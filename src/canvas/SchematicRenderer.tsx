@@ -280,7 +280,7 @@ export function SchematicRenderer({ data }: Props) {
         // Pin number (midpoint of pin line) — respect lib symbol visibility
         if (lib.show_pin_numbers && pin.number_visible && pin.number !== "~") {
           ctx.fillStyle = C.pinNum;
-          ctx.font = "0.65px Roboto";
+          ctx.font = "1.0px Roboto";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
           const nmx = (px + ex) / 2, nmy = (py + ey) / 2;
@@ -342,62 +342,93 @@ export function SchematicRenderer({ data }: Props) {
 
       // Draw global label shape (flag/arrow)
       if (label.label_type === "Global" && label.shape) {
-        ctx.save();
-        ctx.translate(lx, ly);
-        ctx.rotate(-(r * Math.PI) / 180);
-
-        // Measure text width approximately
         ctx.font = `${fs}px Roboto`;
         const tw = ctx.measureText(text).width;
-        const h = fs * 1.4; // text height
+        const h = fs * 1.4;
         const pad = fs * 0.3;
         const arrowW = h * 0.5;
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 0.1;
-        ctx.beginPath();
-        if (label.shape === "input") {
-          // Arrow pointing left: ◁ text
-          ctx.moveTo(0, 0);
-          ctx.lineTo(arrowW, -h / 2);
-          ctx.lineTo(arrowW + tw + pad * 2, -h / 2);
-          ctx.lineTo(arrowW + tw + pad * 2, h / 2);
-          ctx.lineTo(arrowW, h / 2);
-          ctx.closePath();
-        } else if (label.shape === "output") {
-          // Arrow pointing right: text ▷
-          ctx.moveTo(0, 0);
-          ctx.lineTo(-arrowW, -h / 2);
-          ctx.lineTo(-arrowW - tw - pad * 2, -h / 2);
-          ctx.lineTo(-arrowW - tw - pad * 2, h / 2);
-          ctx.lineTo(-arrowW, h / 2);
-          ctx.closePath();
-        } else if (label.shape === "bidirectional") {
-          // Diamond ends: ◇ text ◇
-          ctx.moveTo(0, 0);
-          ctx.lineTo(arrowW, -h / 2);
-          ctx.lineTo(arrowW + tw + pad * 2, -h / 2);
-          ctx.lineTo(arrowW * 2 + tw + pad * 2, 0);
-          ctx.lineTo(arrowW + tw + pad * 2, h / 2);
-          ctx.lineTo(arrowW, h / 2);
-          ctx.closePath();
-        } else {
-          // Rectangle (passive, tri_state, etc.)
-          ctx.rect(0, -h / 2, tw + pad * 2, h);
-        }
-        ctx.stroke();
+        // Determine shape direction based on rotation:
+        // 0° = connection LEFT, text right. 180° = connection RIGHT, text left.
+        // 90° = connection TOP. 270° = connection BOTTOM.
+        const isHoriz = r === 0 || r === 180;
+        const connRight = r === 0;   // connection point is on the left, shape extends right
 
-        // Text inside shape
-        ctx.fillStyle = color;
-        ctx.font = `${fs}px Roboto`;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        if (label.shape === "output") {
-          ctx.fillText(text, -arrowW - tw - pad, 0);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 0.15;
+
+        if (isHoriz) {
+          // Draw shape horizontally — text always reads L→R
+          const dir = connRight ? 1 : -1; // shape extends in this direction from connection
+          const bodyStart = dir > 0 ? arrowW : -arrowW;
+          const bodyEnd = dir > 0 ? arrowW + tw + pad * 2 : -arrowW - tw - pad * 2;
+
+          ctx.beginPath();
+          if (label.shape === "input") {
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx + bodyStart, ly - h / 2);
+            ctx.lineTo(lx + bodyEnd, ly - h / 2);
+            ctx.lineTo(lx + bodyEnd, ly + h / 2);
+            ctx.lineTo(lx + bodyStart, ly + h / 2);
+            ctx.closePath();
+          } else if (label.shape === "output") {
+            const tip = dir > 0 ? bodyEnd + arrowW : bodyEnd - arrowW;
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx + bodyStart, ly - h / 2);
+            ctx.lineTo(lx + bodyEnd, ly - h / 2);
+            ctx.lineTo(lx + tip, ly);
+            ctx.lineTo(lx + bodyEnd, ly + h / 2);
+            ctx.lineTo(lx + bodyStart, ly + h / 2);
+            ctx.closePath();
+          } else if (label.shape === "bidirectional") {
+            const tip = dir > 0 ? bodyEnd + arrowW : bodyEnd - arrowW;
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx + bodyStart, ly - h / 2);
+            ctx.lineTo(lx + bodyEnd, ly - h / 2);
+            ctx.lineTo(lx + tip, ly);
+            ctx.lineTo(lx + bodyEnd, ly + h / 2);
+            ctx.lineTo(lx + bodyStart, ly + h / 2);
+            ctx.closePath();
+          } else {
+            const x1 = Math.min(lx + bodyStart, lx + bodyEnd);
+            ctx.rect(x1, ly - h / 2, Math.abs(bodyEnd - bodyStart), h);
+          }
+          ctx.stroke();
+
+          // Text — always L→R
+          ctx.fillStyle = color;
+          ctx.font = `${fs}px Roboto`;
+          ctx.textBaseline = "middle";
+          if (dir > 0) {
+            ctx.textAlign = "left";
+            ctx.fillText(text, lx + arrowW + pad, ly);
+          } else {
+            ctx.textAlign = "right";
+            ctx.fillText(text, lx - arrowW - pad, ly);
+          }
         } else {
+          // Vertical labels (90°, 270°) — draw rotated but text still readable
+          ctx.save();
+          ctx.translate(lx, ly);
+          const rotAngle = r === 90 ? -Math.PI / 2 : Math.PI / 2;
+          ctx.rotate(rotAngle);
+
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(arrowW, -h / 2);
+          ctx.lineTo(arrowW + tw + pad * 2, -h / 2);
+          ctx.lineTo(arrowW + tw + pad * 2, h / 2);
+          ctx.lineTo(arrowW, h / 2);
+          ctx.closePath();
+          ctx.stroke();
+
+          ctx.fillStyle = color;
+          ctx.font = `${fs}px Roboto`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
           ctx.fillText(text, arrowW + pad, 0);
+          ctx.restore();
         }
-        ctx.restore();
       } else {
         // Net label or label without shape — simple text with overline
         ctx.fillStyle = color;
