@@ -1,8 +1,6 @@
 import {
   MousePointer2,
-  Move,
   RotateCw,
-  Copy,
   Trash2,
   ZoomIn,
   ZoomOut,
@@ -15,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/stores/editor";
+import { useSchematicStore } from "@/stores/schematic";
 
 interface ToolButton {
   icon: React.ReactNode;
@@ -49,37 +48,65 @@ function Separator() {
 }
 
 export function ToolbarStrip() {
-  const mode = useEditorStore((s) => s.mode);
+  const appMode = useEditorStore((s) => s.mode);
+  const editMode = useSchematicStore((s) => s.editMode);
+  const setEditMode = useSchematicStore((s) => s.setEditMode);
+  const undo = useSchematicStore((s) => s.undo);
+  const redo = useSchematicStore((s) => s.redo);
+  const deleteSelected = useSchematicStore((s) => s.deleteSelected);
+  const rotateSelected = useSchematicStore((s) => s.rotateSelected);
+  const selectedIds = useSchematicStore((s) => s.selectedIds);
 
   return (
     <div className="flex items-center h-10 bg-bg-secondary border-b border-border-subtle px-2 gap-0.5">
       {/* Undo / Redo */}
-      <ToolBtn icon={<Undo2 size={17} />} label="Undo (Ctrl+Z)" disabled />
-      <ToolBtn icon={<Redo2 size={17} />} label="Redo (Ctrl+Y)" disabled />
+      <ToolBtn icon={<Undo2 size={17} />} label="Undo (Ctrl+Z)" onClick={undo} />
+      <ToolBtn icon={<Redo2 size={17} />} label="Redo (Ctrl+Y)" onClick={redo} />
 
       <Separator />
 
-      {/* Selection & Editing */}
-      <ToolBtn icon={<MousePointer2 size={17} />} label="Select (Esc)" active />
-      <ToolBtn icon={<Move size={17} />} label="Move (M)" disabled />
-      <ToolBtn icon={<RotateCw size={17} />} label="Rotate (R)" disabled />
-      <ToolBtn icon={<Copy size={17} />} label="Copy (Ctrl+C)" disabled />
-      <ToolBtn icon={<Trash2 size={17} />} label="Delete (Del)" disabled />
+      {/* Edit Mode */}
+      <ToolBtn
+        icon={<MousePointer2 size={17} />}
+        label="Select (Esc)"
+        active={editMode === "select"}
+        onClick={() => setEditMode("select")}
+      />
+      <ToolBtn
+        icon={<Minus size={17} />}
+        label="Wire (W)"
+        active={editMode === "drawWire"}
+        onClick={() => setEditMode("drawWire")}
+      />
+      <ToolBtn
+        icon={<CircleDot size={17} />}
+        label="Component (P, C)"
+        active={editMode === "placeSymbol"}
+        onClick={() => setEditMode("placeSymbol")}
+        disabled={appMode !== "schematic"}
+      />
 
       <Separator />
 
-      {/* Schematic-specific */}
-      {mode === "schematic" && (
-        <>
-          <ToolBtn icon={<Minus size={17} />} label="Wire (P, W)" disabled />
-          <ToolBtn icon={<CircleDot size={17} />} label="Component (P, C)" disabled />
-          <Separator />
-        </>
-      )}
+      {/* Selection actions */}
+      <ToolBtn
+        icon={<RotateCw size={17} />}
+        label="Rotate (R)"
+        disabled={selectedIds.size === 0}
+        onClick={rotateSelected}
+      />
+      <ToolBtn
+        icon={<Trash2 size={17} />}
+        label="Delete (Del)"
+        disabled={selectedIds.size === 0}
+        onClick={deleteSelected}
+      />
+
+      <Separator />
 
       {/* View */}
-      <ToolBtn icon={<ZoomIn size={17} />} label="Zoom In (Ctrl+=)" />
-      <ToolBtn icon={<ZoomOut size={17} />} label="Zoom Out (Ctrl+-)" />
+      <ToolBtn icon={<ZoomIn size={17} />} label="Zoom In" />
+      <ToolBtn icon={<ZoomOut size={17} />} label="Zoom Out" />
       <ToolBtn icon={<Maximize size={17} />} label="Fit View (Home)" />
       <ToolBtn icon={<Grid3x3 size={17} />} label="Toggle Grid (G)" />
 
@@ -87,8 +114,10 @@ export function ToolbarStrip() {
 
       {/* Mode indicator */}
       <div className="flex items-center gap-2 px-3 py-1 rounded bg-bg-surface text-[11px]">
-        <div className="w-2 h-2 rounded-full bg-accent" />
-        <span className="text-text-secondary capitalize">{mode}</span>
+        <div className={cn("w-2 h-2 rounded-full", editMode === "drawWire" ? "bg-warning" : "bg-accent")} />
+        <span className="text-text-secondary capitalize">
+          {editMode === "select" ? appMode : editMode === "drawWire" ? "Wire" : editMode}
+        </span>
       </div>
     </div>
   );

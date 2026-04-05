@@ -1,8 +1,8 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "@/stores/editor";
-import type { SchematicData, Graphic, SchPin, SchPoint, TextPropData } from "@/types";
-
-interface Props { data: SchematicData }
+import { useSchematicStore, snapPoint } from "@/stores/schematic";
+import { hitTest } from "./hitTest";
+import type { Graphic, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
 
 const PAPER: Record<string, [number, number]> = {
@@ -53,14 +53,22 @@ function pinEnd(pin: SchPin): SchPoint {
   };
 }
 
-export function SchematicRenderer({ data }: Props) {
+export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 3 });
   const dragging = useRef(false);
+  const moving = useRef(false);
+  const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
   const animRef = useRef(0);
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
+
+  // Schematic store
+  const data = useSchematicStore((s) => s.data);
+  const selectedIds = useSchematicStore((s) => s.selectedIds);
+  const editMode = useSchematicStore((s) => s.editMode);
+  const wireDrawing = useSchematicStore((s) => s.wireDrawing);
 
   const s2w = useCallback((sx: number, sy: number) => {
     const c = camRef.current;
@@ -186,6 +194,7 @@ export function SchematicRenderer({ data }: Props) {
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, w, h);
 
+    if (!data) return;
     const [pw, ph] = PAPER[data.paper_size] || PAPER.A4;
 
     ctx.save();
@@ -514,8 +523,73 @@ export function SchematicRenderer({ data }: Props) {
       }
     }
 
+    // --- Selection highlights ---
+    ctx.save();
+    ctx.translate(cam.x, cam.y);
+    ctx.scale(cam.zoom, cam.zoom);
+
+    if (selectedIds.size > 0) {
+      ctx.strokeStyle = "#00bfff";
+      ctx.lineWidth = 0.3;
+      ctx.setLineDash([0.5, 0.3]);
+
+      for (const sym of data.symbols) {
+        if (!selectedIds.has(sym.uuid)) continue;
+        const lib = data.lib_symbols[sym.lib_id];
+        if (!lib) continue;
+        // Draw selection box around symbol
+        let extent = 5;
+        for (const pin of lib.pins) {
+          extent = Math.max(extent, Math.abs(pin.position.x) + pin.length, Math.abs(pin.position.y) + pin.length);
+        }
+        ctx.strokeRect(
+          sym.position.x - extent, sym.position.y - extent,
+          extent * 2, extent * 2
+        );
+      }
+
+      for (const wire of data.wires) {
+        if (!selectedIds.has(wire.uuid)) continue;
+        ctx.beginPath();
+        ctx.moveTo(wire.start.x, wire.start.y);
+        ctx.lineTo(wire.end.x, wire.end.y);
+        ctx.stroke();
+      }
+
+      for (const label of data.labels) {
+        if (!selectedIds.has(label.uuid)) continue;
+        ctx.strokeRect(label.position.x - 1, label.position.y - 1.5, 10, 2);
+      }
+      ctx.setLineDash([]);
+    }
+
+    // --- Wire drawing preview ---
+    if (wireDrawing.active && wireDrawing.points.length > 0) {
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.2;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.beginPath();
+      ctx.moveTo(wireDrawing.points[0].x, wireDrawing.points[0].y);
+      for (let i = 1; i < wireDrawing.points.length; i++) {
+        ctx.lineTo(wireDrawing.points[i].x, wireDrawing.points[i].y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Cursor crosshair at last point
+      const last = wireDrawing.points[wireDrawing.points.length - 1];
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.1;
+      ctx.beginPath();
+      ctx.moveTo(last.x - 2, last.y); ctx.lineTo(last.x + 2, last.y);
+      ctx.moveTo(last.x, last.y - 2); ctx.lineTo(last.x, last.y + 2);
+      ctx.stroke();
+    }
+
     ctx.restore();
-  }, [data, drawGraphicTransformed, drawTextProp]);
+
+    ctx.restore();
+  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing]);
 
   // Fit to view
   useEffect(() => {
@@ -555,44 +629,150 @@ export function SchematicRenderer({ data }: Props) {
     animRef.current = requestAnimationFrame(render);
   }, [render, updateStatusBar]);
 
+  // --- Mouse handlers: pan (right-drag) + select/move/wire (left-click) ---
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Right/middle button = pan
     if (e.button === 2 || e.button === 1) {
       dragging.current = true;
       lastMouse.current = { x: e.clientX, y: e.clientY };
       e.preventDefault();
+      return;
     }
-  }, []);
+
+    // Left button = select, move, or wire
+    if (e.button === 0 && data) {
+      const r = canvasRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const world = s2w(e.clientX - r.left, e.clientY - r.top);
+      const store = useSchematicStore.getState();
+
+      if (store.editMode === "drawWire") {
+        // Wire drawing: add point on click
+        if (store.wireDrawing.active) {
+          store.addWirePoint(world);
+        } else {
+          store.startWire(world);
+        }
+        return;
+      }
+
+      // Select mode: hit test
+      const hit = hitTest(data, world.x, world.y);
+      if (hit) {
+        if (e.shiftKey) {
+          store.toggleSelect(hit.uuid);
+        } else if (!store.selectedIds.has(hit.uuid)) {
+          store.select(hit.uuid);
+        }
+        // Start move drag
+        moving.current = true;
+        moveStart.current = { x: world.x, y: world.y };
+        // Push undo before move
+        store.pushUndo();
+      } else {
+        if (!e.shiftKey) store.deselectAll();
+      }
+    }
+  }, [data, s2w]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const r = canvasRef.current?.getBoundingClientRect();
-    if (r) {
-      const world = s2w(e.clientX - r.left, e.clientY - r.top);
-      updateStatusBar({ cursorPosition: { x: Math.round(world.x * 100) / 100, y: Math.round(world.y * 100) / 100 } });
-    }
+    if (!r) return;
+    const world = s2w(e.clientX - r.left, e.clientY - r.top);
+    updateStatusBar({
+      cursorPosition: { x: Math.round(world.x * 100) / 100, y: Math.round(world.y * 100) / 100 },
+    });
+
+    // Pan
     if (dragging.current) {
       camRef.current.x += e.clientX - lastMouse.current.x;
       camRef.current.y += e.clientY - lastMouse.current.y;
       lastMouse.current = { x: e.clientX, y: e.clientY };
       cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(render);
+      return;
     }
-  }, [render, s2w, updateStatusBar]);
 
-  const handleMouseUp = useCallback(() => { dragging.current = false; }, []);
+    // Move selected elements
+    if (moving.current && data) {
+      const store = useSchematicStore.getState();
+      if (store.selectedIds.size > 0) {
+        const snapped = snapPoint(world);
+        const startSnapped = snapPoint(moveStart.current);
+        const dx = snapped.x - startSnapped.x;
+        const dy = snapped.y - startSnapped.y;
+        if (dx !== 0 || dy !== 0) {
+          store.moveElements([...store.selectedIds], dx, dy);
+          moveStart.current = { x: snapped.x, y: snapped.y };
+        }
+      }
+    }
+  }, [render, s2w, updateStatusBar, data]);
 
-  // Keyboard: Home = fit
+  const handleMouseUp = useCallback(() => {
+    dragging.current = false;
+    moving.current = false;
+  }, []);
+
+  const handleDblClick = useCallback((_e: React.MouseEvent) => {
+    const store = useSchematicStore.getState();
+    if (store.editMode === "drawWire" && store.wireDrawing.active) {
+      store.finishWire();
+    }
+  }, []);
+
+  // --- Keyboard shortcuts ---
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Home") {
-        const container = containerRef.current;
-        if (!container) return;
-        const rect = container.getBoundingClientRect();
-        const [pw, ph] = PAPER[data.paper_size] || PAPER.A4;
-        const pad = 40;
-        const zoom = Math.min((rect.width - pad * 2) / pw, (rect.height - pad * 2) / ph);
-        camRef.current = { zoom, x: (rect.width - pw * zoom) / 2, y: (rect.height - ph * zoom) / 2 };
-        updateStatusBar({ zoom: Math.round(zoom * 100 / 3) });
-        render();
+      if (!data) return;
+      const store = useSchematicStore.getState();
+
+      // Don't handle if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key) {
+        case "Home": {
+          const container = containerRef.current;
+          if (!container) return;
+          const rect = container.getBoundingClientRect();
+          const [pw, ph] = PAPER[data.paper_size] || PAPER.A4;
+          const pad = 40;
+          const zoom = Math.min((rect.width - pad * 2) / pw, (rect.height - pad * 2) / ph);
+          camRef.current = { zoom, x: (rect.width - pw * zoom) / 2, y: (rect.height - ph * zoom) / 2 };
+          updateStatusBar({ zoom: Math.round(zoom * 100 / 3) });
+          render();
+          break;
+        }
+        case "Escape":
+          if (store.wireDrawing.active) {
+            store.cancelWire();
+          } else {
+            store.deselectAll();
+            store.setEditMode("select");
+          }
+          break;
+        case "w":
+        case "W":
+          if (!e.ctrlKey) store.setEditMode("drawWire");
+          break;
+        case "Delete":
+        case "Backspace":
+          store.deleteSelected();
+          break;
+        case "r":
+        case "R":
+          if (!e.ctrlKey) store.rotateSelected();
+          break;
+        case "z":
+          if (e.ctrlKey) { e.preventDefault(); store.undo(); }
+          break;
+        case "y":
+          if (e.ctrlKey) { e.preventDefault(); store.redo(); }
+          break;
+        case "Z":
+          if (e.ctrlKey && e.shiftKey) { e.preventDefault(); store.redo(); }
+          break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -604,15 +784,20 @@ export function SchematicRenderer({ data }: Props) {
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
+        style={{ cursor: editMode === "drawWire" ? "crosshair" : "default" }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
       />
-      <div className="absolute top-2 left-2 text-[10px] text-text-muted/40 bg-bg-primary/60 px-2 py-1 rounded pointer-events-none">
-        {data.symbols.filter(s => !s.is_power).length} components | {data.wires.length} wires | {data.labels.length} labels | {data.paper_size}
+      <div className="absolute top-2 left-2 text-[10px] text-text-muted/40 bg-bg-primary/60 px-2 py-1 rounded pointer-events-none flex gap-3">
+        <span>{data?.symbols.filter(s => !s.is_power).length ?? 0} components | {data?.wires.length ?? 0} wires | {data?.labels.length ?? 0} labels</span>
+        {selectedIds.size > 0 && <span className="text-accent">{selectedIds.size} selected</span>}
+        {editMode !== "select" && <span className="text-warning uppercase">{editMode}</span>}
+        {wireDrawing.active && <span className="text-info">Drawing wire ({wireDrawing.points.length} pts)</span>}
       </div>
     </div>
   );
