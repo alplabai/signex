@@ -27,7 +27,11 @@ pub fn open_project(path: String) -> Result<ProjectInfo, String> {
     // Phase 0: stub — will integrate KiCad parser in Week 2
     let project_path = std::path::Path::new(&path);
     if !project_path.exists() {
-        return Err(format!("Project file not found: {}", path));
+        let name = project_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        return Err(format!("Project file not found: {}", name));
     }
 
     let name = project_path

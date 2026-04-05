@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {
@@ -40,10 +40,5 @@
     "shortDescription": "AI-First Electronic Design Automation",
     "longDescription": "Alp EDA is an AI-powered electronic design automation tool with Altium-class UX, built on KiCad's open-source core."
   },
-  "plugins": {
-    "opener": {
-      "openUrl": true,
-      "openPath": true
-    }
-  }
+  "plugins": {}
 }
