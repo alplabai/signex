@@ -6,6 +6,7 @@ export type EditMode = "select" | "drawWire" | "placeSymbol" | "placeLabel";
 interface WireDrawState {
   points: SchPoint[];
   active: boolean;
+  cursor: SchPoint; // Live cursor position for preview
 }
 
 interface SchematicState {
@@ -16,6 +17,7 @@ interface SchematicState {
   // Edit mode
   editMode: EditMode;
   wireDrawing: WireDrawState;
+  updateWireCursor: (pos: SchPoint) => void;
 
   // Selection
   selectedIds: Set<string>;
@@ -77,7 +79,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   data: null,
   dirty: false,
   editMode: "select",
-  wireDrawing: { points: [], active: false },
+    wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
   selectedIds: new Set<string>(),
   undoStack: [],
   redoStack: [],
@@ -90,14 +92,14 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       undoStack: [],
       redoStack: [],
       editMode: "select",
-      wireDrawing: { points: [], active: false },
+        wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
     }),
 
   setEditMode: (mode) => {
     const state = get();
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
-      set({ editMode: mode, wireDrawing: { points: [], active: false } });
+      set({ editMode: mode, wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } } });
     } else {
       set({ editMode: mode });
     }
@@ -252,11 +254,19 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  updateWireCursor: (pos) => {
+    const { wireDrawing } = get();
+    if (wireDrawing.active) {
+      set({ wireDrawing: { ...wireDrawing, cursor: snapPoint(pos) } });
+    }
+  },
+
   // Wire drawing state machine
   startWire: (pos) => {
+    const snapped = snapPoint(pos);
     set({
       editMode: "drawWire",
-      wireDrawing: { points: [snapPoint(pos)], active: true },
+      wireDrawing: { points: [snapped], active: true, cursor: snapped },
     });
   },
 
@@ -264,14 +274,21 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const { wireDrawing } = get();
     if (!wireDrawing.active) return;
     const snapped = snapPoint(pos);
-    const points = [...wireDrawing.points, snapped];
-    set({ wireDrawing: { points, active: true } });
+    // Add Manhattan-routed segments (horizontal then vertical)
+    const last = wireDrawing.points[wireDrawing.points.length - 1];
+    const newPoints = [...wireDrawing.points];
+    if (Math.abs(snapped.x - last.x) > 0.01 && Math.abs(snapped.y - last.y) > 0.01) {
+      // Add bend point for Manhattan routing
+      newPoints.push({ x: snapped.x, y: last.y });
+    }
+    newPoints.push(snapped);
+    set({ wireDrawing: { points: newPoints, active: true, cursor: snapped } });
   },
 
   finishWire: () => {
     const { wireDrawing, data } = get();
     if (!wireDrawing.active || wireDrawing.points.length < 2 || !data) {
-      set({ wireDrawing: { points: [], active: false } });
+      set({ wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } } });
       return;
     }
 
@@ -290,11 +307,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({
       data: newData,
       dirty: true,
-      wireDrawing: { points: [], active: false },
+        wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
     });
   },
 
   cancelWire: () => {
-    set({ wireDrawing: { points: [], active: false }, editMode: "select" });
+    set({   wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } }, editMode: "select" });
   },
 }));
