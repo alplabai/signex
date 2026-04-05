@@ -1,11 +1,25 @@
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+use crate::engine::parser;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectInfo {
     pub name: String,
     pub path: String,
-    pub schematics: Vec<String>,
-    pub pcb: Option<String>,
+    pub format: String,
+    pub schematic_root: Option<String>,
+    pub pcb_file: Option<String>,
+    pub sheets: Vec<SheetInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SheetInfo {
+    pub name: String,
+    pub filename: String,
+    pub symbols_count: usize,
+    pub wires_count: usize,
+    pub labels_count: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,8 +38,7 @@ pub fn get_app_info() -> AppInfo {
 
 #[tauri::command]
 pub fn open_project(path: String) -> Result<ProjectInfo, String> {
-    // Phase 0: stub — will integrate KiCad parser in Week 2
-    let project_path = std::path::Path::new(&path);
+    let project_path = Path::new(&path);
     if !project_path.exists() {
         let name = project_path
             .file_name()
@@ -34,7 +47,46 @@ pub fn open_project(path: String) -> Result<ProjectInfo, String> {
         return Err(format!("Project file not found: {}", name));
     }
 
-    let name = project_path
+    let ext = project_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+
+    match ext {
+        "kicad_pro" => open_kicad_project(project_path, &path),
+        "alpproj" => open_alp_project(project_path, &path),
+        _ => Err(format!("Unsupported project format: .{}", ext)),
+    }
+}
+
+fn open_kicad_project(project_path: &Path, original_path: &str) -> Result<ProjectInfo, String> {
+    let data = parser::parse_project(project_path)?;
+
+    let sheets = data
+        .sheets
+        .iter()
+        .map(|s| SheetInfo {
+            name: s.name.clone(),
+            filename: s.filename.clone(),
+            symbols_count: s.symbols_count,
+            wires_count: s.wires_count,
+            labels_count: s.labels_count,
+        })
+        .collect();
+
+    Ok(ProjectInfo {
+        name: data.name,
+        path: original_path.to_string(),
+        format: "kicad".to_string(),
+        schematic_root: data.schematic_root,
+        pcb_file: data.pcb_file,
+        sheets,
+    })
+}
+
+fn open_alp_project(_project_path: &Path, original_path: &str) -> Result<ProjectInfo, String> {
+    // Stub for native .alpproj format — will implement in Phase 1
+    let name = _project_path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Untitled")
@@ -42,8 +94,10 @@ pub fn open_project(path: String) -> Result<ProjectInfo, String> {
 
     Ok(ProjectInfo {
         name,
-        path,
-        schematics: vec![],
-        pcb: None,
+        path: original_path.to_string(),
+        format: "alp".to_string(),
+        schematic_root: None,
+        pcb_file: None,
+        sheets: vec![],
     })
 }
