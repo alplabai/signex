@@ -435,10 +435,14 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 position, rotation: 0.0, font_size: 1.27, justify_h: "center".into(), justify_v: "center".into(), hidden: false,
             });
 
-            // When fields_autoplaced, KiCad renders text horizontal regardless of stored rotation
-            if fields_autoplaced {
-                ref_text.rotation = 0.0;
-                val_text.rotation = 0.0;
+            // KiCad's GetDrawRotation(): stored angle is toggled (H↔V) when symbol
+            // rotation is 90° or 270° (transform has y1 != 0).
+            // Source: eeschema/sch_field.cpp GetDrawRotation()
+            let sym_90_or_270 = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
+            if sym_90_or_270 {
+                // Toggle: horizontal(0) ↔ vertical(90)
+                ref_text.rotation = if ref_text.rotation.abs() < 0.1 { 90.0 } else { 0.0 };
+                val_text.rotation = if val_text.rotation.abs() < 0.1 { 90.0 } else { 0.0 };
             }
 
             Symbol {
