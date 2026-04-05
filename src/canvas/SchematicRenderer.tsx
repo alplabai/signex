@@ -26,15 +26,20 @@ const txt = (s: string) => s.replace(/\{slash\}/g, "/");
 
 // Transform a point from symbol-local (Y-up) to schematic (Y-down) space
 function symToSch(lx: number, ly: number, sx: number, sy: number, rot: number, mx: boolean, my: boolean): [number, number] {
-  let x = my ? -lx : lx;
-  let y = mx ? ly : -ly; // default: flip Y (symbol Y-up → screen Y-down); mirror_x cancels the flip
+  // 1. Flip Y (symbol Y-up → screen Y-down)
+  const x = lx;
+  const y = -ly;
 
-  // KiCad rotation is CW in screen space — negate for standard math rotation
+  // 2. Rotate (KiCad CW in screen space = negate for math CCW)
   const rad = -(rot * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  const rx = x * cos - y * sin;
-  const ry = x * sin + y * cos;
+  let rx = x * cos - y * sin;
+  let ry = x * sin + y * cos;
+
+  // 3. Mirror AFTER rotation (KiCad applies mirror post-rotation)
+  if (mx) ry = -ry;
+  if (my) rx = -rx;
 
   return [sx + rx, sy + ry];
 }
@@ -122,18 +127,33 @@ export function SchematicRenderer({ data }: Props) {
     }
   }, []);
 
-  // Draw text using exact KiCad property position, rotation, justify, and font size
+  // Draw text using exact KiCad property position, rotation, justify, and font size.
+  // KiCad normalizes text to always be readable (never upside-down).
   const drawTextProp = useCallback((
     ctx: CanvasRenderingContext2D, text: string, prop: TextPropData, color: string, bold: boolean
   ) => {
     ctx.fillStyle = color;
     ctx.font = `${bold ? "bold " : ""}${prop.font_size}px Roboto`;
 
-    // Map KiCad justify to canvas textAlign/textBaseline
-    ctx.textAlign = prop.justify_h === "left" ? "left" : prop.justify_h === "right" ? "right" : "center";
-    ctx.textBaseline = prop.justify_v === "top" ? "top" : prop.justify_v === "bottom" ? "bottom" : "middle";
+    let jh = prop.justify_h;
+    let jv = prop.justify_v;
+    let rot = prop.rotation;
 
-    if (prop.rotation === 90 || prop.rotation === 270) {
+    // KiCad keeps text readable: normalize 180° → 0° and 270° → 90° with flipped justify
+    if (rot === 180) {
+      rot = 0;
+      jh = jh === "left" ? "right" : jh === "right" ? "left" : jh;
+      jv = jv === "top" ? "bottom" : jv === "bottom" ? "top" : jv;
+    } else if (rot === 270) {
+      rot = 90;
+      jh = jh === "left" ? "right" : jh === "right" ? "left" : jh;
+      jv = jv === "top" ? "bottom" : jv === "bottom" ? "top" : jv;
+    }
+
+    ctx.textAlign = jh === "left" ? "left" : jh === "right" ? "right" : "center";
+    ctx.textBaseline = jv === "top" ? "top" : jv === "bottom" ? "bottom" : "middle";
+
+    if (rot === 90) {
       ctx.save();
       ctx.translate(prop.position.x, prop.position.y);
       ctx.rotate(-Math.PI / 2);
