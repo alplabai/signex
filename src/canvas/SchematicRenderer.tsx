@@ -322,11 +322,11 @@ export function SchematicRenderer({ data }: Props) {
           drawTextProp(ctx, txt(sym.value), sym.val_text, C.val, false);
         }
       } else {
-        // Power symbol: show value at its property position
-        if (!sym.val_text.hidden) {
-          drawTextProp(ctx, txt(sym.value || sym.reference), sym.val_text, C.power, true);
-        } else if (!sym.ref_text.hidden) {
-          drawTextProp(ctx, txt(sym.value || sym.reference), sym.ref_text, C.power, true);
+        // Power symbol: render value text ALWAYS horizontal (KiCad behavior)
+        const powerText = sym.val_text.hidden ? sym.ref_text : sym.val_text;
+        if (!powerText.hidden) {
+          const powerProp = { ...powerText, rotation: 0 }; // Force horizontal
+          drawTextProp(ctx, txt(sym.value || sym.reference), powerProp, C.power, true);
         }
       }
     }
@@ -335,28 +335,92 @@ export function SchematicRenderer({ data }: Props) {
     for (const label of data.labels) {
       const color = label.label_type === "Global" ? C.labelGlobal
         : label.label_type === "Hierarchical" ? C.labelHier : C.labelNet;
-      ctx.fillStyle = color;
-      ctx.font = label.label_type === "Global" ? "bold 1.0px Roboto" : "0.95px Roboto";
-
       const text = txt(label.text);
+      const fs = label.font_size || 1.27;
       const r = label.rotation;
+      const lx = label.position.x, ly = label.position.y;
 
-      if (r === 0) {
-        ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-        ctx.fillText(text, label.position.x, label.position.y - 0.3);
-      } else if (r === 180) {
-        ctx.textAlign = "right"; ctx.textBaseline = "bottom";
-        ctx.fillText(text, label.position.x, label.position.y - 0.3);
-      } else if (r === 90 || r === 270) {
+      // Draw global label shape (flag/arrow)
+      if (label.label_type === "Global" && label.shape) {
         ctx.save();
-        ctx.translate(label.position.x, label.position.y);
-        ctx.rotate(-Math.PI / 2);
-        ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-        ctx.fillText(text, 0.3, 0);
+        ctx.translate(lx, ly);
+        ctx.rotate(-(r * Math.PI) / 180);
+
+        // Measure text width approximately
+        ctx.font = `${fs}px Roboto`;
+        const tw = ctx.measureText(text).width;
+        const h = fs * 1.4; // text height
+        const pad = fs * 0.3;
+        const arrowW = h * 0.5;
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 0.1;
+        ctx.beginPath();
+        if (label.shape === "input") {
+          // Arrow pointing left: ◁ text
+          ctx.moveTo(0, 0);
+          ctx.lineTo(arrowW, -h / 2);
+          ctx.lineTo(arrowW + tw + pad * 2, -h / 2);
+          ctx.lineTo(arrowW + tw + pad * 2, h / 2);
+          ctx.lineTo(arrowW, h / 2);
+          ctx.closePath();
+        } else if (label.shape === "output") {
+          // Arrow pointing right: text ▷
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-arrowW, -h / 2);
+          ctx.lineTo(-arrowW - tw - pad * 2, -h / 2);
+          ctx.lineTo(-arrowW - tw - pad * 2, h / 2);
+          ctx.lineTo(-arrowW, h / 2);
+          ctx.closePath();
+        } else if (label.shape === "bidirectional") {
+          // Diamond ends: ◇ text ◇
+          ctx.moveTo(0, 0);
+          ctx.lineTo(arrowW, -h / 2);
+          ctx.lineTo(arrowW + tw + pad * 2, -h / 2);
+          ctx.lineTo(arrowW * 2 + tw + pad * 2, 0);
+          ctx.lineTo(arrowW + tw + pad * 2, h / 2);
+          ctx.lineTo(arrowW, h / 2);
+          ctx.closePath();
+        } else {
+          // Rectangle (passive, tri_state, etc.)
+          ctx.rect(0, -h / 2, tw + pad * 2, h);
+        }
+        ctx.stroke();
+
+        // Text inside shape
+        ctx.fillStyle = color;
+        ctx.font = `${fs}px Roboto`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        if (label.shape === "output") {
+          ctx.fillText(text, -arrowW - tw - pad, 0);
+        } else {
+          ctx.fillText(text, arrowW + pad, 0);
+        }
         ctx.restore();
       } else {
-        ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-        ctx.fillText(text, label.position.x, label.position.y - 0.3);
+        // Net label or label without shape — simple text with overline
+        ctx.fillStyle = color;
+        ctx.font = `${fs}px Roboto`;
+
+        // Normalize rotation for readability
+        let rot = r;
+        let jh = label.justify === "right" ? "right" : "left";
+        if (rot === 180) { rot = 0; jh = jh === "left" ? "right" : "left"; }
+        if (rot === 270) { rot = 90; jh = jh === "left" ? "right" : "left"; }
+
+        ctx.textAlign = jh as CanvasTextAlign;
+        ctx.textBaseline = "bottom";
+
+        if (rot === 90) {
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(text, 0.3, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(text, lx, ly - 0.3);
+        }
       }
     }
 

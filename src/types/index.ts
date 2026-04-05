@@ -137,6 +137,7 @@ export interface SchSymbol {
   is_power: boolean;
   ref_text: TextPropData;
   val_text: TextPropData;
+  fields_autoplaced: boolean;
 }
 
 export interface TextPropData {
@@ -165,6 +166,9 @@ export interface SchLabel {
   position: SchPoint;
   rotation: number;
   label_type: "Net" | "Global" | "Hierarchical" | "Power";
+  shape: string;
+  font_size: number;
+  justify: string;
 }
 
 export interface SchChildSheet {

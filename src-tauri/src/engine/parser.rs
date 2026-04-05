@@ -70,6 +70,7 @@ pub struct Symbol {
     pub is_power: bool,
     pub ref_text: TextProp,
     pub val_text: TextProp,
+    pub fields_autoplaced: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +103,9 @@ pub struct Label {
     pub position: Point,
     pub rotation: f64,
     pub label_type: LabelType,
+    pub shape: String,
+    pub font_size: f64,
+    pub justify: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -417,14 +421,25 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
             let mirror_x = mirror.and_then(|m| m.first_arg()).map(|v| v == "x" || v == "xy").unwrap_or(false);
             let mirror_y = mirror.and_then(|m| m.first_arg()).map(|v| v == "y" || v == "xy").unwrap_or(false);
 
+            let fields_autoplaced = s.find("fields_autoplaced")
+                .and_then(|f| f.first_arg())
+                .map(|v| v == "yes")
+                .unwrap_or(false);
+
             let ref_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Reference"));
             let val_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Value"));
-            let ref_text = ref_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
+            let mut ref_text = ref_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
                 position, rotation: 0.0, font_size: 1.27, justify_h: "center".into(), justify_v: "center".into(), hidden: false,
             });
-            let val_text = val_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
+            let mut val_text = val_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
                 position, rotation: 0.0, font_size: 1.27, justify_h: "center".into(), justify_v: "center".into(), hidden: false,
             });
+
+            // When fields_autoplaced, KiCad renders text horizontal regardless of stored rotation
+            if fields_autoplaced {
+                ref_text.rotation = 0.0;
+                val_text.rotation = 0.0;
+            }
 
             Symbol {
                 uuid: parse_uuid(s),
@@ -440,6 +455,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 is_power,
                 ref_text,
                 val_text,
+                fields_autoplaced,
             }
         })
         .collect();
@@ -473,12 +489,27 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
     for (keyword, ltype) in [("label", LabelType::Net), ("global_label", LabelType::Global), ("hierarchical_label", LabelType::Hierarchical)] {
         for l in root.find_all(keyword) {
             let (position, rotation) = parse_at(l);
+            let shape = l.find("shape").and_then(|s| s.first_arg()).unwrap_or("").to_string();
+            let effects = l.find("effects");
+            let font_size = effects
+                .and_then(|e| e.find("font"))
+                .and_then(|f| f.find("size"))
+                .and_then(|s| s.arg_f64(0))
+                .unwrap_or(1.27);
+            let justify = effects
+                .and_then(|e| e.find("justify"))
+                .and_then(|j| j.first_arg())
+                .unwrap_or("left")
+                .to_string();
             labels.push(Label {
                 uuid: parse_uuid(l),
                 text: l.first_arg().unwrap_or("").to_string(),
                 position,
                 rotation,
                 label_type: ltype.clone(),
+                shape,
+                font_size,
+                justify,
             });
         }
     }
