@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
+interface MenuBarProps {
+  onOpenProject?: () => void;
+}
+
 interface MenuItem {
+  id?: string;
   label: string;
   shortcut?: string;
   action?: () => void;
@@ -19,7 +24,7 @@ const menus: MenuGroup[] = [
     label: "File",
     items: [
       { label: "New Project...", shortcut: "Ctrl+N" },
-      { label: "Open Project...", shortcut: "Ctrl+O" },
+      { id: "file-open", label: "Open Project...", shortcut: "Ctrl+O" },
       { separator: true, label: "" },
       { label: "Save", shortcut: "Ctrl+S", disabled: true },
       { label: "Save As...", shortcut: "Ctrl+Shift+S", disabled: true },
@@ -47,7 +52,7 @@ const menus: MenuGroup[] = [
   {
     label: "View",
     items: [
-      { label: "Zoom In", shortcut: "Ctrl++" },
+      { label: "Zoom In", shortcut: "Ctrl+=" },
       { label: "Zoom Out", shortcut: "Ctrl+-" },
       { label: "Fit to View", shortcut: "Home" },
       { label: "Zoom 1:1", shortcut: "Ctrl+1" },
@@ -128,9 +133,18 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar() {
+export function MenuBar({ onOpenProject }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
+
+  // Wire up actions
+  const actionMenus = menus.map((menu) => ({
+    ...menu,
+    items: menu.items.map((item) => {
+      if (item.id === "file-open") return { ...item, action: onOpenProject };
+      return item;
+    }),
+  }));
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -145,14 +159,14 @@ export function MenuBar() {
   return (
     <div
       ref={menuBarRef}
-      className="flex h-7 items-center bg-bg-secondary border-b border-border px-1 text-xs"
+      className="flex h-8 items-center bg-bg-tertiary border-b border-border-subtle px-1 text-[12.5px]"
     >
-      {menus.map((menu, idx) => (
+      {actionMenus.map((menu, idx) => (
         <div key={menu.label} className="relative">
           <button
             className={cn(
-              "px-2.5 py-1 rounded-sm hover:bg-bg-hover transition-colors",
-              openMenu === idx && "bg-bg-hover"
+              "px-3 py-1.5 rounded hover:bg-bg-hover hover:text-text-primary text-text-secondary transition-colors",
+              openMenu === idx && "bg-bg-hover text-text-primary"
             )}
             onClick={() => setOpenMenu(openMenu === idx ? null : idx)}
             onMouseEnter={() => openMenu !== null && setOpenMenu(idx)}
@@ -160,17 +174,19 @@ export function MenuBar() {
             {menu.label}
           </button>
           {openMenu === idx && (
-            <div className="absolute left-0 top-full mt-0.5 min-w-[220px] bg-bg-surface border border-border rounded-md shadow-xl z-50 py-1">
+            <div className="absolute left-0 top-full mt-0.5 min-w-[240px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/40 z-50 py-1.5">
               {menu.items.map((item, iIdx) =>
                 item.separator ? (
-                  <div key={iIdx} className="h-px bg-border mx-2 my-1" />
+                  <div key={iIdx} className="h-px bg-border-subtle mx-3 my-1.5" />
                 ) : (
                   <button
                     key={iIdx}
                     disabled={item.disabled}
                     className={cn(
-                      "w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-bg-hover transition-colors",
-                      item.disabled && "opacity-40 cursor-default"
+                      "w-full flex items-center justify-between px-4 py-[5px] text-[12.5px] text-left transition-colors",
+                      item.disabled
+                        ? "text-text-muted/50 cursor-default"
+                        : "text-text-secondary hover:bg-accent/15 hover:text-text-primary"
                     )}
                     onClick={() => {
                       if (!item.disabled) {
@@ -181,7 +197,7 @@ export function MenuBar() {
                   >
                     <span>{item.label}</span>
                     {item.shortcut && (
-                      <span className="text-text-muted ml-6 text-[11px]">
+                      <span className="text-text-muted/60 ml-8 text-[11px] font-mono">
                         {item.shortcut}
                       </span>
                     )}

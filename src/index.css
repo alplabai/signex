@@ -1,25 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #1e1e2e;
-  --color-bg-secondary: #181825;
-  --color-bg-tertiary: #11111b;
-  --color-bg-surface: #252536;
-  --color-bg-hover: #313244;
-  --color-border: #45475a;
-  --color-border-active: #89b4fa;
-  --color-text-primary: #cdd6f4;
-  --color-text-secondary: #a6adc8;
-  --color-text-muted: #6c7086;
-  --color-accent: #89b4fa;
-  --color-accent-hover: #74c7ec;
-  --color-success: #a6e3a1;
-  --color-warning: #f9e2af;
-  --color-error: #f38ba8;
-  --color-info: #89dceb;
+  --color-bg-primary: #1a1b2e;
+  --color-bg-secondary: #141522;
+  --color-bg-tertiary: #0f1019;
+  --color-bg-surface: #1e2035;
+  --color-bg-hover: #282a45;
+  --color-bg-active: #2d3052;
+  --color-border: #2a2d4a;
+  --color-border-subtle: #222440;
+  --color-border-active: #5b8def;
+  --color-text-primary: #e2e4f0;
+  --color-text-secondary: #9598b3;
+  --color-text-muted: #5c5f7e;
+  --color-accent: #5b8def;
+  --color-accent-hover: #7ba4f7;
+  --color-accent-dim: #3d5a9e;
+  --color-success: #6bcf7f;
+  --color-warning: #e8c66a;
+  --color-error: #e8667a;
+  --color-info: #6ac4d6;
 
-  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+  --font-sans: "Roboto", sans-serif;
+  --font-mono: "Roboto Mono", monospace;
 }
 
 html, body, #root {
@@ -36,18 +39,19 @@ html, body, #root {
   user-select: none;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* Panel resize handle */
+.resize-handle {
+  position: relative;
 }
-::-webkit-scrollbar-track {
-  background: var(--color-bg-secondary);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  cursor: col-resize;
 }

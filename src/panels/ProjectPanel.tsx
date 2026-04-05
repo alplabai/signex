@@ -24,9 +24,9 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
     <div>
       <button
         className={cn(
-          "flex items-center gap-1.5 w-full px-2 py-1 text-xs hover:bg-bg-hover transition-colors text-left"
+          "flex items-center gap-1.5 w-full py-[5px] text-[12px] hover:bg-bg-hover transition-colors text-left text-text-secondary hover:text-text-primary"
         )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        style={{ paddingLeft: `${depth * 14 + 10}px` }}
         onClick={() => {
           if (hasChildren) setExpanded(!expanded);
           node.onClick?.();
@@ -34,14 +34,14 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
       >
         {hasChildren ? (
           expanded ? (
-            <ChevronDown size={12} className="text-text-muted shrink-0" />
+            <ChevronDown size={11} className="text-text-muted shrink-0" />
           ) : (
-            <ChevronRight size={12} className="text-text-muted shrink-0" />
+            <ChevronRight size={11} className="text-text-muted shrink-0" />
           )
         ) : (
-          <span className="w-3" />
+          <span className="w-[11px]" />
         )}
-        <span className="text-text-muted shrink-0">{node.icon}</span>
+        <span className="shrink-0">{node.icon}</span>
         <span className="truncate">{node.label}</span>
       </button>
       {hasChildren && expanded && (
@@ -60,11 +60,11 @@ export function ProjectPanel() {
 
   if (!project) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-muted text-xs gap-3 p-4">
-        <FolderOpen size={32} className="opacity-30" />
-        <span>No project open</span>
-        <span className="text-text-muted/60">
-          File &gt; Open Project (Ctrl+O)
+      <div className="flex flex-col items-center justify-center h-full text-text-muted text-xs gap-3 p-6">
+        <FolderOpen size={28} className="text-text-muted/20" />
+        <span className="text-text-muted/50">No project open</span>
+        <span className="text-text-muted/30 text-[11px]">
+          Ctrl+O to open
         </span>
       </div>
     );
@@ -72,21 +72,21 @@ export function ProjectPanel() {
 
   const tree: TreeNode = {
     label: project.name,
-    icon: <FolderOpen size={14} className="text-accent" />,
+    icon: <FolderOpen size={13} className="text-accent" />,
     children: [
       {
         label: "Schematics",
-        icon: <FileText size={14} />,
+        icon: <FileText size={13} className="text-warning" />,
         children: project.schematics.map((s) => ({
           label: s,
-          icon: <FileText size={13} />,
+          icon: <FileText size={12} className="text-warning/60" />,
         })),
       },
       ...(project.pcb
         ? [
             {
               label: project.pcb,
-              icon: <Cpu size={14} />,
+              icon: <Cpu size={13} className="text-success" />,
             },
           ]
         : []),
