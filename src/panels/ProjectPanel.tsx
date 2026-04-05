@@ -77,10 +77,23 @@ export function ProjectPanel() {
     );
   }
 
+  const { openTab, setActiveTab } = useProjectStore();
+
   const sheetsChildren: TreeNode[] = project.sheets.map((sheet) => ({
     label: sheet.name,
     icon: <FileText size={12} className="text-warning/70" />,
     badge: `${sheet.symbols_count}c ${sheet.wires_count}w`,
+    onClick: () => {
+      const tabId = `sch-${project.path}:${sheet.filename}`;
+      openTab({
+        id: tabId,
+        name: sheet.name,
+        type: "schematic",
+        path: project.path,
+        dirty: false,
+      });
+      setActiveTab(tabId);
+    },
     children: [
       {
         label: `${sheet.symbols_count} components`,

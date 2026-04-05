@@ -201,17 +201,24 @@ function App() {
 
       if (!selected) return;
 
-      const info = await invoke<ProjectInfo>("open_project", { path: selected });
+      const info = await invoke<ProjectInfo>("open_project", {
+        path: typeof selected === "string" ? selected : String(selected),
+      });
 
       setProject(info);
       addRecentProject(info.path);
-      openTab({
-        id: `sch-${info.path}`,
-        name: info.name,
-        type: "schematic",
-        path: info.path,
-        dirty: false,
-      });
+
+      // Open root schematic tab
+      const rootSheet = info.sheets[0];
+      if (rootSheet) {
+        openTab({
+          id: `sch-${info.path}:${rootSheet.filename}`,
+          name: rootSheet.name,
+          type: "schematic",
+          path: info.path,
+          dirty: false,
+        });
+      }
     } catch (err) {
       if (import.meta.env.DEV) {
         console.error("Failed to open project:", err);

@@ -35,10 +35,68 @@ export type DocumentType = "schematic" | "pcb" | "library" | "output-job" | "3d-
 export interface ProjectInfo {
   name: string;
   path: string;
+  dir: string;
   format: string;
   schematic_root: string | null;
   pcb_file: string | null;
   sheets: SheetInfo[];
+}
+
+export interface SchematicData {
+  uuid: string;
+  version: string;
+  generator: string;
+  paper_size: string;
+  symbols: SchSymbol[];
+  wires: SchWire[];
+  junctions: SchJunction[];
+  labels: SchLabel[];
+  child_sheets: SchChildSheet[];
+  no_connects: SchPoint[];
+}
+
+export interface SchSymbol {
+  uuid: string;
+  lib_id: string;
+  reference: string;
+  value: string;
+  footprint: string;
+  position: SchPoint;
+  rotation: number;
+  unit: number;
+  is_power: boolean;
+}
+
+export interface SchWire {
+  uuid: string;
+  start: SchPoint;
+  end: SchPoint;
+}
+
+export interface SchJunction {
+  uuid: string;
+  position: SchPoint;
+}
+
+export interface SchLabel {
+  uuid: string;
+  text: string;
+  position: SchPoint;
+  rotation: number;
+  label_type: "Net" | "Global" | "Hierarchical" | "Power";
+}
+
+export interface SchChildSheet {
+  uuid: string;
+  name: string;
+  filename: string;
+  position: SchPoint;
+  size: [number, number];
+}
+
+export interface SchPoint {
+  x: number;
+  y: number;
 }
 
 export interface SheetInfo {
