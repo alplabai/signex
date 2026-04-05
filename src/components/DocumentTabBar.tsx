@@ -12,7 +12,10 @@ const typeIcons: Record<DocumentType, React.ReactNode> = {
 };
 
 export function DocumentTabBar() {
-  const { openTabs, activeTabId, setActiveTab, closeTab } = useProjectStore();
+  const openTabs = useProjectStore((s) => s.openTabs);
+  const activeTabId = useProjectStore((s) => s.activeTabId);
+  const setActiveTab = useProjectStore((s) => s.setActiveTab);
+  const closeTab = useProjectStore((s) => s.closeTab);
 
   if (openTabs.length === 0) return null;
 

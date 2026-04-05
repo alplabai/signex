@@ -66,6 +66,8 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
 
 export function ProjectPanel() {
   const project = useProjectStore((s) => s.project);
+  const openTab = useProjectStore((s) => s.openTab);
+  const setActiveTab = useProjectStore((s) => s.setActiveTab);
 
   if (!project) {
     return (
@@ -76,8 +78,6 @@ export function ProjectPanel() {
       </div>
     );
   }
-
-  const { openTab, setActiveTab } = useProjectStore();
 
   const sheetsChildren: TreeNode[] = project.sheets.map((sheet) => ({
     label: sheet.name,

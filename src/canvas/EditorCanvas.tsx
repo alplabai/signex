@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useProjectStore } from "@/stores/project";
 import { useEditorStore } from "@/stores/editor";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { SchematicRenderer } from "./SchematicRenderer";
 import { Zap, FolderOpen, Cpu, Layers, Loader2 } from "lucide-react";
 import type { SchematicData } from "@/types";
@@ -13,9 +14,8 @@ interface EditorCanvasProps {
 export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
   const project = useProjectStore((s) => s.project);
   const activeTabId = useProjectStore((s) => s.activeTabId);
-  const activeTab = useProjectStore((s) =>
-    s.openTabs.find((t) => t.id === s.activeTabId)
-  );
+  const openTabs = useProjectStore((s) => s.openTabs);
+  const activeTab = activeTabId ? openTabs.find((t) => t.id === activeTabId) : undefined;
   const [schematic, setSchematic] = useState<SchematicData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,31 +30,46 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
 
     if (activeTab.type !== "schematic") return;
 
-    // Find the sheet filename from the tab
     const sheet = project.sheets.find(
       (s) => `sch-${project.path}:${s.filename}` === activeTabId
     );
-    // Fallback: if tab was opened with project path, use root schematic
     const filename = sheet?.filename || project.schematic_root;
     if (!filename) return;
 
+    let cancelled = false;
+
     setLoading(true);
     setError(null);
-    setMode("schematic");
+    // Only update mode if it actually changed to avoid cross-store cascade
+    if (useEditorStore.getState().mode !== "schematic") {
+      setMode("schematic");
+    }
 
-    invoke<SchematicData>("get_schematic", {
-      projectDir: project.dir,
-      filename,
-    })
-      .then((data) => {
-        setSchematic(data);
+    // Defer so React can paint the loading spinner before IPC blocks
+    const timer = setTimeout(() => {
+      invoke<SchematicData>("get_schematic", {
+        projectDir: project.dir,
+        filename,
       })
-      .catch((err) => {
-        setError(String(err));
-        setSchematic(null);
-      })
-      .finally(() => setLoading(false));
-  }, [project, activeTab, activeTabId, setMode]);
+        .then((data) => {
+          if (!cancelled) setSchematic(data);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setError(String(err));
+            setSchematic(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 16); // one frame delay
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [project, activeTabId, openTabs, setMode]);
 
   // No project — welcome screen
   if (!project || !activeTabId) {
