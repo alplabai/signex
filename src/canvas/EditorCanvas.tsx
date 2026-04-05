@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useProjectStore } from "@/stores/project";
 import { useEditorStore } from "@/stores/editor";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { useSchematicStore } from "@/stores/schematic";
 import { SchematicRenderer } from "./SchematicRenderer";
 import { Zap, FolderOpen, Cpu, Layers, Loader2 } from "lucide-react";
 import type { SchematicData } from "@/types";
+import { useState } from "react";
 
 interface EditorCanvasProps {
   onOpenProject?: () => void;
@@ -16,18 +17,17 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
   const activeTabId = useProjectStore((s) => s.activeTabId);
   const openTabs = useProjectStore((s) => s.openTabs);
   const activeTab = activeTabId ? openTabs.find((t) => t.id === activeTabId) : undefined;
-  const [schematic, setSchematic] = useState<SchematicData | null>(null);
+
+  const schematicData = useSchematicStore((s) => s.data);
+  const loadSchematic = useSchematicStore((s) => s.loadSchematic);
+  const setMode = useEditorStore((s) => s.setMode);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const setMode = useEditorStore((s) => s.setMode);
 
   // Load schematic when active tab changes
   useEffect(() => {
-    if (!project || !activeTab) {
-      setSchematic(null);
-      return;
-    }
-
+    if (!project || !activeTab) return;
     if (activeTab.type !== "schematic") return;
 
     const sheet = project.sheets.find(
@@ -37,39 +37,37 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
     if (!filename) return;
 
     let cancelled = false;
-
     setLoading(true);
     setError(null);
-    // Only update mode if it actually changed to avoid cross-store cascade
+
     if (useEditorStore.getState().mode !== "schematic") {
       setMode("schematic");
     }
 
-    // Defer so React can paint the loading spinner before IPC blocks
     const timer = setTimeout(() => {
       invoke<SchematicData>("get_schematic", {
         projectDir: project.dir,
         filename,
       })
         .then((data) => {
-          if (!cancelled) setSchematic(data);
+          if (!cancelled) {
+            loadSchematic(data);
+            setLoading(false);
+          }
         })
         .catch((err) => {
           if (!cancelled) {
             setError(String(err));
-            setSchematic(null);
+            setLoading(false);
           }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
         });
-    }, 16); // one frame delay
+    }, 16);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [project, activeTabId, openTabs, setMode]);
+  }, [project, activeTabId, openTabs, setMode, loadSchematic]);
 
   // No project — welcome screen
   if (!project || !activeTabId) {
@@ -107,14 +105,11 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
               Open Project
               <span className="text-accent/50 text-xs ml-1">Ctrl+O</span>
             </button>
-            <span className="text-text-muted/40 text-xs mt-1">
-              or press Ctrl+K for Command Palette
-            </span>
           </div>
           <div className="flex gap-3 mt-6">
             {[
               { phase: "0", label: "Viewer", icon: <Zap size={16} />, active: true },
-              { phase: "1", label: "Schematic", icon: <Layers size={16} />, active: false },
+              { phase: "1", label: "Schematic", icon: <Layers size={16} />, active: true },
               { phase: "2", label: "PCB Layout", icon: <Cpu size={16} />, active: false },
             ].map((p) => (
               <div
@@ -155,8 +150,8 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
     );
   }
 
-  if (schematic) {
-    return <SchematicRenderer data={schematic} />;
+  if (schematicData) {
+    return <SchematicRenderer />;
   }
 
   return (
