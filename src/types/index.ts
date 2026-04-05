@@ -35,8 +35,18 @@ export type DocumentType = "schematic" | "pcb" | "library" | "output-job" | "3d-
 export interface ProjectInfo {
   name: string;
   path: string;
-  schematics: string[];
-  pcb: string | null;
+  format: string;
+  schematic_root: string | null;
+  pcb_file: string | null;
+  sheets: SheetInfo[];
+}
+
+export interface SheetInfo {
+  name: string;
+  filename: string;
+  symbols_count: number;
+  wires_count: number;
+  labels_count: number;
 }
 
 export interface AppInfo {
