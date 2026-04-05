@@ -7,9 +7,12 @@ import { StatusBar } from "@/components/StatusBar";
 import { ProjectPanel } from "@/panels/ProjectPanel";
 import { PropertiesPanel } from "@/panels/PropertiesPanel";
 import { MessagesPanel } from "@/panels/MessagesPanel";
+// Signal panel available for AI integration (Phase 1 stub)
+// import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
+import { useSchematicStore } from "@/stores/schematic";
 import { useResizable } from "@/hooks/useResizable";
 import { cn } from "@/lib/utils";
 import {
@@ -43,6 +46,30 @@ async function openProjectFlow() {
     }
   } catch (err) {
     alert(`Failed to open project: ${err}`);
+  }
+}
+
+async function saveSchematicFlow() {
+  const project = useProjectStore.getState().project;
+  const { data } = useSchematicStore.getState();
+  if (!project || !data) return;
+
+  const activeTabId = useProjectStore.getState().activeTabId;
+  const sheet = project.sheets.find(
+    (s) => `sch-${project.path}:${s.filename}` === activeTabId
+  );
+  const filename = sheet?.filename || project.schematic_root;
+  if (!filename) return;
+
+  try {
+    await invoke("save_schematic", {
+      projectDir: project.dir,
+      filename,
+      data,
+    });
+    useSchematicStore.setState({ dirty: false });
+  } catch (err) {
+    alert(`Failed to save: ${err}`);
   }
 }
 
@@ -178,6 +205,7 @@ function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "o") { e.preventDefault(); openProjectFlow(); }
+      if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveSchematicFlow(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);

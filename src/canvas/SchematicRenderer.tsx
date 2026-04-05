@@ -523,11 +523,7 @@ export function SchematicRenderer() {
       }
     }
 
-    // --- Selection highlights ---
-    ctx.save();
-    ctx.translate(cam.x, cam.y);
-    ctx.scale(cam.zoom, cam.zoom);
-
+    // --- Selection highlights (already in world-space transform) ---
     if (selectedIds.size > 0) {
       ctx.strokeStyle = "#00bfff";
       ctx.lineWidth = 0.3;
@@ -537,15 +533,39 @@ export function SchematicRenderer() {
         if (!selectedIds.has(sym.uuid)) continue;
         const lib = data.lib_symbols[sym.lib_id];
         if (!lib) continue;
-        // Draw selection box around symbol
-        let extent = 5;
-        for (const pin of lib.pins) {
-          extent = Math.max(extent, Math.abs(pin.position.x) + pin.length, Math.abs(pin.position.y) + pin.length);
+        // Calculate tight bounding box from body graphics only
+        let minX = -2, maxX = 2, minY = -2, maxY = 2;
+        for (const g of lib.graphics) {
+          if (g.type === "Rectangle") {
+            minX = Math.min(minX, g.start.x, g.end.x);
+            maxX = Math.max(maxX, g.start.x, g.end.x);
+            minY = Math.min(minY, g.start.y, g.end.y);
+            maxY = Math.max(maxY, g.start.y, g.end.y);
+          } else if (g.type === "Polyline") {
+            for (const p of g.points) {
+              minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+              minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+            }
+          } else if (g.type === "Circle") {
+            minX = Math.min(minX, g.center.x - g.radius);
+            maxX = Math.max(maxX, g.center.x + g.radius);
+            minY = Math.min(minY, g.center.y - g.radius);
+            maxY = Math.max(maxY, g.center.y + g.radius);
+          }
         }
-        ctx.strokeRect(
-          sym.position.x - extent, sym.position.y - extent,
-          extent * 2, extent * 2
-        );
+        // Transform bounds to screen space
+        const pad = 1;
+        const corners = [
+          symToSch(minX - pad, minY - pad, sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y),
+          symToSch(maxX + pad, minY - pad, sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y),
+          symToSch(maxX + pad, maxY + pad, sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y),
+          symToSch(minX - pad, maxY + pad, sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y),
+        ];
+        const bx = Math.min(...corners.map(c => c[0]));
+        const by = Math.min(...corners.map(c => c[1]));
+        const bw = Math.max(...corners.map(c => c[0])) - bx;
+        const bh = Math.max(...corners.map(c => c[1])) - by;
+        ctx.strokeRect(bx, by, bw, bh);
       }
 
       for (const wire of data.wires) {
@@ -563,35 +583,55 @@ export function SchematicRenderer() {
       ctx.setLineDash([]);
     }
 
-    // --- Wire drawing preview ---
+    // --- Wire drawing preview with live Manhattan routing ---
     if (wireDrawing.active && wireDrawing.points.length > 0) {
+      // Draw placed segments (solid)
+      ctx.strokeStyle = "#4fc3f7";
+      ctx.lineWidth = 0.15;
+      ctx.setLineDash([]);
+      if (wireDrawing.points.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(wireDrawing.points[0].x, wireDrawing.points[0].y);
+        for (let i = 1; i < wireDrawing.points.length; i++) {
+          ctx.lineTo(wireDrawing.points[i].x, wireDrawing.points[i].y);
+        }
+        ctx.stroke();
+      }
+
+      // Draw live preview from last placed point to cursor (Manhattan: H then V)
+      const last = wireDrawing.points[wireDrawing.points.length - 1];
+      const cur = wireDrawing.cursor;
       ctx.strokeStyle = "#80deea";
-      ctx.lineWidth = 0.2;
+      ctx.lineWidth = 0.15;
       ctx.setLineDash([0.3, 0.2]);
       ctx.beginPath();
-      ctx.moveTo(wireDrawing.points[0].x, wireDrawing.points[0].y);
-      for (let i = 1; i < wireDrawing.points.length; i++) {
-        ctx.lineTo(wireDrawing.points[i].x, wireDrawing.points[i].y);
-      }
+      ctx.moveTo(last.x, last.y);
+      // Manhattan routing: horizontal first, then vertical
+      ctx.lineTo(cur.x, last.y); // horizontal segment
+      ctx.lineTo(cur.x, cur.y);  // vertical segment
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Cursor crosshair at last point
-      const last = wireDrawing.points[wireDrawing.points.length - 1];
+      // Cursor crosshair
       ctx.strokeStyle = "#80deea";
-      ctx.lineWidth = 0.1;
+      ctx.lineWidth = 0.08;
       ctx.beginPath();
-      ctx.moveTo(last.x - 2, last.y); ctx.lineTo(last.x + 2, last.y);
-      ctx.moveTo(last.x, last.y - 2); ctx.lineTo(last.x, last.y + 2);
+      ctx.moveTo(cur.x - 3, cur.y); ctx.lineTo(cur.x + 3, cur.y);
+      ctx.moveTo(cur.x, cur.y - 3); ctx.lineTo(cur.x, cur.y + 3);
       ctx.stroke();
+
+      // Dot at connection point
+      ctx.fillStyle = "#80deea";
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 0.3, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    ctx.restore();
-
-    ctx.restore();
+    ctx.restore(); // End world-space transform
   }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing]);
 
-  // Fit to view
+  // Fit to view — only when data changes (new sheet loaded), NOT on selection/edit
+  const dataUuid = data?.uuid;
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !data) return;
@@ -602,7 +642,14 @@ export function SchematicRenderer() {
     camRef.current = { zoom, x: (rect.width - pw * zoom) / 2, y: (rect.height - ph * zoom) / 2 };
     updateStatusBar({ zoom: Math.round(zoom * 100 / 3) });
     render();
-  }, [data, render, updateStatusBar]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataUuid]); // Only re-fit when a different schematic is loaded
+
+  // Re-render when data, selection, or wire drawing changes
+  useEffect(() => {
+    cancelAnimationFrame(animRef.current);
+    animRef.current = requestAnimationFrame(render);
+  }, [render]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -692,6 +739,14 @@ export function SchematicRenderer() {
       cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(render);
       return;
+    }
+
+    // Update wire cursor for live preview
+    if (data) {
+      const store = useSchematicStore.getState();
+      if (store.wireDrawing.active) {
+        store.updateWireCursor(world);
+      }
     }
 
     // Move selected elements
