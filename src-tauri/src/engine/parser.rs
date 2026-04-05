@@ -174,7 +174,7 @@ fn parse_at(node: &SExpr) -> (Point, f64) {
     }
 }
 
-fn parse_text_prop(prop_node: &SExpr, fallback_pos: Point) -> TextProp {
+fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
     let (position, rotation) = parse_at(prop_node);
     let effects = prop_node.find("effects");
 
@@ -209,8 +209,7 @@ fn parse_text_prop(prop_node: &SExpr, fallback_pos: Point) -> TextProp {
         }
     }
 
-    let pos = if position.x == 0.0 && position.y == 0.0 { fallback_pos } else { position };
-    TextProp { position: pos, rotation, font_size, justify_h, justify_v, hidden }
+    TextProp { position, rotation, font_size, justify_h, justify_v, hidden }
 }
 
 fn parse_uuid(node: &SExpr) -> String {
