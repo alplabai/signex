@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Alp EDA",
+  "version": "0.1.0",
+  "identifier": "ai.alplab.eda",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Alp EDA",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "decorations": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "copyright": "Copyright (C) 2026 Alp Lab AB. GPL-3.0",
+    "shortDescription": "AI-First Electronic Design Automation",
+    "longDescription": "Alp EDA is an AI-powered electronic design automation tool with Altium-class UX, built on KiCad's open-source core."
+  },
+  "plugins": {
+    "opener": {
+      "openUrl": true,
+      "openPath": true
+    }
+  }
+}
