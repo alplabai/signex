@@ -162,6 +162,7 @@ export function SchematicRenderer({ data }: Props) {
     } else {
       ctx.fillText(text, prop.position.x, prop.position.y);
     }
+
   }, []);
 
   const render = useCallback(() => {
