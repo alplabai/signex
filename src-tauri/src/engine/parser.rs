@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 use super::sexpr::{self, SExpr};
@@ -17,6 +18,41 @@ pub struct SchematicSheet {
     pub labels: Vec<Label>,
     pub child_sheets: Vec<ChildSheet>,
     pub no_connects: Vec<Point>,
+    pub text_notes: Vec<TextNote>,
+    pub rectangles: Vec<SchRectangle>,
+    pub lib_symbols: HashMap<String, LibSymbol>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibSymbol {
+    pub id: String,
+    pub graphics: Vec<Graphic>,
+    pub pins: Vec<Pin>,
+    pub show_pin_numbers: bool,
+    pub show_pin_names: bool,
+    pub pin_name_offset: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Graphic {
+    Polyline { points: Vec<Point>, width: f64, fill: bool },
+    Rectangle { start: Point, end: Point, width: f64, fill: bool },
+    Circle { center: Point, radius: f64, width: f64, fill: bool },
+    Arc { start: Point, mid: Point, end: Point, width: f64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pin {
+    pub pin_type: String,
+    pub shape: String,
+    pub position: Point,
+    pub rotation: f64,
+    pub length: f64,
+    pub name: String,
+    pub number: String,
+    pub name_visible: bool,
+    pub number_visible: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,8 +64,22 @@ pub struct Symbol {
     pub footprint: String,
     pub position: Point,
     pub rotation: f64,
+    pub mirror_x: bool,
+    pub mirror_y: bool,
     pub unit: u32,
     pub is_power: bool,
+    pub ref_text: TextProp,
+    pub val_text: TextProp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextProp {
+    pub position: Point,
+    pub rotation: f64,
+    pub font_size: f64,
+    pub justify_h: String,
+    pub justify_v: String,
+    pub hidden: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +110,21 @@ pub enum LabelType {
     Global,
     Hierarchical,
     Power,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextNote {
+    pub text: String,
+    pub position: Point,
+    pub rotation: f64,
+    pub font_size: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchRectangle {
+    pub start: Point,
+    pub end: Point,
+    pub stroke_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,11 +160,10 @@ pub struct SheetEntry {
     pub labels_count: usize,
 }
 
-// --- Parsing functions ---
+// --- Helper functions ---
 
 fn parse_at(node: &SExpr) -> (Point, f64) {
-    let at = node.find("at");
-    match at {
+    match node.find("at") {
         Some(at) => {
             let x = at.arg_f64(0).unwrap_or(0.0);
             let y = at.arg_f64(1).unwrap_or(0.0);
@@ -110,12 +174,209 @@ fn parse_at(node: &SExpr) -> (Point, f64) {
     }
 }
 
+fn parse_text_prop(prop_node: &SExpr, fallback_pos: Point) -> TextProp {
+    let (position, rotation) = parse_at(prop_node);
+    let effects = prop_node.find("effects");
+
+    let font_size = effects
+        .and_then(|e| e.find("font"))
+        .and_then(|f| f.find("size"))
+        .and_then(|s| s.arg_f64(0))
+        .unwrap_or(1.27);
+
+    let hidden = effects
+        .and_then(|e| e.find("hide"))
+        .and_then(|h| h.first_arg())
+        .map(|v| v == "yes")
+        .unwrap_or(false);
+
+    // Parse justify: (justify left bottom), (justify right), (justify center), etc.
+    let justify = effects.and_then(|e| e.find("justify"));
+    let mut justify_h = "center".to_string();
+    let mut justify_v = "center".to_string();
+    if let Some(j) = justify {
+        for child in j.children() {
+            if let super::sexpr::SExpr::Atom(s) = child {
+                match s.as_str() {
+                    "left" => justify_h = "left".to_string(),
+                    "right" => justify_h = "right".to_string(),
+                    "top" => justify_v = "top".to_string(),
+                    "bottom" => justify_v = "bottom".to_string(),
+                    "mirror" => {} // ignore mirror for now
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let pos = if position.x == 0.0 && position.y == 0.0 { fallback_pos } else { position };
+    TextProp { position: pos, rotation, font_size, justify_h, justify_v, hidden }
+}
+
 fn parse_uuid(node: &SExpr) -> String {
     node.find("uuid")
         .and_then(|u| u.first_arg())
         .unwrap_or("unknown")
         .to_string()
 }
+
+fn parse_fill_type(node: &SExpr) -> bool {
+    node.find("fill")
+        .and_then(|f| f.find("type"))
+        .and_then(|t| t.first_arg())
+        .map(|t| t == "outline" || t == "background")
+        .unwrap_or(false)
+}
+
+fn parse_stroke_width(node: &SExpr) -> f64 {
+    node.find("stroke")
+        .and_then(|s| s.find("width"))
+        .and_then(|w| w.arg_f64(0))
+        .unwrap_or(0.0)
+}
+
+fn is_text_hidden(node: &SExpr) -> bool {
+    // Check if (effects ... (hide yes)) exists
+    node.find("effects")
+        .and_then(|e| e.find("hide"))
+        .and_then(|h| h.first_arg())
+        .map(|v| v == "yes")
+        .unwrap_or(false)
+}
+
+// --- Lib symbol parsing ---
+
+fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
+    let id = symbol_node.first_arg().unwrap_or("").to_string();
+    let mut graphics = Vec::new();
+    let mut pins = Vec::new();
+
+    // Check pin visibility flags
+    let show_pin_numbers = symbol_node.find("pin_numbers")
+        .and_then(|pn| pn.first_arg())
+        .map(|v| v != "hide")
+        .unwrap_or(true);
+
+    // pin_names can have: (pin_names hide), (pin_names (offset X) hide), (pin_names (offset X))
+    let pin_names_node = symbol_node.find("pin_names");
+    let show_pin_names = pin_names_node
+        .map(|pn| {
+            // Check if any child atom is "hide"
+            !pn.children().iter().any(|c| matches!(c, super::sexpr::SExpr::Atom(s) if s == "hide"))
+        })
+        .unwrap_or(true);
+    let pin_name_offset = pin_names_node
+        .and_then(|pn| pn.find("offset"))
+        .and_then(|o| o.arg_f64(0))
+        .unwrap_or(0.508);
+
+    // Collect graphics and pins from sub-symbols (e.g., "R_0_1" for graphics, "R_1_1" for pins)
+    for sub in symbol_node.find_all("symbol") {
+        for poly in sub.find_all("polyline") {
+            if let Some(pts) = poly.find("pts") {
+                let points: Vec<Point> = pts.find_all("xy").iter().map(|xy| Point {
+                    x: xy.arg_f64(0).unwrap_or(0.0),
+                    y: xy.arg_f64(1).unwrap_or(0.0),
+                }).collect();
+                if !points.is_empty() {
+                    graphics.push(Graphic::Polyline {
+                        points,
+                        width: parse_stroke_width(poly),
+                        fill: parse_fill_type(poly),
+                    });
+                }
+            }
+        }
+
+        for rect in sub.find_all("rectangle") {
+            let start = rect.find("start").map(|s| Point {
+                x: s.arg_f64(0).unwrap_or(0.0),
+                y: s.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            let end = rect.find("end").map(|e| Point {
+                x: e.arg_f64(0).unwrap_or(0.0),
+                y: e.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            graphics.push(Graphic::Rectangle {
+                start,
+                end,
+                width: parse_stroke_width(rect),
+                fill: parse_fill_type(rect),
+            });
+        }
+
+        for circ in sub.find_all("circle") {
+            let center = circ.find("center").map(|c| Point {
+                x: c.arg_f64(0).unwrap_or(0.0),
+                y: c.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            let radius = circ.find("radius")
+                .and_then(|r| r.arg_f64(0))
+                .unwrap_or(1.0);
+            graphics.push(Graphic::Circle {
+                center,
+                radius,
+                width: parse_stroke_width(circ),
+                fill: parse_fill_type(circ),
+            });
+        }
+
+        for arc in sub.find_all("arc") {
+            let start = arc.find("start").map(|s| Point {
+                x: s.arg_f64(0).unwrap_or(0.0),
+                y: s.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            let mid = arc.find("mid").map(|m| Point {
+                x: m.arg_f64(0).unwrap_or(0.0),
+                y: m.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            let end = arc.find("end").map(|e| Point {
+                x: e.arg_f64(0).unwrap_or(0.0),
+                y: e.arg_f64(1).unwrap_or(0.0),
+            }).unwrap_or(Point { x: 0.0, y: 0.0 });
+            graphics.push(Graphic::Arc {
+                start,
+                mid,
+                end,
+                width: parse_stroke_width(arc),
+            });
+        }
+
+        // Parse pins
+        for pin in sub.children().iter().filter(|c| c.keyword() == Some("pin")) {
+            let pin_type = pin.first_arg().unwrap_or("unspecified").to_string();
+            let shape = pin.arg(1).unwrap_or("line").to_string();
+            let (position, rotation) = parse_at(pin);
+            let length = pin.find("length")
+                .and_then(|l| l.arg_f64(0))
+                .unwrap_or(2.54);
+
+            let name_node = pin.find("name");
+            let name = name_node.and_then(|n| n.first_arg()).unwrap_or("~").to_string();
+            let name_visible = !name_node.map(|n| is_text_hidden(n)).unwrap_or(false);
+
+            let number_node = pin.find("number");
+            let number = number_node.and_then(|n| n.first_arg()).unwrap_or("").to_string();
+            let number_visible = !number_node.map(|n| is_text_hidden(n)).unwrap_or(false);
+
+            pins.push(Pin {
+                pin_type,
+                shape,
+                position,
+                rotation,
+                length,
+                name,
+                number,
+                name_visible,
+                number_visible,
+            });
+        }
+    }
+
+    LibSymbol { id, graphics, pins, show_pin_numbers, show_pin_names, pin_name_offset }
+}
+
+// --- Main schematic parser ---
 
 pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
     let root = sexpr::parse(content)?;
@@ -124,61 +385,47 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
         return Err("Not a KiCad schematic file".to_string());
     }
 
-    let version = root
-        .find("version")
-        .and_then(|v| v.first_arg())
-        .unwrap_or("unknown")
-        .to_string();
-    let generator = root
-        .find("generator")
-        .and_then(|v| v.first_arg())
-        .unwrap_or("unknown")
-        .to_string();
-    let paper_size = root
-        .find("paper")
-        .and_then(|v| v.first_arg())
-        .unwrap_or("A4")
-        .to_string();
+    let version = root.find("version").and_then(|v| v.first_arg()).unwrap_or("unknown").to_string();
+    let generator = root.find("generator").and_then(|v| v.first_arg()).unwrap_or("unknown").to_string();
+    let paper_size = root.find("paper").and_then(|v| v.first_arg()).unwrap_or("A4").to_string();
     let uuid = parse_uuid(&root);
 
-    // Parse symbols (skip lib_symbols section — those are definitions, not instances)
-    let lib_symbol_ids: Vec<&str> = root
-        .find("lib_symbols")
-        .map(|ls| {
-            ls.find_all("symbol")
-                .iter()
-                .filter_map(|s| s.first_arg())
-                .collect()
-        })
-        .unwrap_or_default();
+    // Parse library symbols
+    let mut lib_symbols = HashMap::new();
+    if let Some(lib_node) = root.find("lib_symbols") {
+        for sym in lib_node.find_all("symbol") {
+            let parsed = parse_lib_symbol(sym);
+            lib_symbols.insert(parsed.id.clone(), parsed);
+        }
+    }
 
+    // Parse instance symbols
     let symbols: Vec<Symbol> = root
         .find_all("symbol")
         .iter()
-        .filter(|s| {
-            // Only instance symbols, not library definitions inside lib_symbols
-            let is_lib_def = s
-                .first_arg()
-                .map(|id| lib_symbol_ids.contains(&id))
-                .unwrap_or(false);
-            !is_lib_def
-        })
+        .filter(|s| s.find("lib_id").is_some())
         .map(|s| {
             let (position, rotation) = parse_at(s);
-            let lib_id = s
-                .find("lib_id")
-                .and_then(|l| l.first_arg())
-                .unwrap_or("")
-                .to_string();
+            let lib_id = s.find("lib_id").and_then(|l| l.first_arg()).unwrap_or("").to_string();
             let reference = s.property("Reference").unwrap_or("?").to_string();
             let value = s.property("Value").unwrap_or("").to_string();
             let footprint = s.property("Footprint").unwrap_or("").to_string();
-            let unit = s
-                .find("unit")
-                .and_then(|u| u.first_arg())
-                .and_then(|u| u.parse::<u32>().ok())
-                .unwrap_or(1);
+            let unit = s.find("unit").and_then(|u| u.first_arg()).and_then(|u| u.parse::<u32>().ok()).unwrap_or(1);
             let is_power = lib_id.starts_with("power:");
+
+            // Check for mirror in the at node or mirror node
+            let mirror = s.find("mirror");
+            let mirror_x = mirror.and_then(|m| m.first_arg()).map(|v| v == "x" || v == "xy").unwrap_or(false);
+            let mirror_y = mirror.and_then(|m| m.first_arg()).map(|v| v == "y" || v == "xy").unwrap_or(false);
+
+            let ref_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Reference"));
+            let val_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Value"));
+            let ref_text = ref_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
+                position, rotation: 0.0, font_size: 1.27, justify_h: "center".into(), justify_v: "center".into(), hidden: false,
+            });
+            let val_text = val_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
+                position, rotation: 0.0, font_size: 1.27, justify_h: "center".into(), justify_v: "center".into(), hidden: false,
+            });
 
             Symbol {
                 uuid: parse_uuid(s),
@@ -188,225 +435,162 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 footprint,
                 position,
                 rotation,
+                mirror_x,
+                mirror_y,
                 unit,
                 is_power,
+                ref_text,
+                val_text,
             }
         })
         .collect();
 
     // Parse wires
-    let wires: Vec<Wire> = root
-        .find_all("wire")
-        .iter()
-        .map(|w| {
-            let pts = w.find("pts");
-            let (start, end) = match pts {
-                Some(pts) => {
-                    let xy_nodes = pts.find_all("xy");
-                    let start = xy_nodes.first().map(|xy| Point {
-                        x: xy.arg_f64(0).unwrap_or(0.0),
-                        y: xy.arg_f64(1).unwrap_or(0.0),
-                    }).unwrap_or(Point { x: 0.0, y: 0.0 });
-                    let end = xy_nodes.get(1).map(|xy| Point {
-                        x: xy.arg_f64(0).unwrap_or(0.0),
-                        y: xy.arg_f64(1).unwrap_or(0.0),
-                    }).unwrap_or(start);
-                    (start, end)
-                }
-                None => (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
-            };
-            Wire {
-                uuid: parse_uuid(w),
-                start,
-                end,
+    let wires: Vec<Wire> = root.find_all("wire").iter().map(|w| {
+        let pts = w.find("pts");
+        let (start, end) = match pts {
+            Some(pts) => {
+                let xy_nodes = pts.find_all("xy");
+                let start = xy_nodes.first().map(|xy| Point {
+                    x: xy.arg_f64(0).unwrap_or(0.0),
+                    y: xy.arg_f64(1).unwrap_or(0.0),
+                }).unwrap_or(Point { x: 0.0, y: 0.0 });
+                let end = xy_nodes.get(1).map(|xy| Point {
+                    x: xy.arg_f64(0).unwrap_or(0.0),
+                    y: xy.arg_f64(1).unwrap_or(0.0),
+                }).unwrap_or(start);
+                (start, end)
             }
-        })
-        .collect();
+            None => (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
+        };
+        Wire { uuid: parse_uuid(w), start, end }
+    }).collect();
 
-    // Parse junctions
-    let junctions: Vec<Junction> = root
-        .find_all("junction")
-        .iter()
-        .map(|j| {
-            let (position, _) = parse_at(j);
-            Junction {
-                uuid: parse_uuid(j),
-                position,
-            }
-        })
-        .collect();
+    let junctions: Vec<Junction> = root.find_all("junction").iter().map(|j| {
+        Junction { uuid: parse_uuid(j), position: parse_at(j).0 }
+    }).collect();
 
-    // Parse labels
     let mut labels: Vec<Label> = Vec::new();
-    for l in root.find_all("label") {
-        let (position, rotation) = parse_at(l);
-        labels.push(Label {
-            uuid: parse_uuid(l),
-            text: l.first_arg().unwrap_or("").to_string(),
-            position,
-            rotation,
-            label_type: LabelType::Net,
-        });
-    }
-    for l in root.find_all("global_label") {
-        let (position, rotation) = parse_at(l);
-        labels.push(Label {
-            uuid: parse_uuid(l),
-            text: l.first_arg().unwrap_or("").to_string(),
-            position,
-            rotation,
-            label_type: LabelType::Global,
-        });
-    }
-    for l in root.find_all("hierarchical_label") {
-        let (position, rotation) = parse_at(l);
-        labels.push(Label {
-            uuid: parse_uuid(l),
-            text: l.first_arg().unwrap_or("").to_string(),
-            position,
-            rotation,
-            label_type: LabelType::Hierarchical,
-        });
-    }
-
-    // Parse no-connect markers
-    let no_connects: Vec<Point> = root
-        .find_all("no_connect")
-        .iter()
-        .map(|nc| parse_at(nc).0)
-        .collect();
-
-    // Parse child sheet references
-    let child_sheets: Vec<ChildSheet> = root
-        .find_all("sheet")
-        .iter()
-        .map(|s| {
-            let (position, _) = parse_at(s);
-            let size_node = s.find("size");
-            let size = match size_node {
-                Some(sz) => (
-                    sz.arg_f64(0).unwrap_or(20.0),
-                    sz.arg_f64(1).unwrap_or(15.0),
-                ),
-                None => (20.0, 15.0),
-            };
-            let name = s.property("Sheetname").unwrap_or("Unnamed").to_string();
-            let filename = s.property("Sheetfile").unwrap_or("").to_string();
-            ChildSheet {
-                uuid: parse_uuid(s),
-                name,
-                filename,
+    for (keyword, ltype) in [("label", LabelType::Net), ("global_label", LabelType::Global), ("hierarchical_label", LabelType::Hierarchical)] {
+        for l in root.find_all(keyword) {
+            let (position, rotation) = parse_at(l);
+            labels.push(Label {
+                uuid: parse_uuid(l),
+                text: l.first_arg().unwrap_or("").to_string(),
                 position,
-                size,
-            }
-        })
-        .collect();
+                rotation,
+                label_type: ltype.clone(),
+            });
+        }
+    }
+
+    let no_connects: Vec<Point> = root.find_all("no_connect").iter().map(|nc| parse_at(nc).0).collect();
+
+    let child_sheets: Vec<ChildSheet> = root.find_all("sheet").iter().map(|s| {
+        let (position, _) = parse_at(s);
+        let size = s.find("size").map(|sz| (
+            sz.arg_f64(0).unwrap_or(20.0),
+            sz.arg_f64(1).unwrap_or(15.0),
+        )).unwrap_or((20.0, 15.0));
+        ChildSheet {
+            uuid: parse_uuid(s),
+            name: s.property("Sheetname").unwrap_or("Unnamed").to_string(),
+            filename: s.property("Sheetfile").unwrap_or("").to_string(),
+            position,
+            size,
+        }
+    }).collect();
+
+    // Parse text notes
+    let text_notes: Vec<TextNote> = root.find_all("text").iter().map(|t| {
+        let (position, rotation) = parse_at(t);
+        let font_size = t.find("effects")
+            .and_then(|e| e.find("font"))
+            .and_then(|f| f.find("size"))
+            .and_then(|s| s.arg_f64(0))
+            .unwrap_or(1.27);
+        TextNote {
+            text: t.first_arg().unwrap_or("").to_string(),
+            position,
+            rotation,
+            font_size,
+        }
+    }).collect();
+
+    // Parse top-level rectangles (dashed section boxes)
+    let rectangles: Vec<SchRectangle> = root.find_all("rectangle").iter().map(|r| {
+        let start = r.find("start").map(|s| Point {
+            x: s.arg_f64(0).unwrap_or(0.0),
+            y: s.arg_f64(1).unwrap_or(0.0),
+        }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let end = r.find("end").map(|e| Point {
+            x: e.arg_f64(0).unwrap_or(0.0),
+            y: e.arg_f64(1).unwrap_or(0.0),
+        }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let stroke_type = r.find("stroke")
+            .and_then(|s| s.find("type"))
+            .and_then(|t| t.first_arg())
+            .unwrap_or("default")
+            .to_string();
+        SchRectangle { start, end, stroke_type }
+    }).collect();
 
     Ok(SchematicSheet {
-        uuid,
-        version,
-        generator,
-        paper_size,
-        symbols,
-        wires,
-        junctions,
-        labels,
-        child_sheets,
-        no_connects,
+        uuid, version, generator, paper_size,
+        symbols, wires, junctions, labels, child_sheets, no_connects,
+        text_notes, rectangles, lib_symbols,
     })
 }
 
-/// Parse a KiCad .kicad_pro project file (JSON format)
+// --- Project parser (lightweight, no full S-expr parse) ---
+
 pub fn parse_project(path: &Path) -> Result<ProjectData, String> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let project_name = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Untitled")
-        .to_string();
+    let project_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string();
 
-    // Find the root schematic (same name as project, .kicad_sch extension)
     let root_sch_name = format!("{}.kicad_sch", project_name);
     let root_sch_path = dir.join(&root_sch_name);
+    let schematic_root = if root_sch_path.exists() { Some(root_sch_name.clone()) } else { None };
 
-    let schematic_root = if root_sch_path.exists() {
-        Some(root_sch_name.clone())
-    } else {
-        None
-    };
-
-    // Find PCB file
     let pcb_name = format!("{}.kicad_pcb", project_name);
-    let pcb_path = dir.join(&pcb_name);
-    let pcb_file = if pcb_path.exists() {
-        Some(pcb_name)
-    } else {
-        None
-    };
+    let pcb_file = if dir.join(&pcb_name).exists() { Some(pcb_name) } else { None };
 
-    // Parse all schematic sheets recursively
     let mut sheets = Vec::new();
     if let Some(ref root_name) = schematic_root {
         collect_sheets(dir, root_name, &mut sheets)?;
     }
 
-    Ok(ProjectData {
-        name: project_name,
-        dir: dir.to_string_lossy().to_string(),
-        schematic_root,
-        pcb_file,
-        sheets,
-    })
+    Ok(ProjectData { name: project_name, dir: dir.to_string_lossy().to_string(), schematic_root, pcb_file, sheets })
 }
 
-/// Lightweight scanner — counts elements and finds child sheets without full S-expr parsing.
-/// Much faster than parse_schematic for project tree population.
-fn collect_sheets(
-    dir: &Path,
-    filename: &str,
-    sheets: &mut Vec<SheetEntry>,
-) -> Result<(), String> {
-    if sheets.iter().any(|s| s.filename == filename) {
-        return Ok(());
-    }
+fn collect_sheets(dir: &Path, filename: &str, sheets: &mut Vec<SheetEntry>) -> Result<(), String> {
+    if sheets.iter().any(|s| s.filename == filename) { return Ok(()); }
 
-    let sch_path = dir.join(filename);
-    let content = std::fs::read_to_string(&sch_path)
+    let content = std::fs::read_to_string(dir.join(filename))
         .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
 
-    // Count top-level elements by scanning for patterns (no full parse needed)
     let mut symbols_count = 0;
     let mut wires_count = 0;
     let mut labels_count = 0;
     let mut child_filenames: Vec<String> = Vec::new();
-
     let mut depth = 0;
+
     for line in content.lines() {
         let trimmed = line.trim();
-
-        // Track nesting depth to only count top-level elements
         let opens = trimmed.matches('(').count();
         let closes = trimmed.matches(')').count();
 
         if depth == 1 {
-            if trimmed.starts_with("(symbol") && !trimmed.contains("lib_symbols") {
-                // Skip power symbols (lib_id starts with "power:")
-                if !trimmed.contains("power:") {
-                    symbols_count += 1;
-                }
+            if trimmed.starts_with("(symbol") && !trimmed.contains("power:") {
+                symbols_count += 1;
             } else if trimmed.starts_with("(wire") {
                 wires_count += 1;
-            } else if trimmed.starts_with("(label")
-                || trimmed.starts_with("(global_label")
-                || trimmed.starts_with("(hierarchical_label")
-            {
+            } else if trimmed.starts_with("(label") || trimmed.starts_with("(global_label") || trimmed.starts_with("(hierarchical_label") {
                 labels_count += 1;
             }
         }
 
-        // Find Sheetfile properties inside (sheet ...) blocks
         if trimmed.contains("\"Sheetfile\"") {
-            // Extract filename from: (property "Sheetfile" "filename.kicad_sch"
             if let Some(start) = trimmed.rfind('"') {
                 let before = &trimmed[..start];
                 if let Some(fname_start) = before.rfind('"') {
@@ -422,23 +606,11 @@ fn collect_sheets(
         depth = depth.saturating_sub(closes);
     }
 
-    let name = if sheets.is_empty() {
-        "Root".to_string()
-    } else {
-        filename.trim_end_matches(".kicad_sch").to_string()
-    };
-
-    sheets.push(SheetEntry {
-        name,
-        filename: filename.to_string(),
-        symbols_count,
-        wires_count,
-        labels_count,
-    });
+    let name = if sheets.is_empty() { "Root".to_string() } else { filename.trim_end_matches(".kicad_sch").to_string() };
+    sheets.push(SheetEntry { name, filename: filename.to_string(), symbols_count, wires_count, labels_count });
 
     for child in child_filenames {
         collect_sheets(dir, &child, sheets)?;
     }
-
     Ok(())
 }
