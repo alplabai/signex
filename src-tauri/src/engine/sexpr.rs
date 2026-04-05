@@ -197,6 +197,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_real_kicad_file() {
+        let path = r"C:\Users\caner\Documents\GitHub\smart-home-hub-pcb\smart-home-hub.kicad_sch";
+        if !std::path::Path::new(path).exists() {
+            return; // skip if file not present
+        }
+        let content = std::fs::read_to_string(path).unwrap();
+        let start = std::time::Instant::now();
+        let expr = parse(&content).unwrap();
+        let elapsed = start.elapsed();
+        println!("Parsed {} bytes in {:?}", content.len(), elapsed);
+        assert_eq!(expr.keyword(), Some("kicad_sch"));
+    }
+
+    #[test]
     fn test_simple() {
         let expr = parse("(hello world)").unwrap();
         assert_eq!(expr.keyword(), Some("hello"));

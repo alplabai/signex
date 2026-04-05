@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use commands::project;
+use commands::{project, schematic};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             project::open_project,
             project::get_app_info,
+            schematic::get_schematic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Alp EDA");

@@ -7,6 +7,7 @@ use crate::engine::parser;
 pub struct ProjectInfo {
     pub name: String,
     pub path: String,
+    pub dir: String,
     pub format: String,
     pub schematic_root: Option<String>,
     pub pcb_file: Option<String>,
@@ -37,26 +38,30 @@ pub fn get_app_info() -> AppInfo {
 }
 
 #[tauri::command]
-pub fn open_project(path: String) -> Result<ProjectInfo, String> {
-    let project_path = Path::new(&path);
-    if !project_path.exists() {
-        let name = project_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
-        return Err(format!("Project file not found: {}", name));
-    }
+pub async fn open_project(path: String) -> Result<ProjectInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        let project_path = Path::new(&path);
+        if !project_path.exists() {
+            let name = project_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            return Err(format!("Project file not found: {}", name));
+        }
 
-    let ext = project_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+        let ext = project_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
 
-    match ext {
-        "kicad_pro" => open_kicad_project(project_path, &path),
-        "alpproj" => open_alp_project(project_path, &path),
-        _ => Err(format!("Unsupported project format: .{}", ext)),
-    }
+        match ext {
+            "kicad_pro" => open_kicad_project(project_path, &path),
+            "alpproj" => open_alp_project(project_path, &path),
+            _ => Err(format!("Unsupported project format: .{}", ext)),
+        }
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 fn open_kicad_project(project_path: &Path, original_path: &str) -> Result<ProjectInfo, String> {
@@ -77,6 +82,7 @@ fn open_kicad_project(project_path: &Path, original_path: &str) -> Result<Projec
     Ok(ProjectInfo {
         name: data.name,
         path: original_path.to_string(),
+        dir: data.dir,
         format: "kicad".to_string(),
         schematic_root: data.schematic_root,
         pcb_file: data.pcb_file,
@@ -92,9 +98,11 @@ fn open_alp_project(_project_path: &Path, original_path: &str) -> Result<Project
         .unwrap_or("Untitled")
         .to_string();
 
+    let dir = _project_path.parent().unwrap_or(Path::new("."));
     Ok(ProjectInfo {
         name,
         path: original_path.to_string(),
+        dir: dir.to_string_lossy().to_string(),
         format: "alp".to_string(),
         schematic_root: None,
         pcb_file: None,

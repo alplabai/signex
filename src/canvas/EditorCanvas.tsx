@@ -1,5 +1,10 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useProjectStore } from "@/stores/project";
-import { Zap, FolderOpen, Cpu, Layers } from "lucide-react";
+import { useEditorStore } from "@/stores/editor";
+import { SchematicRenderer } from "./SchematicRenderer";
+import { Zap, FolderOpen, Cpu, Layers, Loader2 } from "lucide-react";
+import type { SchematicData } from "@/types";
 
 interface EditorCanvasProps {
   onOpenProject?: () => void;
@@ -8,11 +13,53 @@ interface EditorCanvasProps {
 export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
   const project = useProjectStore((s) => s.project);
   const activeTabId = useProjectStore((s) => s.activeTabId);
+  const activeTab = useProjectStore((s) =>
+    s.openTabs.find((t) => t.id === s.activeTabId)
+  );
+  const [schematic, setSchematic] = useState<SchematicData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setMode = useEditorStore((s) => s.setMode);
 
+  // Load schematic when active tab changes
+  useEffect(() => {
+    if (!project || !activeTab) {
+      setSchematic(null);
+      return;
+    }
+
+    if (activeTab.type !== "schematic") return;
+
+    // Find the sheet filename from the tab
+    const sheet = project.sheets.find(
+      (s) => `sch-${project.path}:${s.filename}` === activeTabId
+    );
+    // Fallback: if tab was opened with project path, use root schematic
+    const filename = sheet?.filename || project.schematic_root;
+    if (!filename) return;
+
+    setLoading(true);
+    setError(null);
+    setMode("schematic");
+
+    invoke<SchematicData>("get_schematic", {
+      projectDir: project.dir,
+      filename,
+    })
+      .then((data) => {
+        setSchematic(data);
+      })
+      .catch((err) => {
+        setError(String(err));
+        setSchematic(null);
+      })
+      .finally(() => setLoading(false));
+  }, [project, activeTab, activeTabId, setMode]);
+
+  // No project — welcome screen
   if (!project || !activeTabId) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-bg-primary relative overflow-hidden">
-        {/* Background grid pattern */}
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
@@ -21,13 +68,8 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
             backgroundSize: "40px 40px",
           }}
         />
-
-        {/* Radial glow */}
         <div className="absolute inset-0 bg-radial-[circle_at_center] from-accent/5 via-transparent to-transparent" />
-
-        {/* Content */}
         <div className="relative z-10 flex flex-col items-center gap-8">
-          {/* Logo */}
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-2xl bg-accent/10 border border-accent/20">
               <Zap size={36} className="text-accent" />
@@ -41,8 +83,6 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
               </p>
             </div>
           </div>
-
-          {/* Quick actions */}
           <div className="flex flex-col items-center gap-2 mt-2">
             <button
               onClick={onOpenProject}
@@ -56,8 +96,6 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
               or press Ctrl+K for Command Palette
             </span>
           </div>
-
-          {/* Phase roadmap */}
           <div className="flex gap-3 mt-6">
             {[
               { phase: "0", label: "Viewer", icon: <Zap size={16} />, active: true },
@@ -85,21 +123,30 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
     );
   }
 
-  // Canvas placeholder — wgpu rendering replaces this in Week 3
-  return (
-    <div className="relative h-full bg-bg-primary">
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
-          opacity: 0.2,
-        }}
-      />
-      <div className="absolute inset-0 flex items-center justify-center text-text-muted text-sm">
-        wgpu canvas — rendering engine coming in Phase 0, Week 3
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-bg-primary">
+        <Loader2 size={24} className="text-accent animate-spin" />
+        <span className="ml-3 text-text-secondary text-sm">Loading schematic...</span>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full bg-bg-primary">
+        <span className="text-error text-sm">{error}</span>
+      </div>
+    );
+  }
+
+  if (schematic) {
+    return <SchematicRenderer data={schematic} />;
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full bg-bg-primary text-text-muted text-sm">
+      Select a sheet to view
     </div>
   );
 }

@@ -359,12 +359,13 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, String> {
     })
 }
 
+/// Lightweight scanner — counts elements and finds child sheets without full S-expr parsing.
+/// Much faster than parse_schematic for project tree population.
 fn collect_sheets(
     dir: &Path,
     filename: &str,
     sheets: &mut Vec<SheetEntry>,
 ) -> Result<(), String> {
-    // Avoid duplicates (circular references)
     if sheets.iter().any(|s| s.filename == filename) {
         return Ok(());
     }
@@ -373,31 +374,70 @@ fn collect_sheets(
     let content = std::fs::read_to_string(&sch_path)
         .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
 
-    let sheet = parse_schematic(&content)?;
+    // Count top-level elements by scanning for patterns (no full parse needed)
+    let mut symbols_count = 0;
+    let mut wires_count = 0;
+    let mut labels_count = 0;
+    let mut child_filenames: Vec<String> = Vec::new();
+
+    let mut depth = 0;
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Track nesting depth to only count top-level elements
+        let opens = trimmed.matches('(').count();
+        let closes = trimmed.matches(')').count();
+
+        if depth == 1 {
+            if trimmed.starts_with("(symbol") && !trimmed.contains("lib_symbols") {
+                // Skip power symbols (lib_id starts with "power:")
+                if !trimmed.contains("power:") {
+                    symbols_count += 1;
+                }
+            } else if trimmed.starts_with("(wire") {
+                wires_count += 1;
+            } else if trimmed.starts_with("(label")
+                || trimmed.starts_with("(global_label")
+                || trimmed.starts_with("(hierarchical_label")
+            {
+                labels_count += 1;
+            }
+        }
+
+        // Find Sheetfile properties inside (sheet ...) blocks
+        if trimmed.contains("\"Sheetfile\"") {
+            // Extract filename from: (property "Sheetfile" "filename.kicad_sch"
+            if let Some(start) = trimmed.rfind('"') {
+                let before = &trimmed[..start];
+                if let Some(fname_start) = before.rfind('"') {
+                    let fname = &trimmed[fname_start + 1..start];
+                    if !fname.is_empty() && fname != "Sheetfile" {
+                        child_filenames.push(fname.to_string());
+                    }
+                }
+            }
+        }
+
+        depth += opens;
+        depth = depth.saturating_sub(closes);
+    }
 
     let name = if sheets.is_empty() {
         "Root".to_string()
     } else {
-        filename
-            .trim_end_matches(".kicad_sch")
-            .to_string()
+        filename.trim_end_matches(".kicad_sch").to_string()
     };
-
-    let non_power_symbols = sheet.symbols.iter().filter(|s| !s.is_power).count();
 
     sheets.push(SheetEntry {
         name,
         filename: filename.to_string(),
-        symbols_count: non_power_symbols,
-        wires_count: sheet.wires.len(),
-        labels_count: sheet.labels.len(),
+        symbols_count,
+        wires_count,
+        labels_count,
     });
 
-    // Recurse into child sheets
-    for child in &sheet.child_sheets {
-        if !child.filename.is_empty() {
-            collect_sheets(dir, &child.filename, sheets)?;
-        }
+    for child in child_filenames {
+        collect_sheets(dir, &child, sheets)?;
     }
 
     Ok(())
