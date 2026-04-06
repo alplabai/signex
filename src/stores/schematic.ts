@@ -85,6 +85,10 @@ interface SchematicState {
   // Selection helpers
   selectAll: () => void;
 
+  // Alignment
+  alignSelected: (direction: "left" | "right" | "top" | "bottom" | "centerH" | "centerV") => void;
+  distributeSelected: (axis: "horizontal" | "vertical") => void;
+
   // Component placement
   startPlacement: (lib: LibSymbol, meta: SymbolSearchResult) => void;
   rotatePlacement: () => void;
@@ -630,6 +634,94 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     for (const l of data.labels) ids.add(l.uuid);
     for (const j of data.junctions) ids.add(j.uuid);
     set({ selectedIds: ids });
+  },
+
+  alignSelected: (direction) => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size < 2) return;
+
+    // Collect positions of selected symbols
+    const positions: { uuid: string; x: number; y: number }[] = [];
+    for (const sym of data.symbols) {
+      if (selectedIds.has(sym.uuid)) positions.push({ uuid: sym.uuid, x: sym.position.x, y: sym.position.y });
+    }
+    for (const label of data.labels) {
+      if (selectedIds.has(label.uuid)) positions.push({ uuid: label.uuid, x: label.position.x, y: label.position.y });
+    }
+    if (positions.length < 2) return;
+
+    get().pushUndo();
+    const newData = cloneData(data);
+
+    let target: number;
+    switch (direction) {
+      case "left": target = Math.min(...positions.map(p => p.x)); break;
+      case "right": target = Math.max(...positions.map(p => p.x)); break;
+      case "top": target = Math.min(...positions.map(p => p.y)); break;
+      case "bottom": target = Math.max(...positions.map(p => p.y)); break;
+      case "centerH": target = positions.reduce((s, p) => s + p.x, 0) / positions.length; break;
+      case "centerV": target = positions.reduce((s, p) => s + p.y, 0) / positions.length; break;
+    }
+
+    for (const pos of positions) {
+      const isH = direction === "left" || direction === "right" || direction === "centerH";
+      const delta = isH ? target - pos.x : target - pos.y;
+
+      const sym = newData.symbols.find(s => s.uuid === pos.uuid);
+      if (sym) {
+        if (isH) { sym.position.x += delta; sym.ref_text.position.x += delta; sym.val_text.position.x += delta; }
+        else { sym.position.y += delta; sym.ref_text.position.y += delta; sym.val_text.position.y += delta; }
+      }
+      const label = newData.labels.find(l => l.uuid === pos.uuid);
+      if (label) {
+        if (isH) label.position.x += delta;
+        else label.position.y += delta;
+      }
+    }
+
+    set({ data: newData, dirty: true });
+  },
+
+  distributeSelected: (axis) => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size < 3) return;
+
+    const positions: { uuid: string; x: number; y: number }[] = [];
+    for (const sym of data.symbols) {
+      if (selectedIds.has(sym.uuid)) positions.push({ uuid: sym.uuid, x: sym.position.x, y: sym.position.y });
+    }
+    for (const label of data.labels) {
+      if (selectedIds.has(label.uuid)) positions.push({ uuid: label.uuid, x: label.position.x, y: label.position.y });
+    }
+    if (positions.length < 3) return;
+
+    get().pushUndo();
+    const newData = cloneData(data);
+
+    const isH = axis === "horizontal";
+    positions.sort((a, b) => isH ? a.x - b.x : a.y - b.y);
+    const first = isH ? positions[0].x : positions[0].y;
+    const last = isH ? positions[positions.length - 1].x : positions[positions.length - 1].y;
+    const step = (last - first) / (positions.length - 1);
+
+    for (let i = 1; i < positions.length - 1; i++) {
+      const target = first + step * i;
+      const pos = positions[i];
+      const delta = target - (isH ? pos.x : pos.y);
+
+      const sym = newData.symbols.find(s => s.uuid === pos.uuid);
+      if (sym) {
+        if (isH) { sym.position.x += delta; sym.ref_text.position.x += delta; sym.val_text.position.x += delta; }
+        else { sym.position.y += delta; sym.ref_text.position.y += delta; sym.val_text.position.y += delta; }
+      }
+      const label = newData.labels.find(l => l.uuid === pos.uuid);
+      if (label) {
+        if (isH) label.position.x += delta;
+        else label.position.y += delta;
+      }
+    }
+
+    set({ data: newData, dirty: true });
   },
 
   // Component placement

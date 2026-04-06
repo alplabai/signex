@@ -1024,6 +1024,30 @@ export function SchematicRenderer() {
             store.selectAll();
           }
           break;
+        case "q":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            const editor = useEditorStore.getState();
+            const nextUnits = editor.statusBar.units === "mm" ? "mil" : editor.statusBar.units === "mil" ? "inch" : "mm";
+            editor.updateStatusBar({ units: nextUnits as "mm" | "mil" | "inch" });
+          }
+          break;
+        case "ArrowUp":
+        case "ArrowDown":
+        case "ArrowLeft":
+        case "ArrowRight": {
+          if (!e.ctrlKey || store.selectedIds.size === 0) break;
+          e.preventDefault();
+          const grid = useEditorStore.getState().statusBar.gridSize;
+          const step = e.shiftKey ? grid * 10 : grid;
+          const ddx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
+          const ddy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
+          if (ddx !== 0 || ddy !== 0) {
+            store.pushUndo();
+            store.moveElements([...store.selectedIds], ddx, ddy);
+          }
+          break;
+        }
         case "r":
         case "R":
           if (!e.ctrlKey) {
