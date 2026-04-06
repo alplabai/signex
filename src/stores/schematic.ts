@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeJunction" | "placePort" | "placeText" | "drawLine" | "drawRect" | "measure";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placePort" | "placeText" | "drawLine" | "drawRect" | "measure";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -550,8 +550,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "reference": sym.reference = value; break;
       case "value": sym.value = value; break;
       case "footprint": sym.footprint = value; break;
-      case "x": sym.position.x = parseFloat(value) || sym.position.x; break;
-      case "y": sym.position.y = parseFloat(value) || sym.position.y; break;
+      case "x": sym.position.x = isNaN(parseFloat(value)) ? sym.position.x : parseFloat(value); break;
+      case "y": sym.position.y = isNaN(parseFloat(value)) ? sym.position.y : parseFloat(value); break;
       case "rotation": sym.rotation = (parseInt(value) || 0) % 360; break;
     }
     set({ data: newData, dirty: true });
@@ -566,8 +566,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!label) return;
     switch (key) {
       case "text": label.text = value; break;
-      case "x": label.position.x = parseFloat(value) || label.position.x; break;
-      case "y": label.position.y = parseFloat(value) || label.position.y; break;
+      case "x": label.position.x = isNaN(parseFloat(value)) ? label.position.x : parseFloat(value); break;
+      case "y": label.position.y = isNaN(parseFloat(value)) ? label.position.y : parseFloat(value); break;
     }
     set({ data: newData, dirty: true });
   },
@@ -581,8 +581,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!note) return;
     switch (key) {
       case "text": note.text = value; break;
-      case "x": note.position.x = parseFloat(value) || note.position.x; break;
-      case "y": note.position.y = parseFloat(value) || note.position.y; break;
+      case "x": note.position.x = isNaN(parseFloat(value)) ? note.position.x : parseFloat(value); break;
+      case "y": note.position.y = isNaN(parseFloat(value)) ? note.position.y : parseFloat(value); break;
     }
     set({ data: newData, dirty: true });
   },
@@ -762,9 +762,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   // Wire drawing state machine
   startWire: (pos) => {
     // Caller handles snapping (electrical or grid) — use pos directly
+    // Preserve current editMode (could be "drawWire" or "drawBus")
     const mode = get().wireDrawing.routingMode;
+    const currentEditMode = get().editMode;
     set({
-      editMode: "drawWire",
+      editMode: currentEditMode === "drawBus" ? "drawBus" : "drawWire",
       wireDrawing: { points: [pos], active: true, routingMode: mode },
     });
   },

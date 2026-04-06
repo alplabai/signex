@@ -63,20 +63,6 @@ function pinEnd(pin: SchPin): SchPoint {
 const ELECTRICAL_SNAP_RANGE = 2.0; // World units — snap to pins/wire endpoints within this range
 
 /** Find nearest pin endpoint or wire endpoint for electrical snapping */
-/** Find intersection point of two line segments, or null if they don't cross */
-function lineIntersection(a1: SchPoint, a2: SchPoint, b1: SchPoint, b2: SchPoint): SchPoint | null {
-  const dx1 = a2.x - a1.x, dy1 = a2.y - a1.y;
-  const dx2 = b2.x - b1.x, dy2 = b2.y - b1.y;
-  const denom = dx1 * dy2 - dy1 * dx2;
-  if (Math.abs(denom) < 0.001) return null; // Parallel
-  const t = ((b1.x - a1.x) * dy2 - (b1.y - a1.y) * dx2) / denom;
-  const u = ((b1.x - a1.x) * dy1 - (b1.y - a1.y) * dx1) / denom;
-  if (t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99) {
-    return { x: a1.x + t * dx1, y: a1.y + t * dy1 };
-  }
-  return null;
-}
-
 function findNearestElectricalPoint(
   data: SchematicData, worldX: number, worldY: number
 ): SchPoint | null {
@@ -262,14 +248,19 @@ export function SchematicRenderer() {
 
     const dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
+    const newW = Math.round(rect.width * dpr);
+    const newH = Math.round(rect.height * dpr);
+    // Only resize when dimensions change (avoids clearing context state every frame)
+    if (canvas.width !== newW || canvas.height !== newH) {
+      canvas.width = newW;
+      canvas.height = newH;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const cam = camRef.current;
     const w = rect.width, h = rect.height;
 
@@ -813,30 +804,6 @@ export function SchematicRenderer() {
       }
     }
 
-    // --- Wire cross-over arcs (bump at non-connected crossings) ---
-    for (let i = 0; i < data.wires.length; i++) {
-      for (let j = i + 1; j < data.wires.length; j++) {
-        const w1 = data.wires[i], w2 = data.wires[j];
-        const ix = lineIntersection(w1.start, w1.end, w2.start, w2.end);
-        if (ix) {
-          // Check if they share an endpoint (connected) — skip if so
-          const eps = [[w1.start, w2.start], [w1.start, w2.end], [w1.end, w2.start], [w1.end, w2.end]];
-          const connected = eps.some(([a, b]) => Math.abs(a.x - b.x) < 0.05 && Math.abs(a.y - b.y) < 0.05);
-          if (!connected) {
-            // Check if junction exists at intersection
-            const hasJunction = data.junctions.some(j => Math.abs(j.position.x - ix.x) < 0.05 && Math.abs(j.position.y - ix.y) < 0.05);
-            if (!hasJunction) {
-              ctx.strokeStyle = C.wire;
-              ctx.lineWidth = 0.15;
-              ctx.beginPath();
-              ctx.arc(ix.x, ix.y, 0.4, 0, Math.PI, true);
-              ctx.stroke();
-            }
-          }
-        }
-      }
-    }
-
     // --- Wire/Bus drawing preview with live Manhattan routing ---
     const isBusDrawing = useSchematicStore.getState().editMode === "drawBus";
     if (wireDrawing.active && wireDrawing.points.length > 0) {
@@ -1059,13 +1026,22 @@ export function SchematicRenderer() {
         store.setEditMode("select");
         return;
       }
-      // Select mode: show context menu
+      // Select mode: context menu on objects, pan on empty space
       if (data) {
-        e.preventDefault();
         const r = canvasRef.current?.getBoundingClientRect();
         if (!r) return;
         const world = s2w(e.clientX - r.left, e.clientY - r.top);
         const hit = hitTest(data, world.x, world.y);
+
+        // Right-click on empty space = pan (Altium behavior)
+        if (!hit && store.selectedIds.size === 0) {
+          dragging.current = true;
+          lastMouse.current = { x: e.clientX, y: e.clientY };
+          e.preventDefault();
+          return;
+        }
+
+        e.preventDefault();
         // If right-clicked on an unselected object, select it first
         if (hit && !store.selectedIds.has(hit.uuid)) {
           store.select(hit.uuid);
@@ -1078,8 +1054,8 @@ export function SchematicRenderer() {
           items.push({ label: "Delete", shortcut: "Del", action: () => useSchematicStore.getState().deleteSelected() });
           items.push({ separator: true, label: "", action: () => {} });
           items.push({ label: "Rotate", shortcut: "Space", action: () => useSchematicStore.getState().rotateSelected() });
-          items.push({ label: "Mirror X", shortcut: "X", action: () => useSchematicStore.getState().mirrorSelectedY() });
-          items.push({ label: "Mirror Y", shortcut: "Y", action: () => useSchematicStore.getState().mirrorSelectedX() });
+          items.push({ label: "Flip Horizontal", shortcut: "X", action: () => useSchematicStore.getState().mirrorSelectedY() });
+          items.push({ label: "Flip Vertical", shortcut: "Y", action: () => useSchematicStore.getState().mirrorSelectedX() });
           // Break Wire — only when a single wire is selected
           if (hit && hit.type === "wire" && sel.size === 1) {
             items.push({ separator: true, label: "", action: () => {} });
@@ -1188,12 +1164,6 @@ export function SchematicRenderer() {
         return;
       }
 
-      if (store.editMode === "placeJunction") {
-        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
-        store.addJunction(eSnap || world);
-        return;
-      }
-
       if (store.editMode === "placePort") {
         const eSnap = findNearestElectricalPoint(data, world.x, world.y);
         const pos = eSnap || world;
@@ -1209,13 +1179,14 @@ export function SchematicRenderer() {
       }
 
       if (store.editMode === "placeText") {
-        const sp = w2s(world.x, world.y);
         store.addTextNote(world, "Text");
         const newData = useSchematicStore.getState().data;
         if (newData && newData.text_notes.length > 0) {
           const newNote = newData.text_notes[newData.text_notes.length - 1];
           store.select(newNote.uuid);
-          setInPlaceEdit({ uuid: newNote.uuid, field: "text", value: "Text", screenX: sp.x, screenY: sp.y });
+          // Open properties panel for editing via Tab
+          const layout = useLayoutStore.getState();
+          if (layout.rightCollapsed) layout.toggleRight();
         }
         return;
       }
@@ -1286,35 +1257,7 @@ export function SchematicRenderer() {
           store.pushUndo();
           return;
         }
-        // Wire body drag → split and drag midpoint
-        if (hit.type === "wire" && !e.shiftKey) {
-          store.pushUndo();
-          store.breakWire(hit.uuid, snapPoint(world));
-          // Find the new wire whose start matches the split point and drag it
-          const updatedData = useSchematicStore.getState().data;
-          if (updatedData) {
-            const sp = snapPoint(world);
-            // breakWire creates wire1={orig.start→sp} and wire2={sp→orig.end}, plus junction
-            // Find wire2 (starts at split point) and drag its start
-            const wire2 = updatedData.wires.find(w =>
-              Math.abs(w.start.x - sp.x) < 0.05 && Math.abs(w.start.y - sp.y) < 0.05 &&
-              w.uuid !== hit.uuid
-            );
-            if (wire2) {
-              // Drag the junction at the split point — actually drag both wire endpoints
-              const junc = updatedData.junctions.find(j =>
-                Math.abs(j.position.x - sp.x) < 0.05 && Math.abs(j.position.y - sp.y) < 0.05
-              );
-              if (junc) {
-                store.select(junc.uuid);
-                moving.current = true;
-                moveNoRubber.current = false;
-                moveStart.current = { x: world.x, y: world.y };
-                return;
-              }
-            }
-          }
-        }
+        // Wire body drag → move the whole wire segment
         if (e.shiftKey) {
           store.toggleSelect(hit.uuid);
         } else if (!store.selectedIds.has(hit.uuid)) {
@@ -1535,10 +1478,9 @@ export function SchematicRenderer() {
           break;
         }
         case "Tab":
-          // During placement: open properties for the component being placed
-          if (store.placingSymbol) {
+          // Tab = open properties panel (during any mode with selection or placement)
+          if (store.editMode !== "select" || store.selectedIds.size > 0) {
             e.preventDefault();
-            // Focus the properties panel by toggling right panel open
             const layout = useLayoutStore.getState();
             if (layout.rightCollapsed) layout.toggleRight();
           }
@@ -1551,10 +1493,6 @@ export function SchematicRenderer() {
         case "b":
         case "B":
           if (!e.ctrlKey) store.setEditMode("drawBus");
-          break;
-        case "j":
-        case "J":
-          if (!e.ctrlKey) store.setEditMode("placeJunction");
           break;
         case "t":
         case "T":
@@ -1614,9 +1552,9 @@ export function SchematicRenderer() {
         case "F5":
           // Toggle Net Color Override
           {
-            const editor = useEditorStore.getState();
-            editor.toggleNetColors();
-            if (!editor.netColorOverride && data) {
+            useEditorStore.getState().toggleNetColors();
+            const editor = useEditorStore.getState(); // Read AFTER toggle
+            if (editor.netColorOverride && data) {
               // Build net colors on enable
               const nets = resolveNets(data);
               const palette = ["#ff6b6b","#51cf66","#339af0","#fcc419","#cc5de8","#20c997","#ff922b","#845ef7","#f06595","#22b8cf","#94d82d","#fd7e14"];
@@ -1806,52 +1744,57 @@ export function SchematicRenderer() {
       {/* Find/Replace */}
       <FindReplace open={findOpen} onClose={() => setFindOpen(false)} showReplace={findShowReplace} />
 
-      {/* Altium-style Active Bar — floating canvas toolbar */}
-      <div className="absolute top-3 right-3 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30">
-        <CanvasBtn
-          active={editMode === "select"}
-          label="Select (Esc)"
-          onClick={() => useSchematicStore.getState().setEditMode("select")}
-        >
+      {/* Altium-style Active Bar — centered top */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30">
+        <CanvasBtn active={editMode === "select"} label="Select (Esc)"
+          onClick={() => useSchematicStore.getState().setEditMode("select")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
         </CanvasBtn>
-        <CanvasBtn
-          active={editMode === "drawWire"}
-          label="Wire (W)"
-          onClick={() => useSchematicStore.getState().setEditMode("drawWire")}
-        >
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        {/* Wiring */}
+        <CanvasBtn active={editMode === "drawWire"} label="Wire (W)"
+          onClick={() => useSchematicStore.getState().setEditMode("drawWire")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>
         </CanvasBtn>
-        <CanvasBtn
-          active={editMode === "placeSymbol"}
-          label="Component (P)"
-          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        <CanvasBtn active={editMode === "drawBus"} label="Bus (B)"
+          onClick={() => useSchematicStore.getState().setEditMode("drawBus")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>
         </CanvasBtn>
-        <CanvasBtn
-          active={editMode === "placeLabel"}
-          label="Net Label (L)"
-          onClick={() => useSchematicStore.getState().setEditMode("placeLabel")}
-        >
+        <CanvasBtn active={editMode === "placeLabel"} label="Net Label (L)"
+          onClick={() => useSchematicStore.getState().setEditMode("placeLabel")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>
         </CanvasBtn>
-        <CanvasBtn
-          active={editMode === "placePower"}
-          label="Power Port"
-          onClick={() => useSchematicStore.getState().setEditMode("placePower")}
-        >
+        <CanvasBtn active={editMode === "placePower"} label="Power Port"
+          onClick={() => useSchematicStore.getState().setEditMode("placePower")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v10"/><path d="M5 12h14"/></svg>
         </CanvasBtn>
-        <CanvasBtn
-          active={editMode === "placeNoConnect"}
-          label="No Connect"
-          onClick={() => useSchematicStore.getState().setEditMode("placeNoConnect")}
-        >
+        <CanvasBtn active={editMode === "placeNoConnect"} label="No Connect"
+          onClick={() => useSchematicStore.getState().setEditMode("placeNoConnect")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
         </CanvasBtn>
         <div className="w-px h-4 bg-border-subtle mx-0.5" />
-        <CanvasBtn label="Rotate (R)" onClick={() => {
+        {/* Placement */}
+        <CanvasBtn active={editMode === "placeSymbol"} label="Component (P)"
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "placeText"} label="Text (T)"
+          onClick={() => useSchematicStore.getState().setEditMode("placeText")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>
+        </CanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        {/* Drawing */}
+        <CanvasBtn active={editMode === "drawLine"} label="Line"
+          onClick={() => useSchematicStore.getState().setEditMode("drawLine")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "drawRect"} label="Rectangle"
+          onClick={() => useSchematicStore.getState().setEditMode("drawRect")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+        </CanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        {/* Actions */}
+        <CanvasBtn label="Rotate (Space)" onClick={() => {
           const s = useSchematicStore.getState();
           if (s.placingSymbol) s.rotatePlacement(); else s.rotateSelected();
         }}>
@@ -1859,6 +1802,10 @@ export function SchematicRenderer() {
         </CanvasBtn>
         <CanvasBtn label="Delete (Del)" onClick={() => useSchematicStore.getState().deleteSelected()}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </CanvasBtn>
+        <CanvasBtn label="Measure (Ctrl+M)" active={editMode === "measure"}
+          onClick={() => { useSchematicStore.getState().setEditMode("measure"); measureStart.current = null; measureEnd.current = null; }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12h4"/><path d="M18 12h4"/><path d="M12 2v4"/><path d="M12 18v4"/><circle cx="12" cy="12" r="3"/></svg>
         </CanvasBtn>
         <div className="w-px h-4 bg-border-subtle mx-0.5" />
         <CanvasBtn label="Fit View (Home)" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }))}>
