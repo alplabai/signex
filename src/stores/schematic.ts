@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "measure";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
