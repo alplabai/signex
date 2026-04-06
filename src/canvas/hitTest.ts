@@ -1,4 +1,4 @@
-import type { SchematicData, SchPoint } from "@/types";
+import type { SchematicData, SchPoint, SchSymbol } from "@/types";
 
 export interface HitResult {
   type: "symbol" | "wire" | "junction" | "label";
@@ -8,6 +8,17 @@ export interface HitResult {
 interface Box {
   minX: number; minY: number;
   maxX: number; maxY: number;
+}
+
+function symToSch(lx: number, ly: number, sym: SchSymbol): SchPoint {
+  const y = -ly; // Flip Y
+  const rad = -(sym.rotation * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  let rx = lx * cos - y * sin;
+  let ry = lx * sin + y * cos;
+  if (sym.mirror_x) ry = -ry;
+  if (sym.mirror_y) rx = -rx;
+  return { x: sym.position.x + rx, y: sym.position.y + ry };
 }
 
 function dist(a: SchPoint, b: SchPoint): number {
@@ -45,33 +56,53 @@ export function hitTest(
     }
   }
 
-  // Symbols — check bounding box around position
-  // Use a rough estimate: symbol body is ~8mm wide
+  // Symbols — check tight transformed bounding box
   for (const sym of data.symbols) {
-    if (sym.is_power) continue; // Skip power symbols for selection
+    if (sym.is_power) continue;
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
 
-    // Estimate bounds from pin positions + body graphics
-    let minX = -4, maxX = 4, minY = -4, maxY = 4;
-    for (const pin of lib.pins) {
-      minX = Math.min(minX, pin.position.x - 1);
-      maxX = Math.max(maxX, pin.position.x + 1);
-      minY = Math.min(minY, pin.position.y - 1);
-      maxY = Math.max(maxY, pin.position.y + 1);
-    }
+    // Calculate local-space bounds from body graphics only (not default +-4)
+    let lMinX = Infinity, lMaxX = -Infinity, lMinY = Infinity, lMaxY = -Infinity;
     for (const g of lib.graphics) {
       if (g.type === "Rectangle") {
-        minX = Math.min(minX, g.start.x, g.end.x);
-        maxX = Math.max(maxX, g.start.x, g.end.x);
-        minY = Math.min(minY, g.start.y, g.end.y);
-        maxY = Math.max(maxY, g.start.y, g.end.y);
+        lMinX = Math.min(lMinX, g.start.x, g.end.x);
+        lMaxX = Math.max(lMaxX, g.start.x, g.end.x);
+        lMinY = Math.min(lMinY, g.start.y, g.end.y);
+        lMaxY = Math.max(lMaxY, g.start.y, g.end.y);
+      } else if (g.type === "Polyline") {
+        for (const pt of g.points) {
+          lMinX = Math.min(lMinX, pt.x); lMaxX = Math.max(lMaxX, pt.x);
+          lMinY = Math.min(lMinY, pt.y); lMaxY = Math.max(lMaxY, pt.y);
+        }
+      } else if (g.type === "Circle") {
+        lMinX = Math.min(lMinX, g.center.x - g.radius);
+        lMaxX = Math.max(lMaxX, g.center.x + g.radius);
+        lMinY = Math.min(lMinY, g.center.y - g.radius);
+        lMaxY = Math.max(lMaxY, g.center.y + g.radius);
       }
     }
+    // Include pins
+    for (const pin of lib.pins) {
+      lMinX = Math.min(lMinX, pin.position.x); lMaxX = Math.max(lMaxX, pin.position.x);
+      lMinY = Math.min(lMinY, pin.position.y); lMaxY = Math.max(lMaxY, pin.position.y);
+    }
+    if (!isFinite(lMinX)) { lMinX = -2; lMaxX = 2; lMinY = -2; lMaxY = 2; }
 
-    // Transform bounds to schematic space (rough — use center + extent)
-    const extent = Math.max(maxX - minX, maxY - minY) / 2 + tolerance;
-    if (dist(p, sym.position) < extent) {
+    // Transform corners to schematic space
+    const pad = tolerance * 0.3;
+    const corners = [
+      symToSch(lMinX - pad, lMinY - pad, sym),
+      symToSch(lMaxX + pad, lMinY - pad, sym),
+      symToSch(lMaxX + pad, lMaxY + pad, sym),
+      symToSch(lMinX - pad, lMaxY + pad, sym),
+    ];
+    const bx0 = Math.min(...corners.map(c => c.x));
+    const by0 = Math.min(...corners.map(c => c.y));
+    const bx1 = Math.max(...corners.map(c => c.x));
+    const by1 = Math.max(...corners.map(c => c.y));
+
+    if (p.x >= bx0 && p.x <= bx1 && p.y >= by0 && p.y <= by1) {
       return { type: "symbol", uuid: sym.uuid };
     }
   }

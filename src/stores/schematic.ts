@@ -52,7 +52,7 @@ interface SchematicState {
   deselectAll: () => void;
 
   // Editing
-  moveElements: (uuids: string[], dx: number, dy: number) => void;
+  moveElements: (uuids: string[], dx: number, dy: number, noRubberBand?: boolean) => void;
   addWire: (start: SchPoint, end: SchPoint) => void;
   addSymbol: (symbol: SchSymbol) => void;
   addLabel: (label: SchLabel) => void;
@@ -255,7 +255,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
   deselectAll: () => set({ selectedIds: new Set() }),
 
-  moveElements: (uuids, dx, dy) => {
+  moveElements: (uuids, dx, dy, noRubberBand) => {
     const { data } = get();
     if (!data) return;
 
@@ -315,6 +315,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     }
 
     // Rubber-banding: stretch non-selected wires connected to moving symbol pins
+    if (noRubberBand) { set({ data: newData, dirty: true }); return; }
     for (const wire of newData.wires) {
       if (idSet.has(wire.uuid)) continue; // Already moved
       for (const pinPos of movingPinPositions) {
