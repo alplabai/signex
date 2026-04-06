@@ -862,3 +862,158 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
 
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn minimal_kicad_sch() -> String {
+        r#"(kicad_sch
+  (version 20231120)
+  (generator "test")
+  (generator_version "0.1")
+  (uuid "test-uuid")
+  (paper "A4")
+  (wire
+    (pts (xy 10 20) (xy 30 20))
+    (stroke (width 0) (type default))
+    (uuid "wire-1")
+  )
+  (junction
+    (at 20 20)
+    (uuid "junc-1")
+  )
+  (label "VCC"
+    (at 20 20 0)
+    (effects (font (size 1.27 1.27)))
+    (uuid "label-1")
+  )
+  (no_connect
+    (at 50 50)
+    (uuid "nc-1")
+  )
+  (text "Hello World"
+    (at 100 100 0)
+    (effects (font (size 1.27 1.27)))
+    (uuid "text-1")
+  )
+)"#.to_string()
+    }
+
+    #[test]
+    fn parse_minimal_schematic() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        assert_eq!(sheet.uuid, "test-uuid");
+        assert_eq!(sheet.version, "20231120");
+        assert_eq!(sheet.paper_size, "A4");
+        assert_eq!(sheet.wires.len(), 1);
+        assert_eq!(sheet.junctions.len(), 1);
+        assert_eq!(sheet.labels.len(), 1);
+        assert_eq!(sheet.no_connects.len(), 1);
+        assert_eq!(sheet.text_notes.len(), 1);
+    }
+
+    #[test]
+    fn parse_wire_coordinates() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        let wire = &sheet.wires[0];
+        assert_eq!(wire.start.x, 10.0);
+        assert_eq!(wire.start.y, 20.0);
+        assert_eq!(wire.end.x, 30.0);
+        assert_eq!(wire.end.y, 20.0);
+        assert_eq!(wire.uuid, "wire-1");
+    }
+
+    #[test]
+    fn parse_label_text_and_type() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        let label = &sheet.labels[0];
+        assert_eq!(label.text, "VCC");
+        assert!(matches!(label.label_type, LabelType::Net));
+        assert_eq!(label.position.x, 20.0);
+    }
+
+    #[test]
+    fn parse_no_connect_has_uuid() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        let nc = &sheet.no_connects[0];
+        assert_eq!(nc.uuid, "nc-1");
+        assert_eq!(nc.position.x, 50.0);
+    }
+
+    #[test]
+    fn parse_text_note() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        let note = &sheet.text_notes[0];
+        assert_eq!(note.text, "Hello World");
+        assert_eq!(note.uuid, "text-1");
+        assert_eq!(note.font_size, 1.27);
+    }
+
+    #[test]
+    fn write_then_reparse_preserves_data() {
+        let content = minimal_kicad_sch();
+        let sheet = parse_schematic(&content).unwrap();
+        let written = crate::engine::writer::write_schematic(&sheet);
+        let reparsed = parse_schematic(&written).unwrap();
+        assert_eq!(reparsed.wires.len(), sheet.wires.len());
+        assert_eq!(reparsed.junctions.len(), sheet.junctions.len());
+        assert_eq!(reparsed.labels.len(), sheet.labels.len());
+        assert_eq!(reparsed.no_connects.len(), sheet.no_connects.len());
+        assert_eq!(reparsed.text_notes.len(), sheet.text_notes.len());
+    }
+
+    #[test]
+    fn parse_kicad10_fields_default() {
+        // KiCad 10 fields should default correctly when absent
+        let content = r#"(kicad_sch
+  (version 20260326)
+  (generator "eeschema")
+  (generator_version "10.0")
+  (uuid "kicad10-test")
+  (paper "A4")
+  (lib_symbols
+    (symbol "Device:R"
+      (pin_names (offset 0))
+      (symbol "R_0_1"
+        (rectangle (start -1.016 -2.54) (end 1.016 2.54)
+          (stroke (width 0.254) (type default))
+          (fill (type none))
+        )
+      )
+      (symbol "R_1_1"
+        (pin passive line (at 0 3.81 270) (length 1.27) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 0 -3.81 90) (length 1.27) (name "~" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+  )
+  (symbol
+    (lib_id "Device:R")
+    (at 100 50 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (uuid "sym-r1")
+    (property "Reference" "R1" (at 100 48 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "10k" (at 100 52 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+  )
+)"#;
+        let sheet = parse_schematic(content).unwrap();
+        assert_eq!(sheet.generator_version, "10.0");
+        assert_eq!(sheet.symbols.len(), 1);
+        let sym = &sheet.symbols[0];
+        assert!(!sym.dnp);
+        assert!(sym.in_bom);
+        assert!(sym.on_board);
+        assert!(!sym.exclude_from_sim);
+        assert!(!sym.locked);
+    }
+}
