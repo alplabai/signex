@@ -155,7 +155,6 @@ const menus: MenuGroup[] = [
       { label: "Cross Reference...", disabled: true },
       { label: "Cross Select Mode", shortcut: "Shift+Ctrl+X", disabled: true },
       { separator: true, label: "" },
-      { label: "Measure Distance", shortcut: "Ctrl+M", disabled: true },
       { separator: true, label: "" },
       { label: "Preferences...", disabled: true },
       { separator: true, label: "" },
@@ -234,7 +233,6 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Line") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawLine") };
       if (item.label === "Rectangle" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawRect") };
       // Tools
-      if (item.label === "Measure Distance") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("measure") };
       // Reports / Output
       if (item.label === "Bill of Materials...") return { ...item, disabled: false, action: async () => {
         const data = useSchematicStore.getState().data;
