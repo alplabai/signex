@@ -25,6 +25,9 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   const violations: ErcViolation[] = [];
   const nets = resolveNets(data);
 
+  // No ERC directive positions — suppress violations at these points
+  const noErcPositions = (data.no_erc_directives || []).map(d => d.position);
+
   // 1. Duplicate designators
   checkDuplicateDesignators(data, violations);
 
@@ -58,7 +61,13 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   // 11. Nets with wires but no label
   checkNetNoLabel(nets, violations);
 
-  return { violations, nets };
+  // Filter out violations at No ERC directive positions
+  const filtered = violations.filter(v => {
+    if (!v.position || noErcPositions.length === 0) return true;
+    return !noErcPositions.some(p => pointsMatch(p, v.position!, 1.0));
+  });
+
+  return { violations: filtered, nets };
 }
 
 function checkDuplicateDesignators(data: SchematicData, violations: ErcViolation[]) {

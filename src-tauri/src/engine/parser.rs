@@ -24,6 +24,7 @@ pub struct SchematicSheet {
     pub buses: Vec<Bus>,
     pub bus_entries: Vec<BusEntry>,
     pub drawings: Vec<SchDrawing>,
+    pub no_erc_directives: Vec<NoConnect>,  // Reuse NoConnect struct (uuid + position)
     pub lib_symbols: HashMap<String, LibSymbol>,
 }
 
@@ -709,10 +710,12 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
         SchRectangle { uuid: parse_uuid(r), start, end, stroke_type }
     }).collect();
 
+    let no_erc_directives: Vec<NoConnect> = Vec::new();
+
     Ok(SchematicSheet {
         uuid, version, generator, generator_version, paper_size,
         symbols, wires, junctions, labels, child_sheets, no_connects,
-        text_notes, rectangles, buses, bus_entries, drawings, lib_symbols,
+        text_notes, rectangles, buses, bus_entries, drawings, no_erc_directives, lib_symbols,
     })
 }
 

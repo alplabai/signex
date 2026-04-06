@@ -124,7 +124,7 @@ const menus: MenuGroup[] = [
       { label: "Polygon", disabled: true },
       { label: "Image...", disabled: true },
       { separator: true, label: "" },
-      { label: "No ERC", disabled: true },
+      { label: "No ERC", disabled: false },
       { label: "Directive", disabled: true },
     ],
   },
@@ -261,6 +261,7 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
       if (item.label === "Reset Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDesignators() };
       if (item.label === "Reset Duplicate Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDuplicateDesignators() };
+      if (item.label === "No ERC") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoErc") };
 
       return item;
     }),

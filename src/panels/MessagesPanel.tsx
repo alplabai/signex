@@ -95,6 +95,7 @@ export function MessagesPanel() {
                 // Select the involved elements
                 if (v.uuids.length > 0) {
                   useSchematicStore.getState().selectMultiple(v.uuids);
+                  useEditorStore.getState().setAutoFocus(v.uuids);
                 }
               }}>
               {v.severity === "error" ? (
