@@ -12,16 +12,28 @@ export function symToSchPoint(lx: number, ly: number, sym: SchSymbol): SchPoint 
   return { x: sym.position.x + rx, y: sym.position.y + ry };
 }
 
-/** Get all pin world positions for a symbol */
+/** Compute pin tip (electrical end) in local coordinates */
+export function pinEnd(pin: { position: SchPoint; rotation: number; length: number }): SchPoint {
+  const rad = (pin.rotation * Math.PI) / 180;
+  return {
+    x: pin.position.x + Math.cos(rad) * pin.length,
+    y: pin.position.y + Math.sin(rad) * pin.length,
+  };
+}
+
+/** Get all pin world positions for a symbol (at the electrical tip, not body-side base) */
 export function getSymbolPinPositions(sym: SchSymbol, data: SchematicData): { pinNumber: string; pinName: string; pinType: string; position: SchPoint }[] {
   const lib = data.lib_symbols[sym.lib_id];
   if (!lib) return [];
-  return lib.pins.map(pin => ({
-    pinNumber: pin.number,
-    pinName: pin.name,
-    pinType: pin.pin_type,
-    position: symToSchPoint(pin.position.x, pin.position.y, sym),
-  }));
+  return lib.pins.map(pin => {
+    const tip = pinEnd(pin);
+    return {
+      pinNumber: pin.number,
+      pinName: pin.name,
+      pinType: pin.pin_type,
+      position: symToSchPoint(tip.x, tip.y, sym),
+    };
+  });
 }
 
 /** Distance between two points */

@@ -56,6 +56,16 @@ export const useLayoutStore = create<LayoutState>()(
           ),
         })),
     }),
-    { name: "signex-layout" }
+    {
+      name: "signex-layout",
+      version: 1,
+      migrate: (persisted: unknown, version: number) => {
+        if (version === 0) {
+          // v0 → v1: no schema changes, just stamp the version
+          return persisted as LayoutState;
+        }
+        return persisted as LayoutState;
+      },
+    }
   )
 );

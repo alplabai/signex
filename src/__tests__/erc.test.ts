@@ -47,7 +47,7 @@ describe("erc", () => {
     const data = createSimpleSchematic();
     // Add a second label with different name on the same wire
     data.labels.push({
-      uuid: "l2", text: "VDD", position: { x: 20, y: 16.19 }, rotation: 0,
+      uuid: "l2", text: "VDD", position: { x: 20, y: 17.46 }, rotation: 0,
       label_type: "Net", shape: "", font_size: 1.27, justify: "left",
     });
     const { violations } = runErc(data);
@@ -59,7 +59,7 @@ describe("erc", () => {
     const data = createSimpleSchematic();
     // Add a second label with SAME name
     data.labels.push({
-      uuid: "l2", text: "VCC", position: { x: 15, y: 16.19 }, rotation: 0,
+      uuid: "l2", text: "VCC", position: { x: 15, y: 17.46 }, rotation: 0,
       label_type: "Net", shape: "", font_size: 1.27, justify: "left",
     });
     const { violations } = runErc(data);

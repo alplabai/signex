@@ -67,7 +67,7 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [project, activeTabId, openTabs, setMode, loadSchematic]);
+  }, [project, activeTabId, setMode, loadSchematic]);
 
   // No project — welcome screen
   if (!project || !activeTabId) {
