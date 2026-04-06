@@ -92,6 +92,64 @@ function cloneData(data: SchematicData): SchematicData {
   return structuredClone(data);
 }
 
+/** Check if point lies on a wire segment (not at endpoints) */
+function pointOnWireSegment(p: SchPoint, start: SchPoint, end: SchPoint, tol = 0.05): boolean {
+  // Skip if point is at either endpoint
+  if (Math.abs(p.x - start.x) < tol && Math.abs(p.y - start.y) < tol) return false;
+  if (Math.abs(p.x - end.x) < tol && Math.abs(p.y - end.y) < tol) return false;
+
+  // Check collinearity and within bounds
+  const dx = end.x - start.x, dy = end.y - start.y;
+  const len = Math.hypot(dx, dy);
+  if (len < tol) return false;
+
+  // Distance from point to line
+  const dist = Math.abs(dx * (start.y - p.y) - dy * (start.x - p.x)) / len;
+  if (dist > tol) return false;
+
+  // Check within segment bounds
+  const t = ((p.x - start.x) * dx + (p.y - start.y) * dy) / (len * len);
+  return t > 0.01 && t < 0.99;
+}
+
+/** Auto-place junctions where wire endpoints land on existing wire midpoints */
+function autoJunction(data: SchematicData, newPoints: SchPoint[]): void {
+  const existingJunctions = new Set(
+    data.junctions.map((j) => `${j.position.x.toFixed(3)},${j.position.y.toFixed(3)}`)
+  );
+
+  for (const pt of newPoints) {
+    const key = `${pt.x.toFixed(3)},${pt.y.toFixed(3)}`;
+    if (existingJunctions.has(key)) continue;
+
+    // Check if this point is on any existing wire (T-junction)
+    for (const wire of data.wires) {
+      if (pointOnWireSegment(pt, wire.start, wire.end)) {
+        data.junctions.push({ uuid: generateUuid(), position: { x: pt.x, y: pt.y } });
+        existingJunctions.add(key);
+        break;
+      }
+    }
+  }
+
+  // Also check existing wire endpoints against the new wire segments
+  const newWires = data.wires.slice(-newPoints.length + 1); // Last N-1 wires are the new ones
+  for (const wire of data.wires) {
+    if (newWires.includes(wire)) continue;
+    for (const endPt of [wire.start, wire.end]) {
+      const key = `${endPt.x.toFixed(3)},${endPt.y.toFixed(3)}`;
+      if (existingJunctions.has(key)) continue;
+      for (const nw of newWires) {
+        if (pointOnWireSegment(endPt, nw.start, nw.end)) {
+          data.junctions.push({ uuid: generateUuid(), position: { x: endPt.x, y: endPt.y } });
+          existingJunctions.add(key);
+          break;
+        }
+      }
+    }
+  }
+}
+
 const MAX_UNDO = 50;
 
 export const useSchematicStore = create<SchematicState>()((set, get) => ({
@@ -309,18 +367,24 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const newData = cloneData(data);
 
     // Create wire segments between consecutive points
+    const newWirePoints: SchPoint[] = [];
     for (let i = 0; i < wireDrawing.points.length - 1; i++) {
       newData.wires.push({
         uuid: generateUuid(),
         start: wireDrawing.points[i],
         end: wireDrawing.points[i + 1],
       });
+      newWirePoints.push(wireDrawing.points[i]);
     }
+    newWirePoints.push(wireDrawing.points[wireDrawing.points.length - 1]);
+
+    // Auto-junction: check if any new wire endpoint touches an existing wire's midpoint
+    autoJunction(newData, newWirePoints);
 
     set({
       data: newData,
       dirty: true,
-        wireDrawing: { points: [], active: false },
+      wireDrawing: { points: [], active: false },
     });
   },
 

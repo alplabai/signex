@@ -1,8 +1,8 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
-import { hitTest } from "./hitTest";
-import type { Graphic, SchPin, SchPoint, TextPropData } from "@/types";
+import { hitTest, boxSelect } from "./hitTest";
+import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
 
 const PAPER: Record<string, [number, number]> = {
@@ -53,12 +53,47 @@ function pinEnd(pin: SchPin): SchPoint {
   };
 }
 
+const ELECTRICAL_SNAP_RANGE = 2.0; // World units — snap to pins/wire endpoints within this range
+
+/** Find nearest pin endpoint or wire endpoint for electrical snapping */
+function findNearestElectricalPoint(
+  data: SchematicData, worldX: number, worldY: number
+): SchPoint | null {
+  let bestDist = ELECTRICAL_SNAP_RANGE;
+  let bestPoint: SchPoint | null = null;
+
+  // Check all symbol pin endpoints
+  for (const sym of data.symbols) {
+    const lib = data.lib_symbols[sym.lib_id];
+    if (!lib) continue;
+    for (const pin of lib.pins) {
+      const [px, py] = symToSch(pin.position.x, pin.position.y,
+        sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y);
+      const d = Math.hypot(worldX - px, worldY - py);
+      if (d < bestDist) { bestDist = d; bestPoint = { x: px, y: py }; }
+    }
+  }
+
+  // Check wire endpoints
+  for (const wire of data.wires) {
+    for (const pt of [wire.start, wire.end]) {
+      const d = Math.hypot(worldX - pt.x, worldY - pt.y);
+      if (d < bestDist) { bestDist = d; bestPoint = { x: pt.x, y: pt.y }; }
+    }
+  }
+
+  return bestPoint;
+}
+
 export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 3 });
   const dragging = useRef(false);
   const moving = useRef(false);
+  const selecting = useRef(false); // Drag-box selection active
+  const selectStart = useRef({ x: 0, y: 0 }); // Drag-box start (world coords)
+  const selectEnd = useRef({ x: 0, y: 0 }); // Drag-box end (world coords)
   const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
   const animRef = useRef(0);
@@ -629,6 +664,19 @@ export function SchematicRenderer() {
       ctx.beginPath();
       ctx.arc(last.x, last.y, 0.3, 0, Math.PI * 2);
       ctx.fill();
+
+      // Electrical snap indicator — red cross when snapped to a pin/endpoint
+      if (data) {
+        const eSnap = findNearestElectricalPoint(data, cur.x, cur.y);
+        if (eSnap && Math.hypot(cur.x - eSnap.x, cur.y - eSnap.y) < 0.1) {
+          ctx.strokeStyle = "#ff4444";
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.moveTo(cur.x - 0.6, cur.y - 0.6); ctx.lineTo(cur.x + 0.6, cur.y + 0.6);
+          ctx.moveTo(cur.x + 0.6, cur.y - 0.6); ctx.lineTo(cur.x - 0.6, cur.y + 0.6);
+          ctx.stroke();
+        }
+      }
     }
 
     // --- Placement preview (ghost symbol following cursor) ---
@@ -666,6 +714,24 @@ export function SchematicRenderer() {
       ctx.moveTo(cur.x - 3, cur.y); ctx.lineTo(cur.x + 3, cur.y);
       ctx.moveTo(cur.x, cur.y - 3); ctx.lineTo(cur.x, cur.y + 3);
       ctx.stroke();
+    }
+
+    // --- Drag-box selection rectangle ---
+    if (selecting.current) {
+      const s = selectStart.current;
+      const e = selectEnd.current;
+      const rx = Math.min(s.x, e.x), ry = Math.min(s.y, e.y);
+      const rw = Math.abs(e.x - s.x), rh = Math.abs(e.y - s.y);
+      // Left-to-right = inside selection (solid), right-to-left = crossing (dashed)
+      const crossing = e.x < s.x;
+      ctx.strokeStyle = crossing ? "#4fc3f7" : "#00bfff";
+      ctx.fillStyle = crossing ? "rgba(79,195,247,0.08)" : "rgba(0,191,255,0.08)";
+      ctx.lineWidth = 0.2;
+      if (crossing) ctx.setLineDash([0.5, 0.3]);
+      else ctx.setLineDash([]);
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.setLineDash([]);
     }
 
     ctx.restore(); // End world-space transform
@@ -742,11 +808,13 @@ export function SchematicRenderer() {
       const store = useSchematicStore.getState();
 
       if (store.editMode === "drawWire") {
-        // Wire drawing: add point on click
+        // Electrical snap on click: prefer pin/wire endpoints
+        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
+        const wirePos = eSnap || world;
         if (store.wireDrawing.active) {
-          store.addWirePoint(world);
+          store.addWirePoint(wirePos);
         } else {
-          store.startWire(world);
+          store.startWire(wirePos);
         }
         return;
       }
@@ -770,7 +838,11 @@ export function SchematicRenderer() {
         // Push undo before move
         store.pushUndo();
       } else {
+        // Start drag-box selection
         if (!e.shiftKey) store.deselectAll();
+        selecting.current = true;
+        selectStart.current = { x: world.x, y: world.y };
+        selectEnd.current = { x: world.x, y: world.y };
       }
     }
   }, [data, s2w]);
@@ -797,7 +869,9 @@ export function SchematicRenderer() {
     if (data) {
       const store = useSchematicStore.getState();
       if (store.wireDrawing.active) {
-        wireCursorRef.current = snapPoint(world);
+        // Electrical grid snap: prefer snapping to nearby pins/wire endpoints
+        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
+        wireCursorRef.current = eSnap || snapPoint(world);
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
@@ -806,6 +880,14 @@ export function SchematicRenderer() {
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
+    }
+
+    // Drag-box selection update
+    if (selecting.current) {
+      selectEnd.current = { x: world.x, y: world.y };
+      cancelAnimationFrame(animRef.current);
+      animRef.current = requestAnimationFrame(render);
+      return;
     }
 
     // Move selected elements
@@ -825,9 +907,23 @@ export function SchematicRenderer() {
   }, [render, s2w, updateStatusBar, data]);
 
   const handleMouseUp = useCallback(() => {
+    // Finalize drag-box selection
+    if (selecting.current && data) {
+      selecting.current = false;
+      const s = selectStart.current, e = selectEnd.current;
+      // Only if dragged more than a tiny amount (avoid accidental micro-drags)
+      if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
+        const uuids = boxSelect(data, s.x, s.y, e.x, e.y);
+        if (uuids.length > 0) {
+          useSchematicStore.getState().selectMultiple(uuids);
+        }
+      }
+      cancelAnimationFrame(animRef.current);
+      animRef.current = requestAnimationFrame(render);
+    }
     dragging.current = false;
     moving.current = false;
-  }, []);
+  }, [data, render]);
 
   const handleDblClick = useCallback((_e: React.MouseEvent) => {
     const store = useSchematicStore.getState();
