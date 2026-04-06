@@ -33,7 +33,7 @@ export const capacitorLib: LibSymbol = {
 
 const defaultTextProp = { position: { x: 0, y: 0 }, rotation: 0, font_size: 1.27, justify_h: "center", justify_v: "center", hidden: false };
 
-function makeSymbol(id: string, ref: string, value: string, x: number, y: number, libId: string): SchSymbol {
+function makeSymbol(_id: string, ref: string, value: string, x: number, y: number, libId: string): SchSymbol {
   return {
     uuid: `sym-${ref}`, lib_id: libId, reference: ref, value, footprint: "",
     position: { x, y }, rotation: 0, mirror_x: false, mirror_y: false, unit: 1, is_power: false,
