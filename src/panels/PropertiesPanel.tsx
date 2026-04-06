@@ -1,20 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
 import { MousePointer2, Eye, EyeOff, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ─── Unit conversion (internal = mm) ─────────────────────────────
-function mmToDisplay(mm: number, unit: "mm" | "mil" | "inch"): string {
-  if (unit === "mil") return (mm / 0.0254).toFixed(0);
-  if (unit === "inch") return (mm / 25.4).toFixed(4);
-  return mm.toFixed(2);
-}
-function displayToMm(val: number, unit: "mm" | "mil" | "inch"): number {
-  if (unit === "mil") return val * 0.0254;
-  if (unit === "inch") return val * 25.4;
-  return val;
-}
+import { mmToDisplay, displayToMm } from "@/lib/units";
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN PANEL ROUTER
@@ -279,6 +268,7 @@ function ComponentProps({ uuid }: { uuid: string }) {
   if (!sym) return null;
 
   const lib = data?.lib_symbols[sym.lib_id];
+  // TODO: Move to store action
   const toggleProp = (setter: (s: NonNullable<typeof sym>) => void) => {
     useSchematicStore.getState().pushUndo();
     const d = useSchematicStore.getState().data;
@@ -511,7 +501,7 @@ function LabelProps({ uuid }: { uuid: string }) {
               onCommit={(v) => updateLabelProp(uuid, "y", String(displayToMm(parseFloat(v) || 0, units)))} />
           </FieldRow>
           <FieldRow label="Rotation">
-            <select value={label.rotation} onChange={() => {}}
+            <select value={label.rotation} onChange={(e) => updateLabelProp(uuid, "rotation", e.target.value)}
               className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
               {[0, 90, 180, 270].map(r => <option key={r} value={r}>{r} Degrees</option>)}
             </select>
@@ -714,7 +704,7 @@ function TextNoteProps({ uuid }: { uuid: string }) {
             </div>
           </FieldRow>
           <FieldRow label="Rotation">
-            <select value={note.rotation} onChange={() => {}}
+            <select value={note.rotation} onChange={(e) => updateTextNoteProp(uuid, "rotation", e.target.value)}
               className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
               {[0, 90, 180, 270].map(r => <option key={r} value={r}>{r}°</option>)}
             </select>
@@ -947,6 +937,8 @@ function FieldInput({ value, suffix, onCommit }: { value: string; suffix?: strin
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
+  useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
+
   if (editing) {
     return (
       <input autoFocus value={draft}
@@ -986,7 +978,7 @@ function StatRow({ label, value }: { label: string; value: number }) {
 
 function CheckBox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
-    <button onClick={onChange}
+    <button onClick={onChange} role="checkbox" aria-checked={checked}
       className={cn("w-3.5 h-3.5 rounded-sm border shrink-0 flex items-center justify-center transition-colors",
         checked ? "bg-accent/30 border-accent" : "bg-bg-primary border-border-subtle")}>
       {checked && <span className="text-accent text-[8px] leading-none">✓</span>}

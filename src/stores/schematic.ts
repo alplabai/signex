@@ -350,6 +350,12 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         nc.position.y += dy;
       }
     }
+    for (const ne of newData.no_erc_directives) {
+      if (idSet.has(ne.uuid)) {
+        ne.position.x += dx;
+        ne.position.y += dy;
+      }
+    }
     for (const note of newData.text_notes) {
       if (idSet.has(note.uuid)) {
         note.position.x += dx;
@@ -418,6 +424,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const snapped = snapPoint(pos);
     if (endpoint === "start") { wire.start = snapped; }
     else { wire.end = snapped; }
+    autoJunction(newData, [snapped]);
     set({ data: newData, dirty: true });
   },
 
@@ -506,7 +513,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const newData = cloneData(data);
     for (const sym of newData.symbols) {
       if (selectedIds.has(sym.uuid)) {
-        sym.rotation = ((sym.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+        sym.rotation = (sym.rotation + 90) % 360;
       }
     }
     set({ data: newData, dirty: true });
@@ -535,13 +542,56 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
 
   duplicateSelected: () => {
-    const store = get();
-    store.copySelected();
-    // Paste with small offset
-    const updated = get(); // re-read after copy
-    if (updated.clipboard) {
-      updated.pasteClipboard({ x: 2.54, y: 2.54 });
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+    const ox = 2.54, oy = 2.54;
+
+    for (const sym of data.symbols) {
+      if (!selectedIds.has(sym.uuid)) continue;
+      const n = structuredClone(sym);
+      n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+      n.val_text.position.x += ox; n.val_text.position.y += oy;
+      // Reset reference to prefix? to avoid duplicate designators
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
+      newData.symbols.push(n); newIds.push(n.uuid);
     }
+    for (const w of data.wires) {
+      if (!selectedIds.has(w.uuid)) continue;
+      const n = structuredClone(w);
+      n.uuid = generateUuid();
+      n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+      newData.wires.push(n); newIds.push(n.uuid);
+    }
+    for (const l of data.labels) {
+      if (!selectedIds.has(l.uuid)) continue;
+      const n = structuredClone(l);
+      n.uuid = generateUuid(); n.position.x += ox; n.position.y += oy;
+      newData.labels.push(n); newIds.push(n.uuid);
+    }
+    for (const j of data.junctions) {
+      if (!selectedIds.has(j.uuid)) continue;
+      const n = structuredClone(j);
+      n.uuid = generateUuid(); n.position.x += ox; n.position.y += oy;
+      newData.junctions.push(n); newIds.push(n.uuid);
+    }
+    for (const d of data.drawings) {
+      if (!selectedIds.has(d.uuid)) continue;
+      const n = structuredClone(d);
+      n.uuid = generateUuid();
+      if (n.type === "Line" || n.type === "Rect") { n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy; }
+      else if (n.type === "Circle") { n.center.x += ox; n.center.y += oy; }
+      else if (n.type === "Arc") { n.start.x += ox; n.start.y += oy; n.mid.x += ox; n.mid.y += oy; n.end.x += ox; n.end.y += oy; }
+      else if (n.type === "Polyline") { for (const p of n.points) { p.x += ox; p.y += oy; } }
+      newData.drawings.push(n); newIds.push(n.uuid);
+    }
+
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
   },
 
   // Property editing
@@ -574,6 +624,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "text": label.text = value; break;
       case "x": label.position.x = isNaN(parseFloat(value)) ? label.position.x : parseFloat(value); break;
       case "y": label.position.y = isNaN(parseFloat(value)) ? label.position.y : parseFloat(value); break;
+      case "rotation": label.rotation = (parseInt(value) || 0) % 360; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -589,6 +640,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "text": note.text = value; break;
       case "x": note.position.x = isNaN(parseFloat(value)) ? note.position.x : parseFloat(value); break;
       case "y": note.position.y = isNaN(parseFloat(value)) ? note.position.y : parseFloat(value); break;
+      case "rotation": note.rotation = (parseInt(value) || 0) % 360; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -625,6 +677,9 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       n.position.x += ox; n.position.y += oy;
       n.ref_text.position.x += ox; n.ref_text.position.y += oy;
       n.val_text.position.x += ox; n.val_text.position.y += oy;
+      // Reset reference to prefix? to avoid duplicate designators
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
       newData.symbols.push(n); newIds.push(n.uuid);
     }
     for (const w of clipboard.wires) {
@@ -855,17 +910,17 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     get().pushUndo();
     const newData = cloneData(data);
 
-    // Create wire segments between consecutive points
+    // Create wire segments between consecutive points (spread to avoid storing by reference)
     const newWirePoints: SchPoint[] = [];
     for (let i = 0; i < wireDrawing.points.length - 1; i++) {
       newData.wires.push({
         uuid: generateUuid(),
-        start: wireDrawing.points[i],
-        end: wireDrawing.points[i + 1],
+        start: { ...wireDrawing.points[i] },
+        end: { ...wireDrawing.points[i + 1] },
       });
-      newWirePoints.push(wireDrawing.points[i]);
+      newWirePoints.push({ ...wireDrawing.points[i] });
     }
-    newWirePoints.push(wireDrawing.points[wireDrawing.points.length - 1]);
+    newWirePoints.push({ ...wireDrawing.points[wireDrawing.points.length - 1] });
 
     // Auto-junction: check if any new wire endpoint touches an existing wire's midpoint
     autoJunction(newData, newWirePoints);
@@ -1047,7 +1102,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const existing = newData.symbols
       .filter((s) => s.reference.startsWith(prefix))
       .map((s) => parseInt(s.reference.slice(prefix.length)) || 0);
-    const nextNum = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+    const nextNum = (existing.length > 0 ? existing.reduce((max, v) => v > max ? v : max, 0) : 0) + 1;
     const reference = `${prefix}${nextNum}`;
 
     const fs = 1.27;

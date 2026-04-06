@@ -12,10 +12,10 @@ interface EditorState {
   mode: EditorMode;
   gridVisible: boolean;
   netColorOverride: boolean;
-  netColors: Map<string, string>;
+  netColors: Record<string, string>;
   ercMarkers: ErcMarker[];
   showErcMarkers: boolean;
-  autoFocusUuids: Set<string> | null; // When set, dim everything except these UUIDs
+  autoFocusUuids: string[] | null; // When set, dim everything except these UUIDs
   statusBar: StatusBarState;
 
   setMode: (mode: EditorMode) => void;
@@ -24,7 +24,7 @@ interface EditorState {
   toggleNetColors: () => void;
   setGridSize: (size: number) => void;
   updateStatusBar: (partial: Partial<StatusBarState>) => void;
-  setNetColors: (colors: Map<string, string>) => void;
+  setNetColors: (colors: Record<string, string>) => void;
   setErcMarkers: (markers: ErcMarker[]) => void;
   toggleErcMarkers: () => void;
   setAutoFocus: (uuids: string[] | null) => void;
@@ -34,7 +34,7 @@ export const useEditorStore = create<EditorState>()((set) => ({
   mode: "schematic",
   gridVisible: true,
   netColorOverride: false,
-  netColors: new Map(),
+  netColors: {},
   ercMarkers: [],
   showErcMarkers: true,
   autoFocusUuids: null,
@@ -56,7 +56,7 @@ export const useEditorStore = create<EditorState>()((set) => ({
   setNetColors: (colors) => set({ netColors: colors }),
   setErcMarkers: (markers) => set({ ercMarkers: markers }),
   toggleErcMarkers: () => set((s) => ({ showErcMarkers: !s.showErcMarkers })),
-  setAutoFocus: (uuids) => set({ autoFocusUuids: uuids ? new Set(uuids) : null }),
+  setAutoFocus: (uuids) => set({ autoFocusUuids: uuids ?? null }),
   setGridSize: (size) =>
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>

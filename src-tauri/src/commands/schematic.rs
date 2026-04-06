@@ -24,7 +24,18 @@ pub async fn get_schematic(
         let dir = Path::new(&project_dir);
         let sch_path = dir.join(&filename);
 
-        if !sch_path.exists() {
+        // Validate resolved path is within project dir
+        let canonical_dir = dir
+            .canonicalize()
+            .map_err(|e| format!("Invalid project dir: {}", e))?;
+        if sch_path.exists() {
+            let canonical_sch = sch_path
+                .canonicalize()
+                .map_err(|e| format!("Invalid path: {}", e))?;
+            if !canonical_sch.starts_with(&canonical_dir) {
+                return Err("Path escapes project directory".to_string());
+            }
+        } else {
             return Err(format!("Schematic not found: {}", filename));
         }
 

@@ -54,7 +54,7 @@ export function MessagesPanel() {
           className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors text-[11px]">
           <Play size={11} /> Run ERC
         </button>
-        <button onClick={() => { setViolations([]); setLastRun(null); }}
+        <button onClick={() => { setViolations([]); setLastRun(null); useEditorStore.getState().setErcMarkers([]); }}
           className="p-1 rounded text-text-muted/50 hover:text-text-primary hover:bg-bg-hover transition-colors">
           <Trash2 size={12} />
         </button>

@@ -22,5 +22,8 @@ pub fn run() {
             export::export_netlist,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Signex");
+        .unwrap_or_else(|e| {
+            eprintln!("Signex failed to start: {}", e);
+            std::process::exit(1);
+        });
 }

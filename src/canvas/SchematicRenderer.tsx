@@ -69,12 +69,13 @@ function findNearestElectricalPoint(
   let bestDist = ELECTRICAL_SNAP_RANGE;
   let bestPoint: SchPoint | null = null;
 
-  // Check all symbol pin endpoints
+  // Check all symbol pin endpoints (snap to pin tip, not pin base)
   for (const sym of data.symbols) {
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
     for (const pin of lib.pins) {
-      const [px, py] = symToSch(pin.position.x, pin.position.y,
+      const pe = pinEnd(pin);
+      const [px, py] = symToSch(pe.x, pe.y,
         sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y);
       const d = Math.hypot(worldX - px, worldY - py);
       if (d < bestDist) { bestDist = d; bestPoint = { x: px, y: py }; }
@@ -94,6 +95,7 @@ function findNearestElectricalPoint(
 
 export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 3 });
   const dragging = useRef(false);
@@ -143,6 +145,10 @@ export function SchematicRenderer() {
     const c = camRef.current;
     return { x: wx * c.zoom + c.x, y: wy * c.zoom + c.y };
   }, []);
+
+  // Prevent double-commit: Enter commits + blur fires again
+  const committedRef = useRef(false);
+  useEffect(() => { committedRef.current = false; }, [inPlaceEdit]);
 
   const drawGraphicTransformed = useCallback((
     ctx: CanvasRenderingContext2D, g: Graphic,
@@ -259,7 +265,8 @@ export function SchematicRenderer() {
       canvas.style.height = `${rect.height}px`;
     }
 
-    const ctx = canvas.getContext("2d");
+    if (!ctxRef.current) ctxRef.current = canvas.getContext("2d");
+    const ctx = ctxRef.current;
     if (!ctx) return;
     // Reset transform and clear entire canvas
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -290,14 +297,16 @@ export function SchematicRenderer() {
     // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
     if (gridVisible && gridSize * cam.zoom > 2) {
       ctx.globalAlpha = 0.4;
-      for (let gx = 0; gx <= pw; gx += gridSize) {
-        const maj = Math.abs(gx % (gridSize * 10)) < 0.01;
+      for (let i = 0; i * gridSize <= pw; i++) {
+        const gx = i * gridSize;
+        const maj = i % 10 === 0;
         ctx.strokeStyle = maj ? C.gridMajor : C.grid;
         ctx.lineWidth = maj ? 0.06 : 0.02;
         ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ph); ctx.stroke();
       }
-      for (let gy = 0; gy <= ph; gy += gridSize) {
-        const maj = Math.abs(gy % (gridSize * 10)) < 0.01;
+      for (let i = 0; i * gridSize <= ph; i++) {
+        const gy = i * gridSize;
+        const maj = i % 10 === 0;
         ctx.strokeStyle = maj ? C.gridMajor : C.grid;
         ctx.lineWidth = maj ? 0.06 : 0.02;
         ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(pw, gy); ctx.stroke();
@@ -307,20 +316,21 @@ export function SchematicRenderer() {
 
     // AutoFocus: dim non-focused elements
     const autoFocus = useEditorStore.getState().autoFocusUuids;
-    const hasFocus = autoFocus !== null && autoFocus.size > 0;
+    const hasFocus = autoFocus !== null && autoFocus.length > 0;
 
     // Wires
     ctx.strokeStyle = C.wire;
     ctx.lineWidth = 0.15;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
-      ctx.globalAlpha = hasFocus && !autoFocus.has(wire.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = hasFocus && !autoFocus.includes(wire.uuid) ? 0.15 : 1;
       ctx.beginPath();
       ctx.moveTo(wire.start.x, wire.start.y);
       ctx.lineTo(wire.end.x, wire.end.y);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.lineCap = "butt";
 
     // Junctions
     ctx.fillStyle = C.junction;
@@ -366,7 +376,7 @@ export function SchematicRenderer() {
     for (const sym of data.symbols) {
       const lib = data.lib_symbols[sym.lib_id];
       if (!lib) continue;
-      ctx.globalAlpha = hasFocus && !autoFocus.has(sym.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = hasFocus && !autoFocus.includes(sym.uuid) ? 0.15 : 1;
 
       const sx = sym.position.x, sy = sym.position.y;
       const rot = sym.rotation, mx = sym.mirror_x, my = sym.mirror_y;
@@ -445,6 +455,7 @@ export function SchematicRenderer() {
         }
       }
     }
+    ctx.globalAlpha = 1;
 
     // Labels
     for (const label of data.labels) {
@@ -987,7 +998,7 @@ export function SchematicRenderer() {
     }
 
     ctx.restore(); // End world-space transform
-  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol, gridVisible, gridSize]);
+  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol, gridVisible, gridSize, inPlaceEdit]);
 
   // Fit to view — only when data changes (new sheet loaded), NOT on selection/edit
   const dataUuid = data?.uuid;
@@ -1008,6 +1019,7 @@ export function SchematicRenderer() {
   useEffect(() => {
     cancelAnimationFrame(animRef.current);
     animRef.current = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
   // ResizeObserver — mount once, call latest render via ref to avoid recreation
@@ -1320,7 +1332,7 @@ export function SchematicRenderer() {
         selectEnd.current = { x: world.x, y: world.y };
       }
     }
-  }, [data, s2w]);
+  }, [data, s2w, ctxMenu]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -1477,8 +1489,9 @@ export function SchematicRenderer() {
       if (!data) return;
       const store = useSchematicStore.getState();
 
-      // Don't handle if typing in an input
+      // Don't handle if typing in an input or contenteditable element
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (document.activeElement?.getAttribute("contenteditable")) return;
 
       switch (e.key) {
         case "Home": {
@@ -1601,11 +1614,11 @@ export function SchematicRenderer() {
               // Build net colors on enable
               const nets = resolveNets(data);
               const palette = ["#ff6b6b","#51cf66","#339af0","#fcc419","#cc5de8","#20c997","#ff922b","#845ef7","#f06595","#22b8cf","#94d82d","#fd7e14"];
-              const colors = new Map<string, string>();
+              const colors: Record<string, string> = {};
               nets.forEach((net: { wireUuids: string[]; labelUuids: string[]; junctionUuids: string[] }, i: number) => {
                 const color = palette[i % palette.length];
                 for (const uuid of [...net.wireUuids, ...net.labelUuids, ...net.junctionUuids]) {
-                  colors.set(uuid, color);
+                  colors[uuid] = color;
                 }
               });
               editor.setNetColors(colors);
@@ -1737,6 +1750,7 @@ export function SchematicRenderer() {
           onChange={(e) => setInPlaceEdit({ ...inPlaceEdit, value: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
+              committedRef.current = true;
               const store = useSchematicStore.getState();
               const d = store.data;
               if (d) {
@@ -1750,6 +1764,7 @@ export function SchematicRenderer() {
             e.stopPropagation();
           }}
           onBlur={() => {
+            if (committedRef.current) { committedRef.current = false; return; }
             const store = useSchematicStore.getState();
             const d = store.data;
             if (d) {

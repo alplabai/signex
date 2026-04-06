@@ -163,7 +163,17 @@ export function hitTest(
     } else if (d.type === "Rect") {
       const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
       const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
-      if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
+      if (d.fill === false) {
+        // Unfilled rect: check proximity to edges
+        const tl: SchPoint = { x: rx, y: ry };
+        const tr: SchPoint = { x: rx + rw, y: ry };
+        const br: SchPoint = { x: rx + rw, y: ry + rh };
+        const bl: SchPoint = { x: rx, y: ry + rh };
+        if (distToSegment(p, tl, tr) < tolerance || distToSegment(p, tr, br) < tolerance ||
+            distToSegment(p, br, bl) < tolerance || distToSegment(p, bl, tl) < tolerance) {
+          return { type: "drawing", uuid: d.uuid };
+        }
+      } else if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
         return { type: "drawing", uuid: d.uuid };
       }
     } else if (d.type === "Circle") {
@@ -315,7 +325,7 @@ export function boxSelect(
     if (d.type === "Line" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Rect" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Circle" && pointInBox(d.center, box)) selected.push(d.uuid);
-    else if (d.type === "Arc" && pointInBox(d.start, box)) selected.push(d.uuid);
+    else if (d.type === "Arc" && pointInBox(d.start, box) && pointInBox(d.mid, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Polyline" && d.points.every(p => pointInBox(p, box))) selected.push(d.uuid);
   }
 
