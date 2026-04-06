@@ -96,6 +96,7 @@ export function SchematicRenderer() {
   const selecting = useRef(false); // Drag-box selection active
   const selectStart = useRef({ x: 0, y: 0 }); // Drag-box start (world coords)
   const selectEnd = useRef({ x: 0, y: 0 }); // Drag-box end (world coords)
+  const moveNoRubber = useRef(false); // Ctrl held = move without rubber-banding
   const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
   const animRef = useRef(0);
@@ -822,8 +823,21 @@ export function SchematicRenderer() {
   // --- Mouse handlers: pan (right-drag) + select/move/wire (left-click) ---
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Right/middle button = pan
-    if (e.button === 2 || e.button === 1) {
+    // Right-click: finish wire (Altium) or pan
+    if (e.button === 2) {
+      const store = useSchematicStore.getState();
+      if (store.wireDrawing.active) {
+        e.preventDefault();
+        store.finishWire();
+        return;
+      }
+      dragging.current = true;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+      return;
+    }
+    // Middle button = pan
+    if (e.button === 1) {
       dragging.current = true;
       lastMouse.current = { x: e.clientX, y: e.clientY };
       e.preventDefault();
@@ -855,14 +869,32 @@ export function SchematicRenderer() {
       }
 
       if (store.editMode === "placeLabel") {
-        const name = prompt("Net label name:");
-        if (name) store.placeNetLabel(world, name);
+        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
+        const pos = eSnap || world;
+        const sp = w2s(pos.x, pos.y);
+        // Place label and immediately enter in-place edit for naming
+        store.placeNetLabel(pos, "NET?");
+        // Find the just-placed label (last one) and start editing
+        const newData = useSchematicStore.getState().data;
+        if (newData && newData.labels.length > 0) {
+          const newLabel = newData.labels[newData.labels.length - 1];
+          store.select(newLabel.uuid);
+          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "NET?", screenX: sp.x, screenY: sp.y - 10 });
+        }
         return;
       }
 
       if (store.editMode === "placePower") {
-        const name = prompt("Power net name (e.g. VCC, GND):");
-        if (name) store.placePowerPort(world, name, "input");
+        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
+        const pos = eSnap || world;
+        const sp = w2s(pos.x, pos.y);
+        store.placePowerPort(pos, "VCC", "input");
+        const newData = useSchematicStore.getState().data;
+        if (newData && newData.labels.length > 0) {
+          const newLabel = newData.labels[newData.labels.length - 1];
+          store.select(newLabel.uuid);
+          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "VCC", screenX: sp.x, screenY: sp.y - 10 });
+        }
         return;
       }
 
@@ -879,8 +911,9 @@ export function SchematicRenderer() {
         } else if (!store.selectedIds.has(hit.uuid)) {
           store.select(hit.uuid);
         }
-        // Start move drag
+        // Start move drag (Ctrl = move without rubber-banding, like Altium)
         moving.current = true;
+        moveNoRubber.current = e.ctrlKey;
         moveStart.current = { x: world.x, y: world.y };
         // Push undo before move
         store.pushUndo();
@@ -946,7 +979,7 @@ export function SchematicRenderer() {
         const dx = snapped.x - startSnapped.x;
         const dy = snapped.y - startSnapped.y;
         if (dx !== 0 || dy !== 0) {
-          store.moveElements([...store.selectedIds], dx, dy);
+          store.moveElements([...store.selectedIds], dx, dy, moveNoRubber.current);
           moveStart.current = { x: snapped.x, y: snapped.y };
         }
       }
@@ -980,25 +1013,44 @@ export function SchematicRenderer() {
     }
 
     // Double-click = in-place edit (Altium behavior)
+    // Only triggers on labels and text — not on component body
     if (data) {
       const r = canvasRef.current?.getBoundingClientRect();
       if (!r) return;
       const world = s2w(e.clientX - r.left, e.clientY - r.top);
-      const hit = hitTest(data, world.x, world.y);
-      if (hit) {
-        // Select it first
-        if (!store.selectedIds.has(hit.uuid)) store.select(hit.uuid);
 
-        const sym = data.symbols.find(s => s.uuid === hit.uuid);
-        if (sym) {
-          const sp = w2s(sym.position.x, sym.position.y);
-          setInPlaceEdit({ uuid: hit.uuid, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y - 20 });
+      // Check labels first (tight hit test)
+      for (const label of data.labels) {
+        if (Math.hypot(world.x - label.position.x, world.y - label.position.y) < 3) {
+          store.select(label.uuid);
+          const sp = w2s(label.position.x, label.position.y);
+          setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y - 10 });
           return;
         }
-        const lbl = data.labels.find(l => l.uuid === hit.uuid);
-        if (lbl) {
-          const sp = w2s(lbl.position.x, lbl.position.y);
-          setInPlaceEdit({ uuid: hit.uuid, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y - 10 });
+      }
+
+      // Check symbol text fields (ref/value) — must click near the text position, not body
+      for (const sym of data.symbols) {
+        if (sym.is_power) continue;
+        // Check reference text position
+        if (!sym.ref_text.hidden) {
+          const d = Math.hypot(world.x - sym.ref_text.position.x, world.y - sym.ref_text.position.y);
+          if (d < 2) {
+            store.select(sym.uuid);
+            const sp = w2s(sym.ref_text.position.x, sym.ref_text.position.y);
+            setInPlaceEdit({ uuid: sym.uuid, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y });
+            return;
+          }
+        }
+        // Check value text position
+        if (!sym.val_text.hidden) {
+          const d = Math.hypot(world.x - sym.val_text.position.x, world.y - sym.val_text.position.y);
+          if (d < 2) {
+            store.select(sym.uuid);
+            const sp = w2s(sym.val_text.position.x, sym.val_text.position.y);
+            setInPlaceEdit({ uuid: sym.uuid, field: "value", value: sym.value, screenX: sp.x, screenY: sp.y });
+            return;
+          }
         }
       }
     }
@@ -1082,9 +1134,13 @@ export function SchematicRenderer() {
           }
           break;
         case " ":
+          e.preventDefault();
           if (e.shiftKey && store.wireDrawing.active) {
-            e.preventDefault();
             store.cycleWireRouting();
+          } else if (store.placingSymbol) {
+            store.rotatePlacement(); // Space = rotate during placement (Altium)
+          } else if (store.selectedIds.size > 0) {
+            store.rotateSelected(); // Space = rotate selected (Altium)
           }
           break;
         case "a":
@@ -1140,9 +1196,10 @@ export function SchematicRenderer() {
           break;
         case "x":
         case "X":
+          // X = horizontal flip (mirror around Y axis) — Altium convention
           if (!e.ctrlKey) {
-            if (store.placingSymbol) store.mirrorPlacementX();
-            else if (store.selectedIds.size > 0) store.mirrorSelectedX();
+            if (store.placingSymbol) store.mirrorPlacementY();
+            else if (store.selectedIds.size > 0) store.mirrorSelectedY();
           }
           break;
         case "y":
@@ -1150,8 +1207,9 @@ export function SchematicRenderer() {
           if (e.ctrlKey) {
             e.preventDefault(); store.redo();
           } else {
-            if (store.placingSymbol) store.mirrorPlacementY();
-            else if (store.selectedIds.size > 0) store.mirrorSelectedY();
+            // Y = vertical flip (mirror around X axis) — Altium convention
+            if (store.placingSymbol) store.mirrorPlacementX();
+            else if (store.selectedIds.size > 0) store.mirrorSelectedX();
           }
           break;
         case "d":
@@ -1161,10 +1219,23 @@ export function SchematicRenderer() {
           }
           break;
         case "g":
-          if (e.shiftKey) {
-            useEditorStore.getState().toggleSnap();
-          } else {
+          if (e.shiftKey && e.ctrlKey) {
+            // Shift+Ctrl+G = toggle grid visibility (Altium)
             useEditorStore.getState().toggleGrid();
+          } else if (e.shiftKey) {
+            // Shift+G = cycle grid backward
+            const ed = useEditorStore.getState();
+            const presets = [0.635, 1.27, 2.54, 5.08, 10.16];
+            const idx = presets.indexOf(ed.statusBar.gridSize);
+            const prev = presets[idx > 0 ? idx - 1 : presets.length - 1];
+            ed.setGridSize(prev);
+          } else {
+            // G = cycle grid forward (Altium)
+            const ed = useEditorStore.getState();
+            const presets = [0.635, 1.27, 2.54, 5.08, 10.16];
+            const idx = presets.indexOf(ed.statusBar.gridSize);
+            const next = presets[(idx + 1) % presets.length];
+            ed.setGridSize(next);
           }
           break;
         case "z":
