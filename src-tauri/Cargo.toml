@@ -1,5 +1,5 @@
 [package]
-name = "alp-eda"
+name = "signex"
 version = "0.1.0"
 description = "AI-First Electronic Design Automation"
 authors = ["Caner Alp <caner.alp@alplab.ai>"]
@@ -7,7 +7,7 @@ license = "GPL-3.0"
 edition = "2021"
 
 [lib]
-name = "alp_eda_lib"
+name = "signex_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

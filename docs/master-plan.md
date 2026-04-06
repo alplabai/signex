@@ -1,4 +1,4 @@
-# Alp EDA — Master Plan
+# Signex — Master Plan
 
 ## Vision
 AI-First Electronic Design Automation tool that replaces Altium Designer.
@@ -316,7 +316,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ## Phase 10: Native Format & Ecosystem
 
-**Goal:** Establish Alp EDA as an independent platform.
+**Goal:** Establish Signex as an independent platform.
 
 - [ ] Native file format: .alpsch, .alppcb, .alplib, .alpproj, .alprules, .alpout
 - [ ] Import from: KiCad, Altium, Eagle, OrCAD

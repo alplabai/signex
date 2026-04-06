@@ -89,7 +89,7 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-text-primary tracking-tight">
-                Alp EDA
+                Signex
               </h1>
               <p className="text-sm text-text-secondary mt-0.5">
                 AI-First Electronic Design Automation

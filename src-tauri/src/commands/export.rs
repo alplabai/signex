@@ -45,7 +45,7 @@ pub fn export_netlist(data: SchematicSheet) -> Result<String, String> {
     out.push_str("(export (version \"E\")\n");
     out.push_str("  (design\n");
     out.push_str(&format!("    (source \"{}\")\n", data.uuid));
-    out.push_str("    (tool \"Alp EDA 0.1\")\n");
+    out.push_str("    (tool \"Signex 0.1\")\n");
     out.push_str("  )\n");
 
     // Components

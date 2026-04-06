@@ -1,4 +1,4 @@
-# Alp EDA — AI-First Electronic Design Automation
+# Signex — AI-First Electronic Design Automation
 
 ## Project Overview
 Desktop EDA tool with Altium Designer-class UX.

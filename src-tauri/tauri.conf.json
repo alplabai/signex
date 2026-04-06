@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Alp EDA",
+  "productName": "Signex",
   "version": "0.1.0",
   "identifier": "ai.alplab.eda",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Alp EDA",
+        "title": "Signex",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -38,7 +38,7 @@
     "category": "DeveloperTool",
     "copyright": "Copyright (C) 2026 Alp Lab AB. GPL-3.0",
     "shortDescription": "AI-First Electronic Design Automation",
-    "longDescription": "Alp EDA is an AI-powered electronic design automation tool with Altium-class UX, built on KiCad's open-source core."
+    "longDescription": "Signex is an AI-powered electronic design automation tool with Altium-class UX, built on KiCad's open-source core."
   },
   "plugins": {}
 }

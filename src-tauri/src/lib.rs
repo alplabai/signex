@@ -22,5 +22,5 @@ pub fn run() {
             export::export_netlist,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Alp EDA");
+        .expect("error while running Signex");
 }

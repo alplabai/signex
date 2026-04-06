@@ -32,7 +32,7 @@ pub struct AppInfo {
 #[tauri::command]
 pub fn get_app_info() -> AppInfo {
     AppInfo {
-        name: "Alp EDA".to_string(),
+        name: "Signex".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
@@ -42,7 +42,7 @@ pub async fn pick_and_open_project() -> Result<Option<ProjectInfo>, String> {
     tokio::task::spawn_blocking(|| {
         let file = rfd::FileDialog::new()
             .set_title("Open Project")
-            .add_filter("Alp EDA Project", &["alpproj"])
+            .add_filter("Signex Project", &["alpproj"])
             .add_filter("KiCad Project (Import)", &["kicad_pro"])
             .add_filter("All Files", &["*"])
             .pick_file();

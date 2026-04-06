@@ -7,7 +7,7 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
 
     writeln!(out, "(kicad_sch").unwrap();
     writeln!(out, "\t(version {})", sheet.version).unwrap();
-    writeln!(out, "\t(generator \"alp-eda\")").unwrap();
+    writeln!(out, "\t(generator \"signex\")").unwrap();
     writeln!(out, "\t(generator_version \"0.1\")").unwrap();
     writeln!(out, "\t(uuid \"{}\")", sheet.uuid).unwrap();
     writeln!(out, "\t(paper \"{}\")", sheet.paper_size).unwrap();

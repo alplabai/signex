@@ -56,6 +56,6 @@ export const useLayoutStore = create<LayoutState>()(
           ),
         })),
     }),
-    { name: "alp-eda-layout" }
+    { name: "signex-layout" }
   )
 );
