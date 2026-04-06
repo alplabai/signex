@@ -111,6 +111,8 @@ export function SchematicRenderer() {
   const measureStart = useRef<SchPoint | null>(null);
   const measureEnd = useRef<SchPoint | null>(null);
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
+  const gridVisible = useEditorStore((s) => s.gridVisible);
+  const gridSize = useEditorStore((s) => s.statusBar.gridSize);
 
   // Schematic store
   const data = useSchematicStore((s) => s.data);
@@ -954,7 +956,7 @@ export function SchematicRenderer() {
     }
 
     ctx.restore(); // End world-space transform
-  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol]);
+  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol, gridVisible, gridSize]);
 
   // Fit to view — only when data changes (new sheet loaded), NOT on selection/edit
   const dataUuid = data?.uuid;
@@ -1435,7 +1437,7 @@ export function SchematicRenderer() {
       const store = useSchematicStore.getState();
 
       // Don't handle if typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
 
       switch (e.key) {
         case "Home": {
