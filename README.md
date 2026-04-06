@@ -222,15 +222,17 @@ docs/                 Roadmap, master plan, Altium reference
 
 ## Contributing
 
-We welcome contributions from hardware engineers, EDA developers, and vibe coders!
+We welcome contributions from hardware engineers, EDA developers, and vibe coders! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 ### How to Contribute
 
 1. **Fork** the repo
-2. **Branch** (`git checkout -b feature/my-feature`)
+2. **Branch from `dev`** (`git checkout dev && git checkout -b feature/my-feature`)
 3. **Code** and add tests
 4. **Test** (`npm run test` + `cd src-tauri && cargo test`)
-5. **PR** with a clear description
+5. **PR against `dev`** with a clear description
+
+> **Branches:** `main` = stable releases, `dev` = active development. All PRs go to `dev`.
 
 ### Good First Issues
 
