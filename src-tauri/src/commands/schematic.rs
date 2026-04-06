@@ -7,7 +7,19 @@ pub async fn get_schematic(
     project_dir: String,
     filename: String,
 ) -> Result<parser::SchematicSheet, String> {
-    // Run parsing on a blocking thread to avoid freezing the UI
+    // Validate filename to prevent path traversal
+    for comp in Path::new(&filename).components() {
+        match comp {
+            std::path::Component::ParentDir => {
+                return Err("Invalid filename: path traversal not allowed".to_string());
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                return Err("Invalid filename: absolute paths not allowed".to_string());
+            }
+            _ => {}
+        }
+    }
+
     tokio::task::spawn_blocking(move || {
         let dir = Path::new(&project_dir);
         let sch_path = dir.join(&filename);

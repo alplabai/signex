@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MenuBar } from "@/components/MenuBar";
 import { ToolbarStrip } from "@/components/ToolbarStrip";
@@ -7,6 +7,7 @@ import { StatusBar } from "@/components/StatusBar";
 import { ProjectPanel } from "@/panels/ProjectPanel";
 import { PropertiesPanel } from "@/panels/PropertiesPanel";
 import { MessagesPanel } from "@/panels/MessagesPanel";
+import { ComponentSearch } from "@/components/ComponentSearch";
 // Signal panel available for AI integration (Phase 1 stub)
 // import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
@@ -179,6 +180,8 @@ function ResizeHandle({
 }
 
 function App() {
+  const [componentSearchOpen, setComponentSearchOpen] = useState(false);
+
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
   const bottomCollapsed = useLayoutStore((s) => s.bottomCollapsed);
@@ -206,6 +209,11 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "o") { e.preventDefault(); openProjectFlow(); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveSchematicFlow(); }
+      // P key (place component) — only when not typing in an input
+      if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        setComponentSearchOpen(true);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -213,7 +221,11 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
-      <MenuBar onOpenProject={openProjectFlow} />
+      <MenuBar
+        onOpenProject={openProjectFlow}
+        onSave={saveSchematicFlow}
+        onOpenComponentSearch={() => setComponentSearchOpen(true)}
+      />
       <ToolbarStrip />
       <DocumentTabBar />
 
@@ -262,6 +274,7 @@ function App() {
       </div>
 
       <StatusBar />
+      <ComponentSearch open={componentSearchOpen} onClose={() => setComponentSearchOpen(false)} />
     </div>
   );
 }

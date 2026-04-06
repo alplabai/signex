@@ -62,6 +62,8 @@ export function SchematicRenderer() {
   const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
   const animRef = useRef(0);
+  const wireCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for live wire cursor — no Zustand churn
+  const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
 
   // Schematic store
@@ -69,6 +71,7 @@ export function SchematicRenderer() {
   const selectedIds = useSchematicStore((s) => s.selectedIds);
   const editMode = useSchematicStore((s) => s.editMode);
   const wireDrawing = useSchematicStore((s) => s.wireDrawing);
+  const placingSymbol = useSchematicStore((s) => s.placingSymbol);
 
   const s2w = useCallback((sx: number, sy: number) => {
     const c = camRef.current;
@@ -210,9 +213,10 @@ export function SchematicRenderer() {
     ctx.lineWidth = 0.15;
     ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
-    // Grid (only if zoomed enough)
-    const gridSize = 1.27;
-    if (gridSize * cam.zoom > 6) {
+    // Grid (only if zoomed enough and visible)
+    const editorState = useEditorStore.getState();
+    const gridSize = editorState.statusBar.gridSize;
+    if (editorState.gridVisible && gridSize * cam.zoom > 6) {
       ctx.globalAlpha = 0.4;
       for (let gx = 0; gx <= pw; gx += gridSize) {
         const maj = Math.abs(gx % (gridSize * 10)) < 0.01;
@@ -600,7 +604,7 @@ export function SchematicRenderer() {
 
       // Draw live preview from last placed point to cursor (Manhattan: H then V)
       const last = wireDrawing.points[wireDrawing.points.length - 1];
-      const cur = wireDrawing.cursor;
+      const cur = wireCursorRef.current;
       ctx.strokeStyle = "#80deea";
       ctx.lineWidth = 0.15;
       ctx.setLineDash([0.3, 0.2]);
@@ -627,8 +631,45 @@ export function SchematicRenderer() {
       ctx.fill();
     }
 
+    // --- Placement preview (ghost symbol following cursor) ---
+    const placing = useSchematicStore.getState().placingSymbol;
+    if (placing) {
+      const cur = placeCursorRef.current;
+      const rot = placing.rotation;
+      const mx = placing.mirrorX;
+      const my = placing.mirrorY;
+
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = "#4fc3f7";
+      for (const g of placing.lib.graphics) {
+        drawGraphicTransformed(ctx, g, cur.x, cur.y, rot, mx, my);
+      }
+
+      // Draw pins
+      for (const pin of placing.lib.pins) {
+        const [px, py] = symToSch(pin.position.x, pin.position.y, cur.x, cur.y, rot, mx, my);
+        const pe = pinEnd(pin);
+        const [ex, ey] = symToSch(pe.x, pe.y, cur.x, cur.y, rot, mx, my);
+        ctx.strokeStyle = "#81c784";
+        ctx.lineWidth = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Crosshair at placement point
+      ctx.strokeStyle = "#4fc3f7";
+      ctx.lineWidth = 0.08;
+      ctx.beginPath();
+      ctx.moveTo(cur.x - 3, cur.y); ctx.lineTo(cur.x + 3, cur.y);
+      ctx.moveTo(cur.x, cur.y - 3); ctx.lineTo(cur.x, cur.y + 3);
+      ctx.stroke();
+    }
+
     ctx.restore(); // End world-space transform
-  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing]);
+  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol]);
 
   // Fit to view — only when data changes (new sheet loaded), NOT on selection/edit
   const dataUuid = data?.uuid;
@@ -651,13 +692,19 @@ export function SchematicRenderer() {
     animRef.current = requestAnimationFrame(render);
   }, [render]);
 
+  // ResizeObserver — mount once, call latest render via ref to avoid recreation
+  const renderRef = useRef(render);
+  renderRef.current = render;
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const obs = new ResizeObserver(() => render());
+    const obs = new ResizeObserver(() => {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = requestAnimationFrame(() => renderRef.current());
+    });
     obs.observe(container);
     return () => obs.disconnect();
-  }, [render]);
+  }, []); // Mount once — renderRef always has latest
 
   // --- Altium mouse: scroll=zoom, right-drag=pan ---
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -704,6 +751,11 @@ export function SchematicRenderer() {
         return;
       }
 
+      if (store.editMode === "placeSymbol" && store.placingSymbol) {
+        store.placeSymbolAt(world);
+        return;
+      }
+
       // Select mode: hit test
       const hit = hitTest(data, world.x, world.y);
       if (hit) {
@@ -741,11 +793,18 @@ export function SchematicRenderer() {
       return;
     }
 
-    // Update wire cursor for live preview
+    // Update wire/placement cursor for live preview (ref + rAF, no Zustand state churn)
     if (data) {
       const store = useSchematicStore.getState();
       if (store.wireDrawing.active) {
-        store.updateWireCursor(world);
+        wireCursorRef.current = snapPoint(world);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+      }
+      if (store.editMode === "placeSymbol" && store.placingSymbol) {
+        placeCursorRef.current = snapPoint(world);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
       }
     }
 
@@ -802,6 +861,8 @@ export function SchematicRenderer() {
         case "Escape":
           if (store.wireDrawing.active) {
             store.cancelWire();
+          } else if (store.placingSymbol) {
+            store.cancelPlacement();
           } else {
             store.deselectAll();
             store.setEditMode("select");
@@ -817,7 +878,25 @@ export function SchematicRenderer() {
           break;
         case "r":
         case "R":
-          if (!e.ctrlKey) store.rotateSelected();
+          if (!e.ctrlKey) {
+            if (store.placingSymbol) store.rotatePlacement();
+            else store.rotateSelected();
+          }
+          break;
+        case "x":
+        case "X":
+          if (!e.ctrlKey && store.placingSymbol) store.mirrorPlacementX();
+          break;
+        case "y":
+        case "Y":
+          if (!e.ctrlKey && store.placingSymbol) store.mirrorPlacementY();
+          break;
+        case "g":
+          if (e.shiftKey) {
+            useEditorStore.getState().toggleSnap();
+          } else {
+            useEditorStore.getState().toggleGrid();
+          }
           break;
         case "z":
           if (e.ctrlKey) { e.preventDefault(); store.undo(); }
@@ -839,7 +918,7 @@ export function SchematicRenderer() {
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ cursor: editMode === "drawWire" ? "crosshair" : "default" }}
+        style={{ cursor: editMode === "drawWire" || editMode === "placeSymbol" ? "crosshair" : "default" }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -853,6 +932,7 @@ export function SchematicRenderer() {
         {selectedIds.size > 0 && <span className="text-accent">{selectedIds.size} selected</span>}
         {editMode !== "select" && <span className="text-warning uppercase">{editMode}</span>}
         {wireDrawing.active && <span className="text-info">Drawing wire ({wireDrawing.points.length} pts)</span>}
+        {placingSymbol && <span className="text-info">Placing {placingSymbol.meta.symbol_id} (R:rotate X:mirrorX Y:mirrorY)</span>}
       </div>
     </div>
   );

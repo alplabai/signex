@@ -644,7 +644,81 @@ fn collect_sheets(dir: &Path, filename: &str, sheets: &mut Vec<SheetEntry>) -> R
     sheets.push(SheetEntry { name, filename: filename.to_string(), symbols_count, wires_count, labels_count });
 
     for child in child_filenames {
+        // Prevent path traversal via crafted sheet filenames
+        let child_path = std::path::Path::new(&child);
+        let has_traversal = child_path.components().any(|c| matches!(c,
+            std::path::Component::ParentDir |
+            std::path::Component::RootDir |
+            std::path::Component::Prefix(_)
+        ));
+        if has_traversal {
+            continue; // Skip malicious filenames silently
+        }
         collect_sheets(dir, &child, sheets)?;
     }
     Ok(())
+}
+
+// --- Symbol library parsing (.kicad_sym files) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolMeta {
+    pub symbol_id: String,
+    pub reference_prefix: String,
+    pub value: String,
+    pub description: String,
+    pub keywords: Vec<String>,
+    pub datasheet: String,
+    pub pin_count: usize,
+}
+
+/// Parse a .kicad_sym library file and return all symbols with metadata
+pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)>, String> {
+    let root = sexpr::parse(content)?;
+
+    if root.keyword() != Some("kicad_symbol_lib") {
+        return Err("Not a KiCad symbol library file".to_string());
+    }
+
+    let mut results = Vec::new();
+
+    for sym_node in root.find_all("symbol") {
+        let id = sym_node.first_arg().unwrap_or("").to_string();
+
+        // Skip sub-symbols (they contain "_N_M" suffix and are handled by parse_lib_symbol)
+        if id.contains('_') {
+            let parts: Vec<&str> = id.rsplitn(3, '_').collect();
+            if parts.len() >= 2 && parts[0].parse::<u32>().is_ok() && parts[1].parse::<u32>().is_ok() {
+                continue; // This is a sub-symbol like "R_0_1"
+            }
+        }
+
+        // Extract properties
+        let reference_prefix = sym_node.property("Reference").unwrap_or("?").to_string();
+        let value = sym_node.property("Value").unwrap_or(&id).to_string();
+        let description = sym_node.property("Description").unwrap_or("").to_string();
+        let datasheet = sym_node.property("Datasheet").unwrap_or("").to_string();
+        let keywords_str = sym_node.property("ki_keywords").unwrap_or("").to_string();
+        let keywords: Vec<String> = keywords_str
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+
+        let lib = parse_lib_symbol(sym_node);
+        let pin_count = lib.pins.len();
+
+        let meta = SymbolMeta {
+            symbol_id: id,
+            reference_prefix,
+            value,
+            description,
+            keywords,
+            datasheet,
+            pin_count,
+        };
+
+        results.push((lib, meta));
+    }
+
+    Ok(results)
 }

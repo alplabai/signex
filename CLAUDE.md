@@ -1,34 +1,35 @@
 # Alp EDA — AI-First Electronic Design Automation
 
 ## Project Overview
-Desktop EDA tool built on KiCad's open-source core with Altium Designer-class UX.
-Target: schematic capture, PCB layout, 3D viewer, SI simulation, AI copilot.
+Desktop EDA tool with Altium Designer-class UX.
+Target: schematic capture, PCB layout, 3D viewer, SI simulation, AI copilot (Signal).
 
 ## Architecture
 - **Desktop shell:** Tauri v2 (Rust backend)
 - **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS 4
-- **Canvas:** wgpu (GPU-accelerated, Rust plugin) — placeholder in Phase 0
+- **Canvas:** Canvas2D (schematic rendering, hit testing, selection)
+- **Parser:** Pure Rust S-expression parser for KiCad format (.kicad_sch, .kicad_sym)
 - **3D:** Three.js (future)
-- **Core engine:** KiCad C++ fork as headless lib via FFI (future)
-- **AI:** Claude API via Rust reqwest client
-- **State:** Zustand (7 stores: layout, project, editor, selection, ai, collab, prefs)
+- **AI:** Claude API via Rust reqwest client — branded "Signal"
+- **State:** Zustand (4 stores: layout, project, editor, schematic)
 
 ## Project Structure
 ```
 src-tauri/src/          Rust backend
-  commands/             Tauri IPC commands
-  engine/               KiCad parser + document model
-  renderer/             wgpu rendering (future)
-  ai/                   Claude API client (future)
+  commands/             Tauri IPC commands (project, schematic, save, library)
+  engine/               KiCad S-expr parser, document model, writer
+    parser.rs           Schematic + symbol library parser
+    sexpr.rs            Generic S-expression tokenizer
+    writer.rs           KiCad S-expr serializer
+    document.rs         Document model (future)
 src/                    React frontend
-  components/           Shell: MenuBar, ToolbarStrip, TabBar, StatusBar
-  panels/               Dockable panels: Project, Properties, Messages
-  canvas/               Central editor canvas
-  editors/              Schematic, PCB, Library editors (future)
-  stores/               Zustand state stores
-  hooks/                React hooks (useTauriCommand, etc.)
+  components/           Shell: MenuBar, ToolbarStrip, TabBar, StatusBar, ComponentSearch
+  panels/               Dockable panels: Project, Properties, Messages, Signal
+  canvas/               SchematicRenderer (Canvas2D), EditorCanvas, hitTest
+  stores/               Zustand state: layout, project, editor, schematic
+  hooks/                useResizable, useTauriCommand
   types/                TypeScript type definitions
-  lib/                  Utilities (cn, etc.)
+  lib/                  Utilities (cn)
 ```
 
 ## Commands
@@ -41,11 +42,23 @@ src/                    React frontend
 - Dark theme (Catppuccin Mocha-inspired palette)
 - 13px base font size (dense EDA UI)
 - All panels collapsible, layout persisted to localStorage
-- Altium-compatible keyboard shortcuts where possible
+- Altium-compatible keyboard shortcuts (see docs/altium-schematic-reference.md)
+- KiCad file format compatibility (.kicad_sch read/write)
+- Native format: .alpsch/.alppcb (future)
 - GPL-3.0 license (KiCad derivative)
 
 ## Phase Status
-- [x] Phase 0 Week 1: Tauri + React scaffold, UI shell
-- [ ] Phase 0 Week 2: KiCad S-expression parser
-- [ ] Phase 0 Week 3: wgpu canvas basics
-- [ ] Phase 0 Week 4: Real schematic rendering
+- [x] Phase 0: Viewer — KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav
+- [x] Phase 1: Editor foundation — selection, move, wire, delete, rotate, undo/redo, save, properties
+- [x] Phase 1.5: Grid/snap toggle, component library browser (226 KiCad libs), menu wiring
+- [ ] Phase 2: Core editing — drag-box select, auto-junction, electrical snap, rubber-band, copy/paste, net labels, power ports, ERC
+- [ ] Phase 3: Validation — ERC, annotation, cross-reference
+- [ ] Phase 4: Advanced — library editor, drawing objects, BOM, PDF export
+- [ ] Phase 5: Signal AI — Claude API integration, design assistance
+- [ ] Phase 6: PCB layout — layer stack, routing, DRC, copper pour, 3D viewer
+
+## Architecture Decisions
+- Canvas2D chosen over wgpu for faster iteration; wgpu planned for PCB phase
+- Pure Rust parser instead of KiCad C++ FFI — simpler build, no C++ toolchain dependency
+- Wire cursor + placement cursor use refs (not Zustand) to avoid 60Hz state churn
+- structuredClone for undo snapshots instead of JSON roundtrip
