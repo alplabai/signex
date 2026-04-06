@@ -1,7 +1,9 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
+import { useLayoutStore } from "@/stores/layout";
 import { hitTest, boxSelect } from "./hitTest";
+import { FindReplace } from "@/components/FindReplace";
 import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
 
@@ -108,9 +110,25 @@ export function SchematicRenderer() {
   const wireDrawing = useSchematicStore((s) => s.wireDrawing);
   const placingSymbol = useSchematicStore((s) => s.placingSymbol);
 
+  // Find/Replace state
+  const [findOpen, setFindOpen] = useState(false);
+  const [findShowReplace, setFindShowReplace] = useState(false);
+
+  // In-place text editing state
+  const [inPlaceEdit, setInPlaceEdit] = useState<{
+    uuid: string; field: string; value: string;
+    screenX: number; screenY: number;
+  } | null>(null);
+
   const s2w = useCallback((sx: number, sy: number) => {
     const c = camRef.current;
     return { x: (sx - c.x) / c.zoom, y: (sy - c.y) / c.zoom };
+  }, []);
+
+  // World to screen
+  const w2s = useCallback((wx: number, wy: number) => {
+    const c = camRef.current;
+    return { x: wx * c.zoom + c.x, y: wy * c.zoom + c.y };
   }, []);
 
   const drawGraphicTransformed = useCallback((
@@ -954,12 +972,37 @@ export function SchematicRenderer() {
     moving.current = false;
   }, [data, render]);
 
-  const handleDblClick = useCallback((_e: React.MouseEvent) => {
+  const handleDblClick = useCallback((e: React.MouseEvent) => {
     const store = useSchematicStore.getState();
     if (store.editMode === "drawWire" && store.wireDrawing.active) {
       store.finishWire();
+      return;
     }
-  }, []);
+
+    // Double-click = in-place edit (Altium behavior)
+    if (data) {
+      const r = canvasRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const world = s2w(e.clientX - r.left, e.clientY - r.top);
+      const hit = hitTest(data, world.x, world.y);
+      if (hit) {
+        // Select it first
+        if (!store.selectedIds.has(hit.uuid)) store.select(hit.uuid);
+
+        const sym = data.symbols.find(s => s.uuid === hit.uuid);
+        if (sym) {
+          const sp = w2s(sym.position.x, sym.position.y);
+          setInPlaceEdit({ uuid: hit.uuid, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y - 20 });
+          return;
+        }
+        const lbl = data.labels.find(l => l.uuid === hit.uuid);
+        if (lbl) {
+          const sp = w2s(lbl.position.x, lbl.position.y);
+          setInPlaceEdit({ uuid: hit.uuid, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y - 10 });
+        }
+      }
+    }
+  }, [data, s2w, w2s]);
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -993,6 +1036,32 @@ export function SchematicRenderer() {
             store.setEditMode("select");
           }
           break;
+        case "F2": {
+          // In-place text editing for selected component or label
+          if (store.selectedIds.size !== 1 || !data) break;
+          const selId = [...store.selectedIds][0];
+          const sym = data.symbols.find(s => s.uuid === selId);
+          if (sym) {
+            const sp = w2s(sym.position.x, sym.position.y);
+            setInPlaceEdit({ uuid: selId, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y - 20 });
+            break;
+          }
+          const lbl = data.labels.find(l => l.uuid === selId);
+          if (lbl) {
+            const sp = w2s(lbl.position.x, lbl.position.y);
+            setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y - 10 });
+          }
+          break;
+        }
+        case "Tab":
+          // During placement: open properties for the component being placed
+          if (store.placingSymbol) {
+            e.preventDefault();
+            // Focus the properties panel by toggling right panel open
+            const layout = useLayoutStore.getState();
+            if (layout.rightCollapsed) layout.toggleRight();
+          }
+          break;
         case "w":
         case "W":
           if (!e.ctrlKey) store.setEditMode("drawWire");
@@ -1022,6 +1091,20 @@ export function SchematicRenderer() {
           if (e.ctrlKey) {
             e.preventDefault();
             store.selectAll();
+          }
+          break;
+        case "f":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            setFindShowReplace(false);
+            setFindOpen(true);
+          }
+          break;
+        case "h":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            setFindShowReplace(true);
+            setFindOpen(true);
           }
           break;
         case "q":
@@ -1110,6 +1193,46 @@ export function SchematicRenderer() {
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {/* In-place text editor overlay */}
+      {inPlaceEdit && (
+        <input
+          autoFocus
+          value={inPlaceEdit.value}
+          onChange={(e) => setInPlaceEdit({ ...inPlaceEdit, value: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const store = useSchematicStore.getState();
+              const data = store.data;
+              if (data) {
+                const sym = data.symbols.find(s => s.uuid === inPlaceEdit.uuid);
+                if (sym) store.updateSymbolProp(inPlaceEdit.uuid, inPlaceEdit.field, inPlaceEdit.value);
+                const lbl = data.labels.find(l => l.uuid === inPlaceEdit.uuid);
+                if (lbl) store.updateLabelProp(inPlaceEdit.uuid, inPlaceEdit.field, inPlaceEdit.value);
+              }
+              setInPlaceEdit(null);
+            }
+            if (e.key === "Escape") setInPlaceEdit(null);
+            e.stopPropagation();
+          }}
+          onBlur={() => {
+            const store = useSchematicStore.getState();
+            const data = store.data;
+            if (data) {
+              const sym = data.symbols.find(s => s.uuid === inPlaceEdit.uuid);
+              if (sym) store.updateSymbolProp(inPlaceEdit.uuid, inPlaceEdit.field, inPlaceEdit.value);
+              const lbl = data.labels.find(l => l.uuid === inPlaceEdit.uuid);
+              if (lbl) store.updateLabelProp(inPlaceEdit.uuid, inPlaceEdit.field, inPlaceEdit.value);
+            }
+            setInPlaceEdit(null);
+          }}
+          className="absolute z-40 bg-bg-primary border border-accent rounded px-2 py-0.5 text-[12px] font-mono text-text-primary outline-none shadow-lg"
+          style={{ left: inPlaceEdit.screenX, top: inPlaceEdit.screenY, minWidth: 80 }}
+        />
+      )}
+
+      {/* Find/Replace */}
+      <FindReplace open={findOpen} onClose={() => setFindOpen(false)} showReplace={findShowReplace} />
 
       {/* Altium-style Active Bar — floating canvas toolbar */}
       <div className="absolute top-3 right-3 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30">
