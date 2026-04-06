@@ -305,16 +305,22 @@ export function SchematicRenderer() {
       ctx.globalAlpha = 1;
     }
 
+    // AutoFocus: dim non-focused elements
+    const autoFocus = useEditorStore.getState().autoFocusUuids;
+    const hasFocus = autoFocus !== null && autoFocus.size > 0;
+
     // Wires
     ctx.strokeStyle = C.wire;
     ctx.lineWidth = 0.15;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
+      ctx.globalAlpha = hasFocus && !autoFocus.has(wire.uuid) ? 0.15 : 1;
       ctx.beginPath();
       ctx.moveTo(wire.start.x, wire.start.y);
       ctx.lineTo(wire.end.x, wire.end.y);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
 
     // Junctions
     ctx.fillStyle = C.junction;
@@ -335,10 +341,32 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    // No ERC directives (green circle with check)
+    if (data.no_erc_directives) {
+      for (const d of data.no_erc_directives) {
+        const sel = selectedIds.has(d.uuid);
+        ctx.strokeStyle = sel ? C.selection : "#66bb6a";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(102,187,106,0.15)";
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.arc(d.position.x, d.position.y, 0.5, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Checkmark
+        ctx.strokeStyle = sel ? C.selection : "#66bb6a";
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(d.position.x - 0.2, d.position.y);
+        ctx.lineTo(d.position.x - 0.05, d.position.y + 0.2);
+        ctx.lineTo(d.position.x + 0.25, d.position.y - 0.15);
+        ctx.stroke();
+      }
+    }
+
     // --- Symbols ---
     for (const sym of data.symbols) {
       const lib = data.lib_symbols[sym.lib_id];
       if (!lib) continue;
+      ctx.globalAlpha = hasFocus && !autoFocus.has(sym.uuid) ? 0.15 : 1;
 
       const sx = sym.position.x, sy = sym.position.y;
       const rot = sym.rotation, mx = sym.mirror_x, my = sym.mirror_y;
@@ -1190,6 +1218,12 @@ export function SchematicRenderer() {
         return;
       }
 
+      if (store.editMode === "placeNoErc") {
+        const eSnap = findNearestElectricalPoint(data, world.x, world.y);
+        store.placeNoErcDirective(eSnap || world);
+        return;
+      }
+
       if (store.editMode === "placePort") {
         const eSnap = findNearestElectricalPoint(data, world.x, world.y);
         const pos = eSnap || world;
@@ -1316,8 +1350,8 @@ export function SchematicRenderer() {
         // Push undo before move
         store.pushUndo();
       } else {
-        // Start drag-box selection
-        if (!e.shiftKey) store.deselectAll();
+        // Start drag-box selection — also clear AutoFocus
+        if (!e.shiftKey) { store.deselectAll(); useEditorStore.getState().setAutoFocus(null); }
         selecting.current = true;
         selectStart.current = { x: world.x, y: world.y };
         selectEnd.current = { x: world.x, y: world.y };

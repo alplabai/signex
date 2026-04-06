@@ -81,6 +81,7 @@ export function createSimpleSchematic(): SchematicData {
     buses: [],
     bus_entries: [],
     drawings: [],
+    no_erc_directives: [],
     lib_symbols: {
       "Device:R": resistorLib,
       "Device:C": capacitorLib,

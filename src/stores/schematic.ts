@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placePort" | "placeText" | "drawLine" | "drawRect" | "measure";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "measure";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -80,6 +80,8 @@ interface SchematicState {
   } | null;
 
   // Placement
+  placeNoErcDirective: (pos: SchPoint) => void;
+  toggleDesignatorLock: (uuid: string) => void;
   placeNetLabel: (pos: SchPoint, text: string) => void;
   placePowerPort: (pos: SchPoint, netName: string, style: string) => void;
   placeNoConnect: (pos: SchPoint) => void;
@@ -119,6 +121,7 @@ interface SchematicState {
   annotateAll: () => void;
   resetDesignators: () => void;
   resetDuplicateDesignators: () => void;
+  annotateSelected: () => void;
 
   // Component placement
   startPlacement: (lib: LibSymbol, meta: SymbolSearchResult) => void;
@@ -492,6 +495,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     newData.bus_entries = newData.bus_entries.filter((be) => !selectedIds.has(be.uuid));
     newData.child_sheets = newData.child_sheets.filter((cs) => !selectedIds.has(cs.uuid));
     newData.drawings = newData.drawings.filter((d) => !selectedIds.has(d.uuid));
+    newData.no_erc_directives = newData.no_erc_directives.filter((d) => !selectedIds.has(d.uuid));
     set({ data: newData, dirty: true, selectedIds: new Set() });
   },
 
@@ -715,6 +719,28 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  // No ERC directive placement
+  placeNoErcDirective: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.no_erc_directives.push({ uuid: generateUuid(), position: snapped });
+    set({ data: newData, dirty: true });
+  },
+
+  // Toggle designator lock on a symbol
+  toggleDesignatorLock: (uuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find(s => s.uuid === uuid);
+    if (sym) sym.locked = !sym.locked;
+    set({ data: newData, dirty: true });
+  },
+
   // Port placement (hierarchical label)
   placePort: (pos, text, shape) => {
     const { data } = get();
@@ -889,6 +915,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     for (const be of data.bus_entries) ids.add(be.uuid);
     for (const cs of data.child_sheets) ids.add(cs.uuid);
     for (const d of data.drawings) ids.add(d.uuid);
+    for (const d of data.no_erc_directives) ids.add(d.uuid);
     set({ selectedIds: ids });
   },
 
@@ -1199,7 +1226,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       }
 
       // Sort by Y first (top to bottom), then X (left to right)
-      const toAnnotate = syms.filter(s => s.reference.endsWith("?") || s.reference === prefix);
+      const toAnnotate = syms.filter(s => !s.locked && (s.reference.endsWith("?") || s.reference === prefix));
       toAnnotate.sort((a, b) => {
         const dy = a.position.y - b.position.y;
         if (Math.abs(dy) > 2) return dy;
@@ -1217,6 +1244,42 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       }
     }
 
+    set({ data: newData, dirty: true });
+  },
+
+  // Annotate only selected symbols
+  annotateSelected: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const selectedSyms = newData.symbols.filter(s => selectedIds.has(s.uuid) && !s.is_power && !s.locked);
+    const groups = new Map<string, typeof selectedSyms>();
+    for (const sym of selectedSyms) {
+      const prefix = sym.reference.replace(/[0-9?]+$/, "");
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix)!.push(sym);
+    }
+    for (const [prefix, syms] of groups) {
+      const usedNumbers = new Set<number>();
+      for (const s of newData.symbols) {
+        if (s.is_power) continue;
+        const num = parseInt(s.reference.replace(/^[A-Z]+/, ""), 10);
+        if (!isNaN(num) && !s.reference.endsWith("?") && !selectedIds.has(s.uuid)) usedNumbers.add(num);
+      }
+      syms.sort((a, b) => {
+        const dy = a.position.y - b.position.y;
+        if (Math.abs(dy) > 2) return dy;
+        return a.position.x - b.position.x;
+      });
+      let nextNum = 1;
+      for (const sym of syms) {
+        while (usedNumbers.has(nextNum)) nextNum++;
+        sym.reference = `${prefix}${nextNum}`;
+        usedNumbers.add(nextNum);
+        nextNum++;
+      }
+    }
     set({ data: newData, dirty: true });
   },
 

@@ -84,6 +84,7 @@ export interface SchematicData {
   buses: SchBus[];
   bus_entries: SchBusEntry[];
   drawings: SchDrawing[];
+  no_erc_directives: SchNoErcDirective[];
   lib_symbols: Record<string, LibSymbol>;
 }
 
@@ -113,6 +114,11 @@ export type SchDrawing =
   | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean }
   | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number }
   | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean };
+
+export interface SchNoErcDirective {
+  uuid: string;
+  position: SchPoint;
+}
 
 export interface SchBus {
   uuid: string;

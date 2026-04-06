@@ -386,6 +386,12 @@ function ComponentProps({ uuid }: { uuid: string }) {
               }} />
               <span className="text-[10px] text-text-secondary">Mirrored</span>
             </FieldRow>
+            <FieldRow label="">
+              <CheckBox checked={sym.locked} onChange={() => {
+                useSchematicStore.getState().toggleDesignatorLock(uuid);
+              }} />
+              <span className="text-[10px] text-text-secondary">Lock Designator</span>
+            </FieldRow>
             <FieldRow label="Local Colors">
               <span className="text-[10px] text-text-muted/50 mr-1">Fills</span>
               <ColorSwatch color="#9fa8da" />
