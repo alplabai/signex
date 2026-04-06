@@ -5,6 +5,11 @@ export interface HitResult {
   uuid: string;
 }
 
+interface Box {
+  minX: number; minY: number;
+  maxX: number; maxY: number;
+}
+
 function dist(a: SchPoint, b: SchPoint): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -86,4 +91,82 @@ export function hitTest(
   }
 
   return null;
+}
+
+function pointInBox(p: SchPoint, box: Box): boolean {
+  return p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY && p.y <= box.maxY;
+}
+
+function segmentIntersectsBox(a: SchPoint, b: SchPoint, box: Box): boolean {
+  // Check if either endpoint is inside
+  if (pointInBox(a, box) || pointInBox(b, box)) return true;
+  // Check segment-edge intersections (simplified: check if segment crosses any box edge)
+  const edges: [SchPoint, SchPoint][] = [
+    [{ x: box.minX, y: box.minY }, { x: box.maxX, y: box.minY }],
+    [{ x: box.maxX, y: box.minY }, { x: box.maxX, y: box.maxY }],
+    [{ x: box.maxX, y: box.maxY }, { x: box.minX, y: box.maxY }],
+    [{ x: box.minX, y: box.maxY }, { x: box.minX, y: box.minY }],
+  ];
+  for (const [c, d] of edges) {
+    if (segmentsIntersect(a, b, c, d)) return true;
+  }
+  return false;
+}
+
+function segmentsIntersect(a: SchPoint, b: SchPoint, c: SchPoint, d: SchPoint): boolean {
+  const cross = (o: SchPoint, p: SchPoint, q: SchPoint) =>
+    (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const d1 = cross(c, d, a), d2 = cross(c, d, b);
+  const d3 = cross(a, b, c), d4 = cross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  return false;
+}
+
+/**
+ * Select all objects within a drag box.
+ * crossing=true: select if object intersects box (right-to-left drag)
+ * crossing=false: select only if object is fully inside box (left-to-right drag)
+ */
+export function boxSelect(
+  data: SchematicData,
+  startX: number, startY: number,
+  endX: number, endY: number,
+): string[] {
+  const crossing = endX < startX;
+  const box: Box = {
+    minX: Math.min(startX, endX), minY: Math.min(startY, endY),
+    maxX: Math.max(startX, endX), maxY: Math.max(startY, endY),
+  };
+
+  const selected: string[] = [];
+
+  for (const sym of data.symbols) {
+    if (sym.is_power) continue;
+    if (crossing) {
+      // Crossing: any part of symbol in box
+      if (pointInBox(sym.position, box)) selected.push(sym.uuid);
+    } else {
+      // Inside: symbol center must be in box
+      if (pointInBox(sym.position, box)) selected.push(sym.uuid);
+    }
+  }
+
+  for (const wire of data.wires) {
+    if (crossing) {
+      if (segmentIntersectsBox(wire.start, wire.end, box)) selected.push(wire.uuid);
+    } else {
+      if (pointInBox(wire.start, box) && pointInBox(wire.end, box)) selected.push(wire.uuid);
+    }
+  }
+
+  for (const label of data.labels) {
+    if (pointInBox(label.position, box)) selected.push(label.uuid);
+  }
+
+  for (const j of data.junctions) {
+    if (pointInBox(j.position, box)) selected.push(j.uuid);
+  }
+
+  return selected;
 }
