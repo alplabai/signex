@@ -1057,11 +1057,25 @@ export function SchematicRenderer() {
           break;
         case "x":
         case "X":
-          if (!e.ctrlKey && store.placingSymbol) store.mirrorPlacementX();
+          if (!e.ctrlKey) {
+            if (store.placingSymbol) store.mirrorPlacementX();
+            else if (store.selectedIds.size > 0) store.mirrorSelectedX();
+          }
           break;
         case "y":
         case "Y":
-          if (!e.ctrlKey && store.placingSymbol) store.mirrorPlacementY();
+          if (e.ctrlKey) {
+            e.preventDefault(); store.redo();
+          } else {
+            if (store.placingSymbol) store.mirrorPlacementY();
+            else if (store.selectedIds.size > 0) store.mirrorSelectedY();
+          }
+          break;
+        case "d":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            store.duplicateSelected();
+          }
           break;
         case "g":
           if (e.shiftKey) {
@@ -1072,9 +1086,6 @@ export function SchematicRenderer() {
           break;
         case "z":
           if (e.ctrlKey) { e.preventDefault(); store.undo(); }
-          break;
-        case "y":
-          if (e.ctrlKey) { e.preventDefault(); store.redo(); }
           break;
         case "Z":
           if (e.ctrlKey && e.shiftKey) { e.preventDefault(); store.redo(); }
