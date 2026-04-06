@@ -221,7 +221,9 @@ See [LICENSE](LICENSE) for the full text.
 
 ## Credits
 
-Built by [Caner Alp](https://github.com/alpCaner) at [Alp Lab AB](https://alplab.ai) with [Claude Code](https://claude.ai/code).
+Built by [Caner Alp](https://github.com/alpCaner) at [Alp Lab AB](https://alplab.ai).
+
+Tools used: [Claude Code](https://claude.ai/code), [Tauri](https://tauri.app/), [Vite](https://vite.dev/), [KiCad](https://www.kicad.org/) (file format).
 
 ---
 
