@@ -157,6 +157,7 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Paste") return { ...item, disabled: false, action: () => useSchematicStore.getState().pasteClipboard({ x: 5, y: 5 }) };
       if (item.label === "Delete") return { ...item, disabled: false, action: () => useSchematicStore.getState().deleteSelected() };
       if (item.label === "Select All") return { ...item, disabled: false, action: () => useSchematicStore.getState().selectAll() };
+      if (item.label === "Find...") return { ...item, disabled: false, action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true })) };
       // View
       if (item.label === "Toggle Grid") return { ...item, action: () => useEditorStore.getState().toggleGrid() };
       if (item.label === "Toggle Snap") return { ...item, action: () => useEditorStore.getState().toggleSnap() };
