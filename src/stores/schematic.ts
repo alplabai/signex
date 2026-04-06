@@ -117,6 +117,8 @@ interface SchematicState {
   // Find Similar & Annotation
   findSimilar: () => void;
   annotateAll: () => void;
+  resetDesignators: () => void;
+  resetDuplicateDesignators: () => void;
 
   // Component placement
   startPlacement: (lib: LibSymbol, meta: SymbolSearchResult) => void;
@@ -1216,5 +1218,40 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     }
 
     set({ data: newData, dirty: true });
+  },
+
+  // Reset ALL designators to prefix + "?"
+  resetDesignators: () => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    for (const sym of nd.symbols) {
+      if (sym.is_power || sym.locked) continue;
+      const prefix = sym.reference.replace(/[0-9?]+$/, "");
+      sym.reference = `${prefix}?`;
+    }
+    set({ data: nd, dirty: true });
+  },
+
+  // Reset only DUPLICATE designators to "?"
+  resetDuplicateDesignators: () => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const seen = new Map<string, string>(); // ref → first uuid
+    for (const sym of nd.symbols) {
+      if (sym.is_power) continue;
+      if (sym.reference.endsWith("?")) continue;
+      if (seen.has(sym.reference)) {
+        // Duplicate — reset to "?"
+        const prefix = sym.reference.replace(/[0-9]+$/, "");
+        sym.reference = `${prefix}?`;
+      } else {
+        seen.set(sym.reference, sym.uuid);
+      }
+    }
+    set({ data: nd, dirty: true });
   },
 }));

@@ -913,6 +913,30 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    // --- ERC markers ---
+    const ercMarkers = useEditorStore.getState().ercMarkers;
+    const showErc = useEditorStore.getState().showErcMarkers;
+    if (showErc && ercMarkers.length > 0) {
+      for (const marker of ercMarkers) {
+        const mx = marker.position.x, my = marker.position.y;
+        const r = 0.6;
+        // Draw marker circle
+        ctx.beginPath();
+        ctx.arc(mx, my, r, 0, Math.PI * 2);
+        ctx.fillStyle = marker.severity === "error" ? "rgba(239,83,80,0.3)" : "rgba(255,183,77,0.3)";
+        ctx.fill();
+        ctx.strokeStyle = marker.severity === "error" ? "#ef5350" : "#ffb74d";
+        ctx.lineWidth = 0.12;
+        ctx.stroke();
+        // Draw icon (! for warning, X for error)
+        ctx.fillStyle = marker.severity === "error" ? "#ef5350" : "#ffb74d";
+        ctx.font = "bold 0.8px Roboto";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(marker.severity === "error" ? "X" : "!", mx, my);
+      }
+    }
+
     // --- Measure distance overlay ---
     if (measureStart.current) {
       const ms = measureStart.current;
@@ -1246,6 +1270,26 @@ export function SchematicRenderer() {
           store.startWire(busPos);
         }
         wireCursorRef.current = busPos;
+        return;
+      }
+
+      // Alt+Click = select entire net (Altium behavior)
+      if (e.altKey) {
+        const hit = hitTest(data, world.x, world.y);
+        if (hit) {
+          const nets = resolveNets(data);
+          // Find which net this element belongs to
+          const net = nets.find(n =>
+            n.wireUuids.includes(hit.uuid) || n.labelUuids.includes(hit.uuid) || n.junctionUuids.includes(hit.uuid) ||
+            n.pins.some(p => p.symbolUuid === hit.uuid)
+          );
+          if (net) {
+            const allUuids = [...net.wireUuids, ...net.labelUuids, ...net.junctionUuids];
+            store.selectMultiple(allUuids);
+          } else {
+            store.select(hit.uuid);
+          }
+        }
         return;
       }
 
