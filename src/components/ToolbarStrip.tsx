@@ -110,8 +110,8 @@ export function ToolbarStrip() {
 
       {/* Transform actions */}
       <ToolBtn icon={<RotateCw size={16} />} label="Rotate (Space)" disabled={!hasSel} onClick={rotateSelected} />
-      <ToolBtn icon={<FlipHorizontal size={16} />} label="Mirror X" disabled={!hasSel} onClick={mirrorSelectedX} />
-      <ToolBtn icon={<FlipVertical size={16} />} label="Mirror Y" disabled={!hasSel} onClick={mirrorSelectedY} />
+      <ToolBtn icon={<FlipHorizontal size={16} />} label="Flip Horizontal (X)" disabled={!hasSel} onClick={mirrorSelectedY} />
+      <ToolBtn icon={<FlipVertical size={16} />} label="Flip Vertical (Y)" disabled={!hasSel} onClick={mirrorSelectedX} />
       <ToolBtn icon={<Copy size={16} />} label="Duplicate (Ctrl+D)" disabled={!hasSel} onClick={duplicateSelected} />
       <ToolBtn icon={<Trash2 size={16} />} label="Delete (Del)" disabled={!hasSel} onClick={deleteSelected} />
 

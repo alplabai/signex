@@ -381,7 +381,7 @@ function ComponentProps({ uuid }: { uuid: string }) {
               </select>
             </FieldRow>
             <FieldRow label="">
-              <CheckBox checked={sym.mirror_x || sym.mirror_y} onChange={() => {
+              <CheckBox checked={sym.mirror_x} onChange={() => {
                 toggleProp(s => { s.mirror_x = !s.mirror_x; });
               }} />
               <span className="text-[10px] text-text-secondary">Mirrored</span>

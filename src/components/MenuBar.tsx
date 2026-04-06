@@ -227,7 +227,7 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Net Label") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeLabel") };
       if (item.label === "Power Port") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placePower") };
       if (item.label === "No Connect") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoConnect") };
-      if (item.label === "Junction") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeJunction") };
+      // Junction is auto-only (Altium behavior) — no manual placement mode
       if (item.label === "Port") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placePort") };
       if (item.label === "Text String") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeText") };
       if (item.label === "Bus" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawBus") };
