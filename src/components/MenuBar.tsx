@@ -259,6 +259,8 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       // Design / Tools
       if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
       if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
+      if (item.label === "Reset Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDesignators() };
+      if (item.label === "Reset Duplicate Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDuplicateDesignators() };
 
       return item;
     }),

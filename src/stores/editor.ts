@@ -1,11 +1,20 @@
 import { create } from "zustand";
-import type { EditorMode, StatusBarState } from "@/types";
+import type { EditorMode, StatusBarState, SchPoint } from "@/types";
+
+export interface ErcMarker {
+  position: SchPoint;
+  severity: "error" | "warning";
+  message: string;
+  uuids: string[];
+}
 
 interface EditorState {
   mode: EditorMode;
   gridVisible: boolean;
   netColorOverride: boolean;
   netColors: Map<string, string>;
+  ercMarkers: ErcMarker[];
+  showErcMarkers: boolean;
   statusBar: StatusBarState;
 
   setMode: (mode: EditorMode) => void;
@@ -15,6 +24,8 @@ interface EditorState {
   setGridSize: (size: number) => void;
   updateStatusBar: (partial: Partial<StatusBarState>) => void;
   setNetColors: (colors: Map<string, string>) => void;
+  setErcMarkers: (markers: ErcMarker[]) => void;
+  toggleErcMarkers: () => void;
 }
 
 export const useEditorStore = create<EditorState>()((set) => ({
@@ -22,6 +33,8 @@ export const useEditorStore = create<EditorState>()((set) => ({
   gridVisible: true,
   netColorOverride: false,
   netColors: new Map(),
+  ercMarkers: [],
+  showErcMarkers: true,
   statusBar: {
     cursorPosition: { x: 0, y: 0 },
     gridSize: 1.27,
@@ -38,6 +51,8 @@ export const useEditorStore = create<EditorState>()((set) => ({
     set((s) => ({ statusBar: { ...s.statusBar, snapEnabled: !s.statusBar.snapEnabled } })),
   toggleNetColors: () => set((s) => ({ netColorOverride: !s.netColorOverride })),
   setNetColors: (colors) => set({ netColors: colors }),
+  setErcMarkers: (markers) => set({ ercMarkers: markers }),
+  toggleErcMarkers: () => set((s) => ({ showErcMarkers: !s.showErcMarkers })),
   setGridSize: (size) =>
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>

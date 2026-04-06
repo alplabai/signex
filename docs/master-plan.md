@@ -139,33 +139,39 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ---
 
-## Phase 3: Design Validation
+## Phase 3: Design Validation (DONE)
 
 **Goal:** Ensure designs are electrically correct before moving to PCB.
 
 ### ERC (Electrical Rules Check)
-- [ ] Connection matrix (pin-to-pin validity rules)
-- [ ] Duplicate designator detection
-- [ ] Unconnected pin detection
-- [ ] Missing power net detection
-- [ ] Floating wire detection
-- [ ] ERC markers with severity levels (Fatal, Error, Warning)
-- [ ] Messages panel with violation navigation (double-click to zoom)
+- [x] Connection matrix (pin-to-pin validity rules — 12x12 matrix)
+- [x] Duplicate designator detection
+- [x] Unconnected pin detection
+- [x] Missing power net detection
+- [x] Floating wire detection
+- [x] ERC markers with severity levels (Error, Warning)
+- [x] Messages panel with violation navigation (click to select)
+- [x] Pin conflict detection (output-to-output, output-to-tristate, etc.)
+- [x] Power pin not driven check
+- [x] Net with no label warning
+- [x] Unannotated component detection
+- [x] Multiple conflicting net names on same net
 - [ ] No ERC directives to suppress individual violations
 - [ ] AutoFocus: dim unrelated wiring when inspecting violation
 
 ### Annotation
-- [ ] Auto-annotate schematic (processing order: Up/Down/Across)
-- [ ] Reset designators / Reset duplicates only
+- [x] Auto-annotate schematic (processing order: top-to-bottom, left-to-right)
+- [x] Reset designators
+- [x] Reset duplicates only
 - [ ] Per-sheet annotation control
 - [ ] Lock/unlock individual designators
 - [ ] Back-annotation from PCB
 
 ### Cross-Reference
+- [x] Alt+Click to highlight entire net across all sheets
+- [x] Net color override (F5)
 - [ ] Port cross-references showing sheet/grid location
 - [ ] Component cross-references
-- [ ] Alt+Click to highlight entire net across all sheets
-- [ ] Net color override (F5)
 
 ---
 

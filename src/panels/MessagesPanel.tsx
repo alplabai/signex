@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, AlertTriangle, XCircle, Play, Trash2 } from "lucide-react";
 import { useSchematicStore } from "@/stores/schematic";
+import { useEditorStore, type ErcMarker } from "@/stores/editor";
 import { runErc, type ErcViolation } from "@/lib/erc";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,21 @@ export function MessagesPanel() {
     const result = runErc(data);
     setViolations(result.violations);
     setLastRun(new Date().toLocaleTimeString());
+
+    // Build ERC markers for canvas display
+    const markers: ErcMarker[] = [];
+    for (const v of result.violations) {
+      if (v.position) {
+        markers.push({ position: v.position, severity: v.severity, message: v.message, uuids: v.uuids });
+      } else if (v.uuids.length > 0) {
+        // Try to find position from the first involved element
+        const sym = data.symbols.find(s => s.uuid === v.uuids[0]);
+        if (sym) {
+          markers.push({ position: sym.position, severity: v.severity, message: v.message, uuids: v.uuids });
+        }
+      }
+    }
+    useEditorStore.getState().setErcMarkers(markers);
   };
 
   const errors = violations.filter(v => v.severity === "error");

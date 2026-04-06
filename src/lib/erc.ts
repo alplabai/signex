@@ -1,12 +1,14 @@
 import type { SchematicData, SchPoint } from "@/types";
 import { resolveNets, type NetInfo } from "./netResolver";
 import { getSymbolPinPositions, pointsMatch } from "./geometry";
+import { checkPinConnection } from "./ercMatrix";
 
 export type ErcViolationType =
   | "duplicate_designator" | "unconnected_pin" | "floating_wire"
   | "no_driver" | "single_pin_net" | "missing_power"
   | "output_to_output" | "multiple_net_names" | "unannotated"
-  | "missing_no_connect" | "wire_not_connected";
+  | "missing_no_connect" | "wire_not_connected"
+  | "pin_conflict" | "power_pin_not_driven" | "net_no_label";
 
 export interface ErcViolation {
   type: ErcViolationType;
@@ -46,6 +48,15 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
 
   // 8. Unannotated components (designator ends with ?)
   checkUnannotated(data, violations);
+
+  // 9. Pin-to-pin connection matrix violations
+  checkPinConnectionMatrix(nets, violations);
+
+  // 10. Power pins not driven (power_in without power_out on net)
+  checkPowerPinNotDriven(nets, violations);
+
+  // 11. Nets with wires but no label
+  checkNetNoLabel(nets, violations);
 
   return { violations, nets };
 }
@@ -192,6 +203,72 @@ function checkUnannotated(data: SchematicData, violations: ErcViolation[]) {
         message: `Unannotated component: ${sym.reference} (${sym.value})`,
         uuids: [sym.uuid],
         position: sym.position,
+      });
+    }
+  }
+}
+
+function checkPinConnectionMatrix(nets: NetInfo[], violations: ErcViolation[]) {
+  for (const net of nets) {
+    if (net.pins.length < 2) continue;
+    // Check every pair of pins on the same net
+    const checked = new Set<string>();
+    for (let i = 0; i < net.pins.length; i++) {
+      for (let j = i + 1; j < net.pins.length; j++) {
+        const a = net.pins[i], b = net.pins[j];
+        // Avoid duplicate reports for same symbol pair
+        const pairKey = [a.symbolUuid, b.symbolUuid].sort().join(":");
+        if (checked.has(pairKey)) continue;
+        checked.add(pairKey);
+        const severity = checkPinConnection(a.pinType, b.pinType);
+        if (severity === "error") {
+          violations.push({
+            type: "pin_conflict",
+            severity: "error",
+            message: `Pin conflict on net "${net.name || "(unnamed)"}": ${a.symbolRef}:${a.pinNumber} (${a.pinType}) vs ${b.symbolRef}:${b.pinNumber} (${b.pinType})`,
+            uuids: [a.symbolUuid, b.symbolUuid],
+          });
+        } else if (severity === "warning") {
+          violations.push({
+            type: "pin_conflict",
+            severity: "warning",
+            message: `Suspicious connection on "${net.name || "(unnamed)"}": ${a.symbolRef}:${a.pinNumber} (${a.pinType}) with ${b.symbolRef}:${b.pinNumber} (${b.pinType})`,
+            uuids: [a.symbolUuid, b.symbolUuid],
+          });
+        }
+      }
+    }
+  }
+}
+
+function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[]) {
+  for (const net of nets) {
+    const powerInputs = net.pins.filter(p => p.pinType === "power_in" || p.pinType === "power_input");
+    if (powerInputs.length === 0) continue;
+    const hasPowerSource = net.pins.some(p =>
+      p.pinType === "power_out" || p.pinType === "power_output" || p.pinType === "output"
+    );
+    const hasPowerLabel = net.labelUuids.length > 0;
+    if (!hasPowerSource && !hasPowerLabel) {
+      violations.push({
+        type: "power_pin_not_driven",
+        severity: "error",
+        message: `Power pin not driven: ${powerInputs.map(p => `${p.symbolRef}:${p.pinNumber}`).join(", ")} on net "${net.name || "(unnamed)"}"`,
+        uuids: powerInputs.map(p => p.symbolUuid),
+      });
+    }
+  }
+}
+
+function checkNetNoLabel(nets: NetInfo[], violations: ErcViolation[]) {
+  for (const net of nets) {
+    if (net.pins.length >= 2 && net.labelUuids.length === 0 && net.wireUuids.length > 0) {
+      violations.push({
+        type: "net_no_label",
+        severity: "warning",
+        message: `Net with ${net.pins.length} pins has no label (${net.pins.map(p => p.symbolRef + ":" + p.pinNumber).slice(0, 3).join(", ")}${net.pins.length > 3 ? "..." : ""})`,
+        uuids: net.wireUuids.slice(0, 1),
+        position: net.points[0],
       });
     }
   }
