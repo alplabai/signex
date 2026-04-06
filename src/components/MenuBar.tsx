@@ -66,7 +66,7 @@ const menus: MenuGroup[] = [
       { separator: true, label: "" },
       { label: "Projects Panel" },
       { label: "Properties Panel" },
-      { label: "AI Copilot" },
+      { label: "Signal" },
     ],
   },
   {
@@ -122,7 +122,7 @@ const menus: MenuGroup[] = [
       { label: "Simulation...", disabled: true },
       { label: "Supply Chain Search...", disabled: true },
       { separator: true, label: "" },
-      { label: "AI Copilot", shortcut: "Ctrl+Shift+A" },
+      { label: "Signal", shortcut: "Ctrl+Shift+A" },
       { label: "Command Palette", shortcut: "Ctrl+K" },
     ],
   },
@@ -152,7 +152,11 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       // Edit
       if (item.label === "Undo") return { ...item, disabled: false, action: () => useSchematicStore.getState().undo() };
       if (item.label === "Redo") return { ...item, disabled: false, action: () => useSchematicStore.getState().redo() };
+      if (item.label === "Cut") return { ...item, disabled: false, action: () => { useSchematicStore.getState().copySelected(); useSchematicStore.getState().deleteSelected(); } };
+      if (item.label === "Copy") return { ...item, disabled: false, action: () => useSchematicStore.getState().copySelected() };
+      if (item.label === "Paste") return { ...item, disabled: false, action: () => useSchematicStore.getState().pasteClipboard({ x: 5, y: 5 }) };
       if (item.label === "Delete") return { ...item, disabled: false, action: () => useSchematicStore.getState().deleteSelected() };
+      if (item.label === "Select All") return { ...item, disabled: false, action: () => useSchematicStore.getState().selectAll() };
       // View
       if (item.label === "Toggle Grid") return { ...item, action: () => useEditorStore.getState().toggleGrid() };
       if (item.label === "Toggle Snap") return { ...item, action: () => useEditorStore.getState().toggleSnap() };
@@ -160,6 +164,9 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       // Place
       if (item.label === "Wire") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawWire") };
       if (item.label === "Component...") return { ...item, disabled: false, action: onOpenComponentSearch };
+      if (item.label === "Net Label") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeLabel") };
+      if (item.label === "Power Port") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placePower") };
+      if (item.label === "No Connect") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoConnect") };
 
       return item;
     }),

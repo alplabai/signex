@@ -3,10 +3,12 @@ import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, LibSymbol, SymbolSearchResult } from "@/types";
 
 export type EditMode = "select" | "drawWire" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect";
+export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
   points: SchPoint[];
   active: boolean;
+  routingMode: WireRoutingMode;
 }
 
 interface PlacingSymbol {
@@ -75,8 +77,13 @@ interface SchematicState {
   // Wire drawing
   startWire: (pos: SchPoint) => void;
   addWirePoint: (pos: SchPoint) => void;
+  removeLastWirePoint: () => void;
+  cycleWireRouting: () => void;
   finishWire: () => void;
   cancelWire: () => void;
+
+  // Selection helpers
+  selectAll: () => void;
 
   // Component placement
   startPlacement: (lib: LibSymbol, meta: SymbolSearchResult) => void;
@@ -170,7 +177,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   data: null,
   dirty: false,
   editMode: "select",
-  wireDrawing: { points: [], active: false },
+  wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode },
   placingSymbol: null,
   clipboard: null,
   selectedIds: new Set<string>(),
@@ -185,14 +192,14 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       undoStack: [],
       redoStack: [],
       editMode: "select",
-        wireDrawing: { points: [], active: false },
+        wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode },
     }),
 
   setEditMode: (mode) => {
     const state = get();
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
-      set({ editMode: mode, wireDrawing: { points: [], active: false } });
+      set({ editMode: mode, wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode } });
     } else {
       set({ editMode: mode });
     }
@@ -526,9 +533,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   // Wire drawing state machine
   startWire: (pos) => {
     const snapped = snapPoint(pos);
+    const mode = get().wireDrawing.routingMode;
     set({
       editMode: "drawWire",
-      wireDrawing: { points: [snapped], active: true },
+      wireDrawing: { points: [snapped], active: true, routingMode: mode },
     });
   },
 
@@ -536,21 +544,50 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const { wireDrawing } = get();
     if (!wireDrawing.active || wireDrawing.points.length === 0) return;
     const snapped = snapPoint(pos);
-    // Add Manhattan-routed segments (horizontal then vertical)
     const last = wireDrawing.points[wireDrawing.points.length - 1];
     const newPoints = [...wireDrawing.points];
-    if (Math.abs(snapped.x - last.x) > 0.01 && Math.abs(snapped.y - last.y) > 0.01) {
-      // Add bend point for Manhattan routing
-      newPoints.push({ x: snapped.x, y: last.y });
+
+    if (wireDrawing.routingMode === "manhattan") {
+      // Manhattan: horizontal then vertical
+      if (Math.abs(snapped.x - last.x) > 0.01 && Math.abs(snapped.y - last.y) > 0.01) {
+        newPoints.push({ x: snapped.x, y: last.y });
+      }
+    } else if (wireDrawing.routingMode === "diagonal") {
+      // 45-degree: diagonal then orthogonal
+      if (Math.abs(snapped.x - last.x) > 0.01 && Math.abs(snapped.y - last.y) > 0.01) {
+        const dx = snapped.x - last.x, dy = snapped.y - last.y;
+        const diag = Math.min(Math.abs(dx), Math.abs(dy));
+        const mx = last.x + Math.sign(dx) * diag;
+        const my = last.y + Math.sign(dy) * diag;
+        newPoints.push({ x: mx, y: my });
+      }
     }
+    // "free" mode: direct line, no bend point
+
     newPoints.push(snapped);
-    set({ wireDrawing: { points: newPoints, active: true } });
+    set({ wireDrawing: { ...wireDrawing, points: newPoints } });
+  },
+
+  removeLastWirePoint: () => {
+    const { wireDrawing } = get();
+    if (!wireDrawing.active || wireDrawing.points.length <= 1) return;
+    const newPoints = wireDrawing.points.slice(0, -1);
+    set({ wireDrawing: { ...wireDrawing, points: newPoints } });
+  },
+
+  cycleWireRouting: () => {
+    const { wireDrawing } = get();
+    const modes: WireRoutingMode[] = ["manhattan", "diagonal", "free"];
+    const idx = modes.indexOf(wireDrawing.routingMode);
+    const next = modes[(idx + 1) % modes.length];
+    set({ wireDrawing: { ...wireDrawing, routingMode: next } });
   },
 
   finishWire: () => {
     const { wireDrawing, data } = get();
+    const mode = wireDrawing.routingMode;
     if (!wireDrawing.active || wireDrawing.points.length < 2 || !data) {
-      set({ wireDrawing: { points: [], active: false } });
+      set({ wireDrawing: { points: [], active: false, routingMode: mode } });
       return;
     }
 
@@ -575,12 +612,24 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({
       data: newData,
       dirty: true,
-      wireDrawing: { points: [], active: false },
+      wireDrawing: { points: [], active: false, routingMode: mode },
     });
   },
 
   cancelWire: () => {
-    set({ wireDrawing: { points: [], active: false }, editMode: "select" });
+    const mode = get().wireDrawing.routingMode;
+    set({ wireDrawing: { points: [], active: false, routingMode: mode }, editMode: "select" });
+  },
+
+  selectAll: () => {
+    const { data } = get();
+    if (!data) return;
+    const ids = new Set<string>();
+    for (const s of data.symbols) if (!s.is_power) ids.add(s.uuid);
+    for (const w of data.wires) ids.add(w.uuid);
+    for (const l of data.labels) ids.add(l.uuid);
+    for (const j of data.junctions) ids.add(j.uuid);
+    set({ selectedIds: ids });
   },
 
   // Component placement
@@ -588,7 +637,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({
       editMode: "placeSymbol",
       placingSymbol: { lib, meta, rotation: 0, mirrorX: false, mirrorY: false },
-      wireDrawing: { points: [], active: false },
+      wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode },
     });
   },
 
