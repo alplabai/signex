@@ -5,6 +5,8 @@ export type PanelId =
   | "components"
   | "navigator"
   | "properties"
+  | "filter"
+  | "list"
   | "inspector"
   | "rules"
   | "messages"

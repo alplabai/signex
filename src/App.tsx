@@ -8,6 +8,9 @@ import { ProjectPanel } from "@/panels/ProjectPanel";
 import { PropertiesPanel } from "@/panels/PropertiesPanel";
 import { MessagesPanel } from "@/panels/MessagesPanel";
 import { ComponentPanel } from "@/panels/ComponentPanel";
+import { FilterPanel } from "@/panels/FilterPanel";
+import { ListPanel } from "@/panels/ListPanel";
+import { NavigatorPanel } from "@/panels/NavigatorPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
 // Signal panel available for AI integration (Phase 1 stub)
 // import { SignalPanel } from "@/panels/SignalPanel";
@@ -182,7 +185,8 @@ function ResizeHandle({
 
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
-  const [leftTab, setLeftTab] = useState<"projects" | "components">("projects");
+  const [leftTab, setLeftTab] = useState<"projects" | "components" | "navigator">("projects");
+  const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -258,25 +262,23 @@ function App() {
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: leftPanelWidth }}>
               {/* Tab bar */}
               <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                <button
-                  className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                    leftTab === "projects" ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                  onClick={() => setLeftTab("projects")}
-                >Projects</button>
-                <button
-                  className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                    leftTab === "components" ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                  onClick={() => setLeftTab("components")}
-                >Components</button>
-                <button
-                  onClick={toggleLeft}
-                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors"
-                >
+                {(["projects", "components", "navigator"] as const).map(t => (
+                  <button key={t}
+                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                      leftTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
+                    onClick={() => setLeftTab(t)}>
+                    {t === "navigator" ? "Nav" : t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+                <button onClick={toggleLeft}
+                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
                   <PanelLeftClose size={14} />
                 </button>
               </div>
-              <div className="flex-1 overflow-hidden">
-                {leftTab === "projects" ? <ProjectPanel /> : <ComponentPanel />}
+              <div className="flex-1 overflow-hidden overflow-y-auto">
+                {leftTab === "projects" && <ProjectPanel />}
+                {leftTab === "components" && <ComponentPanel />}
+                {leftTab === "navigator" && <NavigatorPanel />}
               </div>
             </div>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => leftResize.onMouseDown(e, leftPanelWidth)} />
@@ -307,8 +309,25 @@ function App() {
           <>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => rightResize.onMouseDown(e, rightPanelWidth)} />
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: rightPanelWidth }}>
-              <PanelHeader title="Properties" onCollapse={toggleRight} collapseIcon={<PanelRightClose size={14} />} />
-              <div className="flex-1 overflow-y-auto"><PropertiesPanel /></div>
+              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
+                {(["properties", "filter", "list"] as const).map(t => (
+                  <button key={t}
+                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                      rightTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
+                    onClick={() => setRightTab(t)}>
+                    {t === "properties" ? "Props" : t === "filter" ? "Filter" : "List"}
+                  </button>
+                ))}
+                <button onClick={toggleRight}
+                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
+                  <PanelRightClose size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {rightTab === "properties" && <PropertiesPanel />}
+                {rightTab === "filter" && <FilterPanel />}
+                {rightTab === "list" && <ListPanel />}
+              </div>
             </div>
           </>
         )}
