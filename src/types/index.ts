@@ -183,3 +183,20 @@ export interface SchPoint {
   x: number;
   y: number;
 }
+
+// --- Library types ---
+
+export interface LibraryInfo {
+  name: string;
+  path: string;
+  file_size: number;
+}
+
+export interface SymbolSearchResult {
+  library: string;
+  symbol_id: string;
+  description: string;
+  keywords: string[];
+  reference_prefix: string;
+  pin_count: number;
+}

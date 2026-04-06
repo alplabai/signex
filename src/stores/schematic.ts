@@ -1,12 +1,20 @@
 import { create } from "zustand";
-import type { SchematicData, SchPoint, SchSymbol, SchLabel } from "@/types";
+import { useEditorStore } from "@/stores/editor";
+import type { SchematicData, SchPoint, SchSymbol, SchLabel, LibSymbol, SymbolSearchResult } from "@/types";
 
 export type EditMode = "select" | "drawWire" | "placeSymbol" | "placeLabel";
 
 interface WireDrawState {
   points: SchPoint[];
   active: boolean;
-  cursor: SchPoint; // Live cursor position for preview
+}
+
+interface PlacingSymbol {
+  lib: LibSymbol;
+  meta: SymbolSearchResult;
+  rotation: number;
+  mirrorX: boolean;
+  mirrorY: boolean;
 }
 
 interface SchematicState {
@@ -17,7 +25,7 @@ interface SchematicState {
   // Edit mode
   editMode: EditMode;
   wireDrawing: WireDrawState;
-  updateWireCursor: (pos: SchPoint) => void;
+  placingSymbol: PlacingSymbol | null;
 
   // Selection
   selectedIds: Set<string>;
@@ -55,22 +63,33 @@ interface SchematicState {
   addWirePoint: (pos: SchPoint) => void;
   finishWire: () => void;
   cancelWire: () => void;
+
+  // Component placement
+  startPlacement: (lib: LibSymbol, meta: SymbolSearchResult) => void;
+  rotatePlacement: () => void;
+  mirrorPlacementX: () => void;
+  mirrorPlacementY: () => void;
+  placeSymbolAt: (pos: SchPoint) => void;
+  cancelPlacement: () => void;
 }
 
 function generateUuid(): string {
   return crypto.randomUUID();
 }
 
-function snapToGrid(v: number, grid: number = 1.27): number {
+function snapToGrid(v: number, grid: number): number {
   return Math.round(v / grid) * grid;
 }
 
-export function snapPoint(p: SchPoint, grid: number = 1.27): SchPoint {
-  return { x: snapToGrid(p.x, grid), y: snapToGrid(p.y, grid) };
+export function snapPoint(p: SchPoint, grid?: number): SchPoint {
+  const editor = useEditorStore.getState();
+  if (!editor.statusBar.snapEnabled) return p;
+  const g = grid ?? editor.statusBar.gridSize;
+  return { x: snapToGrid(p.x, g), y: snapToGrid(p.y, g) };
 }
 
 function cloneData(data: SchematicData): SchematicData {
-  return JSON.parse(JSON.stringify(data));
+  return structuredClone(data);
 }
 
 const MAX_UNDO = 50;
@@ -79,7 +98,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   data: null,
   dirty: false,
   editMode: "select",
-    wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
+  wireDrawing: { points: [], active: false },
+  placingSymbol: null,
   selectedIds: new Set<string>(),
   undoStack: [],
   redoStack: [],
@@ -92,14 +112,14 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       undoStack: [],
       redoStack: [],
       editMode: "select",
-        wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
+        wireDrawing: { points: [], active: false },
     }),
 
   setEditMode: (mode) => {
     const state = get();
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
-      set({ editMode: mode, wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } } });
+      set({ editMode: mode, wireDrawing: { points: [], active: false } });
     } else {
       set({ editMode: mode });
     }
@@ -254,25 +274,18 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
-  updateWireCursor: (pos) => {
-    const { wireDrawing } = get();
-    if (wireDrawing.active) {
-      set({ wireDrawing: { ...wireDrawing, cursor: snapPoint(pos) } });
-    }
-  },
-
   // Wire drawing state machine
   startWire: (pos) => {
     const snapped = snapPoint(pos);
     set({
       editMode: "drawWire",
-      wireDrawing: { points: [snapped], active: true, cursor: snapped },
+      wireDrawing: { points: [snapped], active: true },
     });
   },
 
   addWirePoint: (pos) => {
     const { wireDrawing } = get();
-    if (!wireDrawing.active) return;
+    if (!wireDrawing.active || wireDrawing.points.length === 0) return;
     const snapped = snapPoint(pos);
     // Add Manhattan-routed segments (horizontal then vertical)
     const last = wireDrawing.points[wireDrawing.points.length - 1];
@@ -282,13 +295,13 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       newPoints.push({ x: snapped.x, y: last.y });
     }
     newPoints.push(snapped);
-    set({ wireDrawing: { points: newPoints, active: true, cursor: snapped } });
+    set({ wireDrawing: { points: newPoints, active: true } });
   },
 
   finishWire: () => {
     const { wireDrawing, data } = get();
     if (!wireDrawing.active || wireDrawing.points.length < 2 || !data) {
-      set({ wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } } });
+      set({ wireDrawing: { points: [], active: false } });
       return;
     }
 
@@ -307,11 +320,97 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({
       data: newData,
       dirty: true,
-        wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } },
+        wireDrawing: { points: [], active: false },
     });
   },
 
   cancelWire: () => {
-    set({   wireDrawing: { points: [], active: false, cursor: { x: 0, y: 0 } }, editMode: "select" });
+    set({ wireDrawing: { points: [], active: false }, editMode: "select" });
+  },
+
+  // Component placement
+  startPlacement: (lib, meta) => {
+    set({
+      editMode: "placeSymbol",
+      placingSymbol: { lib, meta, rotation: 0, mirrorX: false, mirrorY: false },
+      wireDrawing: { points: [], active: false },
+    });
+  },
+
+  rotatePlacement: () => {
+    const { placingSymbol } = get();
+    if (!placingSymbol) return;
+    set({ placingSymbol: { ...placingSymbol, rotation: (placingSymbol.rotation + 90) % 360 } });
+  },
+
+  mirrorPlacementX: () => {
+    const { placingSymbol } = get();
+    if (!placingSymbol) return;
+    set({ placingSymbol: { ...placingSymbol, mirrorX: !placingSymbol.mirrorX } });
+  },
+
+  mirrorPlacementY: () => {
+    const { placingSymbol } = get();
+    if (!placingSymbol) return;
+    set({ placingSymbol: { ...placingSymbol, mirrorY: !placingSymbol.mirrorY } });
+  },
+
+  placeSymbolAt: (pos) => {
+    const { data, placingSymbol } = get();
+    if (!data || !placingSymbol) return;
+
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+
+    // Auto-generate reference designator
+    const prefix = placingSymbol.meta.reference_prefix || "U";
+    const existing = newData.symbols
+      .filter((s) => s.reference.startsWith(prefix))
+      .map((s) => parseInt(s.reference.slice(prefix.length)) || 0);
+    const nextNum = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+    const reference = `${prefix}${nextNum}`;
+
+    const fs = 1.27;
+    const newSymbol: SchSymbol = {
+      uuid: generateUuid(),
+      lib_id: `${placingSymbol.meta.library}:${placingSymbol.meta.symbol_id}`,
+      reference,
+      value: placingSymbol.meta.symbol_id,
+      footprint: "",
+      position: snapped,
+      rotation: placingSymbol.rotation,
+      mirror_x: placingSymbol.mirrorX,
+      mirror_y: placingSymbol.mirrorY,
+      unit: 1,
+      is_power: false,
+      ref_text: {
+        position: { x: snapped.x, y: snapped.y - 2 },
+        rotation: 0, font_size: fs,
+        justify_h: "center", justify_v: "bottom",
+        hidden: false,
+      },
+      val_text: {
+        position: { x: snapped.x, y: snapped.y + 2 },
+        rotation: 0, font_size: fs,
+        justify_h: "center", justify_v: "top",
+        hidden: false,
+      },
+      fields_autoplaced: true,
+    };
+
+    // Also add the lib symbol to the document so rendering works
+    const libId = newSymbol.lib_id;
+    if (!newData.lib_symbols[libId]) {
+      newData.lib_symbols[libId] = placingSymbol.lib;
+    }
+
+    newData.symbols.push(newSymbol);
+    set({ data: newData, dirty: true });
+    // Stay in placement mode for placing more of the same
+  },
+
+  cancelPlacement: () => {
+    set({ placingSymbol: null, editMode: "select" });
   },
 }));

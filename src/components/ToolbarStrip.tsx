@@ -80,9 +80,9 @@ export function ToolbarStrip() {
       />
       <ToolBtn
         icon={<CircleDot size={17} />}
-        label="Component (P, C)"
+        label="Component (P)"
         active={editMode === "placeSymbol"}
-        onClick={() => setEditMode("placeSymbol")}
+        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}
         disabled={appMode !== "schematic"}
       />
 

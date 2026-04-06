@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useSchematicStore } from "@/stores/schematic";
+import { useEditorStore } from "@/stores/editor";
 
 interface MenuBarProps {
   onOpenProject?: () => void;
+  onSave?: () => void;
+  onOpenComponentSearch?: () => void;
 }
 
 interface MenuItem {
@@ -133,7 +137,7 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar({ onOpenProject }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +146,21 @@ export function MenuBar({ onOpenProject }: MenuBarProps) {
     ...menu,
     items: menu.items.map((item) => {
       if (item.id === "file-open") return { ...item, action: onOpenProject };
+
+      // File
+      if (item.label === "Save") return { ...item, disabled: false, action: onSave };
+      // Edit
+      if (item.label === "Undo") return { ...item, disabled: false, action: () => useSchematicStore.getState().undo() };
+      if (item.label === "Redo") return { ...item, disabled: false, action: () => useSchematicStore.getState().redo() };
+      if (item.label === "Delete") return { ...item, disabled: false, action: () => useSchematicStore.getState().deleteSelected() };
+      // View
+      if (item.label === "Toggle Grid") return { ...item, action: () => useEditorStore.getState().toggleGrid() };
+      if (item.label === "Toggle Snap") return { ...item, action: () => useEditorStore.getState().toggleSnap() };
+      if (item.label === "Fit to View") return { ...item, action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" })) };
+      // Place
+      if (item.label === "Wire") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawWire") };
+      if (item.label === "Component...") return { ...item, disabled: false, action: onOpenComponentSearch };
+
       return item;
     }),
   }));
