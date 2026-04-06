@@ -59,6 +59,9 @@ interface SchematicState {
   addJunction: (pos: SchPoint) => void;
   deleteSelected: () => void;
   rotateSelected: () => void;
+  mirrorSelectedX: () => void;
+  mirrorSelectedY: () => void;
+  duplicateSelected: () => void;
 
   // Property editing
   updateSymbolProp: (uuid: string, key: string, value: string) => void;
@@ -392,6 +395,38 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       }
     }
     set({ data: newData, dirty: true });
+  },
+
+  mirrorSelectedX: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    for (const sym of newData.symbols) {
+      if (selectedIds.has(sym.uuid)) sym.mirror_x = !sym.mirror_x;
+    }
+    set({ data: newData, dirty: true });
+  },
+
+  mirrorSelectedY: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    for (const sym of newData.symbols) {
+      if (selectedIds.has(sym.uuid)) sym.mirror_y = !sym.mirror_y;
+    }
+    set({ data: newData, dirty: true });
+  },
+
+  duplicateSelected: () => {
+    const store = get();
+    store.copySelected();
+    // Paste with small offset
+    const updated = get(); // re-read after copy
+    if (updated.clipboard) {
+      updated.pasteClipboard({ x: 2.54, y: 2.54 });
+    }
   },
 
   // Property editing
