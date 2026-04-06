@@ -859,6 +859,8 @@ export function SchematicRenderer() {
           store.addWirePoint(wirePos);
         } else {
           store.startWire(wirePos);
+          // Initialize wire cursor to start point to prevent jump
+          wireCursorRef.current = snapPoint(wirePos);
         }
         return;
       }

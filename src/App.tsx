@@ -7,6 +7,7 @@ import { StatusBar } from "@/components/StatusBar";
 import { ProjectPanel } from "@/panels/ProjectPanel";
 import { PropertiesPanel } from "@/panels/PropertiesPanel";
 import { MessagesPanel } from "@/panels/MessagesPanel";
+import { ComponentPanel } from "@/panels/ComponentPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
 // Signal panel available for AI integration (Phase 1 stub)
 // import { SignalPanel } from "@/panels/SignalPanel";
@@ -181,6 +182,7 @@ function ResizeHandle({
 
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
+  const [leftTab, setLeftTab] = useState<"projects" | "components">("projects");
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -226,10 +228,12 @@ function App() {
           e.preventDefault(); useSchematicStore.getState().pasteClipboard({ x: 5, y: 5 });
         }
       }
-      // P key (place component) — only when not typing in an input
+      // P key (place component) — switch to components tab
       if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
-        setComponentSearchOpen(true);
+        setLeftTab("components");
+        const layout = useLayoutStore.getState();
+        if (layout.leftCollapsed) layout.toggleLeft();
       }
     };
     window.addEventListener("keydown", handler);
@@ -241,19 +245,39 @@ function App() {
       <MenuBar
         onOpenProject={openProjectFlow}
         onSave={saveSchematicFlow}
-        onOpenComponentSearch={() => setComponentSearchOpen(true)}
+        onOpenComponentSearch={() => { setLeftTab("components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
       />
       <ToolbarStrip />
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
         {leftCollapsed ? (
-          <CollapsedRail label="Projects" icon={<FolderOpen size={15} />} onClick={toggleLeft} side="left" />
+          <CollapsedRail label="Explorer" icon={<FolderOpen size={15} />} onClick={toggleLeft} side="left" />
         ) : (
           <>
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: leftPanelWidth }}>
-              <PanelHeader title="Projects" onCollapse={toggleLeft} collapseIcon={<PanelLeftClose size={14} />} />
-              <div className="flex-1 overflow-y-auto"><ProjectPanel /></div>
+              {/* Tab bar */}
+              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
+                <button
+                  className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    leftTab === "projects" ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
+                  onClick={() => setLeftTab("projects")}
+                >Projects</button>
+                <button
+                  className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                    leftTab === "components" ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
+                  onClick={() => setLeftTab("components")}
+                >Components</button>
+                <button
+                  onClick={toggleLeft}
+                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors"
+                >
+                  <PanelLeftClose size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {leftTab === "projects" ? <ProjectPanel /> : <ComponentPanel />}
+              </div>
             </div>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => leftResize.onMouseDown(e, leftPanelWidth)} />
           </>
