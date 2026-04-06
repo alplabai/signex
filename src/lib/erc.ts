@@ -42,7 +42,7 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   checkOutputConflict(nets, violations);
 
   // 7. Multiple net names on same net
-  checkMultipleNetNames(nets, violations);
+  checkMultipleNetNames(nets, violations, data);
 
   // 8. Unannotated components (designator ends with ?)
   checkUnannotated(data, violations);
@@ -162,15 +162,20 @@ function checkOutputConflict(nets: NetInfo[], violations: ErcViolation[]) {
   }
 }
 
-function checkMultipleNetNames(nets: NetInfo[], violations: ErcViolation[]) {
+function checkMultipleNetNames(nets: NetInfo[], violations: ErcViolation[], data: SchematicData) {
   for (const net of nets) {
-    if (net.labelUuids.length > 1) {
-      // Check if labels have different names
-      // We'd need the actual label texts — for now check via labelUuids count
+    if (net.labelUuids.length < 2) continue;
+    // Get actual label texts and check for conflicts
+    const labelTexts = new Set<string>();
+    for (const uuid of net.labelUuids) {
+      const label = data.labels.find(l => l.uuid === uuid);
+      if (label) labelTexts.add(label.text);
+    }
+    if (labelTexts.size > 1) {
       violations.push({
         type: "multiple_net_names",
         severity: "warning",
-        message: `Net has ${net.labelUuids.length} labels — possible conflicting net names`,
+        message: `Net has conflicting names: ${[...labelTexts].join(", ")}`,
         uuids: net.labelUuids,
       });
     }

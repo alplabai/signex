@@ -29,7 +29,8 @@ pub fn generate_bom(data: SchematicSheet) -> Result<String, String> {
         let val_escaped = csv_escape(value);
         let fp_escaped = csv_escape(footprint);
         let lib_escaped = csv_escape(lib_id);
-        csv.push_str(&format!("\"{}\",{},{},{},{}\n", designators, val_escaped, fp_escaped, lib_escaped, refs.len()));
+        let des_escaped = csv_escape(&designators);
+        csv.push_str(&format!("{},{},{},{},{}\n", des_escaped, val_escaped, fp_escaped, lib_escaped, refs.len()));
     }
 
     Ok(csv)
@@ -71,14 +72,15 @@ pub fn export_netlist(data: SchematicSheet) -> Result<String, String> {
     }
     out.push_str("  )\n");
 
-    // Nets (simple net extraction by wire connectivity)
-    // For a full implementation, this would use the net resolver
-    // For now, output labeled nets
+    // Nets — deduplicated by label text (basic extraction, not full connectivity)
     out.push_str("  (nets\n");
     let mut net_id = 1;
+    let mut seen_nets = std::collections::HashSet::new();
     for label in &data.labels {
-        out.push_str(&format!("    (net (code {}) (name \"{}\"))\n", net_id, label.text));
-        net_id += 1;
+        if seen_nets.insert(label.text.clone()) {
+            out.push_str(&format!("    (net (code {}) (name \"{}\"))\n", net_id, label.text));
+            net_id += 1;
+        }
     }
     out.push_str("  )\n");
 
@@ -90,7 +92,7 @@ fn csv_escape(s: &str) -> String {
     if s.contains(',') || s.contains('"') || s.contains('\n') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
-        format!("\"{}\"", s)
+        s.to_string()
     }
 }
 

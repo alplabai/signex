@@ -243,8 +243,28 @@ export function boxSelect(
 
   for (const sym of data.symbols) {
     if (crossing) {
-      // Crossing: any part of symbol in box
-      if (pointInBox(sym.position, box)) selected.push(sym.uuid);
+      // Crossing: select if symbol bounding box overlaps selection box
+      const lib = data.lib_symbols[sym.lib_id];
+      if (lib) {
+        let lMinX = -2, lMaxX = 2, lMinY = -2, lMaxY = 2;
+        for (const g of lib.graphics) {
+          if (g.type === "Rectangle") { lMinX = Math.min(lMinX, g.start.x, g.end.x); lMaxX = Math.max(lMaxX, g.start.x, g.end.x); lMinY = Math.min(lMinY, g.start.y, g.end.y); lMaxY = Math.max(lMaxY, g.start.y, g.end.y); }
+          else if (g.type === "Polyline") { for (const p of g.points) { lMinX = Math.min(lMinX, p.x); lMaxX = Math.max(lMaxX, p.x); lMinY = Math.min(lMinY, p.y); lMaxY = Math.max(lMaxY, p.y); } }
+          else if (g.type === "Circle") { lMinX = Math.min(lMinX, g.center.x - g.radius); lMaxX = Math.max(lMaxX, g.center.x + g.radius); lMinY = Math.min(lMinY, g.center.y - g.radius); lMaxY = Math.max(lMaxY, g.center.y + g.radius); }
+        }
+        for (const pin of lib.pins) { lMinX = Math.min(lMinX, pin.position.x); lMaxX = Math.max(lMaxX, pin.position.x); lMinY = Math.min(lMinY, pin.position.y); lMaxY = Math.max(lMaxY, pin.position.y); }
+        const corners = [symToSch(lMinX, lMinY, sym), symToSch(lMaxX, lMinY, sym), symToSch(lMaxX, lMaxY, sym), symToSch(lMinX, lMaxY, sym)];
+        const symBox = {
+          minX: Math.min(...corners.map(c => c.x)), minY: Math.min(...corners.map(c => c.y)),
+          maxX: Math.max(...corners.map(c => c.x)), maxY: Math.max(...corners.map(c => c.y)),
+        };
+        // Check if symbol bbox overlaps selection box
+        if (symBox.maxX >= box.minX && symBox.minX <= box.maxX && symBox.maxY >= box.minY && symBox.minY <= box.maxY) {
+          selected.push(sym.uuid);
+        }
+      } else if (pointInBox(sym.position, box)) {
+        selected.push(sym.uuid);
+      }
     } else {
       // Inside: symbol center must be in box
       if (pointInBox(sym.position, box)) selected.push(sym.uuid);
