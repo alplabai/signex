@@ -209,6 +209,16 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "o") { e.preventDefault(); openProjectFlow(); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveSchematicFlow(); }
+      if (e.ctrlKey && e.key === "c") {
+        if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault(); useSchematicStore.getState().copySelected();
+        }
+      }
+      if (e.ctrlKey && e.key === "v") {
+        if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault(); useSchematicStore.getState().pasteClipboard({ x: 5, y: 5 });
+        }
+      }
       // P key (place component) — only when not typing in an input
       if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {

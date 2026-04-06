@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
-import type { SchematicData, SchPoint, SchSymbol, SchLabel, LibSymbol, SymbolSearchResult } from "@/types";
+import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "placeSymbol" | "placeLabel";
+export type EditMode = "select" | "drawWire" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect";
 
 interface WireDrawState {
   points: SchPoint[];
@@ -57,6 +57,20 @@ interface SchematicState {
   addJunction: (pos: SchPoint) => void;
   deleteSelected: () => void;
   rotateSelected: () => void;
+
+  // Property editing
+  updateSymbolProp: (uuid: string, key: string, value: string) => void;
+  updateLabelProp: (uuid: string, key: string, value: string) => void;
+
+  // Clipboard
+  copySelected: () => void;
+  pasteClipboard: (offset: SchPoint) => void;
+  clipboard: { symbols: SchSymbol[]; wires: SchWire[]; labels: SchLabel[] } | null;
+
+  // Net label / power port placement
+  placeNetLabel: (pos: SchPoint, text: string) => void;
+  placePowerPort: (pos: SchPoint, netName: string, style: string) => void;
+  placeNoConnect: (pos: SchPoint) => void;
 
   // Wire drawing
   startWire: (pos: SchPoint) => void;
@@ -158,6 +172,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   editMode: "select",
   wireDrawing: { points: [], active: false },
   placingSymbol: null,
+  clipboard: null,
   selectedIds: new Set<string>(),
   undoStack: [],
   redoStack: [],
@@ -232,7 +247,28 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
     const idSet = new Set(uuids);
     const newData = cloneData(data);
+    const tol = 0.05;
 
+    // Collect pin positions of moving symbols BEFORE move (for rubber-banding)
+    const movingPinPositions: SchPoint[] = [];
+    for (const sym of newData.symbols) {
+      if (!idSet.has(sym.uuid)) continue;
+      const lib = newData.lib_symbols[sym.lib_id];
+      if (!lib) continue;
+      for (const pin of lib.pins) {
+        // Transform pin to schematic coords (Y-flip + rotation + mirror)
+        const ly = -pin.position.y;
+        const rad = -(sym.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad), sin = Math.sin(rad);
+        let rx = pin.position.x * cos - ly * sin;
+        let ry = pin.position.x * sin + ly * cos;
+        if (sym.mirror_x) ry = -ry;
+        if (sym.mirror_y) rx = -rx;
+        movingPinPositions.push({ x: sym.position.x + rx, y: sym.position.y + ry });
+      }
+    }
+
+    // Move selected elements
     for (const sym of newData.symbols) {
       if (idSet.has(sym.uuid)) {
         sym.position.x += dx;
@@ -261,6 +297,21 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       if (idSet.has(j.uuid)) {
         j.position.x += dx;
         j.position.y += dy;
+      }
+    }
+
+    // Rubber-banding: stretch non-selected wires connected to moving symbol pins
+    for (const wire of newData.wires) {
+      if (idSet.has(wire.uuid)) continue; // Already moved
+      for (const pinPos of movingPinPositions) {
+        if (Math.abs(wire.start.x - pinPos.x) < tol && Math.abs(wire.start.y - pinPos.y) < tol) {
+          wire.start.x += dx;
+          wire.start.y += dy;
+        }
+        if (Math.abs(wire.end.x - pinPos.x) < tol && Math.abs(wire.end.y - pinPos.y) < tol) {
+          wire.end.x += dx;
+          wire.end.y += dy;
+        }
       }
     }
 
@@ -329,6 +380,146 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         sym.rotation = ((sym.rotation + 90) % 360) as 0 | 90 | 180 | 270;
       }
     }
+    set({ data: newData, dirty: true });
+  },
+
+  // Property editing
+  updateSymbolProp: (uuid, key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find((s) => s.uuid === uuid);
+    if (!sym) return;
+    switch (key) {
+      case "reference": sym.reference = value; break;
+      case "value": sym.value = value; break;
+      case "footprint": sym.footprint = value; break;
+      case "x": sym.position.x = parseFloat(value) || sym.position.x; break;
+      case "y": sym.position.y = parseFloat(value) || sym.position.y; break;
+      case "rotation": sym.rotation = (parseInt(value) || 0) % 360; break;
+    }
+    set({ data: newData, dirty: true });
+  },
+
+  updateLabelProp: (uuid, key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const label = newData.labels.find((l) => l.uuid === uuid);
+    if (!label) return;
+    switch (key) {
+      case "text": label.text = value; break;
+      case "x": label.position.x = parseFloat(value) || label.position.x; break;
+      case "y": label.position.y = parseFloat(value) || label.position.y; break;
+    }
+    set({ data: newData, dirty: true });
+  },
+
+  // Clipboard
+  copySelected: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    const symbols = data.symbols.filter((s) => selectedIds.has(s.uuid));
+    const wires = data.wires.filter((w) => selectedIds.has(w.uuid));
+    const labels = data.labels.filter((l) => selectedIds.has(l.uuid));
+    set({
+      clipboard: {
+        symbols: structuredClone(symbols),
+        wires: structuredClone(wires),
+        labels: structuredClone(labels),
+      },
+    });
+  },
+
+  pasteClipboard: (offset) => {
+    const { data, clipboard } = get();
+    if (!data || !clipboard) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+
+    for (const sym of clipboard.symbols) {
+      const newSym = structuredClone(sym);
+      newSym.uuid = generateUuid();
+      newSym.position.x += offset.x;
+      newSym.position.y += offset.y;
+      newSym.ref_text.position.x += offset.x;
+      newSym.ref_text.position.y += offset.y;
+      newSym.val_text.position.x += offset.x;
+      newSym.val_text.position.y += offset.y;
+      newData.symbols.push(newSym);
+      newIds.push(newSym.uuid);
+    }
+    for (const wire of clipboard.wires) {
+      const newWire = structuredClone(wire);
+      newWire.uuid = generateUuid();
+      newWire.start.x += offset.x; newWire.start.y += offset.y;
+      newWire.end.x += offset.x; newWire.end.y += offset.y;
+      newData.wires.push(newWire);
+      newIds.push(newWire.uuid);
+    }
+    for (const label of clipboard.labels) {
+      const newLabel = structuredClone(label);
+      newLabel.uuid = generateUuid();
+      newLabel.position.x += offset.x;
+      newLabel.position.y += offset.y;
+      newData.labels.push(newLabel);
+      newIds.push(newLabel.uuid);
+    }
+
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  // Net label placement
+  placeNetLabel: (pos, text) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.labels.push({
+      uuid: generateUuid(),
+      text,
+      position: snapped,
+      rotation: 0,
+      label_type: "Net",
+      shape: "",
+      font_size: 1.27,
+      justify: "left",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  // Power port placement (creates a power symbol)
+  placePowerPort: (pos, netName, _style) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.labels.push({
+      uuid: generateUuid(),
+      text: netName,
+      position: snapped,
+      rotation: 0,
+      label_type: "Power",
+      shape: "input",
+      font_size: 1.27,
+      justify: "left",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  // No-connect marker
+  placeNoConnect: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.no_connects.push(snapped);
     set({ data: newData, dirty: true });
   },
 
