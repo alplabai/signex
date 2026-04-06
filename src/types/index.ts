@@ -71,19 +71,29 @@ export interface SchematicData {
   uuid: string;
   version: string;
   generator: string;
+  generator_version: string;
   paper_size: string;
   symbols: SchSymbol[];
   wires: SchWire[];
   junctions: SchJunction[];
   labels: SchLabel[];
   child_sheets: SchChildSheet[];
-  no_connects: SchPoint[];
+  no_connects: SchNoConnect[];
   text_notes: TextNote[];
   rectangles: SchRectangle[];
+  buses: SchBus[];
+  bus_entries: SchBusEntry[];
+  drawings: SchDrawing[];
   lib_symbols: Record<string, LibSymbol>;
 }
 
+export interface SchNoConnect {
+  uuid: string;
+  position: SchPoint;
+}
+
 export interface TextNote {
+  uuid: string;
   text: string;
   position: SchPoint;
   rotation: number;
@@ -91,9 +101,29 @@ export interface TextNote {
 }
 
 export interface SchRectangle {
+  uuid: string;
   start: SchPoint;
   end: SchPoint;
   stroke_type: string;
+}
+
+export type SchDrawing =
+  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number }
+  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean }
+  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean }
+  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number }
+  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean };
+
+export interface SchBus {
+  uuid: string;
+  start: SchPoint;
+  end: SchPoint;
+}
+
+export interface SchBusEntry {
+  uuid: string;
+  position: SchPoint;
+  size: [number, number];
 }
 
 export interface LibSymbol {
@@ -138,6 +168,12 @@ export interface SchSymbol {
   ref_text: TextPropData;
   val_text: TextPropData;
   fields_autoplaced: boolean;
+  // KiCad 10 fields
+  dnp: boolean;
+  in_bom: boolean;
+  on_board: boolean;
+  exclude_from_sim: boolean;
+  locked: boolean;
 }
 
 export interface TextPropData {
@@ -171,12 +207,21 @@ export interface SchLabel {
   justify: string;
 }
 
+export interface SchSheetPin {
+  uuid: string;
+  name: string;
+  direction: string;
+  position: SchPoint;
+  rotation: number;
+}
+
 export interface SchChildSheet {
   uuid: string;
   name: string;
   filename: string;
   position: SchPoint;
   size: [number, number];
+  pins: SchSheetPin[];
 }
 
 export interface SchPoint {

@@ -11,15 +11,19 @@ pub struct SchematicSheet {
     pub uuid: String,
     pub version: String,
     pub generator: String,
+    pub generator_version: String,
     pub paper_size: String,
     pub symbols: Vec<Symbol>,
     pub wires: Vec<Wire>,
     pub junctions: Vec<Junction>,
     pub labels: Vec<Label>,
     pub child_sheets: Vec<ChildSheet>,
-    pub no_connects: Vec<Point>,
+    pub no_connects: Vec<NoConnect>,
     pub text_notes: Vec<TextNote>,
     pub rectangles: Vec<SchRectangle>,
+    pub buses: Vec<Bus>,
+    pub bus_entries: Vec<BusEntry>,
+    pub drawings: Vec<SchDrawing>,
     pub lib_symbols: HashMap<String, LibSymbol>,
 }
 
@@ -71,6 +75,12 @@ pub struct Symbol {
     pub ref_text: TextProp,
     pub val_text: TextProp,
     pub fields_autoplaced: bool,
+    // KiCad 10 fields
+    pub dnp: bool,
+    pub in_bom: bool,
+    pub on_board: bool,
+    pub exclude_from_sim: bool,
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,7 +127,14 @@ pub enum LabelType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoConnect {
+    pub uuid: String,
+    pub position: Point,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextNote {
+    pub uuid: String,
     pub text: String,
     pub position: Point,
     pub rotation: f64,
@@ -126,9 +143,33 @@ pub struct TextNote {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchRectangle {
+    pub uuid: String,
     pub start: Point,
     pub end: Point,
     pub stroke_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Bus {
+    pub uuid: String,
+    pub start: Point,
+    pub end: Point,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BusEntry {
+    pub uuid: String,
+    pub position: Point,
+    pub size: (f64, f64),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SheetPin {
+    pub uuid: String,
+    pub name: String,
+    pub direction: String,
+    pub position: Point,
+    pub rotation: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +179,18 @@ pub struct ChildSheet {
     pub filename: String,
     pub position: Point,
     pub size: (f64, f64),
+    pub pins: Vec<SheetPin>,
+}
+
+/// User-drawn schematic graphics (not inside symbols)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SchDrawing {
+    Line { uuid: String, start: Point, end: Point, width: f64 },
+    Rect { uuid: String, start: Point, end: Point, width: f64, fill: bool },
+    Circle { uuid: String, center: Point, radius: f64, width: f64, fill: bool },
+    Arc { uuid: String, start: Point, mid: Point, end: Point, width: f64 },
+    Polyline { uuid: String, points: Vec<Point>, width: f64, fill: bool },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -390,6 +443,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
 
     let version = root.find("version").and_then(|v| v.first_arg()).unwrap_or("unknown").to_string();
     let generator = root.find("generator").and_then(|v| v.first_arg()).unwrap_or("unknown").to_string();
+    let generator_version = root.find("generator_version").and_then(|v| v.first_arg()).unwrap_or("").to_string();
     let paper_size = root.find("paper").and_then(|v| v.first_arg()).unwrap_or("A4").to_string();
     let uuid = parse_uuid(&root);
 
@@ -426,6 +480,13 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 .map(|v| v == "yes")
                 .unwrap_or(false);
 
+            // KiCad 10 fields
+            let dnp = s.find("dnp").and_then(|f| f.first_arg()).map(|v| v == "yes").unwrap_or(false);
+            let in_bom = s.find("in_bom").and_then(|f| f.first_arg()).map(|v| v == "yes").unwrap_or(true);
+            let on_board = s.find("on_board").and_then(|f| f.first_arg()).map(|v| v == "yes").unwrap_or(true);
+            let exclude_from_sim = s.find("exclude_from_sim").and_then(|f| f.first_arg()).map(|v| v == "yes").unwrap_or(false);
+            let locked = s.find("locked").is_some();
+
             let ref_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Reference"));
             let val_prop = s.children().iter().find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Value"));
             let mut ref_text = ref_prop.map(|p| parse_text_prop(p, position)).unwrap_or(TextProp {
@@ -460,6 +521,11 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 ref_text,
                 val_text,
                 fields_autoplaced,
+                dnp,
+                in_bom,
+                on_board,
+                exclude_from_sim,
+                locked,
             }
         })
         .collect();
@@ -518,7 +584,65 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
         }
     }
 
-    let no_connects: Vec<Point> = root.find_all("no_connect").iter().map(|nc| parse_at(nc).0).collect();
+    let no_connects: Vec<NoConnect> = root.find_all("no_connect").iter().map(|nc| {
+        let (position, _) = parse_at(nc);
+        NoConnect { uuid: parse_uuid(nc), position }
+    }).collect();
+
+    let buses: Vec<Bus> = root.find_all("bus").iter().map(|b| {
+        let pts: Vec<Point> = b.find("pts").map(|p| {
+            p.find_all("xy").iter().map(|xy| Point {
+                x: xy.arg_f64(0).unwrap_or(0.0),
+                y: xy.arg_f64(1).unwrap_or(0.0),
+            }).collect()
+        }).unwrap_or_default();
+        Bus {
+            uuid: parse_uuid(b),
+            start: pts.first().copied().unwrap_or(Point { x: 0.0, y: 0.0 }),
+            end: pts.get(1).copied().unwrap_or(Point { x: 0.0, y: 0.0 }),
+        }
+    }).collect();
+
+    let bus_entries: Vec<BusEntry> = root.find_all("bus_entry").iter().map(|be| {
+        let (position, _) = parse_at(be);
+        let size = be.find("size").map(|s| (
+            s.arg_f64(0).unwrap_or(2.54),
+            s.arg_f64(1).unwrap_or(2.54),
+        )).unwrap_or((2.54, 2.54));
+        BusEntry { uuid: parse_uuid(be), position, size }
+    }).collect();
+
+    // Parse sheet-level drawing objects (polyline, arc, circle at top level)
+    let mut drawings: Vec<SchDrawing> = Vec::new();
+    for pl in root.find_all("polyline") {
+        let pts: Vec<Point> = pl.find("pts").map(|p| {
+            p.find_all("xy").iter().map(|xy| Point {
+                x: xy.arg_f64(0).unwrap_or(0.0),
+                y: xy.arg_f64(1).unwrap_or(0.0),
+            }).collect()
+        }).unwrap_or_default();
+        let width = pl.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.arg_f64(0)).unwrap_or(0.0);
+        let fill = pl.find("fill").and_then(|f| f.find("type")).and_then(|t| t.first_arg()).map(|t| t != "none").unwrap_or(false);
+        if pts.len() == 2 {
+            drawings.push(SchDrawing::Line { uuid: parse_uuid(pl), start: pts[0], end: pts[1], width });
+        } else if pts.len() > 2 {
+            drawings.push(SchDrawing::Polyline { uuid: parse_uuid(pl), points: pts, width, fill });
+        }
+    }
+    for arc in root.find_all("arc") {
+        let start = arc.find("start").map(|s| Point { x: s.arg_f64(0).unwrap_or(0.0), y: s.arg_f64(1).unwrap_or(0.0) }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let mid = arc.find("mid").map(|m| Point { x: m.arg_f64(0).unwrap_or(0.0), y: m.arg_f64(1).unwrap_or(0.0) }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let end = arc.find("end").map(|e| Point { x: e.arg_f64(0).unwrap_or(0.0), y: e.arg_f64(1).unwrap_or(0.0) }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let width = arc.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.arg_f64(0)).unwrap_or(0.0);
+        drawings.push(SchDrawing::Arc { uuid: parse_uuid(arc), start, mid, end, width });
+    }
+    for circ in root.find_all("circle") {
+        let center = circ.find("center").map(|c| Point { x: c.arg_f64(0).unwrap_or(0.0), y: c.arg_f64(1).unwrap_or(0.0) }).unwrap_or(Point { x: 0.0, y: 0.0 });
+        let radius = circ.find("radius").and_then(|r| r.arg_f64(0)).unwrap_or(1.0);
+        let width = circ.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.arg_f64(0)).unwrap_or(0.0);
+        let fill = circ.find("fill").and_then(|f| f.find("type")).and_then(|t| t.first_arg()).map(|t| t != "none").unwrap_or(false);
+        drawings.push(SchDrawing::Circle { uuid: parse_uuid(circ), center, radius, width, fill });
+    }
 
     let child_sheets: Vec<ChildSheet> = root.find_all("sheet").iter().map(|s| {
         let (position, _) = parse_at(s);
@@ -526,12 +650,27 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
             sz.arg_f64(0).unwrap_or(20.0),
             sz.arg_f64(1).unwrap_or(15.0),
         )).unwrap_or((20.0, 15.0));
+        // Parse sheet pins (entries): (pin "name" direction (at x y angle) ...)
+        let pins: Vec<SheetPin> = s.find_all("pin").iter().map(|p| {
+            let name = p.first_arg().unwrap_or("").to_string();
+            let direction = p.arg(1).unwrap_or("bidirectional").to_string();
+            let (position, rotation) = parse_at(p);
+            SheetPin {
+                uuid: parse_uuid(p),
+                name,
+                direction,
+                position,
+                rotation,
+            }
+        }).collect();
+
         ChildSheet {
             uuid: parse_uuid(s),
             name: s.property("Sheetname").unwrap_or("Unnamed").to_string(),
             filename: s.property("Sheetfile").unwrap_or("").to_string(),
             position,
             size,
+            pins,
         }
     }).collect();
 
@@ -544,6 +683,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
             .and_then(|s| s.arg_f64(0))
             .unwrap_or(1.27);
         TextNote {
+            uuid: parse_uuid(t),
             text: t.first_arg().unwrap_or("").to_string(),
             position,
             rotation,
@@ -566,13 +706,13 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
             .and_then(|t| t.first_arg())
             .unwrap_or("default")
             .to_string();
-        SchRectangle { start, end, stroke_type }
+        SchRectangle { uuid: parse_uuid(r), start, end, stroke_type }
     }).collect();
 
     Ok(SchematicSheet {
-        uuid, version, generator, paper_size,
+        uuid, version, generator, generator_version, paper_size,
         symbols, wires, junctions, labels, child_sheets, no_connects,
-        text_notes, rectangles, lib_symbols,
+        text_notes, rectangles, buses, bus_entries, drawings, lib_symbols,
     })
 }
 

@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use commands::{library, project, save, schematic};
+use commands::{export, library, project, save, schematic};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +18,8 @@ pub fn run() {
             library::list_libraries,
             library::search_symbols,
             library::get_symbol,
+            export::generate_bom,
+            export::export_netlist,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Alp EDA");

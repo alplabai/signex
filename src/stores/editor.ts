@@ -4,18 +4,24 @@ import type { EditorMode, StatusBarState } from "@/types";
 interface EditorState {
   mode: EditorMode;
   gridVisible: boolean;
+  netColorOverride: boolean;
+  netColors: Map<string, string>;
   statusBar: StatusBarState;
 
   setMode: (mode: EditorMode) => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
+  toggleNetColors: () => void;
   setGridSize: (size: number) => void;
   updateStatusBar: (partial: Partial<StatusBarState>) => void;
+  setNetColors: (colors: Map<string, string>) => void;
 }
 
 export const useEditorStore = create<EditorState>()((set) => ({
   mode: "schematic",
   gridVisible: true,
+  netColorOverride: false,
+  netColors: new Map(),
   statusBar: {
     cursorPosition: { x: 0, y: 0 },
     gridSize: 1.27,
@@ -30,6 +36,8 @@ export const useEditorStore = create<EditorState>()((set) => ({
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   toggleSnap: () =>
     set((s) => ({ statusBar: { ...s.statusBar, snapEnabled: !s.statusBar.snapEnabled } })),
+  toggleNetColors: () => set((s) => ({ netColorOverride: !s.netColorOverride })),
+  setNetColors: (colors) => set({ netColors: colors }),
   setGridSize: (size) =>
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>
