@@ -108,8 +108,7 @@ export function SchematicRenderer() {
   const wireCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for live wire cursor — no Zustand churn
   const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
   const draggingEndpoint = useRef<{ uuid: string; endpoint: "start" | "end" } | null>(null);
-  const measureStart = useRef<SchPoint | null>(null);
-  const measureEnd = useRef<SchPoint | null>(null);
+  const drawStart = useRef<SchPoint | null>(null);
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
@@ -285,10 +284,8 @@ export function SchematicRenderer() {
     ctx.lineWidth = 0.15;
     ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
-    // Grid (only if zoomed enough and visible)
-    const editorState = useEditorStore.getState();
-    const gridSize = editorState.statusBar.gridSize;
-    if (editorState.gridVisible && gridSize * cam.zoom > 2) {
+    // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
+    if (gridVisible && gridSize * cam.zoom > 2) {
       ctx.globalAlpha = 0.4;
       for (let gx = 0; gx <= pw; gx += gridSize) {
         const maj = Math.abs(gx % (gridSize * 10)) < 0.01;
@@ -427,12 +424,13 @@ export function SchematicRenderer() {
         }
       }
 
-      // Reference & value text at their exact KiCad positions with justify
+      // Reference & value text — hide while being edited inline
+      const editUuid = inPlaceEdit?.uuid ?? null;
       if (!sym.is_power) {
-        if (!sym.ref_text.hidden) {
+        if (!sym.ref_text.hidden && !(editUuid === sym.uuid && inPlaceEdit?.field === "reference")) {
           drawTextProp(ctx, txt(sym.reference), sym.ref_text, C.ref, true);
         }
-        if (!sym.val_text.hidden) {
+        if (!sym.val_text.hidden && !(editUuid === sym.uuid && inPlaceEdit?.field === "value")) {
           drawTextProp(ctx, txt(sym.value), sym.val_text, C.val, false);
         }
       } else {
@@ -447,6 +445,8 @@ export function SchematicRenderer() {
 
     // Labels
     for (const label of data.labels) {
+      // Hide label text while being edited inline
+      if (inPlaceEdit?.uuid === label.uuid) continue;
       const color = label.label_type === "Global" ? C.labelGlobal
         : label.label_type === "Hierarchical" ? C.labelHier : C.labelNet;
       const text = txt(label.text);
@@ -965,30 +965,6 @@ export function SchematicRenderer() {
       }
     }
 
-    // --- Measure distance overlay ---
-    if (measureStart.current) {
-      const ms = measureStart.current;
-      const me = measureEnd.current || wireCursorRef.current;
-      const d = Math.hypot(me.x - ms.x, me.y - ms.y);
-      ctx.strokeStyle = "#ffeb3b";
-      ctx.lineWidth = 0.12;
-      ctx.setLineDash([0.3, 0.2]);
-      ctx.beginPath(); ctx.moveTo(ms.x, ms.y); ctx.lineTo(me.x, me.y); ctx.stroke();
-      ctx.setLineDash([]);
-      // Distance label
-      const mx = (ms.x + me.x) / 2, my = (ms.y + me.y) / 2;
-      ctx.fillStyle = "#ffeb3b";
-      ctx.font = `${1.0}px Roboto`;
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-      const units = useEditorStore.getState().statusBar.units;
-      const display = units === "mil" ? (d / 0.0254).toFixed(0) + " mil" : units === "inch" ? (d / 25.4).toFixed(4) + " in" : d.toFixed(2) + " mm";
-      ctx.fillText(display, mx, my - 0.5);
-      // Endpoint markers
-      ctx.fillStyle = "#ffeb3b";
-      ctx.beginPath(); ctx.arc(ms.x, ms.y, 0.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(me.x, me.y, 0.2, 0, Math.PI * 2); ctx.fill();
-    }
-
     // --- Drag-box selection rectangle ---
     if (selecting.current) {
       const s = selectStart.current;
@@ -1253,11 +1229,11 @@ export function SchematicRenderer() {
 
       if (store.editMode === "drawLine") {
         const snapped = snapPoint(world);
-        if (!measureStart.current) {
-          measureStart.current = snapped; // Reuse measure refs for line start/end
+        if (!drawStart.current) {
+          drawStart.current = snapped; // Reuse measure refs for line start/end
         } else {
-          store.addDrawing({ type: "Line", uuid: crypto.randomUUID(), start: measureStart.current, end: snapped, width: 0.15 });
-          measureStart.current = null;
+          store.addDrawing({ type: "Line", uuid: crypto.randomUUID(), start: drawStart.current, end: snapped, width: 0.15 });
+          drawStart.current = null;
         }
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
@@ -1266,33 +1242,17 @@ export function SchematicRenderer() {
 
       if (store.editMode === "drawRect") {
         const snapped = snapPoint(world);
-        if (!measureStart.current) {
-          measureStart.current = snapped;
+        if (!drawStart.current) {
+          drawStart.current = snapped;
         } else {
-          store.addDrawing({ type: "Rect", uuid: crypto.randomUUID(), start: measureStart.current, end: snapped, width: 0.15, fill: false });
-          measureStart.current = null;
+          store.addDrawing({ type: "Rect", uuid: crypto.randomUUID(), start: drawStart.current, end: snapped, width: 0.15, fill: false });
+          drawStart.current = null;
         }
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
         return;
       }
 
-      if (store.editMode === "measure") {
-        const snapped = snapPoint(world);
-        if (!measureStart.current) {
-          measureStart.current = snapped;
-        } else {
-          measureEnd.current = snapped;
-          // Show distance in status bar
-          const d = Math.hypot(snapped.x - measureStart.current.x, snapped.y - measureStart.current.y);
-          const units = useEditorStore.getState().statusBar.units;
-          const display = units === "mil" ? (d / 0.0254).toFixed(0) + "mil" : units === "inch" ? (d / 25.4).toFixed(4) + "in" : d.toFixed(2) + "mm";
-          useEditorStore.getState().updateStatusBar({ currentMode: `Distance: ${display}` });
-          cancelAnimationFrame(animRef.current);
-          animRef.current = requestAnimationFrame(render);
-        }
-        return;
-      }
 
       if (store.editMode === "drawBus") {
         // Bus drawing uses the same wire drawing state machine
@@ -1651,15 +1611,6 @@ export function SchematicRenderer() {
             animRef.current = requestAnimationFrame(render);
           }
           break;
-        case "m":
-        case "M":
-          if (e.ctrlKey) {
-            e.preventDefault();
-            store.setEditMode("measure");
-            measureStart.current = null;
-            measureEnd.current = null;
-          }
-          break;
         case "q":
           if (e.ctrlKey) {
             e.preventDefault();
@@ -1805,15 +1756,15 @@ export function SchematicRenderer() {
             }
             setInPlaceEdit(null);
           }}
-          className="absolute z-40 bg-transparent border-none px-0 py-0 font-mono text-text-primary outline-none caret-accent"
+          className="absolute z-40 bg-bg-primary border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
           style={{
             left: inPlaceEdit.screenX,
-            top: inPlaceEdit.screenY - 7,
-            fontSize: `${Math.max(11, camRef.current.zoom * 1.27 * 0.9)}px`,
-            minWidth: 40,
-            color: "#81c784",
-            textShadow: "0 0 4px rgba(0,188,212,0.5)",
-            borderBottom: "1px solid rgba(0,188,212,0.6)",
+            top: inPlaceEdit.screenY - camRef.current.zoom * 1.27,
+            fontSize: `${Math.max(10, camRef.current.zoom * 1.27)}px`,
+            fontFamily: "Roboto, sans-serif",
+            minWidth: Math.max(60, inPlaceEdit.value.length * Math.max(7, camRef.current.zoom * 0.8)),
+            color: "#e8c66a",
+            lineHeight: 1.3,
           }}
         />
       )}
@@ -1883,11 +1834,6 @@ export function SchematicRenderer() {
         <CanvasBtn label="Delete (Del)" onClick={() => useSchematicStore.getState().deleteSelected()}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
         </CanvasBtn>
-        <CanvasBtn label="Measure (Ctrl+M)" active={editMode === "measure"}
-          onClick={() => { useSchematicStore.getState().setEditMode("measure"); measureStart.current = null; measureEnd.current = null; }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12h4"/><path d="M18 12h4"/><path d="M12 2v4"/><path d="M12 18v4"/><circle cx="12" cy="12" r="3"/></svg>
-        </CanvasBtn>
-        <div className="w-px h-4 bg-border-subtle mx-0.5" />
         <CanvasBtn label="Fit View (Home)" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }))}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
         </CanvasBtn>
