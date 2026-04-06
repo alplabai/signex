@@ -1,8 +1,9 @@
 import type { SchematicData, SchPoint, SchSymbol } from "@/types";
 
 export interface HitResult {
-  type: "symbol" | "wire" | "junction" | "label";
+  type: "symbol" | "wire" | "wireEndpoint" | "junction" | "label" | "noConnect" | "textNote" | "bus" | "busEntry" | "childSheet" | "drawing";
   uuid: string;
+  endpoint?: "start" | "end"; // Only for wireEndpoint
 }
 
 interface Box {
@@ -39,7 +40,7 @@ function distToSegment(p: SchPoint, a: SchPoint, b: SchPoint): number {
 
 /**
  * Hit test at world coordinates. Returns the topmost element under the cursor.
- * Priority: junctions → symbols → wires → labels
+ * Priority: junctions → noConnects → symbols → wires → buses → labels → textNotes → busEntries
  */
 export function hitTest(
   data: SchematicData,
@@ -56,9 +57,15 @@ export function hitTest(
     }
   }
 
-  // Symbols — check tight transformed bounding box
+  // No-connect markers (X shape, ~1.4 unit span)
+  for (const nc of data.no_connects) {
+    if (dist(p, nc.position) < tolerance * 0.6) {
+      return { type: "noConnect", uuid: nc.uuid };
+    }
+  }
+
+  // Symbols — check tight transformed bounding box (including power symbols)
   for (const sym of data.symbols) {
-    if (sym.is_power) continue;
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
 
@@ -107,10 +114,24 @@ export function hitTest(
     }
   }
 
-  // Wires
+  // Wire endpoints (tight tolerance for dragging)
+  const epTol = tolerance * 0.35;
+  for (const wire of data.wires) {
+    if (dist(p, wire.start) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "start" };
+    if (dist(p, wire.end) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "end" };
+  }
+
+  // Wires (segment body)
   for (const wire of data.wires) {
     if (distToSegment(p, wire.start, wire.end) < tolerance * 0.5) {
       return { type: "wire", uuid: wire.uuid };
+    }
+  }
+
+  // Buses (thicker hit zone)
+  for (const bus of data.buses) {
+    if (distToSegment(p, bus.start, bus.end) < tolerance * 0.7) {
+      return { type: "bus", uuid: bus.uuid };
     }
   }
 
@@ -118,6 +139,54 @@ export function hitTest(
   for (const label of data.labels) {
     if (dist(p, label.position) < tolerance) {
       return { type: "label", uuid: label.uuid };
+    }
+  }
+
+  // Text notes (hit by proximity to position)
+  for (const note of data.text_notes) {
+    if (dist(p, note.position) < tolerance * 1.5) {
+      return { type: "textNote", uuid: note.uuid };
+    }
+  }
+
+  // Bus entries
+  for (const be of data.bus_entries) {
+    if (dist(p, be.position) < tolerance) {
+      return { type: "busEntry", uuid: be.uuid };
+    }
+  }
+
+  // Drawing objects
+  for (const d of data.drawings) {
+    if (d.type === "Line") {
+      if (distToSegment(p, d.start, d.end) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "Rect") {
+      const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+      const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+      if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
+        return { type: "drawing", uuid: d.uuid };
+      }
+    } else if (d.type === "Circle") {
+      const dr = Math.abs(dist(p, d.center) - d.radius);
+      if (dr < tolerance || (d.fill && dist(p, d.center) < d.radius)) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "Arc") {
+      if (dist(p, d.start) < tolerance || dist(p, d.mid) < tolerance || dist(p, d.end) < tolerance) {
+        return { type: "drawing", uuid: d.uuid };
+      }
+    } else if (d.type === "Polyline") {
+      for (let i = 0; i < d.points.length - 1; i++) {
+        if (distToSegment(p, d.points[i], d.points[i + 1]) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
+      }
+    }
+  }
+
+  // Child sheets (rectangle hit test)
+  for (const sheet of data.child_sheets) {
+    const sx = sheet.position.x, sy = sheet.position.y;
+    const sw = sheet.size[0], sh = sheet.size[1];
+    if (p.x >= sx - tolerance && p.x <= sx + sw + tolerance &&
+        p.y >= sy - tolerance && p.y <= sy + sh + tolerance) {
+      return { type: "childSheet", uuid: sheet.uuid };
     }
   }
 
@@ -173,7 +242,6 @@ export function boxSelect(
   const selected: string[] = [];
 
   for (const sym of data.symbols) {
-    if (sym.is_power) continue;
     if (crossing) {
       // Crossing: any part of symbol in box
       if (pointInBox(sym.position, box)) selected.push(sym.uuid);
@@ -197,6 +265,38 @@ export function boxSelect(
 
   for (const j of data.junctions) {
     if (pointInBox(j.position, box)) selected.push(j.uuid);
+  }
+
+  for (const nc of data.no_connects) {
+    if (pointInBox(nc.position, box)) selected.push(nc.uuid);
+  }
+
+  for (const note of data.text_notes) {
+    if (pointInBox(note.position, box)) selected.push(note.uuid);
+  }
+
+  for (const bus of data.buses) {
+    if (crossing) {
+      if (segmentIntersectsBox(bus.start, bus.end, box)) selected.push(bus.uuid);
+    } else {
+      if (pointInBox(bus.start, box) && pointInBox(bus.end, box)) selected.push(bus.uuid);
+    }
+  }
+
+  for (const be of data.bus_entries) {
+    if (pointInBox(be.position, box)) selected.push(be.uuid);
+  }
+
+  for (const sheet of data.child_sheets) {
+    if (pointInBox(sheet.position, box)) selected.push(sheet.uuid);
+  }
+
+  for (const d of data.drawings) {
+    if (d.type === "Line" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
+    else if (d.type === "Rect" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
+    else if (d.type === "Circle" && pointInBox(d.center, box)) selected.push(d.uuid);
+    else if (d.type === "Arc" && pointInBox(d.start, box)) selected.push(d.uuid);
+    else if (d.type === "Polyline" && d.points.every(p => pointInBox(p, box))) selected.push(d.uuid);
   }
 
   return selected;

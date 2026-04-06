@@ -26,22 +26,18 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
 
   return (
     <div>
-      <button
+      <div
         className={cn(
-          "flex items-center gap-1.5 w-full py-[5px] text-[12px] hover:bg-bg-hover transition-colors text-left text-text-secondary hover:text-text-primary group"
+          "flex items-center gap-1.5 w-full py-[5px] text-[12px] hover:bg-bg-hover transition-colors text-left text-text-secondary hover:text-text-primary group cursor-pointer"
         )}
         style={{ paddingLeft: `${depth * 14 + 10}px` }}
-        onClick={() => {
-          if (hasChildren) setExpanded(!expanded);
-          node.onClick?.();
-        }}
+        onClick={() => node.onClick?.()}
       >
         {hasChildren ? (
-          expanded ? (
-            <ChevronDown size={11} className="text-text-muted shrink-0" />
-          ) : (
-            <ChevronRight size={11} className="text-text-muted shrink-0" />
-          )
+          <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            className="shrink-0 p-0 hover:text-accent transition-colors">
+            {expanded ? <ChevronDown size={11} className="text-text-muted" /> : <ChevronRight size={11} className="text-text-muted" />}
+          </button>
         ) : (
           <span className="w-[11px]" />
         )}
@@ -52,7 +48,7 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
             {node.badge}
           </span>
         )}
-      </button>
+      </div>
       {hasChildren && expanded && (
         <div>
           {node.children!.map((child, i) => (

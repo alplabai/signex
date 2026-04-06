@@ -34,8 +34,29 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // No connects
     for nc in &sheet.no_connects {
         writeln!(out, "\t(no_connect").unwrap();
-        writeln!(out, "\t\t(at {} {})", nc.x, nc.y).unwrap();
-        writeln!(out, "\t\t(uuid \"{}\")", uuid::Uuid::new_v4()).unwrap();
+        writeln!(out, "\t\t(at {} {})", nc.position.x, nc.position.y).unwrap();
+        writeln!(out, "\t\t(uuid \"{}\")", nc.uuid).unwrap();
+        writeln!(out, "\t)").unwrap();
+    }
+
+    // Buses
+    for b in &sheet.buses {
+        writeln!(out, "\t(bus").unwrap();
+        writeln!(out, "\t\t(pts").unwrap();
+        writeln!(out, "\t\t\t(xy {} {}) (xy {} {})", b.start.x, b.start.y, b.end.x, b.end.y).unwrap();
+        writeln!(out, "\t\t)").unwrap();
+        writeln!(out, "\t\t(stroke (width 0) (type default) (color 0 0 0 0))").unwrap();
+        writeln!(out, "\t\t(uuid \"{}\")", b.uuid).unwrap();
+        writeln!(out, "\t)").unwrap();
+    }
+
+    // Bus entries
+    for be in &sheet.bus_entries {
+        writeln!(out, "\t(bus_entry").unwrap();
+        writeln!(out, "\t\t(at {} {})", be.position.x, be.position.y).unwrap();
+        writeln!(out, "\t\t(size {} {})", be.size.0, be.size.1).unwrap();
+        writeln!(out, "\t\t(stroke (width 0) (type default) (color 0 0 0 0))").unwrap();
+        writeln!(out, "\t\t(uuid \"{}\")", be.uuid).unwrap();
         writeln!(out, "\t)").unwrap();
     }
 
@@ -86,10 +107,11 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         if sym.mirror_x { writeln!(out, "\t\t(mirror x)").unwrap(); }
         if sym.mirror_y { writeln!(out, "\t\t(mirror y)").unwrap(); }
         writeln!(out, "\t\t(unit {})", sym.unit).unwrap();
-        writeln!(out, "\t\t(exclude_from_sim no)").unwrap();
-        writeln!(out, "\t\t(in_bom yes)").unwrap();
-        writeln!(out, "\t\t(on_board yes)").unwrap();
-        writeln!(out, "\t\t(dnp no)").unwrap();
+        if sym.locked { writeln!(out, "\t\t(locked)").unwrap(); }
+        writeln!(out, "\t\t(exclude_from_sim {})", if sym.exclude_from_sim { "yes" } else { "no" }).unwrap();
+        writeln!(out, "\t\t(in_bom {})", if sym.in_bom { "yes" } else { "no" }).unwrap();
+        writeln!(out, "\t\t(on_board {})", if sym.on_board { "yes" } else { "no" }).unwrap();
+        writeln!(out, "\t\t(dnp {})", if sym.dnp { "yes" } else { "no" }).unwrap();
         if sym.fields_autoplaced {
             writeln!(out, "\t\t(fields_autoplaced yes)").unwrap();
         }
@@ -118,7 +140,7 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         writeln!(out, "\t\t\t\t(size {} {})", note.font_size, note.font_size).unwrap();
         writeln!(out, "\t\t\t)").unwrap();
         writeln!(out, "\t\t)").unwrap();
-        writeln!(out, "\t\t(uuid \"{}\")", uuid::Uuid::new_v4()).unwrap();
+        writeln!(out, "\t\t(uuid \"{}\")", note.uuid).unwrap();
         writeln!(out, "\t)").unwrap();
     }
 
@@ -129,8 +151,59 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         writeln!(out, "\t\t(end {} {})", r.end.x, r.end.y).unwrap();
         writeln!(out, "\t\t(stroke (width 0) (type {}))", r.stroke_type).unwrap();
         writeln!(out, "\t\t(fill (type none))").unwrap();
-        writeln!(out, "\t\t(uuid \"{}\")", uuid::Uuid::new_v4()).unwrap();
+        writeln!(out, "\t\t(uuid \"{}\")", r.uuid).unwrap();
         writeln!(out, "\t)").unwrap();
+    }
+
+    // Drawing objects
+    for d in &sheet.drawings {
+        match d {
+            SchDrawing::Line { uuid, start, end, width } => {
+                writeln!(out, "\t(polyline").unwrap();
+                writeln!(out, "\t\t(pts (xy {} {}) (xy {} {}))", start.x, start.y, end.x, end.y).unwrap();
+                writeln!(out, "\t\t(stroke (width {}) (type default))", width).unwrap();
+                writeln!(out, "\t\t(uuid \"{}\")", uuid).unwrap();
+                writeln!(out, "\t)").unwrap();
+            }
+            SchDrawing::Polyline { uuid, points, width, fill } => {
+                writeln!(out, "\t(polyline").unwrap();
+                write!(out, "\t\t(pts").unwrap();
+                for p in points { write!(out, " (xy {} {})", p.x, p.y).unwrap(); }
+                writeln!(out, ")").unwrap();
+                writeln!(out, "\t\t(stroke (width {}) (type default))", width).unwrap();
+                writeln!(out, "\t\t(fill (type {}))", if *fill { "outline" } else { "none" }).unwrap();
+                writeln!(out, "\t\t(uuid \"{}\")", uuid).unwrap();
+                writeln!(out, "\t)").unwrap();
+            }
+            SchDrawing::Circle { uuid, center, radius, width, fill } => {
+                writeln!(out, "\t(circle").unwrap();
+                writeln!(out, "\t\t(center {} {})", center.x, center.y).unwrap();
+                writeln!(out, "\t\t(radius {})", radius).unwrap();
+                writeln!(out, "\t\t(stroke (width {}) (type default))", width).unwrap();
+                writeln!(out, "\t\t(fill (type {}))", if *fill { "outline" } else { "none" }).unwrap();
+                writeln!(out, "\t\t(uuid \"{}\")", uuid).unwrap();
+                writeln!(out, "\t)").unwrap();
+            }
+            SchDrawing::Arc { uuid, start, mid, end, width } => {
+                writeln!(out, "\t(arc").unwrap();
+                writeln!(out, "\t\t(start {} {})", start.x, start.y).unwrap();
+                writeln!(out, "\t\t(mid {} {})", mid.x, mid.y).unwrap();
+                writeln!(out, "\t\t(end {} {})", end.x, end.y).unwrap();
+                writeln!(out, "\t\t(stroke (width {}) (type default))", width).unwrap();
+                writeln!(out, "\t\t(uuid \"{}\")", uuid).unwrap();
+                writeln!(out, "\t)").unwrap();
+            }
+            SchDrawing::Rect { uuid, start, end, width, fill } => {
+                // Rects written as rectangles (distinct from section box rectangles)
+                writeln!(out, "\t(rectangle").unwrap();
+                writeln!(out, "\t\t(start {} {})", start.x, start.y).unwrap();
+                writeln!(out, "\t\t(end {} {})", end.x, end.y).unwrap();
+                writeln!(out, "\t\t(stroke (width {}) (type default))", width).unwrap();
+                writeln!(out, "\t\t(fill (type {}))", if *fill { "outline" } else { "none" }).unwrap();
+                writeln!(out, "\t\t(uuid \"{}\")", uuid).unwrap();
+                writeln!(out, "\t)").unwrap();
+            }
+        }
     }
 
     // Child sheets
@@ -147,6 +220,14 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         writeln!(out, "\t\t\t(at {} {} 0)", sheet_ref.position.x, sheet_ref.position.y + sheet_ref.size.1 + 1.0).unwrap();
         writeln!(out, "\t\t\t(effects (font (size 1.27 1.27)) (justify left top))").unwrap();
         writeln!(out, "\t\t)").unwrap();
+        // Sheet pins
+        for pin in &sheet_ref.pins {
+            writeln!(out, "\t\t(pin \"{}\" {}", pin.name, pin.direction).unwrap();
+            writeln!(out, "\t\t\t(at {} {} {})", pin.position.x, pin.position.y, pin.rotation).unwrap();
+            writeln!(out, "\t\t\t(effects (font (size 1.27 1.27)) (justify left))").unwrap();
+            writeln!(out, "\t\t\t(uuid \"{}\")", pin.uuid).unwrap();
+            writeln!(out, "\t\t)").unwrap();
+        }
         writeln!(out, "\t)").unwrap();
     }
 
