@@ -261,6 +261,9 @@ export function SchematicRenderer() {
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // Reset transform and clear entire canvas
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const cam = camRef.current;
     const w = rect.width, h = rect.height;
