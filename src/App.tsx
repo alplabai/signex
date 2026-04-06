@@ -214,6 +214,13 @@ function App() {
           e.preventDefault(); useSchematicStore.getState().copySelected();
         }
       }
+      if (e.ctrlKey && e.key === "x") {
+        if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          useSchematicStore.getState().copySelected();
+          useSchematicStore.getState().deleteSelected();
+        }
+      }
       if (e.ctrlKey && e.key === "v") {
         if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
           e.preventDefault(); useSchematicStore.getState().pasteClipboard({ x: 5, y: 5 });

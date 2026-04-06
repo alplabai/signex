@@ -637,7 +637,7 @@ export function SchematicRenderer() {
         ctx.stroke();
       }
 
-      // Draw live preview from last placed point to cursor (Manhattan: H then V)
+      // Draw live preview from last placed point to cursor
       const last = wireDrawing.points[wireDrawing.points.length - 1];
       const cur = wireCursorRef.current;
       ctx.strokeStyle = "#80deea";
@@ -645,9 +645,21 @@ export function SchematicRenderer() {
       ctx.setLineDash([0.3, 0.2]);
       ctx.beginPath();
       ctx.moveTo(last.x, last.y);
-      // Manhattan routing: horizontal first, then vertical
-      ctx.lineTo(cur.x, last.y); // horizontal segment
-      ctx.lineTo(cur.x, cur.y);  // vertical segment
+
+      const rMode = useSchematicStore.getState().wireDrawing.routingMode;
+      if (rMode === "manhattan") {
+        ctx.lineTo(cur.x, last.y);
+        ctx.lineTo(cur.x, cur.y);
+      } else if (rMode === "diagonal") {
+        const dx = cur.x - last.x, dy = cur.y - last.y;
+        const diag = Math.min(Math.abs(dx), Math.abs(dy));
+        const mx = last.x + Math.sign(dx) * diag;
+        const my = last.y + Math.sign(dy) * diag;
+        ctx.lineTo(mx, my);
+        ctx.lineTo(cur.x, cur.y);
+      } else {
+        ctx.lineTo(cur.x, cur.y);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -990,8 +1002,27 @@ export function SchematicRenderer() {
           if (!e.ctrlKey) store.setEditMode("placeLabel");
           break;
         case "Delete":
-        case "Backspace":
           store.deleteSelected();
+          break;
+        case "Backspace":
+          if (store.wireDrawing.active) {
+            e.preventDefault();
+            store.removeLastWirePoint();
+          } else {
+            store.deleteSelected();
+          }
+          break;
+        case " ":
+          if (e.shiftKey && store.wireDrawing.active) {
+            e.preventDefault();
+            store.cycleWireRouting();
+          }
+          break;
+        case "a":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            store.selectAll();
+          }
           break;
         case "r":
         case "R":
@@ -1110,7 +1141,7 @@ export function SchematicRenderer() {
         <span>{data?.symbols.filter(s => !s.is_power).length ?? 0} components | {data?.wires.length ?? 0} wires | {data?.labels.length ?? 0} labels</span>
         {selectedIds.size > 0 && <span className="text-accent">{selectedIds.size} selected</span>}
         {editMode !== "select" && <span className="text-warning uppercase">{editMode}</span>}
-        {wireDrawing.active && <span className="text-info">Drawing wire ({wireDrawing.points.length} pts)</span>}
+        {wireDrawing.active && <span className="text-info">Wire: {wireDrawing.routingMode} ({wireDrawing.points.length} pts) Shift+Space:mode Backspace:undo</span>}
         {placingSymbol && <span className="text-info">Placing {placingSymbol.meta.symbol_id} (R:rotate X:mirrorX Y:mirrorY)</span>}
       </div>
     </div>
