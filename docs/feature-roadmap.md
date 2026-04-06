@@ -1,4 +1,4 @@
-# Alp EDA Feature Roadmap — Altium Parity
+# Signex Feature Roadmap — Altium Parity
 
 ## Current Status (Phase 0+1)
 

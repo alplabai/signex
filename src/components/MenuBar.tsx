@@ -178,7 +178,7 @@ const menus: MenuGroup[] = [
       { label: "Documentation" },
       { label: "Keyboard Shortcuts (F1)" },
       { separator: true, label: "" },
-      { label: "About Alp EDA" },
+      { label: "About Signex" },
     ],
   },
 ];
