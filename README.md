@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/Rust-stable-orange?logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/KiCad-8%2F9%2F10-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJMMyAxNGgxOEwxMiAyeiIgZmlsbD0id2hpdGUiLz48L3N2Zz4=" alt="KiCad">
-  <img src="https://img.shields.io/badge/Tests-64_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-64_passing_(53_TS_%2B_11_Rust)-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
 </p>
 
@@ -54,6 +54,8 @@ We started Signex because we design Edge AI hardware at [Alp Lab](https://alplab
 - Component placement with auto-designator generation
 - Net labels, power ports, hierarchical ports, no-connect markers
 - Sheet symbols with pin support
+- Drawing objects (line, rectangle, circle, arc, polyline)
+- Text string placement
 </details>
 
 <details>
@@ -67,34 +69,51 @@ We started Signex because we design Edge AI hardware at [Alp Lab](https://alplab
 - Wire endpoint dragging and break wire
 - Find/Replace, Find Similar Objects (Shift+F)
 - Right-click context menu (context-aware)
-- Drawing objects (line, rectangle, circle, arc, polyline)
 - Z-ordering (Bring to Front / Send to Back)
-- Batch property editing for multi-select
+- Batch property editing for multi-select same-type objects
+- Alt+Click to select entire net
 </details>
 
 <details>
 <summary><strong>Validation & Output</strong></summary>
 
 - Net connectivity resolution (union-find algorithm)
-- ERC with 8 violation types
-- Auto-annotation (Design > Annotate)
+- ERC with 11 violation types including pin-to-pin connection matrix (12x12)
+- No ERC directives to suppress individual violations
+- Auto-annotation with lock/unlock designators
+- Reset designators / reset duplicates only
 - BOM generation (CSV export)
 - Netlist export (KiCad format)
 - PNG export
-- Net Color Override (F5)
+- Net Color Override (F5) with 12-color palette
 - Measure distance tool (Ctrl+M)
+- ERC markers rendered on canvas (red errors, yellow warnings)
+- AutoFocus: dim non-related objects when inspecting violations
+</details>
+
+<details>
+<summary><strong>Panels (Altium-style)</strong></summary>
+
+- **Properties** -- context-aware editing for all object types (Altium layout)
+- **Components** -- 226 KiCad libraries with search, preview, and place
+- **SCH Filter** -- toggle visibility/selectability per object type
+- **SCH List** -- spreadsheet view with sortable columns, click-to-select
+- **Navigator** -- schematic overview with object tree and stats
+- **Messages** -- ERC violations with click-to-select and Run ERC button
+- **Projects** -- project tree with sheet navigation
+- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages)
 </details>
 
 <details>
 <summary><strong>UI & UX</strong></summary>
 
-- Altium-style Properties panel for all object types
-- Altium-style selection highlights with corner handles
 - Dark theme (Catppuccin Mocha-inspired)
 - Unit conversion (mm/mil/inch) everywhere
-- Preferences dialog
+- Preferences dialog (General/Display/ERC tabs)
 - 30+ keyboard shortcuts matching Altium conventions
 - Centered Active Bar with all placement tools
+- Altium-style selection highlights with green corner handles
+- Right-click context menu with context-aware actions
 </details>
 
 ## Roadmap
@@ -104,7 +123,7 @@ We started Signex because we design Edge AI hardware at [Alp Lab](https://alplab
 | **Phase 0: Viewer** | :white_check_mark: Done | KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav |
 | **Phase 1: Editor** | :white_check_mark: Done | Selection, move, wire, delete, rotate, undo/redo, save, properties |
 | **Phase 2: Core** | :white_check_mark: Done | Drag-box select, auto-junction, rubber-band, copy/paste, net labels, power ports, ERC, BOM |
-| **Phase 3: Validation** | :arrow_forward: Next | Full ERC (50+ rules), annotation tools, cross-reference, output jobs |
+| **Phase 3: Validation** | :white_check_mark: Done | ERC (11 checks + connection matrix), annotation, No ERC directives, AutoFocus, lock designators |
 | **Phase 4: Advanced** | :hourglass: Planned | Library editor, drawing tools, BOM/PDF/ODB++ export, template system |
 | **Phase 5: Signal AI** | :hourglass: Planned | Claude API integration, design review, component suggestion, ERC fix |
 | **Phase 6: PCB Layout** | :hourglass: Planned | Layer stack, interactive routing, DRC, copper pour, 3D viewer |
@@ -183,7 +202,7 @@ npm run tauri dev
 | State | Zustand |
 | Parser | Pure Rust S-expression parser |
 | AI | Claude API via Rust reqwest (planned) |
-| Testing | Vitest (53 tests) + cargo test (11 tests) |
+| Testing | Vitest (53 tests) + cargo test (11 tests) = 64 total |
 
 ## Project Structure
 
@@ -194,9 +213,9 @@ src-tauri/src/
 src/
   canvas/             SchematicRenderer (Canvas2D), hitTest
   components/         MenuBar, ToolbarStrip, StatusBar, ContextMenu
-  panels/             Properties, Components, Messages, Project, Signal
+  panels/             Properties, Components, Messages, Filter, List, Navigator, Project
   stores/             Zustand: layout, project, editor, schematic
-  lib/                Net resolver, ERC, geometry
+  lib/                Net resolver, ERC (11 checks), connection matrix, geometry
   __tests__/          Vitest test suite (53 tests)
 docs/                 Roadmap, master plan, Altium reference
 ```
