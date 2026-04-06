@@ -824,6 +824,23 @@ export function SchematicRenderer() {
         return;
       }
 
+      if (store.editMode === "placeLabel") {
+        const name = prompt("Net label name:");
+        if (name) store.placeNetLabel(world, name);
+        return;
+      }
+
+      if (store.editMode === "placePower") {
+        const name = prompt("Power net name (e.g. VCC, GND):");
+        if (name) store.placePowerPort(world, name, "input");
+        return;
+      }
+
+      if (store.editMode === "placeNoConnect") {
+        store.placeNoConnect(world);
+        return;
+      }
+
       // Select mode: hit test
       const hit = hitTest(data, world.x, world.y);
       if (hit) {
@@ -968,6 +985,10 @@ export function SchematicRenderer() {
         case "W":
           if (!e.ctrlKey) store.setEditMode("drawWire");
           break;
+        case "l":
+        case "L":
+          if (!e.ctrlKey) store.setEditMode("placeLabel");
+          break;
         case "Delete":
         case "Backspace":
           store.deleteSelected();
@@ -1014,7 +1035,7 @@ export function SchematicRenderer() {
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ cursor: editMode === "drawWire" || editMode === "placeSymbol" ? "crosshair" : "default" }}
+        style={{ cursor: editMode !== "select" ? "crosshair" : "default" }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -1046,6 +1067,27 @@ export function SchematicRenderer() {
           onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        </CanvasBtn>
+        <CanvasBtn
+          active={editMode === "placeLabel"}
+          label="Net Label (L)"
+          onClick={() => useSchematicStore.getState().setEditMode("placeLabel")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>
+        </CanvasBtn>
+        <CanvasBtn
+          active={editMode === "placePower"}
+          label="Power Port"
+          onClick={() => useSchematicStore.getState().setEditMode("placePower")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v10"/><path d="M5 12h14"/></svg>
+        </CanvasBtn>
+        <CanvasBtn
+          active={editMode === "placeNoConnect"}
+          label="No Connect"
+          onClick={() => useSchematicStore.getState().setEditMode("placeNoConnect")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
         </CanvasBtn>
         <div className="w-px h-4 bg-border-subtle mx-0.5" />
         <CanvasBtn label="Rotate (R)" onClick={() => {
