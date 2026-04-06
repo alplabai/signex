@@ -1023,6 +1023,47 @@ export function SchematicRenderer() {
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {/* Altium-style Active Bar — floating canvas toolbar */}
+      <div className="absolute top-3 right-3 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30">
+        <CanvasBtn
+          active={editMode === "select"}
+          label="Select (Esc)"
+          onClick={() => useSchematicStore.getState().setEditMode("select")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+        </CanvasBtn>
+        <CanvasBtn
+          active={editMode === "drawWire"}
+          label="Wire (W)"
+          onClick={() => useSchematicStore.getState().setEditMode("drawWire")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>
+        </CanvasBtn>
+        <CanvasBtn
+          active={editMode === "placeSymbol"}
+          label="Component (P)"
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        </CanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        <CanvasBtn label="Rotate (R)" onClick={() => {
+          const s = useSchematicStore.getState();
+          if (s.placingSymbol) s.rotatePlacement(); else s.rotateSelected();
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>
+        </CanvasBtn>
+        <CanvasBtn label="Delete (Del)" onClick={() => useSchematicStore.getState().deleteSelected()}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </CanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        <CanvasBtn label="Fit View (Home)" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }))}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+        </CanvasBtn>
+      </div>
+
+      {/* Info overlay */}
       <div className="absolute top-2 left-2 text-[10px] text-text-muted/40 bg-bg-primary/60 px-2 py-1 rounded pointer-events-none flex gap-3">
         <span>{data?.symbols.filter(s => !s.is_power).length ?? 0} components | {data?.wires.length ?? 0} wires | {data?.labels.length ?? 0} labels</span>
         {selectedIds.size > 0 && <span className="text-accent">{selectedIds.size} selected</span>}
@@ -1031,6 +1072,22 @@ export function SchematicRenderer() {
         {placingSymbol && <span className="text-info">Placing {placingSymbol.meta.symbol_id} (R:rotate X:mirrorX Y:mirrorY)</span>}
       </div>
     </div>
+  );
+}
+
+function CanvasBtn({ children, label, active, onClick }: {
+  children: React.ReactNode; label: string; active?: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      title={label}
+      onClick={onClick}
+      className={`p-1.5 rounded transition-colors ${
+        active ? "bg-accent/25 text-accent" : "text-text-muted/60 hover:bg-bg-hover hover:text-text-primary"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
