@@ -123,7 +123,7 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         };
         writeln!(out, "\t({} \"{}\"", keyword, escape_kicad_string(&l.text)).unwrap();
         if !l.shape.is_empty() {
-            writeln!(out, "\t\t(shape {})", l.shape).unwrap();
+            writeln!(out, "\t\t(shape {})", escape_kicad_string(&l.shape)).unwrap();
         }
         writeln!(
             out,
@@ -138,7 +138,7 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         if l.justify != "left"
             || matches!(l.label_type, LabelType::Global | LabelType::Hierarchical)
         {
-            writeln!(out, "\t\t\t(justify {})", l.justify).unwrap();
+            writeln!(out, "\t\t\t(justify {})", escape_kicad_string(&l.justify)).unwrap();
         }
         writeln!(out, "\t\t)").unwrap();
         writeln!(out, "\t\t(uuid \"{}\")", l.uuid).unwrap();
@@ -264,7 +264,7 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         writeln!(out, "\t(rectangle").unwrap();
         writeln!(out, "\t\t(start {} {})", r.start.x, r.start.y).unwrap();
         writeln!(out, "\t\t(end {} {})", r.end.x, r.end.y).unwrap();
-        writeln!(out, "\t\t(stroke (width 0) (type {}))", r.stroke_type).unwrap();
+        writeln!(out, "\t\t(stroke (width 0) (type {}))", escape_kicad_string(&r.stroke_type)).unwrap();
         writeln!(out, "\t\t(fill (type none))").unwrap();
         writeln!(out, "\t\t(uuid \"{}\")", r.uuid).unwrap();
         writeln!(out, "\t)").unwrap();
@@ -623,7 +623,7 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     )
     .unwrap();
     for pin in &lib.pins {
-        writeln!(out, "\t\t\t\t(pin {} {}", pin.pin_type, pin.shape).unwrap();
+        writeln!(out, "\t\t\t\t(pin {} {}", escape_kicad_string(&pin.pin_type), escape_kicad_string(&pin.shape)).unwrap();
         writeln!(
             out,
             "\t\t\t\t\t(at {} {} {})",

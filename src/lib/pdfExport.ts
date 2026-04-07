@@ -544,17 +544,16 @@ export async function printSchematic(data: SchematicData): Promise<void> {
   const imgData = canvas.toDataURL("image/png");
   const w = window.open("", "_blank");
   if (!w) { alert("Pop-up blocked. Please allow pop-ups for printing."); return; }
-  w.document.write(
-    "<!DOCTYPE html><html><head><title>Print Schematic</title><style>" +
-    "@page { size: " + pw + "mm " + ph + "mm; margin: 0; } " +
-    "* { margin: 0; padding: 0; } " +
-    "body { display: flex; justify-content: center; align-items: center; } " +
-    "img { width: 100vw; height: auto; max-height: 100vh; object-fit: contain; }" +
-    "</style></head><body>" +
-    "<img src=\"" + imgData + "\" onload=\"window.print();window.close();\" />" +
-    "</body></html>"
-  );
-  w.document.close();
+  // Use DOM APIs instead of document.write to avoid XSS sink
+  const doc = w.document;
+  doc.title = "Print Schematic";
+  const style = doc.createElement("style");
+  style.textContent = `@page { size: ${pw}mm ${ph}mm; margin: 0; } * { margin: 0; padding: 0; } body { display: flex; justify-content: center; align-items: center; } img { width: 100vw; height: auto; max-height: 100vh; object-fit: contain; }`;
+  doc.head.appendChild(style);
+  const img = doc.createElement("img");
+  img.src = imgData;
+  img.addEventListener("load", () => { w.print(); w.close(); });
+  doc.body.appendChild(img);
 }
 
 export function getPaperSize(paperSize: string): [number, number] {

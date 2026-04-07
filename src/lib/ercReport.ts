@@ -18,7 +18,7 @@ export function generateErcHtmlReport(violations: ErcViolation[], projectName: s
     return `<tr>
       <td>${i + 1}</td>
       <td style="color: ${severityColor}; font-weight: 600;">${severityLabel}</td>
-      <td>${typeLabel}</td>
+      <td>${escapeHtml(typeLabel)}</td>
       <td>${escapeHtml(v.message)}</td>
       <td>${position}</td>
     </tr>`;

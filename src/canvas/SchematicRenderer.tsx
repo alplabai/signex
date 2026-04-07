@@ -10,6 +10,7 @@ import { resolveNets } from "@/lib/netResolver";
 import { substituteSpecialStrings } from "@/lib/specialStrings";
 import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
+const IMAGE_CACHE = new Map<string, HTMLImageElement>();
 
 const PAPER: Record<string, [number, number]> = {
   A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
@@ -319,16 +320,17 @@ export function SchematicRenderer() {
       ctx.fillText("Date:", tbx + 51, tby + 1);
       ctx.fillText("Rev:", tbx + 1, tby + 11);
       ctx.fillText("Company:", tbx + 51, tby + 11);
-      // Values (larger text)
+      // Values
       ctx.fillStyle = C.val;
-      ctx.font = "bold 1.5px Roboto";
-      ctx.textBaseline = "middle";
-      ctx.fillText(substituteSpecialStrings(tb.title || "", data), tbx + 1, tby + 25);
       ctx.font = "1.2px Roboto";
+      ctx.textBaseline = "middle";
       ctx.fillText(tb.title || "", tbx + 8, tby + 5);
       ctx.fillText(tb.date || "", tbx + 58, tby + 5);
       ctx.fillText(tb.rev || "", tbx + 8, tby + 15);
       ctx.fillText(tb.company || "", tbx + 63, tby + 15);
+      // Large title at bottom row
+      ctx.font = "bold 1.5px Roboto";
+      ctx.fillText(tb.title || "", tbx + 2, tby + 25);
     }
 
     // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
@@ -630,6 +632,8 @@ export function SchematicRenderer() {
       }
     }
 
+    // Reset alpha before child sheets
+    ctx.globalAlpha = 1;
     // Child sheets
     ctx.globalAlpha = sf.sheetSymbols?.visible === false ? 0.12 : 1;
     for (const sheet of data.child_sheets) {
@@ -688,6 +692,7 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    ctx.globalAlpha = 1;
     // Bus entries (short diagonal lines)
     ctx.lineWidth = 0.2;
     for (const be of data.bus_entries) {
@@ -698,6 +703,7 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    ctx.globalAlpha = 1;
     // Top-level rectangles (dashed section boxes)
     for (const r of data.rectangles) {
       const rx = Math.min(r.start.x, r.end.x);
@@ -833,14 +839,11 @@ export function SchematicRenderer() {
         const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
         const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
         // Image rendering uses cached HTMLImageElement
-        const imgKey = `img_${d.uuid}`;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const win = window as any;
-        let img = win[imgKey] as HTMLImageElement | undefined;
+        let img = IMAGE_CACHE.get(d.uuid);
         if (!img && d.dataUrl) {
           img = new Image();
           img.src = d.dataUrl;
-          win[imgKey] = img;
+          IMAGE_CACHE.set(d.uuid, img);
         }
         if (img?.complete) {
           ctx.drawImage(img, rx, ry, rw, rh);
@@ -1628,6 +1631,13 @@ export function SchematicRenderer() {
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
+      // Update cursor for drawing tool ghost previews
+      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc"];
+      if (drawModes.includes(store.editMode)) {
+        placeCursorRef.current = snapPoint(world);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+      }
     }
 
     // Drag-box selection update
@@ -1681,7 +1691,7 @@ export function SchematicRenderer() {
       const s = selectStart.current, e = selectEnd.current;
       // Only if dragged more than a tiny amount (avoid accidental micro-drags)
       if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
-        const uuids = boxSelect(data, s.x, s.y, e.x, e.y);
+        const uuids = boxSelect(data, s.x, s.y, e.x, e.y, useEditorStore.getState().selectionFilter);
         if (uuids.length > 0) {
           useSchematicStore.getState().selectMultiple(uuids);
         }
@@ -1939,6 +1949,9 @@ export function SchematicRenderer() {
           if (e.ctrlKey && e.shiftKey) {
             e.preventDefault();
             store.alignSelectionToGrid();
+          } else if (e.ctrlKey) {
+            e.preventDefault();
+            store.duplicateSelected();
           }
           break;
         case "q":
@@ -2005,12 +2018,6 @@ export function SchematicRenderer() {
             // Y = vertical flip (mirror around X axis) — Altium convention
             if (store.placingSymbol) store.mirrorPlacementX();
             else if (store.selectedIds.size > 0) store.mirrorSelectedX();
-          }
-          break;
-        case "d":
-          if (e.ctrlKey) {
-            e.preventDefault();
-            store.duplicateSelected();
           }
           break;
         case "g":

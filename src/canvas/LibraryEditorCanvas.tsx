@@ -69,10 +69,11 @@ export function LibraryEditorCanvas() {
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, w, h);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w / dpr, h / dpr);
     ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, w / dpr, h / dpr);
 
     ctx.save();
     ctx.translate(v.offsetX, v.offsetY);
@@ -148,8 +149,7 @@ export function LibraryEditorCanvas() {
       canvas.height = rect.height * dpr;
       canvas.style.width = rect.width + "px";
       canvas.style.height = rect.height + "px";
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.scale(dpr, dpr);
+      // DPR scaling is applied in render() via setTransform — not here to avoid accumulation
 
       // Center origin
       viewRef.current.offsetX = rect.width / 2;

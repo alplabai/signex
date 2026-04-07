@@ -22,8 +22,8 @@ pub fn generate_bom(data: SchematicSheet) -> Result<String, String> {
     // Sort by first designator in each group
     let mut entries: Vec<_> = groups.into_iter().collect();
     entries.sort_by(|a, b| {
-        let a_ref = a.1.first().unwrap();
-        let b_ref = b.1.first().unwrap();
+        let a_ref = a.1.first().map(|s| s.as_str()).unwrap_or("");
+        let b_ref = b.1.first().map(|s| s.as_str()).unwrap_or("");
         natural_sort(a_ref, b_ref)
     });
 
@@ -189,7 +189,7 @@ pub fn generate_bom_configured(
                     .collect();
                 let mut designators_sorted = designators.clone();
                 designators_sorted.sort_by(|a, b| natural_sort(a, b));
-                let first = group_rows.first().unwrap();
+                let Some(first) = group_rows.first() else { continue };
                 let mut fields: Vec<String> = Vec::new();
                 for col in &cols {
                     match *col {
@@ -212,7 +212,7 @@ pub fn generate_bom_configured(
                     .filter_map(|r| r.get("Designator").map(|s| s.as_str()))
                     .collect();
                 designators.sort_by(|a, b| natural_sort(a, b));
-                let first = group_rows.first().unwrap();
+                let Some(first) = group_rows.first() else { continue };
                 let mut fields: Vec<String> = Vec::new();
                 for col in &cols {
                     match *col {
