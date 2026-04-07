@@ -1352,7 +1352,7 @@ export function SchematicRenderer() {
           // Port flag shape: tight selection matching the rendered flag
           const fs = label.font_size || 1.27;
           ctx.font = `${fs}px Roboto`;
-          const tw = ctx.measureText(label.text).width;
+          const tw = ctx.measureText(txt(label.text)).width; // Use txt() to convert {slash} to /
           const h = fs * 1.4;
           const pad = fs * 0.3;
           const arrowW = h * 0.5;
