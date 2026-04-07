@@ -1516,6 +1516,108 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    // --- Net Label / Power Port / No Connect placement preview ---
+    const editMode2 = useSchematicStore.getState().editMode;
+    const paused = useEditorStore.getState().placementPaused;
+    if (!placing && editMode2 !== "select" && !paused) {
+      const cur = placeCursorRef.current;
+      ctx.globalAlpha = 0.6;
+
+      if (editMode2 === "placeLabel") {
+        // Net label preview — flag shape with "NET?" text
+        const labelText = "NET?";
+        const fs = 1.27;
+        const h = fs * 1.4;
+        const pad = fs * 0.3;
+        const arrowW = h * 0.5;
+        ctx.font = `${fs}px Roboto`;
+        const tw = ctx.measureText(labelText).width;
+
+        // Draw connection line stub
+        ctx.strokeStyle = C.labelNet;
+        ctx.lineWidth = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x - 1, cur.y);
+        ctx.stroke();
+
+        // Draw flag shape
+        ctx.strokeStyle = C.labelGlobal;
+        ctx.lineWidth = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x + arrowW, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y + h / 2);
+        ctx.lineTo(cur.x + arrowW, cur.y + h / 2);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = C.labelNet;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(labelText, cur.x + arrowW + pad, cur.y);
+
+      } else if (editMode2 === "placePower") {
+        // Power port preview
+        const preset = powerPreset.current;
+        const stemLen = 2.0, symSize = 1.2;
+        const isGnd = preset.style.includes("ground");
+        const dir = isGnd ? 1 : -1;
+
+        ctx.strokeStyle = C.power;
+        ctx.lineWidth = 0.12;
+        ctx.lineCap = "round";
+
+        // Stem
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x, cur.y + dir * stemLen);
+        ctx.stroke();
+
+        // Symbol
+        const sy = cur.y + dir * stemLen;
+        if (preset.style === "bar") {
+          ctx.lineWidth = 0.18;
+          ctx.beginPath();
+          ctx.moveTo(cur.x - symSize, sy);
+          ctx.lineTo(cur.x + symSize, sy);
+          ctx.stroke();
+        } else if (isGnd) {
+          ctx.lineWidth = 0.12;
+          ctx.beginPath();
+          ctx.moveTo(cur.x - symSize, sy);
+          ctx.lineTo(cur.x + symSize, sy);
+          ctx.moveTo(cur.x - symSize * 0.65, sy + dir * 0.4);
+          ctx.lineTo(cur.x + symSize * 0.65, sy + dir * 0.4);
+          ctx.moveTo(cur.x - symSize * 0.3, sy + dir * 0.8);
+          ctx.lineTo(cur.x + symSize * 0.3, sy + dir * 0.8);
+          ctx.stroke();
+        }
+
+        // Name
+        ctx.fillStyle = C.power;
+        ctx.font = "1.27px Roboto";
+        ctx.textAlign = "center";
+        ctx.textBaseline = isGnd ? "top" : "bottom";
+        ctx.fillText(preset.net, cur.x, isGnd ? sy + 1.2 : sy - 0.4);
+
+      } else if (editMode2 === "placeNoConnect") {
+        // X mark preview
+        ctx.strokeStyle = C.noConnect;
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(cur.x - 0.7, cur.y - 0.7);
+        ctx.lineTo(cur.x + 0.7, cur.y + 0.7);
+        ctx.moveTo(cur.x + 0.7, cur.y - 0.7);
+        ctx.lineTo(cur.x - 0.7, cur.y + 0.7);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
     // --- Drawing tool ghost previews ---
     const curEdit = useSchematicStore.getState().editMode;
     const cur = placeCursorRef.current;
