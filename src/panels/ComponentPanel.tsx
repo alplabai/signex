@@ -6,6 +6,50 @@ import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
 
+/** Footprint data returned from Rust pcb_parser (snake_case field names) */
+interface RustFootprintData {
+  uuid: string;
+  reference: string;
+  value: string;
+  footprint_id: string;
+  position: { x: number; y: number };
+  rotation: number;
+  layer: string;
+  locked: boolean;
+  pads: RustPadData[];
+  graphics: RustFpGraphic[];
+}
+
+interface RustPadData {
+  uuid: string;
+  number: string;
+  pad_type: string;
+  shape: string;
+  position: { x: number; y: number };
+  size: [number, number];
+  drill?: { diameter: number; shape?: string };
+  layers: string[];
+  net?: { number: number; name: string };
+  roundrect_ratio?: number;
+}
+
+interface RustFpGraphic {
+  graphic_type: string;
+  layer: string;
+  width: number;
+  start?: { x: number; y: number };
+  end?: { x: number; y: number };
+  center?: { x: number; y: number };
+  mid?: { x: number; y: number };
+  radius?: number;
+  points: { x: number; y: number }[];
+  text?: string;
+  font_size?: number;
+  position?: { x: number; y: number };
+  rotation?: number;
+  fill?: boolean;
+}
+
 /** Collapsible section header matching Altium's panel style */
 function SectionHeader({ title, expanded, onToggle, className }: {
   title: string;
@@ -513,17 +557,14 @@ function ComponentDetailSections({
                 {selectedResult.symbol_id}
               </div>
 
-              {/* Footprint / 3D preview — dark background like Altium */}
-              <div className="h-[200px] mx-2 mb-1 rounded bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center relative">
-                <Package size={20} className="text-text-muted/15 mb-1" />
-                <span className="text-[9px] text-text-muted/30">No 3D model available</span>
-                {/* 2D toggle button — bottom left like Altium */}
-                <button className="absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[9px] text-text-muted/50 border border-border-subtle/50 rounded bg-bg-surface/50 hover:text-text-secondary hover:border-border-subtle transition-colors">
-                  2D
-                </button>
+              {/* Footprint preview — dark background like Altium */}
+              <div className="h-[200px] mx-2 mb-1 rounded overflow-hidden">
+                <FootprintPreviewMini footprintId={selectedResult.footprint} />
               </div>
-              <div className="px-2 pb-1.5 text-[10px] text-text-muted/50 font-medium">
-                {selectedResult.symbol_id}
+              <div className="px-2 pb-1.5 text-[10px] text-text-muted/50 font-medium truncate" title={selectedResult.footprint || "No footprint"}>
+                {selectedResult.footprint
+                  ? selectedResult.footprint.includes(":") ? selectedResult.footprint.split(":")[1] : selectedResult.footprint
+                  : "No footprint assigned"}
               </div>
             </div>
           )}
@@ -555,6 +596,265 @@ function ComponentDetailSections({
       )}
     </div>
   );
+}
+
+/** Layer color mapping for footprint preview */
+const FP_LAYER_COLORS: Record<string, string> = {
+  "F.Cu": "#ff4444",
+  "B.Cu": "#4444ff",
+  "F.SilkS": "#e0e040",
+  "B.SilkS": "#808080",
+  "F.Fab": "#aaaa44",
+  "B.Fab": "#44aaaa",
+  "F.CrtYd": "#c8c800",
+  "B.CrtYd": "#00c8c8",
+  "F.Mask": "#804080",
+  "B.Mask": "#408080",
+  "F.Paste": "#808040",
+  "B.Paste": "#408040",
+  "Edge.Cuts": "#c8c800",
+};
+
+function FootprintPreviewMini({ footprintId }: { footprintId: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [fpData, setFpData] = useState<RustFootprintData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Load footprint data when footprintId changes
+  useEffect(() => {
+    setFpData(null);
+    setError(null);
+    if (!footprintId || !footprintId.includes(":")) {
+      setError(footprintId ? "Invalid footprint reference" : "No footprint assigned");
+      return;
+    }
+    setLoading(true);
+    invoke<RustFootprintData>("get_footprint", { footprintId })
+      .then((data) => { setFpData(data); setError(null); })
+      .catch((e) => { setError(String(e)); setFpData(null); })
+      .finally(() => setLoading(false));
+  }, [footprintId]);
+
+  // Render footprint on canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Dark background
+    ctx.fillStyle = "#1a1b2e";
+    ctx.fillRect(0, 0, w, h);
+
+    if (!fpData) return;
+
+    // Calculate bounds from pads and graphics
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const expand = (x: number, y: number) => {
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    };
+
+    for (const pad of fpData.pads) {
+      expand(pad.position.x - pad.size[0] / 2, pad.position.y - pad.size[1] / 2);
+      expand(pad.position.x + pad.size[0] / 2, pad.position.y + pad.size[1] / 2);
+    }
+    for (const g of fpData.graphics) {
+      if (g.start) expand(g.start.x, g.start.y);
+      if (g.end) expand(g.end.x, g.end.y);
+      if (g.center && g.radius != null) {
+        expand(g.center.x - g.radius, g.center.y - g.radius);
+        expand(g.center.x + g.radius, g.center.y + g.radius);
+      }
+      for (const pt of g.points) expand(pt.x, pt.y);
+    }
+
+    if (!isFinite(minX)) { minX = -2; minY = -2; maxX = 2; maxY = 2; }
+
+    const pad = 0.5;
+    const bw = maxX - minX + pad * 2, bh = maxY - minY + pad * 2;
+    const scale = Math.min(w / bw, h / bh) * 0.85;
+    const ox = (w - bw * scale) / 2 - (minX - pad) * scale;
+    const oy = (h - bh * scale) / 2 - (minY - pad) * scale;
+
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.scale(scale, scale);
+
+    // Render graphics (silkscreen, fab, courtyard) - back layers first, then front
+    const layerOrder = ["B.Fab", "B.CrtYd", "B.SilkS", "F.Fab", "F.CrtYd", "F.SilkS"];
+    const sortedGraphics = [...fpData.graphics].sort((a, b) => {
+      const ai = layerOrder.indexOf(a.layer);
+      const bi = layerOrder.indexOf(b.layer);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    for (const g of sortedGraphics) {
+      // Skip text for cleaner preview
+      if (g.graphic_type === "text") continue;
+
+      const color = FP_LAYER_COLORS[g.layer] || "#666666";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(g.width, 0.05);
+      ctx.fillStyle = color;
+
+      if (g.graphic_type === "line" && g.start && g.end) {
+        ctx.beginPath();
+        ctx.moveTo(g.start.x, g.start.y);
+        ctx.lineTo(g.end.x, g.end.y);
+        ctx.stroke();
+      } else if (g.graphic_type === "rect" && g.start && g.end) {
+        const rx = Math.min(g.start.x, g.end.x), ry = Math.min(g.start.y, g.end.y);
+        const rw = Math.abs(g.end.x - g.start.x), rh = Math.abs(g.end.y - g.start.y);
+        if (g.fill) {
+          ctx.globalAlpha = 0.3;
+          ctx.fillRect(rx, ry, rw, rh);
+          ctx.globalAlpha = 1;
+        }
+        ctx.strokeRect(rx, ry, rw, rh);
+      } else if (g.graphic_type === "circle" && g.center && g.radius != null) {
+        ctx.beginPath();
+        ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
+        if (g.fill) {
+          ctx.globalAlpha = 0.3;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.stroke();
+      } else if (g.graphic_type === "arc" && g.start && g.end) {
+        ctx.beginPath();
+        if (g.mid) {
+          // Three-point arc: approximate with quadratic curve
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.quadraticCurveTo(g.mid.x, g.mid.y, g.end.x, g.end.y);
+        } else {
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.lineTo(g.end.x, g.end.y);
+        }
+        ctx.stroke();
+      } else if (g.graphic_type === "poly" && g.points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(g.points[0].x, g.points[0].y);
+        for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+        ctx.closePath();
+        if (g.fill) {
+          ctx.globalAlpha = 0.3;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.stroke();
+      }
+    }
+
+    // Render pads on top
+    for (const p of fpData.pads) {
+      const isSmd = p.pad_type === "smd";
+      const isTh = p.pad_type === "thru_hole";
+      const px = p.position.x, py = p.position.y;
+      const sw = p.size[0], sh = p.size[1];
+
+      // Pad fill color
+      if (isSmd) {
+        ctx.fillStyle = "#cc3333"; // Red for front copper SMD
+      } else if (isTh) {
+        ctx.fillStyle = "#cc9933"; // Gold for through-hole
+      } else {
+        ctx.fillStyle = "#666666";
+      }
+
+      if (p.shape === "circle") {
+        ctx.beginPath();
+        ctx.arc(px, py, sw / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.shape === "roundrect") {
+        const r = (p.roundrect_ratio ?? 0.25) * Math.min(sw, sh) / 2;
+        drawRoundRect(ctx, px - sw / 2, py - sh / 2, sw, sh, r);
+        ctx.fill();
+      } else {
+        // rect, oval, etc. — draw as rectangle
+        ctx.fillRect(px - sw / 2, py - sh / 2, sw, sh);
+      }
+
+      // Draw drill hole for through-hole pads
+      if (isTh && p.drill) {
+        ctx.fillStyle = "#1a1b2e"; // Background color for hole
+        ctx.beginPath();
+        ctx.arc(px, py, p.drill.diameter / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Pad number label
+      if (p.number) {
+        const fontSize = Math.min(sw, sh) * 0.5;
+        if (fontSize * scale > 3) { // Only show if readable
+          ctx.fillStyle = "#ffffff";
+          ctx.font = `${fontSize}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.save();
+          ctx.scale(1, -1); // Flip for text since we may have inverted Y
+          // Note: coordinate system is not inverted here (PCB Y goes down)
+          ctx.restore();
+        }
+      }
+    }
+
+    ctx.restore();
+  }, [fpData]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center">
+        <div className="w-4 h-4 border-2 border-accent/40 border-t-accent rounded-full animate-spin mb-1" />
+        <span className="text-[9px] text-text-muted/30">Loading footprint...</span>
+      </div>
+    );
+  }
+
+  if (error || !fpData) {
+    return (
+      <div className="w-full h-full bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center relative">
+        <Package size={20} className="text-text-muted/15 mb-1" />
+        <span className="text-[9px] text-text-muted/30">
+          {!footprintId ? "No footprint assigned" : error || "No footprint data"}
+        </span>
+        <button className="absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[9px] text-text-muted/50 border border-border-subtle/50 rounded bg-bg-surface/50 hover:text-text-secondary hover:border-border-subtle transition-colors">
+          2D
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      <canvas ref={canvasRef} className="w-full h-full" />
+      <button className="absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[9px] text-text-muted/50 border border-border-subtle/50 rounded bg-bg-surface/50 hover:text-text-secondary hover:border-border-subtle transition-colors">
+        2D
+      </button>
+    </div>
+  );
+}
+
+/** Draw a rounded rectangle path */
+function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
 }
 
 function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {

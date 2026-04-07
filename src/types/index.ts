@@ -389,5 +389,6 @@ export interface SymbolSearchResult {
   description: string;
   keywords: string[];
   reference_prefix: string;
+  footprint: string;
   pin_count: number;
 }

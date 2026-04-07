@@ -19,6 +19,7 @@ pub fn run() {
             library::search_symbols,
             library::get_symbol,
             library::save_symbol,
+            library::get_footprint,
             export::generate_bom,
             export::generate_bom_configured,
             export::export_netlist,
