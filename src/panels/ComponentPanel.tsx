@@ -378,7 +378,8 @@ export function ComponentPanel() {
               const startH = detailsHeight;
               const onMove = (ev: MouseEvent) => {
                 const delta = startY - ev.clientY;
-                setDetailsHeight(Math.max(100, Math.min(600, startH + delta)));
+                const maxH = (e.currentTarget.parentElement?.parentElement?.clientHeight || 800) - 80;
+                setDetailsHeight(Math.max(60, Math.min(maxH, startH + delta)));
               };
               const onUp = () => {
                 window.removeEventListener("mousemove", onMove);
