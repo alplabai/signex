@@ -87,7 +87,15 @@ export interface SchematicData {
   bus_entries: SchBusEntry[];
   drawings: SchDrawing[];
   no_erc_directives: SchNoErcDirective[];
+  title_block: Record<string, string>;
+  net_classes: NetClass[];
   lib_symbols: Record<string, LibSymbol>;
+}
+
+export interface NetClass {
+  name: string;
+  nets: string[];
+  color?: string;
 }
 
 export interface SchNoConnect {
@@ -182,6 +190,7 @@ export interface SchSymbol {
   on_board: boolean;
   exclude_from_sim: boolean;
   locked: boolean;
+  fields: Record<string, string>;
 }
 
 export interface TextPropData {

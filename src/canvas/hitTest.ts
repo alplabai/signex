@@ -1,9 +1,33 @@
 import type { SchematicData, SchPoint, SchSymbol } from "@/types";
+import type { SelectionFilter } from "@/stores/editor";
 
 export interface HitResult {
   type: "symbol" | "wire" | "wireEndpoint" | "junction" | "label" | "noConnect" | "textNote" | "bus" | "busEntry" | "childSheet" | "drawing";
   uuid: string;
   endpoint?: "start" | "end"; // Only for wireEndpoint
+}
+
+// Map hit result types to filter keys
+const FILTER_MAP: Record<string, string> = {
+  symbol: "components",
+  wire: "wires",
+  wireEndpoint: "wires",
+  junction: "junctions",
+  label: "labels",
+  noConnect: "noConnects",
+  textNote: "textNotes",
+  bus: "buses",
+  busEntry: "buses",
+  childSheet: "sheetSymbols",
+  drawing: "drawings",
+};
+
+function isSelectable(type: string, filter?: SelectionFilter, isPower?: boolean): boolean {
+  if (!filter) return true;
+  if (isPower) return filter.powerPorts?.selectable !== false;
+  const key = FILTER_MAP[type];
+  if (!key) return true;
+  return filter[key]?.selectable !== false;
 }
 
 interface Box {
@@ -46,26 +70,32 @@ export function hitTest(
   data: SchematicData,
   worldX: number,
   worldY: number,
-  tolerance: number = 2.0
+  tolerance: number = 2.0,
+  filter?: SelectionFilter,
 ): HitResult | null {
   const p: SchPoint = { x: worldX, y: worldY };
 
   // Junctions first (small targets)
-  for (const j of data.junctions) {
-    if (dist(p, j.position) < tolerance * 0.5) {
-      return { type: "junction", uuid: j.uuid };
+  if (isSelectable("junction", filter)) {
+    for (const j of data.junctions) {
+      if (dist(p, j.position) < tolerance * 0.5) {
+        return { type: "junction", uuid: j.uuid };
+      }
     }
   }
 
   // No-connect markers (X shape, ~1.4 unit span)
-  for (const nc of data.no_connects) {
-    if (dist(p, nc.position) < tolerance * 0.6) {
-      return { type: "noConnect", uuid: nc.uuid };
+  if (isSelectable("noConnect", filter)) {
+    for (const nc of data.no_connects) {
+      if (dist(p, nc.position) < tolerance * 0.6) {
+        return { type: "noConnect", uuid: nc.uuid };
+      }
     }
   }
 
   // Symbols — check tight transformed bounding box (including power symbols)
   for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
 
@@ -115,49 +145,60 @@ export function hitTest(
   }
 
   // Wire endpoints (tight tolerance for dragging)
-  const epTol = tolerance * 0.35;
-  for (const wire of data.wires) {
-    if (dist(p, wire.start) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "start" };
-    if (dist(p, wire.end) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "end" };
-  }
+  if (isSelectable("wire", filter)) {
+    const epTol = tolerance * 0.35;
+    for (const wire of data.wires) {
+      if (dist(p, wire.start) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "start" };
+      if (dist(p, wire.end) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "end" };
+    }
 
-  // Wires (segment body)
-  for (const wire of data.wires) {
-    if (distToSegment(p, wire.start, wire.end) < tolerance * 0.5) {
-      return { type: "wire", uuid: wire.uuid };
+    // Wires (segment body)
+    for (const wire of data.wires) {
+      if (distToSegment(p, wire.start, wire.end) < tolerance * 0.5) {
+        return { type: "wire", uuid: wire.uuid };
+      }
     }
   }
 
   // Buses (thicker hit zone)
-  for (const bus of data.buses) {
-    if (distToSegment(p, bus.start, bus.end) < tolerance * 0.7) {
-      return { type: "bus", uuid: bus.uuid };
+  if (isSelectable("bus", filter)) {
+    for (const bus of data.buses) {
+      if (distToSegment(p, bus.start, bus.end) < tolerance * 0.7) {
+        return { type: "bus", uuid: bus.uuid };
+      }
     }
   }
 
   // Labels
-  for (const label of data.labels) {
-    if (dist(p, label.position) < tolerance) {
-      return { type: "label", uuid: label.uuid };
+  if (isSelectable("label", filter)) {
+    for (const label of data.labels) {
+      if (dist(p, label.position) < tolerance) {
+        return { type: "label", uuid: label.uuid };
+      }
     }
   }
 
   // Text notes (hit by proximity to position)
-  for (const note of data.text_notes) {
-    if (dist(p, note.position) < tolerance * 1.5) {
-      return { type: "textNote", uuid: note.uuid };
+  if (isSelectable("textNote", filter)) {
+    for (const note of data.text_notes) {
+      if (dist(p, note.position) < tolerance * 1.5) {
+        return { type: "textNote", uuid: note.uuid };
+      }
     }
   }
 
   // Bus entries
-  for (const be of data.bus_entries) {
-    if (dist(p, be.position) < tolerance) {
-      return { type: "busEntry", uuid: be.uuid };
+  if (isSelectable("busEntry", filter)) {
+    for (const be of data.bus_entries) {
+      if (dist(p, be.position) < tolerance) {
+        return { type: "busEntry", uuid: be.uuid };
+      }
     }
   }
 
   // Drawing objects
-  for (const d of data.drawings) {
+  if (!isSelectable("drawing", filter)) { /* skip */ }
+  else for (const d of data.drawings) {
     if (d.type === "Line") {
       if (distToSegment(p, d.start, d.end) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
     } else if (d.type === "Rect") {
@@ -191,7 +232,8 @@ export function hitTest(
   }
 
   // Child sheets (rectangle hit test)
-  for (const sheet of data.child_sheets) {
+  if (!isSelectable("childSheet", filter)) { /* skip */ }
+  else for (const sheet of data.child_sheets) {
     const sx = sheet.position.x, sy = sheet.position.y;
     const sw = sheet.size[0], sh = sheet.size[1];
     if (p.x >= sx - tolerance && p.x <= sx + sw + tolerance &&

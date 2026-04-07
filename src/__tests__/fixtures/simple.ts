@@ -41,6 +41,7 @@ function makeSymbol(_id: string, ref: string, value: string, x: number, y: numbe
     val_text: { ...defaultTextProp, position: { x, y: y + 2 } },
     fields_autoplaced: true,
     dnp: false, in_bom: true, on_board: true, exclude_from_sim: false, locked: false,
+    fields: {},
   };
 }
 
@@ -82,6 +83,8 @@ export function createSimpleSchematic(): SchematicData {
     bus_entries: [],
     drawings: [],
     no_erc_directives: [],
+    title_block: {},
+    net_classes: [],
     lib_symbols: {
       "Device:R": resistorLib,
       "Device:C": capacitorLib,

@@ -17,6 +17,30 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     writeln!(out, "\t(uuid \"{}\")", sheet.uuid).unwrap();
     writeln!(out, "\t(paper \"{}\")", sheet.paper_size).unwrap();
 
+    // Title block
+    if !sheet.title_block.is_empty() {
+        writeln!(out, "\t(title_block").unwrap();
+        if let Some(title) = sheet.title_block.get("title") {
+            writeln!(out, "\t\t(title \"{}\")", escape_kicad_string(title)).unwrap();
+        }
+        if let Some(date) = sheet.title_block.get("date") {
+            writeln!(out, "\t\t(date \"{}\")", escape_kicad_string(date)).unwrap();
+        }
+        if let Some(rev) = sheet.title_block.get("rev") {
+            writeln!(out, "\t\t(rev \"{}\")", escape_kicad_string(rev)).unwrap();
+        }
+        if let Some(company) = sheet.title_block.get("company") {
+            writeln!(out, "\t\t(company \"{}\")", escape_kicad_string(company)).unwrap();
+        }
+        for i in 1..=9 {
+            let key = format!("comment_{}", i);
+            if let Some(comment) = sheet.title_block.get(&key) {
+                writeln!(out, "\t\t(comment {} \"{}\")", i, escape_kicad_string(comment)).unwrap();
+            }
+        }
+        writeln!(out, "\t)").unwrap();
+    }
+
     // lib_symbols
     if !sheet.lib_symbols.is_empty() {
         writeln!(out, "\t(lib_symbols").unwrap();
@@ -185,6 +209,20 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         writeln!(out, "\t\t\t(at {} {} 0)", sym.position.x, sym.position.y).unwrap();
         writeln!(out, "\t\t\t(effects (font (size 1.27 1.27)) (hide yes))").unwrap();
         writeln!(out, "\t\t)").unwrap();
+
+        // Custom fields
+        for (key, value) in &sym.fields {
+            writeln!(
+                out,
+                "\t\t(property \"{}\" \"{}\"",
+                escape_kicad_string(key),
+                escape_kicad_string(value)
+            )
+            .unwrap();
+            writeln!(out, "\t\t\t(at {} {} 0)", sym.position.x, sym.position.y).unwrap();
+            writeln!(out, "\t\t\t(effects (font (size 1.27 1.27)) (hide yes))").unwrap();
+            writeln!(out, "\t\t)").unwrap();
+        }
 
         writeln!(out, "\t)").unwrap();
     }
@@ -459,6 +497,20 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym
     }
     writeln!(out, ")").unwrap();
     writeln!(out, "\t\t)").unwrap();
+}
+
+/// Serialize a standalone symbol library file (.kicad_sym)
+pub fn write_symbol_library(symbols: &[(String, LibSymbol)]) -> String {
+    let mut out = String::with_capacity(16 * 1024);
+    writeln!(out, "(kicad_symbol_lib").unwrap();
+    writeln!(out, "\t(version 20231120)").unwrap();
+    writeln!(out, "\t(generator \"signex\")").unwrap();
+    writeln!(out, "\t(generator_version \"0.1\")").unwrap();
+    for (id, lib) in symbols {
+        write_lib_symbol(&mut out, id, lib);
+    }
+    writeln!(out, ")").unwrap();
+    out
 }
 
 fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {

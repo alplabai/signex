@@ -7,6 +7,15 @@ interface MenuBarProps {
   onOpenProject?: () => void;
   onSave?: () => void;
   onOpenComponentSearch?: () => void;
+  onExportPdf?: () => void;
+  onExportBom?: () => void;
+  onExportNetlist?: () => void;
+  onOpenOutputJobs?: () => void;
+  onAnnotate?: () => void;
+  onPreferences?: () => void;
+  onFindSimilar?: () => void;
+  onParameterManager?: () => void;
+  onPrint?: () => void;
 }
 
 interface MenuItem {
@@ -34,6 +43,7 @@ const menus: MenuGroup[] = [
       { label: "Save As...", shortcut: "Ctrl+Alt+S", disabled: true },
       { separator: true, label: "" },
       { label: "Export as PNG...", disabled: true },
+      { label: "Export as PDF...", disabled: true },
       { label: "Print...", shortcut: "Ctrl+P", disabled: true },
       { separator: true, label: "" },
       { label: "Recent Projects", disabled: true },
@@ -149,6 +159,7 @@ const menus: MenuGroup[] = [
     label: "Tools",
     items: [
       { label: "Annotate Schematics...", shortcut: "T, A", disabled: true },
+      { label: "Parameter Manager...", disabled: true },
       { label: "Back Annotate...", disabled: true },
       { label: "Number Schematic Sheets...", disabled: true },
       { separator: true, label: "" },
@@ -165,10 +176,13 @@ const menus: MenuGroup[] = [
     label: "Reports",
     items: [
       { label: "Bill of Materials...", disabled: true },
+      { label: "Export Netlist...", disabled: true },
       { label: "Component Cross Reference...", disabled: true },
       { separator: true, label: "" },
       { label: "Design Rule Check...", disabled: true },
       { label: "Electrical Rules Check...", disabled: true },
+      { separator: true, label: "" },
+      { label: "Output Jobs...", disabled: true },
     ],
   },
   {
@@ -182,7 +196,7 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
@@ -232,33 +246,32 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Bus" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawBus") };
       if (item.label === "Line") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawLine") };
       if (item.label === "Rectangle" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawRect") };
+      if (item.label === "Arc") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawCircle") };
+      if (item.label === "Ellipse") return { ...item, disabled: false, label: "Circle", action: () => useSchematicStore.getState().setEditMode("drawCircle") };
+      if (item.label === "Polygon") return { ...item, disabled: false, label: "Polyline", action: () => useSchematicStore.getState().setEditMode("drawPolyline") };
       // Tools
       // Reports / Output
-      if (item.label === "Bill of Materials...") return { ...item, disabled: false, action: async () => {
-        const data = useSchematicStore.getState().data;
-        if (!data) return;
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const csv = await invoke<string>("generate_bom", { data });
-          // Download as file
-          const blob = new Blob([csv], { type: "text/csv" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a"); a.href = url; a.download = "bom.csv"; a.click();
-          URL.revokeObjectURL(url);
-        } catch (e) { console.error("BOM generation failed:", e); }
-      }};
+      if (item.label === "Bill of Materials...") return { ...item, disabled: false, action: onExportBom };
+      if (item.label === "Export Netlist...") return { ...item, disabled: false, action: onExportNetlist };
+      if (item.label === "Output Jobs...") return { ...item, disabled: false, action: onOpenOutputJobs };
       if (item.label === "Export as PNG...") return { ...item, disabled: false, action: () => {
         // Trigger export via custom event — renderer handles it
         window.dispatchEvent(new CustomEvent("alp-export-png"));
       }};
+      if (item.label === "Export as PDF...") return { ...item, disabled: false, action: onExportPdf };
+      if (item.label === "Print...") return { ...item, disabled: false, action: onPrint };
       if (item.label === "Electrical Rules Check...") return { ...item, disabled: false, action: () => {
         /* ERC runs from Messages panel */
       }};
       // Design / Tools
-      if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
-      if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
+      if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: onAnnotate };
+      if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: onAnnotate };
+      if (item.label === "Preferences...") return { ...item, disabled: false, action: onPreferences };
+      if (item.label === "Find Similar Objects") return { ...item, disabled: false, action: onFindSimilar };
+      if (item.label === "Parameter Manager...") return { ...item, disabled: false, action: onParameterManager };
       if (item.label === "Reset Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDesignators() };
       if (item.label === "Reset Duplicate Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDuplicateDesignators() };
+      if (item.label === "Sheet Symbol...") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeSheetSymbol") };
       if (item.label === "No ERC") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoErc") };
 
       return item;

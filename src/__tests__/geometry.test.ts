@@ -10,6 +10,7 @@ function makeSym(x: number, y: number, rotation: number, mx = false, my = false)
     position: { x, y }, rotation, mirror_x: mx, mirror_y: my, unit: 1, is_power: false,
     ref_text: defaultTextProp, val_text: defaultTextProp, fields_autoplaced: true,
     dnp: false, in_bom: true, on_board: true, exclude_from_sim: false, locked: false,
+    fields: {},
   };
 }
 
