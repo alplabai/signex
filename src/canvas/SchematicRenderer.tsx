@@ -2354,13 +2354,18 @@ export function SchematicRenderer() {
       if (!r) return;
       const world = s2w(e.clientX - r.left, e.clientY - r.top);
 
-      // Check labels first (tight hit test on label position)
-      for (const label of data.labels) {
-        if (Math.hypot(world.x - label.position.x, world.y - label.position.y) < 2.5) {
-          store.select(label.uuid);
-          const sp = w2s(label.position.x, label.position.y);
-          setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y });
-          return;
+      // Check labels — use hitTest for proper zone matching, position edit at text location
+      {
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
+        if (hit && hit.type === "label") {
+          const label = data.labels.find(l => l.uuid === hit.uuid);
+          if (label) {
+            store.select(label.uuid);
+            const textPos = getLabelTextWorldPos(label);
+            const sp = w2s(textPos.x, textPos.y);
+            setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y });
+            return;
+          }
         }
       }
 
@@ -2424,6 +2429,14 @@ export function SchematicRenderer() {
           render();
           break;
         }
+        case "Tab":
+          // Altium: Tab opens properties panel during placement
+          if (store.editMode !== "select" || store.placingSymbol || store.wireDrawing.active) {
+            e.preventDefault();
+            useLayoutStore.getState().setDockActiveTab("right", "properties");
+            if (useLayoutStore.getState().rightCollapsed) useLayoutStore.getState().toggleRight();
+          }
+          break;
         case "Escape":
           if (store.wireDrawing.active) {
             store.cancelWire();
@@ -2446,7 +2459,8 @@ export function SchematicRenderer() {
           }
           const lbl = data.labels.find(l => l.uuid === selId);
           if (lbl) {
-            const sp = w2s(lbl.position.x, lbl.position.y);
+            const textPos = getLabelTextWorldPos(lbl);
+            const sp = w2s(textPos.x, textPos.y);
             setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y });
           }
           break;
@@ -2699,8 +2713,12 @@ export function SchematicRenderer() {
       {inPlaceEdit && (
         <input
           autoFocus
-          value={inPlaceEdit.value}
-          onChange={(e) => setInPlaceEdit({ ...inPlaceEdit, value: e.target.value })}
+          value={txt(inPlaceEdit.value)}
+          onChange={(e) => {
+            // Convert / back to {slash} for KiCad compat, keep rest as-is
+            const raw = e.target.value.replace(/\//g, "{slash}");
+            setInPlaceEdit({ ...inPlaceEdit, value: raw });
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               committedRef.current = true;
@@ -2727,16 +2745,16 @@ export function SchematicRenderer() {
             }
             setInPlaceEdit(null);
           }}
-          className="absolute z-40 bg-bg-primary border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
+          className="absolute z-40 bg-bg-primary/90 border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
           style={{
-            left: inPlaceEdit.screenX - 2,
+            left: inPlaceEdit.screenX,
             top: inPlaceEdit.screenY,
             fontSize: `${Math.max(10, camRef.current.zoom * 1.27)}px`,
             fontFamily: "Roboto, sans-serif",
             minWidth: Math.max(60, inPlaceEdit.value.length * Math.max(7, camRef.current.zoom * 0.8)),
             color: "#e8c66a",
             lineHeight: 1,
-            transform: "translateY(-100%)",
+            transform: "translateY(-50%)",
           }}
         />
       )}
@@ -3192,6 +3210,42 @@ function DropdownItem({ label, icon, onClick, disabled }: { label: string; icon?
       {label}
     </button>
   );
+}
+
+/** Calculate the world-space position where the label TEXT starts rendering.
+ *  This is used for inline editing to overlay the input exactly on the text. */
+function getLabelTextWorldPos(label: { position: SchPoint; label_type: string; shape?: string; font_size?: number; rotation: number; text: string }): SchPoint {
+  const fs = label.font_size || 1.27;
+  const lx = label.position.x, ly = label.position.y;
+
+  if (label.label_type === "Power") {
+    const stemLen = 2.0;
+    const style = label.shape || "bar";
+    const isGnd = style.includes("ground") || style === "earth_ground";
+    // Text is centered, return center position
+    if (isGnd) return { x: lx, y: ly + stemLen + 1.2 + fs * 0.5 };
+    return { x: lx, y: ly - stemLen - 0.4 - fs * 0.5 };
+  }
+
+  if ((label.label_type === "Global" || label.label_type === "Hierarchical") && label.shape) {
+    const h = fs * 1.4;
+    const pad = fs * 0.3;
+    const arrowW = h * 0.5;
+    const r = label.rotation;
+
+    if (r === 0 || r === 180) {
+      const connRight = r === 0;
+      const dir = connRight ? 1 : -1;
+      // Text starts after the arrow, with padding
+      const textX = lx + dir * (arrowW + pad);
+      return { x: textX, y: ly };
+    }
+    // Vertical: approximate
+    return { x: lx, y: ly };
+  }
+
+  // Net labels: text renders at position with small offset
+  return { x: lx, y: ly - 0.3 };
 }
 
 function arcCenter(p1: SchPoint, p2: SchPoint, p3: SchPoint): SchPoint | null {
