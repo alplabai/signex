@@ -136,10 +136,9 @@ export function ComponentPanel() {
       return;
     }
     try {
-      const res = await invoke<SymbolSearchResult[]>("search_symbols", { query: lib.name, limit: 500 });
-      const filtered = res.filter(r => r.library === lib.name);
-      libCacheRef.current[lib.name] = filtered;
-      setLibSymbols(filtered);
+      const res = await invoke<SymbolSearchResult[]>("list_library_symbols", { libraryName: lib.name });
+      libCacheRef.current[lib.name] = res;
+      setLibSymbols(res);
     } catch { setLibSymbols([]); }
   };
 

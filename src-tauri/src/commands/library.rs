@@ -216,6 +216,41 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// List all symbols in a specific library file (fast — only loads one file)
+#[tauri::command]
+pub async fn list_library_symbols(library_name: String) -> Result<Vec<SymbolSearchResult>, String> {
+    tokio::task::spawn_blocking(move || {
+        let dir = find_kicad_symbols_dir()
+            .ok_or_else(|| "KiCad symbol libraries not found.".to_string())?;
+
+        let path = dir.join(format!("{}.kicad_sym", library_name));
+        if !path.exists() {
+            return Err(format!("Library not found: {}", library_name));
+        }
+
+        let path_str = path.to_string_lossy().to_string();
+        let symbols = load_library(&path_str)
+            .map_err(|e| format!("Failed to load library: {}", e))?;
+
+        let results: Vec<SymbolSearchResult> = symbols
+            .iter()
+            .map(|(_lib_sym, meta)| SymbolSearchResult {
+                library: library_name.clone(),
+                symbol_id: meta.symbol_id.clone(),
+                description: meta.description.clone(),
+                keywords: meta.keywords.clone(),
+                reference_prefix: meta.reference_prefix.clone(),
+                pin_count: meta.pin_count,
+                footprint: meta.footprint.clone(),
+            })
+            .collect();
+
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
 /// Validate that a library path is safe to access (must be a .kicad_sym or .snxsym file
 /// inside the KiCad symbols directory or a project directory)
 fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, String> {
