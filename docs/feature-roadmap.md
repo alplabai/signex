@@ -83,15 +83,28 @@
 ## Upcoming
 
 ### Phase 5: Signal AI
-- [ ] Claude API integration via Rust reqwest
-- [ ] Natural language schematic assistance
-- [ ] Component suggestion based on circuit context
-- [ ] ERC fix suggestions
-- [ ] Design review analysis
-- [ ] Datasheet Q&A
+- [x] Claude API integration via Rust reqwest with streaming SSE
+- [x] Chat panel with markdown rendering and model selection (Sonnet 4 / Opus 4)
+- [x] Rich schematic context: component list, net connectivity, ERC details
+- [x] Visual context: schematic screenshot sent to Claude vision
+- [x] Tool use: add_component, add_wire, set_component_value, add_net_label, run_erc
+- [x] 6 circuit templates (LDO, Decoupling, Pull-ups, Op-Amp, RC Filter, Power Header)
+- [x] Design Brief: persistent design intent
+- [x] Design review (one-click analysis)
+- [x] ERC fix suggestions (from Messages panel)
+- [x] BOM optimization prompt
+- [x] Component suggestion prompt builder
+- [x] Inline copilot suggestions (hover popover)
+- [x] Session cost tracking with per-model pricing
+- [x] Export chat as markdown
+- [x] Ctrl+Shift+A shortcut
+
+---
+
+## Upcoming
 
 ### Phase 6: PCB Layout
-- [ ] PCB canvas with wgpu (GPU-accelerated)
+- [ ] PCB canvas with WebGL2 (GPU-accelerated, GAL abstraction for future WebGPU)
 - [ ] Layer stack manager
 - [ ] Component placement from netlist
 - [ ] Interactive routing (single track, diff pair)

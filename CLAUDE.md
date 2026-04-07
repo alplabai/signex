@@ -54,11 +54,13 @@ src/                    React frontend
 - [x] Phase 3: Validation — ERC 11 checks + pin matrix, annotation, AutoFocus, net color override
 - [x] Phase 4: Advanced — library editor, PDF/print, output jobs, templates, title block, BOM formats
 - [x] Phase 4+: Altium parity — 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, variants, parameter manager, multi-channel
-- [ ] Phase 5: Signal AI — Claude API integration, design assistance
-- [ ] Phase 6: PCB layout — layer stack, routing, DRC, copper pour, 3D viewer
+- [x] Phase 5: Signal AI — Claude API streaming, tool use, visual context, circuit templates, design review
+- [ ] Phase 6: PCB layout — WebGL2 renderer, layer stack, routing, DRC, copper pour, 3D viewer
 
 ## Architecture Decisions
-- Canvas2D chosen over wgpu for faster iteration; wgpu planned for PCB phase
+- Canvas2D for schematic (adequate for 1000+ components per sheet)
+- WebGL2 planned for PCB (GPU-accelerated, handles 100k+ objects)
+- GAL abstraction layer for future WebGPU/wgpu migration
 - Pure Rust parser instead of KiCad C++ FFI — simpler build, no C++ toolchain dependency
 - Wire cursor + placement cursor use refs (not Zustand) to avoid 60Hz state churn
 - structuredClone for undo snapshots instead of JSON roundtrip
