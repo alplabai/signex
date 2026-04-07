@@ -160,7 +160,7 @@ function drawTextProp(
   }
 }
 
-function renderSchematicToCanvas(
+export function renderSchematicToCanvas(
   data: SchematicData, canvas: HTMLCanvasElement,
   opts: { showGrid: boolean; colorMode: "color" | "monochrome" },
 ) {
