@@ -219,26 +219,91 @@ export interface PcbData {
   designRules: PcbDesignRule[];
 }
 
-// --- Layer Colors (Altium-inspired) ---
+// --- Layer Colors (Altium Designer palette) ---
+// Matches Altium's default layer color scheme
 
 export const DEFAULT_LAYER_COLORS: Record<string, string> = {
-  "F.Cu": "#cc0000",     // Red
-  "B.Cu": "#0000cc",     // Blue
-  "In1.Cu": "#c8c800",   // Yellow
-  "In2.Cu": "#00c8c8",   // Cyan
-  "In3.Cu": "#c800c8",   // Magenta
-  "In4.Cu": "#00c800",   // Green
-  "F.SilkS": "#c8c8c8",  // Light gray
-  "B.SilkS": "#808080",  // Dark gray
-  "F.Mask": "#800080",   // Purple (transparent)
-  "B.Mask": "#008080",   // Teal (transparent)
-  "F.Paste": "#808000",  // Olive
-  "B.Paste": "#008000",  // Dark green
-  "F.Fab": "#aaaa00",    // Yellow-green
-  "B.Fab": "#00aaaa",    // Cyan-green
-  "F.CrtYd": "#c8c800",  // Yellow outline
-  "B.CrtYd": "#00c8c8",  // Cyan outline
-  "Edge.Cuts": "#c8c800", // Yellow
-  "Dwgs.User": "#808080",
-  "Cmts.User": "#606060",
+  // Copper layers (Altium: Top=Red, Bottom=Blue, Mid=rotating palette)
+  "F.Cu": "#ff0000",      // Top Layer — Red
+  "B.Cu": "#0000ff",      // Bottom Layer — Blue
+  "In1.Cu": "#ffff00",    // Mid Layer 1 — Yellow
+  "In2.Cu": "#00ffff",    // Mid Layer 2 — Cyan
+  "In3.Cu": "#ff00ff",    // Mid Layer 3 — Magenta
+  "In4.Cu": "#00ff00",    // Mid Layer 4 — Green
+  "In5.Cu": "#ff8000",    // Mid Layer 5 — Orange
+  "In6.Cu": "#8000ff",    // Mid Layer 6 — Purple
+  "In7.Cu": "#0080ff",    // Mid Layer 7 — Light Blue
+  "In8.Cu": "#ff0080",    // Mid Layer 8 — Pink
+  // Silkscreen (Altium: Top Overlay, Bottom Overlay)
+  "F.SilkS": "#ffff00",   // Top Overlay — Yellow (Altium default)
+  "B.SilkS": "#808080",   // Bottom Overlay — Gray
+  // Solder Mask (Altium: Top Solder, Bottom Solder)
+  "F.Mask": "#800080",    // Top Solder — Purple
+  "B.Mask": "#008080",    // Bottom Solder — Teal
+  // Paste (Altium: Top Paste, Bottom Paste)
+  "F.Paste": "#808000",   // Top Paste — Olive
+  "B.Paste": "#008000",   // Bottom Paste — Dark Green
+  // Fabrication / Assembly
+  "F.Fab": "#aaaa00",     // Top Assembly — matches Altium Mechanical 13
+  "B.Fab": "#00aaaa",     // Bottom Assembly — matches Altium Mechanical 14
+  // Courtyard
+  "F.CrtYd": "#c8c800",   // Top Courtyard
+  "B.CrtYd": "#00c8c8",   // Bottom Courtyard
+  // Board outline (Altium: Keep-Out Layer)
+  "Edge.Cuts": "#c8c800",  // Keep-Out — Yellow
+  // User layers (Altium: Mechanical layers)
+  "Dwgs.User": "#808080",  // Mechanical 1
+  "Cmts.User": "#606060",  // Mechanical 2
+};
+
+// Altium layer name mapping (Altium name → KiCad/Signex ID)
+export const ALTIUM_LAYER_NAMES: Record<string, string> = {
+  "Top Layer": "F.Cu",
+  "Bottom Layer": "B.Cu",
+  "Mid Layer 1": "In1.Cu",
+  "Mid Layer 2": "In2.Cu",
+  "Mid Layer 3": "In3.Cu",
+  "Mid Layer 4": "In4.Cu",
+  "Mid Layer 5": "In5.Cu",
+  "Mid Layer 6": "In6.Cu",
+  "Top Overlay": "F.SilkS",
+  "Bottom Overlay": "B.SilkS",
+  "Top Solder": "F.Mask",
+  "Bottom Solder": "B.Mask",
+  "Top Paste": "F.Paste",
+  "Bottom Paste": "B.Paste",
+  "Keep-Out Layer": "Edge.Cuts",
+  "Mechanical 1": "Dwgs.User",
+  "Mechanical 2": "Cmts.User",
+  "Mechanical 13": "F.Fab",
+  "Mechanical 14": "B.Fab",
+  "Mechanical 15": "F.CrtYd",
+  "Mechanical 16": "B.CrtYd",
+};
+
+// Display names for layers (Altium-style naming in the UI)
+export const LAYER_DISPLAY_NAMES: Record<string, string> = {
+  "F.Cu": "Top Layer",
+  "B.Cu": "Bottom Layer",
+  "In1.Cu": "Mid Layer 1",
+  "In2.Cu": "Mid Layer 2",
+  "In3.Cu": "Mid Layer 3",
+  "In4.Cu": "Mid Layer 4",
+  "In5.Cu": "Mid Layer 5",
+  "In6.Cu": "Mid Layer 6",
+  "In7.Cu": "Mid Layer 7",
+  "In8.Cu": "Mid Layer 8",
+  "F.SilkS": "Top Overlay",
+  "B.SilkS": "Bottom Overlay",
+  "F.Mask": "Top Solder",
+  "B.Mask": "Bottom Solder",
+  "F.Paste": "Top Paste",
+  "B.Paste": "Bottom Paste",
+  "F.Fab": "Top Assembly",
+  "B.Fab": "Bottom Assembly",
+  "F.CrtYd": "Top Courtyard",
+  "B.CrtYd": "Bottom Courtyard",
+  "Edge.Cuts": "Keep-Out",
+  "Dwgs.User": "Mechanical 1",
+  "Cmts.User": "Mechanical 2",
 };
