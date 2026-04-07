@@ -506,7 +506,7 @@ function ComponentDetailSections({
           {modelsOpen && (
             <div className="border-b border-border-subtle/30">
               {/* Symbol preview — tall, cream background like Altium */}
-              <div className="h-[160px] mx-2 mt-1.5 rounded border border-[#d4cba8]/30 overflow-hidden">
+              <div className="h-[200px] mx-2 mt-1.5 rounded border border-[#d4cba8]/30 overflow-hidden">
                 <SymbolPreviewMini symbol={preview} />
               </div>
               <div className="px-2 py-1 text-[10px] text-text-muted/70 font-medium">
@@ -514,7 +514,7 @@ function ComponentDetailSections({
               </div>
 
               {/* Footprint / 3D preview — dark background like Altium */}
-              <div className="h-[130px] mx-2 mb-1 rounded bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center relative">
+              <div className="h-[200px] mx-2 mb-1 rounded bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center relative">
                 <Package size={20} className="text-text-muted/15 mb-1" />
                 <span className="text-[9px] text-text-muted/30">No 3D model available</span>
                 {/* 2D toggle button — bottom left like Altium */}
