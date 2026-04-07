@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
-import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
+import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult, DesignConstraint, ConstraintScope } from "@/types";
 
 export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
@@ -152,7 +152,7 @@ interface SchematicState {
   addHarnessMember: (harnessUuid: string, memberName: string, kind: "net" | "bus" | "harness", ref?: string) => void;
   removeHarnessMember: (harnessUuid: string, memberName: string) => void;
   // Design constraints
-  addConstraint: (name: string, type: string, scopeKind: string, value: number, unit: string) => void;
+  addConstraint: (name: string, type: DesignConstraint["type"], scopeKind: ConstraintScope["kind"], value: number, unit: "mm" | "mil") => void;
   removeConstraint: (uuid: string) => void;
   updateConstraintEnabled: (uuid: string, enabled: boolean) => void;
   // Parameter resolution (component → variant → document → project)
@@ -175,7 +175,7 @@ interface SchematicState {
   // Find Similar & Annotation
   findSimilar: () => void;
   annotateAll: () => void;
-  annotateWithOptions: (opts: { order: string; startIndex: number; scope: string }) => void;
+  annotateWithOptions: (opts: { order: "down-across" | "up-across" | "across-down" | "across-up"; startIndex: number; scope: "all" | "selected" | "unannotated" }) => void;
   resetDesignators: () => void;
   resetDuplicateDesignators: () => void;
   annotateSelected: () => void;
@@ -344,6 +344,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
   deselectAll: () => set({ selectedIds: new Set() }),
 
+  // NOTE: Caller must call pushUndo() before the first move tick in a drag gesture
   moveElements: (uuids, dx, dy, noRubberBand) => {
     const { data } = get();
     if (!data) return;
@@ -445,7 +446,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     }
 
     for (const d of newData.drawings) {
-      const uuid = "uuid" in d ? (d as { uuid: string }).uuid : "";
+      const uuid = d.uuid;
       if (!idSet.has(uuid)) continue;
       if (d.type === "Line") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
       else if (d.type === "Rect") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
@@ -473,6 +474,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  // NOTE: Caller must call pushUndo() before the first endpoint drag tick
   moveWireEndpoint: (uuid, endpoint, pos) => {
     const { data } = get();
     if (!data) return;
@@ -835,10 +837,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     nd.constraints.push({
       uuid: crypto.randomUUID(),
       name,
-      type: type as import("@/types").DesignConstraint["type"],
-      scope: { kind: scopeKind as import("@/types").ConstraintScope["kind"] },
+      type,
+      scope: { kind: scopeKind },
       value,
-      unit: unit as "mm" | "mil",
+      unit,
       enabled: true,
       priority: nd.constraints.length,
     });
@@ -862,16 +864,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: nd, dirty: true });
   },
 
-  // --- Parameter hierarchy resolution ---
+  // --- Parameter hierarchy resolution: variant → component → document → project ---
   resolveParameter: (key, componentUuid, variantName) => {
     const { data } = get();
     if (!data) return "";
-    // 1. Component field (highest priority)
-    if (componentUuid) {
-      const sym = data.symbols.find((s) => s.uuid === componentUuid);
-      if (sym?.fields[key]) return sym.fields[key];
-    }
-    // 2. Variant override
+    // 1. Variant override (highest priority — design variants must be able to override component values)
     if (variantName && componentUuid) {
       const variant = data.variants.find((v) => v.name === variantName);
       if (variant?.components[componentUuid]) {
@@ -880,15 +877,17 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         if (key === "Footprint" && vc.altFootprint) return vc.altFootprint;
       }
     }
+    // 2. Component field
+    if (componentUuid) {
+      const sym = data.symbols.find((s) => s.uuid === componentUuid);
+      if (sym?.fields[key]) return sym.fields[key];
+    }
     // 3. Document parameter
     const docParam = data.document_parameters.find((p) => p.key === key);
     if (docParam) return docParam.value;
-    // 4. Project parameter (lowest priority) — imported lazily to avoid circular deps
-    try {
-      // Dynamic import would be async, so we use title_block as fallback for project-level params
-      const tb = data.title_block || {};
-      if (tb[key]) return tb[key];
-    } catch { /* ignore */ }
+    // 4. Title block / project-level fallback
+    const tb = data.title_block || {};
+    if (tb[key]) return tb[key];
     return "";
   },
 
@@ -1385,8 +1384,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     for (let i = 0; i < wireDrawing.points.length - 1; i++) {
       newData.buses.push({
         uuid: generateUuid(),
-        start: wireDrawing.points[i],
-        end: wireDrawing.points[i + 1],
+        start: { ...wireDrawing.points[i] },
+        end: { ...wireDrawing.points[i + 1] },
       });
     }
     set({ data: newData, dirty: true, wireDrawing: { points: [], active: false, routingMode: mode } });
@@ -1427,7 +1426,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     get().pushUndo();
     const newData = cloneData(data);
 
-    let target: number;
+    let target = 0;
     switch (direction) {
       case "left": target = Math.min(...positions.map(p => p.x)); break;
       case "right": target = Math.max(...positions.map(p => p.x)); break;
@@ -1435,6 +1434,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "bottom": target = Math.max(...positions.map(p => p.y)); break;
       case "centerH": target = positions.reduce((s, p) => s + p.x, 0) / positions.length; break;
       case "centerV": target = positions.reduce((s, p) => s + p.y, 0) / positions.length; break;
+      default: return; // unknown direction
     }
 
     for (const pos of positions) {
@@ -1904,7 +1904,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       const usedNumbers = new Set<number>();
       for (const s of newData.symbols) {
         if (s.is_power) continue;
-        const num = parseInt(s.reference.replace(/^[A-Z]+/, ""), 10);
+        if (!s.reference.startsWith(prefix) || !/^\d/.test(s.reference.slice(prefix.length))) continue;
+        const num = parseInt(s.reference.slice(prefix.length), 10);
         if (!isNaN(num) && !s.reference.endsWith("?") && !selectedIds.has(s.uuid)) usedNumbers.add(num);
       }
       syms.sort((a, b) => {

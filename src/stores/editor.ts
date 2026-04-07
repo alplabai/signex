@@ -64,7 +64,6 @@ interface EditorState {
   pushViewHistory: (pos: { x: number; y: number; zoom: number }) => void;
   navigateBack: () => void;
   navigateForward: () => void;
-  getNavTarget: () => { x: number; y: number; zoom: number } | null;
   addBookmark: (name: string, pos: { x: number; y: number; zoom: number }) => void;
   removeBookmark: (name: string) => void;
 }
@@ -132,10 +131,6 @@ export const useEditorStore = create<EditorState>()((set) => ({
     set((s) => (s.viewHistoryIndex > 0 ? { viewHistoryIndex: s.viewHistoryIndex - 1 } : {})),
   navigateForward: () =>
     set((s) => (s.viewHistoryIndex < s.viewHistory.length - 1 ? { viewHistoryIndex: s.viewHistoryIndex + 1 } : {})),
-  getNavTarget: () => {
-    // Must be called after navigateBack/Forward to get the target position
-    return null; // Caller reads viewHistory[viewHistoryIndex] directly
-  },
   addBookmark: (name, pos) =>
     set((s) => ({ bookmarks: [...s.bookmarks.filter((b) => b.name !== name), { name, ...pos }] })),
   removeBookmark: (name) =>
