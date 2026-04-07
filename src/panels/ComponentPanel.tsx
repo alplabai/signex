@@ -248,18 +248,6 @@ export function ComponentPanel() {
         </button>
       </div>
 
-      {/* Preview + Details (Altium-style collapsible sections) */}
-      {preview && selectedResult && (
-        <ComponentDetailSections
-          preview={preview}
-          selectedResult={selectedResult}
-          onEdit={editSymbol}
-          onDuplicate={duplicateSymbol}
-          onPlace={() => placeComponent(selectedResult)}
-          showModels={showModelsSection}
-        />
-      )}
-
       {/* "Drag a column header here to group" placeholder */}
       {isSearching && filteredResults.length > 0 && (
         <div className="px-2 py-[3px] bg-bg-tertiary/40 border-b border-border-subtle/40 text-center">
@@ -326,6 +314,20 @@ export function ComponentPanel() {
       {isSearching && filteredResults.length > 0 && (
         <div className="px-2 py-[3px] border-t border-border-subtle/50 bg-bg-tertiary/40 text-[9px] text-text-muted/50 shrink-0">
           Results: {filteredResults.length}
+        </div>
+      )}
+
+      {/* Details + Models (below results table, like Altium) */}
+      {preview && selectedResult && (
+        <div className="overflow-y-auto shrink-0" style={{ maxHeight: "50%" }}>
+          <ComponentDetailSections
+            preview={preview}
+            selectedResult={selectedResult}
+            onEdit={editSymbol}
+            onDuplicate={duplicateSymbol}
+            onPlace={() => placeComponent(selectedResult)}
+            showModels={showModelsSection}
+          />
         </div>
       )}
 
