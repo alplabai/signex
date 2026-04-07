@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
 import { DEFAULT_LAYER_COLORS } from "@/types/pcb";
+import { computeRatsnest, getPadPosition } from "@/lib/pcbRatsnest";
 import type { PcbPoint, PcbLayerId } from "@/types/pcb";
 
 interface Camera { x: number; y: number; zoom: number }
@@ -252,7 +253,25 @@ export function PcbRenderer() {
     }
 
     // Ratsnest (unrouted connections)
-    // TODO: compute ratsnest from netlist
+    const ratsnest = computeRatsnest(data);
+    if (ratsnest.length > 0) {
+      ctx.strokeStyle = "#ffff00";
+      ctx.lineWidth = 0.05;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.globalAlpha = 0.6;
+      for (const line of ratsnest) {
+        const posA = getPadPosition(data, line.padA);
+        const posB = getPadPosition(data, line.padB);
+        if (posA && posB) {
+          ctx.beginPath();
+          ctx.moveTo(posA.x, posA.y);
+          ctx.lineTo(posB.x, posB.y);
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
 
     // Routing preview
     if (routingActive && routingPoints.length > 0) {
@@ -297,7 +316,12 @@ export function PcbRenderer() {
     ctx.fillStyle = "#cdd6f4";
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`Layer: ${activeLayer} | Mode: ${editMode} | Zoom: ${(cam.zoom * 100).toFixed(0)}%`, 10, h - 10);
+    const unrouted = ratsnest.length;
+    ctx.fillText(
+      `Layer: ${activeLayer} | Mode: ${editMode} | Zoom: ${(cam.zoom * 100).toFixed(0)}% | ` +
+      `Nets: ${data.nets.length} | Unrouted: ${unrouted} | Segments: ${data.segments.length} | Vias: ${data.vias.length}`,
+      10, h - 10
+    );
   }, [data, selectedIds, activeLayer, visibleLayers, editMode, routingActive, routingPoints, gridVisible, s2w, getLayerColor]);
 
   // --- Resize ---
@@ -355,8 +379,28 @@ export function PcbRenderer() {
         if (store.routingActive) {
           store.addRoutePoint(world);
         } else {
-          store.startRoute(world, 0);
+          // Find net from nearest pad
+          let nearestNet = 0;
+          for (const fp of data.footprints) {
+            for (const pad of fp.pads) {
+              if (!pad.net) continue;
+              const px = fp.position.x + pad.position.x;
+              const py = fp.position.y + pad.position.y;
+              const d = Math.hypot(world.x - px, world.y - py);
+              if (d < Math.max(pad.size[0], pad.size[1])) {
+                nearestNet = pad.net.number;
+              }
+            }
+          }
+          store.startRoute(world, nearestNet);
         }
+        return;
+      }
+
+      // Board outline drawing
+      if (store.editMode === "drawBoardOutline") {
+        const outline = [...(store.data?.board.outline || []), world];
+        store.setBoardOutline(outline);
         return;
       }
 
@@ -375,6 +419,32 @@ export function PcbRenderer() {
           return;
         }
       }
+
+      // Segment hit test
+      const hitTol = 1.0 / camRef.current.zoom;
+      for (const seg of data.segments) {
+        const dx = seg.end.x - seg.start.x, dy = seg.end.y - seg.start.y;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) continue;
+        let t = ((world.x - seg.start.x) * dx + (world.y - seg.start.y) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const nearest = { x: seg.start.x + t * dx, y: seg.start.y + t * dy };
+        if (Math.hypot(world.x - nearest.x, world.y - nearest.y) < seg.width / 2 + hitTol) {
+          if (e.shiftKey) store.toggleSelect(seg.uuid);
+          else store.select(seg.uuid);
+          return;
+        }
+      }
+
+      // Via hit test
+      for (const via of data.vias) {
+        if (Math.hypot(world.x - via.position.x, world.y - via.position.y) < via.diameter / 2 + hitTol) {
+          if (e.shiftKey) store.toggleSelect(via.uuid);
+          else store.select(via.uuid);
+          return;
+        }
+      }
+
       store.deselectAll();
     }
   }, [data, s2w]);
@@ -461,7 +531,7 @@ export function PcbRenderer() {
         onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
         className="absolute inset-0"
-        style={{ cursor: editMode === "routeTrack" ? "crosshair" : "default" }}
+        style={{ cursor: editMode !== "select" ? "crosshair" : "default" }}
       />
     </div>
   );
