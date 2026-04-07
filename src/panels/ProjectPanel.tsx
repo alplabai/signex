@@ -1,5 +1,6 @@
 import {
   FolderOpen,
+  FolderClosed,
   FileText,
   Cpu,
   ChevronRight,
@@ -15,14 +16,18 @@ import { useProjectStore } from "@/stores/project";
 interface TreeNode {
   label: string;
   icon: React.ReactNode;
+  expandedIcon?: React.ReactNode;
   badge?: string;
   children?: TreeNode[];
   onClick?: () => void;
+  defaultExpanded?: boolean;
+  isFolder?: boolean;
 }
 
 function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(node.defaultExpanded ?? true);
   const hasChildren = node.children && node.children.length > 0;
+  const isExpandable = hasChildren || node.isFolder;
 
   return (
     <div>
@@ -31,9 +36,15 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
           "flex items-center gap-1.5 w-full py-[5px] text-[12px] hover:bg-bg-hover transition-colors text-left text-text-secondary hover:text-text-primary group cursor-pointer"
         )}
         style={{ paddingLeft: `${depth * 14 + 10}px` }}
-        onClick={() => node.onClick?.()}
+        onClick={() => {
+          if (node.onClick) {
+            node.onClick();
+          } else if (isExpandable) {
+            setExpanded(!expanded);
+          }
+        }}
       >
-        {hasChildren ? (
+        {isExpandable ? (
           <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
             className="shrink-0 p-0 hover:text-accent transition-colors">
             {expanded ? <ChevronDown size={11} className="text-text-muted" /> : <ChevronRight size={11} className="text-text-muted" />}
@@ -41,7 +52,7 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         ) : (
           <span className="w-[11px]" />
         )}
-        <span className="shrink-0">{node.icon}</span>
+        <span className="shrink-0">{expanded && node.expandedIcon ? node.expandedIcon : node.icon}</span>
         <span className="truncate flex-1">{node.label}</span>
         {node.badge && (
           <span className="text-[10px] text-text-muted/50 pr-2 tabular-nums">
@@ -49,11 +60,19 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
           </span>
         )}
       </div>
-      {hasChildren && expanded && (
+      {isExpandable && expanded && hasChildren && (
         <div>
           {node.children!.map((child, i) => (
             <TreeItem key={i} node={child} depth={depth + 1} />
           ))}
+        </div>
+      )}
+      {isExpandable && expanded && !hasChildren && (
+        <div
+          className="text-[11px] text-text-muted/30 italic"
+          style={{ paddingLeft: `${(depth + 1) * 14 + 10 + 11 + 6}px`, paddingTop: 2, paddingBottom: 2 }}
+        >
+          (empty)
         </div>
       )}
     </div>
@@ -75,8 +94,8 @@ export function ProjectPanel() {
     );
   }
 
-  const sheetsChildren: TreeNode[] = project.sheets.map((sheet) => ({
-    label: sheet.name,
+  const sheetsChildren: TreeNode[] = project.sheets.map((sheet, idx) => ({
+    label: `[${idx + 1}] ${sheet.name}`,
     icon: <FileText size={12} className="text-warning/70" />,
     badge: `${sheet.symbols_count}c ${sheet.wires_count}w`,
     onClick: () => {
@@ -106,38 +125,74 @@ export function ProjectPanel() {
     ],
   }));
 
+  // Source Documents: schematics + PCB + BOM
+  const sourceDocChildren: TreeNode[] = [
+    ...sheetsChildren,
+    ...(project.pcb_file
+      ? [
+          {
+            label: project.pcb_file,
+            icon: <Cpu size={12} className="text-success/70" />,
+            onClick: () => {
+              const tabId = `pcb-${project.path}:${project.pcb_file}`;
+              openTab({
+                id: tabId,
+                name: project.pcb_file!,
+                type: "pcb" as const,
+                path: project.path,
+                dirty: false,
+              });
+              setActiveTab(tabId);
+            },
+          },
+        ]
+      : []),
+  ];
+
   const tree: TreeNode = {
     label: project.name,
-    icon: <FolderOpen size={13} className="text-accent" />,
+    icon: <FolderClosed size={13} className="text-accent" />,
+    expandedIcon: <FolderOpen size={13} className="text-accent" />,
     children: [
-      ...(sheetsChildren.length > 0
-        ? [
-            {
-              label: `Schematics (${sheetsChildren.length})`,
-              icon: <FileText size={13} className="text-warning" />,
-              children: sheetsChildren,
-            },
-          ]
-        : []),
-      ...(project.pcb_file
-        ? [
-            {
-              label: project.pcb_file,
-              icon: <Cpu size={13} className="text-success" />,
-              onClick: () => {
-                const tabId = `pcb-${project.path}:${project.pcb_file}`;
-                openTab({
-                  id: tabId,
-                  name: project.pcb_file!,
-                  type: "pcb",
-                  path: project.path,
-                  dirty: false,
-                });
-                setActiveTab(tabId);
-              },
-            },
-          ]
-        : []),
+      {
+        label: "Variants",
+        icon: <FolderClosed size={12} className="text-text-muted/60" />,
+        expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
+        isFolder: true,
+        defaultExpanded: false,
+        children: [],
+      },
+      {
+        label: "Source Documents",
+        icon: <FolderClosed size={12} className="text-warning/80" />,
+        expandedIcon: <FolderOpen size={12} className="text-warning/80" />,
+        isFolder: true,
+        children: sourceDocChildren,
+      },
+      {
+        label: "Settings",
+        icon: <FolderClosed size={12} className="text-text-muted/60" />,
+        expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
+        isFolder: true,
+        defaultExpanded: false,
+        children: [],
+      },
+      {
+        label: "Libraries",
+        icon: <FolderClosed size={12} className="text-purple-400/70" />,
+        expandedIcon: <FolderOpen size={12} className="text-purple-400/70" />,
+        isFolder: true,
+        defaultExpanded: false,
+        children: [],
+      },
+      {
+        label: "Generated",
+        icon: <FolderClosed size={12} className="text-text-muted/60" />,
+        expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
+        isFolder: true,
+        defaultExpanded: false,
+        children: [],
+      },
     ],
   };
 

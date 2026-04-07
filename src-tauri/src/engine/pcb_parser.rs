@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::engine::sexpr::SExpr;
+use crate::engine::sexpr::{self, SExpr};
 
 // ═══════════════════════════════════════════════════════════════
 // KiCad PCB Parser (.kicad_pcb)
@@ -381,6 +381,60 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
                 position: Some(text_pos), rotation: Some(text_rot), fill: None,
             });
         }
+        for g in fp.find_all("fp_arc") {
+            let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+            let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+            let start = g.find("start").map(|s| parse_point(s));
+            let mid = g.find("mid").map(|m| parse_point(m));
+            let end = g.find("end").map(|e| parse_point(e));
+            graphics.push(FpGraphic {
+                graphic_type: "arc".to_string(), layer: gl, width: w,
+                start, end, center: None, mid, radius: None,
+                points: vec![], text: None, font_size: None, position: None, rotation: None, fill: None,
+            });
+        }
+        for g in fp.find_all("fp_poly") {
+            let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+            let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+            let pts: Vec<Point> = if let Some(pts_node) = g.find("pts") {
+                pts_node.find_all("xy").iter().map(|xy| parse_point(xy)).collect()
+            } else { vec![] };
+            let fill = g.find("fill").and_then(|f| f.first_arg()).map(|f| f != "none");
+            graphics.push(FpGraphic {
+                graphic_type: "poly".to_string(), layer: gl, width: w,
+                start: None, end: None, center: None, mid: None, radius: None,
+                points: pts, text: None, font_size: None, position: None, rotation: None, fill,
+            });
+        }
+        // KiCad 8+ uses (property "Reference" "U1" (at ...) (layer ...) ...) for text graphics
+        for prop in fp.find_all("property") {
+            let prop_name = prop.first_arg().unwrap_or("");
+            let prop_val = prop.arg(1).unwrap_or("").to_string();
+            // Only render properties that have position and layer
+            if let Some(_at) = prop.find("at") {
+                if let Some(layer_node) = prop.find("layer") {
+                    let gl = layer_node.first_arg().unwrap_or("").to_string();
+                    if gl.is_empty() { continue; }
+                    let (text_pos, text_rot) = parse_at(prop);
+                    let fs = prop.find("effects").and_then(|e| e.find("font")).and_then(|f| f.find("size"))
+                        .and_then(|s| s.first_arg()?.parse().ok()).unwrap_or(1.0);
+                    // Check if hidden
+                    let hidden = prop.find("effects").and_then(|e| e.find("hide")).is_some();
+                    if hidden { continue; }
+                    let display_text = match prop_name {
+                        "Reference" => "%R".to_string(),
+                        "Value" => "%V".to_string(),
+                        _ => prop_val,
+                    };
+                    graphics.push(FpGraphic {
+                        graphic_type: "text".to_string(), layer: gl, width: 0.1,
+                        start: None, end: None, center: None, mid: None, radius: None,
+                        points: vec![], text: Some(display_text), font_size: Some(fs),
+                        position: Some(text_pos), rotation: Some(text_rot), fill: None,
+                    });
+                }
+            }
+        }
         for g in fp.find_all("fp_rect") {
             let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
             let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
@@ -475,6 +529,60 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
             start, end, center: None, radius: None, points: vec![],
         });
     }
+    for g in root.find_all("gr_rect") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let end = g.find("end").map(|e| parse_point(e));
+        // If on Edge.Cuts, also add to outline
+        if layer == "Edge.Cuts" {
+            if let (Some(ref s), Some(ref e)) = (&start, &end) {
+                if outline_points.is_empty() {
+                    outline_points.push(Point { x: s.x, y: s.y });
+                    outline_points.push(Point { x: e.x, y: s.y });
+                    outline_points.push(Point { x: e.x, y: e.y });
+                    outline_points.push(Point { x: s.x, y: e.y });
+                }
+            }
+        }
+        board_graphics.push(BoardGraphic {
+            graphic_type: "rect".to_string(), layer, width: w,
+            start, end, center: None, radius: None, points: vec![],
+        });
+    }
+    for g in root.find_all("gr_circle") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let center = g.find("center").map(|c| parse_point(c));
+        let end = g.find("end").map(|e| parse_point(e));
+        let radius = if let (Some(ref c), Some(ref e)) = (&center, &end) {
+            Some(((e.x - c.x).powi(2) + (e.y - c.y).powi(2)).sqrt())
+        } else { None };
+        board_graphics.push(BoardGraphic {
+            graphic_type: "circle".to_string(), layer, width: w,
+            start: None, end: None, center, radius, points: vec![],
+        });
+    }
+    for g in root.find_all("gr_arc") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let mid = g.find("mid").map(|m| parse_point(m));
+        let end = g.find("end").map(|e| parse_point(e));
+        // Store mid point in the points vec for the renderer
+        let mut pts = vec![];
+        if let Some(ref m) = mid { pts.push(m.clone()); }
+        board_graphics.push(BoardGraphic {
+            graphic_type: "arc".to_string(), layer, width: w,
+            start, end, center: None, radius: None, points: pts,
+        });
+    }
 
     // Board-level texts
     let texts: Vec<BoardText> = root.find_all("gr_text").iter().map(|t| {
@@ -496,4 +604,193 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
         layers, setup, nets, footprints, segments, vias, zones,
         graphics: board_graphics, texts,
     })
+}
+
+/// Parse a footprint from an S-expression node (reusable for both PCB and standalone .kicad_mod)
+fn parse_footprint_node(fp: &SExpr) -> Footprint {
+    let footprint_id = fp.first_arg().unwrap_or("").to_string();
+    let (pos, rot) = parse_at(fp);
+    let layer = fp.find("layer").and_then(|l| l.first_arg()).unwrap_or("F.Cu").to_string();
+    let locked = fp.find("locked").is_some();
+    let uuid = parse_uuid(fp);
+
+    let reference = fp.find_all("property").iter()
+        .find(|p| p.first_arg() == Some("Reference"))
+        .and_then(|p| p.arg(1))
+        .unwrap_or("?")
+        .to_string();
+
+    let value = fp.find_all("property").iter()
+        .find(|p| p.first_arg() == Some("Value"))
+        .and_then(|p| p.arg(1))
+        .unwrap_or("")
+        .to_string();
+
+    // Pads
+    let pads: Vec<Pad> = fp.find_all("pad").iter().map(|p| {
+        let number = p.first_arg().unwrap_or("").to_string();
+        let pad_type = p.arg(1).unwrap_or("smd").to_string();
+        let shape = p.arg(2).unwrap_or("rect").to_string();
+        let (pad_pos, _) = parse_at(p);
+        let size = if let Some(sz) = p.find("size") {
+            [
+                sz.arg(0).and_then(|s| s.parse().ok()).unwrap_or(1.0),
+                sz.arg(1).and_then(|s| s.parse().ok()).unwrap_or(1.0),
+            ]
+        } else {
+            [1.0, 1.0]
+        };
+        let drill = p.find("drill").map(|d| DrillDef {
+            diameter: d.first_arg().and_then(|s| s.parse().ok()).unwrap_or(0.3),
+            shape: None,
+        });
+        let pad_layers: Vec<String> = if let Some(layers) = p.find("layers") {
+            layers.children().iter().filter_map(|c| {
+                if let SExpr::Atom(s) = c { Some(s.clone()) } else { None }
+            }).collect()
+        } else {
+            vec![layer.clone()]
+        };
+        let net = p.find("net").map(|n| PadNet {
+            number: n.first_arg().and_then(|s| s.parse().ok()).unwrap_or(0),
+            name: n.arg(1).unwrap_or("").to_string(),
+        });
+        let roundrect_ratio = p.find("roundrect_rratio")
+            .and_then(|r| r.first_arg()?.parse().ok());
+
+        Pad {
+            uuid: parse_uuid(p),
+            number, pad_type, shape, position: pad_pos, size, drill,
+            layers: pad_layers, net, roundrect_ratio,
+        }
+    }).collect();
+
+    // Footprint graphics
+    let mut graphics = Vec::new();
+    for g in fp.find_all("fp_line") {
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let end = g.find("end").map(|e| parse_point(e));
+        graphics.push(FpGraphic {
+            graphic_type: "line".to_string(), layer: gl, width: w,
+            start, end, center: None, mid: None, radius: None,
+            points: vec![], text: None, font_size: None, position: None, rotation: None, fill: None,
+        });
+    }
+    for g in fp.find_all("fp_circle") {
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+        let center = g.find("center").map(|c| parse_point(c));
+        let end = g.find("end").map(|e| parse_point(e));
+        let radius = if let (Some(c), Some(e)) = (&center, &end) {
+            Some(((e.x - c.x).powi(2) + (e.y - c.y).powi(2)).sqrt())
+        } else { None };
+        graphics.push(FpGraphic {
+            graphic_type: "circle".to_string(), layer: gl, width: w,
+            start: None, end: None, center, mid: None, radius,
+            points: vec![], text: None, font_size: None, position: None, rotation: None, fill: None,
+        });
+    }
+    for g in fp.find_all("fp_text") {
+        let text_type = g.first_arg().unwrap_or("user");
+        let text_val = g.arg(1).unwrap_or("").to_string();
+        let (text_pos, text_rot) = parse_at(g);
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let fs = g.find("effects").and_then(|e| e.find("font")).and_then(|f| f.find("size"))
+            .and_then(|s| s.first_arg()?.parse().ok()).unwrap_or(1.0);
+        let display_text = match text_type {
+            "reference" => "%R".to_string(),
+            "value" => "%V".to_string(),
+            _ => text_val,
+        };
+        graphics.push(FpGraphic {
+            graphic_type: "text".to_string(), layer: gl, width: 0.1,
+            start: None, end: None, center: None, mid: None, radius: None,
+            points: vec![], text: Some(display_text), font_size: Some(fs),
+            position: Some(text_pos), rotation: Some(text_rot), fill: None,
+        });
+    }
+    for g in fp.find_all("fp_arc") {
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let mid = g.find("mid").map(|m| parse_point(m));
+        let end = g.find("end").map(|e| parse_point(e));
+        graphics.push(FpGraphic {
+            graphic_type: "arc".to_string(), layer: gl, width: w,
+            start, end, center: None, mid, radius: None,
+            points: vec![], text: None, font_size: None, position: None, rotation: None, fill: None,
+        });
+    }
+    for g in fp.find_all("fp_poly") {
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+        let pts: Vec<Point> = if let Some(pts_node) = g.find("pts") {
+            pts_node.find_all("xy").iter().map(|xy| parse_point(xy)).collect()
+        } else { vec![] };
+        let fill = g.find("fill").and_then(|f| f.first_arg()).map(|f| f != "none");
+        graphics.push(FpGraphic {
+            graphic_type: "poly".to_string(), layer: gl, width: w,
+            start: None, end: None, center: None, mid: None, radius: None,
+            points: pts, text: None, font_size: None, position: None, rotation: None, fill,
+        });
+    }
+    for prop in fp.find_all("property") {
+        let prop_name = prop.first_arg().unwrap_or("");
+        let prop_val = prop.arg(1).unwrap_or("").to_string();
+        if let Some(_at) = prop.find("at") {
+            if let Some(layer_node) = prop.find("layer") {
+                let gl = layer_node.first_arg().unwrap_or("").to_string();
+                if gl.is_empty() { continue; }
+                let (text_pos, text_rot) = parse_at(prop);
+                let fs = prop.find("effects").and_then(|e| e.find("font")).and_then(|f| f.find("size"))
+                    .and_then(|s| s.first_arg()?.parse().ok()).unwrap_or(1.0);
+                let hidden = prop.find("effects").and_then(|e| e.find("hide")).is_some();
+                if hidden { continue; }
+                let display_text = match prop_name {
+                    "Reference" => "%R".to_string(),
+                    "Value" => "%V".to_string(),
+                    _ => prop_val,
+                };
+                graphics.push(FpGraphic {
+                    graphic_type: "text".to_string(), layer: gl, width: 0.1,
+                    start: None, end: None, center: None, mid: None, radius: None,
+                    points: vec![], text: Some(display_text), font_size: Some(fs),
+                    position: Some(text_pos), rotation: Some(text_rot), fill: None,
+                });
+            }
+        }
+    }
+    for g in fp.find_all("fp_rect") {
+        let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let end = g.find("end").map(|e| parse_point(e));
+        let fill = g.find("fill").and_then(|f| f.first_arg()).map(|f| f != "none");
+        graphics.push(FpGraphic {
+            graphic_type: "rect".to_string(), layer: gl, width: w,
+            start, end, center: None, mid: None, radius: None,
+            points: vec![], text: None, font_size: None, position: None, rotation: None, fill,
+        });
+    }
+
+    Footprint {
+        uuid, reference, value, footprint_id, position: pos,
+        rotation: rot, layer, locked, pads, graphics,
+    }
+}
+
+/// Parse a standalone .kicad_mod footprint file
+pub fn parse_footprint_file(content: &str) -> Result<Footprint, String> {
+    let root = sexpr::parse(content)?;
+
+    if root.keyword() != Some("footprint") {
+        // Some older files might use "module"
+        if root.keyword() != Some("module") {
+            return Err("Not a KiCad footprint file".to_string());
+        }
+    }
+
+    Ok(parse_footprint_node(&root))
 }

@@ -1,5 +1,7 @@
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Layers } from "lucide-react";
 import { usePcbStore } from "@/stores/pcb";
+import { useEditorStore } from "@/stores/editor";
+import { useProjectStore } from "@/stores/project";
 import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import type { PcbLayerId } from "@/types/pcb";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,18 @@ export function LayerStackPanel() {
   const visibleLayers = usePcbStore((s) => s.visibleLayers);
   const setActiveLayer = usePcbStore((s) => s.setActiveLayer);
   const toggleLayerVisibility = usePcbStore((s) => s.toggleLayerVisibility);
+  const editorMode = useEditorStore((s) => s.mode);
+  const project = useProjectStore((s) => s.project);
+
+  // Only show in PCB mode with a project open
+  if (!project || editorMode !== "pcb") {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-text-muted/40 text-xs gap-2 p-6">
+        <Layers size={24} className="opacity-20" />
+        <span>Layers available in PCB view</span>
+      </div>
+    );
+  }
 
   // Determine how many copper layers are in use
   const copperCount = data?.board.layers.copperCount || 2;

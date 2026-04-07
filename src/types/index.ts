@@ -95,6 +95,11 @@ export interface SchematicData {
   differential_pairs: DifferentialPair[];
   signal_harnesses: SignalHarness[];
   constraints: DesignConstraint[];
+  parameter_sets: SchParameterSet[];
+  diff_pair_directives: SchDifferentialPairDirective[];
+  blankets: SchBlanket[];
+  compile_masks: SchCompileMask[];
+  notes: SchNote[];
   lib_symbols: Record<string, LibSymbol>;
 }
 
@@ -123,6 +128,39 @@ export interface DifferentialPair {
   negativeNet: string; // Net name with _N suffix
   impedance?: number; // Target impedance in ohms
   netClass?: string; // Associated net class
+}
+
+export interface SchParameterSet {
+  uuid: string;
+  position: SchPoint;
+  parameters: { key: string; value: string }[];
+  targetNet?: string; // Net this parameter set applies to
+}
+
+export interface SchDifferentialPairDirective {
+  uuid: string;
+  position: SchPoint;
+  positiveNet: string;
+  negativeNet: string;
+}
+
+export interface SchBlanket {
+  uuid: string;
+  points: SchPoint[]; // Polygon outline
+  parameters: { key: string; value: string }[];
+}
+
+export interface SchCompileMask {
+  uuid: string;
+  position: SchPoint;
+  size: [number, number]; // width, height
+}
+
+export interface SchNote {
+  uuid: string;
+  text: string;
+  position: SchPoint;
+  size: [number, number]; // width, height
 }
 
 export interface SignalHarness {
@@ -351,5 +389,6 @@ export interface SymbolSearchResult {
   description: string;
   keywords: string[];
   reference_prefix: string;
+  footprint: string;
   pin_count: number;
 }

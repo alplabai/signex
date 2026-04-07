@@ -3,7 +3,7 @@ import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
-import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect } from "./hitTest";
+import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect, connectionSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
@@ -109,6 +109,8 @@ export function SchematicRenderer() {
   const moveNoRubber = useRef(false); // Ctrl held = move without rubber-banding
   const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
+  const autoPanRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoPanDir = useRef({ dx: 0, dy: 0 });
   const animRef = useRef(0);
   const wireCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for live wire cursor — no Zustand churn
   const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
@@ -135,6 +137,13 @@ export function SchematicRenderer() {
   const selectionModeRef = useRef<"box" | "lasso" | "insideArea" | "outsideArea" | "touchingRect" | "touchingLine">("box");
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
   const powerPreset = useRef<{ net: string; style: string }>({ net: "VCC", style: "bar" });
+  // Track last-used tool per Active Bar group (Altium: icon changes to last used)
+  const [lastTool, setLastTool] = useState<Record<string, string>>({
+    wire: "drawWire",
+    text: "placeText",
+    draw: "drawLine",
+    power: "placePower",
+  });
   const [findShowReplace, setFindShowReplace] = useState(false);
 
   // Context menu state
@@ -296,16 +305,66 @@ export function SchematicRenderer() {
     ctx.translate(cam.x, cam.y);
     ctx.scale(cam.zoom, cam.zoom);
 
-    // Paper
+    // Paper with Altium-style zone markers
     ctx.fillStyle = C.paper;
     ctx.fillRect(0, 0, pw, ph);
     ctx.strokeStyle = C.paperBorder;
     ctx.lineWidth = 0.3;
     ctx.strokeRect(0, 0, pw, ph);
-    ctx.lineWidth = 0.15;
-    ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
-    // Title block fields inside the 100x30mm border box
+    // Zone markers (A-H columns, 1-N rows)
+    const zoneMargin = 5; // margin width for zone labels
+    const cols = Math.max(4, Math.floor(pw / 50));
+    const rows = Math.max(2, Math.floor(ph / 50));
+    const colW = (pw - zoneMargin * 2) / cols;
+    const rowH = (ph - zoneMargin * 2) / rows;
+
+    ctx.strokeStyle = C.paperBorder;
+    ctx.lineWidth = 0.1;
+    ctx.fillStyle = "#4a4d6a";
+    ctx.font = "2px Roboto";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Column markers (top and bottom)
+    for (let c = 0; c < cols; c++) {
+      const x = zoneMargin + c * colW;
+      // Top tick
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zoneMargin); ctx.stroke();
+      ctx.fillText(String(c + 1), x + colW / 2, zoneMargin / 2);
+      // Bottom tick
+      ctx.beginPath(); ctx.moveTo(x, ph - zoneMargin); ctx.lineTo(x, ph); ctx.stroke();
+      ctx.fillText(String(c + 1), x + colW / 2, ph - zoneMargin / 2);
+    }
+    // Last column tick
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, 0); ctx.lineTo(pw - zoneMargin, zoneMargin); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, ph - zoneMargin); ctx.lineTo(pw - zoneMargin, ph); ctx.stroke();
+
+    // Row markers (left and right)
+    for (let r = 0; r < rows; r++) {
+      const y = zoneMargin + r * rowH;
+      const letter = String.fromCharCode(65 + r); // A, B, C...
+      // Left tick
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zoneMargin, y); ctx.stroke();
+      ctx.fillText(letter, zoneMargin / 2, y + rowH / 2);
+      // Right tick
+      ctx.beginPath(); ctx.moveTo(pw - zoneMargin, y); ctx.lineTo(pw, y); ctx.stroke();
+      ctx.fillText(letter, pw - zoneMargin / 2, y + rowH / 2);
+    }
+    // Last row tick
+    ctx.beginPath(); ctx.moveTo(0, ph - zoneMargin); ctx.lineTo(zoneMargin, ph - zoneMargin); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, ph - zoneMargin); ctx.lineTo(pw, ph - zoneMargin); ctx.stroke();
+
+    // Inner border (working area)
+    ctx.strokeStyle = C.paperBorder;
+    ctx.lineWidth = 0.15;
+    ctx.strokeRect(zoneMargin, zoneMargin, pw - zoneMargin * 2, ph - zoneMargin * 2);
+
+    // Title block
+    ctx.lineWidth = 0.15;
+    ctx.strokeRect(pw - 100, ph - 30, 100 - zoneMargin, 30 - zoneMargin);
+
+    // Title block fields inside the border box
     {
       const tbx = pw - 100, tby = ph - 30;
       const tb = data.title_block || {};
@@ -339,22 +398,28 @@ export function SchematicRenderer() {
       ctx.fillText(tb.title || "", tbx + 2, tby + 25);
     }
 
-    // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
+    // Grid (Altium-style dots at intersections)
     if (gridVisible && gridSize * cam.zoom > 2) {
-      ctx.globalAlpha = 0.4;
-      for (let i = 0; i * gridSize <= pw; i++) {
-        const gx = i * gridSize;
-        const maj = i % 10 === 0;
-        ctx.strokeStyle = maj ? C.gridMajor : C.grid;
-        ctx.lineWidth = maj ? 0.06 : 0.02;
-        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ph); ctx.stroke();
-      }
-      for (let i = 0; i * gridSize <= ph; i++) {
-        const gy = i * gridSize;
-        const maj = i % 10 === 0;
-        ctx.strokeStyle = maj ? C.gridMajor : C.grid;
-        ctx.lineWidth = maj ? 0.06 : 0.02;
-        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(pw, gy); ctx.stroke();
+      const dotSize = gridSize * 0.04;
+      const majDotSize = gridSize * 0.08;
+      // Calculate visible grid range from camera
+      const gStartX = Math.floor(-cam.x / cam.zoom / gridSize) * gridSize;
+      const gStartY = Math.floor(-cam.y / cam.zoom / gridSize) * gridSize;
+      const gEndX = gStartX + w / cam.zoom + gridSize;
+      const gEndY = gStartY + h / cam.zoom + gridSize;
+
+      ctx.globalAlpha = 0.5;
+      for (let gx = gStartX; gx <= gEndX; gx += gridSize) {
+        const ix = Math.round(gx / gridSize);
+        const majX = ix % 10 === 0;
+        for (let gy = gStartY; gy <= gEndY; gy += gridSize) {
+          const iy = Math.round(gy / gridSize);
+          const majY = iy % 10 === 0;
+          const maj = majX && majY;
+          ctx.fillStyle = maj ? C.gridMajor : C.grid;
+          const r = maj ? majDotSize : dotSize;
+          ctx.fillRect(gx - r, gy - r, r * 2, r * 2);
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -369,9 +434,9 @@ export function SchematicRenderer() {
       return 1;
     };
 
-    // Wires
+    // Wires (Altium-style: slightly thicker for visibility)
     ctx.strokeStyle = C.wire;
-    ctx.lineWidth = 0.15;
+    ctx.lineWidth = 0.2;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
       ctx.globalAlpha = alphaFor(wire.uuid, "wires");
@@ -422,6 +487,161 @@ export function SchematicRenderer() {
         ctx.lineTo(d.position.x - 0.05, d.position.y + 0.2);
         ctx.lineTo(d.position.x + 0.25, d.position.y - 0.15);
         ctx.stroke();
+      }
+    }
+
+    // Parameter Sets (purple/magenta table icon)
+    if (data.parameter_sets) {
+      for (const ps of data.parameter_sets) {
+        const sel = selectedIds.has(ps.uuid);
+        const px = ps.position.x, py = ps.position.y;
+        ctx.strokeStyle = sel ? C.selection : "#ab47bc";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(171,71,188,0.12)";
+        ctx.lineWidth = 0.15;
+        // Table icon: rectangle with horizontal lines
+        ctx.fillRect(px - 0.8, py - 0.6, 1.6, 1.2);
+        ctx.strokeRect(px - 0.8, py - 0.6, 1.6, 1.2);
+        ctx.beginPath();
+        ctx.moveTo(px - 0.8, py - 0.15); ctx.lineTo(px + 0.8, py - 0.15);
+        ctx.moveTo(px - 0.8, py + 0.3); ctx.lineTo(px + 0.8, py + 0.3);
+        ctx.stroke();
+        // Small dots
+        ctx.fillStyle = sel ? C.selection : "#ab47bc";
+        ctx.beginPath(); ctx.arc(px - 0.4, py - 0.38, 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px - 0.4, py + 0.08, 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px - 0.4, py + 0.52, 0.08, 0, Math.PI * 2); ctx.fill();
+        // Label
+        if (ps.parameters.length > 0) {
+          ctx.fillStyle = sel ? C.selection : "#ce93d8";
+          ctx.font = `${0.5}px sans-serif`;
+          ctx.textAlign = "left"; ctx.textBaseline = "top";
+          ctx.fillText(ps.parameters[0].key + "=" + ps.parameters[0].value, px + 1.0, py - 0.4);
+        }
+      }
+    }
+
+    // Differential Pair Directives (blue parallel lines with +/-)
+    if (data.diff_pair_directives) {
+      for (const dp of data.diff_pair_directives) {
+        const sel = selectedIds.has(dp.uuid);
+        const px = dp.position.x, py = dp.position.y;
+        ctx.strokeStyle = sel ? C.selection : "#42a5f5";
+        ctx.lineWidth = 0.15;
+        // Two parallel lines
+        ctx.beginPath();
+        ctx.moveTo(px - 0.8, py - 0.25); ctx.lineTo(px + 0.8, py - 0.25);
+        ctx.moveTo(px - 0.8, py + 0.25); ctx.lineTo(px + 0.8, py + 0.25);
+        ctx.stroke();
+        // + and - labels
+        ctx.fillStyle = sel ? C.selection : "#42a5f5";
+        ctx.font = `bold ${0.45}px sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("+", px + 1.1, py - 0.25);
+        ctx.fillText("\u2013", px + 1.1, py + 0.25);
+        // Net names
+        ctx.font = `${0.4}px sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        ctx.fillText(dp.positiveNet, px - 0.8, py - 0.8);
+        ctx.fillText(dp.negativeNet, px - 0.8, py + 0.5);
+      }
+    }
+
+    // Blankets (dashed orange polygon)
+    if (data.blankets) {
+      for (const bl of data.blankets) {
+        const sel = selectedIds.has(bl.uuid);
+        if (bl.points.length < 2) continue;
+        ctx.strokeStyle = sel ? C.selection : "#ff9800";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(255,152,0,0.06)";
+        ctx.lineWidth = 0.15;
+        ctx.setLineDash([0.4, 0.25]);
+        ctx.beginPath();
+        ctx.moveTo(bl.points[0].x, bl.points[0].y);
+        for (let i = 1; i < bl.points.length; i++) ctx.lineTo(bl.points[i].x, bl.points[i].y);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        // Parameters label
+        if (bl.parameters.length > 0) {
+          ctx.fillStyle = sel ? C.selection : "#ffb74d";
+          ctx.font = `${0.5}px sans-serif`;
+          ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+          ctx.fillText(bl.parameters.map(p => p.key + "=" + p.value).join(", "), bl.points[0].x + 0.3, bl.points[0].y - 0.2);
+        }
+      }
+    }
+
+    // Compile Masks (hatched gray rectangle)
+    if (data.compile_masks) {
+      for (const cm of data.compile_masks) {
+        const sel = selectedIds.has(cm.uuid);
+        const px = cm.position.x, py = cm.position.y;
+        const w = cm.size[0], h = cm.size[1];
+        ctx.strokeStyle = sel ? C.selection : "#78909c";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(120,144,156,0.08)";
+        ctx.lineWidth = 0.15;
+        ctx.fillRect(px, py, w, h);
+        ctx.strokeRect(px, py, w, h);
+        // Hatching lines (diagonal)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, w, h);
+        ctx.clip();
+        ctx.strokeStyle = sel ? C.selection : "rgba(120,144,156,0.25)";
+        ctx.lineWidth = 0.08;
+        for (let d = -h; d < w + h; d += 0.8) {
+          ctx.beginPath();
+          ctx.moveTo(px + d, py);
+          ctx.lineTo(px + d - h, py + h);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // Label
+        ctx.fillStyle = sel ? C.selection : "#90a4ae";
+        ctx.font = `${0.5}px sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("Compile Mask", px + w / 2, py + h / 2);
+      }
+    }
+
+    // Notes (yellow/amber rectangle with text and pointer triangle)
+    if (data.notes) {
+      for (const n of data.notes) {
+        const sel = selectedIds.has(n.uuid);
+        const px = n.position.x, py = n.position.y;
+        const w = n.size[0], h = n.size[1];
+        // Pointer triangle (bottom-left)
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(255,193,7,0.15)";
+        ctx.strokeStyle = sel ? C.selection : "#ffc107";
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(px, py + h);
+        ctx.lineTo(px - 0.5, py + h + 0.8);
+        ctx.lineTo(px + 0.8, py + h);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // Body rectangle
+        ctx.fillRect(px, py, w, h);
+        ctx.strokeRect(px, py, w, h);
+        // Text
+        ctx.fillStyle = sel ? C.selection : "#ffca28";
+        ctx.font = `${0.55}px sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        // Word-wrap text
+        const words = n.text.split(" ");
+        let line = "";
+        let ty = py + 0.3;
+        for (const word of words) {
+          const test = line + (line ? " " : "") + word;
+          if (ctx.measureText(test).width > w - 0.6 && line) {
+            ctx.fillText(line, px + 0.3, ty);
+            line = word;
+            ty += 0.65;
+          } else {
+            line = test;
+          }
+        }
+        if (line) ctx.fillText(line, px + 0.3, ty);
       }
     }
 
@@ -726,12 +946,13 @@ export function SchematicRenderer() {
           ctx.fillStyle = color;
           ctx.font = `${fs}px Roboto`;
           ctx.textBaseline = "middle";
+          const textYOff = fs * 0.1; // Offset to visually center uppercase text in flag
           if (dir > 0) {
             ctx.textAlign = "left";
-            ctx.fillText(text, lx + arrowW + pad, ly);
+            ctx.fillText(text, lx + arrowW + pad, ly + textYOff);
           } else {
             ctx.textAlign = "right";
-            ctx.fillText(text, lx - arrowW - pad, ly);
+            ctx.fillText(text, lx - arrowW - pad, ly + textYOff);
           }
         } else {
           // Vertical labels (90°, 270°) — draw rotated but text still readable
@@ -1129,10 +1350,10 @@ export function SchematicRenderer() {
             drawSelBox(label.position.x - halfW, top, halfW * 2, bottom - top);
           }
         } else if ((label.label_type === "Global" || label.label_type === "Hierarchical") && label.shape) {
-          // Port flag shape: match the rendered flag dimensions
+          // Port flag shape: tight selection matching the rendered flag
           const fs = label.font_size || 1.27;
           ctx.font = `${fs}px Roboto`;
-          const tw = ctx.measureText(label.text).width;
+          const tw = ctx.measureText(txt(label.text)).width; // Use txt() to convert {slash} to /
           const h = fs * 1.4;
           const pad = fs * 0.3;
           const arrowW = h * 0.5;
@@ -1141,15 +1362,22 @@ export function SchematicRenderer() {
 
           if (isHoriz) {
             const connRight = r === 0;
-            const dir = connRight ? 1 : -1;
-            const bodyStart = dir > 0 ? arrowW : -arrowW;
-            const bodyEnd = dir > 0 ? arrowW + tw + pad * 2 : -arrowW - tw - pad * 2;
-            const x1 = label.position.x + Math.min(0, bodyStart, bodyEnd);
-            const x2 = label.position.x + Math.max(0, bodyStart, bodyEnd);
-            drawSelBox(x1, label.position.y - h / 2, x2 - x1, h);
+            // Total shape length: arrow + text body (+ possible output arrow)
+            const totalLen = arrowW + tw + pad * 2 + (label.shape === "output" || label.shape === "bidirectional" ? arrowW : 0);
+            if (connRight) {
+              // Connection on left, flag extends right
+              drawSelBox(label.position.x, label.position.y - h / 2, totalLen, h);
+            } else {
+              // Connection on right, flag extends left
+              drawSelBox(label.position.x - totalLen, label.position.y - h / 2, totalLen, h);
+            }
           } else {
-            const totalW = arrowW + tw + pad * 2;
-            drawSelBox(label.position.x - h / 2, label.position.y - totalW, h, totalW);
+            const totalLen = arrowW + tw + pad * 2;
+            if (r === 90) {
+              drawSelBox(label.position.x - h / 2, label.position.y - totalLen, h, totalLen);
+            } else {
+              drawSelBox(label.position.x - h / 2, label.position.y, h, totalLen);
+            }
           }
         } else {
           // Net label: selection box around text
@@ -1287,6 +1515,133 @@ export function SchematicRenderer() {
       ctx.moveTo(cur.x - 3, cur.y); ctx.lineTo(cur.x + 3, cur.y);
       ctx.moveTo(cur.x, cur.y - 3); ctx.lineTo(cur.x, cur.y + 3);
       ctx.stroke();
+    }
+
+    // --- Net Label / Power Port / No Connect placement preview ---
+    const editMode2 = useSchematicStore.getState().editMode;
+    const paused = useEditorStore.getState().placementPaused;
+    if (!placing && editMode2 !== "select" && !paused) {
+      const cur = placeCursorRef.current;
+      ctx.globalAlpha = 0.6;
+
+      if (editMode2 === "placeLabel") {
+        // Net label preview — simple text with overline (NOT a flag/port shape)
+        const labelText = "NET?";
+        const fs = 1.27;
+        ctx.font = `${fs}px Roboto`;
+        const tw = ctx.measureText(labelText).width;
+
+        // Text
+        ctx.fillStyle = C.labelNet;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(labelText, cur.x, cur.y - 0.3);
+
+        // Overline
+        ctx.strokeStyle = C.labelNet;
+        ctx.lineWidth = 0.08;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y - fs - 0.2);
+        ctx.lineTo(cur.x + tw, cur.y - fs - 0.2);
+        ctx.stroke();
+
+        // Connection point indicator (small dot)
+        ctx.fillStyle = C.labelNet;
+        ctx.beginPath();
+        ctx.arc(cur.x, cur.y, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (editMode2 === "placePower") {
+        // Power port preview
+        const preset = powerPreset.current;
+        const stemLen = 2.0, symSize = 1.2;
+        const isGnd = preset.style.includes("ground");
+        const dir = isGnd ? 1 : -1;
+
+        ctx.strokeStyle = C.power;
+        ctx.lineWidth = 0.12;
+        ctx.lineCap = "round";
+
+        // Stem
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x, cur.y + dir * stemLen);
+        ctx.stroke();
+
+        // Symbol
+        const sy = cur.y + dir * stemLen;
+        if (preset.style === "bar") {
+          ctx.lineWidth = 0.18;
+          ctx.beginPath();
+          ctx.moveTo(cur.x - symSize, sy);
+          ctx.lineTo(cur.x + symSize, sy);
+          ctx.stroke();
+        } else if (isGnd) {
+          ctx.lineWidth = 0.12;
+          ctx.beginPath();
+          ctx.moveTo(cur.x - symSize, sy);
+          ctx.lineTo(cur.x + symSize, sy);
+          ctx.moveTo(cur.x - symSize * 0.65, sy + dir * 0.4);
+          ctx.lineTo(cur.x + symSize * 0.65, sy + dir * 0.4);
+          ctx.moveTo(cur.x - symSize * 0.3, sy + dir * 0.8);
+          ctx.lineTo(cur.x + symSize * 0.3, sy + dir * 0.8);
+          ctx.stroke();
+        }
+
+        // Name
+        ctx.fillStyle = C.power;
+        ctx.font = "1.27px Roboto";
+        ctx.textAlign = "center";
+        ctx.textBaseline = isGnd ? "top" : "bottom";
+        ctx.fillText(preset.net, cur.x, isGnd ? sy + 1.2 : sy - 0.4);
+
+      } else if (editMode2 === "placeNoConnect") {
+        // X mark preview
+        ctx.strokeStyle = C.noConnect;
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(cur.x - 0.7, cur.y - 0.7);
+        ctx.lineTo(cur.x + 0.7, cur.y + 0.7);
+        ctx.moveTo(cur.x + 0.7, cur.y - 0.7);
+        ctx.lineTo(cur.x - 0.7, cur.y + 0.7);
+        ctx.stroke();
+
+      } else if (editMode2 === "placePort") {
+        // Port preview — flag shape with "PORT?" text
+        const portText = "PORT?";
+        const fs = 1.27;
+        const h = fs * 1.4;
+        const pad = fs * 0.3;
+        const arrowW = h * 0.5;
+        ctx.font = `${fs}px Roboto`;
+        const tw = ctx.measureText(portText).width;
+
+        ctx.strokeStyle = C.labelHier;
+        ctx.lineWidth = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x + arrowW, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y + h / 2);
+        ctx.lineTo(cur.x + arrowW, cur.y + h / 2);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Connection stub
+        ctx.lineWidth = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x - 1, cur.y);
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = C.labelHier;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(portText, cur.x + arrowW + pad, cur.y);
+      }
+
+      ctx.globalAlpha = 1;
     }
 
     // --- Drawing tool ghost previews ---
@@ -1515,6 +1870,12 @@ export function SchematicRenderer() {
         return;
       }
 
+      // If placement is paused (Tab pressed), clicking on canvas resumes
+      if (useEditorStore.getState().placementPaused) {
+        useEditorStore.getState().setPlacementPaused(false);
+        return;
+      }
+
       if (store.editMode === "placeSymbol" && store.placingSymbol) {
         store.placeSymbolAt(world);
         return;
@@ -1559,6 +1920,36 @@ export function SchematicRenderer() {
       if (store.editMode === "placeNoErc") {
         const eSnap = findNearestElectricalPoint(data, world.x, world.y);
         store.placeNoErcDirective(eSnap || world);
+        return;
+      }
+
+      if (store.editMode === "placeParameterSet") {
+        store.placeParameterSet(world);
+        return;
+      }
+
+      if (store.editMode === "placeDifferentialPair") {
+        store.placeDifferentialPairDirective(world);
+        return;
+      }
+
+      if (store.editMode === "placeBlanket") {
+        store.placeBlanket(world);
+        return;
+      }
+
+      if (store.editMode === "placeCompileMask") {
+        store.placeCompileMask(world);
+        return;
+      }
+
+      if (store.editMode === "placeTextFrame") {
+        store.placeTextFrame(world);
+        return;
+      }
+
+      if (store.editMode === "placeNote") {
+        store.placeNote(world);
         return;
       }
 
@@ -1724,6 +2115,25 @@ export function SchematicRenderer() {
         if (selectionModeRef.current === "lasso") {
           lassoPoints.current = [{ x: world.x, y: world.y }];
         }
+        // Global listeners so selection works even when mouse leaves canvas
+        const globalMove = (ev: MouseEvent) => {
+          const cr = canvasRef.current?.getBoundingClientRect();
+          if (!cr) return;
+          const world2 = s2w(ev.clientX - cr.left, ev.clientY - cr.top);
+          selectEnd.current = { x: world2.x, y: world2.y };
+          if (selectionModeRef.current === "lasso") {
+            lassoPoints.current.push({ x: world2.x, y: world2.y });
+          }
+          cancelAnimationFrame(animRef.current);
+          animRef.current = requestAnimationFrame(render);
+        };
+        const globalUp = () => {
+          handleMouseUp();
+          window.removeEventListener("mousemove", globalMove);
+          window.removeEventListener("mouseup", globalUp);
+        };
+        window.addEventListener("mousemove", globalMove);
+        window.addEventListener("mouseup", globalUp);
       }
     }
   }, [data, s2w, ctxMenu]);
@@ -1773,9 +2183,12 @@ export function SchematicRenderer() {
         animRef.current = requestAnimationFrame(render);
       }
       // Update cursor for drawing tool ghost previews
-      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc"];
+      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc", "placeParameterSet", "placeDifferentialPair", "placeBlanket", "placeCompileMask", "placeTextFrame", "placeNote"];
       if (drawModes.includes(store.editMode)) {
-        placeCursorRef.current = snapPoint(world);
+        // Use electrical snap for placement modes that snap to pins/wires
+        const eSnapModes = ["placeLabel", "placePower", "placePort", "placeNoConnect", "placeNoErc"];
+        const eSnap = eSnapModes.includes(store.editMode) && data ? findNearestElectricalPoint(data, world.x, world.y) : null;
+        placeCursorRef.current = eSnap || snapPoint(world);
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
@@ -1807,24 +2220,60 @@ export function SchematicRenderer() {
       }
     }
 
-    // Auto-pan: when cursor is near edge during active modes
+    // Auto-pan: when cursor is near edge during active modes (NOT when paused)
     const store2 = useSchematicStore.getState();
-    const isActive = store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current;
+    const isActive = !useEditorStore.getState().placementPaused && (store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current);
     if (isActive) {
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      const edge = 40; // pixels from edge
-      const speed = 4; // pixels per frame
+      const edge = 50; // pixels from edge
+      const speed = 6; // pixels per frame
       let pdx = 0, pdy = 0;
       if (sx < edge) pdx = speed * (1 - sx / edge);
       else if (sx > r.width - edge) pdx = -speed * (1 - (r.width - sx) / edge);
       if (sy < edge) pdy = speed * (1 - sy / edge);
       else if (sy > r.height - edge) pdy = -speed * (1 - (r.height - sy) / edge);
+      // Also handle mouse outside canvas (negative sx/sy or beyond width/height)
+      if (sx < 0) pdx = speed * 1.5;
+      if (sx > r.width) pdx = -speed * 1.5;
+      if (sy < 0) pdy = speed * 1.5;
+      if (sy > r.height) pdy = -speed * 1.5;
+
+      autoPanDir.current = { dx: pdx, dy: pdy };
+
       if (pdx !== 0 || pdy !== 0) {
         camRef.current.x += pdx;
         camRef.current.y += pdy;
+        // Update selection end point to follow pan
+        if (selecting.current) {
+          const world = s2w(e.clientX - r.left, e.clientY - r.top);
+          selectEnd.current = { x: world.x, y: world.y };
+          if (selectionModeRef.current === "lasso") {
+            lassoPoints.current.push({ x: world.x, y: world.y });
+          }
+        }
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
+
+        // Start interval for continued panning when mouse stays at edge
+        if (!autoPanRef.current) {
+          autoPanRef.current = setInterval(() => {
+            const { dx, dy } = autoPanDir.current;
+            if (dx === 0 && dy === 0) {
+              if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
+              return;
+            }
+            camRef.current.x += dx;
+            camRef.current.y += dy;
+            cancelAnimationFrame(animRef.current);
+            animRef.current = requestAnimationFrame(render);
+          }, 16);
+        }
+      } else {
+        autoPanDir.current = { dx: 0, dy: 0 };
+        if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
       }
+    } else {
+      if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
     }
   }, [render, s2w, updateStatusBar, data]);
 
@@ -1904,8 +2353,8 @@ export function SchematicRenderer() {
           { label: "Sheet Entry", action: () => {} },
           sep,
           { label: "Text String", action: () => s().setEditMode("placeText") },
-          { label: "Text Frame", action: () => {} },
-          { label: "Note", action: () => {} },
+          { label: "Text Frame", action: () => s().setEditMode("placeTextFrame") },
+          { label: "Note", action: () => s().setEditMode("placeNote") },
           sep,
           { label: "Drawing Tools", action: () => {}, children: [
             { label: "Line", action: () => s().setEditMode("drawLine") },
@@ -1975,7 +2424,10 @@ export function SchematicRenderer() {
         // Bottom section
         items.push({ label: "Preferences...", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "," })) });
         if (hasSel) {
-          items.push({ label: "Properties...", shortcut: "F11", action: () => {} });
+          items.push({ label: "Properties...", shortcut: "F11", action: () => {
+            useLayoutStore.getState().setDockActiveTab("right", "properties");
+            if (useLayoutStore.getState().rightCollapsed) useLayoutStore.getState().toggleRight();
+          }});
         }
 
         setCtxMenu({ x: rcp.x, y: rcp.y, items });
@@ -1985,6 +2437,9 @@ export function SchematicRenderer() {
     dragging.current = false;
     moving.current = false;
     draggingEndpoint.current = null;
+    // Stop auto-pan
+    autoPanDir.current = { dx: 0, dy: 0 };
+    if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
   }, [data, render]);
 
   const handleDblClick = useCallback((e: React.MouseEvent) => {
@@ -2036,13 +2491,18 @@ export function SchematicRenderer() {
       if (!r) return;
       const world = s2w(e.clientX - r.left, e.clientY - r.top);
 
-      // Check labels first (tight hit test on label position)
-      for (const label of data.labels) {
-        if (Math.hypot(world.x - label.position.x, world.y - label.position.y) < 2.5) {
-          store.select(label.uuid);
-          const sp = w2s(label.position.x, label.position.y);
-          setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y });
-          return;
+      // Check labels — use hitTest for proper zone matching, position edit at text location
+      {
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
+        if (hit && hit.type === "label") {
+          const label = data.labels.find(l => l.uuid === hit.uuid);
+          if (label) {
+            store.select(label.uuid);
+            const textPos = getLabelTextWorldPos(label);
+            const sp = w2s(textPos.x, textPos.y);
+            setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y });
+            return;
+          }
         }
       }
 
@@ -2106,7 +2566,16 @@ export function SchematicRenderer() {
           render();
           break;
         }
+        case "Tab": {
+          // Altium: Tab opens properties panel (during placement or with selection)
+          e.preventDefault();
+          const layout = useLayoutStore.getState();
+          layout.setDockActiveTab("right", "properties");
+          if (layout.rightCollapsed) layout.toggleRight();
+          break;
+        }
         case "Escape":
+          useEditorStore.getState().setPlacementPaused(false);
           if (store.wireDrawing.active) {
             store.cancelWire();
           } else if (store.placingSymbol) {
@@ -2128,19 +2597,20 @@ export function SchematicRenderer() {
           }
           const lbl = data.labels.find(l => l.uuid === selId);
           if (lbl) {
-            const sp = w2s(lbl.position.x, lbl.position.y);
+            const textPos = getLabelTextWorldPos(lbl);
+            const sp = w2s(textPos.x, textPos.y);
             setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y });
           }
           break;
         }
-        case "Tab":
-          // Tab = open properties panel (during any mode with selection or placement)
-          if (store.editMode !== "select" || store.selectedIds.size > 0) {
-            e.preventDefault();
-            const layout = useLayoutStore.getState();
-            if (layout.rightCollapsed) layout.toggleRight();
-          }
+        case "Tab": {
+          // Tab = open properties panel
+          e.preventDefault();
+          const ly = useLayoutStore.getState();
+          ly.setDockActiveTab("right", "properties");
+          if (ly.rightCollapsed) ly.toggleRight();
           break;
+        }
         case "w":
         case "W":
           if (e.ctrlKey) { e.preventDefault(); store.setEditMode("drawWire"); }
@@ -2351,7 +2821,7 @@ export function SchematicRenderer() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={() => { /* Don't cancel selection on leave — auto-pan handles edge panning */ }}
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
@@ -2381,8 +2851,12 @@ export function SchematicRenderer() {
       {inPlaceEdit && (
         <input
           autoFocus
-          value={inPlaceEdit.value}
-          onChange={(e) => setInPlaceEdit({ ...inPlaceEdit, value: e.target.value })}
+          value={txt(inPlaceEdit.value)}
+          onChange={(e) => {
+            // Convert / back to {slash} for KiCad compat, keep rest as-is
+            const raw = e.target.value.replace(/\//g, "{slash}");
+            setInPlaceEdit({ ...inPlaceEdit, value: raw });
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               committedRef.current = true;
@@ -2409,7 +2883,7 @@ export function SchematicRenderer() {
             }
             setInPlaceEdit(null);
           }}
-          className="absolute z-40 bg-bg-primary border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
+          className="absolute z-40 bg-bg-primary/90 border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
           style={{
             left: inPlaceEdit.screenX,
             top: inPlaceEdit.screenY,
@@ -2417,8 +2891,8 @@ export function SchematicRenderer() {
             fontFamily: "Roboto, sans-serif",
             minWidth: Math.max(60, inPlaceEdit.value.length * Math.max(7, camRef.current.zoom * 0.8)),
             color: "#e8c66a",
-            lineHeight: 1.3,
-            transform: "translateY(-100%)",
+            lineHeight: 1,
+            transform: "translateY(-50%)",
           }}
         />
       )}
@@ -2497,19 +2971,12 @@ export function SchematicRenderer() {
                 <DropdownItem label="Touching Line" onClick={() => { selectionModeRef.current = "touchingLine"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
                 <DropdownItem label="All" onClick={() => { useSchematicStore.getState().selectAll(); setActiveBarMenu(null); }} />
                 <DropdownItem label="Connection" onClick={() => {
-                  // Select all objects on the same net as the current selection
                   const store = useSchematicStore.getState();
                   const data = store.data;
                   if (!data || store.selectedIds.size === 0) { setActiveBarMenu(null); return; }
                   const firstId = [...store.selectedIds][0];
-                  // Find net name from selected label or wire
-                  const label = data.labels.find(l => l.uuid === firstId);
-                  if (label) {
-                    const netName = label.text;
-                    const ids = new Set<string>();
-                    data.labels.filter(l => l.text === netName).forEach(l => ids.add(l.uuid));
-                    store.selectMultiple([...ids]);
-                  }
+                  const uuids = connectionSelect(data, firstId, useEditorStore.getState().selectionFilter);
+                  if (uuids.length > 0) store.selectMultiple(uuids);
                   setActiveBarMenu(null);
                 }} />
                 <DropdownItem label="Toggle Selection" onClick={() => { useSchematicStore.getState().invertSelection(); setActiveBarMenu(null); }} />
@@ -2525,9 +2992,18 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "move" ? null : "move")}
             menu={
               <div className="py-1 min-w-[220px]">
-                <DropdownItem label="Drag" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Move" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Move Selection by X, Y..." onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Drag" onClick={() => { useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Move" onClick={() => { useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Move Selection by X, Y..." onClick={() => {
+                  const input = prompt("Enter offset as X,Y (e.g. 2.54,0):");
+                  if (input) {
+                    const parts = input.split(",").map(s => parseFloat(s.trim()));
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                      useSchematicStore.getState().moveSelectionByXY(parts[0], parts[1]);
+                    }
+                  }
+                  setActiveBarMenu(null);
+                }} />
                 <div className="h-px bg-[#3d4054] my-1" />
                 <DropdownItem label="Move To Front" onClick={() => setActiveBarMenu(null)} />
                 <DropdownItem label="Rotate Selection" onClick={() => { useSchematicStore.getState().rotateSelected(); setActiveBarMenu(null); }} />
@@ -2539,22 +3015,27 @@ export function SchematicRenderer() {
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
-          {/* Wiring */}
+          {/* Wiring — icon tracks last-used tool */}
           <ActiveBarBtn
-            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
-            label="Wire" active={editMode === "drawWire" || editMode === "drawBus" || editMode === "placeLabel"}
-            onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }}
+            icon={lastTool.wire === "drawBus"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>
+              : lastTool.wire === "placeLabel"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
+            label={lastTool.wire === "drawBus" ? "Bus" : lastTool.wire === "placeLabel" ? "Net Label" : "Wire"}
+            active={editMode === "drawWire" || editMode === "drawBus" || editMode === "placeLabel" || editMode === "placeBusEntry"}
+            onClick={() => { useSchematicStore.getState().setEditMode(lastTool.wire as any); setActiveBarMenu(null); }}
             menuOpen={activeBarMenu === "wire"}
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "wire" ? null : "wire")}
             menu={
               <div className="py-1 min-w-[140px]">
                 <DropdownItem label="Wire" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "drawWire"})); useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Bus" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("drawBus"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Bus Entry" onClick={() => { useSchematicStore.getState().setEditMode("placeBusEntry"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "drawBus"})); useSchematicStore.getState().setEditMode("drawBus"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Bus Entry" onClick={() => { setLastTool(t => ({...t, wire: "placeBusEntry"})); useSchematicStore.getState().setEditMode("placeBusEntry"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Net Label" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("placeLabel"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "placeLabel"})); useSchematicStore.getState().setEditMode("placeLabel"); setActiveBarMenu(null); }} />
               </div>
             } />
 
@@ -2598,9 +3079,9 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "harness" ? null : "harness")}
             menu={
               <div className="py-1 min-w-[180px]">
-                <DropdownItem label="Signal Harness" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Harness Connector" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Harness Entry" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Signal Harness" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Harness Connector" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Harness Entry" onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
 
@@ -2609,6 +3090,20 @@ export function SchematicRenderer() {
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>}
             label="No Connect" active={editMode === "placeNoConnect"}
             onClick={() => { useSchematicStore.getState().setEditMode("placeNoConnect"); setActiveBarMenu(null); }} />
+
+          {/* Port */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/><line x1="4" y1="12" x2="1" y2="12"/></svg>}
+            label="Port" active={editMode === "placePort"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placePort"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "port"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "port" ? null : "port")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                <DropdownItem label="Port" onClick={() => { useSchematicStore.getState().setEditMode("placePort"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Off Sheet Connector" disabled onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
           {/* Component */}
@@ -2628,9 +3123,9 @@ export function SchematicRenderer() {
               <div className="py-1 min-w-[200px]">
                 <DropdownItem label="Sheet Symbol" onClick={() => { useSchematicStore.getState().setEditMode("placeSheetSymbol"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Sheet Entry" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Device Sheet Symbol" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Device Sheet Symbol" onClick={() => setActiveBarMenu(null)} disabled />
                 <div className="h-px bg-[#3d4054] my-1" />
-                <DropdownItem label="Reuse Block..." onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Reuse Block..." onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
 
@@ -2643,11 +3138,11 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "directives" ? null : "directives")}
             menu={
               <div className="py-1 min-w-[180px]">
-                <DropdownItem label="Parameter Set" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Parameter Set" onClick={() => { useSchematicStore.getState().setEditMode("placeParameterSet"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Generic No ERC" onClick={() => { useSchematicStore.getState().setEditMode("placeNoErc"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Differential Pair" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Blanket" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Compile Mask" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Differential Pair" onClick={() => { useSchematicStore.getState().setEditMode("placeDifferentialPair"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Blanket" onClick={() => { useSchematicStore.getState().setEditMode("placeBlanket"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Compile Mask" onClick={() => { useSchematicStore.getState().setEditMode("placeCompileMask"); setActiveBarMenu(null); }} />
               </div>
             } />
 
@@ -2662,25 +3157,32 @@ export function SchematicRenderer() {
               <div className="py-1 min-w-[140px]">
                 <DropdownItem label="Text String" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/></svg>}
                   onClick={() => { useSchematicStore.getState().setEditMode("placeText"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Text Frame" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Note" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Text Frame" onClick={() => { useSchematicStore.getState().setEditMode("placeTextFrame"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Note" onClick={() => { useSchematicStore.getState().setEditMode("placeNote"); setActiveBarMenu(null); }} />
               </div>
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
-          {/* Drawing tools */}
+          {/* Drawing tools — icon tracks last-used tool */}
           <ActiveBarBtn
-            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>}
-            label="Line" active={editMode === "drawLine" || editMode === "drawRect" || editMode === "drawCircle" || editMode === "drawPolyline"}
-            onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }}
+            icon={lastTool.draw === "drawRect"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+              : lastTool.draw === "drawCircle"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+              : lastTool.draw === "drawPolyline"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l6-10 4 6 6-12"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>}
+            label={lastTool.draw === "drawRect" ? "Rectangle" : lastTool.draw === "drawCircle" ? "Circle" : lastTool.draw === "drawPolyline" ? "Polyline" : "Line"}
+            active={editMode === "drawLine" || editMode === "drawRect" || editMode === "drawCircle" || editMode === "drawPolyline"}
+            onClick={() => { useSchematicStore.getState().setEditMode(lastTool.draw as any); setActiveBarMenu(null); }}
             menuOpen={activeBarMenu === "draw"}
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "draw" ? null : "draw")}
             menu={
               <div className="py-1 min-w-[130px]">
-                <DropdownItem label="Line" onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Rectangle" onClick={() => { useSchematicStore.getState().setEditMode("drawRect"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Circle" onClick={() => { useSchematicStore.getState().setEditMode("drawCircle"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Polyline" onClick={() => { useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Line" onClick={() => { setLastTool(t => ({...t, draw: "drawLine"})); useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Rectangle" onClick={() => { setLastTool(t => ({...t, draw: "drawRect"})); useSchematicStore.getState().setEditMode("drawRect"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Circle" onClick={() => { setLastTool(t => ({...t, draw: "drawCircle"})); useSchematicStore.getState().setEditMode("drawCircle"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Polyline" onClick={() => { setLastTool(t => ({...t, draw: "drawPolyline"})); useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
               </div>
             } />
 
@@ -2768,6 +3270,29 @@ export function SchematicRenderer() {
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
+          {/* Align */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4v16"/><path d="M8 8h10"/><path d="M8 12h6"/><path d="M8 16h8"/></svg>}
+            label="Align"
+            onClick={() => { useSchematicStore.getState().alignSelectionToGrid(); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "align"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "align" ? null : "align")}
+            menu={
+              <div className="py-1 min-w-[200px]">
+                <DropdownItem label="Align Left" onClick={() => { useSchematicStore.getState().alignSelected("left"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Right" onClick={() => { useSchematicStore.getState().alignSelected("right"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Horizontal Centers" onClick={() => { useSchematicStore.getState().alignSelected("left"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Distribute Horizontally" onClick={() => { useSchematicStore.getState().distributeSelected("horizontal"); setActiveBarMenu(null); }} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Align Top" onClick={() => { useSchematicStore.getState().alignSelected("top"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Bottom" onClick={() => { useSchematicStore.getState().alignSelected("bottom"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Vertical Centers" onClick={() => { useSchematicStore.getState().alignSelected("top"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Distribute Vertically" onClick={() => { useSchematicStore.getState().distributeSelected("vertical"); setActiveBarMenu(null); }} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Align To Grid" onClick={() => { useSchematicStore.getState().alignSelectionToGrid(); setActiveBarMenu(null); }} />
+              </div>
+            } />
+
           {/* Rotate */}
           <ActiveBarBtn
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>}
@@ -2826,16 +3351,56 @@ function ActiveBarBtn({ icon, label, active, highlighted, onClick, menu, menuOpe
   );
 }
 
-function DropdownItem({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick: () => void }) {
+function DropdownItem({ label, icon, onClick, disabled }: { label: string; icon?: React.ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <button
-      onClick={onClick}
-      className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-text-secondary hover:bg-[#3d4054] hover:text-text-primary transition-colors text-left"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`flex items-center gap-2 w-full px-3 py-1.5 text-[11px] transition-colors text-left ${disabled ? "text-text-secondary/40 cursor-default" : "text-text-secondary hover:bg-[#3d4054] hover:text-text-primary"}`}
     >
       {icon && <span className="w-4 shrink-0 flex justify-center">{icon}</span>}
       {label}
     </button>
   );
+}
+
+/** Calculate the world-space position where the label TEXT starts rendering.
+ *  This is used for inline editing to overlay the input exactly on the text. */
+function getLabelTextWorldPos(label: { position: SchPoint; label_type: string; shape?: string; font_size?: number; rotation: number; text: string }): SchPoint {
+  const fs = label.font_size || 1.27;
+  const lx = label.position.x, ly = label.position.y;
+
+  if (label.label_type === "Power") {
+    const stemLen = 2.0;
+    const style = label.shape || "bar";
+    const isGnd = style.includes("ground") || style === "earth_ground";
+    // Text is centered, return center position
+    if (isGnd) return { x: lx, y: ly + stemLen + 1.2 + fs * 0.5 };
+    return { x: lx, y: ly - stemLen - 0.4 - fs * 0.5 };
+  }
+
+  if ((label.label_type === "Global" || label.label_type === "Hierarchical") && label.shape) {
+    const h = fs * 1.4;
+    const pad = fs * 0.3;
+    const arrowW = h * 0.5;
+    const r = label.rotation;
+    const tw = label.text.replace(/\{slash\}/g, "/").length * fs * 0.6; // Approximate text width
+
+    if (r === 0 || r === 180) {
+      const connRight = r === 0;
+      if (connRight) {
+        // Connection on left, text goes right — return left edge of text
+        return { x: lx + arrowW + pad, y: ly };
+      } else {
+        // Connection on right, text goes left — return left edge of text
+        return { x: lx - arrowW - pad - tw, y: ly };
+      }
+    }
+    return { x: lx, y: ly };
+  }
+
+  // Net labels: text renders at position with small offset
+  return { x: lx, y: ly - 0.3 };
 }
 
 function arcCenter(p1: SchPoint, p2: SchPoint, p3: SchPoint): SchPoint | null {

@@ -5,6 +5,7 @@ import { ToolbarStrip } from "@/components/ToolbarStrip";
 import { DocumentTabBar } from "@/components/DocumentTabBar";
 import { StatusBar } from "@/components/StatusBar";
 import { DockPanel } from "@/components/DockPanel";
+import { FloatingPanel } from "@/components/FloatingPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
@@ -21,6 +22,7 @@ import { ParameterManager } from "@/components/ParameterManager";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
+import { useEditorStore } from "@/stores/editor";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useResizable } from "@/hooks/useResizable";
 import { printSchematic } from "@/lib/pdfExport";
@@ -163,6 +165,17 @@ function ResizeHandle({
   );
 }
 
+function FloatingPanelsRenderer() {
+  const floatingPanels = useLayoutStore((s) => s.floatingPanels);
+  return (
+    <>
+      {Object.entries(floatingPanels).map(([panelId, state]) => (
+        <FloatingPanel key={panelId} panelId={panelId} x={state.x} y={state.y} width={state.width} height={state.height} />
+      ))}
+    </>
+  );
+}
+
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
   const [showPdfExport, setShowPdfExport] = useState(false);
@@ -234,6 +247,29 @@ function App() {
         useLayoutStore.getState().setDockActiveTab("left", "components");
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
+      }
+      // Tab — Pause placement and open Properties panel (Altium behavior)
+      if (e.key === "Tab" &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        const editor = useEditorStore.getState();
+        const schematic = useSchematicStore.getState();
+        const layout = useLayoutStore.getState();
+
+        if (schematic.editMode !== "select" || schematic.placingSymbol) {
+          // Toggle placement pause
+          const newPaused = !editor.placementPaused;
+          editor.setPlacementPaused(newPaused);
+          if (newPaused) {
+            // Pause: open properties panel and focus it
+            layout.setDockActiveTab("right", "properties");
+            if (layout.rightCollapsed) layout.toggleRight();
+          }
+        } else if (schematic.selectedIds.size > 0) {
+          // Object selected: just open properties
+          layout.setDockActiveTab("right", "properties");
+          if (layout.rightCollapsed) layout.toggleRight();
+        }
       }
       // Shift+F — Find Similar Objects
       if (e.key === "F" && e.shiftKey && !e.ctrlKey &&
@@ -317,6 +353,7 @@ function App() {
       </div>
 
       <StatusBar />
+      <FloatingPanelsRenderer />
       <ComponentSearch open={componentSearchOpen} onClose={() => setComponentSearchOpen(false)} />
       <ExportPdfDialog open={showPdfExport} onClose={() => setShowPdfExport(false)} />
       <BomConfigDialog open={showBomConfig} onClose={() => setShowBomConfig(false)} />

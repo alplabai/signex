@@ -42,6 +42,9 @@ interface EditorState {
   selectionFilter: SelectionFilter;
   autoJunction: boolean;
   electricalSnapRange: number;
+  snapToElectrical: boolean;
+  placementPaused: boolean; // Tab pauses placement to edit properties
+  setPlacementPaused: (v: boolean) => void;
   ercSeverity: Record<string, "error" | "warning" | "none">;
   // Navigation history
   viewHistory: { x: number; y: number; zoom: number }[];
@@ -63,6 +66,7 @@ interface EditorState {
   resetFilter: () => void;
   setAutoJunction: (v: boolean) => void;
   setElectricalSnapRange: (v: number) => void;
+  setSnapToElectrical: (v: boolean) => void;
   setErcSeverity: (type: string, severity: "error" | "warning" | "none") => void;
   pushViewHistory: (pos: { x: number; y: number; zoom: number }) => void;
   navigateBack: () => void;
@@ -82,6 +86,9 @@ export const useEditorStore = create<EditorState>()(persist((set) => ({
   selectionFilter: { ...DEFAULT_FILTER },
   autoJunction: true,
   electricalSnapRange: 2.0,
+  snapToElectrical: true,
+  placementPaused: false,
+  setPlacementPaused: (v) => set({ placementPaused: v }),
   viewHistory: [],
   viewHistoryIndex: -1,
   bookmarks: [],
@@ -121,6 +128,7 @@ export const useEditorStore = create<EditorState>()(persist((set) => ({
   resetFilter: () => set({ selectionFilter: { ...DEFAULT_FILTER } }),
   setAutoJunction: (v) => set({ autoJunction: v }),
   setElectricalSnapRange: (v) => set({ electricalSnapRange: v }),
+  setSnapToElectrical: (v) => set({ snapToElectrical: v }),
   setErcSeverity: (type, severity) =>
     set((s) => ({ ercSeverity: { ...s.ercSeverity, [type]: severity } })),
   pushViewHistory: (pos) =>
@@ -148,5 +156,7 @@ export const useEditorStore = create<EditorState>()(persist((set) => ({
     selectionFilter: state.selectionFilter,
     gridVisible: state.gridVisible,
     autoJunction: state.autoJunction,
+    snapToElectrical: state.snapToElectrical,
+    electricalSnapRange: state.electricalSnapRange,
   }),
 }));

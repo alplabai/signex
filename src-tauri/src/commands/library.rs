@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::engine::parser::{self, LibSymbol, SymbolMeta};
+use crate::engine::pcb_parser::{self, Footprint as PcbFootprint};
 use crate::engine::writer;
 
 // In-memory cache for parsed libraries
@@ -25,6 +26,7 @@ pub struct SymbolSearchResult {
     pub description: String,
     pub keywords: Vec<String>,
     pub reference_prefix: String,
+    pub footprint: String,
     pub pin_count: usize,
 }
 
@@ -198,6 +200,7 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
                         description: meta.description.clone(),
                         keywords: meta.keywords.clone(),
                         reference_prefix: meta.reference_prefix.clone(),
+                        footprint: meta.footprint.clone(),
                         pin_count: meta.pin_count,
                     });
                     if limit > 0 && results.len() >= limit as usize {
@@ -206,6 +209,41 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
                 }
             }
         }
+
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// List all symbols in a specific library file (fast — only loads one file)
+#[tauri::command]
+pub async fn list_library_symbols(library_name: String) -> Result<Vec<SymbolSearchResult>, String> {
+    tokio::task::spawn_blocking(move || {
+        let dir = find_kicad_symbols_dir()
+            .ok_or_else(|| "KiCad symbol libraries not found.".to_string())?;
+
+        let path = dir.join(format!("{}.kicad_sym", library_name));
+        if !path.exists() {
+            return Err(format!("Library not found: {}", library_name));
+        }
+
+        let path_str = path.to_string_lossy().to_string();
+        let symbols = load_library(&path_str)
+            .map_err(|e| format!("Failed to load library: {}", e))?;
+
+        let results: Vec<SymbolSearchResult> = symbols
+            .iter()
+            .map(|(_lib_sym, meta)| SymbolSearchResult {
+                library: library_name.clone(),
+                symbol_id: meta.symbol_id.clone(),
+                description: meta.description.clone(),
+                keywords: meta.keywords.clone(),
+                reference_prefix: meta.reference_prefix.clone(),
+                pin_count: meta.pin_count,
+                footprint: meta.footprint.clone(),
+            })
+            .collect();
 
         Ok(results)
     })
@@ -326,6 +364,122 @@ pub async fn save_symbol(
         }
 
         Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Find KiCad footprint library directory (.pretty directories)
+fn find_kicad_footprints_dir() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("KICAD_FOOTPRINT_DIR") {
+        let path = Path::new(&dir);
+        if path.is_dir() {
+            return Some(path.to_path_buf());
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            r"C:\Program Files\KiCad\9.0\share\kicad\footprints",
+            r"C:\Program Files\KiCad\8.0\share\kicad\footprints",
+            r"C:\Program Files\KiCad\7.0\share\kicad\footprints",
+            r"C:\Program Files (x86)\KiCad\share\kicad\footprints",
+        ];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let candidates = [
+            "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints",
+            "/Applications/KiCad/kicad.app/Contents/SharedSupport/footprints",
+        ];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let candidates = [
+            "/usr/share/kicad/footprints",
+            "/usr/local/share/kicad/footprints",
+        ];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            let xdg = Path::new(&home).join(".local/share/kicad/footprints");
+            if xdg.is_dir() {
+                return Some(xdg);
+            }
+        }
+    }
+
+    None
+}
+
+/// Load a footprint from KiCad libraries by its full name (e.g., "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
+#[tauri::command]
+pub async fn get_footprint(footprint_id: String) -> Result<PcbFootprint, String> {
+    tokio::task::spawn_blocking(move || {
+        // Parse "LibraryName:FootprintName" format
+        let (lib_name, fp_name) = if let Some(colon_idx) = footprint_id.find(':') {
+            (
+                &footprint_id[..colon_idx],
+                &footprint_id[colon_idx + 1..],
+            )
+        } else {
+            return Err(format!(
+                "Invalid footprint ID '{}'. Expected 'Library:Footprint' format.",
+                footprint_id
+            ));
+        };
+
+        let fp_dir = find_kicad_footprints_dir().ok_or_else(|| {
+            "KiCad footprint libraries not found. Install KiCad or set KICAD_FOOTPRINT_DIR."
+                .to_string()
+        })?;
+
+        // Build path: footprints_dir/LibraryName.pretty/FootprintName.kicad_mod
+        let mod_path = fp_dir
+            .join(format!("{}.pretty", lib_name))
+            .join(format!("{}.kicad_mod", fp_name));
+
+        if !mod_path.exists() {
+            return Err(format!(
+                "Footprint file not found: {}",
+                mod_path.display()
+            ));
+        }
+
+        // Validate path is inside the footprints directory (no traversal)
+        let canonical = mod_path
+            .canonicalize()
+            .map_err(|e| format!("Invalid footprint path: {}", e))?;
+        let canonical_dir = fp_dir
+            .canonicalize()
+            .map_err(|e| format!("Invalid footprints dir: {}", e))?;
+        if !canonical.starts_with(&canonical_dir) {
+            return Err("Path traversal not allowed".to_string());
+        }
+
+        let content = std::fs::read_to_string(&canonical)
+            .map_err(|e| format!("Failed to read footprint: {}", e))?;
+
+        pcb_parser::parse_footprint_file(&content)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
