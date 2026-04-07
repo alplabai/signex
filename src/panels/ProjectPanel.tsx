@@ -37,8 +37,11 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         )}
         style={{ paddingLeft: `${depth * 14 + 10}px` }}
         onClick={() => {
-          if (isExpandable) setExpanded(!expanded);
-          node.onClick?.();
+          if (node.onClick) {
+            node.onClick();
+          } else if (isExpandable) {
+            setExpanded(!expanded);
+          }
         }}
       >
         {isExpandable ? (

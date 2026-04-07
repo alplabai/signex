@@ -327,6 +327,59 @@ export function hitTest(
     }
   }
 
+  // Parameter sets (icon ~1 unit radius)
+  if (data.parameter_sets) {
+    for (const ps of data.parameter_sets) {
+      if (dist(p, ps.position) < tolerance * 1.2) return { type: "drawing", uuid: ps.uuid };
+    }
+  }
+
+  // Differential pair directives
+  if (data.diff_pair_directives) {
+    for (const dp of data.diff_pair_directives) {
+      if (dist(p, dp.position) < tolerance * 1.2) return { type: "drawing", uuid: dp.uuid };
+    }
+  }
+
+  // Blankets (point-in-polygon)
+  if (data.blankets) {
+    for (const bl of data.blankets) {
+      if (bl.points.length >= 3) {
+        let inside = false;
+        for (let i = 0, j = bl.points.length - 1; i < bl.points.length; j = i++) {
+          const xi = bl.points[i].x, yi = bl.points[i].y;
+          const xj = bl.points[j].x, yj = bl.points[j].y;
+          if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        if (inside) return { type: "drawing", uuid: bl.uuid };
+        for (let i = 0; i < bl.points.length; i++) {
+          const j2 = (i + 1) % bl.points.length;
+          if (distToSegment(p, bl.points[i], bl.points[j2]) < tolerance * 0.5) return { type: "drawing", uuid: bl.uuid };
+        }
+      }
+    }
+  }
+
+  // Compile masks (rectangle)
+  if (data.compile_masks) {
+    for (const cm of data.compile_masks) {
+      const cx = cm.position.x, cy = cm.position.y, cw = cm.size[0], ch = cm.size[1];
+      if (p.x >= cx - tolerance && p.x <= cx + cw + tolerance && p.y >= cy - tolerance && p.y <= cy + ch + tolerance) {
+        return { type: "drawing", uuid: cm.uuid };
+      }
+    }
+  }
+
+  // Notes (rectangle)
+  if (data.notes) {
+    for (const n of data.notes) {
+      const nx = n.position.x, ny = n.position.y, nw = n.size[0], nh = n.size[1];
+      if (p.x >= nx - tolerance && p.x <= nx + nw + tolerance && p.y >= ny - tolerance && p.y <= ny + nh + tolerance) {
+        return { type: "drawing", uuid: n.uuid };
+      }
+    }
+  }
+
   return null;
 }
 
@@ -501,6 +554,13 @@ export function boxSelect(
     else if (d.type === "Arc" && pointInBox(d.start, box) && pointInBox(d.mid, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Polyline" && d.points.every(p => pointInBox(p, box))) selected.push(d.uuid);
   }
+
+  // New directive/annotation types
+  if (data.parameter_sets) for (const ps of data.parameter_sets) { if (pointInBox(ps.position, box)) selected.push(ps.uuid); }
+  if (data.diff_pair_directives) for (const dp of data.diff_pair_directives) { if (pointInBox(dp.position, box)) selected.push(dp.uuid); }
+  if (data.blankets) for (const bl of data.blankets) { if (bl.points.every(p => pointInBox(p, box))) selected.push(bl.uuid); }
+  if (data.compile_masks) for (const cm of data.compile_masks) { if (pointInBox(cm.position, box)) selected.push(cm.uuid); }
+  if (data.notes) for (const n of data.notes) { if (pointInBox(n.position, box)) selected.push(n.uuid); }
 
   return selected;
 }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useLayoutStore } from "@/stores/layout";
+import { useEditorStore } from "@/stores/editor";
 import { PANEL_DEFS } from "@/lib/panelRegistry";
 import type { PanelId } from "@/lib/panelRegistry";
 import { ProjectPanel } from "@/panels/ProjectPanel";
@@ -88,17 +89,29 @@ function findTargetDock(x: number, y: number): string | null {
 }
 
 export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
-  const tabs = useLayoutStore((s) => s.docks[dockId]);
-  const activeTab = useLayoutStore((s) => s.activeTab[dockId]);
+  const allTabs = useLayoutStore((s) => s.docks[dockId]);
+  const editorMode = useEditorStore((s) => s.mode) as "schematic" | "pcb";
+  // Filter tabs by editor context — hide PCB-only panels in schematic mode and vice versa
+  const tabs = allTabs.filter(panelId => {
+    const def = PANEL_DEFS.find(d => d.id === panelId);
+    if (!def) return true;
+    return def.context === "both" || def.context === editorMode;
+  });
+  const rawActiveTab = useLayoutStore((s) => s.activeTab[dockId]);
+  const activeTab = tabs.includes(rawActiveTab) ? rawActiveTab : tabs[0];
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const movePanel = useLayoutStore((s) => s.movePanel);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [, forceUpdate] = useState(0);
 
-  // Subscribe to global ghost changes
+  // Subscribe to global ghost changes + clear drag highlight when drag ends
   useEffect(() => {
-    const fn = () => forceUpdate(n => n + 1);
+    const fn = () => {
+      forceUpdate(n => n + 1);
+      // Clear drag highlight when no panel is being dragged
+      if (!globalGhost && dragOver) setDragOver(false);
+    };
     ghostListeners.add(fn);
     return () => { ghostListeners.delete(fn); };
   }, []);
@@ -189,7 +202,7 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
             key={panelId}
             onMouseDown={(e) => { if (e.button === 0) startTabDrag(e, panelId); }}
             className={cn(
-              "h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap cursor-default",
+              "h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap cursor-default outline-none",
               activeTab === panelId
                 ? "text-text-secondary border-b-2 border-accent"
                 : "text-text-muted/40 hover:text-text-muted/70"
