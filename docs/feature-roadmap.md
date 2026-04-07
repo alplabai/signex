@@ -38,7 +38,7 @@
 - [x] AutoFocus (dim unrelated objects)
 
 ### Phase 4: Advanced
-- [x] Library editor (canvas, toolbar, pin/graphic CRUD, save to .sxsym)
+- [x] Library editor (canvas, toolbar, pin/graphic CRUD, save to .snxsym)
 - [x] PDF export (single/multi-sheet, DPI, color/mono)
 - [x] Print support (Ctrl+P)
 - [x] Output Jobs panel (BOM, Netlist, PDF, PNG)

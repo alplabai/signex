@@ -98,7 +98,7 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - Hidden pin support for power connections
 - Multi-part component types (LibSymbolUnit)
 - DeMorgan alternate display mode toggle
-- Save to native .sxsym format, read .kicad_sym
+- Save to native .snxsym format, read .kicad_sym
 - New/Edit/Duplicate from Components panel
 </details>
 

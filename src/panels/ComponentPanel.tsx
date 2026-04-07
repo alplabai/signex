@@ -89,7 +89,7 @@ export function ComponentPanel() {
       show_pin_names: true,
       pin_name_offset: 1.016,
     };
-    useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.sxsym", "NewSymbol");
+    useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.snxsym", "NewSymbol");
   };
 
   const placeComponent = async (result: SymbolSearchResult) => {

@@ -44,7 +44,7 @@ src/                    React frontend
 - All panels collapsible, layout persisted to localStorage
 - Altium-compatible keyboard shortcuts (see docs/altium-schematic-reference.md)
 - KiCad file format compatibility (.kicad_sch read/write)
-- Native format: .sxsch/.sxpcb/.sxproj (future)
+- Native format: .snxsch/.snxpcb/.snxproj/.snxsym (future)
 - GPL-3.0 license (KiCad derivative)
 
 ## Phase Status
