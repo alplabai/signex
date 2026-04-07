@@ -91,6 +91,10 @@ export interface SchematicData {
   net_classes: NetClass[];
   variants: DesignVariant[];
   document_parameters: DocumentParameter[];
+  groups: SchGroup[];
+  differential_pairs: DifferentialPair[];
+  signal_harnesses: SignalHarness[];
+  constraints: DesignConstraint[];
   lib_symbols: Record<string, LibSymbol>;
 }
 
@@ -113,6 +117,55 @@ export interface DocumentParameter {
   scope: "document" | "project";
 }
 
+export interface DifferentialPair {
+  name: string; // Common name (e.g., "USB_D")
+  positiveNet: string; // Net name with _P suffix
+  negativeNet: string; // Net name with _N suffix
+  impedance?: number; // Target impedance in ohms
+  netClass?: string; // Associated net class
+}
+
+export interface SignalHarness {
+  uuid: string;
+  name: string;
+  type: string; // Harness type identifier
+  members: HarnessMember[];
+}
+
+export interface HarnessMember {
+  name: string;
+  kind: "net" | "bus" | "harness"; // Can contain nets, buses, or nested harnesses
+  ref?: string; // Reference to net name, bus name, or child harness uuid
+}
+
+export interface DesignConstraint {
+  uuid: string;
+  name: string;
+  type: "clearance" | "trace_width" | "via_size" | "diff_pair_gap" | "length_match" | "custom";
+  scope: ConstraintScope;
+  value: number;
+  unit: "mm" | "mil";
+  enabled: boolean;
+  priority: number; // Higher = overrides lower
+}
+
+export interface ConstraintScope {
+  kind: "all" | "net_class" | "net" | "diff_pair" | "component" | "between";
+  target?: string; // Net class name, net name, diff pair name, or component ref
+  target2?: string; // Second target for "between" kind
+}
+
+export interface ProjectParameter {
+  key: string;
+  value: string;
+}
+
+export interface SchGroup {
+  uuid: string;
+  name: string;
+  memberUuids: string[];
+}
+
 export interface SchNoConnect {
   uuid: string;
   position: SchPoint;
@@ -133,15 +186,20 @@ export interface SchRectangle {
   stroke_type: string;
 }
 
+export type LineStyle = "solid" | "dash" | "dot" | "dash_dot";
+export type ArrowStyle = "none" | "open" | "closed" | "diamond";
+
 export type SchDrawing =
-  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number; color?: string }
-  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; color?: string }
-  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "Ellipse"; uuid: string; center: SchPoint; radiusX: number; radiusY: number; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "RoundRect"; uuid: string; start: SchPoint; end: SchPoint; cornerRadius: number; width: number; fill: boolean; fillColor?: string; color?: string };
+  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number; color?: string; lineStyle?: LineStyle; arrowStart?: ArrowStyle; arrowEnd?: ArrowStyle }
+  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; color?: string; lineStyle?: LineStyle }
+  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle; arrowStart?: ArrowStyle; arrowEnd?: ArrowStyle }
+  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Ellipse"; uuid: string; center: SchPoint; radiusX: number; radiusY: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "RoundRect"; uuid: string; start: SchPoint; end: SchPoint; cornerRadius: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Polygon"; uuid: string; points: SchPoint[]; width: number; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Image"; uuid: string; start: SchPoint; end: SchPoint; dataUrl: string; aspectLocked?: boolean };
 
 export interface SchNoErcDirective {
   uuid: string;
@@ -269,6 +327,9 @@ export interface SchChildSheet {
   position: SchPoint;
   size: [number, number];
   pins: SchSheetPin[];
+  // Multi-channel: Repeat(ChannelId, StartIdx, EndIdx) — e.g., "Repeat(CH, 1, 4)"
+  repeat?: string;
+  channelCount?: number;
 }
 
 export interface SchPoint {

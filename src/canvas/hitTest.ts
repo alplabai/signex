@@ -232,6 +232,25 @@ export function hitTest(
       const nx = (p.x - d.center.x) / d.radiusX, ny = (p.y - d.center.y) / d.radiusY;
       const nd = Math.sqrt(nx * nx + ny * ny);
       if (d.fill ? nd <= 1.1 : Math.abs(nd - 1) < tolerance / Math.max(d.radiusX, d.radiusY)) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "Polygon") {
+      // Point-in-polygon (ray casting) + edge distance
+      if (d.points.length >= 3) {
+        let inside = false;
+        for (let i = 0, j = d.points.length - 1; i < d.points.length; j = i++) {
+          const xi = d.points[i].x, yi = d.points[i].y;
+          const xj = d.points[j].x, yj = d.points[j].y;
+          if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        if (inside) return { type: "drawing", uuid: d.uuid };
+        for (let i = 0; i < d.points.length; i++) {
+          const j = (i + 1) % d.points.length;
+          if (distToSegment(p, d.points[i], d.points[j]) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
+        }
+      }
+    } else if (d.type === "Image") {
+      const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+      const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+      if (p.x >= rx && p.x <= rx + rw && p.y >= ry && p.y <= ry + rh) return { type: "drawing", uuid: d.uuid };
     } else if (d.type === "RoundRect" || d.type === "TextFrame") {
       const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
       const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);

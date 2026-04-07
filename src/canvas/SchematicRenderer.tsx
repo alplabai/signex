@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
 import { useLayoutStore } from "@/stores/layout";
+import { useProjectStore } from "@/stores/project";
 import { hitTest, boxSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
@@ -719,14 +720,47 @@ export function SchematicRenderer() {
     }
 
     // Drawing objects (user-drawn lines, rects, circles, arcs, polylines)
+    // Helper: apply line style dash pattern
+    const applyLineStyle = (ls?: string) => {
+      if (ls === "dash") ctx.setLineDash([1.0, 0.5]);
+      else if (ls === "dot") ctx.setLineDash([0.2, 0.3]);
+      else if (ls === "dash_dot") ctx.setLineDash([1.0, 0.3, 0.2, 0.3]);
+      else ctx.setLineDash([]);
+    };
+    // Helper: draw arrow at point in direction angle
+    const drawArrow = (x: number, y: number, angle: number, style?: string) => {
+      if (!style || style === "none") return;
+      const sz = 0.8;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      if (style === "open") {
+        ctx.moveTo(-sz, -sz * 0.5); ctx.lineTo(0, 0); ctx.lineTo(-sz, sz * 0.5);
+        ctx.stroke();
+      } else if (style === "closed") {
+        ctx.moveTo(0, 0); ctx.lineTo(-sz, -sz * 0.5); ctx.lineTo(-sz, sz * 0.5); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else if (style === "diamond") {
+        ctx.moveTo(0, 0); ctx.lineTo(-sz * 0.5, -sz * 0.4); ctx.lineTo(-sz, 0); ctx.lineTo(-sz * 0.5, sz * 0.4); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    };
+
     ctx.globalAlpha = sf.drawings?.visible === false ? 0.12 : 1;
     for (const d of data.drawings) {
       const sel = selectedIds.has(d.uuid);
       const strokeColor = sel ? C.selection : ("color" in d && d.color) || C.body;
       ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = Math.max(d.width || 0.15, 0.15);
+      ctx.fillStyle = strokeColor;
+      ctx.lineWidth = Math.max("width" in d ? d.width || 0.15 : 0.15, 0.15);
+      applyLineStyle("lineStyle" in d ? d.lineStyle : undefined);
       if (d.type === "Line") {
         ctx.beginPath(); ctx.moveTo(d.start.x, d.start.y); ctx.lineTo(d.end.x, d.end.y); ctx.stroke();
+        const angle = Math.atan2(d.end.y - d.start.y, d.end.x - d.start.x);
+        drawArrow(d.end.x, d.end.y, angle, d.arrowEnd);
+        drawArrow(d.start.x, d.start.y, angle + Math.PI, d.arrowStart);
       } else if (d.type === "Rect") {
         const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
         const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
@@ -746,6 +780,13 @@ export function SchematicRenderer() {
           for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
           if (d.fill) { ctx.closePath(); ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
           ctx.stroke();
+          // Arrows on polyline endpoints
+          if (d.points.length >= 2) {
+            const p0 = d.points[0], p1 = d.points[1];
+            drawArrow(p0.x, p0.y, Math.atan2(p0.y - p1.y, p0.x - p1.x), d.arrowStart);
+            const pn = d.points[d.points.length - 1], pn1 = d.points[d.points.length - 2];
+            drawArrow(pn.x, pn.y, Math.atan2(pn.y - pn1.y, pn.x - pn1.x), d.arrowEnd);
+          }
         }
       } else if (d.type === "Ellipse") {
         ctx.beginPath();
@@ -770,7 +811,6 @@ export function SchematicRenderer() {
         const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
         if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
         ctx.strokeRect(rx, ry, rw, rh);
-        // Render text inside frame
         ctx.fillStyle = sel ? C.selection : d.color || C.sheetText;
         ctx.font = `${d.fontSize || 1.27}px Roboto`;
         ctx.textAlign = "left"; ctx.textBaseline = "top";
@@ -779,7 +819,35 @@ export function SchematicRenderer() {
         lines.forEach((line, i) => {
           ctx.fillText(line, rx + padding, ry + padding + i * (d.fontSize || 1.27) * 1.3, rw - padding * 2);
         });
+      } else if (d.type === "Polygon") {
+        if (d.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(d.points[0].x, d.points[0].y);
+          for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
+          ctx.closePath();
+          ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill;
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (d.type === "Image") {
+        const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+        const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+        // Image rendering uses cached HTMLImageElement
+        const imgKey = `img_${d.uuid}`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const win = window as any;
+        let img = win[imgKey] as HTMLImageElement | undefined;
+        if (!img && d.dataUrl) {
+          img = new Image();
+          img.src = d.dataUrl;
+          win[imgKey] = img;
+        }
+        if (img?.complete) {
+          ctx.drawImage(img, rx, ry, rw, rh);
+        }
+        if (sel) { ctx.strokeStyle = C.selection; ctx.setLineDash([0.3, 0.2]); ctx.strokeRect(rx, ry, rw, rh); ctx.setLineDash([]); }
       }
+      ctx.setLineDash([]);
     }
 
     // Text notes (with special string substitution)
@@ -1243,6 +1311,8 @@ export function SchematicRenderer() {
           items.push({ separator: true, label: "", action: () => {} });
           items.push({ label: "Bring to Front", action: () => useSchematicStore.getState().bringToFront() });
           items.push({ label: "Send to Back", action: () => useSchematicStore.getState().sendToBack() });
+          items.push({ separator: true, label: "", action: () => {} });
+          items.push({ label: "Create Group", action: () => useSchematicStore.getState().createGroup(), disabled: sel.size < 2 });
           if (sel.size > 1) {
             items.push({ separator: true, label: "", action: () => {} });
             items.push({ label: "Align Left", shortcut: "Shift+Ctrl+L", action: () => useSchematicStore.getState().alignSelected("left") });
@@ -1638,6 +1708,33 @@ export function SchematicRenderer() {
       return;
     }
 
+    // Ctrl+Double-Click on child sheet = navigate to that sheet
+    if (e.ctrlKey && data) {
+      const r = canvasRef.current?.getBoundingClientRect();
+      if (r) {
+        const world = s2w(e.clientX - r.left, e.clientY - r.top);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
+        if (hit?.type === "childSheet") {
+          const sheet = data.child_sheets.find((s) => s.uuid === hit.uuid);
+          if (sheet) {
+            // Open the child sheet tab
+            const project = useProjectStore.getState().project;
+            if (project) {
+              const { openTab } = useProjectStore.getState();
+              openTab({
+                id: `sch-${project.path}:${sheet.filename}`,
+                name: sheet.name,
+                type: "schematic",
+                path: project.path,
+                dirty: false,
+              });
+            }
+          }
+          return;
+        }
+      }
+    }
+
     // Double-click = in-place edit (Altium behavior)
     // Only triggers on TEXT elements: labels, net labels, text notes, symbol ref/value text
     // NEVER triggers on component body
@@ -1967,6 +2064,27 @@ export function SchematicRenderer() {
         onMouseLeave={handleMouseUp}
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          const json = e.dataTransfer.getData("application/signex-symbol");
+          if (!json) return;
+          try {
+            const result = JSON.parse(json) as import("@/types").SymbolSearchResult;
+            const lib = (await import("@tauri-apps/api/core")).invoke;
+            // Find library path from the result
+            const libs = await lib<import("@/types").LibraryInfo[]>("list_libraries");
+            const libInfo = libs.find((l) => l.name === result.library);
+            if (!libInfo) return;
+            const sym = await lib<import("@/types").LibSymbol>("get_symbol", { libraryPath: libInfo.path, symbolId: result.symbol_id });
+            const r = canvasRef.current?.getBoundingClientRect();
+            if (!r) return;
+            const world = s2w(e.clientX - r.left, e.clientY - r.top);
+            const snapped = snapPoint(world);
+            useSchematicStore.getState().startPlacement(sym, result);
+            useSchematicStore.getState().placeSymbolAt(snapped);
+          } catch (err) { console.error("Drop failed:", err); }
+        }}
       />
 
       {/* In-place text editor overlay */}
