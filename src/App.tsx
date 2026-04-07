@@ -22,6 +22,7 @@ import { ParameterManager } from "@/components/ParameterManager";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
+import { useEditorStore } from "@/stores/editor";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useResizable } from "@/hooks/useResizable";
 import { printSchematic } from "@/lib/pdfExport";
@@ -247,13 +248,28 @@ function App() {
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
       }
-      // Tab — Open Properties panel (Altium behavior)
+      // Tab — Pause placement and open Properties panel (Altium behavior)
       if (e.key === "Tab" &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault();
+        const editor = useEditorStore.getState();
+        const schematic = useSchematicStore.getState();
         const layout = useLayoutStore.getState();
-        layout.setDockActiveTab("right", "properties");
-        if (layout.rightCollapsed) layout.toggleRight();
+
+        if (schematic.editMode !== "select" || schematic.placingSymbol) {
+          // Toggle placement pause
+          const newPaused = !editor.placementPaused;
+          editor.setPlacementPaused(newPaused);
+          if (newPaused) {
+            // Pause: open properties panel and focus it
+            layout.setDockActiveTab("right", "properties");
+            if (layout.rightCollapsed) layout.toggleRight();
+          }
+        } else if (schematic.selectedIds.size > 0) {
+          // Object selected: just open properties
+          layout.setDockActiveTab("right", "properties");
+          if (layout.rightCollapsed) layout.toggleRight();
+        }
       }
       // Shift+F — Find Similar Objects
       if (e.key === "F" && e.shiftKey && !e.ctrlKey &&

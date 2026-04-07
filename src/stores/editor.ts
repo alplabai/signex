@@ -43,6 +43,8 @@ interface EditorState {
   autoJunction: boolean;
   electricalSnapRange: number;
   snapToElectrical: boolean;
+  placementPaused: boolean; // Tab pauses placement to edit properties
+  setPlacementPaused: (v: boolean) => void;
   ercSeverity: Record<string, "error" | "warning" | "none">;
   // Navigation history
   viewHistory: { x: number; y: number; zoom: number }[];
@@ -85,6 +87,8 @@ export const useEditorStore = create<EditorState>()(persist((set) => ({
   autoJunction: true,
   electricalSnapRange: 2.0,
   snapToElectrical: true,
+  placementPaused: false,
+  setPlacementPaused: (v) => set({ placementPaused: v }),
   viewHistory: [],
   viewHistoryIndex: -1,
   bookmarks: [],
