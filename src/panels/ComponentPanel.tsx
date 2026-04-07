@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus, Star } from "lucide-react";
+import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus, Star, FolderOpen, Menu, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
@@ -37,15 +37,32 @@ export function ComponentPanel() {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<LibSymbol | null>(null);
   const [selectedResult, setSelectedResult] = useState<SymbolSearchResult | null>(null);
+  const [showModelsSection, setShowModelsSection] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
 
   // Load library list on mount
-  useEffect(() => {
+  const fetchLibraries = useCallback(() => {
     invoke<LibraryInfo[]>("list_libraries")
       .then(setLibraries)
       .catch(() => {});
   }, []);
+
+  useEffect(() => { fetchLibraries(); }, [fetchLibraries]);
 
   // Debounced search
   const search = useCallback((q: string) => {
@@ -142,18 +159,76 @@ export function ComponentPanel() {
   // Filter results by selected library
   const filteredResults = selectedLib === "all" ? displayResults : displayResults.filter(r => r.library === selectedLib);
 
+  const handleRefresh = () => {
+    libCacheRef.current = {};
+    fetchLibraries();
+    if (query.length >= 2) search(query);
+    setMenuOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Library selector dropdown */}
+      {/* Library selector dropdown with menu button */}
       <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-subtle">
-        <Package size={12} className="text-accent/60 shrink-0" />
+        <FolderOpen size={12} className="text-accent/60 shrink-0" />
         <select value={selectedLib} onChange={(e) => setSelectedLib(e.target.value)}
           className="flex-1 bg-bg-surface border border-border-subtle rounded px-1.5 py-0.5 text-[10px] text-text-primary outline-none truncate">
           <option value="all">All Libraries</option>
           {libraries.map(lib => (
-            <option key={lib.name} value={lib.name}>{lib.name}</option>
+            <option key={lib.name} value={lib.name}>
+              {lib.name}
+            </option>
           ))}
         </select>
+        {/* Menu button */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-1 rounded text-text-muted/40 hover:text-text-secondary hover:bg-bg-hover transition-colors shrink-0"
+            title="Panel options"
+          >
+            <Menu size={13} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-0.5 z-50 bg-bg-surface border border-border-subtle rounded shadow-lg min-w-[200px] py-0.5">
+              <button
+                disabled
+                className="w-full text-left px-3 py-1.5 text-[10px] text-text-muted/30 cursor-not-allowed"
+              >
+                Import Library...
+              </button>
+              <button
+                onClick={() => { setShowModelsSection(!showModelsSection); setMenuOpen(false); }}
+                className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <span className="w-3 text-center text-accent">{showModelsSection ? "\u2713" : ""}</span>
+                Models
+              </button>
+              <div className="border-t border-border-subtle/40 my-0.5" />
+              <button
+                disabled
+                className="w-full text-left px-3 py-1.5 text-[10px] text-text-muted/30 cursor-not-allowed"
+              >
+                Libraries Preferences...
+              </button>
+              <button
+                disabled
+                className="w-full text-left px-3 py-1.5 text-[10px] text-text-muted/30 cursor-not-allowed"
+              >
+                File-based Libraries Search...
+              </button>
+              <div className="border-t border-border-subtle/40 my-0.5" />
+              <button
+                onClick={handleRefresh}
+                className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:bg-bg-hover transition-colors flex items-center gap-2"
+              >
+                <RefreshCw size={10} className="shrink-0" />
+                Refresh
+                <span className="ml-auto text-text-muted/40 text-[9px]">F5</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Search bar */}
@@ -181,64 +256,92 @@ export function ComponentPanel() {
           onEdit={editSymbol}
           onDuplicate={duplicateSymbol}
           onPlace={() => placeComponent(selectedResult)}
+          showModels={showModelsSection}
         />
       )}
 
-      {/* Results table with column headers */}
+      {/* "Drag a column header here to group" placeholder */}
       {isSearching && filteredResults.length > 0 && (
-        <div className="border-b border-border-subtle">
-          <div className="flex items-center px-2 py-0.5 bg-bg-tertiary text-[9px] text-text-muted/50 uppercase tracking-wider font-semibold border-b border-border-subtle/50">
-            <span className="flex-1 min-w-0">Part Number</span>
-            <span className="w-[120px] shrink-0 truncate">Description</span>
-            <span className="w-[80px] shrink-0 text-right">Library Ref</span>
-          </div>
+        <div className="px-2 py-[3px] bg-bg-tertiary/40 border-b border-border-subtle/40 text-center">
+          <span className="text-[8px] text-text-muted/30 italic select-none">
+            Drag a column header here to group by that column
+          </span>
+        </div>
+      )}
+
+      {/* Results table with sticky column headers */}
+      {isSearching && filteredResults.length > 0 && (
+        <div className="flex-1 overflow-auto min-h-0">
+          <table className="w-full min-w-[380px] border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-bg-tertiary border-b border-border-subtle/60">
+                <th className="text-left px-2 py-[3px] text-[9px] text-text-muted/50 uppercase tracking-wider font-semibold border-r border-border-subtle/30 whitespace-nowrap">
+                  Part Number
+                </th>
+                <th className="text-left px-2 py-[3px] text-[9px] text-text-muted/50 uppercase tracking-wider font-semibold border-r border-border-subtle/30 whitespace-nowrap w-[140px]">
+                  Description
+                </th>
+                <th className="text-right px-2 py-[3px] text-[9px] text-text-muted/50 uppercase tracking-wider font-semibold whitespace-nowrap w-[90px]">
+                  Library Ref
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredResults.map((r) => (
+                <tr
+                  key={`${r.library}:${r.symbol_id}`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/signex-symbol", JSON.stringify(r));
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  className={cn(
+                    "cursor-pointer transition-colors border-b border-border-subtle/20",
+                    selectedResult?.symbol_id === r.symbol_id && selectedResult?.library === r.library
+                      ? "bg-accent/10" : "hover:bg-bg-hover"
+                  )}
+                  onClick={() => loadPreview(r)}
+                  onDoubleClick={() => placeComponent(r)}
+                >
+                  <td className="px-2 py-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Cpu size={11} className="shrink-0 text-accent/50" />
+                      <span className="text-[10px] font-medium truncate text-text-primary">{r.symbol_id}</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-[10px] text-text-muted/60 truncate block">{r.description || "\u2014"}</span>
+                  </td>
+                  <td className="px-2 py-1 text-right">
+                    <span className="text-[10px] text-text-muted/40 truncate block">{r.library}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {/* Results count */}
       {isSearching && filteredResults.length > 0 && (
-        <div className="px-2 py-0.5 border-b border-border-subtle/50 text-[9px] text-text-muted/40">
+        <div className="px-2 py-[3px] border-t border-border-subtle/50 bg-bg-tertiary/40 text-[9px] text-text-muted/50 shrink-0">
           Results: {filteredResults.length}
         </div>
       )}
 
-      {/* Results or library tree */}
-      <div className="flex-1 overflow-y-auto">
-        {isSearching ? (
-          filteredResults.length === 0 && !loading ? (
-            <div className="text-center py-6 text-text-muted/40 text-[11px]">
-              No results
-              <div className="mt-2 text-accent/60 text-[10px]">Need more components?<br/>Find in Manufacturer Part Search</div>
-            </div>
-          ) : (
-            filteredResults.map((r) => (
-              <button
-                key={`${r.library}:${r.symbol_id}`}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/signex-symbol", JSON.stringify(r));
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                className={cn(
-                  "w-full flex items-center px-2 py-1 text-left transition-colors border-b border-border-subtle/20",
-                  selectedResult?.symbol_id === r.symbol_id && selectedResult?.library === r.library
-                    ? "bg-accent/10" : "hover:bg-bg-hover"
-                )}
-                onClick={() => loadPreview(r)}
-                onDoubleClick={() => placeComponent(r)}
-              >
-                <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                  <Cpu size={11} className="shrink-0 text-accent/50" />
-                  <span className="text-[10px] font-medium truncate text-text-primary">{r.symbol_id}</span>
-                </div>
-                <span className="w-[120px] shrink-0 text-[10px] text-text-muted/60 truncate">{r.description || "—"}</span>
-                <span className="w-[80px] shrink-0 text-[10px] text-text-muted/40 text-right truncate">{r.library}</span>
-              </button>
-            ))
-          )
-        ) : (
-          // Library tree
-          libraries.length === 0 ? (
+      {/* No results or library tree (only when not searching with results) */}
+      {isSearching && filteredResults.length === 0 && !loading && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="text-center py-6 text-text-muted/40 text-[11px]">
+            No results
+            <div className="mt-2 text-accent/60 text-[10px]">Need more components?<br/>Find in Manufacturer Part Search</div>
+          </div>
+        </div>
+      )}
+
+      {!isSearching && (
+        <div className="flex-1 overflow-y-auto">
+          {libraries.length === 0 ? (
             <div className="text-center py-6 text-text-muted/40 text-[11px]">
               <Package size={24} className="mx-auto mb-2 opacity-20" />
               Loading libraries...
@@ -251,13 +354,14 @@ export function ComponentPanel() {
                   onClick={() => expandLibrary(lib)}
                 >
                   <ChevronRight size={10} className={cn("text-text-muted/40 transition-transform", expandedLib === lib.name && "rotate-90")} />
+                  <FolderOpen size={11} className="text-yellow-600/60 shrink-0" />
                   <span className="text-text-secondary truncate">{lib.name}</span>
                 </button>
                 {expandedLib === lib.name && libSymbols.map((r) => (
                   <button
                     key={r.symbol_id}
                     className={cn(
-                      "w-full flex items-center gap-2 pl-6 pr-2 py-1 text-left transition-colors text-[10px]",
+                      "w-full flex items-center gap-2 pl-7 pr-2 py-1 text-left transition-colors text-[10px]",
                       selectedResult?.symbol_id === r.symbol_id ? "bg-accent/10" : "hover:bg-bg-hover"
                     )}
                     onClick={() => loadPreview(r)}
@@ -270,9 +374,9 @@ export function ComponentPanel() {
                 ))}
               </div>
             ))
-          )
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -284,12 +388,14 @@ function ComponentDetailSections({
   onEdit,
   onDuplicate,
   onPlace,
+  showModels,
 }: {
   preview: LibSymbol;
   selectedResult: SymbolSearchResult;
   onEdit: () => void;
   onDuplicate: () => void;
   onPlace: () => void;
+  showModels: boolean;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [showAllDetails, setShowAllDetails] = useState(false);
@@ -301,6 +407,7 @@ function ComponentDetailSections({
     { label: "Library Path", value: selectedResult.library },
     { label: "Library Ref", value: selectedResult.symbol_id },
     { label: "Description", value: selectedResult.description || "\u2014" },
+    { label: "Keywords", value: selectedResult.keywords?.length ? selectedResult.keywords.join(", ") : "\u2014" },
     { label: "Prefix", value: selectedResult.reference_prefix || "?" },
     { label: "Pins", value: String(selectedResult.pin_count) },
   ];
@@ -362,33 +469,40 @@ function ComponentDetailSections({
         </div>
       )}
 
-      {/* Models section */}
-      <SectionHeader
-        title="Models"
-        expanded={modelsOpen}
-        onToggle={() => setModelsOpen(!modelsOpen)}
-      />
-      {modelsOpen && (
-        <div className="border-b border-border-subtle/30">
-          {/* Symbol preview */}
-          <div className="h-[100px]">
-            <SymbolPreviewMini symbol={preview} />
-          </div>
-          <div className="px-2 py-1 text-[10px] text-text-muted/60 text-center border-t border-border-subtle/30">
-            {selectedResult.symbol_id}
-          </div>
-          {/* Footprint / 3D preview placeholder */}
-          <div className="h-[80px] mx-2 mb-1.5 rounded bg-[#1e2035] border border-border-subtle/30 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-text-muted/30">3D Preview</span>
-            <span className="text-[8px] text-text-muted/20 mt-0.5">No footprint assigned</span>
-          </div>
-          <div className="px-2 pb-1.5 flex items-center justify-between">
-            <span className="text-[9px] text-text-muted/40 truncate">{selectedResult.symbol_id}</span>
-            <button className="px-1.5 py-0.5 text-[8px] text-text-muted/40 border border-border-subtle/40 rounded hover:text-text-secondary hover:border-border-subtle transition-colors">
-              2D
-            </button>
-          </div>
-        </div>
+      {/* Models section (toggleable from menu) */}
+      {showModels && (
+        <>
+          <SectionHeader
+            title="Models"
+            expanded={modelsOpen}
+            onToggle={() => setModelsOpen(!modelsOpen)}
+          />
+          {modelsOpen && (
+            <div className="border-b border-border-subtle/30">
+              {/* Symbol preview with light/cream background */}
+              <div className="h-[100px]">
+                <SymbolPreviewMini symbol={preview} />
+              </div>
+              <div className="px-2 py-1 text-[10px] text-text-muted/70 text-center border-t border-border-subtle/30 font-medium">
+                {selectedResult.symbol_id}
+              </div>
+              {/* Footprint / 3D preview placeholder */}
+              <div className="h-[80px] mx-2 mb-1.5 rounded bg-[#1e2035] border border-border-subtle/30 flex flex-col items-center justify-center">
+                <Package size={16} className="text-text-muted/15 mb-1" />
+                <span className="text-[9px] text-text-muted/30">No 3D model available</span>
+                {selectedResult.symbol_id && (
+                  <span className="text-[8px] text-text-muted/20 mt-0.5">{selectedResult.symbol_id}</span>
+                )}
+              </div>
+              <div className="px-2 pb-1.5 flex items-center justify-between">
+                <span className="text-[9px] text-text-muted/40 truncate">{selectedResult.symbol_id}</span>
+                <button className="px-1.5 py-0.5 text-[8px] text-text-muted/40 border border-border-subtle/40 rounded hover:text-text-secondary hover:border-border-subtle transition-colors">
+                  2D
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* References section */}
@@ -453,10 +567,16 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
     const ox = (w - bw * scale) / 2 - (minX - pad) * scale;
     const oy = (h - bh * scale) / 2 - (minY - pad) * scale;
 
-    ctx.fillStyle = "#1a1b2e"; ctx.fillRect(0, 0, w, h);
+    // Light cream/yellow background like Altium's symbol preview
+    ctx.fillStyle = "#f5f0dc"; ctx.fillRect(0, 0, w, h);
+    // Subtle border inside
+    ctx.strokeStyle = "#d4cba8"; ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
     ctx.save(); ctx.translate(ox, oy); ctx.scale(scale, -scale);
 
-    ctx.strokeStyle = "#9fa8da"; ctx.fillStyle = "#1e2035"; ctx.lineWidth = 0.15;
+    // Dark body outline and fill on cream background
+    ctx.strokeStyle = "#2a4080"; ctx.fillStyle = "#e8e0c0"; ctx.lineWidth = 0.15;
     for (const g of symbol.graphics) {
       if (g.type === "Polyline" && g.points.length >= 2) {
         ctx.beginPath(); ctx.moveTo(g.points[0].x, g.points[0].y);
@@ -471,7 +591,8 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
         if (g.fill) ctx.fill(); ctx.stroke();
       }
     }
-    ctx.strokeStyle = "#81c784"; ctx.lineWidth = 0.1;
+    // Green pins on cream background
+    ctx.strokeStyle = "#2e7d32"; ctx.lineWidth = 0.1;
     for (const pin of symbol.pins) {
       const rad = (pin.rotation * Math.PI) / 180;
       ctx.beginPath();
