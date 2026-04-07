@@ -2089,9 +2089,9 @@ export function SchematicRenderer() {
       }
     }
 
-    // Auto-pan: when cursor is near edge during active modes (selection, wire, move, lasso)
+    // Auto-pan: when cursor is near edge during active modes (NOT when paused)
     const store2 = useSchematicStore.getState();
-    const isActive = store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current;
+    const isActive = !useEditorStore.getState().placementPaused && (store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current);
     if (isActive) {
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
       const edge = 50; // pixels from edge
