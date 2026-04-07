@@ -41,6 +41,7 @@ function makeSymbol(_id: string, ref: string, value: string, x: number, y: numbe
     val_text: { ...defaultTextProp, position: { x, y: y + 2 } },
     fields_autoplaced: true,
     dnp: false, in_bom: true, on_board: true, exclude_from_sim: false, locked: false,
+    fields: {},
   };
 }
 
@@ -63,16 +64,16 @@ export function createSimpleSchematic(): SchematicData {
       makeSymbol("2", "R2", "10k", 30, 20, "Device:R"),
     ],
     wires: [
-      { uuid: "w1", start: { x: 10, y: 16.19 }, end: { x: 20, y: 16.19 } },  // R1 pin1 → mid
-      { uuid: "w2", start: { x: 20, y: 16.19 }, end: { x: 30, y: 16.19 } },  // mid → R2 pin1
+      { uuid: "w1", start: { x: 10, y: 17.46 }, end: { x: 20, y: 17.46 } },  // R1 pin1 tip → mid
+      { uuid: "w2", start: { x: 20, y: 17.46 }, end: { x: 30, y: 17.46 } },  // mid → R2 pin1 tip
     ],
     junctions: [],
     labels: [
-      { uuid: "l1", text: "VCC", position: { x: 20, y: 16.19 }, rotation: 0, label_type: "Net", shape: "", font_size: 1.27, justify: "left" },
+      { uuid: "l1", text: "VCC", position: { x: 20, y: 17.46 }, rotation: 0, label_type: "Net", shape: "", font_size: 1.27, justify: "left" },
     ],
     child_sheets: [],
     no_connects: [
-      { uuid: "nc1", position: { x: 10, y: 23.81 } },  // R1 pin2
+      { uuid: "nc1", position: { x: 10, y: 22.54 } },  // R1 pin2 tip
     ],
     text_notes: [
       { uuid: "tn1", text: "Test note", position: { x: 50, y: 50 }, rotation: 0, font_size: 1.27 },
@@ -82,6 +83,14 @@ export function createSimpleSchematic(): SchematicData {
     bus_entries: [],
     drawings: [],
     no_erc_directives: [],
+    title_block: {},
+    net_classes: [],
+    variants: [],
+    document_parameters: [],
+    groups: [],
+    differential_pairs: [],
+    signal_harnesses: [],
+    constraints: [],
     lib_symbols: {
       "Device:R": resistorLib,
       "Device:C": capacitorLib,

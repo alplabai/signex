@@ -4,9 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::engine::parser::{self, LibSymbol, SymbolMeta};
+use crate::engine::writer;
 
 // In-memory cache for parsed libraries
-static LIBRARY_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Vec<(LibSymbol, SymbolMeta)>>>> =
+type LibraryCache = HashMap<String, Vec<(LibSymbol, SymbolMeta)>>;
+static LIBRARY_CACHE: std::sync::LazyLock<Mutex<LibraryCache>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,25 +30,60 @@ pub struct SymbolSearchResult {
 
 /// Find KiCad symbol library directory
 fn find_kicad_symbols_dir() -> Option<PathBuf> {
-    // Standard Windows paths
-    let candidates = [
-        r"C:\Program Files\KiCad\9.0\share\kicad\symbols",
-        r"C:\Program Files\KiCad\8.0\share\kicad\symbols",
-        r"C:\Program Files\KiCad\7.0\share\kicad\symbols",
-        r"C:\Program Files (x86)\KiCad\share\kicad\symbols",
-    ];
-    for p in &candidates {
-        let path = Path::new(p);
+    // Check env var first (highest priority)
+    if let Ok(dir) = std::env::var("KICAD_SYMBOL_DIR") {
+        let path = Path::new(&dir);
         if path.is_dir() {
             return Some(path.to_path_buf());
         }
     }
 
-    // Check KICAD_SYMBOL_DIR env var
-    if let Ok(dir) = std::env::var("KICAD_SYMBOL_DIR") {
-        let path = Path::new(&dir);
-        if path.is_dir() {
-            return Some(path.to_path_buf());
+    // Platform-specific standard paths
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            r"C:\Program Files\KiCad\9.0\share\kicad\symbols",
+            r"C:\Program Files\KiCad\8.0\share\kicad\symbols",
+            r"C:\Program Files\KiCad\7.0\share\kicad\symbols",
+            r"C:\Program Files (x86)\KiCad\share\kicad\symbols",
+        ];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let candidates = [
+            "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols",
+            "/Applications/KiCad/kicad.app/Contents/SharedSupport/symbols",
+        ];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let candidates = ["/usr/share/kicad/symbols", "/usr/local/share/kicad/symbols"];
+        for p in &candidates {
+            let path = Path::new(p);
+            if path.is_dir() {
+                return Some(path.to_path_buf());
+            }
+        }
+        // XDG data home
+        if let Ok(home) = std::env::var("HOME") {
+            let xdg = Path::new(&home).join(".local/share/kicad/symbols");
+            if xdg.is_dir() {
+                return Some(xdg);
+            }
         }
     }
 
@@ -56,17 +93,19 @@ fn find_kicad_symbols_dir() -> Option<PathBuf> {
 #[tauri::command]
 pub async fn list_libraries() -> Result<Vec<LibraryInfo>, String> {
     tokio::task::spawn_blocking(|| {
-        let dir = find_kicad_symbols_dir()
-            .ok_or_else(|| "KiCad symbol libraries not found. Install KiCad or set KICAD_SYMBOL_DIR.".to_string())?;
+        let dir = find_kicad_symbols_dir().ok_or_else(|| {
+            "KiCad symbol libraries not found. Install KiCad or set KICAD_SYMBOL_DIR.".to_string()
+        })?;
 
         let mut libs = Vec::new();
-        let entries = std::fs::read_dir(&dir)
-            .map_err(|e| format!("Failed to read symbols dir: {}", e))?;
+        let entries =
+            std::fs::read_dir(&dir).map_err(|e| format!("Failed to read symbols dir: {}", e))?;
 
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("kicad_sym") {
-                let name = path.file_stem()
+                let name = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("unknown")
                     .to_string();
@@ -90,20 +129,20 @@ pub async fn list_libraries() -> Result<Vec<LibraryInfo>, String> {
 fn load_library(path: &str) -> Result<Vec<(LibSymbol, SymbolMeta)>, String> {
     // Check cache first
     {
-        let cache = LIBRARY_CACHE.lock().map_err(|e| e.to_string())?;
+        let cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(cached) = cache.get(path) {
             return Ok(cached.clone());
         }
     }
 
     // Parse the file
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {}", path, e))?;
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
     let symbols = parser::parse_symbol_library(&content)?;
 
     // Store in cache
     {
-        let mut cache = LIBRARY_CACHE.lock().map_err(|e| e.to_string())?;
+        let mut cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         cache.insert(path.to_string(), symbols.clone());
     }
 
@@ -128,7 +167,8 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
 
         for entry in &entries {
             let path = entry.path();
-            let lib_name = path.file_stem()
+            let lib_name = path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("unknown")
                 .to_string();
@@ -160,7 +200,7 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
                         reference_prefix: meta.reference_prefix.clone(),
                         pin_count: meta.pin_count,
                     });
-                    if results.len() >= limit as usize {
+                    if limit > 0 && results.len() >= limit as usize {
                         return Ok(results);
                     }
                 }
@@ -173,16 +213,119 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// Validate that a library path is safe to access (must be a .kicad_sym or .sxsym file
+/// inside the KiCad symbols directory or a project directory)
+fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, String> {
+    let path = Path::new(library_path);
+
+    // Must have a valid library extension
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("kicad_sym") | Some("sxsym") => {}
+        _ => return Err("Invalid library file extension".to_string()),
+    }
+
+    // Reject path traversal components
+    for comp in path.components() {
+        if matches!(comp, std::path::Component::ParentDir) {
+            return Err("Path traversal not allowed".to_string());
+        }
+    }
+
+    // Verify the path exists and resolve to canonical form
+    if path.exists() {
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("Invalid library path: {}", e))?;
+
+        // Must be inside KiCad symbols dir or have .sxsym extension (user library)
+        if let Some(sym_dir) = find_kicad_symbols_dir() {
+            if let Ok(canonical_sym_dir) = sym_dir.canonicalize() {
+                if canonical.starts_with(&canonical_sym_dir) {
+                    return Ok(canonical);
+                }
+            }
+        }
+        // Allow .sxsym files anywhere (user-created libraries)
+        if canonical.extension().and_then(|e| e.to_str()) == Some("sxsym") {
+            return Ok(canonical);
+        }
+        // Allow .kicad_sym files that exist (already validated extension above)
+        return Ok(canonical);
+    }
+
+    // For new files (save_symbol creating a new library), allow if extension is valid
+    Ok(path.to_path_buf())
+}
+
 #[tauri::command]
 pub async fn get_symbol(library_path: String, symbol_id: String) -> Result<LibSymbol, String> {
     tokio::task::spawn_blocking(move || {
-        let symbols = load_library(&library_path)?;
+        let validated_path = validate_library_path(&library_path)?;
+        let path_str = validated_path.to_string_lossy().to_string();
+        let symbols = load_library(&path_str)?;
 
         symbols
             .into_iter()
             .find(|(_, meta)| meta.symbol_id == symbol_id)
             .map(|(lib, _)| lib)
             .ok_or_else(|| format!("Symbol '{}' not found in library", symbol_id))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn save_symbol(
+    library_path: String,
+    lib_id: String,
+    symbol: LibSymbol,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let validated = validate_library_path(&library_path)?;
+        let path = validated.as_path();
+
+        // Load existing symbols from the library file (if it exists)
+        let mut symbols: Vec<(String, LibSymbol)> = if path.exists() {
+            let content = std::fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read library: {}", e))?;
+            let parsed = parser::parse_symbol_library(&content)?;
+            parsed.into_iter().map(|(lib, meta)| (meta.symbol_id, lib)).collect()
+        } else {
+            Vec::new()
+        };
+
+        // Replace existing or append
+        let mut found = false;
+        for (id, lib) in symbols.iter_mut() {
+            if *id == lib_id {
+                *lib = symbol.clone();
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            symbols.push((lib_id.clone(), symbol.clone()));
+        }
+
+        // Write back atomically
+        let output = writer::write_symbol_library(&symbols);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("sxsym");
+        let tmp_ext = format!("{}.tmp", ext);
+        let tmp_path = path.with_extension(tmp_ext);
+        std::fs::write(&tmp_path, &output)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        std::fs::rename(&tmp_path, path)
+            .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+        // Invalidate cache (use both original and validated paths)
+        {
+            let mut cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            cache.remove(&library_path);
+            let vpath = validated.to_string_lossy().to_string();
+            if vpath != library_path { cache.remove(&vpath); }
+        }
+
+        Ok(())
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

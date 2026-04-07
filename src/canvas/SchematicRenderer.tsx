@@ -2,12 +2,15 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
 import { useLayoutStore } from "@/stores/layout";
+import { useProjectStore } from "@/stores/project";
 import { hitTest, boxSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
+import { substituteSpecialStrings } from "@/lib/specialStrings";
 import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
+const IMAGE_CACHE = new Map<string, HTMLImageElement>();
 
 const PAPER: Record<string, [number, number]> = {
   A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
@@ -69,12 +72,13 @@ function findNearestElectricalPoint(
   let bestDist = ELECTRICAL_SNAP_RANGE;
   let bestPoint: SchPoint | null = null;
 
-  // Check all symbol pin endpoints
+  // Check all symbol pin endpoints (snap to pin tip, not pin base)
   for (const sym of data.symbols) {
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
     for (const pin of lib.pins) {
-      const [px, py] = symToSch(pin.position.x, pin.position.y,
+      const pe = pinEnd(pin);
+      const [px, py] = symToSch(pe.x, pe.y,
         sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y);
       const d = Math.hypot(worldX - px, worldY - py);
       if (d < bestDist) { bestDist = d; bestPoint = { x: px, y: py }; }
@@ -94,6 +98,7 @@ function findNearestElectricalPoint(
 
 export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 3 });
   const dragging = useRef(false);
@@ -109,6 +114,8 @@ export function SchematicRenderer() {
   const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
   const draggingEndpoint = useRef<{ uuid: string; endpoint: "start" | "end" } | null>(null);
   const drawStart = useRef<SchPoint | null>(null);
+  const drawMid = useRef<SchPoint | null>(null); // For 3-click arc
+  const polyPoints = useRef<SchPoint[]>([]); // For polyline accumulation
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
@@ -143,6 +150,10 @@ export function SchematicRenderer() {
     const c = camRef.current;
     return { x: wx * c.zoom + c.x, y: wy * c.zoom + c.y };
   }, []);
+
+  // Prevent double-commit: Enter commits + blur fires again
+  const committedRef = useRef(false);
+  useEffect(() => { committedRef.current = false; }, [inPlaceEdit]);
 
   const drawGraphicTransformed = useCallback((
     ctx: CanvasRenderingContext2D, g: Graphic,
@@ -259,7 +270,8 @@ export function SchematicRenderer() {
       canvas.style.height = `${rect.height}px`;
     }
 
-    const ctx = canvas.getContext("2d");
+    if (!ctxRef.current) ctxRef.current = canvas.getContext("2d");
+    const ctx = ctxRef.current;
     if (!ctx) return;
     // Reset transform and clear entire canvas
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -287,17 +299,53 @@ export function SchematicRenderer() {
     ctx.lineWidth = 0.15;
     ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
+    // Title block fields inside the 100x30mm border box
+    {
+      const tbx = pw - 100, tby = ph - 30;
+      const tb = data.title_block || {};
+      // Internal grid lines
+      ctx.strokeStyle = C.paperBorder;
+      ctx.lineWidth = 0.08;
+      ctx.beginPath();
+      ctx.moveTo(tbx, tby + 10); ctx.lineTo(tbx + 100, tby + 10); // row separator
+      ctx.moveTo(tbx, tby + 20); ctx.lineTo(tbx + 100, tby + 20); // row separator
+      ctx.moveTo(tbx + 50, tby); ctx.lineTo(tbx + 50, tby + 10); // col separator top row
+      ctx.stroke();
+      // Labels (small gray text)
+      ctx.fillStyle = C.ref;
+      ctx.font = "0.8px Roboto";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("Title:", tbx + 1, tby + 1);
+      ctx.fillText("Date:", tbx + 51, tby + 1);
+      ctx.fillText("Rev:", tbx + 1, tby + 11);
+      ctx.fillText("Company:", tbx + 51, tby + 11);
+      // Values
+      ctx.fillStyle = C.val;
+      ctx.font = "1.2px Roboto";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tb.title || "", tbx + 8, tby + 5);
+      ctx.fillText(tb.date || "", tbx + 58, tby + 5);
+      ctx.fillText(tb.rev || "", tbx + 8, tby + 15);
+      ctx.fillText(tb.company || "", tbx + 63, tby + 15);
+      // Large title at bottom row
+      ctx.font = "bold 1.5px Roboto";
+      ctx.fillText(tb.title || "", tbx + 2, tby + 25);
+    }
+
     // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
     if (gridVisible && gridSize * cam.zoom > 2) {
       ctx.globalAlpha = 0.4;
-      for (let gx = 0; gx <= pw; gx += gridSize) {
-        const maj = Math.abs(gx % (gridSize * 10)) < 0.01;
+      for (let i = 0; i * gridSize <= pw; i++) {
+        const gx = i * gridSize;
+        const maj = i % 10 === 0;
         ctx.strokeStyle = maj ? C.gridMajor : C.grid;
         ctx.lineWidth = maj ? 0.06 : 0.02;
         ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ph); ctx.stroke();
       }
-      for (let gy = 0; gy <= ph; gy += gridSize) {
-        const maj = Math.abs(gy % (gridSize * 10)) < 0.01;
+      for (let i = 0; i * gridSize <= ph; i++) {
+        const gy = i * gridSize;
+        const maj = i % 10 === 0;
         ctx.strokeStyle = maj ? C.gridMajor : C.grid;
         ctx.lineWidth = maj ? 0.06 : 0.02;
         ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(pw, gy); ctx.stroke();
@@ -307,23 +355,31 @@ export function SchematicRenderer() {
 
     // AutoFocus: dim non-focused elements
     const autoFocus = useEditorStore.getState().autoFocusUuids;
-    const hasFocus = autoFocus !== null && autoFocus.size > 0;
+    const hasFocus = autoFocus !== null && autoFocus.length > 0;
+    const sf = useEditorStore.getState().selectionFilter;
+    const alphaFor = (uuid: string, filterKey: string) => {
+      if (!sf[filterKey]?.visible) return 0.12;
+      if (hasFocus && !autoFocus!.includes(uuid)) return 0.15;
+      return 1;
+    };
 
     // Wires
     ctx.strokeStyle = C.wire;
     ctx.lineWidth = 0.15;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
-      ctx.globalAlpha = hasFocus && !autoFocus.has(wire.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = alphaFor(wire.uuid, "wires");
       ctx.beginPath();
       ctx.moveTo(wire.start.x, wire.start.y);
       ctx.lineTo(wire.end.x, wire.end.y);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.lineCap = "butt";
 
     // Junctions
     ctx.fillStyle = C.junction;
+    ctx.globalAlpha = sf.junctions?.visible === false ? 0.12 : 1;
     for (const j of data.junctions) {
       ctx.beginPath();
       ctx.arc(j.position.x, j.position.y, 0.3, 0, Math.PI * 2);
@@ -332,6 +388,7 @@ export function SchematicRenderer() {
 
     // No-connects
     ctx.lineWidth = 0.2;
+    ctx.globalAlpha = sf.noConnects?.visible === false ? 0.12 : 1;
     for (const nc of data.no_connects) {
       const sel = selectedIds.has(nc.uuid);
       ctx.strokeStyle = sel ? C.selection : C.noConnect;
@@ -366,7 +423,7 @@ export function SchematicRenderer() {
     for (const sym of data.symbols) {
       const lib = data.lib_symbols[sym.lib_id];
       if (!lib) continue;
-      ctx.globalAlpha = hasFocus && !autoFocus.has(sym.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = alphaFor(sym.uuid, sym.is_power ? "powerPorts" : "components");
 
       const sx = sym.position.x, sy = sym.position.y;
       const rot = sym.rotation, mx = sym.mirror_x, my = sym.mirror_y;
@@ -379,6 +436,7 @@ export function SchematicRenderer() {
 
       // Draw pins — all in screen space, no canvas transform needed
       for (const pin of lib.pins) {
+        if (pin.hidden) continue; // Hidden pins still connect electrically but are not drawn
         const [px, py] = symToSch(pin.position.x, pin.position.y, sx, sy, rot, mx, my);
         const pe = pinEnd(pin);
         const [ex, ey] = symToSch(pe.x, pe.y, sx, sy, rot, mx, my);
@@ -445,9 +503,11 @@ export function SchematicRenderer() {
         }
       }
     }
+    ctx.globalAlpha = 1;
 
     // Labels
     for (const label of data.labels) {
+      ctx.globalAlpha = alphaFor(label.uuid, label.label_type === "Power" ? "powerPorts" : "labels");
       // Hide label text while being edited inline
       if (inPlaceEdit?.uuid === label.uuid) continue;
       const color = label.label_type === "Global" ? C.labelGlobal
@@ -572,7 +632,10 @@ export function SchematicRenderer() {
       }
     }
 
+    // Reset alpha before child sheets
+    ctx.globalAlpha = 1;
     // Child sheets
+    ctx.globalAlpha = sf.sheetSymbols?.visible === false ? 0.12 : 1;
     for (const sheet of data.child_sheets) {
       const isSel = selectedIds.has(sheet.uuid);
       const sx = sheet.position.x, sy = sheet.position.y, sw = sheet.size[0], sh = sheet.size[1];
@@ -620,6 +683,7 @@ export function SchematicRenderer() {
 
     // Buses (thicker blue lines)
     ctx.lineWidth = 0.4;
+    ctx.globalAlpha = sf.buses?.visible === false ? 0.12 : 1;
     for (const b of data.buses) {
       ctx.strokeStyle = selectedIds.has(b.uuid) ? C.selection : C.bus;
       ctx.beginPath();
@@ -628,6 +692,7 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    ctx.globalAlpha = 1;
     // Bus entries (short diagonal lines)
     ctx.lineWidth = 0.2;
     for (const be of data.bus_entries) {
@@ -638,6 +703,7 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    ctx.globalAlpha = 1;
     // Top-level rectangles (dashed section boxes)
     for (const r of data.rectangles) {
       const rx = Math.min(r.start.x, r.end.x);
@@ -660,20 +726,55 @@ export function SchematicRenderer() {
     }
 
     // Drawing objects (user-drawn lines, rects, circles, arcs, polylines)
+    // Helper: apply line style dash pattern
+    const applyLineStyle = (ls?: string) => {
+      if (ls === "dash") ctx.setLineDash([1.0, 0.5]);
+      else if (ls === "dot") ctx.setLineDash([0.2, 0.3]);
+      else if (ls === "dash_dot") ctx.setLineDash([1.0, 0.3, 0.2, 0.3]);
+      else ctx.setLineDash([]);
+    };
+    // Helper: draw arrow at point in direction angle
+    const drawArrow = (x: number, y: number, angle: number, style?: string) => {
+      if (!style || style === "none") return;
+      const sz = 0.8;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      if (style === "open") {
+        ctx.moveTo(-sz, -sz * 0.5); ctx.lineTo(0, 0); ctx.lineTo(-sz, sz * 0.5);
+        ctx.stroke();
+      } else if (style === "closed") {
+        ctx.moveTo(0, 0); ctx.lineTo(-sz, -sz * 0.5); ctx.lineTo(-sz, sz * 0.5); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else if (style === "diamond") {
+        ctx.moveTo(0, 0); ctx.lineTo(-sz * 0.5, -sz * 0.4); ctx.lineTo(-sz, 0); ctx.lineTo(-sz * 0.5, sz * 0.4); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    ctx.globalAlpha = sf.drawings?.visible === false ? 0.12 : 1;
     for (const d of data.drawings) {
       const sel = selectedIds.has(d.uuid);
-      ctx.strokeStyle = sel ? C.selection : C.body;
-      ctx.lineWidth = Math.max(d.width || 0.15, 0.15);
+      const strokeColor = sel ? C.selection : ("color" in d && d.color) || C.body;
+      ctx.strokeStyle = strokeColor;
+      ctx.fillStyle = strokeColor;
+      ctx.lineWidth = Math.max("width" in d ? d.width || 0.15 : 0.15, 0.15);
+      applyLineStyle("lineStyle" in d ? d.lineStyle : undefined);
       if (d.type === "Line") {
         ctx.beginPath(); ctx.moveTo(d.start.x, d.start.y); ctx.lineTo(d.end.x, d.end.y); ctx.stroke();
+        const angle = Math.atan2(d.end.y - d.start.y, d.end.x - d.start.x);
+        drawArrow(d.end.x, d.end.y, angle, d.arrowEnd);
+        drawArrow(d.start.x, d.start.y, angle + Math.PI, d.arrowStart);
       } else if (d.type === "Rect") {
         const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
         const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
-        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
         ctx.strokeRect(rx, ry, rw, rh);
       } else if (d.type === "Circle") {
         ctx.beginPath(); ctx.arc(d.center.x, d.center.y, d.radius, 0, Math.PI * 2);
-        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : C.bodyFill; ctx.fill(); }
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
         ctx.stroke();
       } else if (d.type === "Arc") {
         ctx.beginPath(); ctx.moveTo(d.start.x, d.start.y);
@@ -683,30 +784,94 @@ export function SchematicRenderer() {
         if (d.points.length > 1) {
           ctx.beginPath(); ctx.moveTo(d.points[0].x, d.points[0].y);
           for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
-          if (d.fill) { ctx.closePath(); ctx.fillStyle = sel ? C.selectionFill : C.bodyFill; ctx.fill(); }
+          if (d.fill) { ctx.closePath(); ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
+          ctx.stroke();
+          // Arrows on polyline endpoints
+          if (d.points.length >= 2) {
+            const p0 = d.points[0], p1 = d.points[1];
+            drawArrow(p0.x, p0.y, Math.atan2(p0.y - p1.y, p0.x - p1.x), d.arrowStart);
+            const pn = d.points[d.points.length - 1], pn1 = d.points[d.points.length - 2];
+            drawArrow(pn.x, pn.y, Math.atan2(pn.y - pn1.y, pn.x - pn1.x), d.arrowEnd);
+          }
+        }
+      } else if (d.type === "Ellipse") {
+        ctx.beginPath();
+        ctx.ellipse(d.center.x, d.center.y, d.radiusX, d.radiusY, 0, 0, Math.PI * 2);
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
+        ctx.stroke();
+      } else if (d.type === "RoundRect") {
+        const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+        const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+        const cr = Math.min(d.cornerRadius, rw / 2, rh / 2);
+        ctx.beginPath();
+        ctx.moveTo(rx + cr, ry);
+        ctx.lineTo(rx + rw - cr, ry); ctx.arcTo(rx + rw, ry, rx + rw, ry + cr, cr);
+        ctx.lineTo(rx + rw, ry + rh - cr); ctx.arcTo(rx + rw, ry + rh, rx + rw - cr, ry + rh, cr);
+        ctx.lineTo(rx + cr, ry + rh); ctx.arcTo(rx, ry + rh, rx, ry + rh - cr, cr);
+        ctx.lineTo(rx, ry + cr); ctx.arcTo(rx, ry, rx + cr, ry, cr);
+        ctx.closePath();
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
+        ctx.stroke();
+      } else if (d.type === "TextFrame") {
+        const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+        const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.fillStyle = sel ? C.selection : d.color || C.sheetText;
+        ctx.font = `${d.fontSize || 1.27}px Roboto`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        const padding = 0.5;
+        const lines = substituteSpecialStrings(d.text, data).split("\n");
+        lines.forEach((line, i) => {
+          ctx.fillText(line, rx + padding, ry + padding + i * (d.fontSize || 1.27) * 1.3, rw - padding * 2);
+        });
+      } else if (d.type === "Polygon") {
+        if (d.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(d.points[0].x, d.points[0].y);
+          for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
+          ctx.closePath();
+          ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill;
+          ctx.fill();
           ctx.stroke();
         }
+      } else if (d.type === "Image") {
+        const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+        const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+        // Image rendering uses cached HTMLImageElement
+        let img = IMAGE_CACHE.get(d.uuid);
+        if (!img && d.dataUrl) {
+          img = new Image();
+          img.src = d.dataUrl;
+          IMAGE_CACHE.set(d.uuid, img);
+        }
+        if (img?.complete) {
+          ctx.drawImage(img, rx, ry, rw, rh);
+        }
+        if (sel) { ctx.strokeStyle = C.selection; ctx.setLineDash([0.3, 0.2]); ctx.strokeRect(rx, ry, rw, rh); ctx.setLineDash([]); }
       }
+      ctx.setLineDash([]);
     }
 
-    // Text notes
+    // Text notes (with special string substitution)
+    ctx.globalAlpha = sf.textNotes?.visible === false ? 0.12 : 1;
     for (const note of data.text_notes) {
       ctx.fillStyle = selectedIds.has(note.uuid) ? C.selection : C.sheetText;
       ctx.font = `${note.font_size}px Roboto`;
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
+      const noteText = substituteSpecialStrings(note.text, data);
       if (note.rotation === 90 || note.rotation === 270) {
         ctx.save();
         ctx.translate(note.position.x, note.position.y);
         ctx.rotate(-Math.PI / 2);
-        // Handle multiline
-        const lines = note.text.split("\n");
+        const lines = noteText.split("\n");
         lines.forEach((line, i) => {
           ctx.fillText(line, 0, i * note.font_size * 1.3);
         });
         ctx.restore();
       } else {
-        const lines = note.text.split("\n");
+        const lines = noteText.split("\n");
         lines.forEach((line, i) => {
           ctx.fillText(line, note.position.x, note.position.y + i * note.font_size * 1.3);
         });
@@ -944,6 +1109,42 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    // --- Drawing tool ghost previews ---
+    const curEdit = useSchematicStore.getState().editMode;
+    const cur = placeCursorRef.current;
+    if (drawStart.current && (curEdit === "drawLine" || curEdit === "drawRect" || curEdit === "drawCircle")) {
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.1;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.globalAlpha = 0.6;
+      const ds = drawStart.current;
+      if (curEdit === "drawLine") {
+        ctx.beginPath(); ctx.moveTo(ds.x, ds.y); ctx.lineTo(cur.x, cur.y); ctx.stroke();
+      } else if (curEdit === "drawRect") {
+        ctx.strokeRect(Math.min(ds.x, cur.x), Math.min(ds.y, cur.y), Math.abs(cur.x - ds.x), Math.abs(cur.y - ds.y));
+      } else if (curEdit === "drawCircle") {
+        const radius = Math.hypot(cur.x - ds.x, cur.y - ds.y);
+        ctx.beginPath(); ctx.arc(ds.x, ds.y, radius, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    if (curEdit === "drawPolyline" && polyPoints.current.length > 0) {
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.1;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(polyPoints.current[0].x, polyPoints.current[0].y);
+      for (let i = 1; i < polyPoints.current.length; i++) {
+        ctx.lineTo(polyPoints.current[i].x, polyPoints.current[i].y);
+      }
+      ctx.lineTo(cur.x, cur.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+
     // --- ERC markers ---
     const ercMarkers = useEditorStore.getState().ercMarkers;
     const showErc = useEditorStore.getState().showErcMarkers;
@@ -987,7 +1188,7 @@ export function SchematicRenderer() {
     }
 
     ctx.restore(); // End world-space transform
-  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol, gridVisible, gridSize]);
+  }, [data, drawGraphicTransformed, drawTextProp, selectedIds, wireDrawing, placingSymbol, gridVisible, gridSize, inPlaceEdit]);
 
   // Fit to view — only when data changes (new sheet loaded), NOT on selection/edit
   const dataUuid = data?.uuid;
@@ -1008,6 +1209,7 @@ export function SchematicRenderer() {
   useEffect(() => {
     cancelAnimationFrame(animRef.current);
     animRef.current = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
   // ResizeObserver — mount once, call latest render via ref to avoid recreation
@@ -1053,9 +1255,20 @@ export function SchematicRenderer() {
         else store.finishWire();
         return;
       }
+      // Polyline: finish on right-click
+      if (store.editMode === "drawPolyline" && polyPoints.current.length >= 2) {
+        e.preventDefault();
+        store.addDrawing({ type: "Polyline", uuid: crypto.randomUUID(), points: [...polyPoints.current], width: 0.15, fill: false });
+        polyPoints.current = [];
+        store.setEditMode("select");
+        return;
+      }
       // Any placement mode: cancel and return to select
       if (store.editMode !== "select") {
         e.preventDefault();
+        drawStart.current = null;
+        drawMid.current = null;
+        polyPoints.current = [];
         store.setEditMode("select");
         return;
       }
@@ -1064,7 +1277,7 @@ export function SchematicRenderer() {
         const r = canvasRef.current?.getBoundingClientRect();
         if (!r) return;
         const world = s2w(e.clientX - r.left, e.clientY - r.top);
-        const hit = hitTest(data, world.x, world.y);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
 
         // Right-click on empty space = pan (Altium behavior)
         if (!hit && store.selectedIds.size === 0) {
@@ -1084,6 +1297,7 @@ export function SchematicRenderer() {
         if (sel.size > 0) {
           items.push({ label: "Cut", shortcut: "Ctrl+X", action: () => { useSchematicStore.getState().copySelected(); useSchematicStore.getState().deleteSelected(); } });
           items.push({ label: "Copy", shortcut: "Ctrl+C", action: () => useSchematicStore.getState().copySelected() });
+          items.push({ label: "Duplicate", shortcut: "Ctrl+D", action: () => useSchematicStore.getState().duplicateSelected() });
           items.push({ label: "Delete", shortcut: "Del", action: () => useSchematicStore.getState().deleteSelected() });
           items.push({ separator: true, label: "", action: () => {} });
           items.push({ label: "Rotate", shortcut: "Space", action: () => useSchematicStore.getState().rotateSelected() });
@@ -1092,12 +1306,16 @@ export function SchematicRenderer() {
           // Break Wire — only when a single wire is selected
           if (hit && hit.type === "wire" && sel.size === 1) {
             items.push({ separator: true, label: "", action: () => {} });
-            items.push({ label: "Break Wire", action: () => useSchematicStore.getState().breakWire(hit.uuid, world) });
+            items.push({ label: "Break Wire", action: () => useSchematicStore.getState().breakWireAt(hit.uuid, snapPoint(world)) });
           }
           // Z-ordering
           items.push({ separator: true, label: "", action: () => {} });
+          items.push({ label: "Align to Grid", shortcut: "Shift+Ctrl+D", action: () => useSchematicStore.getState().alignSelectionToGrid() });
+          items.push({ separator: true, label: "", action: () => {} });
           items.push({ label: "Bring to Front", action: () => useSchematicStore.getState().bringToFront() });
           items.push({ label: "Send to Back", action: () => useSchematicStore.getState().sendToBack() });
+          items.push({ separator: true, label: "", action: () => {} });
+          items.push({ label: "Create Group", action: () => useSchematicStore.getState().createGroup(), disabled: sel.size < 2 });
           if (sel.size > 1) {
             items.push({ separator: true, label: "", action: () => {} });
             items.push({ label: "Align Left", shortcut: "Shift+Ctrl+L", action: () => useSchematicStore.getState().alignSelected("left") });
@@ -1115,6 +1333,12 @@ export function SchematicRenderer() {
           items.push({ label: "Place Net Label", shortcut: "L", action: () => useSchematicStore.getState().setEditMode("placeLabel") });
           items.push({ label: "Place Power Port", action: () => useSchematicStore.getState().setEditMode("placePower") });
           items.push({ label: "Place No Connect", action: () => useSchematicStore.getState().setEditMode("placeNoConnect") });
+          items.push({ label: "Place Bus Entry", action: () => useSchematicStore.getState().setEditMode("placeBusEntry") });
+          items.push({ separator: true, label: "", action: () => {} });
+          items.push({ label: "Place Line", action: () => useSchematicStore.getState().setEditMode("drawLine") });
+          items.push({ label: "Place Rectangle", action: () => useSchematicStore.getState().setEditMode("drawRect") });
+          items.push({ label: "Place Circle", action: () => useSchematicStore.getState().setEditMode("drawCircle") });
+          items.push({ label: "Place Polyline", action: () => useSchematicStore.getState().setEditMode("drawPolyline") });
           items.push({ separator: true, label: "", action: () => {} });
           items.push({ label: "Fit Document", shortcut: "Home", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" })) });
         }
@@ -1256,6 +1480,50 @@ export function SchematicRenderer() {
         return;
       }
 
+      // Circle: 1st click = center, 2nd click = edge (radius)
+      if (store.editMode === "drawCircle") {
+        const snapped = snapPoint(world);
+        if (!drawStart.current) {
+          drawStart.current = snapped;
+        } else {
+          const radius = Math.hypot(snapped.x - drawStart.current.x, snapped.y - drawStart.current.y);
+          if (radius > 0.1) {
+            store.addDrawing({ type: "Circle", uuid: crypto.randomUUID(), center: drawStart.current, radius, width: 0.15, fill: false });
+          }
+          drawStart.current = null;
+        }
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Polyline: accumulate points; double-click or right-click finishes
+      if (store.editMode === "drawPolyline") {
+        const snapped = snapPoint(world);
+        polyPoints.current.push(snapped);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Sheet symbol placement
+      if (store.editMode === "placeSheetSymbol") {
+        const snapped = snapPoint(world);
+        store.placeSheetSymbol(snapped, "Sheet", "sheet.kicad_sch");
+        store.setEditMode("select");
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Bus entry placement
+      if (store.editMode === "placeBusEntry") {
+        const snapped = snapPoint(world);
+        store.placeBusEntry(snapped);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       if (store.editMode === "drawBus") {
         // Bus drawing uses the same wire drawing state machine
@@ -1272,7 +1540,7 @@ export function SchematicRenderer() {
 
       // Alt+Click = select entire net (Altium behavior)
       if (e.altKey) {
-        const hit = hitTest(data, world.x, world.y);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
         if (hit) {
           const nets = resolveNets(data);
           // Find which net this element belongs to
@@ -1291,7 +1559,7 @@ export function SchematicRenderer() {
       }
 
       // Select mode: hit test
-      const hit = hitTest(data, world.x, world.y);
+      const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
       if (hit) {
         // Wire endpoint drag — special handling for dragging wire vertices
         if (hit.type === "wireEndpoint" && hit.endpoint) {
@@ -1320,7 +1588,7 @@ export function SchematicRenderer() {
         selectEnd.current = { x: world.x, y: world.y };
       }
     }
-  }, [data, s2w]);
+  }, [data, s2w, ctxMenu]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -1363,6 +1631,13 @@ export function SchematicRenderer() {
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
+      // Update cursor for drawing tool ghost previews
+      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc"];
+      if (drawModes.includes(store.editMode)) {
+        placeCursorRef.current = snapPoint(world);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+      }
     }
 
     // Drag-box selection update
@@ -1387,6 +1662,26 @@ export function SchematicRenderer() {
         }
       }
     }
+
+    // Auto-pan: when cursor is near edge during active modes
+    const store2 = useSchematicStore.getState();
+    const isActive = store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current;
+    if (isActive) {
+      const sx = e.clientX - r.left, sy = e.clientY - r.top;
+      const edge = 40; // pixels from edge
+      const speed = 4; // pixels per frame
+      let pdx = 0, pdy = 0;
+      if (sx < edge) pdx = speed * (1 - sx / edge);
+      else if (sx > r.width - edge) pdx = -speed * (1 - (r.width - sx) / edge);
+      if (sy < edge) pdy = speed * (1 - sy / edge);
+      else if (sy > r.height - edge) pdy = -speed * (1 - (r.height - sy) / edge);
+      if (pdx !== 0 || pdy !== 0) {
+        camRef.current.x += pdx;
+        camRef.current.y += pdy;
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+      }
+    }
   }, [render, s2w, updateStatusBar, data]);
 
   const handleMouseUp = useCallback(() => {
@@ -1396,7 +1691,7 @@ export function SchematicRenderer() {
       const s = selectStart.current, e = selectEnd.current;
       // Only if dragged more than a tiny amount (avoid accidental micro-drags)
       if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
-        const uuids = boxSelect(data, s.x, s.y, e.x, e.y);
+        const uuids = boxSelect(data, s.x, s.y, e.x, e.y, useEditorStore.getState().selectionFilter);
         if (uuids.length > 0) {
           useSchematicStore.getState().selectMultiple(uuids);
         }
@@ -1414,6 +1709,40 @@ export function SchematicRenderer() {
     if (store.editMode === "drawWire" && store.wireDrawing.active) {
       store.finishWire();
       return;
+    }
+    // Double-click finishes polyline
+    if (store.editMode === "drawPolyline" && polyPoints.current.length >= 2) {
+      store.addDrawing({ type: "Polyline", uuid: crypto.randomUUID(), points: [...polyPoints.current], width: 0.15, fill: false });
+      polyPoints.current = [];
+      store.setEditMode("select");
+      return;
+    }
+
+    // Ctrl+Double-Click on child sheet = navigate to that sheet
+    if (e.ctrlKey && data) {
+      const r = canvasRef.current?.getBoundingClientRect();
+      if (r) {
+        const world = s2w(e.clientX - r.left, e.clientY - r.top);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
+        if (hit?.type === "childSheet") {
+          const sheet = data.child_sheets.find((s) => s.uuid === hit.uuid);
+          if (sheet) {
+            // Open the child sheet tab
+            const project = useProjectStore.getState().project;
+            if (project) {
+              const { openTab } = useProjectStore.getState();
+              openTab({
+                id: `sch-${project.path}:${sheet.filename}`,
+                name: sheet.name,
+                type: "schematic",
+                path: project.path,
+                dirty: false,
+              });
+            }
+          }
+          return;
+        }
+      }
     }
 
     // Double-click = in-place edit (Altium behavior)
@@ -1477,8 +1806,9 @@ export function SchematicRenderer() {
       if (!data) return;
       const store = useSchematicStore.getState();
 
-      // Don't handle if typing in an input
+      // Don't handle if typing in an input or contenteditable element
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (document.activeElement?.getAttribute("contenteditable")) return;
 
       switch (e.key) {
         case "Home": {
@@ -1601,17 +1931,27 @@ export function SchematicRenderer() {
               // Build net colors on enable
               const nets = resolveNets(data);
               const palette = ["#ff6b6b","#51cf66","#339af0","#fcc419","#cc5de8","#20c997","#ff922b","#845ef7","#f06595","#22b8cf","#94d82d","#fd7e14"];
-              const colors = new Map<string, string>();
+              const colors: Record<string, string> = {};
               nets.forEach((net: { wireUuids: string[]; labelUuids: string[]; junctionUuids: string[] }, i: number) => {
                 const color = palette[i % palette.length];
                 for (const uuid of [...net.wireUuids, ...net.labelUuids, ...net.junctionUuids]) {
-                  colors.set(uuid, color);
+                  colors[uuid] = color;
                 }
               });
               editor.setNetColors(colors);
             }
             cancelAnimationFrame(animRef.current);
             animRef.current = requestAnimationFrame(render);
+          }
+          break;
+        case "d":
+        case "D":
+          if (e.ctrlKey && e.shiftKey) {
+            e.preventDefault();
+            store.alignSelectionToGrid();
+          } else if (e.ctrlKey) {
+            e.preventDefault();
+            store.duplicateSelected();
           }
           break;
         case "q":
@@ -1664,7 +2004,11 @@ export function SchematicRenderer() {
           break;
         case "v":
         case "V":
-          if (e.ctrlKey) { e.preventDefault(); store.pasteClipboard({ x: 2.54, y: 2.54 }); }
+          if (e.ctrlKey && e.shiftKey) {
+            e.preventDefault(); store.smartPaste({ x: 2.54, y: 2.54 });
+          } else if (e.ctrlKey) {
+            e.preventDefault(); store.pasteClipboard({ x: 2.54, y: 2.54 });
+          }
           break;
         case "y":
         case "Y":
@@ -1674,12 +2018,6 @@ export function SchematicRenderer() {
             // Y = vertical flip (mirror around X axis) — Altium convention
             if (store.placingSymbol) store.mirrorPlacementX();
             else if (store.selectedIds.size > 0) store.mirrorSelectedX();
-          }
-          break;
-        case "d":
-          if (e.ctrlKey) {
-            e.preventDefault();
-            store.duplicateSelected();
           }
           break;
         case "g":
@@ -1709,6 +2047,12 @@ export function SchematicRenderer() {
           if (e.ctrlKey && e.shiftKey) { e.preventDefault(); store.redo(); }
           break;
       }
+      // Selection memory: Ctrl+1-8 store, Alt+1-8 recall
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 8) {
+        if (e.ctrlKey && !e.altKey) { e.preventDefault(); store.storeSelection(num); }
+        else if (e.altKey && !e.ctrlKey) { e.preventDefault(); store.recallSelection(num); }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1727,6 +2071,27 @@ export function SchematicRenderer() {
         onMouseLeave={handleMouseUp}
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          const json = e.dataTransfer.getData("application/signex-symbol");
+          if (!json) return;
+          try {
+            const result = JSON.parse(json) as import("@/types").SymbolSearchResult;
+            const lib = (await import("@tauri-apps/api/core")).invoke;
+            // Find library path from the result
+            const libs = await lib<import("@/types").LibraryInfo[]>("list_libraries");
+            const libInfo = libs.find((l) => l.name === result.library);
+            if (!libInfo) return;
+            const sym = await lib<import("@/types").LibSymbol>("get_symbol", { libraryPath: libInfo.path, symbolId: result.symbol_id });
+            const r = canvasRef.current?.getBoundingClientRect();
+            if (!r) return;
+            const world = s2w(e.clientX - r.left, e.clientY - r.top);
+            const snapped = snapPoint(world);
+            useSchematicStore.getState().startPlacement(sym, result);
+            useSchematicStore.getState().placeSymbolAt(snapped);
+          } catch (err) { console.error("Drop failed:", err); }
+        }}
       />
 
       {/* In-place text editor overlay */}
@@ -1737,6 +2102,7 @@ export function SchematicRenderer() {
           onChange={(e) => setInPlaceEdit({ ...inPlaceEdit, value: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
+              committedRef.current = true;
               const store = useSchematicStore.getState();
               const d = store.data;
               if (d) {
@@ -1750,6 +2116,7 @@ export function SchematicRenderer() {
             e.stopPropagation();
           }}
           onBlur={() => {
+            if (committedRef.current) { committedRef.current = false; return; }
             const store = useSchematicStore.getState();
             const d = store.data;
             if (d) {
@@ -1825,6 +2192,14 @@ export function SchematicRenderer() {
         <CanvasBtn active={editMode === "drawRect"} label="Rectangle"
           onClick={() => useSchematicStore.getState().setEditMode("drawRect")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "drawCircle"} label="Circle"
+          onClick={() => useSchematicStore.getState().setEditMode("drawCircle")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "drawPolyline"} label="Polyline"
+          onClick={() => useSchematicStore.getState().setEditMode("drawPolyline")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l6-10 4 6 6-12"/></svg>
         </CanvasBtn>
         <div className="w-px h-4 bg-border-subtle mx-0.5" />
         {/* Actions */}
