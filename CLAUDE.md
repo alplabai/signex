@@ -50,10 +50,10 @@ src/                    React frontend
 ## Phase Status
 - [x] Phase 0: Viewer — KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav
 - [x] Phase 1: Editor foundation — selection, move, wire, delete, rotate, undo/redo, save, properties
-- [x] Phase 1.5: Grid/snap toggle, component library browser (226 KiCad libs), menu wiring
-- [x] Phase 2: Core editing — drag-box select, auto-junction, electrical snap, rubber-band, copy/paste, net labels, power ports, ERC
-- [x] Phase 3: Validation — ERC 11 checks + pin matrix, annotation, cross-reference, AutoFocus
-- [x] Phase 4: Advanced — library editor, PDF/print export, custom fields, title block, output jobs, BOM config
+- [x] Phase 2: Core editing — drag-box, auto-junction, rubber-band, copy/paste, labels, power ports, ERC
+- [x] Phase 3: Validation — ERC 11 checks + pin matrix, annotation, AutoFocus, net color override
+- [x] Phase 4: Advanced — library editor, PDF/print, output jobs, templates, title block, BOM formats
+- [x] Phase 4+: Altium parity — 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, variants, parameter manager, multi-channel
 - [ ] Phase 5: Signal AI — Claude API integration, design assistance
 - [ ] Phase 6: PCB layout — layer stack, routing, DRC, copper pour, 3D viewer
 
