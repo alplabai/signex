@@ -1,13 +1,25 @@
 import { useRef, useEffect } from "react";
 import { usePcbStore } from "@/stores/pcb";
+import { useEditorStore } from "@/stores/editor";
+import { useProjectStore } from "@/stores/project";
 import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
+import { Layers } from "lucide-react";
 
 /**
  * Board Cross-Section View — visualizes the PCB layer stackup.
- * Shows copper layers, dielectric, solder mask, and silkscreen
- * as a side-view cross-section diagram.
  */
 export function BoardCrossSectionPanel() {
+  const editorMode = useEditorStore((s) => s.mode);
+  const project = useProjectStore((s) => s.project);
+
+  if (!project || editorMode !== "pcb") {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-text-muted/40 text-xs gap-2 p-6">
+        <Layers size={24} className="opacity-20" />
+        <span>Cross section available in PCB view</span>
+      </div>
+    );
+  }
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const data = usePcbStore((s) => s.data);
 

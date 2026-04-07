@@ -665,6 +665,23 @@ export function PcbRenderer() {
       if (!data) {
         camRef.current.x = rect.width / 2;
         camRef.current.y = rect.height / 2;
+      } else if (!(camRef.current as any)._fitted) {
+        // Auto-fit to board bounds on first load
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of data.board.outline) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+        // Fallback: use footprint positions if no outline
+        if (!isFinite(minX)) {
+          for (const fp of data.footprints) { if (!fp.position) continue; minX = Math.min(minX, fp.position.x - 5); minY = Math.min(minY, fp.position.y - 5); maxX = Math.max(maxX, fp.position.x + 5); maxY = Math.max(maxY, fp.position.y + 5); }
+        }
+        if (isFinite(minX)) {
+          const bw = maxX - minX, bh = maxY - minY;
+          const pad = Math.max(bw, bh) * 0.1;
+          const zoom = Math.min(rect.width / (bw + pad * 2), rect.height / (bh + pad * 2));
+          camRef.current.zoom = zoom;
+          camRef.current.x = rect.width / 2 - (minX + bw / 2) * zoom;
+          camRef.current.y = rect.height / 2 - (minY + bh / 2) * zoom;
+          (camRef.current as any)._fitted = true;
+        }
       }
       render();
     };
