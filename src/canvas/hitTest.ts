@@ -198,6 +198,37 @@ export function hitTest(
       if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
         return { type: "label", uuid: label.uuid };
       }
+    } else if (label.label_type === "Global" || label.label_type === "Hierarchical") {
+      // Flag/arrow shape bounding box hit test
+      const fs = label.font_size || 1.27;
+      const h = fs * 1.4;
+      const arrowW = h * 0.5;
+      const tw = label.text.length * fs * 0.65;
+      const pad = fs * 0.3;
+      const totalBody = arrowW + tw + pad * 2;
+      const r = label.rotation;
+      const lx = label.position.x, ly = label.position.y;
+      const isHoriz = r === 0 || r === 180;
+
+      let minX: number, minY: number, maxX: number, maxY: number;
+      if (isHoriz) {
+        const dir = r === 0 ? 1 : -1; // 0° extends right, 180° extends left
+        if (dir > 0) {
+          minX = lx; maxX = lx + totalBody + arrowW; // extra arrowW for output tip
+          minY = ly - h / 2; maxY = ly + h / 2;
+        } else {
+          minX = lx - totalBody - arrowW; maxX = lx;
+          minY = ly - h / 2; maxY = ly + h / 2;
+        }
+      } else {
+        // Vertical (90°, 270°) — rotated shape
+        minX = lx - h / 2; maxX = lx + h / 2;
+        minY = ly - totalBody; maxY = ly + totalBody;
+      }
+
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
+        return { type: "label", uuid: label.uuid };
+      }
     } else if (dist(p, label.position) < tolerance) {
       return { type: "label", uuid: label.uuid };
     }
@@ -391,7 +422,41 @@ export function boxSelect(
   for (const label of data.labels) {
     const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
     if (filter && filter[filterKey]?.selectable === false) continue;
-    if (pointInBox(label.position, box)) selected.push(label.uuid);
+
+    if ((label.label_type === "Global" || label.label_type === "Hierarchical") && crossing) {
+      // Use flag shape bounding box for crossing selection
+      const fs = label.font_size || 1.27;
+      const h = fs * 1.4;
+      const arrowW = h * 0.5;
+      const tw = label.text.length * fs * 0.65;
+      const pad = fs * 0.3;
+      const totalBody = arrowW + tw + pad * 2;
+      const r = label.rotation;
+      const lx = label.position.x, ly = label.position.y;
+      const isHoriz = r === 0 || r === 180;
+
+      let lMinX: number, lMinY: number, lMaxX: number, lMaxY: number;
+      if (isHoriz) {
+        const dir = r === 0 ? 1 : -1;
+        if (dir > 0) {
+          lMinX = lx; lMaxX = lx + totalBody + arrowW;
+          lMinY = ly - h / 2; lMaxY = ly + h / 2;
+        } else {
+          lMinX = lx - totalBody - arrowW; lMaxX = lx;
+          lMinY = ly - h / 2; lMaxY = ly + h / 2;
+        }
+      } else {
+        lMinX = lx - h / 2; lMaxX = lx + h / 2;
+        lMinY = ly - totalBody; lMaxY = ly + totalBody;
+      }
+
+      // Check if label bbox overlaps selection box
+      if (lMaxX >= box.minX && lMinX <= box.maxX && lMaxY >= box.minY && lMinY <= box.maxY) {
+        selected.push(label.uuid);
+      }
+    } else {
+      if (pointInBox(label.position, box)) selected.push(label.uuid);
+    }
   }
 
   for (const j of data.junctions) {
