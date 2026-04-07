@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import { usePcbStore } from "@/stores/pcb";
-import { DEFAULT_LAYER_COLORS } from "@/types/pcb";
+import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import type { PcbLayerId } from "@/types/pcb";
 import { cn } from "@/lib/utils";
 
@@ -61,7 +61,7 @@ export function LayerStackPanel() {
         {activeCopperLayers.map((layer) => (
           <LayerRow
             key={layer}
-            label={layer}
+            label={LAYER_DISPLAY_NAMES[layer] || layer}
             color={DEFAULT_LAYER_COLORS[layer] || "#808080"}
             active={activeLayer === layer}
             visible={visibleLayers.has(layer)}
