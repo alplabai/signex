@@ -186,7 +186,7 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
             key={panelId}
             onMouseDown={(e) => { if (e.button === 0) startTabDrag(e, panelId); }}
             className={cn(
-              "h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap cursor-grab active:cursor-grabbing",
+              "h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap cursor-default",
               activeTab === panelId
                 ? "text-text-secondary border-b-2 border-accent"
                 : "text-text-muted/40 hover:text-text-muted/70"

@@ -1,12 +1,25 @@
 import { useState } from "react";
-import { Play, Trash2, XCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Play, Trash2, XCircle, AlertTriangle, CheckCircle2, Shield } from "lucide-react";
 import { usePcbStore } from "@/stores/pcb";
+import { useEditorStore } from "@/stores/editor";
+import { useProjectStore } from "@/stores/project";
 import { runPcbDrc } from "@/lib/pcbDrc";
 import { cn } from "@/lib/utils";
 import type { DrcViolation } from "@/types/pcb";
 
 export function DrcPanel() {
   const data = usePcbStore((s) => s.data);
+  const editorMode = useEditorStore((s) => s.mode);
+  const project = useProjectStore((s) => s.project);
+
+  if (!project || editorMode !== "pcb") {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-text-muted/40 text-xs gap-2 p-6">
+        <Shield size={24} className="opacity-20" />
+        <span>DRC available in PCB view</span>
+      </div>
+    );
+  }
   const [violations, setViolations] = useState<DrcViolation[]>([]);
   const [lastRun, setLastRun] = useState<string | null>(null);
 
