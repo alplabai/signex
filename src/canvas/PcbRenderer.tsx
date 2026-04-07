@@ -1,8 +1,9 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
 import { DEFAULT_LAYER_COLORS } from "@/types/pcb";
 import { computeRatsnest, getPadPosition } from "@/lib/pcbRatsnest";
+import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import type { PcbPoint, PcbLayerId } from "@/types/pcb";
 
 interface Camera { x: number; y: number; zoom: number }
@@ -380,11 +381,61 @@ export function PcbRenderer() {
   }, [render]);
 
   // --- Mouse handlers ---
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 2)) {
+    if (ctxMenu) setCtxMenu(null);
+
+    // Middle button = pan
+    if (e.button === 1) {
       dragging.current = true;
       lastMouse.current = { x: e.clientX, y: e.clientY };
       e.preventDefault();
+      return;
+    }
+
+    // Right click = context menu or pan
+    if (e.button === 2) {
+      e.preventDefault();
+      const store = usePcbStore.getState();
+
+      if (store.routingActive) {
+        store.finishRoute();
+        return;
+      }
+
+      if (store.editMode !== "select") {
+        store.setEditMode("select");
+        return;
+      }
+
+      // Build context menu
+      const items: ContextMenuItem[] = [];
+      const sel = store.selectedIds;
+
+      if (sel.size > 0) {
+        items.push({ label: "Delete", shortcut: "Del", action: () => store.deleteSelected() });
+        items.push({ label: "Rotate 90\u00b0", shortcut: "Space", action: () => { for (const id of sel) store.rotateFootprint(id, 90); } });
+        items.push({ label: "Flip Side", shortcut: "F", action: () => { for (const id of sel) store.flipFootprint(id); } });
+        items.push({ separator: true, label: "", action: () => {} });
+        items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
+      } else {
+        items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
+        items.push({ separator: true, label: "", action: () => {} });
+        items.push({ label: "Route Track", shortcut: "X", action: () => store.setEditMode("routeTrack") });
+        items.push({ label: "Place Via", action: () => store.setEditMode("placeVia") });
+        items.push({ label: "Board Outline", action: () => store.setEditMode("drawBoardOutline") });
+        items.push({ label: "Place Zone", action: () => store.setEditMode("placeZone") });
+      }
+
+      if (items.length > 0) {
+        setCtxMenu({ x: e.clientX, y: e.clientY, items });
+        return;
+      }
+
+      // Fallback: pan
+      dragging.current = true;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
       return;
     }
 
@@ -568,6 +619,7 @@ export function PcbRenderer() {
         className="absolute inset-0"
         style={{ cursor: editMode !== "select" ? "crosshair" : "default" }}
       />
+      {ctxMenu && <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />}
     </div>
   );
 }

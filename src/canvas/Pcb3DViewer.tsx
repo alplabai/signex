@@ -3,8 +3,7 @@ import type { PcbData, PcbLayerId } from "@/types/pcb";
 
 // ═══════════════════════════════════════════════════════════════
 // PCB 3D VIEWER — Three.js (Phase 6)
-// Renders board body, copper traces, pads, vias, component
-// bodies, and silkscreen. Dynamic import — fails gracefully.
+// Renders board, traces, pads, vias, components, silkscreen.
 // ═══════════════════════════════════════════════════════════════
 
 interface Props { data: PcbData }
