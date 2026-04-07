@@ -14,6 +14,7 @@ import { BUILT_IN_TEMPLATES } from "@/lib/sheetTemplate";
 export function PropertiesPanel() {
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
+  const editMode = useSchematicStore((s) => s.editMode);
 
   if (!data) {
     return (
@@ -22,6 +23,11 @@ export function PropertiesPanel() {
         <span className="text-text-muted/50">No document</span>
       </div>
     );
+  }
+
+  // During placement modes, show placement-specific properties
+  if (selectedIds.size === 0 && editMode !== "select") {
+    return <PlacementProps editMode={editMode} />;
   }
 
   if (selectedIds.size === 0) return <DocumentProps />;
@@ -102,6 +108,119 @@ export function PropertiesPanel() {
 // ═══════════════════════════════════════════════════════════════════
 // DOCUMENT OPTIONS (Nothing Selected)
 // ═══════════════════════════════════════════════════════════════════
+
+function PlacementProps({ editMode }: { editMode: string }) {
+  const PLACEMENT_INFO: Record<string, { title: string; fields: { label: string; key: string; default: string }[] }> = {
+    drawWire: { title: "Wire", fields: [] },
+    drawBus: { title: "Bus", fields: [
+      { label: "Bus Name", key: "busName", default: "" },
+    ]},
+    placeLabel: { title: "Net Label", fields: [
+      { label: "Net Name", key: "netName", default: "NET?" },
+      { label: "Orientation", key: "rotation", default: "0" },
+      { label: "Font Size", key: "fontSize", default: "1.27" },
+    ]},
+    placePower: { title: "Power Port", fields: [
+      { label: "Net Name", key: "netName", default: "VCC" },
+      { label: "Style", key: "style", default: "bar" },
+      { label: "Orientation", key: "rotation", default: "0" },
+    ]},
+    placeNoConnect: { title: "No Connect", fields: [] },
+    placeNoErc: { title: "No ERC Directive", fields: [] },
+    placeSymbol: { title: "Component", fields: [
+      { label: "Designator", key: "reference", default: "U?" },
+      { label: "Comment", key: "value", default: "" },
+    ]},
+    placeText: { title: "Text String", fields: [
+      { label: "Text", key: "text", default: "" },
+      { label: "Font Size", key: "fontSize", default: "1.27" },
+    ]},
+    placeTextFrame: { title: "Text Frame", fields: [
+      { label: "Text", key: "text", default: "" },
+    ]},
+    placeNote: { title: "Note", fields: [
+      { label: "Text", key: "text", default: "" },
+    ]},
+    placeSheetSymbol: { title: "Sheet Symbol", fields: [
+      { label: "Sheet Name", key: "sheetName", default: "" },
+      { label: "Filename", key: "filename", default: "" },
+    ]},
+    placeBusEntry: { title: "Bus Entry", fields: [] },
+    placePort: { title: "Port", fields: [
+      { label: "Name", key: "name", default: "" },
+      { label: "I/O Type", key: "ioType", default: "Bidirectional" },
+    ]},
+    drawLine: { title: "Line", fields: [
+      { label: "Line Width", key: "width", default: "0.15" },
+    ]},
+    drawRect: { title: "Rectangle", fields: [
+      { label: "Line Width", key: "width", default: "0.15" },
+      { label: "Fill", key: "fill", default: "false" },
+    ]},
+    drawCircle: { title: "Circle", fields: [
+      { label: "Line Width", key: "width", default: "0.15" },
+      { label: "Fill", key: "fill", default: "false" },
+    ]},
+    drawPolyline: { title: "Polyline", fields: [
+      { label: "Line Width", key: "width", default: "0.15" },
+    ]},
+    placeParameterSet: { title: "Parameter Set", fields: [] },
+    placeDifferentialPair: { title: "Differential Pair", fields: [
+      { label: "Positive Net", key: "posNet", default: "" },
+      { label: "Negative Net", key: "negNet", default: "" },
+    ]},
+    placeBlanket: { title: "Blanket", fields: [] },
+    placeCompileMask: { title: "Compile Mask", fields: [] },
+    placeHarness: { title: "Signal Harness", fields: [] },
+    placeHarnessConnector: { title: "Harness Connector", fields: [] },
+    placeHarnessEntry: { title: "Harness Entry", fields: [] },
+  };
+
+  const info = PLACEMENT_INFO[editMode] || { title: editMode, fields: [] };
+
+  return (
+    <div className="text-xs">
+      <PanelHeader title={`Placing: ${info.title}`} count={0} />
+      <div className="p-3 space-y-3">
+        <Section title="Properties" defaultOpen={true}>
+          {info.fields.length === 0 ? (
+            <div className="text-[10px] text-text-muted/50 py-2">Click to place on schematic</div>
+          ) : (
+            info.fields.map(f => (
+              <FieldRow key={f.key} label={f.label}>
+                {f.key === "style" ? (
+                  <select defaultValue={f.default}
+                    className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
+                    {["bar", "arrow", "power_ground", "signal_ground", "earth_ground", "circle", "wave"].map(s =>
+                      <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                    )}
+                  </select>
+                ) : f.key === "rotation" ? (
+                  <select defaultValue={f.default}
+                    className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
+                    {["0", "90", "180", "270"].map(r => <option key={r} value={r}>{r} Degrees</option>)}
+                  </select>
+                ) : f.key === "ioType" ? (
+                  <select defaultValue={f.default}
+                    className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
+                    {["Input", "Output", "Bidirectional", "Unspecified"].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                ) : f.key === "fill" ? (
+                  <CheckBox checked={f.default === "true"} onChange={() => {}} />
+                ) : (
+                  <FieldInput value={f.default} onCommit={() => {}} />
+                )}
+              </FieldRow>
+            ))
+          )}
+        </Section>
+        <div className="text-[9px] text-text-muted/40 px-1">
+          Press <span className="text-accent">Escape</span> to cancel, <span className="text-accent">Tab</span> to edit properties
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DocumentProps() {
   const data = useSchematicStore((s) => s.data);
