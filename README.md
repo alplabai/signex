@@ -25,14 +25,14 @@
 
 Signex is an open-source desktop EDA tool built for hardware engineers who want Altium Designer-class UX without the Altium price tag. It reads and writes KiCad files natively, so you can use existing KiCad libraries and schematics while enjoying a modern, fast editing experience.
 
-> **Status:** Alpha. Schematic capture is fully functional with ~85% Altium feature parity. PCB layout, simulation, and AI features are on the roadmap.
+> **Status:** Alpha. Schematic capture is fully functional with ~85% Altium feature parity. Signal AI copilot is integrated. PCB layout and simulation are next.
 
 ## Why Signex?
 
 - **Altium-class UX** on an open-source foundation
 - **KiCad file compatibility** (.kicad_sch, .kicad_sym read/write, KiCad 8/9/10)
 - **Native desktop app** via Tauri v2 (Rust backend, React frontend) -- fast startup, low memory
-- **AI copilot (Signal)** -- Claude-powered design assistant (coming in Phase 5)
+- **Signal AI copilot** -- Claude-powered design assistant with streaming, tool use, and visual context
 - **Built by hardware engineers** for hardware engineers
 
 ## Features
@@ -117,6 +117,25 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 </details>
 
 <details>
+<summary><strong>Signal AI Copilot</strong></summary>
+
+- Claude API integration via Rust reqwest with streaming SSE
+- Chat panel with markdown rendering (bold, code blocks, headers, lists)
+- Model selection: Sonnet 4 (fast) / Opus 4 (deep analysis)
+- Rich schematic context: component list, net connectivity, ERC details sent to Claude
+- Visual context: schematic screenshot sent to Claude vision
+- Tool use: Claude can add components, draw wires, set values, place labels, run ERC
+- 6 circuit templates: LDO, Decoupling, Pull-ups, Op-Amp Buffer, RC Filter, Power Header
+- Design Brief: persistent design intent description
+- BOM optimization analysis
+- ERC fix suggestions (one-click from Messages panel)
+- Inline copilot suggestions on hover
+- Session cost tracking with per-model pricing
+- Export chat as markdown
+- Ctrl+Shift+A to open Signal panel
+</details>
+
+<details>
 <summary><strong>Panels (Altium-style)</strong></summary>
 
 - **Properties** -- context-aware editing for all object types
@@ -127,7 +146,8 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - **Messages** -- ERC violations with click-to-focus and HTML report export
 - **Output Jobs** -- BOM, Netlist, PDF, PNG job management
 - **Projects** -- project tree with sheet navigation
-- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages/Output Jobs)
+- **Signal** -- AI chat with streaming, tool use, design review, ERC fix
+- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages/Output Jobs/Signal)
 </details>
 
 ## Roadmap
@@ -140,8 +160,8 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 | **Phase 3: Validation** | Done | ERC (11 checks + connection matrix), annotation, No ERC directives, AutoFocus |
 | **Phase 4: Advanced** | Done | Library editor, PDF/print export, output jobs, custom fields, title block, templates |
 | **Phase 4+: Altium Parity** | Done | 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, design variants, parameter manager, multi-channel, BOM formats |
-| **Phase 5: Signal AI** | Next | Claude API integration, design review, component suggestion |
-| **Phase 6: PCB Layout** | Planned | Layer stack, interactive routing, DRC, copper pour, 3D viewer |
+| **Phase 5: Signal AI** | Done | Claude API with streaming, tool use, visual context, circuit templates, design review |
+| **Phase 6: PCB Layout** | Next | WebGL2 renderer, layer stack, interactive routing, DRC, copper pour, 3D viewer |
 | **Phase 7: Simulation** | Planned | SPICE integration, signal integrity, power analysis |
 | **Phase 8: Manufacturing** | Planned | Gerber/drill export, assembly drawings, pick-and-place |
 
@@ -219,23 +239,23 @@ npm run tauri dev
 | Desktop | [Tauri v2](https://tauri.app/) (Rust) |
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Styling | Tailwind CSS 4 |
-| Canvas | Canvas2D (wgpu planned for PCB) |
-| State | Zustand (5 stores: layout, project, editor, schematic, libraryEditor) |
+| Canvas | Canvas2D (schematic), WebGL2 (PCB, planned) |
+| State | Zustand (7 stores: layout, project, editor, schematic, libraryEditor, outputJobs, signal) |
 | Parser | Pure Rust S-expression parser |
-| AI | Claude API via Rust reqwest (Phase 5) |
+| AI | Claude API via Rust reqwest (streaming SSE, tool use, vision) |
 
 ## Project Structure
 
 ```
 src-tauri/src/
-  commands/           Tauri IPC (project, schematic, save, library, export)
+  commands/           Tauri IPC (project, schematic, save, library, export, signal)
   engine/             KiCad S-expr parser, writer, document model
 src/
   canvas/             SchematicRenderer, LibraryEditorCanvas, hitTest
-  components/         MenuBar, ToolbarStrip, StatusBar, dialogs (15 files)
-  panels/             Properties, Components, Messages, Filter, List, Navigator, OutputJobs (9 files)
-  stores/             Zustand: layout, project, editor, schematic, libraryEditor, outputJobs
-  lib/                Net resolver, ERC, geometry, PDF export, BOM formats, special strings, templates
+  components/         MenuBar, ToolbarStrip, StatusBar, dialogs (17 files)
+  panels/             Properties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs (9 files)
+  stores/             Zustand: layout, project, editor, schematic, libraryEditor, outputJobs, signal
+  lib/                Net resolver, ERC, geometry, PDF export, BOM formats, Signal AI context/tools/templates
   __tests__/          Vitest test suite
 docs/                 Roadmap, master plan, Altium reference
 ```
@@ -263,7 +283,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full gu
 
 - Not affiliated with Altium, KiCad, or any other EDA vendor
 - KiCad file format compatibility is best-effort; not all features supported yet
-- AI features (Signal) are not yet implemented
+- Signal AI requires an Anthropic API key (stored in memory only, never saved to disk)
 
 ## Credits
 
