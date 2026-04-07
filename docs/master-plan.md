@@ -31,7 +31,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
   - ai — Signal chat history, tool calls (future)
   - collab — real-time collaboration state (future)
 - **File formats:**
-  - Native: `.alpsch` (schematic), `.alppcb` (PCB), `.alplib` (library), `.alpproj` (project), `.alprules` (design rules), `.alpout` (output jobs)
+  - Native: `.snxsch` (schematic), `.snxpcb` (PCB), `.snxsym` (symbol library), `.snxprj` (project)
   - Import/Export: KiCad (.kicad_sch, .kicad_pcb), Altium (future), Eagle (future)
 - **License:** GPL-3.0 (KiCad derivative core) + proprietary cloud/AI (separate repos)
 
@@ -181,7 +181,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ### Library Management
 - [ ] Library manager panel
-- [ ] Create/edit schematic symbols (.alplib)
+- [x] Create/edit schematic symbols (.snxsym)
 - [ ] Footprint assignment and management
 - [ ] Library search with parametric filtering
 - [ ] Component comparison (side-by-side diff)
@@ -198,7 +198,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 - [ ] Netlist export (KiCad, Altium, generic)
 - [ ] PDF schematic export
 - [ ] Print support with page setup
-- [ ] Output Jobs configuration (.alpout)
+- [x] Output Jobs configuration
 
 ### Properties Panel Enhancements
 - [ ] Batch editing of multiple selected objects
@@ -334,7 +334,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 **Goal:** Establish Signex as an independent platform.
 
-- [ ] Native file format: .alpsch, .alppcb, .alplib, .alpproj, .alprules, .alpout
+- [ ] Native file format: .snxsch, .snxpcb, .snxsym, .snxprj
 - [ ] Import from: KiCad, Altium, Eagle, OrCAD
 - [ ] Export to: KiCad, Gerber, ODB++, IPC-2581
 - [ ] Plugin system (Rust + WASM)
@@ -351,7 +351,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 | Canvas (schematic) | Canvas2D | wgpu, WebGL, SVG | Fastest iteration; wgpu for PCB phase |
 | Parser | Pure Rust S-expr | KiCad C++ FFI, WASM | Simpler build, no C++ toolchain dependency |
 | AI name | Signal | AI Copilot, Assistant | Domain-relevant, clean branding |
-| File extensions | .alpsch/.alppcb | .kicad_sch/.kicad_pcb | Brand identity, format independence |
+| File extensions | .snxsch/.snxpcb/.snxprj | .kicad_sch/.kicad_pcb | Brand identity (Signex = SNX), format independence |
 | State management | Zustand | Redux, Jotai, Context | Minimal boilerplate, great with React 19 |
 | Desktop framework | Tauri v2 | Electron, Qt | Native performance, small binary, Rust backend |
 | Wire cursor | Ref (not Zustand) | Zustand state | Avoids 60Hz state churn during mouse move |

@@ -2,10 +2,17 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::Emitter;
 
-// Claude API configuration
+// Claude API configuration — supports two modes:
+// 1. User's own API key (direct to Anthropic)
+// 2. Signex backend proxy (future: managed billing via signex.pro)
+//
 // SECURITY: API key held as plaintext String in process memory.
-// Consider OS keychain (tauri-plugin-stronghold) for distribution builds.
+// For distribution, use OS keychain (tauri-plugin-stronghold).
 static API_KEY: std::sync::LazyLock<Mutex<Option<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
+
+// Signex Pro backend URL (when using managed API key)
+static SIGNEX_BACKEND: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 
 // Shared HTTP client — reuses connection pool, TLS sessions, DNS cache
@@ -203,14 +210,28 @@ static TOOL_DEFINITIONS: std::sync::LazyLock<Vec<ToolDef>> =
 
 fn build_system_prompt(context: &SchematicContext) -> String {
     let mut system = String::from(
-        "You are Signal, an AI design assistant integrated into Signex EDA. \
-         You help hardware engineers with schematic design, component selection, ERC troubleshooting, \
-         and circuit analysis.\n\n\
+        "You are Signal, an expert AI hardware design assistant integrated into Signex EDA. \
+         You are an electronics engineering expert with deep knowledge of:\n\
+         - Analog and digital circuit design\n\
+         - Power supply design (LDO, buck/boost, SEPIC, charge pumps)\n\
+         - Microcontroller systems (STM32, ESP32, nRF, PIC, AVR, RISC-V)\n\
+         - Communication interfaces (UART, SPI, I2C, CAN, USB, Ethernet, PCIe)\n\
+         - RF and high-speed design (impedance matching, termination, signal integrity)\n\
+         - Sensor integration (ADC, DAC, op-amp signal conditioning)\n\
+         - PCB design best practices (stackup, routing, EMC/EMI)\n\
+         - Manufacturing constraints (DFM, DFA, component availability)\n\
+         - Component selection (Digi-Key, Mouser, LCSC, JLCPCB catalogs)\n\n\
          Guidelines:\n\
-         - Be concise and technical.\n\
-         - Use specific part numbers and values when suggesting components.\n\
-         - Use standard EE terminology and reference designators (R1, C1, U1).\n\
-         - Format responses with markdown.\n\
+         - Be concise, technical, and actionable. Hardware engineers don't need hand-holding.\n\
+         - Always suggest specific part numbers (e.g., 'TPS63020DSJR' not just 'buck converter').\n\
+         - Include critical design values: exact resistor values with tolerance, capacitor ESR, inductor DCR.\n\
+         - Use standard reference designators (R1, C1, U1, L1, D1, Q1, J1, TP1).\n\
+         - When reviewing designs, prioritize: power integrity > signal integrity > EMC > manufacturability.\n\
+         - For bypass caps: 100nF ceramic (0402/0603) per power pin, 10uF bulk per rail, place within 2mm of pin.\n\
+         - For pull-ups: I2C standard = 4.7k for 100kHz / 2.2k for 400kHz. GPIO = 10k-100k.\n\
+         - For ESD protection: TVS diodes on all external connectors, series resistors on sensitive inputs.\n\
+         - Always consider: input voltage range, output current, thermal dissipation, package availability.\n\
+         - Format responses with markdown. Use tables for component comparisons.\n\
          - When asked to create or modify circuits, use the available tools.\n\n"
     );
 
@@ -259,11 +280,21 @@ fn build_system_prompt(context: &SchematicContext) -> String {
     system
 }
 
-fn get_api_key() -> Result<String, String> {
+/// Get API endpoint and key — supports direct Anthropic or Signex proxy
+fn get_api_config() -> Result<(String, String), String> {
+    // Check Signex backend first (managed mode)
+    let backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(url) = backend.as_ref() {
+        // Signex backend handles auth — use a session token or empty key
+        return Ok((format!("{}/v1/messages", url), String::new()));
+    }
+
+    // Direct Anthropic API with user's key
     let guard = API_KEY.lock().unwrap_or_else(|e| e.into_inner());
-    guard
+    let key = guard
         .clone()
-        .ok_or_else(|| "API key not configured. Set it in Signal panel.".to_string())
+        .ok_or_else(|| "API key not configured. Set it in Signal panel or connect to Signex Pro.".to_string())?;
+    Ok(("https://api.anthropic.com/v1/messages".to_string(), key))
 }
 
 fn build_request(
@@ -333,10 +364,29 @@ pub fn set_api_key(key: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Set the Signex Pro backend URL for managed API access
+#[tauri::command]
+pub fn set_signex_backend(url: String) -> Result<(), String> {
+    let mut backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
+    *backend = if url.is_empty() { None } else { Some(url) };
+    Ok(())
+}
+
 #[tauri::command]
 pub fn has_api_key() -> bool {
     let api_key = API_KEY.lock().unwrap_or_else(|e| e.into_inner());
-    api_key.is_some()
+    let backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
+    api_key.is_some() || backend.is_some()
+}
+
+/// Get the API mode: "user_key", "signex_backend", or "none"
+#[tauri::command]
+pub fn get_api_mode() -> String {
+    let backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
+    if backend.is_some() { return "signex_backend".to_string(); }
+    let api_key = API_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if api_key.is_some() { return "user_key".to_string(); }
+    "none".to_string()
 }
 
 /// Non-streaming chat
@@ -347,7 +397,7 @@ pub async fn signal_chat(
     model: Option<String>,
     image_base64: Option<String>,
 ) -> Result<SignalResponse, String> {
-    let api_key = get_api_key()?;
+    let (api_url, api_key) = get_api_config()?;
     let request = build_request(
         &messages,
         &context,
@@ -358,7 +408,7 @@ pub async fn signal_chat(
     );
 
     let response = HTTP_CLIENT
-        .post("https://api.anthropic.com/v1/messages")
+        .post(&api_url)
         .header("x-api-key", &api_key)
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
@@ -423,7 +473,7 @@ pub async fn signal_chat_stream(
     model: Option<String>,
     image_base64: Option<String>,
 ) -> Result<(), String> {
-    let api_key = get_api_key()?;
+    let (api_url, api_key) = get_api_config()?;
     let request = build_request(
         &messages,
         &context,
@@ -435,7 +485,7 @@ pub async fn signal_chat_stream(
 
     tokio::spawn(async move {
         let response = match HTTP_CLIENT
-            .post("https://api.anthropic.com/v1/messages")
+            .post(&api_url)
             .header("x-api-key", &api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
