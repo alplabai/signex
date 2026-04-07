@@ -1605,6 +1605,40 @@ export function SchematicRenderer() {
         ctx.moveTo(cur.x + 0.7, cur.y - 0.7);
         ctx.lineTo(cur.x - 0.7, cur.y + 0.7);
         ctx.stroke();
+
+      } else if (editMode2 === "placePort") {
+        // Port preview — flag shape with "PORT?" text
+        const portText = "PORT?";
+        const fs = 1.27;
+        const h = fs * 1.4;
+        const pad = fs * 0.3;
+        const arrowW = h * 0.5;
+        ctx.font = `${fs}px Roboto`;
+        const tw = ctx.measureText(portText).width;
+
+        ctx.strokeStyle = C.labelHier;
+        ctx.lineWidth = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x + arrowW, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y - h / 2);
+        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y + h / 2);
+        ctx.lineTo(cur.x + arrowW, cur.y + h / 2);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Connection stub
+        ctx.lineWidth = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y);
+        ctx.lineTo(cur.x - 1, cur.y);
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = C.labelHier;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(portText, cur.x + arrowW + pad, cur.y);
       }
 
       ctx.globalAlpha = 1;
@@ -3053,6 +3087,20 @@ export function SchematicRenderer() {
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>}
             label="No Connect" active={editMode === "placeNoConnect"}
             onClick={() => { useSchematicStore.getState().setEditMode("placeNoConnect"); setActiveBarMenu(null); }} />
+
+          {/* Port */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/><line x1="4" y1="12" x2="1" y2="12"/></svg>}
+            label="Port" active={editMode === "placePort"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placePort"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "port"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "port" ? null : "port")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                <DropdownItem label="Port" onClick={() => { useSchematicStore.getState().setEditMode("placePort"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Off Sheet Connector" disabled onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
           {/* Component */}
