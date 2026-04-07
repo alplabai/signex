@@ -17,8 +17,7 @@
   <img src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white" alt="React 19">
   <img src="https://img.shields.io/badge/Rust-stable-orange?logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/KiCad-8%2F9%2F10-blue?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJMMyAxNGgxOEwxMiAyeiIgZmlsbD0id2hpdGUiLz48L3N2Zz4=" alt="KiCad">
-  <img src="https://img.shields.io/badge/Tests-64_passing_(53_TS_%2B_11_Rust)-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/KiCad-8%2F9%2F10-blue" alt="KiCad">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
 </p>
 
@@ -26,113 +25,127 @@
 
 Signex is an open-source desktop EDA tool built for hardware engineers who want Altium Designer-class UX without the Altium price tag. It reads and writes KiCad files natively, so you can use existing KiCad libraries and schematics while enjoying a modern, fast editing experience.
 
-> **Status:** Alpha. Schematic capture is functional. PCB layout, simulation, and AI features are on the roadmap.
-
-<!-- TODO: Add screenshot here when UI is polished -->
+> **Status:** Alpha. Schematic capture is fully functional with ~85% Altium feature parity. PCB layout, simulation, and AI features are on the roadmap.
 
 ## Why Signex?
 
-The EDA landscape has two camps: expensive commercial tools (Altium, OrCAD, PADS) with polished UX, and free tools (KiCad, gEDA) with steeper learning curves. Signex bridges this gap:
-
 - **Altium-class UX** on an open-source foundation
-- **KiCad file compatibility** (.kicad_sch, .kicad_sym, KiCad 8/9/10 supported)
+- **KiCad file compatibility** (.kicad_sch, .kicad_sym read/write, KiCad 8/9/10)
 - **Native desktop app** via Tauri v2 (Rust backend, React frontend) -- fast startup, low memory
-- **AI copilot (Signal)** -- Claude-powered design assistant (coming soon)
+- **AI copilot (Signal)** -- Claude-powered design assistant (coming in Phase 5)
 - **Built by hardware engineers** for hardware engineers
-
-We started Signex because we design Edge AI hardware at [Alp Lab](https://alplab.ai) and wanted a tool that combined KiCad's openness with Altium's workflow speed.
 
 ## Features
 
 <details>
 <summary><strong>Schematic Capture</strong> (click to expand)</summary>
 
-- Canvas2D rendering with pan/zoom
-- 226 KiCad symbol libraries with search and preview
+- Canvas2D rendering with pan/zoom and auto-pan
+- 226 KiCad symbol libraries with search, preview, and drag-and-drop
 - Wire drawing (Manhattan, diagonal, free routing modes)
-- Bus drawing and bus entry support
-- Component placement with auto-designator generation
-- Net labels, power ports, hierarchical ports, no-connect markers
-- Sheet symbols with pin support
-- Drawing objects (line, rectangle, circle, arc, polyline)
-- Text string placement
+- Bus drawing and bus entry placement
+- Component placement with auto-designator and Tab to edit properties
+- Net labels (Net, Global, Hierarchical, Power) with all label shapes
+- Sheet symbols with pin support and Ctrl+Double-Click navigation
+- Drawing objects: line, rectangle, circle, arc, polyline, ellipse, round rect, polygon, text frame, image
+- Line styles (solid, dash, dot, dash-dot) and arrow endpoints (open, closed, diamond)
+- Text string placement with special string substitution (=Title, =Date, =Rev, etc.)
+- Sheet templates (ISO A4, ANSI A built-in)
 </details>
 
 <details>
 <summary><strong>Editing</strong></summary>
 
-- Selection (click, shift-click, box select with crossing/inside modes)
-- Move with rubber-banding, copy/cut/paste, duplicate
-- Rotate, mirror, align (6 directions), distribute
-- Undo/redo (50 levels)
+- Selection (click, Shift+click, box select with crossing/enclosing modes)
+- Selection filter panel (per-type visibility and selectability)
+- Selection memory (Ctrl+1-8 store, Alt+1-8 recall)
+- Move with rubber-banding (Ctrl = move without rubber-band)
+- Copy/Cut/Paste, Smart Paste (Shift+Ctrl+V), Paste Array
+- Duplicate, Rotate, Mirror X/Y, Align (6 directions), Distribute H/V
+- Undo/Redo (50 levels), Bring to Front / Send to Back
+- Nudge (Ctrl+Arrow, Shift+Ctrl+Arrow for 10x)
+- Break Wire, Align to Grid (Shift+Ctrl+D)
 - In-place text editing (double-click or F2)
-- Wire endpoint dragging and break wire
-- Find/Replace, Find Similar Objects (Shift+F)
-- Right-click context menu (context-aware)
-- Z-ordering (Bring to Front / Send to Back)
-- Batch property editing for multi-select same-type objects
-- Alt+Click to select entire net
+- Find/Replace with regex, Find Similar Objects (Shift+F)
+- Group/Union for collective selection
+- Right-click context menu with full depth
 </details>
 
 <details>
 <summary><strong>Validation & Output</strong></summary>
 
-- Net connectivity resolution (union-find algorithm)
-- ERC with 11 violation types including pin-to-pin connection matrix (12x12)
+- ERC: 11 violation types + 12x12 pin connection matrix
+- Configurable ERC severity per violation type
 - No ERC directives to suppress individual violations
-- Auto-annotation with lock/unlock designators
-- Reset designators / reset duplicates only
-- BOM generation (CSV export)
-- Netlist export (KiCad format)
+- ERC HTML report export
+- Annotation dialog with 4 ordering modes, preview table, designator lock, multi-part matching
+- BOM export: CSV, TSV, HTML, Excel (SpreadsheetML)
+- Netlist export: KiCad S-expression, generic XML
+- PDF export: single sheet or multi-sheet, DPI/color/grid options
 - PNG export
-- Net Color Override (F5) with 12-color palette
-- Measure distance tool (Ctrl+M)
-- ERC markers rendered on canvas (red errors, yellow warnings)
-- AutoFocus: dim non-related objects when inspecting violations
+- Print support (Ctrl+P)
+- Output Jobs panel: configure, run, batch execute
+- Net Color Override (F5)
+- AutoFocus: dim unrelated objects during inspection
+</details>
+
+<details>
+<summary><strong>Library Editor</strong></summary>
+
+- Symbol editor canvas with grid, origin cross, zoom/pan
+- Add/edit/remove pins with auto-increment numbering
+- Add/edit/remove graphics (rect, polyline, circle, arc)
+- Hidden pin support for power connections
+- Multi-part component types (LibSymbolUnit)
+- DeMorgan alternate display mode toggle
+- Save to native .sxsym format, read .kicad_sym
+- New/Edit/Duplicate from Components panel
+</details>
+
+<details>
+<summary><strong>Advanced Features</strong></summary>
+
+- Net classes with add/remove/assign
+- Differential pairs (_P/_N naming)
+- Signal harnesses with nested members
+- Design Constraint Manager (clearance, trace width, via size, diff pair gap, length match)
+- Design variants (fitted/not-fitted/alternate)
+- Document and project parameters with hierarchy resolution
+- Parameter Manager (spreadsheet editing across all components)
+- Multi-channel design (Repeat keyword on sheet symbols)
+- Preferences dialog with grid, snap, ERC severity, template, net scope settings
 </details>
 
 <details>
 <summary><strong>Panels (Altium-style)</strong></summary>
 
-- **Properties** -- context-aware editing for all object types (Altium layout)
-- **Components** -- 226 KiCad libraries with search, preview, and place
-- **SCH Filter** -- toggle visibility/selectability per object type
-- **SCH List** -- spreadsheet view with sortable columns, click-to-select
-- **Navigator** -- schematic overview with object tree and stats
-- **Messages** -- ERC violations with click-to-select and Run ERC button
+- **Properties** -- context-aware editing for all object types
+- **Components** -- 226 KiCad libraries with search, preview, edit, drag-and-drop
+- **SCH Filter** -- toggle visibility/selectability per object type (connected to renderer + hit test)
+- **SCH List** -- sortable tables with editable cells and resolved nets tab
+- **Navigator** -- schematic overview with object tree
+- **Messages** -- ERC violations with click-to-focus and HTML report export
+- **Output Jobs** -- BOM, Netlist, PDF, PNG job management
 - **Projects** -- project tree with sheet navigation
-- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages)
-</details>
-
-<details>
-<summary><strong>UI & UX</strong></summary>
-
-- Dark theme (Catppuccin Mocha-inspired)
-- Unit conversion (mm/mil/inch) everywhere
-- Preferences dialog (General/Display/ERC tabs)
-- 30+ keyboard shortcuts matching Altium conventions
-- Centered Active Bar with all placement tools
-- Altium-style selection highlights with green corner handles
-- Right-click context menu with context-aware actions
+- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages/Output Jobs)
 </details>
 
 ## Roadmap
 
 | Phase | Status | Features |
 |-------|--------|----------|
-| **Phase 0: Viewer** | :white_check_mark: Done | KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav |
-| **Phase 1: Editor** | :white_check_mark: Done | Selection, move, wire, delete, rotate, undo/redo, save, properties |
-| **Phase 2: Core** | :white_check_mark: Done | Drag-box select, auto-junction, rubber-band, copy/paste, net labels, power ports, ERC, BOM |
-| **Phase 3: Validation** | :white_check_mark: Done | ERC (11 checks + connection matrix), annotation, No ERC directives, AutoFocus, lock designators |
-| **Phase 4: Advanced** | :hourglass: Planned | Library editor, drawing tools, BOM/PDF/ODB++ export, template system |
-| **Phase 5: Signal AI** | :hourglass: Planned | Claude API integration, design review, component suggestion, ERC fix |
-| **Phase 6: PCB Layout** | :hourglass: Planned | Layer stack, interactive routing, DRC, copper pour, 3D viewer |
-| **Phase 7: Simulation** | :hourglass: Planned | SPICE integration, signal integrity, power analysis |
-| **Phase 8: Manufacturing** | :hourglass: Planned | Gerber/drill export, assembly drawings, pick-and-place |
-| **Phase 9: Collaboration** | :hourglass: Planned | Real-time multi-user editing, version control, cloud storage |
-| **Phase 10: Marketplace** | :hourglass: Planned | Community libraries, design templates, plugin system |
+| **Phase 0: Viewer** | Done | KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav |
+| **Phase 1: Editor** | Done | Selection, move, wire, delete, rotate, undo/redo, save, properties |
+| **Phase 2: Core Editing** | Done | Drag-box select, auto-junction, rubber-band, copy/paste, net labels, power ports, ERC, BOM |
+| **Phase 3: Validation** | Done | ERC (11 checks + connection matrix), annotation, No ERC directives, AutoFocus |
+| **Phase 4: Advanced** | Done | Library editor, PDF/print export, output jobs, custom fields, title block, templates |
+| **Phase 4+: Altium Parity** | Done | 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, design variants, parameter manager, multi-channel, BOM formats |
+| **Phase 5: Signal AI** | Next | Claude API integration, design review, component suggestion |
+| **Phase 6: PCB Layout** | Planned | Layer stack, interactive routing, DRC, copper pour, 3D viewer |
+| **Phase 7: Simulation** | Planned | SPICE integration, signal integrity, power analysis |
+| **Phase 8: Manufacturing** | Planned | Gerber/drill export, assembly drawings, pick-and-place |
 
-See [docs/master-plan.md](docs/master-plan.md) for the full 10-phase roadmap.
+See [docs/master-plan.md](docs/master-plan.md) for the full roadmap.
 
 ## Quick Start
 
@@ -171,18 +184,26 @@ npm run tauri dev
 | `B` | Draw bus |
 | `L` | Place net label |
 | `T` | Place text |
+| `P` | Open components panel |
 | `Space` | Rotate |
 | `X` / `Y` | Flip horizontal / vertical |
 | `Ctrl+C/X/V` | Copy / Cut / Paste |
+| `Shift+Ctrl+V` | Smart Paste |
 | `Ctrl+D` | Duplicate |
+| `Shift+Ctrl+D` | Align to Grid |
 | `Ctrl+Z/Y` | Undo / Redo |
 | `Ctrl+A` | Select all |
 | `Ctrl+F/H` | Find / Replace |
-| `Ctrl+M` | Measure distance |
+| `Ctrl+P` | Print |
 | `Ctrl+Q` | Toggle mm/mil/inch |
+| `Ctrl+Arrow` | Nudge by grid |
+| `Shift+Ctrl+Arrow` | Nudge by 10x grid |
+| `Ctrl+1-8` | Store selection |
+| `Alt+1-8` | Recall selection |
 | `Shift+F` | Find similar objects |
 | `F2` | Edit text in-place |
 | `F5` | Net color override |
+| `F11` | Properties panel |
 | `G` | Cycle grid size |
 | `Del` | Delete selected |
 | `Esc` | Cancel / deselect |
@@ -199,60 +220,37 @@ npm run tauri dev
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Styling | Tailwind CSS 4 |
 | Canvas | Canvas2D (wgpu planned for PCB) |
-| State | Zustand |
+| State | Zustand (5 stores: layout, project, editor, schematic, libraryEditor) |
 | Parser | Pure Rust S-expression parser |
-| AI | Claude API via Rust reqwest (planned) |
-| Testing | Vitest (53 tests) + cargo test (11 tests) = 64 total |
+| AI | Claude API via Rust reqwest (Phase 5) |
 
 ## Project Structure
 
 ```
 src-tauri/src/
   commands/           Tauri IPC (project, schematic, save, library, export)
-  engine/             KiCad S-expr parser + writer
+  engine/             KiCad S-expr parser, writer, document model
 src/
-  canvas/             SchematicRenderer (Canvas2D), hitTest
-  components/         MenuBar, ToolbarStrip, StatusBar, ContextMenu
-  panels/             Properties, Components, Messages, Filter, List, Navigator, Project
-  stores/             Zustand: layout, project, editor, schematic
-  lib/                Net resolver, ERC (11 checks), connection matrix, geometry
-  __tests__/          Vitest test suite (53 tests)
+  canvas/             SchematicRenderer, LibraryEditorCanvas, hitTest
+  components/         MenuBar, ToolbarStrip, StatusBar, dialogs (15 files)
+  panels/             Properties, Components, Messages, Filter, List, Navigator, OutputJobs (9 files)
+  stores/             Zustand: layout, project, editor, schematic, libraryEditor, outputJobs
+  lib/                Net resolver, ERC, geometry, PDF export, BOM formats, special strings, templates
+  __tests__/          Vitest test suite
 docs/                 Roadmap, master plan, Altium reference
 ```
 
 ## Contributing
 
-We welcome contributions from hardware engineers, EDA developers, and vibe coders! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
-
-### How to Contribute
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 1. **Fork** the repo
-2. **Branch from `dev`** (`git checkout dev && git checkout -b feature/my-feature`)
+2. **Branch from `dev`**: `git checkout dev && git checkout -b feature/my-feature`
 3. **Code** and add tests
-4. **Test** (`npm run test` + `cd src-tauri && cargo test`)
+4. **Test**: `npm run test` + `cd src-tauri && cargo test`
 5. **PR against `dev`** with a clear description
 
-> **Branches:** `main` = stable releases, `dev` = active development. All PRs go to `dev`.
-
-### Good First Issues
-
-| Area | Task |
-|------|------|
-| ERC | Add more violation types (see `src/lib/erc.ts`) |
-| UI | Improve Properties panel for specific object types |
-| Drawing | Add ellipse, bezier, polygon tools |
-| Export | PDF export support |
-| Testing | Increase test coverage |
-| Docs | Improve inline documentation |
-
-### Development
-
-```bash
-npm run test                    # 53 TypeScript tests
-cd src-tauri && cargo test      # 11 Rust tests
-npx tsc --noEmit                # Type check
-npm run tauri dev               # Dev mode with hot reload
-```
+> **Branches:** `main` = stable releases, `dev` = active development. All PRs target `dev`.
 
 ## License
 
@@ -266,13 +264,10 @@ npm run tauri dev               # Dev mode with hot reload
 - Not affiliated with Altium, KiCad, or any other EDA vendor
 - KiCad file format compatibility is best-effort; not all features supported yet
 - AI features (Signal) are not yet implemented
-- Always verify designs with manufacturer tools before production
 
 ## Credits
 
 Built by [Caner Alp](https://github.com/alpCaner) at [Alp Lab AB](https://alplab.ai).
-
-Tools: [Claude Code](https://claude.ai/code), [Tauri](https://tauri.app/), [Vite](https://vite.dev/), [KiCad](https://www.kicad.org/) (file format).
 
 ---
 
