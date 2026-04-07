@@ -305,16 +305,66 @@ export function SchematicRenderer() {
     ctx.translate(cam.x, cam.y);
     ctx.scale(cam.zoom, cam.zoom);
 
-    // Paper
+    // Paper with Altium-style zone markers
     ctx.fillStyle = C.paper;
     ctx.fillRect(0, 0, pw, ph);
     ctx.strokeStyle = C.paperBorder;
     ctx.lineWidth = 0.3;
     ctx.strokeRect(0, 0, pw, ph);
-    ctx.lineWidth = 0.15;
-    ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
-    // Title block fields inside the 100x30mm border box
+    // Zone markers (A-H columns, 1-N rows)
+    const zoneMargin = 5; // margin width for zone labels
+    const cols = Math.max(4, Math.floor(pw / 50));
+    const rows = Math.max(2, Math.floor(ph / 50));
+    const colW = (pw - zoneMargin * 2) / cols;
+    const rowH = (ph - zoneMargin * 2) / rows;
+
+    ctx.strokeStyle = C.paperBorder;
+    ctx.lineWidth = 0.1;
+    ctx.fillStyle = "#4a4d6a";
+    ctx.font = "2px Roboto";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Column markers (top and bottom)
+    for (let c = 0; c < cols; c++) {
+      const x = zoneMargin + c * colW;
+      // Top tick
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, zoneMargin); ctx.stroke();
+      ctx.fillText(String(c + 1), x + colW / 2, zoneMargin / 2);
+      // Bottom tick
+      ctx.beginPath(); ctx.moveTo(x, ph - zoneMargin); ctx.lineTo(x, ph); ctx.stroke();
+      ctx.fillText(String(c + 1), x + colW / 2, ph - zoneMargin / 2);
+    }
+    // Last column tick
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, 0); ctx.lineTo(pw - zoneMargin, zoneMargin); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, ph - zoneMargin); ctx.lineTo(pw - zoneMargin, ph); ctx.stroke();
+
+    // Row markers (left and right)
+    for (let r = 0; r < rows; r++) {
+      const y = zoneMargin + r * rowH;
+      const letter = String.fromCharCode(65 + r); // A, B, C...
+      // Left tick
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(zoneMargin, y); ctx.stroke();
+      ctx.fillText(letter, zoneMargin / 2, y + rowH / 2);
+      // Right tick
+      ctx.beginPath(); ctx.moveTo(pw - zoneMargin, y); ctx.lineTo(pw, y); ctx.stroke();
+      ctx.fillText(letter, pw - zoneMargin / 2, y + rowH / 2);
+    }
+    // Last row tick
+    ctx.beginPath(); ctx.moveTo(0, ph - zoneMargin); ctx.lineTo(zoneMargin, ph - zoneMargin); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pw - zoneMargin, ph - zoneMargin); ctx.lineTo(pw, ph - zoneMargin); ctx.stroke();
+
+    // Inner border (working area)
+    ctx.strokeStyle = C.paperBorder;
+    ctx.lineWidth = 0.15;
+    ctx.strokeRect(zoneMargin, zoneMargin, pw - zoneMargin * 2, ph - zoneMargin * 2);
+
+    // Title block
+    ctx.lineWidth = 0.15;
+    ctx.strokeRect(pw - 100, ph - 30, 100 - zoneMargin, 30 - zoneMargin);
+
+    // Title block fields inside the border box
     {
       const tbx = pw - 100, tby = ph - 30;
       const tb = data.title_block || {};
@@ -348,22 +398,28 @@ export function SchematicRenderer() {
       ctx.fillText(tb.title || "", tbx + 2, tby + 25);
     }
 
-    // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
+    // Grid (Altium-style dots at intersections)
     if (gridVisible && gridSize * cam.zoom > 2) {
-      ctx.globalAlpha = 0.4;
-      for (let i = 0; i * gridSize <= pw; i++) {
-        const gx = i * gridSize;
-        const maj = i % 10 === 0;
-        ctx.strokeStyle = maj ? C.gridMajor : C.grid;
-        ctx.lineWidth = maj ? 0.06 : 0.02;
-        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ph); ctx.stroke();
-      }
-      for (let i = 0; i * gridSize <= ph; i++) {
-        const gy = i * gridSize;
-        const maj = i % 10 === 0;
-        ctx.strokeStyle = maj ? C.gridMajor : C.grid;
-        ctx.lineWidth = maj ? 0.06 : 0.02;
-        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(pw, gy); ctx.stroke();
+      const dotSize = gridSize * 0.04;
+      const majDotSize = gridSize * 0.08;
+      // Calculate visible grid range from camera
+      const gStartX = Math.floor(-cam.x / cam.zoom / gridSize) * gridSize;
+      const gStartY = Math.floor(-cam.y / cam.zoom / gridSize) * gridSize;
+      const gEndX = gStartX + w / cam.zoom + gridSize;
+      const gEndY = gStartY + h / cam.zoom + gridSize;
+
+      ctx.globalAlpha = 0.5;
+      for (let gx = gStartX; gx <= gEndX; gx += gridSize) {
+        const ix = Math.round(gx / gridSize);
+        const majX = ix % 10 === 0;
+        for (let gy = gStartY; gy <= gEndY; gy += gridSize) {
+          const iy = Math.round(gy / gridSize);
+          const majY = iy % 10 === 0;
+          const maj = majX && majY;
+          ctx.fillStyle = maj ? C.gridMajor : C.grid;
+          const r = maj ? majDotSize : dotSize;
+          ctx.fillRect(gx - r, gy - r, r * 2, r * 2);
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -378,9 +434,9 @@ export function SchematicRenderer() {
       return 1;
     };
 
-    // Wires
+    // Wires (Altium-style: slightly thicker for visibility)
     ctx.strokeStyle = C.wire;
-    ctx.lineWidth = 0.15;
+    ctx.lineWidth = 0.2;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
       ctx.globalAlpha = alphaFor(wire.uuid, "wires");
