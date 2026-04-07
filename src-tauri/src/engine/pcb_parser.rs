@@ -381,6 +381,60 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
                 position: Some(text_pos), rotation: Some(text_rot), fill: None,
             });
         }
+        for g in fp.find_all("fp_arc") {
+            let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+            let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+            let start = g.find("start").map(|s| parse_point(s));
+            let mid = g.find("mid").map(|m| parse_point(m));
+            let end = g.find("end").map(|e| parse_point(e));
+            graphics.push(FpGraphic {
+                graphic_type: "arc".to_string(), layer: gl, width: w,
+                start, end, center: None, mid, radius: None,
+                points: vec![], text: None, font_size: None, position: None, rotation: None, fill: None,
+            });
+        }
+        for g in fp.find_all("fp_poly") {
+            let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+            let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
+            let pts: Vec<Point> = if let Some(pts_node) = g.find("pts") {
+                pts_node.find_all("xy").iter().map(|xy| parse_point(xy)).collect()
+            } else { vec![] };
+            let fill = g.find("fill").and_then(|f| f.first_arg()).map(|f| f != "none");
+            graphics.push(FpGraphic {
+                graphic_type: "poly".to_string(), layer: gl, width: w,
+                start: None, end: None, center: None, mid: None, radius: None,
+                points: pts, text: None, font_size: None, position: None, rotation: None, fill,
+            });
+        }
+        // KiCad 8+ uses (property "Reference" "U1" (at ...) (layer ...) ...) for text graphics
+        for prop in fp.find_all("property") {
+            let prop_name = prop.first_arg().unwrap_or("");
+            let prop_val = prop.arg(1).unwrap_or("").to_string();
+            // Only render properties that have position and layer
+            if let Some(_at) = prop.find("at") {
+                if let Some(layer_node) = prop.find("layer") {
+                    let gl = layer_node.first_arg().unwrap_or("").to_string();
+                    if gl.is_empty() { continue; }
+                    let (text_pos, text_rot) = parse_at(prop);
+                    let fs = prop.find("effects").and_then(|e| e.find("font")).and_then(|f| f.find("size"))
+                        .and_then(|s| s.first_arg()?.parse().ok()).unwrap_or(1.0);
+                    // Check if hidden
+                    let hidden = prop.find("effects").and_then(|e| e.find("hide")).is_some();
+                    if hidden { continue; }
+                    let display_text = match prop_name {
+                        "Reference" => "%R".to_string(),
+                        "Value" => "%V".to_string(),
+                        _ => prop_val,
+                    };
+                    graphics.push(FpGraphic {
+                        graphic_type: "text".to_string(), layer: gl, width: 0.1,
+                        start: None, end: None, center: None, mid: None, radius: None,
+                        points: vec![], text: Some(display_text), font_size: Some(fs),
+                        position: Some(text_pos), rotation: Some(text_rot), fill: None,
+                    });
+                }
+            }
+        }
         for g in fp.find_all("fp_rect") {
             let gl = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
             let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok()).unwrap_or(0.1);
@@ -473,6 +527,60 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
         board_graphics.push(BoardGraphic {
             graphic_type: "line".to_string(), layer, width: w,
             start, end, center: None, radius: None, points: vec![],
+        });
+    }
+    for g in root.find_all("gr_rect") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let end = g.find("end").map(|e| parse_point(e));
+        // If on Edge.Cuts, also add to outline
+        if layer == "Edge.Cuts" {
+            if let (Some(ref s), Some(ref e)) = (&start, &end) {
+                if outline_points.is_empty() {
+                    outline_points.push(Point { x: s.x, y: s.y });
+                    outline_points.push(Point { x: e.x, y: s.y });
+                    outline_points.push(Point { x: e.x, y: e.y });
+                    outline_points.push(Point { x: s.x, y: e.y });
+                }
+            }
+        }
+        board_graphics.push(BoardGraphic {
+            graphic_type: "rect".to_string(), layer, width: w,
+            start, end, center: None, radius: None, points: vec![],
+        });
+    }
+    for g in root.find_all("gr_circle") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let center = g.find("center").map(|c| parse_point(c));
+        let end = g.find("end").map(|e| parse_point(e));
+        let radius = if let (Some(ref c), Some(ref e)) = (&center, &end) {
+            Some(((e.x - c.x).powi(2) + (e.y - c.y).powi(2)).sqrt())
+        } else { None };
+        board_graphics.push(BoardGraphic {
+            graphic_type: "circle".to_string(), layer, width: w,
+            start: None, end: None, center, radius, points: vec![],
+        });
+    }
+    for g in root.find_all("gr_arc") {
+        let layer = g.find("layer").and_then(|l| l.first_arg()).unwrap_or("").to_string();
+        let w = g.find("stroke").and_then(|s| s.find("width")).and_then(|w| w.first_arg()?.parse().ok())
+            .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
+            .unwrap_or(0.1);
+        let start = g.find("start").map(|s| parse_point(s));
+        let mid = g.find("mid").map(|m| parse_point(m));
+        let end = g.find("end").map(|e| parse_point(e));
+        // Store mid point in the points vec for the renderer
+        let mut pts = vec![];
+        if let Some(ref m) = mid { pts.push(m.clone()); }
+        board_graphics.push(BoardGraphic {
+            graphic_type: "arc".to_string(), layer, width: w,
+            start, end, center: None, radius: None, points: pts,
         });
     }
 

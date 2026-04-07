@@ -5,6 +5,13 @@ import type { PanelId as DockPanelId } from "@/lib/panelRegistry";
 
 type DockId = "left" | "right" | "bottom";
 
+interface FloatingPanelState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface LayoutState {
   leftPanelWidth: number;
   rightPanelWidth: number;
@@ -19,6 +26,7 @@ interface LayoutState {
     bottom: DockPanelId[];
   };
   activeTab: Record<string, DockPanelId>;
+  floatingPanels: Record<string, FloatingPanelState>;
 
   setLeftWidth: (w: number) => void;
   setRightWidth: (w: number) => void;
@@ -30,6 +38,10 @@ interface LayoutState {
   movePanel: (panelId: string, targetDock: DockId, index?: number) => void;
   removePanel: (panelId: string) => void;
   setDockActiveTab: (dock: string, panelId: string) => void;
+  floatPanel: (panelId: string, x: number, y: number) => void;
+  dockFloatingPanel: (panelId: string, targetDock: DockId) => void;
+  updateFloatingPosition: (panelId: string, x: number, y: number) => void;
+  closeFloatingPanel: (panelId: string) => void;
 }
 
 const defaultPanels: PanelConfig[] = [
@@ -60,6 +72,7 @@ export const useLayoutStore = create<LayoutState>()(
         bottom: ["messages", "output-jobs", "signal"],
       },
       activeTab: { left: "projects", right: "properties", bottom: "messages" },
+      floatingPanels: {},
 
       setLeftWidth: (w) => set({ leftPanelWidth: w }),
       setRightWidth: (w) => set({ rightPanelWidth: w }),
@@ -129,6 +142,51 @@ export const useLayoutStore = create<LayoutState>()(
         set((s) => ({
           activeTab: { ...s.activeTab, [dock]: panelId as DockPanelId },
         })),
+
+      // Floating panels
+      floatPanel: (panelId, x, y) =>
+        set((s) => {
+          // Remove from any dock
+          const newDocks = { left: [...s.docks.left], right: [...s.docks.right], bottom: [...s.docks.bottom] };
+          const newActiveTab = { ...s.activeTab };
+          for (const dock of ["left", "right", "bottom"] as DockId[]) {
+            const idx = newDocks[dock].indexOf(panelId as DockPanelId);
+            if (idx !== -1) {
+              newDocks[dock].splice(idx, 1);
+              if (newActiveTab[dock] === panelId && newDocks[dock].length > 0) {
+                newActiveTab[dock] = newDocks[dock][0];
+              }
+              break;
+            }
+          }
+          return {
+            docks: newDocks,
+            activeTab: newActiveTab,
+            floatingPanels: { ...s.floatingPanels, [panelId]: { x, y, width: 320, height: 400 } },
+          };
+        }),
+
+      dockFloatingPanel: (panelId, targetDock) =>
+        set((s) => {
+          const { [panelId]: _, ...rest } = s.floatingPanels;
+          const newDocks = { ...s.docks, [targetDock]: [...s.docks[targetDock], panelId as DockPanelId] };
+          return {
+            floatingPanels: rest,
+            docks: newDocks,
+            activeTab: { ...s.activeTab, [targetDock]: panelId as DockPanelId },
+          };
+        }),
+
+      updateFloatingPosition: (panelId, x, y) =>
+        set((s) => ({
+          floatingPanels: { ...s.floatingPanels, [panelId]: { ...s.floatingPanels[panelId], x, y } },
+        })),
+
+      closeFloatingPanel: (panelId) =>
+        set((s) => {
+          const { [panelId]: _, ...rest } = s.floatingPanels;
+          return { floatingPanels: rest };
+        }),
     }),
     {
       name: "signex-layout",

@@ -135,6 +135,13 @@ export function SchematicRenderer() {
   const selectionModeRef = useRef<"box" | "lasso" | "insideArea" | "outsideArea" | "touchingRect" | "touchingLine">("box");
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
   const powerPreset = useRef<{ net: string; style: string }>({ net: "VCC", style: "bar" });
+  // Track last-used tool per Active Bar group (Altium: icon changes to last used)
+  const [lastTool, setLastTool] = useState<Record<string, string>>({
+    wire: "drawWire",
+    text: "placeText",
+    draw: "drawLine",
+    power: "placePower",
+  });
   const [findShowReplace, setFindShowReplace] = useState(false);
 
   // Context menu state
@@ -2411,13 +2418,13 @@ export function SchematicRenderer() {
           }}
           className="absolute z-40 bg-bg-primary border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
           style={{
-            left: inPlaceEdit.screenX,
+            left: inPlaceEdit.screenX - 2,
             top: inPlaceEdit.screenY,
             fontSize: `${Math.max(10, camRef.current.zoom * 1.27)}px`,
             fontFamily: "Roboto, sans-serif",
             minWidth: Math.max(60, inPlaceEdit.value.length * Math.max(7, camRef.current.zoom * 0.8)),
             color: "#e8c66a",
-            lineHeight: 1.3,
+            lineHeight: 1,
             transform: "translateY(-100%)",
           }}
         />
@@ -2539,22 +2546,27 @@ export function SchematicRenderer() {
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
-          {/* Wiring */}
+          {/* Wiring — icon tracks last-used tool */}
           <ActiveBarBtn
-            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
-            label="Wire" active={editMode === "drawWire" || editMode === "drawBus" || editMode === "placeLabel"}
-            onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }}
+            icon={lastTool.wire === "drawBus"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>
+              : lastTool.wire === "placeLabel"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
+            label={lastTool.wire === "drawBus" ? "Bus" : lastTool.wire === "placeLabel" ? "Net Label" : "Wire"}
+            active={editMode === "drawWire" || editMode === "drawBus" || editMode === "placeLabel" || editMode === "placeBusEntry"}
+            onClick={() => { useSchematicStore.getState().setEditMode(lastTool.wire as any); setActiveBarMenu(null); }}
             menuOpen={activeBarMenu === "wire"}
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "wire" ? null : "wire")}
             menu={
               <div className="py-1 min-w-[140px]">
                 <DropdownItem label="Wire" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "drawWire"})); useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Bus" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("drawBus"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Bus Entry" onClick={() => { useSchematicStore.getState().setEditMode("placeBusEntry"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "drawBus"})); useSchematicStore.getState().setEditMode("drawBus"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Bus Entry" onClick={() => { setLastTool(t => ({...t, wire: "placeBusEntry"})); useSchematicStore.getState().setEditMode("placeBusEntry"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Net Label" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>}
-                  onClick={() => { useSchematicStore.getState().setEditMode("placeLabel"); setActiveBarMenu(null); }} />
+                  onClick={() => { setLastTool(t => ({...t, wire: "placeLabel"})); useSchematicStore.getState().setEditMode("placeLabel"); setActiveBarMenu(null); }} />
               </div>
             } />
 
@@ -2668,19 +2680,26 @@ export function SchematicRenderer() {
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
-          {/* Drawing tools */}
+          {/* Drawing tools — icon tracks last-used tool */}
           <ActiveBarBtn
-            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>}
-            label="Line" active={editMode === "drawLine" || editMode === "drawRect" || editMode === "drawCircle" || editMode === "drawPolyline"}
-            onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }}
+            icon={lastTool.draw === "drawRect"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+              : lastTool.draw === "drawCircle"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+              : lastTool.draw === "drawPolyline"
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l6-10 4 6 6-12"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>}
+            label={lastTool.draw === "drawRect" ? "Rectangle" : lastTool.draw === "drawCircle" ? "Circle" : lastTool.draw === "drawPolyline" ? "Polyline" : "Line"}
+            active={editMode === "drawLine" || editMode === "drawRect" || editMode === "drawCircle" || editMode === "drawPolyline"}
+            onClick={() => { useSchematicStore.getState().setEditMode(lastTool.draw as any); setActiveBarMenu(null); }}
             menuOpen={activeBarMenu === "draw"}
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "draw" ? null : "draw")}
             menu={
               <div className="py-1 min-w-[130px]">
-                <DropdownItem label="Line" onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Rectangle" onClick={() => { useSchematicStore.getState().setEditMode("drawRect"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Circle" onClick={() => { useSchematicStore.getState().setEditMode("drawCircle"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Polyline" onClick={() => { useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Line" onClick={() => { setLastTool(t => ({...t, draw: "drawLine"})); useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Rectangle" onClick={() => { setLastTool(t => ({...t, draw: "drawRect"})); useSchematicStore.getState().setEditMode("drawRect"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Circle" onClick={() => { setLastTool(t => ({...t, draw: "drawCircle"})); useSchematicStore.getState().setEditMode("drawCircle"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Polyline" onClick={() => { setLastTool(t => ({...t, draw: "drawPolyline"})); useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
               </div>
             } />
 

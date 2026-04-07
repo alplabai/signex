@@ -68,7 +68,10 @@ export function PcbRenderer() {
               generator: raw.generator ?? "",
               thickness: raw.thickness ?? 1.6,
               outline: (raw.outline ?? []).map(p),
-              layers: (raw.layers ?? []).map((l: any) => ({ id: l.id ?? l.name, name: l.name, type: l.layer_type ?? "signal" })),
+              layers: {
+                layers: (raw.layers ?? []).map((l: any) => ({ id: l.id ?? l.name, name: l.name ?? l.id, type: l.layer_type ?? "signal", visible: true, color: "", opacity: 1 })),
+                copperCount: (raw.layers ?? []).filter((l: any) => (l.id ?? l.name ?? "").endsWith(".Cu")).length || 2,
+              },
               setup: raw.setup ? {
                 gridSize: raw.setup.grid_size ?? 0.25,
                 traceWidth: raw.setup.trace_width ?? 0.25,
@@ -102,13 +105,24 @@ export function PcbRenderer() {
                 net: pad.net ? { number: pad.net.number ?? 0, name: pad.net.name ?? "" } : undefined,
                 roundrectRatio: pad.roundrect_ratio,
               })),
-              graphics: (fp.graphics ?? []).map((g: any) => ({
-                type: g.graphic_type ?? "line",
-                layer: g.layer ?? "F.SilkS",
-                start: p(g.start),
-                end: p(g.end),
-                width: g.width ?? 0.12,
-              })),
+              graphics: (fp.graphics ?? []).map((g: any) => {
+                const gt = g.graphic_type ?? "line";
+                const layer = g.layer ?? "F.SilkS";
+                const width = g.width ?? 0.12;
+                if (gt === "circle") {
+                  return { type: "circle" as const, center: p(g.center), radius: g.radius ?? 0, layer, width, fill: g.fill ?? undefined };
+                } else if (gt === "text") {
+                  return { type: "text" as const, text: g.text ?? "", position: p(g.position), layer, fontSize: g.font_size ?? 1.0, rotation: g.rotation ?? 0 };
+                } else if (gt === "arc") {
+                  return { type: "arc" as const, start: p(g.start), mid: p(g.mid), end: p(g.end), layer, width };
+                } else if (gt === "poly") {
+                  return { type: "poly" as const, points: (g.points ?? []).map(p), layer, width, fill: g.fill ?? undefined };
+                } else if (gt === "rect") {
+                  return { type: "rect" as const, start: p(g.start), end: p(g.end), layer, width, fill: g.fill ?? undefined };
+                } else {
+                  return { type: "line" as const, start: p(g.start), end: p(g.end), layer, width };
+                }
+              }),
             })),
             segments: (raw.segments ?? []).map((s: any) => ({
               uuid: s.uuid ?? "",
@@ -144,13 +158,24 @@ export function PcbRenderer() {
               number: n.number ?? 0,
               name: n.name ?? "",
             })),
-            graphics: (raw.graphics ?? []).map((g: any) => ({
-              type: g.graphic_type ?? "line",
-              layer: g.layer ?? "Edge.Cuts",
-              start: p(g.start),
-              end: p(g.end),
-              width: g.width ?? 0.05,
-            })),
+            graphics: (raw.graphics ?? []).map((g: any) => {
+              const gt = g.graphic_type ?? "line";
+              const layer = g.layer ?? "Edge.Cuts";
+              const width = g.width ?? 0.05;
+              if (gt === "circle") {
+                return { type: "circle" as const, center: p(g.center), radius: g.radius ?? 0, layer, width };
+              } else if (gt === "rect") {
+                return { type: "rect" as const, start: p(g.start), end: p(g.end), layer, width };
+              } else if (gt === "arc") {
+                // mid is stored in points[0] from Rust BoardGraphic
+                const mid = g.points?.[0] ? p(g.points[0]) : p(g.start);
+                return { type: "arc" as const, start: p(g.start), mid, end: p(g.end), layer, width };
+              } else if (gt === "poly") {
+                return { type: "poly" as const, points: (g.points ?? []).map(p), layer, width };
+              } else {
+                return { type: "line" as const, start: p(g.start), end: p(g.end), layer, width };
+              }
+            }),
             texts: (raw.texts ?? []).map((t: any) => ({
               uuid: t.uuid ?? "",
               text: t.text ?? "",
@@ -255,7 +280,7 @@ export function PcbRenderer() {
     }
 
     // Board outline
-    if (data.board.outline.length >= 3) {
+    if (data.board.outline.length >= 2) {
       ctx.strokeStyle = getLayerColor("Edge.Cuts");
       ctx.lineWidth = 0.15;
       ctx.beginPath();
@@ -263,17 +288,20 @@ export function PcbRenderer() {
       for (let i = 1; i < data.board.outline.length; i++) {
         ctx.lineTo(data.board.outline[i].x, data.board.outline[i].y);
       }
-      ctx.closePath();
-      ctx.fillStyle = "#1e1e3a";
-      ctx.fill();
+      if (data.board.outline.length >= 3) {
+        ctx.closePath();
+        ctx.fillStyle = "#1e1e3a";
+        ctx.fill();
+      }
       ctx.stroke();
     }
 
     // Render layers back-to-front: B.Cu zones → B.Cu traces → ... → F.Cu traces → F.Cu zones → silk
     const layerOrder: PcbLayerId[] = [
-      "B.Fab", "B.CrtYd", "B.SilkS", "B.Mask", "B.Cu",
+      "B.Fab", "B.CrtYd", "B.SilkS", "B.Mask", "B.Paste", "B.Cu",
       ...Array.from({ length: 30 }, (_, i) => `In${i + 1}.Cu` as PcbLayerId).filter((l) => visibleLayers.has(l)),
-      "F.Cu", "F.Mask", "F.SilkS", "F.CrtYd", "F.Fab",
+      "F.Cu", "F.Mask", "F.Paste", "F.SilkS", "F.CrtYd", "F.Fab",
+      "Edge.Cuts",
     ];
 
     for (const layer of layerOrder) {
@@ -382,26 +410,152 @@ export function PcbRenderer() {
           ctx.globalAlpha = alpha;
 
           const ox = fp.position.x, oy = fp.position.y;
-          if (g.type === "line") {
-            ctx.beginPath();
-            ctx.moveTo(ox + g.start.x, oy + g.start.y);
-            ctx.lineTo(ox + g.end.x, oy + g.end.y);
-            ctx.stroke();
-          } else if (g.type === "rect") {
-            ctx.strokeRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
-          } else if (g.type === "circle") {
-            ctx.beginPath();
-            ctx.arc(ox + g.center.x, oy + g.center.y, g.radius, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (g.type === "text") {
-            ctx.fillStyle = color;
-            ctx.font = `${g.fontSize}px sans-serif`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, ox + g.position.x, oy + g.position.y);
+          const rot = fp.rotation || 0;
+
+          // Apply footprint rotation around its origin
+          if (rot !== 0) {
+            ctx.save();
+            ctx.translate(ox, oy);
+            ctx.rotate((rot * Math.PI) / 180);
+            // Draw relative to (0,0) since we translated
+            if (g.type === "line") {
+              ctx.beginPath();
+              ctx.moveTo(g.start.x, g.start.y);
+              ctx.lineTo(g.end.x, g.end.y);
+              ctx.stroke();
+            } else if (g.type === "rect") {
+              if ("fill" in g && g.fill) {
+                ctx.fillStyle = color;
+                ctx.fillRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+              }
+              ctx.strokeRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+            } else if (g.type === "circle") {
+              ctx.beginPath();
+              ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+              ctx.beginPath();
+              ctx.moveTo(g.points[0].x, g.points[0].y);
+              for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+              ctx.closePath();
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "text") {
+              ctx.fillStyle = color;
+              ctx.font = `${g.fontSize}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              const textRot = ("rotation" in g ? g.rotation : 0) || 0;
+              if (textRot !== 0) {
+                ctx.save();
+                ctx.translate(g.position.x, g.position.y);
+                ctx.rotate((textRot * Math.PI) / 180);
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, 0, 0);
+                ctx.restore();
+              } else {
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, g.position.x, g.position.y);
+              }
+            }
+            ctx.restore();
+          } else {
+            // No rotation — draw with offset
+            if (g.type === "line") {
+              ctx.beginPath();
+              ctx.moveTo(ox + g.start.x, oy + g.start.y);
+              ctx.lineTo(ox + g.end.x, oy + g.end.y);
+              ctx.stroke();
+            } else if (g.type === "rect") {
+              if ("fill" in g && g.fill) {
+                ctx.fillStyle = color;
+                ctx.fillRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+              }
+              ctx.strokeRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+            } else if (g.type === "circle") {
+              ctx.beginPath();
+              ctx.arc(ox + g.center.x, oy + g.center.y, g.radius, 0, Math.PI * 2);
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+              ctx.beginPath();
+              ctx.moveTo(ox + g.points[0].x, oy + g.points[0].y);
+              for (let i = 1; i < g.points.length; i++) ctx.lineTo(ox + g.points[i].x, oy + g.points[i].y);
+              ctx.closePath();
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "text") {
+              ctx.fillStyle = color;
+              ctx.font = `${g.fontSize}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              const textRot = ("rotation" in g ? g.rotation : 0) || 0;
+              if (textRot !== 0) {
+                ctx.save();
+                ctx.translate(ox + g.position.x, oy + g.position.y);
+                ctx.rotate((textRot * Math.PI) / 180);
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, 0, 0);
+                ctx.restore();
+              } else {
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, ox + g.position.x, oy + g.position.y);
+              }
+            }
           }
           ctx.globalAlpha = 1;
         }
+      }
+
+      // Board-level graphics on this layer
+      for (const g of data.graphics) {
+        if (g.layer !== layer) continue;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = "width" in g ? g.width : 0.1;
+        ctx.globalAlpha = alpha;
+        if (g.type === "line") {
+          ctx.beginPath();
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.lineTo(g.end.x, g.end.y);
+          ctx.stroke();
+        } else if (g.type === "rect") {
+          ctx.strokeRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+        } else if (g.type === "circle") {
+          ctx.beginPath();
+          ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (g.type === "arc" && "mid" in g) {
+          // Approximate arc through 3 points
+          ctx.beginPath();
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.quadraticCurveTo(g.mid.x, g.mid.y, g.end.x, g.end.y);
+          ctx.stroke();
+        } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(g.points[0].x, g.points[0].y);
+          for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Board-level texts on this layer
+      for (const t of data.texts) {
+        if (t.layer !== layer) continue;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+        const fs = t.fontSize || 1.0;
+        ctx.font = `${fs}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (t.rotation) {
+          ctx.save();
+          ctx.translate(t.position.x, t.position.y);
+          ctx.rotate((t.rotation * Math.PI) / 180);
+          ctx.fillText(t.text, 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(t.text, t.position.x, t.position.y);
+        }
+        ctx.globalAlpha = 1;
       }
     }
 

@@ -5,6 +5,7 @@ import { ToolbarStrip } from "@/components/ToolbarStrip";
 import { DocumentTabBar } from "@/components/DocumentTabBar";
 import { StatusBar } from "@/components/StatusBar";
 import { DockPanel } from "@/components/DockPanel";
+import { FloatingPanel } from "@/components/FloatingPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
@@ -163,6 +164,17 @@ function ResizeHandle({
   );
 }
 
+function FloatingPanelsRenderer() {
+  const floatingPanels = useLayoutStore((s) => s.floatingPanels);
+  return (
+    <>
+      {Object.entries(floatingPanels).map(([panelId, state]) => (
+        <FloatingPanel key={panelId} panelId={panelId} x={state.x} y={state.y} width={state.width} height={state.height} />
+      ))}
+    </>
+  );
+}
+
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
   const [showPdfExport, setShowPdfExport] = useState(false);
@@ -317,6 +329,7 @@ function App() {
       </div>
 
       <StatusBar />
+      <FloatingPanelsRenderer />
       <ComponentSearch open={componentSearchOpen} onClose={() => setComponentSearchOpen(false)} />
       <ExportPdfDialog open={showPdfExport} onClose={() => setShowPdfExport(false)} />
       <BomConfigDialog open={showBomConfig} onClose={() => setShowBomConfig(false)} />
