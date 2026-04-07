@@ -64,6 +64,7 @@ function MenuItemRow({ item, onClose }: { item: ContextMenuItem; onClose: () => 
       </button>
       {hasChildren && subOpen && createPortal(
         <div
+          data-ctx-sub="true"
           className="fixed min-w-[200px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/50 py-1 z-[200]"
           style={{ left: getSubPos().x, top: getSubPos().y }}
           onMouseEnter={openSub}

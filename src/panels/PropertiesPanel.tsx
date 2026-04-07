@@ -109,6 +109,9 @@ function DocumentProps() {
   const snapEnabled = useEditorStore((s) => s.statusBar.snapEnabled);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const units = useEditorStore((s) => s.statusBar.units);
+  const snapToElectrical = useEditorStore((s) => s.snapToElectrical);
+  const electricalSnapRange = useEditorStore((s) => s.electricalSnapRange);
+  const projectParameters = useProjectStore((s) => s.projectParameters);
   const [tab, setTab] = useState<"general" | "parameters">("general");
 
   return (
@@ -164,13 +167,16 @@ function DocumentProps() {
             </FieldRow>
 
             <FieldRow label="">
-              <CheckBox checked={true} onChange={() => {}} />
+              <CheckBox checked={snapToElectrical} onChange={() => {
+                useEditorStore.getState().setSnapToElectrical(!snapToElectrical);
+              }} />
               <span className="text-[10px] text-text-secondary">Snap to Electrical Object Hotspots</span>
               <span className="text-text-muted/30 text-[10px] ml-auto shrink-0">Shift+E</span>
             </FieldRow>
 
             <FieldRow label="Snap Distance">
-              <FieldInput value={mmToDisplay(1.0, units)} suffix={units} onCommit={() => {}} />
+              <FieldInput value={mmToDisplay(electricalSnapRange, units)} suffix={units}
+                onCommit={(v) => { const mm = displayToMm(parseFloat(v) || 0, units); if (mm > 0) useEditorStore.getState().setElectricalSnapRange(mm); }} />
             </FieldRow>
 
             <FieldRow label="Document Font">
@@ -263,11 +269,37 @@ function DocumentProps() {
         </div>
       ) : (
         <div className="p-3 space-y-2">
-          <div className="text-[10px] text-text-muted/50 py-8 text-center">
-            Document parameters will appear here.<br/>Use Add to create custom parameters.
-          </div>
-          <button className="w-full py-1 px-2 rounded bg-bg-surface border border-border-subtle text-[10px] text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors">
-            Add Parameter...
+          {projectParameters.length === 0 ? (
+            <div className="text-[10px] text-text-muted/50 py-8 text-center">
+              No parameters defined.<br/>Use Add to create custom parameters.
+            </div>
+          ) : (
+            <div className="border border-border-subtle rounded overflow-hidden">
+              <div className="flex bg-bg-surface/50 text-[9px] text-text-muted/60 uppercase tracking-wider">
+                <div className="flex-1 px-2 py-0.5">Name</div>
+                <div className="flex-1 px-2 py-0.5">Value</div>
+                <div className="w-6"></div>
+              </div>
+              {projectParameters.map((p) => (
+                <div key={p.key} className="flex border-t border-border-subtle text-[10px] hover:bg-bg-hover/50 items-center">
+                  <div className="flex-1 px-2 py-0.5 font-mono text-text-primary truncate">{p.key}</div>
+                  <div className="flex-1 px-2 py-0.5">
+                    <FieldInput value={p.value} onCommit={(v) => useProjectStore.getState().updateProjectParameter(p.key, v)} />
+                  </div>
+                  <button onClick={() => useProjectStore.getState().removeProjectParameter(p.key)}
+                    className="w-6 h-6 flex items-center justify-center text-text-muted/40 hover:text-red-400 transition-colors shrink-0">
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => {
+            const name = prompt("Parameter name:");
+            if (name && name.trim()) useProjectStore.getState().addProjectParameter(name.trim(), "");
+          }}
+            className="w-full py-1 px-2 rounded bg-bg-surface border border-border-subtle text-[10px] text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors flex items-center justify-center gap-1">
+            <Plus size={10} /> Add Parameter...
           </button>
         </div>
       )}
@@ -337,7 +369,8 @@ function ComponentProps({ uuid }: { uuid: string }) {
               </span>
             </FieldRow>
             <FieldRow label="Type">
-              <select value={sym.is_power ? "Power" : "Standard"} onChange={() => {}}
+              <select value={sym.is_power ? "Power" : "Standard"}
+                onChange={(e) => updateSymbolProp(uuid, "is_power", String(e.target.value === "Power"))}
                 className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
                 <option>Standard</option><option>Power</option>
               </select>
@@ -1112,10 +1145,26 @@ function IconBtn({ icon, active, onClick }: { icon: React.ReactNode; active?: bo
   );
 }
 
+const FILTER_LABEL_TO_KEY: Record<string, string> = {
+  "Components": "components",
+  "Wires": "wires",
+  "Buses": "buses",
+  "Sheet Symbols": "sheetSymbols",
+  "Sheet Entries": "sheetEntries",
+  "Net Labels": "labels",
+  "Parameters": "parameters",
+  "Ports": "labels",
+  "Power Ports": "powerPorts",
+  "Texts": "textNotes",
+  "Drawing Objects": "drawings",
+  "Other": "noConnects",
+};
+
 function FilterBtn({ label }: { label: string }) {
-  const [on, setOn] = useState(true);
+  const key = FILTER_LABEL_TO_KEY[label] || "components";
+  const on = useEditorStore((s) => s.selectionFilter[key]?.selectable ?? true);
   return (
-    <button onClick={() => setOn(!on)}
+    <button onClick={() => useEditorStore.getState().setFilterItem(key, "selectable", !on)}
       className={cn("px-1.5 py-0.5 rounded text-[9px] border transition-colors",
         on ? "bg-accent/20 text-accent border-accent/30" : "bg-bg-primary text-text-muted/40 border-border-subtle")}>
       {label}
