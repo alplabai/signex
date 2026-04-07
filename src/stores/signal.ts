@@ -12,6 +12,21 @@ export interface SignalMessage {
   toolCalls?: { id: string; name: string; input: Record<string, unknown> }[];
 }
 
+// Module-level listener registry — not in store state to avoid persistence issues
+const activeListeners = new Map<string, UnlistenFn[]>();
+
+function cleanupListeners(messageId: string) {
+  const fns = activeListeners.get(messageId);
+  if (fns) {
+    for (const fn of fns) fn();
+    activeListeners.delete(messageId);
+  }
+}
+
+function cleanupAllListeners() {
+  for (const [id] of activeListeners) cleanupListeners(id);
+}
+
 interface SignalState {
   messages: SignalMessage[];
   apiKeySet: boolean;
@@ -21,7 +36,6 @@ interface SignalState {
   model: string;
   designBrief: string;
 
-  // Actions
   addMessage: (msg: Omit<SignalMessage, "id" | "timestamp"> & { id?: string }) => void;
   updateMessage: (id: string, updates: Partial<SignalMessage>) => void;
   removeMessage: (id: string) => void;
@@ -32,10 +46,8 @@ interface SignalState {
   addCost: (input: number, output: number) => void;
   setModel: (model: string) => void;
   setDesignBrief: (brief: string) => void;
-
-  // Streaming
   startStreamListener: (messageId: string) => Promise<void>;
-  _unlisteners: UnlistenFn[];
+  cancelStream: (messageId: string) => void;
 }
 
 export const useSignalStore = create<SignalState>()(
@@ -48,7 +60,6 @@ export const useSignalStore = create<SignalState>()(
       sessionCost: 0,
       model: "claude-sonnet-4-20250514",
       designBrief: "",
-      _unlisteners: [],
 
       addMessage: (msg) =>
         set((s) => ({
@@ -66,7 +77,10 @@ export const useSignalStore = create<SignalState>()(
       removeMessage: (id) =>
         set((s) => ({ messages: s.messages.filter((m) => m.id !== id) })),
 
-      clearHistory: () => set({ messages: [], totalTokens: 0, sessionCost: 0 }),
+      clearHistory: () => {
+        cleanupAllListeners();
+        set({ messages: [], totalTokens: 0, sessionCost: 0, isLoading: false });
+      },
 
       setApiKeySet: (v) => set({ apiKeySet: v }),
       setLoading: (v) => set({ isLoading: v }),
@@ -88,58 +102,78 @@ export const useSignalStore = create<SignalState>()(
       startStreamListener: async (messageId) => {
         const unlisteners: UnlistenFn[] = [];
 
-        // Listen for text deltas
-        const u1 = await listen<{ text: string; message_id: string }>("signal:stream-delta", (event) => {
-          if (event.payload.message_id === messageId) {
-            const store = useSignalStore.getState();
-            const msg = store.messages.find((m) => m.id === messageId);
-            if (msg) {
-              store.updateMessage(messageId, { content: (msg.content || "") + event.payload.text });
+        const u1 = await listen<{ text: string; message_id: string }>(
+          "signal:stream-delta",
+          (event) => {
+            if (event.payload.message_id === messageId) {
+              const s = useSignalStore.getState();
+              const msg = s.messages.find((m) => m.id === messageId);
+              if (msg) {
+                s.updateMessage(messageId, { content: (msg.content || "") + event.payload.text });
+              }
             }
           }
-        });
+        );
         unlisteners.push(u1);
 
-        // Listen for stream completion
-        const u2 = await listen<{ message_id: string; usage: { input_tokens: number; output_tokens: number }; tool_calls: { id: string; name: string; input: Record<string, unknown> }[]; stop_reason: string }>("signal:stream-done", (event) => {
+        const u2 = await listen<{
+          message_id: string;
+          usage: { input_tokens: number; output_tokens: number };
+          tool_calls: { id: string; name: string; input: Record<string, unknown> }[];
+          stop_reason: string;
+        }>("signal:stream-done", (event) => {
           if (event.payload.message_id === messageId) {
-            const store = useSignalStore.getState();
-            store.updateMessage(messageId, {
+            const s = useSignalStore.getState();
+            s.updateMessage(messageId, {
               loading: false,
               usage: event.payload.usage,
               toolCalls: event.payload.tool_calls.length > 0 ? event.payload.tool_calls : undefined,
             });
-            store.addTokens(event.payload.usage.input_tokens, event.payload.usage.output_tokens);
-            store.addCost(event.payload.usage.input_tokens, event.payload.usage.output_tokens);
-            store.setLoading(false);
-            // Cleanup listeners
-            for (const u of unlisteners) u();
+            s.addTokens(event.payload.usage.input_tokens, event.payload.usage.output_tokens);
+            s.addCost(event.payload.usage.input_tokens, event.payload.usage.output_tokens);
+            s.setLoading(false);
+            cleanupListeners(messageId);
           }
         });
         unlisteners.push(u2);
 
-        // Listen for errors
-        const u3 = await listen<{ message_id: string; error: string }>("signal:stream-error", (event) => {
-          if (event.payload.message_id === messageId) {
-            const store = useSignalStore.getState();
-            store.updateMessage(messageId, {
-              content: `Error: ${event.payload.error}`,
-              loading: false,
-              role: "system",
-            });
-            store.setLoading(false);
-            for (const u of unlisteners) u();
+        const u3 = await listen<{ message_id: string; error: string }>(
+          "signal:stream-error",
+          (event) => {
+            if (event.payload.message_id === messageId) {
+              const s = useSignalStore.getState();
+              s.updateMessage(messageId, {
+                content: `Error: ${event.payload.error}`,
+                loading: false,
+                role: "system",
+              });
+              s.setLoading(false);
+              cleanupListeners(messageId);
+            }
           }
-        });
+        );
         unlisteners.push(u3);
 
-        set((s) => ({ _unlisteners: [...s._unlisteners, ...unlisteners] }));
+        activeListeners.set(messageId, unlisteners);
+      },
+
+      cancelStream: (messageId) => {
+        cleanupListeners(messageId);
+        const s = get();
+        const msg = s.messages.find((m) => m.id === messageId && m.loading);
+        if (msg) {
+          useSignalStore.getState().updateMessage(messageId, {
+            loading: false,
+            content: msg.content || "(cancelled)",
+          });
+          useSignalStore.getState().setLoading(false);
+        }
       },
     }),
     {
       name: "signex-signal",
       partialize: (state) => ({
-        messages: state.messages.filter((m) => !m.loading).slice(-100), // Keep last 100 messages
+        messages: state.messages.filter((m) => !m.loading).slice(-100),
         apiKeySet: state.apiKeySet,
         totalTokens: state.totalTokens,
         sessionCost: state.sessionCost,
