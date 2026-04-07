@@ -55,12 +55,15 @@ src/                    React frontend
 - [x] Phase 4: Advanced — library editor, PDF/print, output jobs, templates, title block, BOM formats
 - [x] Phase 4+: Altium parity — 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, variants, parameter manager, multi-channel
 - [x] Phase 5: Signal AI — Claude API streaming, tool use, visual context, circuit templates, design review
-- [ ] Phase 6: PCB layout — WebGL2 renderer, layer stack, routing, DRC, copper pour, 3D viewer
+- [x] Phase 6: PCB layout — KiCad PCB parser, routing (walkaround/push/diff pair/length tune), 15-type DRC, copper pour, Gerber/ODB++/STEP export, 3D viewer, cross-probing
+- [ ] Phase 7: Simulation — SPICE, signal integrity, power analysis
 
 ## Architecture Decisions
-- Canvas2D for schematic (adequate for 1000+ components per sheet)
-- WebGL2 planned for PCB (GPU-accelerated, handles 100k+ objects)
+- Canvas2D for schematic + PCB MVP (adequate for most designs)
+- WebGL2 framework built for PCB (GPU-accelerated, handles 100k+ objects) — ready for integration
+- Three.js for 3D PCB viewer
 - GAL abstraction layer for future WebGPU/wgpu migration
-- Pure Rust parser instead of KiCad C++ FFI — simpler build, no C++ toolchain dependency
+- Pure Rust parser for both .kicad_sch and .kicad_pcb — simpler build, no C++ toolchain dependency
+- Native file extensions: .snxsch/.snxpcb/.snxproj/.snxsym
 - Wire cursor + placement cursor use refs (not Zustand) to avoid 60Hz state churn
 - structuredClone for undo snapshots instead of JSON roundtrip
