@@ -1,4 +1,4 @@
-// Document model — reserved for future native .sxsch format
+// Document model — reserved for future native .snxsch format
 
 use serde::{Deserialize, Serialize};
 
