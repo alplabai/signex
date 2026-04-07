@@ -1,20 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
-import { MousePointer2, Eye, EyeOff, ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { MousePointer2, Eye, EyeOff, ChevronDown, ChevronRight, Lock, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ─── Unit conversion (internal = mm) ─────────────────────────────
-function mmToDisplay(mm: number, unit: "mm" | "mil" | "inch"): string {
-  if (unit === "mil") return (mm / 0.0254).toFixed(0);
-  if (unit === "inch") return (mm / 25.4).toFixed(4);
-  return mm.toFixed(2);
-}
-function displayToMm(val: number, unit: "mm" | "mil" | "inch"): number {
-  if (unit === "mil") return val * 0.0254;
-  if (unit === "inch") return val * 25.4;
-  return val;
-}
+import { mmToDisplay, displayToMm } from "@/lib/units";
+import { useProjectStore } from "@/stores/project";
+import { BUILT_IN_TEMPLATES } from "@/lib/sheetTemplate";
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN PANEL ROUTER
@@ -207,13 +198,36 @@ function DocumentProps() {
               ))}
             </div>
             <FieldRow label="Paper Size">
-              <select value={data?.paper_size || "A4"} onChange={() => {}}
+              <select value={data?.paper_size || "A4"} onChange={(e) => useSchematicStore.getState().updateDocumentProp("paper_size", e.target.value)}
                 className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none focus:border-accent">
                 {["A4", "A3", "A2", "A1", "A0", "A", "B", "C", "D"].map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </FieldRow>
             <FieldRow label="Orientation">
               <span className="text-[10px] font-mono text-text-primary">Landscape</span>
+            </FieldRow>
+            <FieldRow label="Template">
+              <select value={useProjectStore.getState().activeTemplate}
+                onChange={(e) => useProjectStore.getState().setActiveTemplate(e.target.value)}
+                className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none focus:border-accent">
+                {BUILT_IN_TEMPLATES.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+              </select>
+            </FieldRow>
+          </Section>
+
+          {/* Title Block */}
+          <Section title="Title Block">
+            <FieldRow label="Title">
+              <FieldInput value={data?.title_block?.title || ""} onCommit={(v) => useSchematicStore.getState().updateDocumentProp("title", v)} />
+            </FieldRow>
+            <FieldRow label="Date">
+              <FieldInput value={data?.title_block?.date || ""} onCommit={(v) => useSchematicStore.getState().updateDocumentProp("date", v)} />
+            </FieldRow>
+            <FieldRow label="Revision">
+              <FieldInput value={data?.title_block?.rev || ""} onCommit={(v) => useSchematicStore.getState().updateDocumentProp("rev", v)} />
+            </FieldRow>
+            <FieldRow label="Company">
+              <FieldInput value={data?.title_block?.company || ""} onCommit={(v) => useSchematicStore.getState().updateDocumentProp("company", v)} />
             </FieldRow>
           </Section>
 
@@ -279,6 +293,7 @@ function ComponentProps({ uuid }: { uuid: string }) {
   if (!sym) return null;
 
   const lib = data?.lib_symbols[sym.lib_id];
+  // TODO: Move to store action
   const toggleProp = (setter: (s: NonNullable<typeof sym>) => void) => {
     useSchematicStore.getState().pushUndo();
     const d = useSchematicStore.getState().data;
@@ -351,27 +366,7 @@ function ComponentProps({ uuid }: { uuid: string }) {
           </Section>
 
           {/* Parameters */}
-          <Section title="Parameters">
-            <div className="flex rounded overflow-hidden border border-border-subtle mb-2">
-              {["All", "Footprints", "Models", "Parameters"].map(t => (
-                <button key={t} className={cn("flex-1 px-1 py-0.5 text-[9px] transition-colors",
-                  t === "All" ? "bg-accent/20 text-accent" : "bg-bg-primary text-text-muted hover:bg-bg-hover")}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            {/* Parameters table */}
-            <div className="border border-border-subtle rounded overflow-hidden">
-              <div className="flex bg-bg-surface/50 text-[9px] text-text-muted/60 uppercase tracking-wider">
-                <div className="flex-1 px-2 py-0.5">Name</div>
-                <div className="flex-1 px-2 py-0.5">Value</div>
-              </div>
-              <div className="border-t border-border-subtle">
-                <ParamRow name="Footprint" value={sym.footprint || "(none)"}
-                  onEdit={(v) => updateSymbolProp(uuid, "footprint", v)} />
-              </div>
-            </div>
-          </Section>
+          <ParametersSection uuid={uuid} sym={sym} updateSymbolProp={updateSymbolProp} />
 
           {/* Graphical */}
           <Section title="Graphical">
@@ -511,7 +506,7 @@ function LabelProps({ uuid }: { uuid: string }) {
               onCommit={(v) => updateLabelProp(uuid, "y", String(displayToMm(parseFloat(v) || 0, units)))} />
           </FieldRow>
           <FieldRow label="Rotation">
-            <select value={label.rotation} onChange={() => {}}
+            <select value={label.rotation} onChange={(e) => updateLabelProp(uuid, "rotation", e.target.value)}
               className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
               {[0, 90, 180, 270].map(r => <option key={r} value={r}>{r} Degrees</option>)}
             </select>
@@ -714,7 +709,7 @@ function TextNoteProps({ uuid }: { uuid: string }) {
             </div>
           </FieldRow>
           <FieldRow label="Rotation">
-            <select value={note.rotation} onChange={() => {}}
+            <select value={note.rotation} onChange={(e) => updateTextNoteProp(uuid, "rotation", e.target.value)}
               className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
               {[0, 90, 180, 270].map(r => <option key={r} value={r}>{r}°</option>)}
             </select>
@@ -888,6 +883,103 @@ function SheetSymbolProps({ uuid }: { uuid: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// PARAMETERS SECTION (Component fields table with add/remove)
+// ═══════════════════════════════════════════════════════════════════
+
+function ParametersSection({ uuid, sym, updateSymbolProp }: {
+  uuid: string;
+  sym: import("@/types").SchSymbol;
+  updateSymbolProp: (uuid: string, key: string, value: string) => void;
+}) {
+  const [addingField, setAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+
+  const fieldEntries = Object.entries(sym.fields || {});
+
+  const handleAddField = () => {
+    const key = newFieldName.trim();
+    if (key) {
+      useSchematicStore.getState().updateSymbolField(uuid, key, "");
+      setNewFieldName("");
+      setAddingField(false);
+    }
+  };
+
+  return (
+    <Section title="Parameters">
+      <div className="flex rounded overflow-hidden border border-border-subtle mb-2">
+        {["All", "Footprints", "Models", "Parameters"].map(t => (
+          <button key={t} className={cn("flex-1 px-1 py-0.5 text-[9px] transition-colors",
+            t === "All" ? "bg-accent/20 text-accent" : "bg-bg-primary text-text-muted hover:bg-bg-hover")}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {/* Parameters table */}
+      <div className="border border-border-subtle rounded overflow-hidden">
+        <div className="flex bg-bg-surface/50 text-[9px] text-text-muted/60 uppercase tracking-wider">
+          <div className="flex-1 px-2 py-0.5">Name</div>
+          <div className="flex-1 px-2 py-0.5">Value</div>
+          <div className="w-5" />
+        </div>
+        <div className="border-t border-border-subtle">
+          <ParamRow name="Footprint" value={sym.footprint || "(none)"}
+            onEdit={(v) => updateSymbolProp(uuid, "footprint", v)} />
+        </div>
+        {fieldEntries.map(([key, value]) => (
+          <div key={key} className="border-t border-border-subtle flex items-center">
+            <div className="flex-1 min-w-0">
+              <ParamRow name={key} value={value || ""}
+                onEdit={(v) => useSchematicStore.getState().updateSymbolField(uuid, key, v)} />
+            </div>
+            <button
+              onClick={() => useSchematicStore.getState().removeSymbolField(uuid, key)}
+              className="w-5 h-5 flex items-center justify-center text-text-muted/30 hover:text-red-400 transition-colors shrink-0"
+              title={`Remove ${key}`}
+            >
+              <X size={10} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Add Parameter */}
+      {addingField ? (
+        <div className="flex items-center gap-1 mt-1.5">
+          <input
+            autoFocus
+            value={newFieldName}
+            onChange={(e) => setNewFieldName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleAddField();
+              if (e.key === "Escape") { setAddingField(false); setNewFieldName(""); }
+              e.stopPropagation();
+            }}
+            onBlur={() => { if (!newFieldName.trim()) { setAddingField(false); setNewFieldName(""); } }}
+            placeholder="Field name..."
+            className="flex-1 min-w-0 bg-bg-surface border border-accent/50 rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none focus:border-accent"
+          />
+          <button onClick={handleAddField}
+            className="px-2 py-0.5 rounded bg-accent/20 text-accent text-[10px] hover:bg-accent/30 transition-colors">
+            Add
+          </button>
+          <button onClick={() => { setAddingField(false); setNewFieldName(""); }}
+            className="px-1.5 py-0.5 rounded text-text-muted text-[10px] hover:text-text-primary transition-colors">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => setAddingField(true)}
+          className="w-full mt-1.5 py-1 px-2 rounded bg-bg-surface border border-border-subtle text-[10px] text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors flex items-center justify-center gap-1">
+          <Plus size={10} />
+          Add Parameter
+        </button>
+      )}
+    </Section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SHARED UI PRIMITIVES
 // ═══════════════════════════════════════════════════════════════════
 
@@ -947,6 +1039,8 @@ function FieldInput({ value, suffix, onCommit }: { value: string; suffix?: strin
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
+  useEffect(() => { if (!editing) setDraft(value); }, [value, editing]);
+
   if (editing) {
     return (
       <input autoFocus value={draft}
@@ -986,7 +1080,7 @@ function StatRow({ label, value }: { label: string; value: number }) {
 
 function CheckBox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
-    <button onClick={onChange}
+    <button onClick={onChange} role="checkbox" aria-checked={checked}
       className={cn("w-3.5 h-3.5 rounded-sm border shrink-0 flex items-center justify-center transition-colors",
         checked ? "bg-accent/30 border-accent" : "bg-bg-primary border-border-subtle")}>
       {checked && <span className="text-accent text-[8px] leading-none">✓</span>}

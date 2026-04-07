@@ -6,7 +6,7 @@ describe("netResolver", () => {
   it("groups connected wires into a single net", () => {
     const data = createSimpleSchematic();
     const nets = resolveNets(data);
-    // w1 and w2 share endpoint (20, 16.19) → should be same net
+    // w1 and w2 share endpoint (20, 17.46) → should be same net
     const wireNets = nets.filter(n => n.wireUuids.length > 0);
     expect(wireNets.length).toBeGreaterThanOrEqual(1);
     // Both wires should be in the same net
@@ -37,8 +37,8 @@ describe("netResolver", () => {
   it("junctions connect wires at T-intersections", () => {
     const data = createSimpleSchematic();
     // Add a vertical wire at the junction point + junction
-    data.wires.push({ uuid: "w-branch", start: { x: 20, y: 16.19 }, end: { x: 20, y: 30 } });
-    data.junctions.push({ uuid: "j1", position: { x: 20, y: 16.19 } });
+    data.wires.push({ uuid: "w-branch", start: { x: 20, y: 17.46 }, end: { x: 20, y: 30 } });
+    data.junctions.push({ uuid: "j1", position: { x: 20, y: 17.46 } });
     const nets = resolveNets(data);
     // All 3 wires should be in same net
     const fullNet = nets.find(n => n.wireUuids.includes("w1") && n.wireUuids.includes("w-branch"));

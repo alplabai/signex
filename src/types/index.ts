@@ -87,7 +87,83 @@ export interface SchematicData {
   bus_entries: SchBusEntry[];
   drawings: SchDrawing[];
   no_erc_directives: SchNoErcDirective[];
+  title_block: Record<string, string>;
+  net_classes: NetClass[];
+  variants: DesignVariant[];
+  document_parameters: DocumentParameter[];
+  groups: SchGroup[];
+  differential_pairs: DifferentialPair[];
+  signal_harnesses: SignalHarness[];
+  constraints: DesignConstraint[];
   lib_symbols: Record<string, LibSymbol>;
+}
+
+export interface NetClass {
+  name: string;
+  nets: string[];
+  color?: string;
+}
+
+export interface DesignVariant {
+  name: string;
+  description: string;
+  // Per-component overrides: uuid → { fitted: boolean, altValue?: string, altFootprint?: string }
+  components: Record<string, { fitted: boolean; altValue?: string; altFootprint?: string }>;
+}
+
+export interface DocumentParameter {
+  key: string;
+  value: string;
+  scope: "document" | "project";
+}
+
+export interface DifferentialPair {
+  name: string; // Common name (e.g., "USB_D")
+  positiveNet: string; // Net name with _P suffix
+  negativeNet: string; // Net name with _N suffix
+  impedance?: number; // Target impedance in ohms
+  netClass?: string; // Associated net class
+}
+
+export interface SignalHarness {
+  uuid: string;
+  name: string;
+  type: string; // Harness type identifier
+  members: HarnessMember[];
+}
+
+export interface HarnessMember {
+  name: string;
+  kind: "net" | "bus" | "harness"; // Can contain nets, buses, or nested harnesses
+  ref?: string; // Reference to net name, bus name, or child harness uuid
+}
+
+export interface DesignConstraint {
+  uuid: string;
+  name: string;
+  type: "clearance" | "trace_width" | "via_size" | "diff_pair_gap" | "length_match" | "custom";
+  scope: ConstraintScope;
+  value: number;
+  unit: "mm" | "mil";
+  enabled: boolean;
+  priority: number; // Higher = overrides lower
+}
+
+export interface ConstraintScope {
+  kind: "all" | "net_class" | "net" | "diff_pair" | "component" | "between";
+  target?: string; // Net class name, net name, diff pair name, or component ref
+  target2?: string; // Second target for "between" kind
+}
+
+export interface ProjectParameter {
+  key: string;
+  value: string;
+}
+
+export interface SchGroup {
+  uuid: string;
+  name: string;
+  memberUuids: string[];
 }
 
 export interface SchNoConnect {
@@ -110,12 +186,20 @@ export interface SchRectangle {
   stroke_type: string;
 }
 
+export type LineStyle = "solid" | "dash" | "dot" | "dash_dot";
+export type ArrowStyle = "none" | "open" | "closed" | "diamond";
+
 export type SchDrawing =
-  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number }
-  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean }
-  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean }
-  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number }
-  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean };
+  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number; color?: string; lineStyle?: LineStyle; arrowStart?: ArrowStyle; arrowEnd?: ArrowStyle }
+  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; color?: string; lineStyle?: LineStyle }
+  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle; arrowStart?: ArrowStyle; arrowEnd?: ArrowStyle }
+  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Ellipse"; uuid: string; center: SchPoint; radiusX: number; radiusY: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "RoundRect"; uuid: string; start: SchPoint; end: SchPoint; cornerRadius: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Polygon"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Image"; uuid: string; start: SchPoint; end: SchPoint; dataUrl: string; aspectLocked?: boolean };
 
 export interface SchNoErcDirective {
   uuid: string;
@@ -141,6 +225,11 @@ export interface LibSymbol {
   show_pin_numbers: boolean;
   show_pin_names: boolean;
   pin_name_offset: number;
+  unit_count?: number; // Number of parts (1 = single, 2+ = multi-part like quad gates)
+  units?: LibSymbolUnit[]; // Per-unit graphics/pins for multi-part symbols
+  has_alternate?: boolean; // DeMorgan alternate display mode available
+  alternate_graphics?: Graphic[]; // Alternate (DeMorgan) body graphics
+  alternate_pins?: SchPin[]; // Alternate pin configuration (same numbers, different graphics)
 }
 
 export type Graphic =
@@ -159,6 +248,13 @@ export interface SchPin {
   number: string;
   name_visible: boolean;
   number_visible: boolean;
+  hidden?: boolean; // Hidden power pin (still connects electrically)
+}
+
+export interface LibSymbolUnit {
+  id: number; // Unit number (0 = common, 1+ = specific part)
+  graphics: Graphic[];
+  pins: SchPin[];
 }
 
 export interface SchSymbol {
@@ -182,6 +278,7 @@ export interface SchSymbol {
   on_board: boolean;
   exclude_from_sim: boolean;
   locked: boolean;
+  fields: Record<string, string>;
 }
 
 export interface TextPropData {
@@ -230,6 +327,9 @@ export interface SchChildSheet {
   position: SchPoint;
   size: [number, number];
   pins: SchSheetPin[];
+  // Multi-channel: Repeat(ChannelId, StartIdx, EndIdx) — e.g., "Repeat(CH, 1, 4)"
+  repeat?: string;
+  channelCount?: number;
 }
 
 export interface SchPoint {

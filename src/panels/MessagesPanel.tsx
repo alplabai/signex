@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, Play, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Play, Trash2, Download } from "lucide-react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore, type ErcMarker } from "@/stores/editor";
 import { runErc, type ErcViolation } from "@/lib/erc";
+import { generateErcHtmlReport } from "@/lib/ercReport";
 import { cn } from "@/lib/utils";
 
 export function MessagesPanel() {
@@ -54,10 +55,29 @@ export function MessagesPanel() {
           className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors text-[11px]">
           <Play size={11} /> Run ERC
         </button>
-        <button onClick={() => { setViolations([]); setLastRun(null); }}
+        <button onClick={() => { setViolations([]); setLastRun(null); useEditorStore.getState().setErcMarkers([]); }}
           className="p-1 rounded text-text-muted/50 hover:text-text-primary hover:bg-bg-hover transition-colors">
           <Trash2 size={12} />
         </button>
+        {violations.length > 0 && (
+          <button onClick={() => {
+            const d = useSchematicStore.getState().data;
+            const projectName = d?.title_block?.["Title"] || d?.title_block?.["title"] || "Untitled";
+            const html = generateErcHtmlReport(violations, projectName);
+            const blob = new Blob([html], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `erc-report-${projectName.replace(/\s+/g, "-").toLowerCase()}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/10 text-accent/80 hover:bg-accent/20 hover:text-accent transition-colors text-[11px]">
+            <Download size={11} /> Export Report
+          </button>
+        )}
         <div className="flex-1" />
         {lastRun && (
           <span className="text-text-muted/40 text-[10px]">

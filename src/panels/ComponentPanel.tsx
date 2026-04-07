@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, Package, Cpu, ChevronRight } from "lucide-react";
+import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
+import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
 
 export function ComponentPanel() {
@@ -60,6 +61,37 @@ export function ComponentPanel() {
     } catch { setPreview(null); }
   };
 
+  const editSymbol = () => {
+    if (!preview || !selectedResult) return;
+    const lib = libraries.find((l) => l.name === selectedResult.library);
+    if (!lib) return;
+    useLibraryEditorStore.getState().openSymbol(preview, lib.path, selectedResult.symbol_id);
+  };
+
+  const duplicateSymbol = () => {
+    if (!preview || !selectedResult) return;
+    const lib = libraries.find((l) => l.name === selectedResult.library);
+    if (!lib) return;
+    const cloned = structuredClone(preview);
+    cloned.id = cloned.id + "_copy";
+    useLibraryEditorStore.getState().openSymbol(cloned, lib.path, cloned.id);
+  };
+
+  const newSymbol = () => {
+    const emptySymbol: LibSymbol = {
+      id: "NewSymbol",
+      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill: false }],
+      pins: [
+        { pin_type: "passive", shape: "line", position: { x: -5.08, y: 2.54 }, rotation: 0, length: 2.54, name: "1", number: "1", name_visible: true, number_visible: true },
+        { pin_type: "passive", shape: "line", position: { x: -5.08, y: -2.54 }, rotation: 0, length: 2.54, name: "2", number: "2", name_visible: true, number_visible: true },
+      ],
+      show_pin_numbers: true,
+      show_pin_names: true,
+      pin_name_offset: 1.016,
+    };
+    useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.sxsym", "NewSymbol");
+  };
+
   const placeComponent = async (result: SymbolSearchResult) => {
     let sym = preview;
     if (!sym || selectedResult?.symbol_id !== result.symbol_id) {
@@ -88,6 +120,10 @@ export function ComponentPanel() {
           className="flex-1 bg-transparent text-[11px] text-text-primary placeholder:text-text-muted/30 outline-none"
         />
         {loading && <div className="w-3 h-3 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />}
+        <button onClick={newSymbol} title="New Symbol"
+          className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors shrink-0">
+          <FilePlus size={13} />
+        </button>
       </div>
 
       {/* Preview strip */}
@@ -96,10 +132,18 @@ export function ComponentPanel() {
           <div className="h-[100px]">
             <SymbolPreviewMini symbol={preview} />
           </div>
-          <div className="px-2 py-1 flex items-center justify-between">
-            <div className="text-[10px] text-text-muted truncate">
+          <div className="px-2 py-1 flex items-center gap-1">
+            <div className="text-[10px] text-text-muted truncate flex-1">
               {selectedResult.library}:{selectedResult.symbol_id}
             </div>
+            <button onClick={editSymbol} title="Edit Symbol"
+              className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
+              <Pencil size={11} />
+            </button>
+            <button onClick={duplicateSymbol} title="Duplicate Symbol"
+              className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
+              <Copy size={11} />
+            </button>
             <button
               onClick={() => placeComponent(selectedResult)}
               className="px-2 py-0.5 bg-accent/20 hover:bg-accent/30 text-accent rounded text-[10px] font-medium transition-colors"
@@ -120,6 +164,11 @@ export function ComponentPanel() {
             displayResults.map((r) => (
               <button
                 key={`${r.library}:${r.symbol_id}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/signex-symbol", JSON.stringify(r));
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
                 className={cn(
                   "w-full flex items-start gap-2 px-2 py-1.5 text-left transition-colors border-b border-border-subtle/30",
                   selectedResult?.symbol_id === r.symbol_id && selectedResult?.library === r.library

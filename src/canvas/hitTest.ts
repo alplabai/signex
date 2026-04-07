@@ -1,9 +1,33 @@
 import type { SchematicData, SchPoint, SchSymbol } from "@/types";
+import type { SelectionFilter } from "@/stores/editor";
 
 export interface HitResult {
   type: "symbol" | "wire" | "wireEndpoint" | "junction" | "label" | "noConnect" | "textNote" | "bus" | "busEntry" | "childSheet" | "drawing";
   uuid: string;
   endpoint?: "start" | "end"; // Only for wireEndpoint
+}
+
+// Map hit result types to filter keys
+const FILTER_MAP: Record<string, string> = {
+  symbol: "components",
+  wire: "wires",
+  wireEndpoint: "wires",
+  junction: "junctions",
+  label: "labels",
+  noConnect: "noConnects",
+  textNote: "textNotes",
+  bus: "buses",
+  busEntry: "buses",
+  childSheet: "sheetSymbols",
+  drawing: "drawings",
+};
+
+function isSelectable(type: string, filter?: SelectionFilter, isPower?: boolean): boolean {
+  if (!filter) return true;
+  if (isPower) return filter.powerPorts?.selectable !== false;
+  const key = FILTER_MAP[type];
+  if (!key) return true;
+  return filter[key]?.selectable !== false;
 }
 
 interface Box {
@@ -46,26 +70,32 @@ export function hitTest(
   data: SchematicData,
   worldX: number,
   worldY: number,
-  tolerance: number = 2.0
+  tolerance: number = 2.0,
+  filter?: SelectionFilter,
 ): HitResult | null {
   const p: SchPoint = { x: worldX, y: worldY };
 
   // Junctions first (small targets)
-  for (const j of data.junctions) {
-    if (dist(p, j.position) < tolerance * 0.5) {
-      return { type: "junction", uuid: j.uuid };
+  if (isSelectable("junction", filter)) {
+    for (const j of data.junctions) {
+      if (dist(p, j.position) < tolerance * 0.5) {
+        return { type: "junction", uuid: j.uuid };
+      }
     }
   }
 
   // No-connect markers (X shape, ~1.4 unit span)
-  for (const nc of data.no_connects) {
-    if (dist(p, nc.position) < tolerance * 0.6) {
-      return { type: "noConnect", uuid: nc.uuid };
+  if (isSelectable("noConnect", filter)) {
+    for (const nc of data.no_connects) {
+      if (dist(p, nc.position) < tolerance * 0.6) {
+        return { type: "noConnect", uuid: nc.uuid };
+      }
     }
   }
 
   // Symbols — check tight transformed bounding box (including power symbols)
   for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
     const lib = data.lib_symbols[sym.lib_id];
     if (!lib) continue;
 
@@ -115,55 +145,76 @@ export function hitTest(
   }
 
   // Wire endpoints (tight tolerance for dragging)
-  const epTol = tolerance * 0.35;
-  for (const wire of data.wires) {
-    if (dist(p, wire.start) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "start" };
-    if (dist(p, wire.end) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "end" };
-  }
+  if (isSelectable("wire", filter)) {
+    const epTol = tolerance * 0.35;
+    for (const wire of data.wires) {
+      if (dist(p, wire.start) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "start" };
+      if (dist(p, wire.end) < epTol) return { type: "wireEndpoint", uuid: wire.uuid, endpoint: "end" };
+    }
 
-  // Wires (segment body)
-  for (const wire of data.wires) {
-    if (distToSegment(p, wire.start, wire.end) < tolerance * 0.5) {
-      return { type: "wire", uuid: wire.uuid };
+    // Wires (segment body)
+    for (const wire of data.wires) {
+      if (distToSegment(p, wire.start, wire.end) < tolerance * 0.5) {
+        return { type: "wire", uuid: wire.uuid };
+      }
     }
   }
 
   // Buses (thicker hit zone)
-  for (const bus of data.buses) {
-    if (distToSegment(p, bus.start, bus.end) < tolerance * 0.7) {
-      return { type: "bus", uuid: bus.uuid };
+  if (isSelectable("bus", filter)) {
+    for (const bus of data.buses) {
+      if (distToSegment(p, bus.start, bus.end) < tolerance * 0.7) {
+        return { type: "bus", uuid: bus.uuid };
+      }
     }
   }
 
   // Labels
-  for (const label of data.labels) {
-    if (dist(p, label.position) < tolerance) {
-      return { type: "label", uuid: label.uuid };
+  if (isSelectable("label", filter)) {
+    for (const label of data.labels) {
+      if (dist(p, label.position) < tolerance) {
+        return { type: "label", uuid: label.uuid };
+      }
     }
   }
 
   // Text notes (hit by proximity to position)
-  for (const note of data.text_notes) {
-    if (dist(p, note.position) < tolerance * 1.5) {
-      return { type: "textNote", uuid: note.uuid };
+  if (isSelectable("textNote", filter)) {
+    for (const note of data.text_notes) {
+      if (dist(p, note.position) < tolerance * 1.5) {
+        return { type: "textNote", uuid: note.uuid };
+      }
     }
   }
 
   // Bus entries
-  for (const be of data.bus_entries) {
-    if (dist(p, be.position) < tolerance) {
-      return { type: "busEntry", uuid: be.uuid };
+  if (isSelectable("busEntry", filter)) {
+    for (const be of data.bus_entries) {
+      if (dist(p, be.position) < tolerance) {
+        return { type: "busEntry", uuid: be.uuid };
+      }
     }
   }
 
   // Drawing objects
-  for (const d of data.drawings) {
+  if (!isSelectable("drawing", filter)) { /* skip */ }
+  else for (const d of data.drawings) {
     if (d.type === "Line") {
       if (distToSegment(p, d.start, d.end) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
     } else if (d.type === "Rect") {
       const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
       const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
-      if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
+      if (d.fill === false) {
+        // Unfilled rect: check proximity to edges
+        const tl: SchPoint = { x: rx, y: ry };
+        const tr: SchPoint = { x: rx + rw, y: ry };
+        const br: SchPoint = { x: rx + rw, y: ry + rh };
+        const bl: SchPoint = { x: rx, y: ry + rh };
+        if (distToSegment(p, tl, tr) < tolerance || distToSegment(p, tr, br) < tolerance ||
+            distToSegment(p, br, bl) < tolerance || distToSegment(p, bl, tl) < tolerance) {
+          return { type: "drawing", uuid: d.uuid };
+        }
+      } else if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
         return { type: "drawing", uuid: d.uuid };
       }
     } else if (d.type === "Circle") {
@@ -177,11 +228,41 @@ export function hitTest(
       for (let i = 0; i < d.points.length - 1; i++) {
         if (distToSegment(p, d.points[i], d.points[i + 1]) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
       }
+    } else if (d.type === "Ellipse") {
+      const nx = (p.x - d.center.x) / d.radiusX, ny = (p.y - d.center.y) / d.radiusY;
+      const nd = Math.sqrt(nx * nx + ny * ny);
+      if (d.fill ? nd <= 1.1 : Math.abs(nd - 1) < tolerance / Math.max(d.radiusX, d.radiusY)) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "Polygon") {
+      // Point-in-polygon (ray casting) + edge distance
+      if (d.points.length >= 3) {
+        let inside = false;
+        for (let i = 0, j = d.points.length - 1; i < d.points.length; j = i++) {
+          const xi = d.points[i].x, yi = d.points[i].y;
+          const xj = d.points[j].x, yj = d.points[j].y;
+          if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        if (inside) return { type: "drawing", uuid: d.uuid };
+        for (let i = 0; i < d.points.length; i++) {
+          const j = (i + 1) % d.points.length;
+          if (distToSegment(p, d.points[i], d.points[j]) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
+        }
+      }
+    } else if (d.type === "Image") {
+      const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+      const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+      if (p.x >= rx && p.x <= rx + rw && p.y >= ry && p.y <= ry + rh) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "RoundRect" || d.type === "TextFrame") {
+      const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+      const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+      if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
+        return { type: "drawing", uuid: d.uuid };
+      }
     }
   }
 
   // Child sheets (rectangle hit test)
-  for (const sheet of data.child_sheets) {
+  if (!isSelectable("childSheet", filter)) { /* skip */ }
+  else for (const sheet of data.child_sheets) {
     const sx = sheet.position.x, sy = sheet.position.y;
     const sw = sheet.size[0], sh = sheet.size[1];
     if (p.x >= sx - tolerance && p.x <= sx + sw + tolerance &&
@@ -232,6 +313,7 @@ export function boxSelect(
   data: SchematicData,
   startX: number, startY: number,
   endX: number, endY: number,
+  filter?: SelectionFilter,
 ): string[] {
   const crossing = endX < startX;
   const box: Box = {
@@ -242,6 +324,7 @@ export function boxSelect(
   const selected: string[] = [];
 
   for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
     if (crossing) {
       // Crossing: select if symbol bounding box overlaps selection box
       const lib = data.lib_symbols[sym.lib_id];
@@ -272,6 +355,7 @@ export function boxSelect(
   }
 
   for (const wire of data.wires) {
+    if (!isSelectable("wire", filter)) continue;
     if (crossing) {
       if (segmentIntersectsBox(wire.start, wire.end, box)) selected.push(wire.uuid);
     } else {
@@ -280,22 +364,27 @@ export function boxSelect(
   }
 
   for (const label of data.labels) {
+    if (!isSelectable("label", filter)) continue;
     if (pointInBox(label.position, box)) selected.push(label.uuid);
   }
 
   for (const j of data.junctions) {
+    if (!isSelectable("junction", filter)) continue;
     if (pointInBox(j.position, box)) selected.push(j.uuid);
   }
 
   for (const nc of data.no_connects) {
+    if (!isSelectable("noConnect", filter)) continue;
     if (pointInBox(nc.position, box)) selected.push(nc.uuid);
   }
 
   for (const note of data.text_notes) {
+    if (!isSelectable("textNote", filter)) continue;
     if (pointInBox(note.position, box)) selected.push(note.uuid);
   }
 
   for (const bus of data.buses) {
+    if (!isSelectable("bus", filter)) continue;
     if (crossing) {
       if (segmentIntersectsBox(bus.start, bus.end, box)) selected.push(bus.uuid);
     } else {
@@ -304,18 +393,21 @@ export function boxSelect(
   }
 
   for (const be of data.bus_entries) {
+    if (!isSelectable("busEntry", filter)) continue;
     if (pointInBox(be.position, box)) selected.push(be.uuid);
   }
 
   for (const sheet of data.child_sheets) {
+    if (!isSelectable("childSheet", filter)) continue;
     if (pointInBox(sheet.position, box)) selected.push(sheet.uuid);
   }
 
-  for (const d of data.drawings) {
+  if (!isSelectable("drawing", filter)) { /* skip drawings */ }
+  else for (const d of data.drawings) {
     if (d.type === "Line" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Rect" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Circle" && pointInBox(d.center, box)) selected.push(d.uuid);
-    else if (d.type === "Arc" && pointInBox(d.start, box)) selected.push(d.uuid);
+    else if (d.type === "Arc" && pointInBox(d.start, box) && pointInBox(d.mid, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Polyline" && d.points.every(p => pointInBox(p, box))) selected.push(d.uuid);
   }
 

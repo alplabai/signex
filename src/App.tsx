@@ -15,10 +15,22 @@ import { ComponentSearch } from "@/components/ComponentSearch";
 // Signal panel available for AI integration (Phase 1 stub)
 // import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
+import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
+import { ExportPdfDialog } from "@/components/ExportPdfDialog";
+import { BomConfigDialog } from "@/components/BomConfigDialog";
+import { NetlistExportDialog } from "@/components/NetlistExportDialog";
+import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
+import { OutputJobsPanel } from "@/panels/OutputJobsPanel";
+import { AnnotationDialog } from "@/components/AnnotationDialog";
+import { PreferencesDialog } from "@/components/PreferencesDialog";
+import { FindSimilarDialog } from "@/components/FindSimilarDialog";
+import { ParameterManager } from "@/components/ParameterManager";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
+import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useResizable } from "@/hooks/useResizable";
+import { printSchematic } from "@/lib/pdfExport";
 import { cn } from "@/lib/utils";
 import {
   PanelLeftClose,
@@ -76,28 +88,6 @@ async function saveSchematicFlow() {
   } catch (err) {
     alert(`Failed to save: ${err}`);
   }
-}
-
-function PanelHeader({
-  title,
-  onCollapse,
-  collapseIcon,
-}: {
-  title: string;
-  onCollapse: () => void;
-  collapseIcon: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center h-8 px-3 text-[11px] font-semibold text-text-muted uppercase tracking-widest bg-bg-tertiary border-b border-border-subtle select-none">
-      <span className="flex-1">{title}</span>
-      <button
-        onClick={onCollapse}
-        className="p-0.5 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors"
-      >
-        {collapseIcon}
-      </button>
-    </div>
-  );
 }
 
 function CollapsedRail({
@@ -185,8 +175,17 @@ function ResizeHandle({
 
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
+  const [showPdfExport, setShowPdfExport] = useState(false);
+  const [showBomConfig, setShowBomConfig] = useState(false);
+  const [showNetlistExport, setShowNetlistExport] = useState(false);
+  const [showAnnotation, setShowAnnotation] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showFindSimilar, setShowFindSimilar] = useState(false);
+  const [showParamManager, setShowParamManager] = useState(false);
   const [leftTab, setLeftTab] = useState<"projects" | "components" | "navigator">("projects");
   const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
+  const [bottomTab, setBottomTab] = useState<"messages" | "output-jobs">("messages");
+  const libEditorActive = useLibraryEditorStore((s) => s.active);
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -215,6 +214,11 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "o") { e.preventDefault(); openProjectFlow(); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveSchematicFlow(); }
+      if (e.ctrlKey && e.key === "p") {
+        e.preventDefault();
+        const data = useSchematicStore.getState().data;
+        if (data) printSchematic(data);
+      }
       if (e.ctrlKey && e.key === "c") {
         if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
           e.preventDefault(); useSchematicStore.getState().copySelected();
@@ -239,6 +243,12 @@ function App() {
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
       }
+      // Shift+F — Find Similar Objects
+      if (e.key === "F" && e.shiftKey && !e.ctrlKey &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setShowFindSimilar(true);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -250,8 +260,20 @@ function App() {
         onOpenProject={openProjectFlow}
         onSave={saveSchematicFlow}
         onOpenComponentSearch={() => { setLeftTab("components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
+        onExportPdf={() => setShowPdfExport(true)}
+        onExportBom={() => setShowBomConfig(true)}
+        onExportNetlist={() => setShowNetlistExport(true)}
+        onOpenOutputJobs={() => { setBottomTab("output-jobs"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onAnnotate={() => setShowAnnotation(true)}
+        onPreferences={() => setShowPreferences(true)}
+        onFindSimilar={() => setShowFindSimilar(true)}
+        onParameterManager={() => setShowParamManager(true)}
+        onPrint={() => {
+          const data = useSchematicStore.getState().data;
+          if (data) printSchematic(data);
+        }}
       />
-      <ToolbarStrip />
+      {libEditorActive ? <LibraryEditorToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
@@ -287,15 +309,31 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            <EditorCanvas onOpenProject={openProjectFlow} />
+            {libEditorActive ? <LibraryEditorCanvas /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
             <>
               <ResizeHandle direction="vertical" onMouseDown={(e) => bottomResize.onMouseDown(e, bottomPanelHeight)} />
               <div className="bg-bg-secondary shrink-0" style={{ height: bottomPanelHeight }}>
-                <PanelHeader title="Messages" onCollapse={toggleBottom} collapseIcon={<PanelBottomClose size={14} />} />
-                <div className="overflow-y-auto" style={{ height: bottomPanelHeight - 32 }}><MessagesPanel /></div>
+                <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
+                  {(["messages", "output-jobs"] as const).map(t => (
+                    <button key={t}
+                      className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
+                        bottomTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
+                      onClick={() => setBottomTab(t)}>
+                      {t === "messages" ? "Messages" : "Output Jobs"}
+                    </button>
+                  ))}
+                  <button onClick={toggleBottom}
+                    className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
+                    <PanelBottomClose size={14} />
+                  </button>
+                </div>
+                <div className="overflow-y-auto" style={{ height: bottomPanelHeight - 32 }}>
+                  {bottomTab === "messages" && <MessagesPanel />}
+                  {bottomTab === "output-jobs" && <OutputJobsPanel />}
+                </div>
               </div>
             </>
           ) : (
@@ -335,6 +373,13 @@ function App() {
 
       <StatusBar />
       <ComponentSearch open={componentSearchOpen} onClose={() => setComponentSearchOpen(false)} />
+      <ExportPdfDialog open={showPdfExport} onClose={() => setShowPdfExport(false)} />
+      <BomConfigDialog open={showBomConfig} onClose={() => setShowBomConfig(false)} />
+      <NetlistExportDialog open={showNetlistExport} onClose={() => setShowNetlistExport(false)} />
+      <AnnotationDialog open={showAnnotation} onClose={() => setShowAnnotation(false)} />
+      <PreferencesDialog open={showPreferences} onClose={() => setShowPreferences(false)} />
+      <FindSimilarDialog open={showFindSimilar} onClose={() => setShowFindSimilar(false)} />
+      <ParameterManager open={showParamManager} onClose={() => setShowParamManager(false)} />
     </div>
   );
 }
