@@ -64,12 +64,20 @@ export function ComponentPanel() {
   useEffect(() => { search(query); }, [query, search]);
 
   // Expand library to show all symbols
+  const libCacheRef = useRef<Record<string, SymbolSearchResult[]>>({});
   const expandLibrary = async (lib: LibraryInfo) => {
     if (expandedLib === lib.name) { setExpandedLib(null); return; }
     setExpandedLib(lib.name);
+    // Use cache if available
+    if (libCacheRef.current[lib.name]) {
+      setLibSymbols(libCacheRef.current[lib.name]);
+      return;
+    }
     try {
       const res = await invoke<SymbolSearchResult[]>("search_symbols", { query: lib.name, limit: 500 });
-      setLibSymbols(res.filter(r => r.library === lib.name));
+      const filtered = res.filter(r => r.library === lib.name);
+      libCacheRef.current[lib.name] = filtered;
+      setLibSymbols(filtered);
     } catch { setLibSymbols([]); }
   };
 
