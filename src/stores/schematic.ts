@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult, DesignConstraint, ConstraintScope } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry" | "placeParameterSet" | "placeDifferentialPair" | "placeBlanket" | "placeCompileMask" | "placeTextFrame" | "placeNote" | "placeHarness" | "placeHarnessConnector" | "placeHarnessEntry";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -100,6 +100,15 @@ interface SchematicState {
   // Drawing object placement
   addDrawing: (drawing: SchDrawing) => void;
   placeSheetSymbol: (pos: SchPoint, name: string, filename: string) => void;
+
+  // Directive / annotation placement
+  placeParameterSet: (pos: SchPoint) => void;
+  placeDifferentialPairDirective: (pos: SchPoint) => void;
+  placeBlanket: (pos: SchPoint) => void;
+  placeCompileMask: (pos: SchPoint) => void;
+  placeTextFrame: (pos: SchPoint) => void;
+  placeNote: (pos: SchPoint) => void;
+  moveSelectionByXY: (dx: number, dy: number) => void;
   setSheetRepeat: (uuid: string, repeat: string, channelCount: number) => void;
 
   // Wire/Bus drawing
@@ -283,7 +292,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   loadSchematic: (data) =>
     set({
-      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [], groups: data.groups || [], differential_pairs: data.differential_pairs || [], signal_harnesses: data.signal_harnesses || [], constraints: data.constraints || [] },
+      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [], groups: data.groups || [], differential_pairs: data.differential_pairs || [], signal_harnesses: data.signal_harnesses || [], constraints: data.constraints || [], parameter_sets: data.parameter_sets || [], diff_pair_directives: data.diff_pair_directives || [], blankets: data.blankets || [], compile_masks: data.compile_masks || [], notes: data.notes || [] },
       dirty: false,
       selectedIds: new Set(),
       undoStack: [],
@@ -294,6 +303,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   setEditMode: (mode) => {
     const state = get();
+    // Clear placement pause when changing modes
+    useEditorStore.getState().setPlacementPaused(false);
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
       set({ editMode: mode, wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode } });
@@ -454,6 +465,22 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       else if (d.type === "Circle") { d.center.x += dx; d.center.y += dy; }
       else if (d.type === "Arc") { d.start.x += dx; d.start.y += dy; d.mid.x += dx; d.mid.y += dy; d.end.x += dx; d.end.y += dy; }
       else if (d.type === "Polyline") { for (const p of d.points) { p.x += dx; p.y += dy; } }
+      else if (d.type === "TextFrame") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
+    }
+    for (const ps of newData.parameter_sets) {
+      if (idSet.has(ps.uuid)) { ps.position.x += dx; ps.position.y += dy; }
+    }
+    for (const dp of newData.diff_pair_directives) {
+      if (idSet.has(dp.uuid)) { dp.position.x += dx; dp.position.y += dy; }
+    }
+    for (const bl of newData.blankets) {
+      if (idSet.has(bl.uuid)) { for (const p of bl.points) { p.x += dx; p.y += dy; } }
+    }
+    for (const cm of newData.compile_masks) {
+      if (idSet.has(cm.uuid)) { cm.position.x += dx; cm.position.y += dy; }
+    }
+    for (const n of newData.notes) {
+      if (idSet.has(n.uuid)) { n.position.x += dx; n.position.y += dy; }
     }
 
     // Rubber-banding: stretch non-selected wires connected to moving symbol pins
@@ -564,6 +591,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     newData.child_sheets = newData.child_sheets.filter((cs) => !selectedIds.has(cs.uuid));
     newData.drawings = newData.drawings.filter((d) => !selectedIds.has(d.uuid));
     newData.no_erc_directives = newData.no_erc_directives.filter((d) => !selectedIds.has(d.uuid));
+    newData.parameter_sets = newData.parameter_sets.filter((ps) => !selectedIds.has(ps.uuid));
+    newData.diff_pair_directives = newData.diff_pair_directives.filter((dp) => !selectedIds.has(dp.uuid));
+    newData.blankets = newData.blankets.filter((bl) => !selectedIds.has(bl.uuid));
+    newData.compile_masks = newData.compile_masks.filter((cm) => !selectedIds.has(cm.uuid));
+    newData.notes = newData.notes.filter((n) => !selectedIds.has(n.uuid));
     set({ data: newData, dirty: true, selectedIds: new Set() });
   },
 
@@ -670,6 +702,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "x": sym.position.x = isNaN(parseFloat(value)) ? sym.position.x : parseFloat(value); break;
       case "y": sym.position.y = isNaN(parseFloat(value)) ? sym.position.y : parseFloat(value); break;
       case "rotation": sym.rotation = (parseInt(value) || 0) % 360; break;
+      case "is_power": sym.is_power = value === "true"; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -1136,11 +1169,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: snapped,
+      position: pos,
       rotation: 0,
       label_type: "Net",
       shape: "",
@@ -1156,7 +1188,6 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     // Auto-detect style from name if not specified
     let powerStyle = style || "input";
     if (powerStyle === "input") {
@@ -1170,7 +1201,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     newData.labels.push({
       uuid: generateUuid(),
       text: netName,
-      position: snapped,
+      position: pos,
       rotation: 0,
       label_type: "Power",
       shape: powerStyle,
@@ -1219,11 +1250,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: snapped,
+      position: pos, // Already snapped by caller
       rotation: 0,
       label_type: "Hierarchical",
       shape: shape || "bidirectional",
@@ -1273,6 +1303,115 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       pins: [],
     });
     set({ data: newData, dirty: true });
+  },
+
+  // --- Directive / annotation placement ---
+
+  placeParameterSet: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.parameter_sets.push({
+      uuid: generateUuid(),
+      position: snapped,
+      parameters: [{ key: "Name", value: "Value" }],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeDifferentialPairDirective: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.diff_pair_directives.push({
+      uuid: generateUuid(),
+      position: snapped,
+      positiveNet: "DP_P",
+      negativeNet: "DP_N",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeBlanket: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    const w = 10, h = 7;
+    newData.blankets.push({
+      uuid: generateUuid(),
+      points: [
+        { x: snapped.x, y: snapped.y },
+        { x: snapped.x + w, y: snapped.y },
+        { x: snapped.x + w, y: snapped.y + h },
+        { x: snapped.x, y: snapped.y + h },
+      ],
+      parameters: [],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeCompileMask: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.compile_masks.push({
+      uuid: generateUuid(),
+      position: snapped,
+      size: [10, 7],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeTextFrame: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.drawings.push({
+      type: "TextFrame",
+      uuid: generateUuid(),
+      start: snapped,
+      end: { x: snapped.x + 12, y: snapped.y + 6 },
+      text: "Text Frame",
+      fontSize: 1.27,
+      width: 0.15,
+      fill: false,
+      fillColor: undefined,
+      color: "#b0bec5",
+      lineStyle: "solid",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeNote: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.notes.push({
+      uuid: generateUuid(),
+      text: "Note",
+      position: snapped,
+      size: [10, 5],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  moveSelectionByXY: (dx, dy) => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    get().moveElements(Array.from(selectedIds), dx, dy);
   },
 
   // Multi-channel: set Repeat on a sheet symbol (e.g., "Repeat(CH, 1, 4)" for 4 channels)

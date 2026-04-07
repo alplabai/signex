@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "@/stores/editor";
 import { useLayoutStore } from "@/stores/layout";
-import { PANEL_DEFS } from "@/lib/panelRegistry";
+import { getPanelsForContext } from "@/lib/panelRegistry";
 import type { PanelId } from "@/lib/panelRegistry";
 import { Crosshair, Grid3x3, Magnet, Layers, MousePointer2, Zap, PanelTop, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,7 @@ export function StatusBar() {
   const snapEnabled = useEditorStore((s) => s.statusBar.snapEnabled);
   const units = useEditorStore((s) => s.statusBar.units);
   const activeLayer = useEditorStore((s) => s.statusBar.activeLayer);
+  const editorMode = useEditorStore((s) => s.mode);
   const currentMode = useEditorStore((s) => s.statusBar.currentMode);
   const zoom = useEditorStore((s) => s.statusBar.zoom);
   const toggleGrid = useEditorStore((s) => s.toggleGrid);
@@ -94,11 +95,15 @@ export function StatusBar() {
       </StatusItem>
       <Divider />
 
-      {/* Layer */}
-      <StatusItem icon={<Layers size={11} />}>
-        {activeLayer}
-      </StatusItem>
-      <Divider />
+      {/* Layer — only show in PCB mode */}
+      {editorMode === "pcb" && (
+        <>
+          <StatusItem icon={<Layers size={11} />}>
+            {activeLayer}
+          </StatusItem>
+          <Divider />
+        </>
+      )}
 
       {/* Mode */}
       <StatusItem icon={<MousePointer2 size={11} />}>
@@ -133,6 +138,7 @@ function PanelsButton() {
   const docks = useLayoutStore((s) => s.docks);
   const movePanel = useLayoutStore((s) => s.movePanel);
   const removePanel = useLayoutStore((s) => s.removePanel);
+  const editorMode = useEditorStore((s) => s.mode) as "schematic" | "pcb";
 
   // Build a set of currently visible panel IDs across all docks
   const visiblePanels = new Set<string>([
@@ -196,7 +202,7 @@ function PanelsButton() {
           ref={menuRef}
           className="absolute bottom-full right-0 mb-1 w-48 bg-bg-secondary border border-border-subtle rounded shadow-lg py-1 z-50"
         >
-          {PANEL_DEFS.map((def) => {
+          {getPanelsForContext(editorMode).map((def) => {
             const isVisible = visiblePanels.has(def.id);
             return (
               <button

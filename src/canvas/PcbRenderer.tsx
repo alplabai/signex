@@ -68,7 +68,10 @@ export function PcbRenderer() {
               generator: raw.generator ?? "",
               thickness: raw.thickness ?? 1.6,
               outline: (raw.outline ?? []).map(p),
-              layers: (raw.layers ?? []).map((l: any) => ({ id: l.id ?? l.name, name: l.name, type: l.layer_type ?? "signal" })),
+              layers: {
+                layers: (raw.layers ?? []).map((l: any) => ({ id: l.id ?? l.name, name: l.name ?? l.id, type: l.layer_type ?? "signal", visible: true, color: "", opacity: 1 })),
+                copperCount: (raw.layers ?? []).filter((l: any) => (l.id ?? l.name ?? "").endsWith(".Cu")).length || 2,
+              },
               setup: raw.setup ? {
                 gridSize: raw.setup.grid_size ?? 0.25,
                 traceWidth: raw.setup.trace_width ?? 0.25,
@@ -102,13 +105,24 @@ export function PcbRenderer() {
                 net: pad.net ? { number: pad.net.number ?? 0, name: pad.net.name ?? "" } : undefined,
                 roundrectRatio: pad.roundrect_ratio,
               })),
-              graphics: (fp.graphics ?? []).map((g: any) => ({
-                type: g.graphic_type ?? "line",
-                layer: g.layer ?? "F.SilkS",
-                start: p(g.start),
-                end: p(g.end),
-                width: g.width ?? 0.12,
-              })),
+              graphics: (fp.graphics ?? []).map((g: any) => {
+                const gt = g.graphic_type ?? "line";
+                const layer = g.layer ?? "F.SilkS";
+                const width = g.width ?? 0.12;
+                if (gt === "circle") {
+                  return { type: "circle" as const, center: p(g.center), radius: g.radius ?? 0, layer, width, fill: g.fill ?? undefined };
+                } else if (gt === "text") {
+                  return { type: "text" as const, text: g.text ?? "", position: p(g.position), layer, fontSize: g.font_size ?? 1.0, rotation: g.rotation ?? 0 };
+                } else if (gt === "arc") {
+                  return { type: "arc" as const, start: p(g.start), mid: p(g.mid), end: p(g.end), layer, width };
+                } else if (gt === "poly") {
+                  return { type: "poly" as const, points: (g.points ?? []).map(p), layer, width, fill: g.fill ?? undefined };
+                } else if (gt === "rect") {
+                  return { type: "rect" as const, start: p(g.start), end: p(g.end), layer, width, fill: g.fill ?? undefined };
+                } else {
+                  return { type: "line" as const, start: p(g.start), end: p(g.end), layer, width };
+                }
+              }),
             })),
             segments: (raw.segments ?? []).map((s: any) => ({
               uuid: s.uuid ?? "",
@@ -144,13 +158,24 @@ export function PcbRenderer() {
               number: n.number ?? 0,
               name: n.name ?? "",
             })),
-            graphics: (raw.graphics ?? []).map((g: any) => ({
-              type: g.graphic_type ?? "line",
-              layer: g.layer ?? "Edge.Cuts",
-              start: p(g.start),
-              end: p(g.end),
-              width: g.width ?? 0.05,
-            })),
+            graphics: (raw.graphics ?? []).map((g: any) => {
+              const gt = g.graphic_type ?? "line";
+              const layer = g.layer ?? "Edge.Cuts";
+              const width = g.width ?? 0.05;
+              if (gt === "circle") {
+                return { type: "circle" as const, center: p(g.center), radius: g.radius ?? 0, layer, width };
+              } else if (gt === "rect") {
+                return { type: "rect" as const, start: p(g.start), end: p(g.end), layer, width };
+              } else if (gt === "arc") {
+                // mid is stored in points[0] from Rust BoardGraphic
+                const mid = g.points?.[0] ? p(g.points[0]) : p(g.start);
+                return { type: "arc" as const, start: p(g.start), mid, end: p(g.end), layer, width };
+              } else if (gt === "poly") {
+                return { type: "poly" as const, points: (g.points ?? []).map(p), layer, width };
+              } else {
+                return { type: "line" as const, start: p(g.start), end: p(g.end), layer, width };
+              }
+            }),
             texts: (raw.texts ?? []).map((t: any) => ({
               uuid: t.uuid ?? "",
               text: t.text ?? "",
@@ -237,6 +262,13 @@ export function PcbRenderer() {
       ctx.translate(-boardCenterX, 0);
     }
 
+    // Viewport culling bounds (world-space visible area)
+    const viewMinX = -cam.x / cam.zoom;
+    const viewMinY = -cam.y / cam.zoom;
+    const viewMaxX = viewMinX + w / cam.zoom;
+    const viewMaxY = viewMinY + h / cam.zoom;
+    const FP_PAD = 20; // mm padding for footprint bounds approximation
+
     // Grid
     if (gridVisible && cam.zoom > 1) {
       const gs = data.board.setup.gridSize || 1.27;
@@ -255,7 +287,7 @@ export function PcbRenderer() {
     }
 
     // Board outline
-    if (data.board.outline.length >= 3) {
+    if (data.board.outline.length >= 2) {
       ctx.strokeStyle = getLayerColor("Edge.Cuts");
       ctx.lineWidth = 0.15;
       ctx.beginPath();
@@ -263,17 +295,20 @@ export function PcbRenderer() {
       for (let i = 1; i < data.board.outline.length; i++) {
         ctx.lineTo(data.board.outline[i].x, data.board.outline[i].y);
       }
-      ctx.closePath();
-      ctx.fillStyle = "#1e1e3a";
-      ctx.fill();
+      if (data.board.outline.length >= 3) {
+        ctx.closePath();
+        ctx.fillStyle = "#1e1e3a";
+        ctx.fill();
+      }
       ctx.stroke();
     }
 
     // Render layers back-to-front: B.Cu zones → B.Cu traces → ... → F.Cu traces → F.Cu zones → silk
     const layerOrder: PcbLayerId[] = [
-      "B.Fab", "B.CrtYd", "B.SilkS", "B.Mask", "B.Cu",
+      "B.Fab", "B.CrtYd", "B.SilkS", "B.Mask", "B.Paste", "B.Cu",
       ...Array.from({ length: 30 }, (_, i) => `In${i + 1}.Cu` as PcbLayerId).filter((l) => visibleLayers.has(l)),
-      "F.Cu", "F.Mask", "F.SilkS", "F.CrtYd", "F.Fab",
+      "F.Cu", "F.Mask", "F.Paste", "F.SilkS", "F.CrtYd", "F.Fab",
+      "Edge.Cuts",
     ];
 
     for (const layer of layerOrder) {
@@ -289,6 +324,10 @@ export function PcbRenderer() {
       // Zones on this layer
       for (const zone of data.zones) {
         if (zone.layer !== layer) continue;
+        // Viewport culling: skip zones entirely outside view
+        let zMinX = Infinity, zMinY = Infinity, zMaxX = -Infinity, zMaxY = -Infinity;
+        for (const pt of zone.outline) { zMinX = Math.min(zMinX, pt.x); zMinY = Math.min(zMinY, pt.y); zMaxX = Math.max(zMaxX, pt.x); zMaxY = Math.max(zMaxY, pt.y); }
+        if (zMaxX < viewMinX || zMinX > viewMaxX || zMaxY < viewMinY || zMinY > viewMaxY) continue;
         ctx.globalAlpha = alpha * 0.3;
         ctx.fillStyle = color;
         if (zone.outline.length >= 3) {
@@ -306,6 +345,10 @@ export function PcbRenderer() {
       ctx.lineCap = "round";
       for (const seg of data.segments) {
         if (seg.layer !== layer) continue;
+        // Viewport culling: skip if both endpoints are outside view on the same side
+        const sMinX = Math.min(seg.start.x, seg.end.x), sMaxX = Math.max(seg.start.x, seg.end.x);
+        const sMinY = Math.min(seg.start.y, seg.end.y), sMaxY = Math.max(seg.start.y, seg.end.y);
+        if (sMaxX < viewMinX || sMinX > viewMaxX || sMaxY < viewMinY || sMinY > viewMaxY) continue;
         const sel = selectedIds.has(seg.uuid);
         ctx.globalAlpha = alpha;
         const segColor = (netColorEnabled && netColors[seg.net]) ? netColors[seg.net] : color;
@@ -321,11 +364,24 @@ export function PcbRenderer() {
       // Footprint pads on this layer
       for (const fp of data.footprints) {
         if (!fp.position) continue;
+        // Viewport culling: skip footprints far outside view
+        if (fp.position.x + FP_PAD < viewMinX || fp.position.x - FP_PAD > viewMaxX ||
+            fp.position.y + FP_PAD < viewMinY || fp.position.y - FP_PAD > viewMaxY) continue;
         for (const pad of fp.pads) {
           if (!pad.position || !pad.size || !pad.layers) continue;
           if (!pad.layers.includes(layer) && !pad.layers.includes("*.Cu")) continue;
-          const px = fp.position.x + pad.position.x;
-          const py = fp.position.y + pad.position.y;
+          // Rotate pad local position around footprint origin (KiCad CCW-positive)
+          const fpRot = fp.rotation || 0;
+          let px: number, py: number;
+          if (fpRot !== 0) {
+            const rad = (-fpRot * Math.PI) / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            px = fp.position.x + pad.position.x * cos - pad.position.y * sin;
+            py = fp.position.y + pad.position.x * sin + pad.position.y * cos;
+          } else {
+            px = fp.position.x + pad.position.x;
+            py = fp.position.y + pad.position.y;
+          }
           const sel = selectedIds.has(fp.uuid);
 
           ctx.fillStyle = sel ? "#00e5ff" : color;
@@ -375,6 +431,9 @@ export function PcbRenderer() {
       // Footprint graphics on this layer
       for (const fp of data.footprints) {
         if (!fp.position || !fp.graphics) continue;
+        // Viewport culling: skip footprints far outside view
+        if (fp.position.x + FP_PAD < viewMinX || fp.position.x - FP_PAD > viewMaxX ||
+            fp.position.y + FP_PAD < viewMinY || fp.position.y - FP_PAD > viewMaxY) continue;
         for (const g of fp.graphics) {
           if (g.layer !== layer) continue;
           ctx.strokeStyle = color;
@@ -382,31 +441,161 @@ export function PcbRenderer() {
           ctx.globalAlpha = alpha;
 
           const ox = fp.position.x, oy = fp.position.y;
-          if (g.type === "line") {
-            ctx.beginPath();
-            ctx.moveTo(ox + g.start.x, oy + g.start.y);
-            ctx.lineTo(ox + g.end.x, oy + g.end.y);
-            ctx.stroke();
-          } else if (g.type === "rect") {
-            ctx.strokeRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
-          } else if (g.type === "circle") {
-            ctx.beginPath();
-            ctx.arc(ox + g.center.x, oy + g.center.y, g.radius, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (g.type === "text") {
-            ctx.fillStyle = color;
-            ctx.font = `${g.fontSize}px sans-serif`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, ox + g.position.x, oy + g.position.y);
+          const rot = fp.rotation || 0;
+
+          // Apply footprint rotation around its origin
+          // KiCad uses CCW-positive degrees; Canvas2D rotate() is CW-positive, so negate
+          if (rot !== 0) {
+            ctx.save();
+            ctx.translate(ox, oy);
+            ctx.rotate((-rot * Math.PI) / 180);
+            // Draw relative to (0,0) since we translated
+            if (g.type === "line") {
+              ctx.beginPath();
+              ctx.moveTo(g.start.x, g.start.y);
+              ctx.lineTo(g.end.x, g.end.y);
+              ctx.stroke();
+            } else if (g.type === "rect") {
+              if ("fill" in g && g.fill) {
+                ctx.fillStyle = color;
+                ctx.fillRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+              }
+              ctx.strokeRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+            } else if (g.type === "circle") {
+              ctx.beginPath();
+              ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+              ctx.beginPath();
+              ctx.moveTo(g.points[0].x, g.points[0].y);
+              for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+              ctx.closePath();
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "text") {
+              ctx.fillStyle = color;
+              ctx.font = `${g.fontSize}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              const textRot = ("rotation" in g ? g.rotation : 0) || 0;
+              if (textRot !== 0) {
+                ctx.save();
+                ctx.translate(g.position.x, g.position.y);
+                ctx.rotate((textRot * Math.PI) / 180);
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, 0, 0);
+                ctx.restore();
+              } else {
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, g.position.x, g.position.y);
+              }
+            }
+            ctx.restore();
+          } else {
+            // No rotation — draw with offset
+            if (g.type === "line") {
+              ctx.beginPath();
+              ctx.moveTo(ox + g.start.x, oy + g.start.y);
+              ctx.lineTo(ox + g.end.x, oy + g.end.y);
+              ctx.stroke();
+            } else if (g.type === "rect") {
+              if ("fill" in g && g.fill) {
+                ctx.fillStyle = color;
+                ctx.fillRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+              }
+              ctx.strokeRect(ox + g.start.x, oy + g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+            } else if (g.type === "circle") {
+              ctx.beginPath();
+              ctx.arc(ox + g.center.x, oy + g.center.y, g.radius, 0, Math.PI * 2);
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+              ctx.beginPath();
+              ctx.moveTo(ox + g.points[0].x, oy + g.points[0].y);
+              for (let i = 1; i < g.points.length; i++) ctx.lineTo(ox + g.points[i].x, oy + g.points[i].y);
+              ctx.closePath();
+              if ("fill" in g && g.fill) { ctx.fillStyle = color; ctx.fill(); }
+              ctx.stroke();
+            } else if (g.type === "text") {
+              ctx.fillStyle = color;
+              ctx.font = `${g.fontSize}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              const textRot = ("rotation" in g ? g.rotation : 0) || 0;
+              if (textRot !== 0) {
+                ctx.save();
+                ctx.translate(ox + g.position.x, oy + g.position.y);
+                ctx.rotate((textRot * Math.PI) / 180);
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, 0, 0);
+                ctx.restore();
+              } else {
+                ctx.fillText(g.text === "%R" ? fp.reference : g.text === "%V" ? fp.value : g.text, ox + g.position.x, oy + g.position.y);
+              }
+            }
           }
           ctx.globalAlpha = 1;
         }
+      }
+
+      // Board-level graphics on this layer
+      for (const g of data.graphics) {
+        if (g.layer !== layer) continue;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = "width" in g ? g.width : 0.1;
+        ctx.globalAlpha = alpha;
+        if (g.type === "line") {
+          ctx.beginPath();
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.lineTo(g.end.x, g.end.y);
+          ctx.stroke();
+        } else if (g.type === "rect") {
+          ctx.strokeRect(g.start.x, g.start.y, g.end.x - g.start.x, g.end.y - g.start.y);
+        } else if (g.type === "circle") {
+          ctx.beginPath();
+          ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (g.type === "arc" && "mid" in g) {
+          // Approximate arc through 3 points
+          ctx.beginPath();
+          ctx.moveTo(g.start.x, g.start.y);
+          ctx.quadraticCurveTo(g.mid.x, g.mid.y, g.end.x, g.end.y);
+          ctx.stroke();
+        } else if (g.type === "poly" && "points" in g && g.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(g.points[0].x, g.points[0].y);
+          for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Board-level texts on this layer
+      for (const t of data.texts) {
+        if (t.layer !== layer) continue;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+        const fs = t.fontSize || 1.0;
+        ctx.font = `${fs}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (t.rotation) {
+          ctx.save();
+          ctx.translate(t.position.x, t.position.y);
+          ctx.rotate((t.rotation * Math.PI) / 180);
+          ctx.fillText(t.text, 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(t.text, t.position.x, t.position.y);
+        }
+        ctx.globalAlpha = 1;
       }
     }
 
     // Vias (render on top of all copper)
     for (const via of data.vias) {
+      // Viewport culling
+      if (via.position.x + via.diameter < viewMinX || via.position.x - via.diameter > viewMaxX ||
+          via.position.y + via.diameter < viewMinY || via.position.y - via.diameter > viewMaxY) continue;
       const sel = selectedIds.has(via.uuid);
       ctx.fillStyle = sel ? "#00e5ff" : "#c0c0c0";
       ctx.beginPath();
@@ -511,6 +700,23 @@ export function PcbRenderer() {
       if (!data) {
         camRef.current.x = rect.width / 2;
         camRef.current.y = rect.height / 2;
+      } else if (!(camRef.current as any)._fitted) {
+        // Auto-fit to board bounds on first load
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of data.board.outline) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+        // Fallback: use footprint positions if no outline
+        if (!isFinite(minX)) {
+          for (const fp of data.footprints) { if (!fp.position) continue; minX = Math.min(minX, fp.position.x - 5); minY = Math.min(minY, fp.position.y - 5); maxX = Math.max(maxX, fp.position.x + 5); maxY = Math.max(maxY, fp.position.y + 5); }
+        }
+        if (isFinite(minX)) {
+          const bw = maxX - minX, bh = maxY - minY;
+          const pad = Math.max(bw, bh) * 0.1;
+          const zoom = Math.min(rect.width / (bw + pad * 2), rect.height / (bh + pad * 2));
+          camRef.current.zoom = zoom;
+          camRef.current.x = rect.width / 2 - (minX + bw / 2) * zoom;
+          camRef.current.y = rect.height / 2 - (minY + bh / 2) * zoom;
+          (camRef.current as any)._fitted = true;
+        }
       }
       render();
     };

@@ -198,6 +198,37 @@ export function hitTest(
       if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
         return { type: "label", uuid: label.uuid };
       }
+    } else if (label.label_type === "Global" || label.label_type === "Hierarchical") {
+      // Flag/arrow shape bounding box hit test
+      const fs = label.font_size || 1.27;
+      const h = fs * 1.4;
+      const arrowW = h * 0.5;
+      const tw = label.text.length * fs * 0.65;
+      const pad = fs * 0.3;
+      const totalBody = arrowW + tw + pad * 2;
+      const r = label.rotation;
+      const lx = label.position.x, ly = label.position.y;
+      const isHoriz = r === 0 || r === 180;
+
+      let minX: number, minY: number, maxX: number, maxY: number;
+      if (isHoriz) {
+        const dir = r === 0 ? 1 : -1; // 0° extends right, 180° extends left
+        if (dir > 0) {
+          minX = lx; maxX = lx + totalBody + arrowW; // extra arrowW for output tip
+          minY = ly - h / 2; maxY = ly + h / 2;
+        } else {
+          minX = lx - totalBody - arrowW; maxX = lx;
+          minY = ly - h / 2; maxY = ly + h / 2;
+        }
+      } else {
+        // Vertical (90°, 270°) — rotated shape
+        minX = lx - h / 2; maxX = lx + h / 2;
+        minY = ly - totalBody; maxY = ly + totalBody;
+      }
+
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
+        return { type: "label", uuid: label.uuid };
+      }
     } else if (dist(p, label.position) < tolerance) {
       return { type: "label", uuid: label.uuid };
     }
@@ -296,6 +327,59 @@ export function hitTest(
     }
   }
 
+  // Parameter sets (icon ~1 unit radius)
+  if (data.parameter_sets) {
+    for (const ps of data.parameter_sets) {
+      if (dist(p, ps.position) < tolerance * 1.2) return { type: "drawing", uuid: ps.uuid };
+    }
+  }
+
+  // Differential pair directives
+  if (data.diff_pair_directives) {
+    for (const dp of data.diff_pair_directives) {
+      if (dist(p, dp.position) < tolerance * 1.2) return { type: "drawing", uuid: dp.uuid };
+    }
+  }
+
+  // Blankets (point-in-polygon)
+  if (data.blankets) {
+    for (const bl of data.blankets) {
+      if (bl.points.length >= 3) {
+        let inside = false;
+        for (let i = 0, j = bl.points.length - 1; i < bl.points.length; j = i++) {
+          const xi = bl.points[i].x, yi = bl.points[i].y;
+          const xj = bl.points[j].x, yj = bl.points[j].y;
+          if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        if (inside) return { type: "drawing", uuid: bl.uuid };
+        for (let i = 0; i < bl.points.length; i++) {
+          const j2 = (i + 1) % bl.points.length;
+          if (distToSegment(p, bl.points[i], bl.points[j2]) < tolerance * 0.5) return { type: "drawing", uuid: bl.uuid };
+        }
+      }
+    }
+  }
+
+  // Compile masks (rectangle)
+  if (data.compile_masks) {
+    for (const cm of data.compile_masks) {
+      const cx = cm.position.x, cy = cm.position.y, cw = cm.size[0], ch = cm.size[1];
+      if (p.x >= cx - tolerance && p.x <= cx + cw + tolerance && p.y >= cy - tolerance && p.y <= cy + ch + tolerance) {
+        return { type: "drawing", uuid: cm.uuid };
+      }
+    }
+  }
+
+  // Notes (rectangle)
+  if (data.notes) {
+    for (const n of data.notes) {
+      const nx = n.position.x, ny = n.position.y, nw = n.size[0], nh = n.size[1];
+      if (p.x >= nx - tolerance && p.x <= nx + nw + tolerance && p.y >= ny - tolerance && p.y <= ny + nh + tolerance) {
+        return { type: "drawing", uuid: n.uuid };
+      }
+    }
+  }
+
   return null;
 }
 
@@ -391,7 +475,41 @@ export function boxSelect(
   for (const label of data.labels) {
     const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
     if (filter && filter[filterKey]?.selectable === false) continue;
-    if (pointInBox(label.position, box)) selected.push(label.uuid);
+
+    if ((label.label_type === "Global" || label.label_type === "Hierarchical") && crossing) {
+      // Use flag shape bounding box for crossing selection
+      const fs = label.font_size || 1.27;
+      const h = fs * 1.4;
+      const arrowW = h * 0.5;
+      const tw = label.text.length * fs * 0.65;
+      const pad = fs * 0.3;
+      const totalBody = arrowW + tw + pad * 2;
+      const r = label.rotation;
+      const lx = label.position.x, ly = label.position.y;
+      const isHoriz = r === 0 || r === 180;
+
+      let lMinX: number, lMinY: number, lMaxX: number, lMaxY: number;
+      if (isHoriz) {
+        const dir = r === 0 ? 1 : -1;
+        if (dir > 0) {
+          lMinX = lx; lMaxX = lx + totalBody + arrowW;
+          lMinY = ly - h / 2; lMaxY = ly + h / 2;
+        } else {
+          lMinX = lx - totalBody - arrowW; lMaxX = lx;
+          lMinY = ly - h / 2; lMaxY = ly + h / 2;
+        }
+      } else {
+        lMinX = lx - h / 2; lMaxX = lx + h / 2;
+        lMinY = ly - totalBody; lMaxY = ly + totalBody;
+      }
+
+      // Check if label bbox overlaps selection box
+      if (lMaxX >= box.minX && lMinX <= box.maxX && lMaxY >= box.minY && lMinY <= box.maxY) {
+        selected.push(label.uuid);
+      }
+    } else {
+      if (pointInBox(label.position, box)) selected.push(label.uuid);
+    }
   }
 
   for (const j of data.junctions) {
@@ -436,6 +554,13 @@ export function boxSelect(
     else if (d.type === "Arc" && pointInBox(d.start, box) && pointInBox(d.mid, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Polyline" && d.points.every(p => pointInBox(p, box))) selected.push(d.uuid);
   }
+
+  // New directive/annotation types
+  if (data.parameter_sets) for (const ps of data.parameter_sets) { if (pointInBox(ps.position, box)) selected.push(ps.uuid); }
+  if (data.diff_pair_directives) for (const dp of data.diff_pair_directives) { if (pointInBox(dp.position, box)) selected.push(dp.uuid); }
+  if (data.blankets) for (const bl of data.blankets) { if (bl.points.every(p => pointInBox(p, box))) selected.push(bl.uuid); }
+  if (data.compile_masks) for (const cm of data.compile_masks) { if (pointInBox(cm.position, box)) selected.push(cm.uuid); }
+  if (data.notes) for (const n of data.notes) { if (pointInBox(n.position, box)) selected.push(n.uuid); }
 
   return selected;
 }
