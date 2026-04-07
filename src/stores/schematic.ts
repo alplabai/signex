@@ -1169,11 +1169,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: snapped,
+      position: pos,
       rotation: 0,
       label_type: "Net",
       shape: "",
@@ -1189,7 +1188,6 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     // Auto-detect style from name if not specified
     let powerStyle = style || "input";
     if (powerStyle === "input") {
@@ -1203,7 +1201,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     newData.labels.push({
       uuid: generateUuid(),
       text: netName,
-      position: snapped,
+      position: pos,
       rotation: 0,
       label_type: "Power",
       shape: powerStyle,
@@ -1252,11 +1250,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: snapped,
+      position: pos, // Already snapped by caller
       rotation: 0,
       label_type: "Hierarchical",
       shape: shape || "bidirectional",
