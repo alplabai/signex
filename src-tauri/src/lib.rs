@@ -26,6 +26,7 @@ pub fn run() {
             signal::set_api_key,
             signal::has_api_key,
             signal::signal_chat,
+            signal::signal_chat_stream,
             signal::signal_review,
             signal::signal_fix_erc,
         ])
