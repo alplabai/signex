@@ -124,7 +124,7 @@ function DocumentProps() {
       {tab === "general" ? (
         <div className="p-3 space-y-3">
           {/* Selection Filter */}
-          <Section title="Selection Filter" defaultOpen={false}>
+          <Section title="Selection Filter" defaultOpen={true}>
             <div className="flex flex-wrap gap-1">
               {["Components", "Wires", "Buses", "Sheet Symbols", "Sheet Entries", "Net Labels",
                 "Parameters", "Ports", "Power Ports", "Texts", "Drawing Objects", "Other"].map(t => (
@@ -519,11 +519,18 @@ function LabelProps({ uuid }: { uuid: string }) {
           </FieldRow>
           {isPower && (
             <FieldRow label="Style">
-              <select value={label.shape || "input"} onChange={() => {}}
+              <select value={label.shape || "bar"}
+                onChange={(e) => updateLabelProp(uuid, "shape", e.target.value)}
                 className="flex-1 bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] font-mono text-text-primary outline-none">
-                {["Bar", "Arrow", "Power Ground", "Signal Ground", "Earth Ground", "Circle"].map(s =>
-                  <option key={s}>{s}</option>
-                )}
+                {[
+                  { label: "Bar", value: "bar" },
+                  { label: "Arrow", value: "arrow" },
+                  { label: "Power Ground", value: "power_ground" },
+                  { label: "Signal Ground", value: "signal_ground" },
+                  { label: "Earth Ground", value: "earth_ground" },
+                  { label: "Circle", value: "circle" },
+                  { label: "Wave", value: "wave" },
+                ].map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </FieldRow>
           )}

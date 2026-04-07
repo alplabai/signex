@@ -112,6 +112,7 @@ interface SchematicState {
 
   // Selection helpers
   selectAll: () => void;
+  invertSelection: () => void;
 
   // Alignment
   alignSelected: (direction: "left" | "right" | "top" | "bottom" | "centerH" | "centerV") => void;
@@ -685,6 +686,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "x": label.position.x = isNaN(parseFloat(value)) ? label.position.x : parseFloat(value); break;
       case "y": label.position.y = isNaN(parseFloat(value)) ? label.position.y : parseFloat(value); break;
       case "rotation": label.rotation = (parseInt(value) || 0) % 360; break;
+      case "shape": label.shape = value; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -1149,19 +1151,29 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
 
   // Power port placement (creates a power symbol)
-  placePowerPort: (pos, netName, _style) => {
+  placePowerPort: (pos, netName, style) => {
     const { data } = get();
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
     const snapped = snapPoint(pos);
+    // Auto-detect style from name if not specified
+    let powerStyle = style || "input";
+    if (powerStyle === "input") {
+      const lower = netName.toLowerCase();
+      if (lower.includes("gnd") || lower.includes("vss") || lower.includes("ground")) {
+        powerStyle = "power_ground";
+      } else {
+        powerStyle = "bar";
+      }
+    }
     newData.labels.push({
       uuid: generateUuid(),
       text: netName,
       position: snapped,
       rotation: 0,
       label_type: "Power",
-      shape: "input",
+      shape: powerStyle,
       font_size: 1.27,
       justify: "left",
     });
@@ -1407,6 +1419,27 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     for (const d of data.drawings) ids.add(d.uuid);
     for (const d of data.no_erc_directives) ids.add(d.uuid);
     set({ selectedIds: ids });
+  },
+
+  invertSelection: () => {
+    const { data, selectedIds } = get();
+    if (!data) return;
+    const all = new Set<string>();
+    for (const s of data.symbols) if (!s.is_power) all.add(s.uuid);
+    for (const w of data.wires) all.add(w.uuid);
+    for (const l of data.labels) all.add(l.uuid);
+    for (const j of data.junctions) all.add(j.uuid);
+    for (const nc of data.no_connects) all.add(nc.uuid);
+    for (const t of data.text_notes) all.add(t.uuid);
+    for (const b of data.buses) all.add(b.uuid);
+    for (const be of data.bus_entries) all.add(be.uuid);
+    for (const cs of data.child_sheets) all.add(cs.uuid);
+    for (const d of data.drawings) all.add(d.uuid);
+    const inverted = new Set<string>();
+    for (const id of all) {
+      if (!selectedIds.has(id)) inverted.add(id);
+    }
+    set({ selectedIds: inverted });
   },
 
   alignSelected: (direction) => {

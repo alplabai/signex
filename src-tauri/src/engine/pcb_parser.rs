@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::engine::sexpr::SExpr;
 
 // ═══════════════════════════════════════════════════════════════
 // KiCad PCB Parser (.kicad_pcb)
@@ -314,7 +315,9 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
                 shape: None,
             });
             let pad_layers: Vec<String> = if let Some(layers) = p.find("layers") {
-                layers.args().iter().map(|s| s.to_string()).collect()
+                layers.children().iter().filter_map(|c| {
+                    if let SExpr::Atom(s) = c { Some(s.clone()) } else { None }
+                }).collect()
             } else {
                 vec![layer.clone()]
             };

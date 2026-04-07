@@ -107,8 +107,25 @@ export function ComponentPanel() {
   const isSearching = query.length >= 2;
   const displayResults = isSearching ? results : [];
 
+  const [selectedLib, setSelectedLib] = useState<string>("all");
+
+  // Filter results by selected library
+  const filteredResults = selectedLib === "all" ? displayResults : displayResults.filter(r => r.library === selectedLib);
+
   return (
     <div className="flex flex-col h-full">
+      {/* Library selector dropdown */}
+      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-subtle">
+        <Package size={12} className="text-accent/60 shrink-0" />
+        <select value={selectedLib} onChange={(e) => setSelectedLib(e.target.value)}
+          className="flex-1 bg-bg-surface border border-border-subtle rounded px-1.5 py-0.5 text-[10px] text-text-primary outline-none truncate">
+          <option value="all">All Libraries</option>
+          {libraries.map(lib => (
+            <option key={lib.name} value={lib.name}>{lib.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Search bar */}
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border-subtle">
         <Search size={13} className="text-text-muted/40 shrink-0" />
@@ -116,7 +133,7 @@ export function ComponentPanel() {
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search components..."
+          placeholder="Search..."
           className="flex-1 bg-transparent text-[11px] text-text-primary placeholder:text-text-muted/30 outline-none"
         />
         {loading && <div className="w-3 h-3 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />}
@@ -126,15 +143,17 @@ export function ComponentPanel() {
         </button>
       </div>
 
-      {/* Preview strip */}
+      {/* Preview + Details (Altium-style) */}
       {preview && selectedResult && (
         <div className="border-b border-border-subtle bg-bg-surface/50">
+          {/* Symbol preview */}
           <div className="h-[100px]">
             <SymbolPreviewMini symbol={preview} />
           </div>
-          <div className="px-2 py-1 flex items-center gap-1">
+          {/* Action bar */}
+          <div className="px-2 py-1 flex items-center gap-1 border-t border-border-subtle/50">
             <div className="text-[10px] text-text-muted truncate flex-1">
-              {selectedResult.library}:{selectedResult.symbol_id}
+              {selectedResult.symbol_id}
             </div>
             <button onClick={editSymbol} title="Edit Symbol"
               className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
@@ -151,17 +170,53 @@ export function ComponentPanel() {
               Place
             </button>
           </div>
+          {/* Details section (Altium-style) */}
+          <div className="px-2 py-1.5 border-t border-border-subtle/50 text-[10px] space-y-0.5">
+            <div className="text-[11px] font-semibold text-text-secondary mb-1">Details</div>
+            {[
+              { label: "Library Path", value: selectedResult.library },
+              { label: "Library Ref", value: selectedResult.symbol_id },
+              { label: "Description", value: selectedResult.description || "—" },
+              { label: "Prefix", value: selectedResult.reference_prefix || "?" },
+              { label: "Pins", value: String(selectedResult.pin_count) },
+            ].map(row => (
+              <div key={row.label} className="flex gap-2">
+                <span className="text-text-muted/50 w-20 shrink-0">{row.label}</span>
+                <span className="text-text-secondary truncate">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Results table with column headers */}
+      {isSearching && filteredResults.length > 0 && (
+        <div className="border-b border-border-subtle">
+          <div className="flex items-center px-2 py-0.5 bg-bg-tertiary text-[9px] text-text-muted/50 uppercase tracking-wider font-semibold border-b border-border-subtle/50">
+            <span className="flex-1 min-w-0">Part Number</span>
+            <span className="w-[120px] shrink-0 truncate">Description</span>
+            <span className="w-[80px] shrink-0 text-right">Library Ref</span>
+          </div>
+        </div>
+      )}
+
+      {/* Results count */}
+      {isSearching && filteredResults.length > 0 && (
+        <div className="px-2 py-0.5 border-b border-border-subtle/50 text-[9px] text-text-muted/40">
+          Results: {filteredResults.length}
         </div>
       )}
 
       {/* Results or library tree */}
       <div className="flex-1 overflow-y-auto">
         {isSearching ? (
-          // Search results
-          displayResults.length === 0 && !loading ? (
-            <div className="text-center py-6 text-text-muted/40 text-[11px]">No results</div>
+          filteredResults.length === 0 && !loading ? (
+            <div className="text-center py-6 text-text-muted/40 text-[11px]">
+              No results
+              <div className="mt-2 text-accent/60 text-[10px]">Need more components?<br/>Find in Manufacturer Part Search</div>
+            </div>
           ) : (
-            displayResults.map((r) => (
+            filteredResults.map((r) => (
               <button
                 key={`${r.library}:${r.symbol_id}`}
                 draggable
@@ -170,19 +225,19 @@ export function ComponentPanel() {
                   e.dataTransfer.effectAllowed = "copy";
                 }}
                 className={cn(
-                  "w-full flex items-start gap-2 px-2 py-1.5 text-left transition-colors border-b border-border-subtle/30",
+                  "w-full flex items-center px-2 py-1 text-left transition-colors border-b border-border-subtle/20",
                   selectedResult?.symbol_id === r.symbol_id && selectedResult?.library === r.library
                     ? "bg-accent/10" : "hover:bg-bg-hover"
                 )}
                 onClick={() => loadPreview(r)}
                 onDoubleClick={() => placeComponent(r)}
               >
-                <Cpu size={12} className="mt-0.5 shrink-0 text-accent/50" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-medium truncate text-text-primary">{r.symbol_id}</div>
-                  <div className="text-[10px] text-text-muted/50 truncate">{r.library} | {r.reference_prefix}? | {r.pin_count}p</div>
-                  {r.description && <div className="text-[10px] text-text-muted/40 truncate">{r.description}</div>}
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                  <Cpu size={11} className="shrink-0 text-accent/50" />
+                  <span className="text-[10px] font-medium truncate text-text-primary">{r.symbol_id}</span>
                 </div>
+                <span className="w-[120px] shrink-0 text-[10px] text-text-muted/60 truncate">{r.description || "—"}</span>
+                <span className="w-[80px] shrink-0 text-[10px] text-text-muted/40 text-right truncate">{r.library}</span>
               </button>
             ))
           )
