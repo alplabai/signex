@@ -17,6 +17,7 @@ pub fn run() {
             save::save_schematic,
             library::list_libraries,
             library::search_symbols,
+            library::list_library_symbols,
             library::get_symbol,
             library::save_symbol,
             library::get_footprint,
