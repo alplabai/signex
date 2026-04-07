@@ -19,12 +19,24 @@ export function executeToolCall(
   const data = store.data;
   if (!data) return { success: false, message: "No schematic loaded" };
 
+  // Validate and clamp a coordinate value
+  const safeCoord = (v: unknown, fallback: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(-1000, Math.min(1000, n)) : fallback;
+  };
+
+  // Validate reference prefix: 1-4 uppercase letters only
+  const safePrefix = (v: unknown, fallback: string): string => {
+    const s = String(v || fallback).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    return s || fallback;
+  };
+
   switch (name) {
     case "add_component": {
-      const prefix = String(input.reference_prefix || "U");
-      const value = String(input.value || "");
-      const x = Number(input.x || 100);
-      const y = Number(input.y || 100);
+      const prefix = safePrefix(input.reference_prefix, "U");
+      const value = String(input.value || "").slice(0, 100);
+      const x = safeCoord(input.x, 100);
+      const y = safeCoord(input.y, 100);
 
       // Find next available reference number
       const existing = data.symbols
@@ -66,8 +78,8 @@ export function executeToolCall(
     }
 
     case "add_wire": {
-      const start: SchPoint = { x: Number(input.start_x || 0), y: Number(input.start_y || 0) };
-      const end: SchPoint = { x: Number(input.end_x || 0), y: Number(input.end_y || 0) };
+      const start: SchPoint = { x: safeCoord(input.start_x, 0), y: safeCoord(input.start_y, 0) };
+      const end: SchPoint = { x: safeCoord(input.end_x, 0), y: safeCoord(input.end_y, 0) };
       store.pushUndo();
       const newData = structuredClone(data);
       newData.wires.push({ uuid: crypto.randomUUID(), start, end });
@@ -85,9 +97,9 @@ export function executeToolCall(
     }
 
     case "add_net_label": {
-      const text = String(input.text || "");
-      const x = Number(input.x || 0);
-      const y = Number(input.y || 0);
+      const text = String(input.text || "").slice(0, 50);
+      const x = safeCoord(input.x, 0);
+      const y = safeCoord(input.y, 0);
       store.placeNetLabel({ x, y }, text);
       return { success: true, message: `Added net label "${text}" at (${x}, ${y})` };
     }
