@@ -1349,7 +1349,7 @@ export function SchematicRenderer() {
             drawSelBox(label.position.x - halfW, top, halfW * 2, bottom - top);
           }
         } else if ((label.label_type === "Global" || label.label_type === "Hierarchical") && label.shape) {
-          // Port flag shape: match the rendered flag dimensions
+          // Port flag shape: tight selection matching the rendered flag
           const fs = label.font_size || 1.27;
           ctx.font = `${fs}px Roboto`;
           const tw = ctx.measureText(label.text).width;
@@ -1361,15 +1361,22 @@ export function SchematicRenderer() {
 
           if (isHoriz) {
             const connRight = r === 0;
-            const dir = connRight ? 1 : -1;
-            const bodyStart = dir > 0 ? arrowW : -arrowW;
-            const bodyEnd = dir > 0 ? arrowW + tw + pad * 2 : -arrowW - tw - pad * 2;
-            const x1 = label.position.x + Math.min(0, bodyStart, bodyEnd);
-            const x2 = label.position.x + Math.max(0, bodyStart, bodyEnd);
-            drawSelBox(x1, label.position.y - h / 2, x2 - x1, h);
+            // Total shape length: arrow + text body (+ possible output arrow)
+            const totalLen = arrowW + tw + pad * 2 + (label.shape === "output" || label.shape === "bidirectional" ? arrowW : 0);
+            if (connRight) {
+              // Connection on left, flag extends right
+              drawSelBox(label.position.x, label.position.y - h / 2, totalLen, h);
+            } else {
+              // Connection on right, flag extends left
+              drawSelBox(label.position.x - totalLen, label.position.y - h / 2, totalLen, h);
+            }
           } else {
-            const totalW = arrowW + tw + pad * 2;
-            drawSelBox(label.position.x - h / 2, label.position.y - totalW, h, totalW);
+            const totalLen = arrowW + tw + pad * 2;
+            if (r === 90) {
+              drawSelBox(label.position.x - h / 2, label.position.y - totalLen, h, totalLen);
+            } else {
+              drawSelBox(label.position.x - h / 2, label.position.y, h, totalLen);
+            }
           }
         } else {
           // Net label: selection box around text
