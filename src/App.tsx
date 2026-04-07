@@ -247,6 +247,14 @@ function App() {
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
       }
+      // Tab — Open Properties panel (Altium behavior)
+      if (e.key === "Tab" &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        const layout = useLayoutStore.getState();
+        layout.setDockActiveTab("right", "properties");
+        if (layout.rightCollapsed) layout.toggleRight();
+      }
       // Shift+F — Find Similar Objects
       if (e.key === "F" && e.shiftKey && !e.ctrlKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
