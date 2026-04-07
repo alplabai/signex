@@ -272,7 +272,21 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
       if (item.label === "Reset Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDesignators() };
       if (item.label === "Reset Duplicate Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDuplicateDesignators() };
       if (item.label === "Sheet Symbol...") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeSheetSymbol") };
+      if (item.label === "Bus Entry") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeBusEntry") };
       if (item.label === "No ERC") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoErc") };
+      if (item.label === "Break Wire") return { ...item, disabled: false, action: () => {
+        // Break wire at midpoint of selected wire
+        const store = useSchematicStore.getState();
+        if (store.selectedIds.size === 1 && store.data) {
+          const uuid = [...store.selectedIds][0];
+          const wire = store.data.wires.find((w) => w.uuid === uuid);
+          if (wire) {
+            const mid = { x: (wire.start.x + wire.end.x) / 2, y: (wire.start.y + wire.end.y) / 2 };
+            store.breakWireAt(uuid, mid);
+          }
+        }
+      }};
+      if (item.label === "Align to Grid") return { ...item, disabled: false, action: () => useSchematicStore.getState().alignSelectionToGrid() };
 
       return item;
     }),

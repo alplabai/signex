@@ -214,18 +214,22 @@ export function LibraryEditorCanvas() {
         }
         store.setSelectedItem(null);
       } else if (store.editMode === "addPin") {
+        // Auto-increment: find next unused pin number
+        const usedNums = new Set(symbol ? symbol.pins.map((p) => parseInt(p.number, 10)).filter((n) => !isNaN(n)) : []);
+        let nextNum = 1;
+        while (usedNums.has(nextNum)) nextNum++;
         store.addPin({
           pin_type: "passive",
           shape: "line",
           position: sw,
           rotation: 180,
           length: 2.54,
-          name: "Pin",
-          number: String(symbol ? symbol.pins.length + 1 : 1),
+          name: `Pin${nextNum}`,
+          number: String(nextNum),
           name_visible: true,
           number_visible: true,
         });
-        store.setEditMode("select");
+        // Stay in addPin mode for rapid placement (right-click or Escape to exit)
       } else if (store.editMode === "addRect") {
         store.addGraphic({
           type: "Rectangle",

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -112,6 +112,9 @@ interface SchematicState {
   // Z-ordering
   bringToFront: () => void;
   sendToBack: () => void;
+  breakWireAt: (uuid: string, point: SchPoint) => void;
+  alignSelectionToGrid: () => void;
+  placeBusEntry: (pos: SchPoint) => void;
 
   // Document properties
   updateDocumentProp: (key: string, value: string) => void;
@@ -1333,6 +1336,72 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       arr.length = 0;
       arr.push(...sel, ...rest);
     }
+    set({ data: nd, dirty: true });
+  },
+
+  breakWireAt: (uuid, point) => {
+    const { data } = get();
+    if (!data) return;
+    const wire = data.wires.find((w) => w.uuid === uuid);
+    if (!wire) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const idx = nd.wires.findIndex((w) => w.uuid === uuid);
+    if (idx < 0) return;
+    const w = nd.wires[idx];
+    // Split wire into two at the given point
+    const w1 = { uuid: crypto.randomUUID(), start: { ...w.start }, end: { ...point } };
+    const w2 = { uuid: crypto.randomUUID(), start: { ...point }, end: { ...w.end } };
+    nd.wires.splice(idx, 1, w1, w2);
+    set({ data: nd, dirty: true });
+  },
+
+  alignSelectionToGrid: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    const editor = useEditorStore.getState();
+    const gs = editor.statusBar.gridSize;
+    const snap = (v: number) => Math.round(v / gs) * gs;
+    get().pushUndo();
+    const nd = cloneData(data);
+    for (const sym of nd.symbols) {
+      if (!selectedIds.has(sym.uuid)) continue;
+      sym.position = { x: snap(sym.position.x), y: snap(sym.position.y) };
+    }
+    for (const w of nd.wires) {
+      if (!selectedIds.has(w.uuid)) continue;
+      w.start = { x: snap(w.start.x), y: snap(w.start.y) };
+      w.end = { x: snap(w.end.x), y: snap(w.end.y) };
+    }
+    for (const l of nd.labels) {
+      if (!selectedIds.has(l.uuid)) continue;
+      l.position = { x: snap(l.position.x), y: snap(l.position.y) };
+    }
+    for (const j of nd.junctions) {
+      if (!selectedIds.has(j.uuid)) continue;
+      j.position = { x: snap(j.position.x), y: snap(j.position.y) };
+    }
+    for (const nc of nd.no_connects) {
+      if (!selectedIds.has(nc.uuid)) continue;
+      nc.position = { x: snap(nc.position.x), y: snap(nc.position.y) };
+    }
+    for (const tn of nd.text_notes) {
+      if (!selectedIds.has(tn.uuid)) continue;
+      tn.position = { x: snap(tn.position.x), y: snap(tn.position.y) };
+    }
+    set({ data: nd, dirty: true });
+  },
+
+  placeBusEntry: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.bus_entries.push({
+      uuid: crypto.randomUUID(),
+      position: pos,
+      size: [2.54, 2.54] as [number, number],
+    });
     set({ data: nd, dirty: true });
   },
 
