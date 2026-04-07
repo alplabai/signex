@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useLayoutStore } from "@/stores/layout";
 import { PANEL_DEFS } from "@/lib/panelRegistry";
 import type { PanelId } from "@/lib/panelRegistry";
@@ -19,6 +19,7 @@ import { VariantPanel } from "@/panels/VariantPanel";
 import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
 import { PanelLeftClose, PanelRightClose, PanelBottomClose } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
 interface DockPanelProps {
   dockId: "left" | "right" | "bottom";
@@ -46,7 +47,6 @@ const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
 function getTabLabel(panelId: PanelId): string {
   const def = PANEL_DEFS.find((d) => d.id === panelId);
   if (def) return def.title;
-  // Fallback for panels not in PANEL_DEFS
   switch (panelId) {
     case "inspector": return "Inspector";
     case "drc": return "DRC";
@@ -64,100 +64,137 @@ const COLLAPSE_ICONS = {
   bottom: PanelBottomClose,
 };
 
+// Global drag state for cross-dock communication
+let draggingPanel: { panelId: PanelId; fromDock: string } | null = null;
+const dockElements = new Map<string, HTMLElement>();
+// Global ghost state — updated by source, read by all
+let globalGhost: { panelId: PanelId; x: number; y: number } | null = null;
+const ghostListeners = new Set<() => void>();
+function notifyGhostChange() { ghostListeners.forEach(fn => fn()); }
+
+export function registerDockElement(dockId: string, el: HTMLElement | null) {
+  if (el) dockElements.set(dockId, el);
+  else dockElements.delete(dockId);
+}
+
+function findTargetDock(x: number, y: number): string | null {
+  for (const [dockId, el] of dockElements) {
+    const rect = el.getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return dockId;
+    }
+  }
+  return null;
+}
+
 export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
   const tabs = useLayoutStore((s) => s.docks[dockId]);
   const activeTab = useLayoutStore((s) => s.activeTab[dockId]);
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const movePanel = useLayoutStore((s) => s.movePanel);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const tabBarRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [, forceUpdate] = useState(0);
 
-  const CollapseIcon = COLLAPSE_ICONS[dockId];
-
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, panelId: PanelId) => {
-      e.dataTransfer.setData("text/plain", panelId);
-      e.dataTransfer.effectAllowed = "move";
-    },
-    []
-  );
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-
-      // Calculate drop index based on mouse position relative to tabs
-      if (!tabBarRef.current) return;
-      const tabButtons = tabBarRef.current.querySelectorAll("[data-tab-id]");
-      let idx = tabs.length;
-      for (let i = 0; i < tabButtons.length; i++) {
-        const rect = tabButtons[i].getBoundingClientRect();
-        const midX = rect.left + rect.width / 2;
-        if (e.clientX < midX) {
-          idx = i;
-          break;
-        }
-      }
-      setDropIndex(idx);
-    },
-    [tabs.length]
-  );
-
-  const handleDragLeave = useCallback(() => {
-    setDropIndex(null);
+  // Subscribe to global ghost changes
+  useEffect(() => {
+    const fn = () => forceUpdate(n => n + 1);
+    ghostListeners.add(fn);
+    return () => { ghostListeners.delete(fn); };
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      const panelId = e.dataTransfer.getData("text/plain");
-      if (panelId) {
-        movePanel(panelId, dockId, dropIndex ?? undefined);
-      }
-      setDropIndex(null);
-    },
-    [dockId, dropIndex, movePanel]
-  );
+  // Register this dock element for hit testing
+  useEffect(() => {
+    registerDockElement(dockId, containerRef.current);
+    return () => registerDockElement(dockId, null);
+  }, [dockId]);
 
+  // Listen for global drag events from other docks
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingPanel) return;
+      globalGhost = { panelId: draggingPanel.panelId, x: e.clientX, y: e.clientY };
+      notifyGhostChange();
+      // Check if hovering over this dock
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const over = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+        setDragOver(over);
+      }
+    };
+
+    const onUp = (e: MouseEvent) => {
+      if (!draggingPanel) return;
+      const target = findTargetDock(e.clientX, e.clientY);
+      if (target) {
+        movePanel(draggingPanel.panelId, target as "left" | "right" | "bottom");
+      }
+      draggingPanel = null;
+      globalGhost = null;
+      notifyGhostChange();
+      setDragOver(false);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dockId, movePanel]);
+
+  const startTabDrag = useCallback((e: React.MouseEvent, panelId: PanelId) => {
+    // Only start drag on middle or if moved enough
+    const startX = e.clientX, startY = e.clientY;
+    let started = false;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!started && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 8) {
+        started = true;
+        draggingPanel = { panelId, fromDock: dockId };
+        globalGhost = { panelId, x: ev.clientX, y: ev.clientY };
+        notifyGhostChange();
+      }
+      if (started) {
+        globalGhost = { panelId, x: ev.clientX, y: ev.clientY };
+        notifyGhostChange();
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (!started) {
+        // It was just a click, not a drag — switch tab
+        setDockActiveTab(dockId, panelId);
+      }
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [dockId, setDockActiveTab]);
+
+  const CollapseIcon = COLLAPSE_ICONS[dockId];
   const ActiveComponent = activeTab ? PANEL_COMPONENTS[activeTab as PanelId] : null;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div ref={containerRef} className={cn("flex flex-col h-full overflow-hidden", dragOver && "ring-2 ring-accent ring-inset")}>
       {/* Tab bar */}
-      <div
-        ref={tabBarRef}
-        className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {tabs.map((panelId, i) => (
-          <div key={panelId} className="flex items-center h-full relative">
-            {/* Drop indicator before this tab */}
-            {dropIndex === i && (
-              <div className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent z-10" />
+      <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
+        {tabs.map((panelId) => (
+          <button
+            key={panelId}
+            onMouseDown={(e) => { if (e.button === 0) startTabDrag(e, panelId); }}
+            className={cn(
+              "h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap cursor-grab active:cursor-grabbing",
+              activeTab === panelId
+                ? "text-text-secondary border-b-2 border-accent"
+                : "text-text-muted/40 hover:text-text-muted/70"
             )}
-            <button
-              data-tab-id={panelId}
-              draggable
-              onDragStart={(e) => handleDragStart(e, panelId)}
-              className={cn(
-                "flex-1 h-full px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap",
-                activeTab === panelId
-                  ? "text-text-secondary border-b-2 border-accent"
-                  : "text-text-muted/40 hover:text-text-muted/70"
-              )}
-              onClick={() => setDockActiveTab(dockId, panelId)}
-            >
-              {getTabLabel(panelId)}
-            </button>
-          </div>
+          >
+            {getTabLabel(panelId)}
+          </button>
         ))}
-        {/* Drop indicator at end */}
-        {dropIndex === tabs.length && (
-          <div className="w-[2px] h-4 bg-accent self-center" />
-        )}
         <div className="flex-1" />
         <button
           onClick={onCollapse}
@@ -171,6 +208,17 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
       <div className="flex-1 overflow-hidden overflow-y-auto">
         {ActiveComponent && <ActiveComponent />}
       </div>
+
+      {/* Floating ghost tab (rendered via portal, only from left dock to avoid duplicates) */}
+      {dockId === "left" && globalGhost && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none px-3 py-1 bg-accent/90 text-white text-[10px] font-semibold uppercase tracking-wider rounded shadow-lg"
+          style={{ left: globalGhost.x - 30, top: globalGhost.y - 12 }}
+        >
+          {getTabLabel(globalGhost.panelId)}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
