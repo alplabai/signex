@@ -262,6 +262,13 @@ export function PcbRenderer() {
       ctx.translate(-boardCenterX, 0);
     }
 
+    // Viewport culling bounds (world-space visible area)
+    const viewMinX = -cam.x / cam.zoom;
+    const viewMinY = -cam.y / cam.zoom;
+    const viewMaxX = viewMinX + w / cam.zoom;
+    const viewMaxY = viewMinY + h / cam.zoom;
+    const FP_PAD = 20; // mm padding for footprint bounds approximation
+
     // Grid
     if (gridVisible && cam.zoom > 1) {
       const gs = data.board.setup.gridSize || 1.27;
@@ -317,6 +324,10 @@ export function PcbRenderer() {
       // Zones on this layer
       for (const zone of data.zones) {
         if (zone.layer !== layer) continue;
+        // Viewport culling: skip zones entirely outside view
+        let zMinX = Infinity, zMinY = Infinity, zMaxX = -Infinity, zMaxY = -Infinity;
+        for (const pt of zone.outline) { zMinX = Math.min(zMinX, pt.x); zMinY = Math.min(zMinY, pt.y); zMaxX = Math.max(zMaxX, pt.x); zMaxY = Math.max(zMaxY, pt.y); }
+        if (zMaxX < viewMinX || zMinX > viewMaxX || zMaxY < viewMinY || zMinY > viewMaxY) continue;
         ctx.globalAlpha = alpha * 0.3;
         ctx.fillStyle = color;
         if (zone.outline.length >= 3) {
@@ -334,6 +345,10 @@ export function PcbRenderer() {
       ctx.lineCap = "round";
       for (const seg of data.segments) {
         if (seg.layer !== layer) continue;
+        // Viewport culling: skip if both endpoints are outside view on the same side
+        const sMinX = Math.min(seg.start.x, seg.end.x), sMaxX = Math.max(seg.start.x, seg.end.x);
+        const sMinY = Math.min(seg.start.y, seg.end.y), sMaxY = Math.max(seg.start.y, seg.end.y);
+        if (sMaxX < viewMinX || sMinX > viewMaxX || sMaxY < viewMinY || sMinY > viewMaxY) continue;
         const sel = selectedIds.has(seg.uuid);
         ctx.globalAlpha = alpha;
         const segColor = (netColorEnabled && netColors[seg.net]) ? netColors[seg.net] : color;
@@ -349,11 +364,24 @@ export function PcbRenderer() {
       // Footprint pads on this layer
       for (const fp of data.footprints) {
         if (!fp.position) continue;
+        // Viewport culling: skip footprints far outside view
+        if (fp.position.x + FP_PAD < viewMinX || fp.position.x - FP_PAD > viewMaxX ||
+            fp.position.y + FP_PAD < viewMinY || fp.position.y - FP_PAD > viewMaxY) continue;
         for (const pad of fp.pads) {
           if (!pad.position || !pad.size || !pad.layers) continue;
           if (!pad.layers.includes(layer) && !pad.layers.includes("*.Cu")) continue;
-          const px = fp.position.x + pad.position.x;
-          const py = fp.position.y + pad.position.y;
+          // Rotate pad local position around footprint origin (KiCad CCW-positive)
+          const fpRot = fp.rotation || 0;
+          let px: number, py: number;
+          if (fpRot !== 0) {
+            const rad = (-fpRot * Math.PI) / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            px = fp.position.x + pad.position.x * cos - pad.position.y * sin;
+            py = fp.position.y + pad.position.x * sin + pad.position.y * cos;
+          } else {
+            px = fp.position.x + pad.position.x;
+            py = fp.position.y + pad.position.y;
+          }
           const sel = selectedIds.has(fp.uuid);
 
           ctx.fillStyle = sel ? "#00e5ff" : color;
@@ -403,6 +431,9 @@ export function PcbRenderer() {
       // Footprint graphics on this layer
       for (const fp of data.footprints) {
         if (!fp.position || !fp.graphics) continue;
+        // Viewport culling: skip footprints far outside view
+        if (fp.position.x + FP_PAD < viewMinX || fp.position.x - FP_PAD > viewMaxX ||
+            fp.position.y + FP_PAD < viewMinY || fp.position.y - FP_PAD > viewMaxY) continue;
         for (const g of fp.graphics) {
           if (g.layer !== layer) continue;
           ctx.strokeStyle = color;
@@ -413,10 +444,11 @@ export function PcbRenderer() {
           const rot = fp.rotation || 0;
 
           // Apply footprint rotation around its origin
+          // KiCad uses CCW-positive degrees; Canvas2D rotate() is CW-positive, so negate
           if (rot !== 0) {
             ctx.save();
             ctx.translate(ox, oy);
-            ctx.rotate((rot * Math.PI) / 180);
+            ctx.rotate((-rot * Math.PI) / 180);
             // Draw relative to (0,0) since we translated
             if (g.type === "line") {
               ctx.beginPath();
@@ -561,6 +593,9 @@ export function PcbRenderer() {
 
     // Vias (render on top of all copper)
     for (const via of data.vias) {
+      // Viewport culling
+      if (via.position.x + via.diameter < viewMinX || via.position.x - via.diameter > viewMaxX ||
+          via.position.y + via.diameter < viewMinY || via.position.y - via.diameter > viewMaxY) continue;
       const sel = selectedIds.has(via.uuid);
       ctx.fillStyle = sel ? "#00e5ff" : "#c0c0c0";
       ctx.beginPath();
