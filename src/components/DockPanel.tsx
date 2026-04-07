@@ -194,7 +194,7 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
   const ActiveComponent = activeTab ? PANEL_COMPONENTS[activeTab as PanelId] : null;
 
   return (
-    <div ref={containerRef} className={cn("flex flex-col h-full overflow-hidden", dragOver && "ring-2 ring-accent ring-inset")}>
+    <div ref={containerRef} className="flex flex-col h-full overflow-hidden">
       {/* Tab bar */}
       <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
         {tabs.map((panelId) => (
