@@ -89,6 +89,8 @@ export interface SchematicData {
   no_erc_directives: SchNoErcDirective[];
   title_block: Record<string, string>;
   net_classes: NetClass[];
+  variants: DesignVariant[];
+  document_parameters: DocumentParameter[];
   lib_symbols: Record<string, LibSymbol>;
 }
 
@@ -96,6 +98,19 @@ export interface NetClass {
   name: string;
   nets: string[];
   color?: string;
+}
+
+export interface DesignVariant {
+  name: string;
+  description: string;
+  // Per-component overrides: uuid → { fitted: boolean, altValue?: string, altFootprint?: string }
+  components: Record<string, { fitted: boolean; altValue?: string; altFootprint?: string }>;
+}
+
+export interface DocumentParameter {
+  key: string;
+  value: string;
+  scope: "document" | "project";
 }
 
 export interface SchNoConnect {
@@ -124,7 +139,9 @@ export type SchDrawing =
   | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean; fillColor?: string; color?: string }
   | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; color?: string }
   | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string }
-  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string };
+  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string }
+  | { type: "Ellipse"; uuid: string; center: SchPoint; radiusX: number; radiusY: number; width: number; fill: boolean; fillColor?: string; color?: string }
+  | { type: "RoundRect"; uuid: string; start: SchPoint; end: SchPoint; cornerRadius: number; width: number; fill: boolean; fillColor?: string; color?: string };
 
 export interface SchNoErcDirective {
   uuid: string;
@@ -152,6 +169,9 @@ export interface LibSymbol {
   pin_name_offset: number;
   unit_count?: number; // Number of parts (1 = single, 2+ = multi-part like quad gates)
   units?: LibSymbolUnit[]; // Per-unit graphics/pins for multi-part symbols
+  has_alternate?: boolean; // DeMorgan alternate display mode available
+  alternate_graphics?: Graphic[]; // Alternate (DeMorgan) body graphics
+  alternate_pins?: SchPin[]; // Alternate pin configuration (same numbers, different graphics)
 }
 
 export type Graphic =

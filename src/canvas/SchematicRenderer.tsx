@@ -747,6 +747,24 @@ export function SchematicRenderer() {
           if (d.fill) { ctx.closePath(); ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
           ctx.stroke();
         }
+      } else if (d.type === "Ellipse") {
+        ctx.beginPath();
+        ctx.ellipse(d.center.x, d.center.y, d.radiusX, d.radiusY, 0, 0, Math.PI * 2);
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
+        ctx.stroke();
+      } else if (d.type === "RoundRect") {
+        const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+        const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+        const cr = Math.min(d.cornerRadius, rw / 2, rh / 2);
+        ctx.beginPath();
+        ctx.moveTo(rx + cr, ry);
+        ctx.lineTo(rx + rw - cr, ry); ctx.arcTo(rx + rw, ry, rx + rw, ry + cr, cr);
+        ctx.lineTo(rx + rw, ry + rh - cr); ctx.arcTo(rx + rw, ry + rh, rx + rw - cr, ry + rh, cr);
+        ctx.lineTo(rx + cr, ry + rh); ctx.arcTo(rx, ry + rh, rx, ry + rh - cr, cr);
+        ctx.lineTo(rx, ry + cr); ctx.arcTo(rx, ry, rx + cr, ry, cr);
+        ctx.closePath();
+        if (d.fill) { ctx.fillStyle = sel ? C.selectionFill : d.fillColor || C.bodyFill; ctx.fill(); }
+        ctx.stroke();
       } else if (d.type === "TextFrame") {
         const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
         const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
@@ -1876,7 +1894,11 @@ export function SchematicRenderer() {
           break;
         case "v":
         case "V":
-          if (e.ctrlKey) { e.preventDefault(); store.pasteClipboard({ x: 2.54, y: 2.54 }); }
+          if (e.ctrlKey && e.shiftKey) {
+            e.preventDefault(); store.smartPaste({ x: 2.54, y: 2.54 });
+          } else if (e.ctrlKey) {
+            e.preventDefault(); store.pasteClipboard({ x: 2.54, y: 2.54 });
+          }
           break;
         case "y":
         case "Y":
@@ -1920,6 +1942,12 @@ export function SchematicRenderer() {
         case "Z":
           if (e.ctrlKey && e.shiftKey) { e.preventDefault(); store.redo(); }
           break;
+      }
+      // Selection memory: Ctrl+1-8 store, Alt+1-8 recall
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 8) {
+        if (e.ctrlKey && !e.altKey) { e.preventDefault(); store.storeSelection(num); }
+        else if (e.altKey && !e.ctrlKey) { e.preventDefault(); store.recallSelection(num); }
       }
     };
     window.addEventListener("keydown", handler);

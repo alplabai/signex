@@ -40,6 +40,10 @@ interface EditorState {
   autoJunction: boolean;
   electricalSnapRange: number;
   ercSeverity: Record<string, "error" | "warning" | "none">;
+  // Navigation history
+  viewHistory: { x: number; y: number; zoom: number }[];
+  viewHistoryIndex: number;
+  bookmarks: { name: string; x: number; y: number; zoom: number }[];
   statusBar: StatusBarState;
 
   setMode: (mode: EditorMode) => void;
@@ -57,6 +61,12 @@ interface EditorState {
   setAutoJunction: (v: boolean) => void;
   setElectricalSnapRange: (v: number) => void;
   setErcSeverity: (type: string, severity: "error" | "warning" | "none") => void;
+  pushViewHistory: (pos: { x: number; y: number; zoom: number }) => void;
+  navigateBack: () => void;
+  navigateForward: () => void;
+  getNavTarget: () => { x: number; y: number; zoom: number } | null;
+  addBookmark: (name: string, pos: { x: number; y: number; zoom: number }) => void;
+  removeBookmark: (name: string) => void;
 }
 
 export const useEditorStore = create<EditorState>()((set) => ({
@@ -70,6 +80,9 @@ export const useEditorStore = create<EditorState>()((set) => ({
   selectionFilter: { ...DEFAULT_FILTER },
   autoJunction: true,
   electricalSnapRange: 2.0,
+  viewHistory: [],
+  viewHistoryIndex: -1,
+  bookmarks: [],
   ercSeverity: {
     duplicate_designator: "error",
     unconnected_pin: "warning",
@@ -108,6 +121,25 @@ export const useEditorStore = create<EditorState>()((set) => ({
   setElectricalSnapRange: (v) => set({ electricalSnapRange: v }),
   setErcSeverity: (type, severity) =>
     set((s) => ({ ercSeverity: { ...s.ercSeverity, [type]: severity } })),
+  pushViewHistory: (pos) =>
+    set((s) => {
+      const history = s.viewHistory.slice(0, s.viewHistoryIndex + 1);
+      history.push(pos);
+      if (history.length > 50) history.shift();
+      return { viewHistory: history, viewHistoryIndex: history.length - 1 };
+    }),
+  navigateBack: () =>
+    set((s) => (s.viewHistoryIndex > 0 ? { viewHistoryIndex: s.viewHistoryIndex - 1 } : {})),
+  navigateForward: () =>
+    set((s) => (s.viewHistoryIndex < s.viewHistory.length - 1 ? { viewHistoryIndex: s.viewHistoryIndex + 1 } : {})),
+  getNavTarget: () => {
+    // Must be called after navigateBack/Forward to get the target position
+    return null; // Caller reads viewHistory[viewHistoryIndex] directly
+  },
+  addBookmark: (name, pos) =>
+    set((s) => ({ bookmarks: [...s.bookmarks.filter((b) => b.name !== name), { name, ...pos }] })),
+  removeBookmark: (name) =>
+    set((s) => ({ bookmarks: s.bookmarks.filter((b) => b.name !== name) })),
   setGridSize: (size) =>
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>
