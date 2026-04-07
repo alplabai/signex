@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export interface ContextMenuItem {
@@ -21,6 +22,7 @@ interface Props {
 function MenuItemRow({ item, onClose }: { item: ContextMenuItem; onClose: () => void }) {
   const [subOpen, setSubOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const rowRef = useRef<HTMLDivElement>(null);
   const hasChildren = item.children && item.children.length > 0;
 
   const openSub = () => {
@@ -28,11 +30,18 @@ function MenuItemRow({ item, onClose }: { item: ContextMenuItem; onClose: () => 
     setSubOpen(true);
   };
   const closeSub = () => {
-    closeTimer.current = setTimeout(() => setSubOpen(false), 150);
+    closeTimer.current = setTimeout(() => setSubOpen(false), 200);
+  };
+
+  // Get screen position for submenu portal
+  const getSubPos = () => {
+    if (!rowRef.current) return { x: 0, y: 0 };
+    const rect = rowRef.current.getBoundingClientRect();
+    return { x: rect.right - 2, y: rect.top };
   };
 
   return (
-    <div className="relative"
+    <div ref={rowRef} className="relative"
       onMouseEnter={() => hasChildren && openSub()}
       onMouseLeave={() => hasChildren && closeSub()}>
       <button disabled={item.disabled && !hasChildren}
@@ -53,9 +62,10 @@ function MenuItemRow({ item, onClose }: { item: ContextMenuItem; onClose: () => 
           <span className="text-text-muted/50 ml-2 text-[9px]">&#9656;</span>
         )}
       </button>
-      {hasChildren && subOpen && (
+      {hasChildren && subOpen && createPortal(
         <div
-          className="absolute left-full top-0 min-w-[200px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/50 py-1 z-50 -ml-1"
+          className="fixed min-w-[200px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/50 py-1 z-[200]"
+          style={{ left: getSubPos().x, top: getSubPos().y }}
           onMouseEnter={openSub}
           onMouseLeave={closeSub}>
           {item.children!.map((child, j) =>
@@ -65,7 +75,8 @@ function MenuItemRow({ item, onClose }: { item: ContextMenuItem; onClose: () => 
               <MenuItemRow key={j} item={child} onClose={onClose} />
             )
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -76,14 +87,21 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      // Check if click is inside any submenu portal
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-ctx-sub]")) return;
+      if (ref.current && !ref.current.contains(target)) onClose();
     };
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    document.addEventListener("mousedown", handler);
+    // Delay to avoid closing immediately on the right-click that opened us
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handler);
+    }, 50);
     document.addEventListener("keydown", keyHandler);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", keyHandler);
     };
@@ -97,7 +115,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
 
   return (
     <div ref={ref} style={style}
-      className="absolute z-50 min-w-[200px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/50 py-1 overflow-y-auto">
+      className="absolute z-[150] min-w-[200px] bg-bg-surface border border-border rounded-lg shadow-2xl shadow-black/50 py-1 overflow-y-auto">
       {items.map((item, i) =>
         item.separator ? (
           <div key={i} className="h-px bg-border-subtle mx-3 my-1" />

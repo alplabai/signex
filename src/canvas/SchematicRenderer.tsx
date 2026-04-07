@@ -109,6 +109,8 @@ export function SchematicRenderer() {
   const moveNoRubber = useRef(false); // Ctrl held = move without rubber-banding
   const moveStart = useRef({ x: 0, y: 0 });
   const lastMouse = useRef({ x: 0, y: 0 });
+  const autoPanRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoPanDir = useRef({ dx: 0, dy: 0 });
   const animRef = useRef(0);
   const wireCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for live wire cursor — no Zustand churn
   const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
@@ -1731,6 +1733,25 @@ export function SchematicRenderer() {
         if (selectionModeRef.current === "lasso") {
           lassoPoints.current = [{ x: world.x, y: world.y }];
         }
+        // Global listeners so selection works even when mouse leaves canvas
+        const globalMove = (ev: MouseEvent) => {
+          const cr = canvasRef.current?.getBoundingClientRect();
+          if (!cr) return;
+          const world2 = s2w(ev.clientX - cr.left, ev.clientY - cr.top);
+          selectEnd.current = { x: world2.x, y: world2.y };
+          if (selectionModeRef.current === "lasso") {
+            lassoPoints.current.push({ x: world2.x, y: world2.y });
+          }
+          cancelAnimationFrame(animRef.current);
+          animRef.current = requestAnimationFrame(render);
+        };
+        const globalUp = () => {
+          handleMouseUp();
+          window.removeEventListener("mousemove", globalMove);
+          window.removeEventListener("mouseup", globalUp);
+        };
+        window.addEventListener("mousemove", globalMove);
+        window.addEventListener("mouseup", globalUp);
       }
     }
   }, [data, s2w, ctxMenu]);
@@ -1814,24 +1835,60 @@ export function SchematicRenderer() {
       }
     }
 
-    // Auto-pan: when cursor is near edge during active modes
+    // Auto-pan: when cursor is near edge during active modes (selection, wire, move, lasso)
     const store2 = useSchematicStore.getState();
     const isActive = store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current;
     if (isActive) {
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      const edge = 40; // pixels from edge
-      const speed = 4; // pixels per frame
+      const edge = 50; // pixels from edge
+      const speed = 6; // pixels per frame
       let pdx = 0, pdy = 0;
       if (sx < edge) pdx = speed * (1 - sx / edge);
       else if (sx > r.width - edge) pdx = -speed * (1 - (r.width - sx) / edge);
       if (sy < edge) pdy = speed * (1 - sy / edge);
       else if (sy > r.height - edge) pdy = -speed * (1 - (r.height - sy) / edge);
+      // Also handle mouse outside canvas (negative sx/sy or beyond width/height)
+      if (sx < 0) pdx = speed * 1.5;
+      if (sx > r.width) pdx = -speed * 1.5;
+      if (sy < 0) pdy = speed * 1.5;
+      if (sy > r.height) pdy = -speed * 1.5;
+
+      autoPanDir.current = { dx: pdx, dy: pdy };
+
       if (pdx !== 0 || pdy !== 0) {
         camRef.current.x += pdx;
         camRef.current.y += pdy;
+        // Update selection end point to follow pan
+        if (selecting.current) {
+          const world = s2w(e.clientX - r.left, e.clientY - r.top);
+          selectEnd.current = { x: world.x, y: world.y };
+          if (selectionModeRef.current === "lasso") {
+            lassoPoints.current.push({ x: world.x, y: world.y });
+          }
+        }
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
+
+        // Start interval for continued panning when mouse stays at edge
+        if (!autoPanRef.current) {
+          autoPanRef.current = setInterval(() => {
+            const { dx, dy } = autoPanDir.current;
+            if (dx === 0 && dy === 0) {
+              if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
+              return;
+            }
+            camRef.current.x += dx;
+            camRef.current.y += dy;
+            cancelAnimationFrame(animRef.current);
+            animRef.current = requestAnimationFrame(render);
+          }, 16);
+        }
+      } else {
+        autoPanDir.current = { dx: 0, dy: 0 };
+        if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
       }
+    } else {
+      if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
     }
   }, [render, s2w, updateStatusBar, data]);
 
@@ -1992,6 +2049,9 @@ export function SchematicRenderer() {
     dragging.current = false;
     moving.current = false;
     draggingEndpoint.current = null;
+    // Stop auto-pan
+    autoPanDir.current = { dx: 0, dy: 0 };
+    if (autoPanRef.current) { clearInterval(autoPanRef.current); autoPanRef.current = null; }
   }, [data, render]);
 
   const handleDblClick = useCallback((e: React.MouseEvent) => {
@@ -2358,7 +2418,7 @@ export function SchematicRenderer() {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={() => { /* Don't cancel selection on leave — auto-pan handles edge panning */ }}
         onDoubleClick={handleDblClick}
         onContextMenu={(e) => e.preventDefault()}
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
