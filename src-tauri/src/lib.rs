@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use commands::{export, library, project, save, schematic};
+use commands::{export, library, project, save, schematic, signal};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,6 +23,11 @@ pub fn run() {
             export::generate_bom_configured,
             export::export_netlist,
             export::export_netlist_xml,
+            signal::set_api_key,
+            signal::has_api_key,
+            signal::signal_chat,
+            signal::signal_review,
+            signal::signal_fix_erc,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
