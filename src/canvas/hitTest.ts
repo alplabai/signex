@@ -313,6 +313,7 @@ export function boxSelect(
   data: SchematicData,
   startX: number, startY: number,
   endX: number, endY: number,
+  filter?: SelectionFilter,
 ): string[] {
   const crossing = endX < startX;
   const box: Box = {
@@ -323,6 +324,7 @@ export function boxSelect(
   const selected: string[] = [];
 
   for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
     if (crossing) {
       // Crossing: select if symbol bounding box overlaps selection box
       const lib = data.lib_symbols[sym.lib_id];
@@ -353,6 +355,7 @@ export function boxSelect(
   }
 
   for (const wire of data.wires) {
+    if (!isSelectable("wire", filter)) continue;
     if (crossing) {
       if (segmentIntersectsBox(wire.start, wire.end, box)) selected.push(wire.uuid);
     } else {
@@ -361,22 +364,27 @@ export function boxSelect(
   }
 
   for (const label of data.labels) {
+    if (!isSelectable("label", filter)) continue;
     if (pointInBox(label.position, box)) selected.push(label.uuid);
   }
 
   for (const j of data.junctions) {
+    if (!isSelectable("junction", filter)) continue;
     if (pointInBox(j.position, box)) selected.push(j.uuid);
   }
 
   for (const nc of data.no_connects) {
+    if (!isSelectable("noConnect", filter)) continue;
     if (pointInBox(nc.position, box)) selected.push(nc.uuid);
   }
 
   for (const note of data.text_notes) {
+    if (!isSelectable("textNote", filter)) continue;
     if (pointInBox(note.position, box)) selected.push(note.uuid);
   }
 
   for (const bus of data.buses) {
+    if (!isSelectable("bus", filter)) continue;
     if (crossing) {
       if (segmentIntersectsBox(bus.start, bus.end, box)) selected.push(bus.uuid);
     } else {
@@ -385,14 +393,17 @@ export function boxSelect(
   }
 
   for (const be of data.bus_entries) {
+    if (!isSelectable("busEntry", filter)) continue;
     if (pointInBox(be.position, box)) selected.push(be.uuid);
   }
 
   for (const sheet of data.child_sheets) {
+    if (!isSelectable("childSheet", filter)) continue;
     if (pointInBox(sheet.position, box)) selected.push(sheet.uuid);
   }
 
-  for (const d of data.drawings) {
+  if (!isSelectable("drawing", filter)) { /* skip drawings */ }
+  else for (const d of data.drawings) {
     if (d.type === "Line" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Rect" && pointInBox(d.start, box) && pointInBox(d.end, box)) selected.push(d.uuid);
     else if (d.type === "Circle" && pointInBox(d.center, box)) selected.push(d.uuid);

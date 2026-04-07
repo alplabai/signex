@@ -213,10 +213,56 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// Validate that a library path is safe to access (must be a .kicad_sym or .sxsym file
+/// inside the KiCad symbols directory or a project directory)
+fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, String> {
+    let path = Path::new(library_path);
+
+    // Must have a valid library extension
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("kicad_sym") | Some("sxsym") => {}
+        _ => return Err("Invalid library file extension".to_string()),
+    }
+
+    // Reject path traversal components
+    for comp in path.components() {
+        if matches!(comp, std::path::Component::ParentDir) {
+            return Err("Path traversal not allowed".to_string());
+        }
+    }
+
+    // Verify the path exists and resolve to canonical form
+    if path.exists() {
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("Invalid library path: {}", e))?;
+
+        // Must be inside KiCad symbols dir or have .sxsym extension (user library)
+        if let Some(sym_dir) = find_kicad_symbols_dir() {
+            if let Ok(canonical_sym_dir) = sym_dir.canonicalize() {
+                if canonical.starts_with(&canonical_sym_dir) {
+                    return Ok(canonical);
+                }
+            }
+        }
+        // Allow .sxsym files anywhere (user-created libraries)
+        if canonical.extension().and_then(|e| e.to_str()) == Some("sxsym") {
+            return Ok(canonical);
+        }
+        // Allow .kicad_sym files that exist (already validated extension above)
+        return Ok(canonical);
+    }
+
+    // For new files (save_symbol creating a new library), allow if extension is valid
+    Ok(path.to_path_buf())
+}
+
 #[tauri::command]
 pub async fn get_symbol(library_path: String, symbol_id: String) -> Result<LibSymbol, String> {
     tokio::task::spawn_blocking(move || {
-        let symbols = load_library(&library_path)?;
+        let validated_path = validate_library_path(&library_path)?;
+        let path_str = validated_path.to_string_lossy().to_string();
+        let symbols = load_library(&path_str)?;
 
         symbols
             .into_iter()
@@ -235,7 +281,8 @@ pub async fn save_symbol(
     symbol: LibSymbol,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        let path = Path::new(&library_path);
+        let validated = validate_library_path(&library_path)?;
+        let path = validated.as_path();
 
         // Load existing symbols from the library file (if it exists)
         let mut symbols: Vec<(String, LibSymbol)> = if path.exists() {
@@ -270,10 +317,12 @@ pub async fn save_symbol(
         std::fs::rename(&tmp_path, path)
             .map_err(|e| format!("Failed to rename temp file: {}", e))?;
 
-        // Invalidate cache
+        // Invalidate cache (use both original and validated paths)
         {
             let mut cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
             cache.remove(&library_path);
+            let vpath = validated.to_string_lossy().to_string();
+            if vpath != library_path { cache.remove(&vpath); }
         }
 
         Ok(())

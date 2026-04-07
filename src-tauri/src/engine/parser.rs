@@ -5,16 +5,29 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::sexpr::{self, SExpr};
 
-// Simple UUID-like ID generator for elements missing UUIDs (no external crate needed)
+// UUID generator for elements missing UUIDs.
+// Uses process start time + atomic counter to avoid collisions across sessions.
 static COUNTER: AtomicU64 = AtomicU64::new(1);
+static SESSION_SEED: std::sync::LazyLock<u64> = std::sync::LazyLock::new(|| {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x1234_5678_9abc_def0)
+});
 fn rand_u32() -> u32 {
-    COUNTER.fetch_add(1, Ordering::Relaxed) as u32
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mixed = n.wrapping_mul(0x517cc1b727220a95) ^ *SESSION_SEED;
+    (mixed >> 16) as u32
 }
 fn rand_u16() -> u16 {
-    COUNTER.fetch_add(1, Ordering::Relaxed) as u16
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mixed = n.wrapping_mul(0x517cc1b727220a95) ^ *SESSION_SEED;
+    (mixed >> 32) as u16
 }
 fn rand_u48() -> u64 {
-    COUNTER.fetch_add(1, Ordering::Relaxed)
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mixed = n.wrapping_mul(0x517cc1b727220a95) ^ *SESSION_SEED;
+    mixed & 0xFFFF_FFFF_FFFF
 }
 
 // --- Data structures ---
@@ -1329,12 +1342,18 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
 
     let mut results = Vec::new();
 
+    // Build a set of all top-level symbol IDs for O(1) subsymbol checks
+    let all_sym_ids: std::collections::HashSet<String> = root
+        .find_all("symbol")
+        .iter()
+        .filter_map(|s| s.first_arg().map(|a| a.to_string()))
+        .collect();
+
     for sym_node in root.find_all("symbol") {
         let id = sym_node.first_arg().unwrap_or("").to_string();
 
         // Skip sub-symbols: only skip if the prefix (before _N_M) matches
         // a top-level symbol that already exists in the parent kicad_symbol_lib.
-        // This avoids false-skipping real parts like "INA128_0_1".
         if id.contains('_') {
             let parts: Vec<&str> = id.rsplitn(3, '_').collect();
             if parts.len() >= 3
@@ -1342,12 +1361,7 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
                 && parts[1].parse::<u32>().is_ok()
             {
                 let prefix = parts[2];
-                // Only skip if a parent symbol with this prefix exists at the same level
-                let is_subsymbol = root
-                    .find_all("symbol")
-                    .iter()
-                    .any(|s| s.first_arg().map(|a| a == prefix).unwrap_or(false));
-                if is_subsymbol {
+                if all_sym_ids.contains(prefix) {
                     continue;
                 }
             }
