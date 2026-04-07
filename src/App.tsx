@@ -15,6 +15,7 @@ import { ComponentSearch } from "@/components/ComponentSearch";
 import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
+import { PcbRenderer } from "@/canvas/PcbRenderer";
 import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
@@ -25,6 +26,7 @@ import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { FindSimilarDialog } from "@/components/FindSimilarDialog";
 import { ParameterManager } from "@/components/ParameterManager";
 import { useLayoutStore } from "@/stores/layout";
+import { useEditorStore } from "@/stores/editor";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
@@ -185,6 +187,7 @@ function App() {
   const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
   const [bottomTab, setBottomTab] = useState<"messages" | "output-jobs" | "signal">("messages");
   const libEditorActive = useLibraryEditorStore((s) => s.active);
+  const editorMode = useEditorStore((s) => s.mode);
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -315,7 +318,7 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            {libEditorActive ? <LibraryEditorCanvas /> : <EditorCanvas onOpenProject={openProjectFlow} />}
+            {libEditorActive ? <LibraryEditorCanvas /> : editorMode === "pcb" ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
