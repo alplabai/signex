@@ -98,7 +98,7 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - Hidden pin support for power connections
 - Multi-part component types (LibSymbolUnit)
 - DeMorgan alternate display mode toggle
-- Save to native .sxsym format, read .kicad_sym
+- Save to native .snxsym format, read .kicad_sym
 - New/Edit/Duplicate from Components panel
 </details>
 
@@ -136,18 +136,51 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 </details>
 
 <details>
+<summary><strong>PCB Layout</strong></summary>
+
+- KiCad .kicad_pcb parser with full element extraction
+- Canvas2D renderer with layer-ordered rendering (WebGL2 framework ready)
+- 32 copper layers + full tech layer stack with Altium naming
+- Interactive routing: walkaround, push/shove, 45/90/arc corners, auto-net detection
+- Differential pair routing with gap control
+- Length tuning with meander patterns
+- Multi-track (bus) routing in parallel
+- BGA fanout with dog-bone escape patterns
+- Push/shove component placement
+- Copper pour with polygon clipping, thermal relief, obstacle subtraction
+- DRC engine: 15 check types (clearance, width, via, annular ring, hole-to-hole, short circuit, mask sliver, etc.)
+- Ratsnest engine (MST-based, union-find connectivity)
+- Via stitching (grid + fence patterns)
+- Teardrops for pad/via transitions
+- Cross-probing between schematic and PCB (bidirectional)
+- Back annotation / ECO (PCB changes synced to schematic)
+- 3D viewer with Three.js (board body, pads, traces, vias, component bodies)
+- Board cross-section stackup visualization
+- Single layer mode (Shift+S), board flip (Ctrl+F), net colors (F5)
+- Gerber RS-274X + X2, Excellon drill, ODB++, STEP, IPC-2581
+- PCB PDF export (multi-layer), pick-and-place CSV, assembly SVG
+- Layer sets (7 presets + custom save/load)
+</details>
+
+<details>
 <summary><strong>Panels (Altium-style)</strong></summary>
 
-- **Properties** -- context-aware editing for all object types
+- **Properties** -- context-aware editing for schematic and PCB objects
 - **Components** -- 226 KiCad libraries with search, preview, edit, drag-and-drop
-- **SCH Filter** -- toggle visibility/selectability per object type (connected to renderer + hit test)
+- **SCH Filter** -- toggle visibility/selectability per object type
 - **SCH List** -- sortable tables with editable cells and resolved nets tab
 - **Navigator** -- schematic overview with object tree
 - **Messages** -- ERC violations with click-to-focus and HTML report export
 - **Output Jobs** -- BOM, Netlist, PDF, PNG job management
 - **Projects** -- project tree with sheet navigation
 - **Signal** -- AI chat with streaming, tool use, design review, ERC fix
-- All panels tabbed: Left (Projects/Components/Nav), Right (Props/Filter/List), Bottom (Messages/Output Jobs/Signal)
+- **Layer Stack** -- PCB layer visibility, active layer, Altium naming
+- **DRC Results** -- PCB design rule violations with click-to-select
+- **PCB Properties** -- board setup, footprint/segment/via properties
+- **Board Cross-Section** -- layer stackup visualization
+- **Inspector** -- detailed read-only property table for any object
+- **Design Variants** -- create/manage assembly variants (fitted/not-fitted)
+- **Snippets** -- save/reuse design fragments
 </details>
 
 ## Roadmap
@@ -160,10 +193,10 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 | **Phase 3: Validation** | Done | ERC (11 checks + connection matrix), annotation, No ERC directives, AutoFocus |
 | **Phase 4: Advanced** | Done | Library editor, PDF/print export, output jobs, custom fields, title block, templates |
 | **Phase 4+: Altium Parity** | Done | 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, design variants, parameter manager, multi-channel, BOM formats |
-| **Phase 5: Signal AI** | Done | Claude API with streaming, tool use, visual context, circuit templates, design review |
-| **Phase 6: PCB Layout** | Next | WebGL2 renderer, layer stack, interactive routing, DRC, copper pour, 3D viewer |
+| **Phase 5: Signal AI** | Done | Claude API streaming, tool use, visual context, circuit templates, design review |
+| **Phase 6: PCB Layout** | Done | KiCad PCB parser, routing (walkaround/push/diff pair), 15-type DRC, copper pour, Gerber/ODB++/STEP export, 3D viewer, cross-probing |
 | **Phase 7: Simulation** | Planned | SPICE integration, signal integrity, power analysis |
-| **Phase 8: Manufacturing** | Planned | Gerber/drill export, assembly drawings, pick-and-place |
+| **Phase 8: Ecosystem** | Planned | Plugin system, community libraries, cloud storage |
 
 See [docs/feature-roadmap.md](docs/feature-roadmap.md) for the detailed roadmap.
 
@@ -239,8 +272,8 @@ npm run tauri dev
 | Desktop | [Tauri v2](https://tauri.app/) (Rust) |
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Styling | Tailwind CSS 4 |
-| Canvas | Canvas2D (schematic), WebGL2 (PCB, planned) |
-| State | Zustand (7 stores: layout, project, editor, schematic, libraryEditor, outputJobs, signal) |
+| Canvas | Canvas2D (schematic + PCB), WebGL2 framework ready, Three.js (3D viewer) |
+| State | Zustand (8 stores: layout, project, editor, schematic, libraryEditor, outputJobs, signal, pcb) |
 | Parser | Pure Rust S-expression parser |
 | AI | Claude API via Rust reqwest (streaming SSE, tool use, vision) |
 
@@ -248,14 +281,14 @@ npm run tauri dev
 
 ```
 src-tauri/src/
-  commands/           Tauri IPC (project, schematic, save, library, export, signal)
-  engine/             KiCad S-expr parser, writer, document model
+  commands/           Tauri IPC (project, schematic, pcb, save, library, export, signal)
+  engine/             KiCad S-expr parser (schematic + PCB), writer, document model
 src/
-  canvas/             SchematicRenderer, LibraryEditorCanvas, hitTest
-  components/         MenuBar, ToolbarStrip, StatusBar, dialogs (17 files)
-  panels/             Properties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs (9 files)
-  stores/             Zustand: layout, project, editor, schematic, libraryEditor, outputJobs, signal
-  lib/                Net resolver, ERC, geometry, PDF export, BOM formats, Signal AI context/tools/templates
+  canvas/             SchematicRenderer, PcbRenderer, Pcb3DViewer, PcbWebGLRenderer, hitTest
+  components/         MenuBar, ToolbarStrip, PcbToolbar, StatusBar, dialogs (18 files)
+  panels/             Properties, PcbProperties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs, LayerStack, DRC, Inspector, Variants, Snippets, CrossSection (16 files)
+  stores/             Zustand: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal
+  lib/                Schematic (ERC, net resolver, geometry, PDF, BOM) + PCB (router, DRC, ratsnest, copper pour, Gerber, ODB++, STEP, cross-probe) + Signal AI
   __tests__/          Vitest test suite
 docs/                 Roadmap, master plan, Altium reference
 ```

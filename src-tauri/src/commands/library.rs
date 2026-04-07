@@ -213,14 +213,14 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
-/// Validate that a library path is safe to access (must be a .kicad_sym or .sxsym file
+/// Validate that a library path is safe to access (must be a .kicad_sym or .snxsym file
 /// inside the KiCad symbols directory or a project directory)
 fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, String> {
     let path = Path::new(library_path);
 
     // Must have a valid library extension
     match path.extension().and_then(|e| e.to_str()) {
-        Some("kicad_sym") | Some("sxsym") => {}
+        Some("kicad_sym") | Some("snxsym") => {}
         _ => return Err("Invalid library file extension".to_string()),
     }
 
@@ -237,7 +237,7 @@ fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, Strin
             .canonicalize()
             .map_err(|e| format!("Invalid library path: {}", e))?;
 
-        // Must be inside KiCad symbols dir or have .sxsym extension (user library)
+        // Must be inside KiCad symbols dir or have .snxsym extension (user library)
         if let Some(sym_dir) = find_kicad_symbols_dir() {
             if let Ok(canonical_sym_dir) = sym_dir.canonicalize() {
                 if canonical.starts_with(&canonical_sym_dir) {
@@ -245,8 +245,8 @@ fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, Strin
                 }
             }
         }
-        // Allow .sxsym files anywhere (user-created libraries)
-        if canonical.extension().and_then(|e| e.to_str()) == Some("sxsym") {
+        // Allow .snxsym files anywhere (user-created libraries)
+        if canonical.extension().and_then(|e| e.to_str()) == Some("snxsym") {
             return Ok(canonical);
         }
         // Allow .kicad_sym files that exist (already validated extension above)
@@ -309,7 +309,7 @@ pub async fn save_symbol(
 
         // Write back atomically
         let output = writer::write_symbol_library(&symbols);
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("sxsym");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("snxsym");
         let tmp_ext = format!("{}.tmp", ext);
         let tmp_path = path.with_extension(tmp_ext);
         std::fs::write(&tmp_path, &output)

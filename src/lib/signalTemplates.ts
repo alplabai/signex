@@ -49,8 +49,89 @@ export const CIRCUIT_TEMPLATES: CircuitTemplate[] = [
 export const BOM_OPTIMIZE_PROMPT = "Analyze the current schematic's Bill of Materials. Look at all components and suggest:\n\n1. **Consolidation**: Are there similar values that could be standardized? (e.g., using all 10k resistors instead of 9.1k and 10k)\n2. **Missing components**: Are there bypass caps or pull-ups that should be added?\n3. **Value corrections**: Any obviously wrong values for common circuits?\n4. **Package standardization**: Could packages be standardized (e.g., all 0402 or all 0603)?\n\nUse the set_component_value tool to apply any recommended changes. Be conservative — only change values that are clearly improvements.";
 
 /**
- * Component suggestion prompt
+ * Component suggestion prompt — hardware-specific
  */
 export function buildComponentSuggestionPrompt(circuitContext: string): string {
-  return `Based on the current schematic context, suggest 3-5 components that would commonly be needed next. Consider:\n- Standard support components (bypass caps, pull-ups, ESD protection)\n- Missing connections or incomplete circuits\n- Common companion components\n\nFor each suggestion, specify: component type, value, and why it's needed.\n\nCurrent circuit:\n${circuitContext}`;
+  return `Based on the current schematic, suggest 3-5 components that are commonly needed. Prioritize:\n\n1. **Power integrity**: Missing bypass caps (100nF per IC power pin, 10uF per rail), bulk caps, ferrite beads\n2. **Signal integrity**: Missing pull-ups (I2C: 4.7k, SPI CS: 10k), termination resistors, series resistors for protection\n3. **Protection**: TVS diodes on connectors, ESD protection on USB/Ethernet, reverse polarity protection\n4. **Testability**: Test points on critical signals, debug headers\n5. **Missing passives**: Decoupling, filtering, biasing\n\nFor each suggestion give: specific part number, value with tolerance, package size, and placement rationale.\n\nCurrent circuit:\n${circuitContext}`;
 }
+
+/**
+ * Design review prompt — deep hardware analysis
+ */
+export const DESIGN_REVIEW_PROMPT = `Review this schematic for production readiness. Check systematically:
+
+**Power:**
+- Every IC has 100nF ceramic bypass cap within 2mm of power pin?
+- Bulk capacitors (10-47uF) on each power rail?
+- Correct voltage ratings on all caps (2x operating voltage minimum)?
+- Power-good/enable sequencing correct?
+- Current ratings adequate for expected load?
+
+**Signal Integrity:**
+- I2C: pull-ups present, value appropriate for bus speed and capacitance?
+- SPI: CS pull-ups, MISO tri-state handling?
+- UART: series resistors for protection?
+- Clock signals: termination if trace > lambda/10?
+- Reset pins: RC filter + ESD protection?
+
+**Protection:**
+- ESD protection on all external connectors?
+- Reverse polarity protection on power input?
+- Over-current protection (PTC fuse or electronic)?
+- Voltage clamping on ADC inputs?
+
+**Manufacturing:**
+- All components have footprints assigned?
+- Unannotated designators?
+- Single-source components that need alternates?
+- Standard package sizes (prefer 0402/0603)?
+
+Provide a prioritized punch list with severity (Critical/Important/Nice-to-have).`;
+
+/**
+ * ERC fix prompt — context-aware
+ */
+export function buildErcFixPrompt(violation: string): string {
+  return `ERC violation: "${violation}"
+
+Explain:
+1. **Root cause** — what's electrically wrong
+2. **Impact** — what happens if unfixed (signal corruption, damage, intermittent failure)
+3. **Fix** — specific component/connection to add/change, with values
+4. **Prevention** — design practice to avoid this in future
+
+Be concise. If a component needs adding, specify exact value and placement.`;
+}
+
+/**
+ * PCB review prompt — layout-specific
+ */
+export const PCB_REVIEW_PROMPT = `Review this PCB layout for manufacturing readiness:
+
+**Routing:**
+- Minimum trace width adequate for current? (0.15mm = ~0.5A, 0.25mm = ~1A, 0.5mm = ~2A for 1oz Cu)
+- High-current paths wide enough? Power traces especially.
+- Differential pairs matched in length and gap?
+- No acute angles in traces (prefer 45-degree or curved)?
+- Return paths unbroken under high-speed signals?
+
+**Power:**
+- Power planes solid and uninterrupted?
+- Bypass caps placed close to IC power pins?
+- Via stitching between ground planes?
+- Thermal relief on high-current connections?
+
+**Manufacturing:**
+- All pads have adequate annular ring?
+- Solder mask clearances correct?
+- Silkscreen not overlapping pads?
+- Board outline closed and clean?
+- Drill sizes standard for fab house?
+
+**EMC:**
+- High-speed signals routed on inner layers with reference planes?
+- No traces crossing split planes?
+- Crystal traces short and guarded?
+- Antenna keep-out zones respected?
+
+Provide actionable items with location references.`;
