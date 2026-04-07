@@ -124,6 +124,17 @@ export function ProjectPanel() {
             {
               label: project.pcb_file,
               icon: <Cpu size={13} className="text-success" />,
+              onClick: () => {
+                const tabId = `pcb-${project.path}:${project.pcb_file}`;
+                openTab({
+                  id: tabId,
+                  name: project.pcb_file!,
+                  type: "pcb",
+                  path: project.path,
+                  dirty: false,
+                });
+                setActiveTab(tabId);
+              },
             },
           ]
         : []),

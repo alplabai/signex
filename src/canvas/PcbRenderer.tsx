@@ -1,10 +1,12 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
+import { useProjectStore } from "@/stores/project";
 import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import { computeRatsnest, getPadPosition } from "@/lib/pcbRatsnest";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
-import type { PcbPoint, PcbLayerId } from "@/types/pcb";
+import type { PcbData, PcbPoint, PcbLayerId } from "@/types/pcb";
 
 interface Camera { x: number; y: number; zoom: number }
 
@@ -26,6 +28,9 @@ export function PcbRenderer() {
   const dragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
 
+  const project = useProjectStore((s) => s.project);
+  const [pcbLoading, setPcbLoading] = useState(false);
+  const [pcbError, setPcbError] = useState<string | null>(null);
   const data = usePcbStore((s) => s.data);
   const selectedIds = usePcbStore((s) => s.selectedIds);
   const activeLayer = usePcbStore((s) => s.activeLayer);
@@ -38,6 +43,137 @@ export function PcbRenderer() {
   const netColorEnabled = usePcbStore((s) => s.netColorEnabled);
   const netColors = usePcbStore((s) => s.netColors);
   const gridVisible = useEditorStore((s) => s.gridVisible);
+
+  // Load PCB data when mounted and no data exists
+  useEffect(() => {
+    if (data || !project?.pcb_file) return;
+
+    let cancelled = false;
+    setPcbLoading(true);
+    setPcbError(null);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    invoke<any>("get_pcb", {
+      projectDir: project.dir,
+      filename: project.pcb_file,
+    })
+      .then((raw) => {
+        if (!cancelled) {
+          // Rust returns flat PcbBoard with snake_case fields; map to PcbData
+          const p = (pt: any) => ({ x: pt?.x ?? 0, y: pt?.y ?? 0 });
+          const pcbData: PcbData = {
+            board: {
+              uuid: raw.uuid ?? "",
+              version: raw.version ?? "",
+              generator: raw.generator ?? "",
+              thickness: raw.thickness ?? 1.6,
+              outline: (raw.outline ?? []).map(p),
+              layers: (raw.layers ?? []).map((l: any) => ({ id: l.id ?? l.name, name: l.name, type: l.layer_type ?? "signal" })),
+              setup: raw.setup ? {
+                gridSize: raw.setup.grid_size ?? 0.25,
+                traceWidth: raw.setup.trace_width ?? 0.25,
+                viaDiameter: raw.setup.via_diameter ?? 0.8,
+                viaDrill: raw.setup.via_drill ?? 0.4,
+                clearance: raw.setup.clearance ?? 0.2,
+                trackMinWidth: raw.setup.track_min_width ?? 0.1,
+                viaMinDiameter: raw.setup.via_min_diameter ?? 0.4,
+                viaMinDrill: raw.setup.via_min_drill ?? 0.2,
+                copperFinish: "",
+              } : { gridSize: 0.25, traceWidth: 0.25, viaDiameter: 0.8, viaDrill: 0.4, clearance: 0.2, trackMinWidth: 0.1, viaMinDiameter: 0.4, viaMinDrill: 0.2, copperFinish: "" },
+            },
+            footprints: (raw.footprints ?? []).map((fp: any) => ({
+              uuid: fp.uuid ?? "",
+              reference: fp.reference ?? "",
+              value: fp.value ?? "",
+              footprintId: fp.footprint_id ?? "",
+              position: p(fp.position),
+              rotation: fp.rotation ?? 0,
+              layer: fp.layer ?? "F.Cu",
+              locked: fp.locked ?? false,
+              pads: (fp.pads ?? []).map((pad: any) => ({
+                uuid: pad.uuid ?? "",
+                number: pad.number ?? "",
+                type: pad.pad_type ?? "smd",
+                shape: pad.shape ?? "rect",
+                position: p(pad.position),
+                size: [pad.size?.[0] ?? 1, pad.size?.[1] ?? 1] as [number, number],
+                drill: pad.drill ? { diameter: pad.drill.diameter ?? 0 } : undefined,
+                layers: pad.layers ?? [],
+                net: pad.net ? { number: pad.net.number ?? 0, name: pad.net.name ?? "" } : undefined,
+                roundrectRatio: pad.roundrect_ratio,
+              })),
+              graphics: (fp.graphics ?? []).map((g: any) => ({
+                type: g.graphic_type ?? "line",
+                layer: g.layer ?? "F.SilkS",
+                start: p(g.start),
+                end: p(g.end),
+                width: g.width ?? 0.12,
+              })),
+            })),
+            segments: (raw.segments ?? []).map((s: any) => ({
+              uuid: s.uuid ?? "",
+              start: p(s.start),
+              end: p(s.end),
+              width: s.width ?? 0.25,
+              layer: s.layer ?? "F.Cu",
+              net: s.net ?? 0,
+            })),
+            vias: (raw.vias ?? []).map((v: any) => ({
+              uuid: v.uuid ?? "",
+              position: p(v.position),
+              diameter: v.diameter ?? 0.8,
+              drill: v.drill ?? 0.4,
+              layers: v.layers ?? ["F.Cu", "B.Cu"],
+              net: v.net ?? 0,
+              type: (v.via_type ?? "through") as "through",
+            })),
+            zones: (raw.zones ?? []).map((z: any) => ({
+              uuid: z.uuid ?? "",
+              net: z.net ?? 0,
+              netName: z.net_name ?? "",
+              layer: z.layer ?? "F.Cu",
+              outline: (z.outline ?? []).map(p),
+              fillPolygons: (z.fill_polygons ?? []).map((poly: any) => (poly ?? []).map(p)),
+              minThickness: z.min_thickness ?? 0.25,
+              thermalGap: z.thermal_gap ?? 0.5,
+              thermalBridgeWidth: z.thermal_bridge_width ?? 0.5,
+              connectPads: z.connect_pads ?? "thermal_relief",
+              priority: z.priority ?? 0,
+            })),
+            nets: (raw.nets ?? []).map((n: any) => ({
+              number: n.number ?? 0,
+              name: n.name ?? "",
+            })),
+            graphics: (raw.graphics ?? []).map((g: any) => ({
+              type: g.graphic_type ?? "line",
+              layer: g.layer ?? "Edge.Cuts",
+              start: p(g.start),
+              end: p(g.end),
+              width: g.width ?? 0.05,
+            })),
+            texts: (raw.texts ?? []).map((t: any) => ({
+              uuid: t.uuid ?? "",
+              text: t.text ?? "",
+              position: p(t.position),
+              layer: t.layer ?? "F.SilkS",
+              fontSize: t.font_size ?? 1.0,
+              rotation: t.rotation ?? 0,
+            })),
+            designRules: [],
+          };
+          usePcbStore.getState().loadPcb(pcbData);
+          setPcbLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPcbError(String(err));
+          setPcbLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [data, project]);
 
   // Memoize ratsnest — only recompute when data changes, not every frame
   const ratsnestLines = useMemo(() => {
@@ -81,10 +217,12 @@ export function PcbRenderer() {
       ctx.fillStyle = "#4a4a6a";
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("No PCB loaded", w / 2, h / 2);
+      const msg = pcbError ? `Error: ${pcbError}` : pcbLoading ? "Loading PCB..." : "No PCB loaded";
+      ctx.fillText(msg, w / 2, h / 2);
       return;
     }
 
+    try {
     ctx.save();
     ctx.translate(cam.x, cam.y);
     ctx.scale(cam.zoom, cam.zoom);
@@ -182,7 +320,9 @@ export function PcbRenderer() {
 
       // Footprint pads on this layer
       for (const fp of data.footprints) {
+        if (!fp.position) continue;
         for (const pad of fp.pads) {
+          if (!pad.position || !pad.size || !pad.layers) continue;
           if (!pad.layers.includes(layer) && !pad.layers.includes("*.Cu")) continue;
           const px = fp.position.x + pad.position.x;
           const py = fp.position.y + pad.position.y;
@@ -234,6 +374,7 @@ export function PcbRenderer() {
 
       // Footprint graphics on this layer
       for (const fp of data.footprints) {
+        if (!fp.position || !fp.graphics) continue;
         for (const g of fp.graphics) {
           if (g.layer !== layer) continue;
           ctx.strokeStyle = color;
@@ -317,13 +458,14 @@ export function PcbRenderer() {
 
     // Selection highlight
     for (const fp of data.footprints) {
-      if (!selectedIds.has(fp.uuid)) continue;
+      if (!selectedIds.has(fp.uuid) || !fp.position) continue;
       ctx.strokeStyle = "#00e5ff";
       ctx.lineWidth = 0.15;
       ctx.setLineDash([0.3, 0.2]);
       // Simple bbox
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const pad of fp.pads) {
+        if (!pad.position || !pad.size) continue;
         const px = fp.position.x + pad.position.x;
         const py = fp.position.y + pad.position.y;
         minX = Math.min(minX, px - pad.size[0]); maxX = Math.max(maxX, px + pad.size[0]);
@@ -336,6 +478,10 @@ export function PcbRenderer() {
     }
 
     ctx.restore();
+    } catch (renderErr) {
+      console.error("PCB render error:", renderErr);
+      ctx.restore();
+    }
 
     // Status overlay
     ctx.fillStyle = "#cdd6f4";
@@ -347,7 +493,7 @@ export function PcbRenderer() {
       `Nets: ${data.nets.length} | Unrouted: ${unrouted} | Segments: ${data.segments.length} | Vias: ${data.vias.length}`,
       10, h - 10
     );
-  }, [data, selectedIds, activeLayer, visibleLayers, editMode, routingActive, routingPoints, gridVisible, s2w, getLayerColor, singleLayerMode, boardFlipped, netColorEnabled, netColors, ratsnestLines]);
+  }, [data, selectedIds, activeLayer, visibleLayers, editMode, routingActive, routingPoints, gridVisible, s2w, getLayerColor, singleLayerMode, boardFlipped, netColorEnabled, netColors, ratsnestLines, pcbLoading, pcbError]);
 
   // --- Resize ---
   useEffect(() => {
@@ -457,8 +603,9 @@ export function PcbRenderer() {
           // Find net from nearest pad
           let nearestNet = 0;
           for (const fp of data.footprints) {
+            if (!fp.position) continue;
             for (const pad of fp.pads) {
-              if (!pad.net) continue;
+              if (!pad.net || !pad.position || !pad.size) continue;
               const px = fp.position.x + pad.position.x;
               const py = fp.position.y + pad.position.y;
               const d = Math.hypot(world.x - px, world.y - py);
@@ -481,8 +628,10 @@ export function PcbRenderer() {
 
       // Simple footprint hit test
       for (const fp of data.footprints) {
+        if (!fp.position) continue;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const pad of fp.pads) {
+          if (!pad.position || !pad.size) continue;
           const px = fp.position.x + pad.position.x;
           const py = fp.position.y + pad.position.y;
           minX = Math.min(minX, px - pad.size[0] / 2); maxX = Math.max(maxX, px + pad.size[0] / 2);

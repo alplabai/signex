@@ -169,12 +169,37 @@ export function hitTest(
     }
   }
 
-  // Labels
-  if (isSelectable("label", filter)) {
-    for (const label of data.labels) {
-      if (dist(p, label.position) < tolerance) {
+  // Labels (respect power port filter separately)
+  for (const label of data.labels) {
+    const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
+    if (filter && filter[filterKey]?.selectable === false) continue;
+
+    if (label.label_type === "Power") {
+      // Power port: hit test covers full symbol (stem + head + text)
+      const stemLen = 2.0, symSize = 1.2;
+      const fs = label.font_size || 1.27;
+      const style = label.shape || "bar";
+      const isGnd = style.includes("ground") || style === "earth_ground";
+      const textW = label.text.length * fs * 0.65;
+      const halfW = Math.max(symSize, textW / 2) + 0.5;
+      const lx = label.position.x, ly = label.position.y;
+
+      let minX: number, minY: number, maxX: number, maxY: number;
+      if (isGnd) {
+        // Connection at top, symbol + text below
+        minX = lx - halfW; maxX = lx + halfW;
+        minY = ly - 0.5; maxY = ly + stemLen + 1.5 + fs;
+      } else {
+        // Connection at bottom, symbol + text above
+        minX = lx - halfW; maxX = lx + halfW;
+        minY = ly - stemLen - 0.5 - fs; maxY = ly + 0.5;
+      }
+
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
         return { type: "label", uuid: label.uuid };
       }
+    } else if (dist(p, label.position) < tolerance) {
+      return { type: "label", uuid: label.uuid };
     }
   }
 
@@ -364,7 +389,8 @@ export function boxSelect(
   }
 
   for (const label of data.labels) {
-    if (!isSelectable("label", filter)) continue;
+    const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
+    if (filter && filter[filterKey]?.selectable === false) continue;
     if (pointInBox(label.position, box)) selected.push(label.uuid);
   }
 
@@ -412,4 +438,510 @@ export function boxSelect(
   }
 
   return selected;
+}
+
+// --- Advanced selection helpers ---
+
+function pointInPolygon(p: SchPoint, polygon: SchPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Select all objects whose position falls inside a lasso polygon.
+ * Uses ray-casting point-in-polygon test for each object.
+ */
+export function lassoSelect(
+  data: SchematicData,
+  points: SchPoint[],
+  filter?: SelectionFilter,
+): string[] {
+  if (points.length < 3) return [];
+
+  const selected: string[] = [];
+
+  for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
+    if (pointInPolygon(sym.position, points)) selected.push(sym.uuid);
+  }
+
+  for (const wire of data.wires) {
+    if (!isSelectable("wire", filter)) continue;
+    // Wire is selected if both endpoints are inside the lasso
+    if (pointInPolygon(wire.start, points) && pointInPolygon(wire.end, points)) {
+      selected.push(wire.uuid);
+    }
+  }
+
+  for (const label of data.labels) {
+    const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
+    if (filter && filter[filterKey]?.selectable === false) continue;
+    if (pointInPolygon(label.position, points)) selected.push(label.uuid);
+  }
+
+  for (const j of data.junctions) {
+    if (!isSelectable("junction", filter)) continue;
+    if (pointInPolygon(j.position, points)) selected.push(j.uuid);
+  }
+
+  for (const nc of data.no_connects) {
+    if (!isSelectable("noConnect", filter)) continue;
+    if (pointInPolygon(nc.position, points)) selected.push(nc.uuid);
+  }
+
+  for (const note of data.text_notes) {
+    if (!isSelectable("textNote", filter)) continue;
+    if (pointInPolygon(note.position, points)) selected.push(note.uuid);
+  }
+
+  for (const bus of data.buses) {
+    if (!isSelectable("bus", filter)) continue;
+    if (pointInPolygon(bus.start, points) && pointInPolygon(bus.end, points)) {
+      selected.push(bus.uuid);
+    }
+  }
+
+  for (const be of data.bus_entries) {
+    if (!isSelectable("busEntry", filter)) continue;
+    if (pointInPolygon(be.position, points)) selected.push(be.uuid);
+  }
+
+  for (const sheet of data.child_sheets) {
+    if (!isSelectable("childSheet", filter)) continue;
+    if (pointInPolygon(sheet.position, points)) selected.push(sheet.uuid);
+  }
+
+  if (!isSelectable("drawing", filter)) { /* skip drawings */ }
+  else for (const d of data.drawings) {
+    if (d.type === "Line" && pointInPolygon(d.start, points) && pointInPolygon(d.end, points)) selected.push(d.uuid);
+    else if (d.type === "Rect" && pointInPolygon(d.start, points) && pointInPolygon(d.end, points)) selected.push(d.uuid);
+    else if (d.type === "Circle" && pointInPolygon(d.center, points)) selected.push(d.uuid);
+    else if (d.type === "Arc" && pointInPolygon(d.start, points) && pointInPolygon(d.mid, points) && pointInPolygon(d.end, points)) selected.push(d.uuid);
+    else if (d.type === "Polyline" && d.points.every(p => pointInPolygon(p, points))) selected.push(d.uuid);
+  }
+
+  return selected;
+}
+
+/**
+ * Select all objects OUTSIDE a drag box (inverse of inside-mode boxSelect).
+ * Returns UUIDs of objects not captured by a left-to-right box selection.
+ */
+export function outsideBoxSelect(
+  data: SchematicData,
+  startX: number, startY: number,
+  endX: number, endY: number,
+  filter?: SelectionFilter,
+): string[] {
+  // Get all selectable UUIDs
+  const allUuids: string[] = [];
+
+  for (const sym of data.symbols) {
+    if (isSelectable("symbol", filter, sym.is_power)) allUuids.push(sym.uuid);
+  }
+  for (const wire of data.wires) {
+    if (isSelectable("wire", filter)) allUuids.push(wire.uuid);
+  }
+  for (const label of data.labels) {
+    if (isSelectable("label", filter)) allUuids.push(label.uuid);
+  }
+  for (const j of data.junctions) {
+    if (isSelectable("junction", filter)) allUuids.push(j.uuid);
+  }
+  for (const nc of data.no_connects) {
+    if (isSelectable("noConnect", filter)) allUuids.push(nc.uuid);
+  }
+  for (const note of data.text_notes) {
+    if (isSelectable("textNote", filter)) allUuids.push(note.uuid);
+  }
+  for (const bus of data.buses) {
+    if (isSelectable("bus", filter)) allUuids.push(bus.uuid);
+  }
+  for (const be of data.bus_entries) {
+    if (isSelectable("busEntry", filter)) allUuids.push(be.uuid);
+  }
+  for (const sheet of data.child_sheets) {
+    if (isSelectable("childSheet", filter)) allUuids.push(sheet.uuid);
+  }
+  if (isSelectable("drawing", filter)) {
+    for (const d of data.drawings) allUuids.push(d.uuid);
+  }
+
+  // Use inside-mode boxSelect (L→R) to find objects inside the box
+  const minX = Math.min(startX, endX), minY = Math.min(startY, endY);
+  const maxX = Math.max(startX, endX), maxY = Math.max(startY, endY);
+  const insideUuids = new Set(boxSelect(data, minX, minY, maxX, maxY, filter));
+
+  // Return everything NOT inside the box
+  return allUuids.filter(uuid => !insideUuids.has(uuid));
+}
+
+/**
+ * Select objects whose position is within `tolerance` distance of a line segment.
+ * For wires/buses, checks if any of their segments intersect the selection line.
+ */
+export function lineSelect(
+  data: SchematicData,
+  lineStart: SchPoint,
+  lineEnd: SchPoint,
+  tolerance: number,
+  filter?: SelectionFilter,
+): string[] {
+  const selected: string[] = [];
+
+  for (const sym of data.symbols) {
+    if (!isSelectable("symbol", filter, sym.is_power)) continue;
+    if (distToSegment(sym.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(sym.uuid);
+    }
+  }
+
+  for (const wire of data.wires) {
+    if (!isSelectable("wire", filter)) continue;
+    // Check if wire midpoint or endpoints are near the line, or if segments intersect
+    if (distToSegment(wire.start, lineStart, lineEnd) <= tolerance ||
+        distToSegment(wire.end, lineStart, lineEnd) <= tolerance ||
+        segmentsIntersect(wire.start, wire.end, lineStart, lineEnd)) {
+      selected.push(wire.uuid);
+    }
+  }
+
+  for (const label of data.labels) {
+    if (!isSelectable("label", filter)) continue;
+    if (distToSegment(label.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(label.uuid);
+    }
+  }
+
+  for (const j of data.junctions) {
+    if (!isSelectable("junction", filter)) continue;
+    if (distToSegment(j.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(j.uuid);
+    }
+  }
+
+  for (const nc of data.no_connects) {
+    if (!isSelectable("noConnect", filter)) continue;
+    if (distToSegment(nc.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(nc.uuid);
+    }
+  }
+
+  for (const note of data.text_notes) {
+    if (!isSelectable("textNote", filter)) continue;
+    if (distToSegment(note.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(note.uuid);
+    }
+  }
+
+  for (const bus of data.buses) {
+    if (!isSelectable("bus", filter)) continue;
+    if (distToSegment(bus.start, lineStart, lineEnd) <= tolerance ||
+        distToSegment(bus.end, lineStart, lineEnd) <= tolerance ||
+        segmentsIntersect(bus.start, bus.end, lineStart, lineEnd)) {
+      selected.push(bus.uuid);
+    }
+  }
+
+  for (const be of data.bus_entries) {
+    if (!isSelectable("busEntry", filter)) continue;
+    if (distToSegment(be.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(be.uuid);
+    }
+  }
+
+  for (const sheet of data.child_sheets) {
+    if (!isSelectable("childSheet", filter)) continue;
+    if (distToSegment(sheet.position, lineStart, lineEnd) <= tolerance) {
+      selected.push(sheet.uuid);
+    }
+  }
+
+  if (!isSelectable("drawing", filter)) { /* skip drawings */ }
+  else for (const d of data.drawings) {
+    if (d.type === "Circle" && distToSegment(d.center, lineStart, lineEnd) <= tolerance) selected.push(d.uuid);
+    else if ((d.type === "Line" || d.type === "Rect") && (distToSegment(d.start, lineStart, lineEnd) <= tolerance || distToSegment(d.end, lineStart, lineEnd) <= tolerance)) selected.push(d.uuid);
+    else if (d.type === "Arc" && (distToSegment(d.start, lineStart, lineEnd) <= tolerance || distToSegment(d.mid, lineStart, lineEnd) <= tolerance || distToSegment(d.end, lineStart, lineEnd) <= tolerance)) selected.push(d.uuid);
+    else if (d.type === "Polyline" && d.points.some(p => distToSegment(p, lineStart, lineEnd) <= tolerance)) selected.push(d.uuid);
+  }
+
+  return selected;
+}
+
+/**
+ * Select all objects on the same net as the clicked object.
+ * Traces connectivity through wires, labels, and symbol pins.
+ */
+export function connectionSelect(
+  data: SchematicData,
+  startUuid: string,
+  filter?: SelectionFilter,
+): string[] {
+  const EPSILON = 0.5; // Tolerance for endpoint matching
+
+  // Helper: check if two points are coincident
+  const ptEq = (a: SchPoint, b: SchPoint) =>
+    Math.abs(a.x - b.x) < EPSILON && Math.abs(a.y - b.y) < EPSILON;
+
+  // Helper: get symbol pin positions in schematic space
+  const getSymbolPinPositions = (sym: SchSymbol): SchPoint[] => {
+    const lib = data.lib_symbols[sym.lib_id];
+    if (!lib) return [];
+    return lib.pins.map(pin => symToSch(pin.position.x, pin.position.y, sym));
+  };
+
+  // Find the clicked object
+  const clickedWire = data.wires.find(w => w.uuid === startUuid);
+  const clickedLabel = data.labels.find(l => l.uuid === startUuid);
+  const clickedSymbol = data.symbols.find(s => s.uuid === startUuid);
+  const clickedJunction = data.junctions.find(j => j.uuid === startUuid);
+
+  // Strategy 1: If clicked a label, find all objects with the same net name
+  if (clickedLabel) {
+    const netName = clickedLabel.text;
+    const result: string[] = [];
+
+    // All labels with the same text
+    for (const label of data.labels) {
+      if (!isSelectable("label", filter)) continue;
+      if (label.text === netName) result.push(label.uuid);
+    }
+
+    // Find wires connected to those labels
+    const labelPositions = data.labels.filter(l => l.text === netName).map(l => l.position);
+    const connectedWireUuids = new Set<string>();
+    floodFillWires(data, labelPositions, connectedWireUuids, EPSILON);
+
+    for (const uuid of connectedWireUuids) {
+      if (isSelectable("wire", filter)) result.push(uuid);
+    }
+
+    // Find junctions on connected wires
+    for (const j of data.junctions) {
+      if (!isSelectable("junction", filter)) continue;
+      for (const wUuid of connectedWireUuids) {
+        const w = data.wires.find(wire => wire.uuid === wUuid);
+        if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
+          result.push(j.uuid);
+          break;
+        }
+      }
+    }
+
+    // Find symbols with pins touching connected wires
+    for (const sym of data.symbols) {
+      if (!isSelectable("symbol", filter, sym.is_power)) continue;
+      const pinPositions = getSymbolPinPositions(sym);
+      for (const pinPos of pinPositions) {
+        let connected = false;
+        for (const wUuid of connectedWireUuids) {
+          const w = data.wires.find(wire => wire.uuid === wUuid);
+          if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
+            connected = true;
+            break;
+          }
+        }
+        if (connected) { result.push(sym.uuid); break; }
+      }
+    }
+
+    return [...new Set(result)];
+  }
+
+  // Strategy 2: If clicked a wire, flood-fill connected wires and find labels/symbols
+  if (clickedWire) {
+    const result: string[] = [];
+    const connectedWireUuids = new Set<string>();
+    floodFillWires(data, [clickedWire.start, clickedWire.end], connectedWireUuids, EPSILON);
+
+    for (const uuid of connectedWireUuids) {
+      if (isSelectable("wire", filter)) result.push(uuid);
+    }
+
+    // Find labels at wire endpoints
+    for (const label of data.labels) {
+      if (!isSelectable("label", filter)) continue;
+      for (const wUuid of connectedWireUuids) {
+        const w = data.wires.find(wire => wire.uuid === wUuid);
+        if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
+          result.push(label.uuid);
+          break;
+        }
+      }
+    }
+
+    // Find junctions on connected wires
+    for (const j of data.junctions) {
+      if (!isSelectable("junction", filter)) continue;
+      for (const wUuid of connectedWireUuids) {
+        const w = data.wires.find(wire => wire.uuid === wUuid);
+        if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
+          result.push(j.uuid);
+          break;
+        }
+      }
+    }
+
+    // Find symbols with pins touching connected wires
+    for (const sym of data.symbols) {
+      if (!isSelectable("symbol", filter, sym.is_power)) continue;
+      const pinPositions = getSymbolPinPositions(sym);
+      for (const pinPos of pinPositions) {
+        let connected = false;
+        for (const wUuid of connectedWireUuids) {
+          const w = data.wires.find(wire => wire.uuid === wUuid);
+          if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
+            connected = true;
+            break;
+          }
+        }
+        if (connected) { result.push(sym.uuid); break; }
+      }
+    }
+
+    // Also include labels with same net name (for global connectivity)
+    const netLabels = data.labels.filter(l => {
+      for (const wUuid of connectedWireUuids) {
+        const w = data.wires.find(wire => wire.uuid === wUuid);
+        if (w && (ptEq(l.position, w.start) || ptEq(l.position, w.end))) return true;
+      }
+      return false;
+    });
+    if (netLabels.length > 0) {
+      const netName = netLabels[0].text;
+      for (const label of data.labels) {
+        if (label.text === netName && !result.includes(label.uuid)) {
+          if (isSelectable("label", filter)) result.push(label.uuid);
+        }
+      }
+    }
+
+    return [...new Set(result)];
+  }
+
+  // Strategy 3: If clicked a symbol, find wires/labels connected to its pins
+  if (clickedSymbol) {
+    const result: string[] = [];
+    if (isSelectable("symbol", filter, clickedSymbol.is_power)) {
+      result.push(clickedSymbol.uuid);
+    }
+
+    const pinPositions = getSymbolPinPositions(clickedSymbol);
+    for (const pinPos of pinPositions) {
+      // Find wires touching this pin
+      const connectedWireUuids = new Set<string>();
+      floodFillWires(data, [pinPos], connectedWireUuids, EPSILON);
+
+      for (const uuid of connectedWireUuids) {
+        if (isSelectable("wire", filter)) result.push(uuid);
+      }
+
+      // Find labels at wire endpoints
+      for (const label of data.labels) {
+        if (!isSelectable("label", filter)) continue;
+        for (const wUuid of connectedWireUuids) {
+          const w = data.wires.find(wire => wire.uuid === wUuid);
+          if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
+            result.push(label.uuid);
+            break;
+          }
+        }
+      }
+
+      // Find junctions on connected wires
+      for (const j of data.junctions) {
+        if (!isSelectable("junction", filter)) continue;
+        for (const wUuid of connectedWireUuids) {
+          const w = data.wires.find(wire => wire.uuid === wUuid);
+          if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
+            result.push(j.uuid);
+            break;
+          }
+        }
+      }
+    }
+
+    return [...new Set(result)];
+  }
+
+  // Strategy 4: If clicked a junction, treat like a wire endpoint
+  if (clickedJunction) {
+    const result: string[] = [];
+    if (isSelectable("junction", filter)) result.push(clickedJunction.uuid);
+
+    const connectedWireUuids = new Set<string>();
+    floodFillWires(data, [clickedJunction.position], connectedWireUuids, EPSILON);
+
+    for (const uuid of connectedWireUuids) {
+      if (isSelectable("wire", filter)) result.push(uuid);
+    }
+
+    for (const label of data.labels) {
+      if (!isSelectable("label", filter)) continue;
+      for (const wUuid of connectedWireUuids) {
+        const w = data.wires.find(wire => wire.uuid === wUuid);
+        if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
+          result.push(label.uuid);
+          break;
+        }
+      }
+    }
+
+    for (const sym of data.symbols) {
+      if (!isSelectable("symbol", filter, sym.is_power)) continue;
+      const pinPositions = getSymbolPinPositions(sym);
+      for (const pinPos of pinPositions) {
+        let connected = false;
+        for (const wUuid of connectedWireUuids) {
+          const w = data.wires.find(wire => wire.uuid === wUuid);
+          if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
+            connected = true;
+            break;
+          }
+        }
+        if (connected) { result.push(sym.uuid); break; }
+      }
+    }
+
+    return [...new Set(result)];
+  }
+
+  // Fallback: just return the clicked object if it exists
+  return [startUuid];
+}
+
+/**
+ * Flood-fill connected wires starting from seed points.
+ * Adds all transitively connected wire UUIDs to the `visited` set.
+ */
+function floodFillWires(
+  data: SchematicData,
+  seedPoints: SchPoint[],
+  visited: Set<string>,
+  epsilon: number,
+): void {
+  const ptEq = (a: SchPoint, b: SchPoint) =>
+    Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
+
+  // Collect frontier points to search from
+  const frontier: SchPoint[] = [...seedPoints];
+
+  while (frontier.length > 0) {
+    const point = frontier.pop()!;
+    for (const wire of data.wires) {
+      if (visited.has(wire.uuid)) continue;
+      if (ptEq(point, wire.start) || ptEq(point, wire.end)) {
+        visited.add(wire.uuid);
+        // Add the other endpoint to frontier
+        frontier.push(wire.start, wire.end);
+      }
+    }
+  }
 }

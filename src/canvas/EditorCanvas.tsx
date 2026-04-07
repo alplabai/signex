@@ -108,23 +108,16 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
           </div>
           <div className="flex gap-3 mt-6">
             {[
-              { phase: "0", label: "Viewer", icon: <Zap size={16} />, active: true },
-              { phase: "1", label: "Schematic", icon: <Layers size={16} />, active: true },
-              { phase: "2", label: "PCB Layout", icon: <Cpu size={16} />, active: false },
+              { label: "Schematic", icon: <Layers size={16} /> },
+              { label: "PCB Layout", icon: <Cpu size={16} /> },
+              { label: "Signal AI", icon: <Zap size={16} /> },
             ].map((p) => (
               <div
-                key={p.phase}
-                className={`flex flex-col items-center gap-1.5 px-5 py-3 rounded-xl border transition-colors ${
-                  p.active
-                    ? "bg-accent/10 border-accent/30 text-accent"
-                    : "bg-bg-surface/30 border-border-subtle text-text-muted/40"
-                }`}
+                key={p.label}
+                className="flex flex-col items-center gap-1.5 px-5 py-3 rounded-xl border transition-colors bg-accent/10 border-accent/30 text-accent"
               >
                 {p.icon}
-                <span className="text-[10px] font-bold uppercase tracking-wider">
-                  Phase {p.phase}
-                </span>
-                <span className="text-[11px]">{p.label}</span>
+                <span className="text-[11px] font-medium">{p.label}</span>
               </div>
             ))}
           </div>
