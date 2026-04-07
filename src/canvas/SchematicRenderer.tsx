@@ -6,6 +6,7 @@ import { hitTest, boxSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
+import { substituteSpecialStrings } from "@/lib/specialStrings";
 import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
 
@@ -111,6 +112,8 @@ export function SchematicRenderer() {
   const placeCursorRef = useRef<SchPoint>({ x: 0, y: 0 }); // Ref for placement cursor
   const draggingEndpoint = useRef<{ uuid: string; endpoint: "start" | "end" } | null>(null);
   const drawStart = useRef<SchPoint | null>(null);
+  const drawMid = useRef<SchPoint | null>(null); // For 3-click arc
+  const polyPoints = useRef<SchPoint[]>([]); // For polyline accumulation
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
@@ -294,6 +297,39 @@ export function SchematicRenderer() {
     ctx.lineWidth = 0.15;
     ctx.strokeRect(pw - 100, ph - 30, 100, 30);
 
+    // Title block fields inside the 100x30mm border box
+    {
+      const tbx = pw - 100, tby = ph - 30;
+      const tb = data.title_block || {};
+      // Internal grid lines
+      ctx.strokeStyle = C.paperBorder;
+      ctx.lineWidth = 0.08;
+      ctx.beginPath();
+      ctx.moveTo(tbx, tby + 10); ctx.lineTo(tbx + 100, tby + 10); // row separator
+      ctx.moveTo(tbx, tby + 20); ctx.lineTo(tbx + 100, tby + 20); // row separator
+      ctx.moveTo(tbx + 50, tby); ctx.lineTo(tbx + 50, tby + 10); // col separator top row
+      ctx.stroke();
+      // Labels (small gray text)
+      ctx.fillStyle = C.ref;
+      ctx.font = "0.8px Roboto";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("Title:", tbx + 1, tby + 1);
+      ctx.fillText("Date:", tbx + 51, tby + 1);
+      ctx.fillText("Rev:", tbx + 1, tby + 11);
+      ctx.fillText("Company:", tbx + 51, tby + 11);
+      // Values (larger text)
+      ctx.fillStyle = C.val;
+      ctx.font = "bold 1.5px Roboto";
+      ctx.textBaseline = "middle";
+      ctx.fillText(substituteSpecialStrings(tb.title || "", data), tbx + 1, tby + 25);
+      ctx.font = "1.2px Roboto";
+      ctx.fillText(tb.title || "", tbx + 8, tby + 5);
+      ctx.fillText(tb.date || "", tbx + 58, tby + 5);
+      ctx.fillText(tb.rev || "", tbx + 8, tby + 15);
+      ctx.fillText(tb.company || "", tbx + 63, tby + 15);
+    }
+
     // Grid (only if zoomed enough and visible) — uses reactive gridVisible/gridSize from hooks
     if (gridVisible && gridSize * cam.zoom > 2) {
       ctx.globalAlpha = 0.4;
@@ -317,13 +353,19 @@ export function SchematicRenderer() {
     // AutoFocus: dim non-focused elements
     const autoFocus = useEditorStore.getState().autoFocusUuids;
     const hasFocus = autoFocus !== null && autoFocus.length > 0;
+    const sf = useEditorStore.getState().selectionFilter;
+    const alphaFor = (uuid: string, filterKey: string) => {
+      if (!sf[filterKey]?.visible) return 0.12;
+      if (hasFocus && !autoFocus!.includes(uuid)) return 0.15;
+      return 1;
+    };
 
     // Wires
     ctx.strokeStyle = C.wire;
     ctx.lineWidth = 0.15;
     ctx.lineCap = "round";
     for (const wire of data.wires) {
-      ctx.globalAlpha = hasFocus && !autoFocus.includes(wire.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = alphaFor(wire.uuid, "wires");
       ctx.beginPath();
       ctx.moveTo(wire.start.x, wire.start.y);
       ctx.lineTo(wire.end.x, wire.end.y);
@@ -334,6 +376,7 @@ export function SchematicRenderer() {
 
     // Junctions
     ctx.fillStyle = C.junction;
+    ctx.globalAlpha = sf.junctions?.visible === false ? 0.12 : 1;
     for (const j of data.junctions) {
       ctx.beginPath();
       ctx.arc(j.position.x, j.position.y, 0.3, 0, Math.PI * 2);
@@ -342,6 +385,7 @@ export function SchematicRenderer() {
 
     // No-connects
     ctx.lineWidth = 0.2;
+    ctx.globalAlpha = sf.noConnects?.visible === false ? 0.12 : 1;
     for (const nc of data.no_connects) {
       const sel = selectedIds.has(nc.uuid);
       ctx.strokeStyle = sel ? C.selection : C.noConnect;
@@ -376,7 +420,7 @@ export function SchematicRenderer() {
     for (const sym of data.symbols) {
       const lib = data.lib_symbols[sym.lib_id];
       if (!lib) continue;
-      ctx.globalAlpha = hasFocus && !autoFocus.includes(sym.uuid) ? 0.15 : 1;
+      ctx.globalAlpha = alphaFor(sym.uuid, sym.is_power ? "powerPorts" : "components");
 
       const sx = sym.position.x, sy = sym.position.y;
       const rot = sym.rotation, mx = sym.mirror_x, my = sym.mirror_y;
@@ -459,6 +503,7 @@ export function SchematicRenderer() {
 
     // Labels
     for (const label of data.labels) {
+      ctx.globalAlpha = alphaFor(label.uuid, label.label_type === "Power" ? "powerPorts" : "labels");
       // Hide label text while being edited inline
       if (inPlaceEdit?.uuid === label.uuid) continue;
       const color = label.label_type === "Global" ? C.labelGlobal
@@ -584,6 +629,7 @@ export function SchematicRenderer() {
     }
 
     // Child sheets
+    ctx.globalAlpha = sf.sheetSymbols?.visible === false ? 0.12 : 1;
     for (const sheet of data.child_sheets) {
       const isSel = selectedIds.has(sheet.uuid);
       const sx = sheet.position.x, sy = sheet.position.y, sw = sheet.size[0], sh = sheet.size[1];
@@ -631,6 +677,7 @@ export function SchematicRenderer() {
 
     // Buses (thicker blue lines)
     ctx.lineWidth = 0.4;
+    ctx.globalAlpha = sf.buses?.visible === false ? 0.12 : 1;
     for (const b of data.buses) {
       ctx.strokeStyle = selectedIds.has(b.uuid) ? C.selection : C.bus;
       ctx.beginPath();
@@ -671,6 +718,7 @@ export function SchematicRenderer() {
     }
 
     // Drawing objects (user-drawn lines, rects, circles, arcs, polylines)
+    ctx.globalAlpha = sf.drawings?.visible === false ? 0.12 : 1;
     for (const d of data.drawings) {
       const sel = selectedIds.has(d.uuid);
       ctx.strokeStyle = sel ? C.selection : C.body;
@@ -700,24 +748,25 @@ export function SchematicRenderer() {
       }
     }
 
-    // Text notes
+    // Text notes (with special string substitution)
+    ctx.globalAlpha = sf.textNotes?.visible === false ? 0.12 : 1;
     for (const note of data.text_notes) {
       ctx.fillStyle = selectedIds.has(note.uuid) ? C.selection : C.sheetText;
       ctx.font = `${note.font_size}px Roboto`;
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
+      const noteText = substituteSpecialStrings(note.text, data);
       if (note.rotation === 90 || note.rotation === 270) {
         ctx.save();
         ctx.translate(note.position.x, note.position.y);
         ctx.rotate(-Math.PI / 2);
-        // Handle multiline
-        const lines = note.text.split("\n");
+        const lines = noteText.split("\n");
         lines.forEach((line, i) => {
           ctx.fillText(line, 0, i * note.font_size * 1.3);
         });
         ctx.restore();
       } else {
-        const lines = note.text.split("\n");
+        const lines = noteText.split("\n");
         lines.forEach((line, i) => {
           ctx.fillText(line, note.position.x, note.position.y + i * note.font_size * 1.3);
         });
@@ -955,6 +1004,42 @@ export function SchematicRenderer() {
       ctx.stroke();
     }
 
+    // --- Drawing tool ghost previews ---
+    const curEdit = useSchematicStore.getState().editMode;
+    const cur = placeCursorRef.current;
+    if (drawStart.current && (curEdit === "drawLine" || curEdit === "drawRect" || curEdit === "drawCircle")) {
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.1;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.globalAlpha = 0.6;
+      const ds = drawStart.current;
+      if (curEdit === "drawLine") {
+        ctx.beginPath(); ctx.moveTo(ds.x, ds.y); ctx.lineTo(cur.x, cur.y); ctx.stroke();
+      } else if (curEdit === "drawRect") {
+        ctx.strokeRect(Math.min(ds.x, cur.x), Math.min(ds.y, cur.y), Math.abs(cur.x - ds.x), Math.abs(cur.y - ds.y));
+      } else if (curEdit === "drawCircle") {
+        const radius = Math.hypot(cur.x - ds.x, cur.y - ds.y);
+        ctx.beginPath(); ctx.arc(ds.x, ds.y, radius, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    if (curEdit === "drawPolyline" && polyPoints.current.length > 0) {
+      ctx.strokeStyle = "#80deea";
+      ctx.lineWidth = 0.1;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(polyPoints.current[0].x, polyPoints.current[0].y);
+      for (let i = 1; i < polyPoints.current.length; i++) {
+        ctx.lineTo(polyPoints.current[i].x, polyPoints.current[i].y);
+      }
+      ctx.lineTo(cur.x, cur.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+
     // --- ERC markers ---
     const ercMarkers = useEditorStore.getState().ercMarkers;
     const showErc = useEditorStore.getState().showErcMarkers;
@@ -1065,9 +1150,20 @@ export function SchematicRenderer() {
         else store.finishWire();
         return;
       }
+      // Polyline: finish on right-click
+      if (store.editMode === "drawPolyline" && polyPoints.current.length >= 2) {
+        e.preventDefault();
+        store.addDrawing({ type: "Polyline", uuid: crypto.randomUUID(), points: [...polyPoints.current], width: 0.15, fill: false });
+        polyPoints.current = [];
+        store.setEditMode("select");
+        return;
+      }
       // Any placement mode: cancel and return to select
       if (store.editMode !== "select") {
         e.preventDefault();
+        drawStart.current = null;
+        drawMid.current = null;
+        polyPoints.current = [];
         store.setEditMode("select");
         return;
       }
@@ -1076,7 +1172,7 @@ export function SchematicRenderer() {
         const r = canvasRef.current?.getBoundingClientRect();
         if (!r) return;
         const world = s2w(e.clientX - r.left, e.clientY - r.top);
-        const hit = hitTest(data, world.x, world.y);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
 
         // Right-click on empty space = pan (Altium behavior)
         if (!hit && store.selectedIds.size === 0) {
@@ -1268,6 +1364,41 @@ export function SchematicRenderer() {
         return;
       }
 
+      // Circle: 1st click = center, 2nd click = edge (radius)
+      if (store.editMode === "drawCircle") {
+        const snapped = snapPoint(world);
+        if (!drawStart.current) {
+          drawStart.current = snapped;
+        } else {
+          const radius = Math.hypot(snapped.x - drawStart.current.x, snapped.y - drawStart.current.y);
+          if (radius > 0.1) {
+            store.addDrawing({ type: "Circle", uuid: crypto.randomUUID(), center: drawStart.current, radius, width: 0.15, fill: false });
+          }
+          drawStart.current = null;
+        }
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Polyline: accumulate points; double-click or right-click finishes
+      if (store.editMode === "drawPolyline") {
+        const snapped = snapPoint(world);
+        polyPoints.current.push(snapped);
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Sheet symbol placement
+      if (store.editMode === "placeSheetSymbol") {
+        const snapped = snapPoint(world);
+        store.placeSheetSymbol(snapped, "Sheet", "sheet.kicad_sch");
+        store.setEditMode("select");
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       if (store.editMode === "drawBus") {
         // Bus drawing uses the same wire drawing state machine
@@ -1284,7 +1415,7 @@ export function SchematicRenderer() {
 
       // Alt+Click = select entire net (Altium behavior)
       if (e.altKey) {
-        const hit = hitTest(data, world.x, world.y);
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
         if (hit) {
           const nets = resolveNets(data);
           // Find which net this element belongs to
@@ -1303,7 +1434,7 @@ export function SchematicRenderer() {
       }
 
       // Select mode: hit test
-      const hit = hitTest(data, world.x, world.y);
+      const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
       if (hit) {
         // Wire endpoint drag — special handling for dragging wire vertices
         if (hit.type === "wireEndpoint" && hit.endpoint) {
@@ -1399,6 +1530,26 @@ export function SchematicRenderer() {
         }
       }
     }
+
+    // Auto-pan: when cursor is near edge during active modes
+    const store2 = useSchematicStore.getState();
+    const isActive = store2.wireDrawing.active || store2.editMode !== "select" || selecting.current || moving.current;
+    if (isActive) {
+      const sx = e.clientX - r.left, sy = e.clientY - r.top;
+      const edge = 40; // pixels from edge
+      const speed = 4; // pixels per frame
+      let pdx = 0, pdy = 0;
+      if (sx < edge) pdx = speed * (1 - sx / edge);
+      else if (sx > r.width - edge) pdx = -speed * (1 - (r.width - sx) / edge);
+      if (sy < edge) pdy = speed * (1 - sy / edge);
+      else if (sy > r.height - edge) pdy = -speed * (1 - (r.height - sy) / edge);
+      if (pdx !== 0 || pdy !== 0) {
+        camRef.current.x += pdx;
+        camRef.current.y += pdy;
+        cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(render);
+      }
+    }
   }, [render, s2w, updateStatusBar, data]);
 
   const handleMouseUp = useCallback(() => {
@@ -1425,6 +1576,13 @@ export function SchematicRenderer() {
     const store = useSchematicStore.getState();
     if (store.editMode === "drawWire" && store.wireDrawing.active) {
       store.finishWire();
+      return;
+    }
+    // Double-click finishes polyline
+    if (store.editMode === "drawPolyline" && polyPoints.current.length >= 2) {
+      store.addDrawing({ type: "Polyline", uuid: crypto.randomUUID(), points: [...polyPoints.current], width: 0.15, fill: false });
+      polyPoints.current = [];
+      store.setEditMode("select");
       return;
     }
 
@@ -1840,6 +1998,14 @@ export function SchematicRenderer() {
         <CanvasBtn active={editMode === "drawRect"} label="Rectangle"
           onClick={() => useSchematicStore.getState().setEditMode("drawRect")}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "drawCircle"} label="Circle"
+          onClick={() => useSchematicStore.getState().setEditMode("drawCircle")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+        </CanvasBtn>
+        <CanvasBtn active={editMode === "drawPolyline"} label="Polyline"
+          onClick={() => useSchematicStore.getState().setEditMode("drawPolyline")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l6-10 4 6 6-12"/></svg>
         </CanvasBtn>
         <div className="w-px h-4 bg-border-subtle mx-0.5" />
         {/* Actions */}

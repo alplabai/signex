@@ -18,8 +18,11 @@ pub fn run() {
             library::list_libraries,
             library::search_symbols,
             library::get_symbol,
+            library::save_symbol,
             export::generate_bom,
+            export::generate_bom_configured,
             export::export_netlist,
+            export::export_netlist_xml,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

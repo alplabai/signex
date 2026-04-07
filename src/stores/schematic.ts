@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
 import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -92,6 +92,7 @@ interface SchematicState {
 
   // Drawing object placement
   addDrawing: (drawing: SchDrawing) => void;
+  placeSheetSymbol: (pos: SchPoint, name: string, filename: string) => void;
 
   // Wire/Bus drawing
   startWire: (pos: SchPoint) => void;
@@ -112,6 +113,19 @@ interface SchematicState {
   bringToFront: () => void;
   sendToBack: () => void;
 
+  // Document properties
+  updateDocumentProp: (key: string, value: string) => void;
+
+  // Net classes
+  addNetClass: (name: string) => void;
+  removeNetClass: (name: string) => void;
+  assignNetToClass: (netName: string, className: string) => void;
+  removeNetFromClass: (netName: string, className: string) => void;
+
+  // Symbol field editing
+  updateSymbolField: (uuid: string, key: string, value: string) => void;
+  removeSymbolField: (uuid: string, key: string) => void;
+
   // Batch editing
   updateMultipleSymbolProp: (uuids: string[], key: string, value: string) => void;
   updateMultipleLabelProp: (uuids: string[], key: string, value: string) => void;
@@ -119,6 +133,7 @@ interface SchematicState {
   // Find Similar & Annotation
   findSimilar: () => void;
   annotateAll: () => void;
+  annotateWithOptions: (opts: { order: string; startIndex: number; scope: string }) => void;
   resetDesignators: () => void;
   resetDuplicateDesignators: () => void;
   annotateSelected: () => void;
@@ -224,7 +239,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   loadSchematic: (data) =>
     set({
-      data,
+      data: { ...data, net_classes: data.net_classes || [] },
       dirty: false,
       selectedIds: new Set(),
       undoStack: [],
@@ -645,6 +660,83 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  updateDocumentProp: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    if (key === "paper_size") newData.paper_size = value;
+    else newData.title_block[key] = value;
+    set({ data: newData, dirty: true });
+  },
+
+  addNetClass: (name) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.net_classes.some((nc) => nc.name === name)) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.net_classes.push({ name, nets: [] });
+    set({ data: newData, dirty: true });
+  },
+
+  removeNetClass: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.net_classes = newData.net_classes.filter((nc) => nc.name !== name);
+    set({ data: newData, dirty: true });
+  },
+
+  assignNetToClass: (netName, className) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    // Remove from any existing class
+    for (const nc of newData.net_classes) {
+      nc.nets = nc.nets.filter((n) => n !== netName);
+    }
+    const cls = newData.net_classes.find((nc) => nc.name === className);
+    if (cls) cls.nets.push(netName);
+    set({ data: newData, dirty: true });
+  },
+
+  removeNetFromClass: (netName, className) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const cls = newData.net_classes.find((nc) => nc.name === className);
+    if (cls) cls.nets = cls.nets.filter((n) => n !== netName);
+    set({ data: newData, dirty: true });
+  },
+
+  updateSymbolField: (uuid, key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find((s) => s.uuid === uuid);
+    if (sym) {
+      sym.fields[key] = value;
+      set({ data: newData, dirty: true });
+    }
+  },
+
+  removeSymbolField: (uuid, key) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find((s) => s.uuid === uuid);
+    if (sym) {
+      delete sym.fields[key];
+      set({ data: newData, dirty: true });
+    }
+  },
+
   // Clipboard — copies all element types
   copySelected: () => {
     const { data, selectedIds } = get();
@@ -839,6 +931,22 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     get().pushUndo();
     const newData = cloneData(data);
     newData.drawings.push(drawing);
+    set({ data: newData, dirty: true });
+  },
+
+  placeSheetSymbol: (pos, name, filename) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.child_sheets.push({
+      uuid: crypto.randomUUID(),
+      name,
+      filename,
+      position: pos,
+      size: [25.4, 20.32] as [number, number],
+      pins: [],
+    });
     set({ data: newData, dirty: true });
   },
 
@@ -1136,6 +1244,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       on_board: true,
       exclude_from_sim: false,
       locked: false,
+      fields: {},
     };
 
     // Also add the lib symbol to the document so rendering works
@@ -1294,6 +1403,57 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         while (usedNumbers.has(nextNum)) nextNum++;
         sym.reference = `${prefix}${nextNum}`;
         // Update ref_text if it exists
+        usedNumbers.add(nextNum);
+        nextNum++;
+      }
+    }
+
+    set({ data: newData, dirty: true });
+  },
+
+  annotateWithOptions: ({ order, startIndex, scope }) => {
+    const { data, selectedIds } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+
+    const groups = new Map<string, typeof newData.symbols>();
+    for (const sym of newData.symbols) {
+      if (sym.is_power) continue;
+      const prefix = sym.reference.replace(/[0-9?]+$/, "");
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix)!.push(sym);
+    }
+
+    for (const [prefix, syms] of groups) {
+      const usedNumbers = new Set<number>();
+      for (const sym of syms) {
+        const num = parseInt(sym.reference.replace(/^[A-Z]+/, ""), 10);
+        if (!isNaN(num) && !sym.reference.endsWith("?")) usedNumbers.add(num);
+      }
+
+      const sortFn = (a: { position: SchPoint }, b: { position: SchPoint }) => {
+        switch (order) {
+          case "down-across": { const dy = a.position.y - b.position.y; return Math.abs(dy) > 2 ? dy : a.position.x - b.position.x; }
+          case "up-across": { const dy = b.position.y - a.position.y; return Math.abs(dy) > 2 ? dy : a.position.x - b.position.x; }
+          case "across-down": { const dx = a.position.x - b.position.x; return Math.abs(dx) > 2 ? dx : a.position.y - b.position.y; }
+          case "across-up": { const dx = a.position.x - b.position.x; return Math.abs(dx) > 2 ? dx : b.position.y - a.position.y; }
+          default: return 0;
+        }
+      };
+
+      const toAnnotate = syms.filter((s) => {
+        if (s.locked) return false;
+        if (scope === "selected") return selectedIds.has(s.uuid);
+        if (scope === "unannotated") return s.reference.endsWith("?") || s.reference === prefix;
+        return true; // "all"
+      });
+      toAnnotate.sort(sortFn);
+
+      let nextNum = startIndex;
+      for (const sym of toAnnotate) {
+        while (usedNumbers.has(nextNum)) nextNum++;
+        sym.reference = `${prefix}${nextNum}`;
         usedNumbers.add(nextNum);
         nextNum++;
       }

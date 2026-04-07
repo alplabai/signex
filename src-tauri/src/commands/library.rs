@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::engine::parser::{self, LibSymbol, SymbolMeta};
+use crate::engine::writer;
 
 // In-memory cache for parsed libraries
 type LibraryCache = HashMap<String, Vec<(LibSymbol, SymbolMeta)>>;
@@ -222,6 +223,60 @@ pub async fn get_symbol(library_path: String, symbol_id: String) -> Result<LibSy
             .find(|(_, meta)| meta.symbol_id == symbol_id)
             .map(|(lib, _)| lib)
             .ok_or_else(|| format!("Symbol '{}' not found in library", symbol_id))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn save_symbol(
+    library_path: String,
+    lib_id: String,
+    symbol: LibSymbol,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&library_path);
+
+        // Load existing symbols from the library file (if it exists)
+        let mut symbols: Vec<(String, LibSymbol)> = if path.exists() {
+            let content = std::fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read library: {}", e))?;
+            let parsed = parser::parse_symbol_library(&content)?;
+            parsed.into_iter().map(|(lib, meta)| (meta.symbol_id, lib)).collect()
+        } else {
+            Vec::new()
+        };
+
+        // Replace existing or append
+        let mut found = false;
+        for (id, lib) in symbols.iter_mut() {
+            if *id == lib_id {
+                *lib = symbol.clone();
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            symbols.push((lib_id.clone(), symbol.clone()));
+        }
+
+        // Write back atomically
+        let output = writer::write_symbol_library(&symbols);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("sxsym");
+        let tmp_ext = format!("{}.tmp", ext);
+        let tmp_path = path.with_extension(tmp_ext);
+        std::fs::write(&tmp_path, &output)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        std::fs::rename(&tmp_path, path)
+            .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+        // Invalidate cache
+        {
+            let mut cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            cache.remove(&library_path);
+        }
+
+        Ok(())
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

@@ -38,6 +38,7 @@ pub struct SchematicSheet {
     pub bus_entries: Vec<BusEntry>,
     pub drawings: Vec<SchDrawing>,
     pub no_erc_directives: Vec<NoConnect>, // Reuse NoConnect struct (uuid + position)
+    pub title_block: HashMap<String, String>,
     pub lib_symbols: HashMap<String, LibSymbol>,
 }
 
@@ -114,6 +115,7 @@ pub struct Symbol {
     pub on_board: bool,
     pub exclude_from_sim: bool,
     pub locked: bool,
+    pub fields: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -702,6 +704,21 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 };
             }
 
+            // Parse custom fields (all properties beyond Reference/Value/Footprint/Datasheet)
+            let standard_props = ["Reference", "Value", "Footprint", "Datasheet"];
+            let mut fields = HashMap::new();
+            for child in s.children() {
+                if child.keyword() == Some("property") {
+                    if let Some(key) = child.first_arg() {
+                        if !standard_props.contains(&key) {
+                            if let Some(val) = child.arg(1) {
+                                fields.insert(key.to_string(), val.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
             Symbol {
                 uuid: parse_uuid(s),
                 lib_id,
@@ -722,6 +739,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
                 on_board,
                 exclude_from_sim,
                 locked,
+                fields,
             }
         })
         .collect();
@@ -1075,6 +1093,37 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
         })
         .collect();
 
+    // Parse title block
+    let mut title_block = HashMap::new();
+    if let Some(tb) = root.find("title_block") {
+        if let Some(t) = tb.find("title") {
+            if let Some(v) = t.first_arg() {
+                title_block.insert("title".to_string(), v.to_string());
+            }
+        }
+        if let Some(d) = tb.find("date") {
+            if let Some(v) = d.first_arg() {
+                title_block.insert("date".to_string(), v.to_string());
+            }
+        }
+        if let Some(r) = tb.find("rev") {
+            if let Some(v) = r.first_arg() {
+                title_block.insert("rev".to_string(), v.to_string());
+            }
+        }
+        if let Some(c) = tb.find("company") {
+            if let Some(v) = c.first_arg() {
+                title_block.insert("company".to_string(), v.to_string());
+            }
+        }
+        // Parse comment fields (comment 1 through 9)
+        for comment in tb.find_all("comment") {
+            if let (Some(num), Some(text)) = (comment.first_arg(), comment.arg(1)) {
+                title_block.insert(format!("comment_{}", num), text.to_string());
+            }
+        }
+    }
+
     Ok(SchematicSheet {
         uuid,
         version,
@@ -1093,6 +1142,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, String> {
         bus_entries,
         drawings,
         no_erc_directives,
+        title_block,
         lib_symbols,
     })
 }

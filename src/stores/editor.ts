@@ -8,6 +8,26 @@ export interface ErcMarker {
   uuids: string[];
 }
 
+export interface FilterState {
+  visible: boolean;
+  selectable: boolean;
+}
+
+export type SelectionFilter = Record<string, FilterState>;
+
+const DEFAULT_FILTER: SelectionFilter = {
+  components: { visible: true, selectable: true },
+  wires: { visible: true, selectable: true },
+  buses: { visible: true, selectable: true },
+  labels: { visible: true, selectable: true },
+  powerPorts: { visible: true, selectable: true },
+  junctions: { visible: true, selectable: true },
+  noConnects: { visible: true, selectable: true },
+  textNotes: { visible: true, selectable: true },
+  drawings: { visible: true, selectable: true },
+  sheetSymbols: { visible: true, selectable: true },
+};
+
 interface EditorState {
   mode: EditorMode;
   gridVisible: boolean;
@@ -16,6 +36,10 @@ interface EditorState {
   ercMarkers: ErcMarker[];
   showErcMarkers: boolean;
   autoFocusUuids: string[] | null; // When set, dim everything except these UUIDs
+  selectionFilter: SelectionFilter;
+  autoJunction: boolean;
+  electricalSnapRange: number;
+  ercSeverity: Record<string, "error" | "warning" | "none">;
   statusBar: StatusBarState;
 
   setMode: (mode: EditorMode) => void;
@@ -28,6 +52,11 @@ interface EditorState {
   setErcMarkers: (markers: ErcMarker[]) => void;
   toggleErcMarkers: () => void;
   setAutoFocus: (uuids: string[] | null) => void;
+  setFilterItem: (key: string, field: "visible" | "selectable", value: boolean) => void;
+  resetFilter: () => void;
+  setAutoJunction: (v: boolean) => void;
+  setElectricalSnapRange: (v: number) => void;
+  setErcSeverity: (type: string, severity: "error" | "warning" | "none") => void;
 }
 
 export const useEditorStore = create<EditorState>()((set) => ({
@@ -38,6 +67,16 @@ export const useEditorStore = create<EditorState>()((set) => ({
   ercMarkers: [],
   showErcMarkers: true,
   autoFocusUuids: null,
+  selectionFilter: { ...DEFAULT_FILTER },
+  autoJunction: true,
+  electricalSnapRange: 2.0,
+  ercSeverity: {
+    duplicate_designator: "error",
+    unconnected_pin: "warning",
+    output_conflict: "error",
+    single_pin_net: "warning",
+    no_driver: "warning",
+  },
   statusBar: {
     cursorPosition: { x: 0, y: 0 },
     gridSize: 1.27,
@@ -57,6 +96,18 @@ export const useEditorStore = create<EditorState>()((set) => ({
   setErcMarkers: (markers) => set({ ercMarkers: markers }),
   toggleErcMarkers: () => set((s) => ({ showErcMarkers: !s.showErcMarkers })),
   setAutoFocus: (uuids) => set({ autoFocusUuids: uuids ?? null }),
+  setFilterItem: (key, field, value) =>
+    set((s) => ({
+      selectionFilter: {
+        ...s.selectionFilter,
+        [key]: { ...s.selectionFilter[key], [field]: value },
+      },
+    })),
+  resetFilter: () => set({ selectionFilter: { ...DEFAULT_FILTER } }),
+  setAutoJunction: (v) => set({ autoJunction: v }),
+  setElectricalSnapRange: (v) => set({ electricalSnapRange: v }),
+  setErcSeverity: (type, severity) =>
+    set((s) => ({ ercSeverity: { ...s.ercSeverity, [type]: severity } })),
   setGridSize: (size) =>
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>

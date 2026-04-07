@@ -6,12 +6,16 @@ interface ProjectState {
   openTabs: DocumentTab[];
   activeTabId: string | null;
   recentProjects: string[];
+  activeTemplate: string; // Template name ("Blank", "ISO A4", "ANSI A")
+  netScope: "global" | "flat" | "hierarchical";
 
   setProject: (project: ProjectInfo | null) => void;
   openTab: (tab: DocumentTab) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   addRecentProject: (path: string) => void;
+  setActiveTemplate: (name: string) => void;
+  setNetScope: (scope: "global" | "flat" | "hierarchical") => void;
 }
 
 export const useProjectStore = create<ProjectState>()((set) => ({
@@ -19,6 +23,8 @@ export const useProjectStore = create<ProjectState>()((set) => ({
   openTabs: [],
   activeTabId: null,
   recentProjects: [],
+  activeTemplate: "Blank",
+  netScope: "flat",
 
   setProject: (project) => set({ project }),
 
@@ -48,4 +54,7 @@ export const useProjectStore = create<ProjectState>()((set) => ({
     set((s) => ({
       recentProjects: [path, ...s.recentProjects.filter((p) => p !== path)].slice(0, 10),
     })),
+
+  setActiveTemplate: (name) => set({ activeTemplate: name }),
+  setNetScope: (scope) => set({ netScope: scope }),
 }));
