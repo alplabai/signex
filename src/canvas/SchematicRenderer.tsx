@@ -946,12 +946,13 @@ export function SchematicRenderer() {
           ctx.fillStyle = color;
           ctx.font = `${fs}px Roboto`;
           ctx.textBaseline = "middle";
+          const textYOff = fs * 0.1; // Offset to visually center uppercase text in flag
           if (dir > 0) {
             ctx.textAlign = "left";
-            ctx.fillText(text, lx + arrowW + pad, ly);
+            ctx.fillText(text, lx + arrowW + pad, ly + textYOff);
           } else {
             ctx.textAlign = "right";
-            ctx.fillText(text, lx - arrowW - pad, ly);
+            ctx.fillText(text, lx - arrowW - pad, ly + textYOff);
           }
         } else {
           // Vertical labels (90°, 270°) — draw rotated but text still readable
@@ -3332,15 +3333,18 @@ function getLabelTextWorldPos(label: { position: SchPoint; label_type: string; s
     const pad = fs * 0.3;
     const arrowW = h * 0.5;
     const r = label.rotation;
+    const tw = label.text.replace(/\{slash\}/g, "/").length * fs * 0.6; // Approximate text width
 
     if (r === 0 || r === 180) {
       const connRight = r === 0;
-      const dir = connRight ? 1 : -1;
-      // Text starts after the arrow, with padding
-      const textX = lx + dir * (arrowW + pad);
-      return { x: textX, y: ly };
+      if (connRight) {
+        // Connection on left, text goes right — return left edge of text
+        return { x: lx + arrowW + pad, y: ly };
+      } else {
+        // Connection on right, text goes left — return left edge of text
+        return { x: lx - arrowW - pad - tw, y: ly };
+      }
     }
-    // Vertical: approximate
     return { x: lx, y: ly };
   }
 
