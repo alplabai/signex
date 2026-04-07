@@ -38,6 +38,7 @@ export function ComponentPanel() {
   const [preview, setPreview] = useState<LibSymbol | null>(null);
   const [selectedResult, setSelectedResult] = useState<SymbolSearchResult | null>(null);
   const [showModelsSection, setShowModelsSection] = useState(true);
+  const [detailsHeight, setDetailsHeight] = useState(280);
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -366,18 +367,40 @@ export function ComponentPanel() {
         </div>
       )}
 
-      {/* Details + Models — always at bottom of panel (like Altium) */}
+      {/* Resize handle + Details/Models — always at bottom (like Altium) */}
       {preview && selectedResult && (
-        <div className="overflow-y-auto border-t border-border-subtle shrink-0" style={{ maxHeight: "55%" }}>
-          <ComponentDetailSections
-            preview={preview}
-            selectedResult={selectedResult}
-            onEdit={editSymbol}
-            onDuplicate={duplicateSymbol}
-            onPlace={() => placeComponent(selectedResult)}
-            showModels={showModelsSection}
-          />
-        </div>
+        <>
+          <div
+            className="h-[5px] bg-border-subtle/30 hover:bg-accent/30 active:bg-accent/50 cursor-row-resize shrink-0 flex items-center justify-center"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startY = e.clientY;
+              const startH = detailsHeight;
+              const onMove = (ev: MouseEvent) => {
+                const delta = startY - ev.clientY;
+                setDetailsHeight(Math.max(100, Math.min(600, startH + delta)));
+              };
+              const onUp = () => {
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+              };
+              window.addEventListener("mousemove", onMove);
+              window.addEventListener("mouseup", onUp);
+            }}
+          >
+            <div className="w-8 h-[2px] bg-border-subtle/60 rounded-full" />
+          </div>
+          <div className="overflow-y-auto shrink-0" style={{ height: detailsHeight }}>
+            <ComponentDetailSections
+              preview={preview}
+              selectedResult={selectedResult}
+              onEdit={editSymbol}
+              onDuplicate={duplicateSymbol}
+              onPlace={() => placeComponent(selectedResult)}
+              showModels={showModelsSection}
+            />
+          </div>
+        </>
       )}
     </div>
   );
