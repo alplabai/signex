@@ -12,8 +12,7 @@ import { FilterPanel } from "@/panels/FilterPanel";
 import { ListPanel } from "@/panels/ListPanel";
 import { NavigatorPanel } from "@/panels/NavigatorPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
-// Signal panel available for AI integration (Phase 1 stub)
-// import { SignalPanel } from "@/panels/SignalPanel";
+import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
 import { ExportPdfDialog } from "@/components/ExportPdfDialog";
@@ -184,7 +183,7 @@ function App() {
   const [showParamManager, setShowParamManager] = useState(false);
   const [leftTab, setLeftTab] = useState<"projects" | "components" | "navigator">("projects");
   const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
-  const [bottomTab, setBottomTab] = useState<"messages" | "output-jobs">("messages");
+  const [bottomTab, setBottomTab] = useState<"messages" | "output-jobs" | "signal">("messages");
   const libEditorActive = useLibraryEditorStore((s) => s.active);
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
@@ -248,6 +247,13 @@ function App() {
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault();
         setShowFindSimilar(true);
+      }
+      // Ctrl+Shift+A — Open Signal AI panel
+      if (e.key === "A" && e.ctrlKey && e.shiftKey &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setBottomTab("signal");
+        if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom();
       }
     };
     window.addEventListener("keydown", handler);
@@ -317,12 +323,12 @@ function App() {
               <ResizeHandle direction="vertical" onMouseDown={(e) => bottomResize.onMouseDown(e, bottomPanelHeight)} />
               <div className="bg-bg-secondary shrink-0" style={{ height: bottomPanelHeight }}>
                 <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                  {(["messages", "output-jobs"] as const).map(t => (
+                  {(["messages", "output-jobs", "signal"] as const).map(t => (
                     <button key={t}
                       className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
                         bottomTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
                       onClick={() => setBottomTab(t)}>
-                      {t === "messages" ? "Messages" : "Output Jobs"}
+                      {t === "messages" ? "Messages" : t === "output-jobs" ? "Output Jobs" : "Signal"}
                     </button>
                   ))}
                   <button onClick={toggleBottom}
@@ -333,6 +339,7 @@ function App() {
                 <div className="overflow-y-auto" style={{ height: bottomPanelHeight - 32 }}>
                   {bottomTab === "messages" && <MessagesPanel />}
                   {bottomTab === "output-jobs" && <OutputJobsPanel />}
+                  {bottomTab === "signal" && <SignalPanel />}
                 </div>
               </div>
             </>
