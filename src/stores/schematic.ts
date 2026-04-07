@@ -670,6 +670,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "x": sym.position.x = isNaN(parseFloat(value)) ? sym.position.x : parseFloat(value); break;
       case "y": sym.position.y = isNaN(parseFloat(value)) ? sym.position.y : parseFloat(value); break;
       case "rotation": sym.rotation = (parseInt(value) || 0) % 360; break;
+      case "is_power": sym.is_power = value === "true"; break;
     }
     set({ data: newData, dirty: true });
   },

@@ -3,7 +3,7 @@ import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
-import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect } from "./hitTest";
+import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect, connectionSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
@@ -2039,7 +2039,10 @@ export function SchematicRenderer() {
         // Bottom section
         items.push({ label: "Preferences...", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "," })) });
         if (hasSel) {
-          items.push({ label: "Properties...", shortcut: "F11", action: () => {} });
+          items.push({ label: "Properties...", shortcut: "F11", action: () => {
+            useLayoutStore.getState().setDockActiveTab("right", "properties");
+            if (useLayoutStore.getState().rightCollapsed) useLayoutStore.getState().toggleRight();
+          }});
         }
 
         setCtxMenu({ x: rcp.x, y: rcp.y, items });
@@ -2564,19 +2567,12 @@ export function SchematicRenderer() {
                 <DropdownItem label="Touching Line" onClick={() => { selectionModeRef.current = "touchingLine"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
                 <DropdownItem label="All" onClick={() => { useSchematicStore.getState().selectAll(); setActiveBarMenu(null); }} />
                 <DropdownItem label="Connection" onClick={() => {
-                  // Select all objects on the same net as the current selection
                   const store = useSchematicStore.getState();
                   const data = store.data;
                   if (!data || store.selectedIds.size === 0) { setActiveBarMenu(null); return; }
                   const firstId = [...store.selectedIds][0];
-                  // Find net name from selected label or wire
-                  const label = data.labels.find(l => l.uuid === firstId);
-                  if (label) {
-                    const netName = label.text;
-                    const ids = new Set<string>();
-                    data.labels.filter(l => l.text === netName).forEach(l => ids.add(l.uuid));
-                    store.selectMultiple([...ids]);
-                  }
+                  const uuids = connectionSelect(data, firstId, useEditorStore.getState().selectionFilter);
+                  if (uuids.length > 0) store.selectMultiple(uuids);
                   setActiveBarMenu(null);
                 }} />
                 <DropdownItem label="Toggle Selection" onClick={() => { useSchematicStore.getState().invertSelection(); setActiveBarMenu(null); }} />
@@ -2592,9 +2588,9 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "move" ? null : "move")}
             menu={
               <div className="py-1 min-w-[220px]">
-                <DropdownItem label="Drag" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Move" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Move Selection by X, Y..." onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Drag" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Move" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Move Selection by X, Y..." onClick={() => setActiveBarMenu(null)} disabled />
                 <div className="h-px bg-[#3d4054] my-1" />
                 <DropdownItem label="Move To Front" onClick={() => setActiveBarMenu(null)} />
                 <DropdownItem label="Rotate Selection" onClick={() => { useSchematicStore.getState().rotateSelected(); setActiveBarMenu(null); }} />
@@ -2670,9 +2666,9 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "harness" ? null : "harness")}
             menu={
               <div className="py-1 min-w-[180px]">
-                <DropdownItem label="Signal Harness" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Harness Connector" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Harness Entry" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Signal Harness" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Harness Connector" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Harness Entry" onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
 
@@ -2700,9 +2696,9 @@ export function SchematicRenderer() {
               <div className="py-1 min-w-[200px]">
                 <DropdownItem label="Sheet Symbol" onClick={() => { useSchematicStore.getState().setEditMode("placeSheetSymbol"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Sheet Entry" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Device Sheet Symbol" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Device Sheet Symbol" onClick={() => setActiveBarMenu(null)} disabled />
                 <div className="h-px bg-[#3d4054] my-1" />
-                <DropdownItem label="Reuse Block..." onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Reuse Block..." onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
 
@@ -2715,11 +2711,11 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "directives" ? null : "directives")}
             menu={
               <div className="py-1 min-w-[180px]">
-                <DropdownItem label="Parameter Set" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Parameter Set" onClick={() => setActiveBarMenu(null)} disabled />
                 <DropdownItem label="Generic No ERC" onClick={() => { useSchematicStore.getState().setEditMode("placeNoErc"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Differential Pair" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Blanket" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Compile Mask" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Differential Pair" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Blanket" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Compile Mask" onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
 
@@ -2734,8 +2730,8 @@ export function SchematicRenderer() {
               <div className="py-1 min-w-[140px]">
                 <DropdownItem label="Text String" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/></svg>}
                   onClick={() => { useSchematicStore.getState().setEditMode("placeText"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Text Frame" onClick={() => setActiveBarMenu(null)} />
-                <DropdownItem label="Note" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Text Frame" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Note" onClick={() => setActiveBarMenu(null)} disabled />
               </div>
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
@@ -2905,11 +2901,12 @@ function ActiveBarBtn({ icon, label, active, highlighted, onClick, menu, menuOpe
   );
 }
 
-function DropdownItem({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick: () => void }) {
+function DropdownItem({ label, icon, onClick, disabled }: { label: string; icon?: React.ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <button
-      onClick={onClick}
-      className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-text-secondary hover:bg-[#3d4054] hover:text-text-primary transition-colors text-left"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`flex items-center gap-2 w-full px-3 py-1.5 text-[11px] transition-colors text-left ${disabled ? "text-text-secondary/40 cursor-default" : "text-text-secondary hover:bg-[#3d4054] hover:text-text-primary"}`}
     >
       {icon && <span className="w-4 shrink-0 flex justify-center">{icon}</span>}
       {label}

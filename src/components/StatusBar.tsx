@@ -54,6 +54,7 @@ export function StatusBar() {
   const snapEnabled = useEditorStore((s) => s.statusBar.snapEnabled);
   const units = useEditorStore((s) => s.statusBar.units);
   const activeLayer = useEditorStore((s) => s.statusBar.activeLayer);
+  const editorMode = useEditorStore((s) => s.mode);
   const currentMode = useEditorStore((s) => s.statusBar.currentMode);
   const zoom = useEditorStore((s) => s.statusBar.zoom);
   const toggleGrid = useEditorStore((s) => s.toggleGrid);
@@ -94,11 +95,15 @@ export function StatusBar() {
       </StatusItem>
       <Divider />
 
-      {/* Layer */}
-      <StatusItem icon={<Layers size={11} />}>
-        {activeLayer}
-      </StatusItem>
-      <Divider />
+      {/* Layer — only show in PCB mode */}
+      {editorMode === "pcb" && (
+        <>
+          <StatusItem icon={<Layers size={11} />}>
+            {activeLayer}
+          </StatusItem>
+          <Divider />
+        </>
+      )}
 
       {/* Mode */}
       <StatusItem icon={<MousePointer2 size={11} />}>
