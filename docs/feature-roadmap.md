@@ -38,7 +38,7 @@
 - [x] AutoFocus (dim unrelated objects)
 
 ### Phase 4: Advanced
-- [x] Library editor (canvas, toolbar, pin/graphic CRUD, save to .sxsym)
+- [x] Library editor (canvas, toolbar, pin/graphic CRUD, save to .snxsym)
 - [x] PDF export (single/multi-sheet, DPI, color/mono)
 - [x] Print support (Ctrl+P)
 - [x] Output Jobs panel (BOM, Netlist, PDF, PNG)
@@ -101,41 +101,74 @@
 
 ---
 
-## Upcoming
-
 ### Phase 6: PCB Layout
-- [ ] PCB canvas with WebGL2 (GPU-accelerated, GAL abstraction for future WebGPU)
-- [ ] Layer stack manager
-- [ ] Component placement from netlist
-- [ ] Interactive routing (single track, diff pair)
-- [ ] DRC (Design Rule Check)
-- [ ] Copper pour
-- [ ] 3D viewer (Three.js)
-- [ ] Cross-probing (Shift+Ctrl+X between schematic and PCB)
-- [ ] Forward/back annotation
+- [x] KiCad .kicad_pcb parser (footprints, pads, segments, vias, zones, nets)
+- [x] Canvas2D renderer with layer-ordered rendering
+- [x] WebGL2 renderer framework (shaders, instanced rendering, ready for integration)
+- [x] 32 copper layers + full tech layer stack with Altium naming
+- [x] Layer stack panel with visibility toggles and active layer selection
+- [x] Component placement (move, rotate, flip with pad layer mirroring)
+- [x] Push/shove placement (move overlapping components)
+- [x] Netlist import from schematic (forward annotation)
+- [x] Interactive routing (walkaround, push/shove, ignore modes)
+- [x] Corner styles: 45, 90, arc45, arc90, any angle
+- [x] Differential pair routing with gap control
+- [x] Length tuning with meander patterns (trombone/sawtooth/accordion)
+- [x] Multi-track bus routing (parallel traces)
+- [x] BGA fanout with dog-bone escape routing
+- [x] Via placement with auto-net detection
+- [x] Via stitching (grid + fence patterns)
+- [x] Teardrops for pad/via-to-trace transitions
+- [x] DRC engine: 15 check types (clearance, width, via, annular ring, hole-to-hole, short circuit, solder mask sliver, silk-to-mask, trace-to-pad, via-to-pad, via-to-trace, board outline, unrouted, minimum drill)
+- [x] Copper pour with polygon clipping, thermal relief, obstacle subtraction
+- [x] Dead copper removal (remove isolated islands)
+- [x] Ratsnest engine (MST-based, union-find connectivity)
+- [x] Cross-probing (schematic ↔ PCB, bidirectional, with cross-select mode)
+- [x] Back annotation / ECO (detect and apply PCB→schematic changes)
+- [x] 3D viewer (Three.js: board body, pads, traces, vias, component bodies, orbit/zoom/pan)
+- [x] Board cross-section stackup visualization
+- [x] Single layer mode (Shift+S: off/hide/grayscale/monochrome)
+- [x] Board flip view (Ctrl+F)
+- [x] Net color override (F5)
+- [x] PCB toolbar with all edit modes and layer selector
+- [x] PCB context menus (right-click with context-aware actions)
+- [x] PCB properties panel (board, footprint, segment, via details)
+- [x] Gerber RS-274X export (7 layers)
+- [x] Gerber X2 extended attributes (file function, polarity, net/pad attributes)
+- [x] Excellon drill file export
+- [x] ODB++ export (matrix, profile, layers, components, netlists)
+- [x] STEP 3D export (board body + component placements)
+- [x] IPC-2581 simplified XML export
+- [x] PCB PDF export (multi-layer with traces, pads, vias)
+- [x] Pick-and-place CSV export
+- [x] Assembly drawing SVG export
+- [x] Layer sets (7 presets + custom save/load)
+- [x] Placement alignment and distribution tools
+- [x] Footprint swap
+- [x] Design variant management panel
+- [x] Inspector panel (detailed object properties)
+- [x] Snippets panel (save/reuse design fragments)
+
+---
+
+## Upcoming
 
 ### Phase 7: Simulation
 - [ ] SPICE netlist generation
 - [ ] Mixed-signal circuit simulator
 - [ ] Signal integrity analysis
 - [ ] Power analysis
+- [ ] Impedance-controlled routing
 
-### Phase 8: Manufacturing Output
-- [ ] Gerber (RS-274X) export
-- [ ] NC Drill export
-- [ ] ODB++ export
-- [ ] Assembly drawings
-- [ ] Pick-and-place files
-- [ ] IPC-2581
-
-### Phase 9: Collaboration
-- [ ] Comment threads on schematic
-- [ ] Schematic diff/comparison
+### Phase 8: Collaboration
+- [ ] Comment threads on schematic/PCB
+- [ ] Schematic/PCB diff/comparison
 - [ ] Git integration
 - [ ] Real-time multi-user editing
 
-### Phase 10: Ecosystem
-- [ ] Plugin system
+### Phase 9: Ecosystem
+- [ ] Plugin system (Rust + WASM)
 - [ ] Community library marketplace
 - [ ] Design templates
 - [ ] Cloud project storage
+- [ ] Auto-router

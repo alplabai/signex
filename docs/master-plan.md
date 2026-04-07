@@ -31,7 +31,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
   - ai — Signal chat history, tool calls (future)
   - collab — real-time collaboration state (future)
 - **File formats:**
-  - Native: `.alpsch` (schematic), `.alppcb` (PCB), `.alplib` (library), `.alpproj` (project), `.alprules` (design rules), `.alpout` (output jobs)
+  - Native: `.snxsch` (schematic), `.snxpcb` (PCB), `.snxsym` (symbol library), `.snxprj` (project)
   - Import/Export: KiCad (.kicad_sch, .kicad_pcb), Altium (future), Eagle (future)
 - **License:** GPL-3.0 (KiCad derivative core) + proprietary cloud/AI (separate repos)
 
@@ -181,7 +181,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ### Library Management
 - [ ] Library manager panel
-- [ ] Create/edit schematic symbols (.alplib)
+- [x] Create/edit schematic symbols (.snxsym)
 - [ ] Footprint assignment and management
 - [ ] Library search with parametric filtering
 - [ ] Component comparison (side-by-side diff)
@@ -198,7 +198,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 - [ ] Netlist export (KiCad, Altium, generic)
 - [ ] PDF schematic export
 - [ ] Print support with page setup
-- [ ] Output Jobs configuration (.alpout)
+- [x] Output Jobs configuration
 
 ### Properties Panel Enhancements
 - [ ] Batch editing of multiple selected objects
@@ -208,54 +208,64 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ---
 
-## Phase 5: PCB Layout
+## Phase 5: PCB Layout — DONE
 
 **Goal:** Full PCB editor with interactive routing and design rule checking.
 
 ### Canvas & Rendering
-- [ ] wgpu GPU-accelerated canvas (Rust plugin)
-- [ ] Layer stack manager (copper, silkscreen, mask, paste, mechanical)
-- [ ] Component placement from netlist
-- [ ] Ratsnest visualization
-- [ ] Copper zone rendering
+- [x] Canvas2D renderer with layer-ordered rendering
+- [x] WebGL2 renderer framework (shaders, instancing, camera)
+- [x] 32 copper layers + full tech layer stack with Altium naming
+- [x] Layer stack panel with visibility toggles
+- [x] Component placement (move, rotate, flip, push/shove)
+- [x] Ratsnest visualization (MST-based)
+- [x] Copper zone rendering with filled polygons
+- [x] 3D viewer (Three.js: board, pads, traces, vias, components)
+- [x] Board cross-section stackup visualization
+- [x] Single layer mode, board flip, net colors
 
 ### Routing
-- [ ] Interactive routing with clearance enforcement
-- [ ] Differential pair routing
-- [ ] Length tuning (meander)
-- [ ] Fanout generator
-- [ ] Teardrop generation
-- [ ] Push-and-shove routing
+- [x] Interactive routing (walkaround, push/shove, ignore)
+- [x] Corner styles (45, 90, arc45, arc90, any angle)
+- [x] Differential pair routing with gap control
+- [x] Length tuning (meander patterns)
+- [x] Multi-track bus routing
+- [x] BGA fanout (dog-bone escape)
+- [x] Teardrop generation
+- [x] Via stitching (grid + fence)
+- [x] Online DRC during routing
 
 ### Design Rules
-- [ ] DRC (Design Rule Check)
-- [ ] Clearance rules (net class, component, area)
-- [ ] Width rules
-- [ ] Via rules
-- [ ] Plane rules
-- [ ] Manufacturing rules (minimum annular ring, drill sizes)
+- [x] DRC engine: 15 check types
+- [x] Clearance (trace-to-trace, trace-to-pad, via-to-pad, via-to-trace)
+- [x] Width rules, via size rules, drill size rules
+- [x] Annular ring, hole-to-hole, solder mask sliver
+- [x] Short circuit detection, board outline clearance
+- [x] Silk-to-mask clearance
 
 ### Board Features
-- [ ] Board outline editor
-- [ ] Keepout regions
-- [ ] Copper pour (polygon fill with thermal relief)
-- [ ] Drill table
-- [ ] Stackup configuration
+- [x] Board outline editor
+- [x] Copper pour with polygon clipping + thermal relief
+- [x] Polygon boolean operations (clip, subtract, offset)
+- [x] Dead copper removal
+- [x] Keepout zone support
 
-### Cross-Probing
-- [ ] Shift+Ctrl+X toggle cross-select between schematic and PCB
-- [ ] Click component in schematic → highlight in PCB
-- [ ] Forward annotation (schematic changes → PCB update)
-- [ ] Back annotation (PCB changes → schematic update)
-- [ ] ECO (Engineering Change Order) dialog
+### Cross-Probing & Output
+- [x] Bidirectional cross-probing (schematic ↔ PCB)
+- [x] Cross-select mode (auto-sync selections)
+- [x] Forward annotation (schematic → PCB netlist import)
+- [x] Back annotation / ECO (PCB → schematic change detection + apply)
+- [x] Gerber RS-274X + X2, Excellon drill, ODB++, STEP, IPC-2581
+- [x] PCB PDF, pick-and-place, assembly SVG
 
 ---
 
-## Phase 6: 3D Viewer
+## Phase 6: 3D Viewer — DONE (integrated into PCB)
 
-**Goal:** Visualize the assembled PCB in 3D.
-
-- [ ] Three.js 3D canvas
+- [x] Three.js 3D canvas with orbit/zoom/pan
+- [x] Board body from outline polygon
+- [x] Component body placeholders
+- [x] Pads, traces, vias rendered in 3D
 - [ ] STEP model import for components
 - [ ] VRML model import
 - [ ] Board with copper, silkscreen, mask layers
@@ -324,7 +334,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 **Goal:** Establish Signex as an independent platform.
 
-- [ ] Native file format: .alpsch, .alppcb, .alplib, .alpproj, .alprules, .alpout
+- [ ] Native file format: .snxsch, .snxpcb, .snxsym, .snxprj
 - [ ] Import from: KiCad, Altium, Eagle, OrCAD
 - [ ] Export to: KiCad, Gerber, ODB++, IPC-2581
 - [ ] Plugin system (Rust + WASM)
@@ -341,7 +351,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 | Canvas (schematic) | Canvas2D | wgpu, WebGL, SVG | Fastest iteration; wgpu for PCB phase |
 | Parser | Pure Rust S-expr | KiCad C++ FFI, WASM | Simpler build, no C++ toolchain dependency |
 | AI name | Signal | AI Copilot, Assistant | Domain-relevant, clean branding |
-| File extensions | .alpsch/.alppcb | .kicad_sch/.kicad_pcb | Brand identity, format independence |
+| File extensions | .snxsch/.snxpcb/.snxprj | .kicad_sch/.kicad_pcb | Brand identity (Signex = SNX), format independence |
 | State management | Zustand | Redux, Jotai, Context | Minimal boilerplate, great with React 19 |
 | Desktop framework | Tauri v2 | Electron, Qt | Native performance, small binary, Rust backend |
 | Wire cursor | Ref (not Zustand) | Zustand state | Avoids 60Hz state churn during mouse move |
