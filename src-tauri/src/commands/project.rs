@@ -42,7 +42,7 @@ pub async fn pick_and_open_project() -> Result<Option<ProjectInfo>, String> {
     tokio::task::spawn_blocking(|| {
         let file = rfd::FileDialog::new()
             .set_title("Open Project")
-            .add_filter("Signex Project", &["snxproj"])
+            .add_filter("Signex Project", &["snxprj"])
             .add_filter("KiCad Project (Import)", &["kicad_pro"])
             .add_filter("All Files", &["*"])
             .pick_file();
@@ -83,7 +83,7 @@ fn do_open_project(path: &str) -> Result<ProjectInfo, String> {
 
     match ext {
         "kicad_pro" => open_kicad_project(project_path, path),
-        "snxproj" => open_signex_project(project_path, path),
+        "snxprj" => open_signex_project(project_path, path),
         _ => Err(format!("Unsupported project format: .{}", ext)),
     }
 }
@@ -116,7 +116,7 @@ fn open_kicad_project(project_path: &Path, original_path: &str) -> Result<Projec
 
 fn open_signex_project(_project_path: &Path, _original_path: &str) -> Result<ProjectInfo, String> {
     Err(
-        "Native .snxproj format is not yet implemented. Use KiCad project import instead."
+        "Native .snxprj format is not yet implemented. Use KiCad project import instead."
             .to_string(),
     )
 }

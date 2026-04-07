@@ -1,7 +1,7 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
-import { DEFAULT_LAYER_COLORS } from "@/types/pcb";
+import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import { computeRatsnest, getPadPosition } from "@/lib/pcbRatsnest";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import type { PcbPoint, PcbLayerId } from "@/types/pcb";
@@ -38,6 +38,12 @@ export function PcbRenderer() {
   const netColorEnabled = usePcbStore((s) => s.netColorEnabled);
   const netColors = usePcbStore((s) => s.netColors);
   const gridVisible = useEditorStore((s) => s.gridVisible);
+
+  // Memoize ratsnest — only recompute when data changes, not every frame
+  const ratsnestLines = useMemo(() => {
+    if (!data) return [];
+    return computeRatsnest(data);
+  }, [data]);
 
   const s2w = useCallback((sx: number, sy: number): PcbPoint => {
     const cam = camRef.current;
@@ -272,14 +278,13 @@ export function PcbRenderer() {
       ctx.fill();
     }
 
-    // Ratsnest (unrouted connections)
-    const ratsnest = computeRatsnest(data);
-    if (ratsnest.length > 0) {
+    // Ratsnest (unrouted connections) — uses memoized computation
+    if (ratsnestLines.length > 0) {
       ctx.strokeStyle = "#ffff00";
       ctx.lineWidth = 0.05;
       ctx.setLineDash([0.3, 0.2]);
       ctx.globalAlpha = 0.6;
-      for (const line of ratsnest) {
+      for (const line of ratsnestLines) {
         const posA = getPadPosition(data, line.padA);
         const posB = getPadPosition(data, line.padB);
         if (posA && posB) {
@@ -336,13 +341,13 @@ export function PcbRenderer() {
     ctx.fillStyle = "#cdd6f4";
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
-    const unrouted = ratsnest.length;
+    const unrouted = ratsnestLines.length;
     ctx.fillText(
       `Layer: ${activeLayer} | Mode: ${editMode} | Zoom: ${(cam.zoom * 100).toFixed(0)}% | ` +
       `Nets: ${data.nets.length} | Unrouted: ${unrouted} | Segments: ${data.segments.length} | Vias: ${data.vias.length}`,
       10, h - 10
     );
-  }, [data, selectedIds, activeLayer, visibleLayers, editMode, routingActive, routingPoints, gridVisible, s2w, getLayerColor]);
+  }, [data, selectedIds, activeLayer, visibleLayers, editMode, routingActive, routingPoints, gridVisible, s2w, getLayerColor, singleLayerMode, boardFlipped, netColorEnabled, netColors, ratsnestLines]);
 
   // --- Resize ---
   useEffect(() => {
@@ -620,6 +625,49 @@ export function PcbRenderer() {
         style={{ cursor: editMode !== "select" ? "crosshair" : "default" }}
       />
       {ctxMenu && <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />}
+
+      {/* Altium-style floating Active Bar — centered top */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30 z-20">
+        <PcbCanvasBtn active={editMode === "select"} label="Select (Esc)" onClick={() => usePcbStore.getState().setEditMode("select")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+        </PcbCanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        <PcbCanvasBtn active={editMode === "routeTrack"} label="Route Track (X)" onClick={() => usePcbStore.getState().setEditMode("routeTrack")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 20L12 12L20 4"/></svg>
+        </PcbCanvasBtn>
+        <PcbCanvasBtn active={editMode === "placeVia"} label="Place Via" onClick={() => usePcbStore.getState().setEditMode("placeVia")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.5"/></svg>
+        </PcbCanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        <PcbCanvasBtn active={editMode === "drawBoardOutline"} label="Board Outline" onClick={() => usePcbStore.getState().setEditMode("drawBoardOutline")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </PcbCanvasBtn>
+        <PcbCanvasBtn active={editMode === "placeZone"} label="Copper Pour" onClick={() => usePcbStore.getState().setEditMode("placeZone")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v16H4z" fill="currentColor" opacity="0.15"/><rect x="4" y="4" width="16" height="16"/></svg>
+        </PcbCanvasBtn>
+        <PcbCanvasBtn active={editMode === "placeText"} label="Text" onClick={() => usePcbStore.getState().setEditMode("placeText")}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>
+        </PcbCanvasBtn>
+        <div className="w-px h-4 bg-border-subtle mx-0.5" />
+        {/* Layer indicator */}
+        <div className="flex items-center gap-1 px-1.5">
+          <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: DEFAULT_LAYER_COLORS[activeLayer] || "#808080" }} />
+          <span className="text-[9px] text-text-muted/70 font-mono">{LAYER_DISPLAY_NAMES[activeLayer] || activeLayer}</span>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function PcbCanvasBtn({ children, label, active, onClick }: {
+  children: React.ReactNode; label: string; active?: boolean; onClick: () => void;
+}) {
+  return (
+    <button title={label} onClick={onClick}
+      className={`p-1.5 rounded transition-colors ${
+        active ? "bg-accent/25 text-accent" : "text-text-muted/60 hover:bg-bg-hover hover:text-text-primary"
+      }`}>
+      {children}
+    </button>
   );
 }
