@@ -228,6 +228,16 @@ export function hitTest(
       for (let i = 0; i < d.points.length - 1; i++) {
         if (distToSegment(p, d.points[i], d.points[i + 1]) < tolerance * 0.5) return { type: "drawing", uuid: d.uuid };
       }
+    } else if (d.type === "Ellipse") {
+      const nx = (p.x - d.center.x) / d.radiusX, ny = (p.y - d.center.y) / d.radiusY;
+      const nd = Math.sqrt(nx * nx + ny * ny);
+      if (d.fill ? nd <= 1.1 : Math.abs(nd - 1) < tolerance / Math.max(d.radiusX, d.radiusY)) return { type: "drawing", uuid: d.uuid };
+    } else if (d.type === "RoundRect" || d.type === "TextFrame") {
+      const rx = Math.min(d.start.x, d.end.x), ry = Math.min(d.start.y, d.end.y);
+      const rw = Math.abs(d.end.x - d.start.x), rh = Math.abs(d.end.y - d.start.y);
+      if (p.x >= rx - tolerance && p.x <= rx + rw + tolerance && p.y >= ry - tolerance && p.y <= ry + rh + tolerance) {
+        return { type: "drawing", uuid: d.uuid };
+      }
     }
   }
 

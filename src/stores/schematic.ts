@@ -73,6 +73,13 @@ interface SchematicState {
   // Clipboard
   copySelected: () => void;
   pasteClipboard: (offset: SchPoint) => void;
+  smartPaste: (offset: SchPoint) => void;
+  pasteArray: (offset: SchPoint, rows: number, cols: number, spacingX: number, spacingY: number) => void;
+
+  // Selection memory (Ctrl+1-8 store, Alt+1-8 recall)
+  selectionMemory: Map<number, Set<string>>;
+  storeSelection: (slot: number) => void;
+  recallSelection: (slot: number) => void;
   clipboard: {
     symbols: SchSymbol[]; wires: SchWire[]; labels: SchLabel[];
     junctions: SchJunction[]; noConnects: SchNoConnect[]; textNotes: TextNote[];
@@ -118,6 +125,16 @@ interface SchematicState {
 
   // Document properties
   updateDocumentProp: (key: string, value: string) => void;
+
+  // Design variants
+  addVariant: (name: string) => void;
+  removeVariant: (name: string) => void;
+  setVariantComponent: (variantName: string, uuid: string, fitted: boolean, altValue?: string, altFootprint?: string) => void;
+
+  // Document parameters
+  addDocumentParameter: (key: string, value: string) => void;
+  removeDocumentParameter: (key: string) => void;
+  updateDocumentParameter: (key: string, value: string) => void;
 
   // Net classes
   addNetClass: (name: string) => void;
@@ -236,13 +253,14 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode },
   placingSymbol: null,
   clipboard: null,
+  selectionMemory: new Map(),
   selectedIds: new Set<string>(),
   undoStack: [],
   redoStack: [],
 
   loadSchematic: (data) =>
     set({
-      data: { ...data, net_classes: data.net_classes || [] },
+      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [] },
       dirty: false,
       selectedIds: new Set(),
       undoStack: [],
@@ -673,6 +691,64 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  addVariant: (name) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.variants.some((v) => v.name === name)) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.variants.push({ name, description: "", components: {} });
+    set({ data: nd, dirty: true });
+  },
+
+  removeVariant: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.variants = nd.variants.filter((v) => v.name !== name);
+    set({ data: nd, dirty: true });
+  },
+
+  setVariantComponent: (variantName, uuid, fitted, altValue, altFootprint) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const v = nd.variants.find((vr) => vr.name === variantName);
+    if (v) v.components[uuid] = { fitted, altValue, altFootprint };
+    set({ data: nd, dirty: true });
+  },
+
+  addDocumentParameter: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.document_parameters = nd.document_parameters.filter((p) => p.key !== key);
+    nd.document_parameters.push({ key, value, scope: "document" });
+    set({ data: nd, dirty: true });
+  },
+
+  removeDocumentParameter: (key) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.document_parameters = nd.document_parameters.filter((p) => p.key !== key);
+    set({ data: nd, dirty: true });
+  },
+
+  updateDocumentParameter: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const p = nd.document_parameters.find((dp) => dp.key === key);
+    if (p) p.value = value;
+    set({ data: nd, dirty: true });
+  },
+
   addNetClass: (name) => {
     const { data } = get();
     if (!data) return;
@@ -816,6 +892,98 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     }
 
     set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  // Smart Paste: convert labels ↔ ports, net labels ↔ global labels
+  smartPaste: (offset) => {
+    const { data, clipboard } = get();
+    if (!data || !clipboard) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+    const ox = offset.x, oy = offset.y;
+
+    // Convert labels to ports and vice versa
+    for (const l of clipboard.labels) {
+      const n = structuredClone(l);
+      n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      // Toggle: Net → Global, Global → Net, Hierarchical → Port (skip)
+      if (n.label_type === "Net") n.label_type = "Global";
+      else if (n.label_type === "Global") n.label_type = "Net";
+      newData.labels.push(n);
+      newIds.push(n.uuid);
+    }
+    // Copy everything else as-is
+    for (const sym of clipboard.symbols) {
+      const n = structuredClone(sym); n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
+      n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+      n.val_text.position.x += ox; n.val_text.position.y += oy;
+      newData.symbols.push(n); newIds.push(n.uuid);
+    }
+    for (const w of clipboard.wires) {
+      const n = structuredClone(w); n.uuid = generateUuid();
+      n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+      newData.wires.push(n); newIds.push(n.uuid);
+    }
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  // Paste Array: paste clipboard in a grid pattern
+  pasteArray: (offset, rows, cols, spacingX, spacingY) => {
+    const { data, clipboard } = get();
+    if (!data || !clipboard) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const ox = offset.x + c * spacingX;
+        const oy = offset.y + r * spacingY;
+        for (const sym of clipboard.symbols) {
+          const n = structuredClone(sym); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+          n.val_text.position.x += ox; n.val_text.position.y += oy;
+          const prefix = n.reference.replace(/[0-9?]+$/, "");
+          n.reference = `${prefix}?`;
+          newData.symbols.push(n); newIds.push(n.uuid);
+        }
+        for (const w of clipboard.wires) {
+          const n = structuredClone(w); n.uuid = generateUuid();
+          n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+          newData.wires.push(n); newIds.push(n.uuid);
+        }
+        for (const l of clipboard.labels) {
+          const n = structuredClone(l); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          newData.labels.push(n); newIds.push(n.uuid);
+        }
+        for (const j of clipboard.junctions) {
+          const n = structuredClone(j); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          newData.junctions.push(n); newIds.push(n.uuid);
+        }
+      }
+    }
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  storeSelection: (slot) => {
+    const { selectedIds, selectionMemory } = get();
+    const newMem = new Map(selectionMemory);
+    newMem.set(slot, new Set(selectedIds));
+    set({ selectionMemory: newMem });
+  },
+
+  recallSelection: (slot) => {
+    const { selectionMemory } = get();
+    const stored = selectionMemory.get(slot);
+    if (stored) set({ selectedIds: new Set(stored) });
   },
 
   // Net label placement

@@ -287,6 +287,7 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
         }
       }};
       if (item.label === "Align to Grid") return { ...item, disabled: false, action: () => useSchematicStore.getState().alignSelectionToGrid() };
+      if (item.label === "Smart Paste...") return { ...item, disabled: false, action: () => useSchematicStore.getState().smartPaste({ x: 2.54, y: 2.54 }) };
 
       return item;
     }),

@@ -13,6 +13,7 @@ interface LibraryEditorState {
   symbol: LibSymbol | null;
   selectedItem: LibSelectedItem;
   editMode: LibEditMode;
+  displayMode: "normal" | "alternate"; // DeMorgan toggle
   dirty: boolean;
   undoStack: LibSymbol[];
   redoStack: LibSymbol[];
@@ -44,6 +45,7 @@ interface LibraryEditorState {
 
   // Symbol metadata
   updateSymbolMeta: (updates: Partial<Pick<LibSymbol, "show_pin_numbers" | "show_pin_names" | "pin_name_offset">>) => void;
+  toggleDisplayMode: () => void;
 }
 
 function cloneSymbol(sym: LibSymbol): LibSymbol {
@@ -55,6 +57,7 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
   symbol: null,
   selectedItem: null,
   editMode: "select",
+  displayMode: "normal",
   dirty: false,
   undoStack: [],
   redoStack: [],
@@ -196,5 +199,9 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
     const newSym = cloneSymbol(symbol);
     Object.assign(newSym, updates);
     set({ symbol: newSym, dirty: true });
+  },
+
+  toggleDisplayMode: () => {
+    set((s) => ({ displayMode: s.displayMode === "normal" ? "alternate" : "normal" }));
   },
 }));
