@@ -317,20 +317,6 @@ export function ComponentPanel() {
         </div>
       )}
 
-      {/* Details + Models (below results table, like Altium) */}
-      {preview && selectedResult && (
-        <div className="overflow-y-auto shrink-0" style={{ maxHeight: "50%" }}>
-          <ComponentDetailSections
-            preview={preview}
-            selectedResult={selectedResult}
-            onEdit={editSymbol}
-            onDuplicate={duplicateSymbol}
-            onPlace={() => placeComponent(selectedResult)}
-            showModels={showModelsSection}
-          />
-        </div>
-      )}
-
       {/* No results or library tree (only when not searching with results) */}
       {isSearching && filteredResults.length === 0 && !loading && (
         <div className="flex-1 overflow-y-auto">
@@ -377,6 +363,20 @@ export function ComponentPanel() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Details + Models — always at bottom of panel (like Altium) */}
+      {preview && selectedResult && (
+        <div className="overflow-y-auto border-t border-border-subtle shrink-0" style={{ maxHeight: "55%" }}>
+          <ComponentDetailSections
+            preview={preview}
+            selectedResult={selectedResult}
+            onEdit={editSymbol}
+            onDuplicate={duplicateSymbol}
+            onPlace={() => placeComponent(selectedResult)}
+            showModels={showModelsSection}
+          />
         </div>
       )}
     </div>
