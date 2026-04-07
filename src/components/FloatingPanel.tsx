@@ -73,7 +73,7 @@ export function FloatingPanel({ panelId, x, y, width, height }: FloatingPanelPro
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [panelId, x, y, updatePos]);
+  }, [panelId, x, y, updatePos, dockPanel]);
 
   const Component = PANEL_COMPONENTS[panelId as PanelId];
 
@@ -91,8 +91,11 @@ export function FloatingPanel({ panelId, x, y, width, height }: FloatingPanelPro
           {getTitle(panelId)}
         </span>
         <button
-          onClick={() => dockPanel(panelId, "right")}
-          title="Dock to right panel"
+          onClick={() => {
+            const def = PANEL_DEFS.find(d => d.id === panelId);
+            dockPanel(panelId, def?.defaultDock || "right");
+          }}
+          title="Dock panel"
           className="p-0.5 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors"
         >
           <Minimize2 size={11} />

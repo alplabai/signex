@@ -128,6 +128,9 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
       const target = findTargetDock(e.clientX, e.clientY);
       if (target) {
         movePanel(draggingPanel.panelId, target as "left" | "right" | "bottom");
+      } else {
+        // Dropped outside any dock — float the panel
+        useLayoutStore.getState().floatPanel(draggingPanel.panelId, e.clientX - 100, e.clientY - 15);
       }
       draggingPanel = null;
       globalGhost = null;
