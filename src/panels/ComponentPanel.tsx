@@ -1,10 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus } from "lucide-react";
+import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
+
+/** Collapsible section header matching Altium's panel style */
+function SectionHeader({ title, expanded, onToggle, className }: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      className={cn(
+        "w-full flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-text-secondary",
+        "bg-bg-tertiary/80 border-b border-border-subtle/50 hover:bg-bg-tertiary transition-colors",
+        className
+      )}
+      onClick={onToggle}
+    >
+      <span className="text-[8px] text-text-muted/60">{expanded ? "\u25BC" : "\u25B6"}</span>
+      {title}
+    </button>
+  );
+}
 
 export function ComponentPanel() {
   const [query, setQuery] = useState("");
@@ -143,50 +165,15 @@ export function ComponentPanel() {
         </button>
       </div>
 
-      {/* Preview + Details (Altium-style) */}
+      {/* Preview + Details (Altium-style collapsible sections) */}
       {preview && selectedResult && (
-        <div className="border-b border-border-subtle bg-bg-surface/50">
-          {/* Symbol preview */}
-          <div className="h-[100px]">
-            <SymbolPreviewMini symbol={preview} />
-          </div>
-          {/* Action bar */}
-          <div className="px-2 py-1 flex items-center gap-1 border-t border-border-subtle/50">
-            <div className="text-[10px] text-text-muted truncate flex-1">
-              {selectedResult.symbol_id}
-            </div>
-            <button onClick={editSymbol} title="Edit Symbol"
-              className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
-              <Pencil size={11} />
-            </button>
-            <button onClick={duplicateSymbol} title="Duplicate Symbol"
-              className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
-              <Copy size={11} />
-            </button>
-            <button
-              onClick={() => placeComponent(selectedResult)}
-              className="px-2 py-0.5 bg-accent/20 hover:bg-accent/30 text-accent rounded text-[10px] font-medium transition-colors"
-            >
-              Place
-            </button>
-          </div>
-          {/* Details section (Altium-style) */}
-          <div className="px-2 py-1.5 border-t border-border-subtle/50 text-[10px] space-y-0.5">
-            <div className="text-[11px] font-semibold text-text-secondary mb-1">Details</div>
-            {[
-              { label: "Library Path", value: selectedResult.library },
-              { label: "Library Ref", value: selectedResult.symbol_id },
-              { label: "Description", value: selectedResult.description || "—" },
-              { label: "Prefix", value: selectedResult.reference_prefix || "?" },
-              { label: "Pins", value: String(selectedResult.pin_count) },
-            ].map(row => (
-              <div key={row.label} className="flex gap-2">
-                <span className="text-text-muted/50 w-20 shrink-0">{row.label}</span>
-                <span className="text-text-secondary truncate">{row.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ComponentDetailSections
+          preview={preview}
+          selectedResult={selectedResult}
+          onEdit={editSymbol}
+          onDuplicate={duplicateSymbol}
+          onPlace={() => placeComponent(selectedResult)}
+        />
       )}
 
       {/* Results table with column headers */}
@@ -278,6 +265,147 @@ export function ComponentPanel() {
           )
         )}
       </div>
+    </div>
+  );
+}
+
+/** Altium-style component detail sections with collapsible panels */
+function ComponentDetailSections({
+  preview,
+  selectedResult,
+  onEdit,
+  onDuplicate,
+  onPlace,
+}: {
+  preview: LibSymbol;
+  selectedResult: SymbolSearchResult;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onPlace: () => void;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [showAllDetails, setShowAllDetails] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(true);
+  const [referencesOpen, setReferencesOpen] = useState(false);
+  const [partChoicesOpen, setPartChoicesOpen] = useState(false);
+
+  const coreDetails = [
+    { label: "Library Path", value: selectedResult.library },
+    { label: "Library Ref", value: selectedResult.symbol_id },
+    { label: "Description", value: selectedResult.description || "\u2014" },
+    { label: "Prefix", value: selectedResult.reference_prefix || "?" },
+    { label: "Pins", value: String(selectedResult.pin_count) },
+  ];
+
+  const extraDetails = [
+    { label: "Manufacturer", value: "\u2014" },
+    { label: "Part Number", value: selectedResult.symbol_id },
+    { label: "PartId", value: "1" },
+    { label: "Supplier 1", value: "\u2014" },
+    { label: "Supplier Part No 1", value: "\u2014" },
+  ];
+
+  const visibleDetails = showAllDetails ? [...coreDetails, ...extraDetails] : coreDetails;
+
+  return (
+    <div className="border-b border-border-subtle bg-bg-surface/50">
+      {/* Action bar */}
+      <div className="px-2 py-1 flex items-center gap-1 border-b border-border-subtle/50">
+        <div className="text-[10px] text-text-muted truncate flex-1">
+          {selectedResult.symbol_id}
+        </div>
+        <button onClick={onEdit} title="Edit Symbol"
+          className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
+          <Pencil size={11} />
+        </button>
+        <button onClick={onDuplicate} title="Duplicate Symbol"
+          className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
+          <Copy size={11} />
+        </button>
+        <button
+          onClick={onPlace}
+          className="px-2 py-0.5 bg-accent/20 hover:bg-accent/30 text-accent rounded text-[10px] font-medium transition-colors"
+        >
+          Place
+        </button>
+      </div>
+
+      {/* Details section */}
+      <SectionHeader
+        title={`Details  ${selectedResult.symbol_id}`}
+        expanded={detailsOpen}
+        onToggle={() => setDetailsOpen(!detailsOpen)}
+      />
+      {detailsOpen && (
+        <div className="px-2 py-1.5 text-[10px] space-y-0.5 border-b border-border-subtle/30">
+          {visibleDetails.map(row => (
+            <div key={row.label} className="flex items-center gap-2 group">
+              <span className="text-text-muted/50 w-[90px] shrink-0 truncate">{row.label}</span>
+              <span className="text-text-secondary truncate flex-1" title={row.value}>{row.value}</span>
+              <Star size={9} className="shrink-0 text-text-muted/20 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-yellow-400" />
+            </div>
+          ))}
+          <button
+            onClick={() => setShowAllDetails(!showAllDetails)}
+            className="text-[9px] text-accent/60 hover:text-accent mt-1 flex items-center gap-1 transition-colors"
+          >
+            {showAllDetails ? "Show Less \u25B2" : "Show More \u25BC"}
+          </button>
+        </div>
+      )}
+
+      {/* Models section */}
+      <SectionHeader
+        title="Models"
+        expanded={modelsOpen}
+        onToggle={() => setModelsOpen(!modelsOpen)}
+      />
+      {modelsOpen && (
+        <div className="border-b border-border-subtle/30">
+          {/* Symbol preview */}
+          <div className="h-[100px]">
+            <SymbolPreviewMini symbol={preview} />
+          </div>
+          <div className="px-2 py-1 text-[10px] text-text-muted/60 text-center border-t border-border-subtle/30">
+            {selectedResult.symbol_id}
+          </div>
+          {/* Footprint / 3D preview placeholder */}
+          <div className="h-[80px] mx-2 mb-1.5 rounded bg-[#1e2035] border border-border-subtle/30 flex flex-col items-center justify-center">
+            <span className="text-[10px] text-text-muted/30">3D Preview</span>
+            <span className="text-[8px] text-text-muted/20 mt-0.5">No footprint assigned</span>
+          </div>
+          <div className="px-2 pb-1.5 flex items-center justify-between">
+            <span className="text-[9px] text-text-muted/40 truncate">{selectedResult.symbol_id}</span>
+            <button className="px-1.5 py-0.5 text-[8px] text-text-muted/40 border border-border-subtle/40 rounded hover:text-text-secondary hover:border-border-subtle transition-colors">
+              2D
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* References section */}
+      <SectionHeader
+        title="References"
+        expanded={referencesOpen}
+        onToggle={() => setReferencesOpen(!referencesOpen)}
+      />
+      {referencesOpen && (
+        <div className="px-2 py-2 text-[10px] text-text-muted/40 border-b border-border-subtle/30">
+          No datasheets linked
+        </div>
+      )}
+
+      {/* Part Choices section */}
+      <SectionHeader
+        title="Part Choices"
+        expanded={partChoicesOpen}
+        onToggle={() => setPartChoicesOpen(!partChoicesOpen)}
+      />
+      {partChoicesOpen && (
+        <div className="px-2 py-2 text-[10px] text-text-muted/40 border-b border-border-subtle/30">
+          No part choices configured
+        </div>
+      )}
     </div>
   );
 }
