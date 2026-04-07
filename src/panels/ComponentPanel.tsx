@@ -376,10 +376,9 @@ export function ComponentPanel() {
               e.preventDefault();
               const startY = e.clientY;
               const startH = detailsHeight;
-              const panelEl = e.currentTarget.closest("[class*='flex-col']") as HTMLElement | null;
+              const maxH = window.innerHeight - 200;
               const onMove = (ev: MouseEvent) => {
                 const delta = startY - ev.clientY;
-                const maxH = (panelEl?.clientHeight || 800) - 80;
                 setDetailsHeight(Math.max(60, Math.min(maxH, startH + delta)));
               };
               const onUp = () => {
