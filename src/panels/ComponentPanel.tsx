@@ -505,26 +505,25 @@ function ComponentDetailSections({
           />
           {modelsOpen && (
             <div className="border-b border-border-subtle/30">
-              {/* Symbol preview with light/cream background */}
-              <div className="h-[100px]">
+              {/* Symbol preview — tall, cream background like Altium */}
+              <div className="h-[160px] mx-2 mt-1.5 rounded border border-[#d4cba8]/30 overflow-hidden">
                 <SymbolPreviewMini symbol={preview} />
               </div>
-              <div className="px-2 py-1 text-[10px] text-text-muted/70 text-center border-t border-border-subtle/30 font-medium">
+              <div className="px-2 py-1 text-[10px] text-text-muted/70 font-medium">
                 {selectedResult.symbol_id}
               </div>
-              {/* Footprint / 3D preview placeholder */}
-              <div className="h-[80px] mx-2 mb-1.5 rounded bg-[#1e2035] border border-border-subtle/30 flex flex-col items-center justify-center">
-                <Package size={16} className="text-text-muted/15 mb-1" />
+
+              {/* Footprint / 3D preview — dark background like Altium */}
+              <div className="h-[130px] mx-2 mb-1 rounded bg-[#1a1b2e] border border-border-subtle/30 flex flex-col items-center justify-center relative">
+                <Package size={20} className="text-text-muted/15 mb-1" />
                 <span className="text-[9px] text-text-muted/30">No 3D model available</span>
-                {selectedResult.symbol_id && (
-                  <span className="text-[8px] text-text-muted/20 mt-0.5">{selectedResult.symbol_id}</span>
-                )}
-              </div>
-              <div className="px-2 pb-1.5 flex items-center justify-between">
-                <span className="text-[9px] text-text-muted/40 truncate">{selectedResult.symbol_id}</span>
-                <button className="px-1.5 py-0.5 text-[8px] text-text-muted/40 border border-border-subtle/40 rounded hover:text-text-secondary hover:border-border-subtle transition-colors">
+                {/* 2D toggle button — bottom left like Altium */}
+                <button className="absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[9px] text-text-muted/50 border border-border-subtle/50 rounded bg-bg-surface/50 hover:text-text-secondary hover:border-border-subtle transition-colors">
                   2D
                 </button>
+              </div>
+              <div className="px-2 pb-1.5 text-[10px] text-text-muted/50 font-medium">
+                {selectedResult.symbol_id}
               </div>
             </div>
           )}
