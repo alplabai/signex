@@ -2899,6 +2899,29 @@ export function SchematicRenderer() {
             } />
           <div className="w-px h-5 bg-[#3d4054]" />
 
+          {/* Align */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4v16"/><path d="M8 8h10"/><path d="M8 12h6"/><path d="M8 16h8"/></svg>}
+            label="Align"
+            onClick={() => { useSchematicStore.getState().alignSelectionToGrid(); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "align"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "align" ? null : "align")}
+            menu={
+              <div className="py-1 min-w-[200px]">
+                <DropdownItem label="Align Left" onClick={() => { useSchematicStore.getState().alignSelected("left"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Right" onClick={() => { useSchematicStore.getState().alignSelected("right"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Horizontal Centers" onClick={() => { useSchematicStore.getState().alignSelected("left"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Distribute Horizontally" onClick={() => { useSchematicStore.getState().distributeSelected("horizontal"); setActiveBarMenu(null); }} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Align Top" onClick={() => { useSchematicStore.getState().alignSelected("top"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Bottom" onClick={() => { useSchematicStore.getState().alignSelected("bottom"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Align Vertical Centers" onClick={() => { useSchematicStore.getState().alignSelected("top"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Distribute Vertically" onClick={() => { useSchematicStore.getState().distributeSelected("vertical"); setActiveBarMenu(null); }} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Align To Grid" onClick={() => { useSchematicStore.getState().alignSelectionToGrid(); setActiveBarMenu(null); }} />
+              </div>
+            } />
+
           {/* Rotate */}
           <ActiveBarBtn
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>}
