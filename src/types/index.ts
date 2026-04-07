@@ -119,11 +119,12 @@ export interface SchRectangle {
 }
 
 export type SchDrawing =
-  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number }
-  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean }
-  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean }
-  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number }
-  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean };
+  | { type: "Line"; uuid: string; start: SchPoint; end: SchPoint; width: number; color?: string }
+  | { type: "Rect"; uuid: string; start: SchPoint; end: SchPoint; width: number; fill: boolean; fillColor?: string; color?: string }
+  | { type: "Circle"; uuid: string; center: SchPoint; radius: number; width: number; fill: boolean; fillColor?: string; color?: string }
+  | { type: "Arc"; uuid: string; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; color?: string }
+  | { type: "Polyline"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string }
+  | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string };
 
 export interface SchNoErcDirective {
   uuid: string;
@@ -149,6 +150,8 @@ export interface LibSymbol {
   show_pin_numbers: boolean;
   show_pin_names: boolean;
   pin_name_offset: number;
+  unit_count?: number; // Number of parts (1 = single, 2+ = multi-part like quad gates)
+  units?: LibSymbolUnit[]; // Per-unit graphics/pins for multi-part symbols
 }
 
 export type Graphic =
@@ -167,6 +170,13 @@ export interface SchPin {
   number: string;
   name_visible: boolean;
   number_visible: boolean;
+  hidden?: boolean; // Hidden power pin (still connects electrically)
+}
+
+export interface LibSymbolUnit {
+  id: number; // Unit number (0 = common, 1+ = specific part)
+  graphics: Graphic[];
+  pins: SchPin[];
 }
 
 export interface SchSymbol {
