@@ -25,9 +25,11 @@ export function PropertiesPanel() {
     );
   }
 
+  const placementPaused = useEditorStore((s) => s.placementPaused);
+
   // During placement modes, show placement-specific properties
   if (selectedIds.size === 0 && editMode !== "select") {
-    return <PlacementProps editMode={editMode} />;
+    return <PlacementProps editMode={editMode} paused={placementPaused} />;
   }
 
   if (selectedIds.size === 0) return <DocumentProps />;
@@ -109,7 +111,7 @@ export function PropertiesPanel() {
 // DOCUMENT OPTIONS (Nothing Selected)
 // ═══════════════════════════════════════════════════════════════════
 
-function PlacementProps({ editMode }: { editMode: string }) {
+function PlacementProps({ editMode, paused }: { editMode: string; paused: boolean }) {
   const PLACEMENT_INFO: Record<string, { title: string; fields: { label: string; key: string; default: string }[] }> = {
     drawWire: { title: "Wire", fields: [] },
     drawBus: { title: "Bus", fields: [
@@ -214,9 +216,15 @@ function PlacementProps({ editMode }: { editMode: string }) {
             ))
           )}
         </Section>
-        <div className="text-[9px] text-text-muted/40 px-1">
-          Press <span className="text-accent">Escape</span> to cancel, <span className="text-accent">Tab</span> to edit properties
-        </div>
+        {paused ? (
+          <div className="text-[9px] px-1 py-1 bg-warning/10 border border-warning/30 rounded text-warning">
+            Placement paused — edit properties above, then press <span className="font-bold">Tab</span> to resume
+          </div>
+        ) : (
+          <div className="text-[9px] text-text-muted/40 px-1">
+            Press <span className="text-accent">Tab</span> to pause and edit properties, <span className="text-accent">Escape</span> to cancel
+          </div>
+        )}
       </div>
     </div>
   );

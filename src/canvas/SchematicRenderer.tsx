@@ -1742,6 +1742,12 @@ export function SchematicRenderer() {
         return;
       }
 
+      // If placement is paused (Tab pressed), clicking on canvas resumes
+      if (useEditorStore.getState().placementPaused) {
+        useEditorStore.getState().setPlacementPaused(false);
+        return;
+      }
+
       if (store.editMode === "placeSymbol" && store.placingSymbol) {
         store.placeSymbolAt(world);
         return;
@@ -2438,6 +2444,7 @@ export function SchematicRenderer() {
           break;
         }
         case "Escape":
+          useEditorStore.getState().setPlacementPaused(false);
           if (store.wireDrawing.active) {
             store.cancelWire();
           } else if (store.placingSymbol) {
