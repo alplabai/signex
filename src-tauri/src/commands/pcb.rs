@@ -39,6 +39,14 @@ pub async fn get_pcb(
             return Err(format!("PCB file not found: {}", filename));
         }
 
+        // File size guard
+        let metadata = std::fs::metadata(&pcb_path)
+            .map_err(|e| format!("Cannot stat file: {}", e))?;
+        const MAX_PCB_BYTES: u64 = 256 * 1024 * 1024;
+        if metadata.len() > MAX_PCB_BYTES {
+            return Err(format!("PCB file too large ({} MiB, limit 256 MiB)", metadata.len() / 1_048_576));
+        }
+
         let content = std::fs::read_to_string(&pcb_path)
             .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
 
