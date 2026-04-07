@@ -2429,14 +2429,14 @@ export function SchematicRenderer() {
           render();
           break;
         }
-        case "Tab":
-          // Altium: Tab opens properties panel during placement
-          if (store.editMode !== "select" || store.placingSymbol || store.wireDrawing.active) {
-            e.preventDefault();
-            useLayoutStore.getState().setDockActiveTab("right", "properties");
-            if (useLayoutStore.getState().rightCollapsed) useLayoutStore.getState().toggleRight();
-          }
+        case "Tab": {
+          // Altium: Tab opens properties panel (during placement or with selection)
+          e.preventDefault();
+          const layout = useLayoutStore.getState();
+          layout.setDockActiveTab("right", "properties");
+          if (layout.rightCollapsed) layout.toggleRight();
           break;
+        }
         case "Escape":
           if (store.wireDrawing.active) {
             store.cancelWire();
@@ -2465,14 +2465,14 @@ export function SchematicRenderer() {
           }
           break;
         }
-        case "Tab":
-          // Tab = open properties panel (during any mode with selection or placement)
-          if (store.editMode !== "select" || store.selectedIds.size > 0) {
-            e.preventDefault();
-            const layout = useLayoutStore.getState();
-            if (layout.rightCollapsed) layout.toggleRight();
-          }
+        case "Tab": {
+          // Tab = open properties panel
+          e.preventDefault();
+          const ly = useLayoutStore.getState();
+          ly.setDockActiveTab("right", "properties");
+          if (ly.rightCollapsed) ly.toggleRight();
           break;
+        }
         case "w":
         case "W":
           if (e.ctrlKey) { e.preventDefault(); store.setEditMode("drawWire"); }
