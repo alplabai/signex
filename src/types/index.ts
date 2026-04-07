@@ -198,7 +198,7 @@ export type SchDrawing =
   | { type: "TextFrame"; uuid: string; start: SchPoint; end: SchPoint; text: string; fontSize: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
   | { type: "Ellipse"; uuid: string; center: SchPoint; radiusX: number; radiusY: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
   | { type: "RoundRect"; uuid: string; start: SchPoint; end: SchPoint; cornerRadius: number; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
-  | { type: "Polygon"; uuid: string; points: SchPoint[]; width: number; fillColor?: string; color?: string; lineStyle?: LineStyle }
+  | { type: "Polygon"; uuid: string; points: SchPoint[]; width: number; fill: boolean; fillColor?: string; color?: string; lineStyle?: LineStyle }
   | { type: "Image"; uuid: string; start: SchPoint; end: SchPoint; dataUrl: string; aspectLocked?: boolean };
 
 export interface SchNoErcDirective {
