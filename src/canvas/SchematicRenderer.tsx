@@ -2185,7 +2185,10 @@ export function SchematicRenderer() {
       // Update cursor for drawing tool ghost previews
       const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc", "placeParameterSet", "placeDifferentialPair", "placeBlanket", "placeCompileMask", "placeTextFrame", "placeNote"];
       if (drawModes.includes(store.editMode)) {
-        placeCursorRef.current = snapPoint(world);
+        // Use electrical snap for placement modes that snap to pins/wires
+        const eSnapModes = ["placeLabel", "placePower", "placePort", "placeNoConnect", "placeNoErc"];
+        const eSnap = eSnapModes.includes(store.editMode) && data ? findNearestElectricalPoint(data, world.x, world.y) : null;
+        placeCursorRef.current = eSnap || snapPoint(world);
         cancelAnimationFrame(animRef.current);
         animRef.current = requestAnimationFrame(render);
       }
