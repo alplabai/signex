@@ -15,6 +15,7 @@ export function PropertiesPanel() {
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
   const editMode = useSchematicStore((s) => s.editMode);
+  const placementPaused = useEditorStore((s) => s.placementPaused);
 
   if (!data) {
     return (
@@ -24,8 +25,6 @@ export function PropertiesPanel() {
       </div>
     );
   }
-
-  const placementPaused = useEditorStore((s) => s.placementPaused);
 
   // During placement modes, show placement-specific properties
   if (selectedIds.size === 0 && editMode !== "select") {
