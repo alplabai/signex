@@ -1329,6 +1329,7 @@ pub struct SymbolMeta {
     pub description: String,
     pub keywords: Vec<String>,
     pub datasheet: String,
+    pub footprint: String,
     pub pin_count: usize,
 }
 
@@ -1372,6 +1373,7 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
         let value = sym_node.property("Value").unwrap_or(&id).to_string();
         let description = sym_node.property("Description").unwrap_or("").to_string();
         let datasheet = sym_node.property("Datasheet").unwrap_or("").to_string();
+        let footprint = sym_node.property("Footprint").unwrap_or("").to_string();
         let keywords_str = sym_node.property("ki_keywords").unwrap_or("").to_string();
         let keywords: Vec<String> = keywords_str
             .split_whitespace()
@@ -1388,6 +1390,7 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
             description,
             keywords,
             datasheet,
+            footprint,
             pin_count,
         };
 
