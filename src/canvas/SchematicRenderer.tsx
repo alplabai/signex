@@ -1524,40 +1524,31 @@ export function SchematicRenderer() {
       ctx.globalAlpha = 0.6;
 
       if (editMode2 === "placeLabel") {
-        // Net label preview — flag shape with "NET?" text
+        // Net label preview — simple text with overline (NOT a flag/port shape)
         const labelText = "NET?";
         const fs = 1.27;
-        const h = fs * 1.4;
-        const pad = fs * 0.3;
-        const arrowW = h * 0.5;
         ctx.font = `${fs}px Roboto`;
         const tw = ctx.measureText(labelText).width;
-
-        // Draw connection line stub
-        ctx.strokeStyle = C.labelNet;
-        ctx.lineWidth = 0.1;
-        ctx.beginPath();
-        ctx.moveTo(cur.x, cur.y);
-        ctx.lineTo(cur.x - 1, cur.y);
-        ctx.stroke();
-
-        // Draw flag shape
-        ctx.strokeStyle = C.labelGlobal;
-        ctx.lineWidth = 0.12;
-        ctx.beginPath();
-        ctx.moveTo(cur.x, cur.y);
-        ctx.lineTo(cur.x + arrowW, cur.y - h / 2);
-        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y - h / 2);
-        ctx.lineTo(cur.x + arrowW + tw + pad * 2, cur.y + h / 2);
-        ctx.lineTo(cur.x + arrowW, cur.y + h / 2);
-        ctx.closePath();
-        ctx.stroke();
 
         // Text
         ctx.fillStyle = C.labelNet;
         ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText(labelText, cur.x + arrowW + pad, cur.y);
+        ctx.textBaseline = "bottom";
+        ctx.fillText(labelText, cur.x, cur.y - 0.3);
+
+        // Overline
+        ctx.strokeStyle = C.labelNet;
+        ctx.lineWidth = 0.08;
+        ctx.beginPath();
+        ctx.moveTo(cur.x, cur.y - fs - 0.2);
+        ctx.lineTo(cur.x + tw, cur.y - fs - 0.2);
+        ctx.stroke();
+
+        // Connection point indicator (small dot)
+        ctx.fillStyle = C.labelNet;
+        ctx.beginPath();
+        ctx.arc(cur.x, cur.y, 0.15, 0, Math.PI * 2);
+        ctx.fill();
 
       } else if (editMode2 === "placePower") {
         // Power port preview
