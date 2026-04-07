@@ -3,7 +3,7 @@ import { useEditorStore } from "@/stores/editor";
 import { useSchematicStore, snapPoint } from "@/stores/schematic";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
-import { hitTest, boxSelect } from "./hitTest";
+import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect } from "./hitTest";
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
@@ -119,6 +119,8 @@ export function SchematicRenderer() {
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
+  const selectionFilter = useEditorStore((s) => s.selectionFilter);
+  const setFilterItem = useEditorStore((s) => s.setFilterItem);
 
   // Schematic store
   const data = useSchematicStore((s) => s.data);
@@ -129,6 +131,10 @@ export function SchematicRenderer() {
 
   // Find/Replace state
   const [findOpen, setFindOpen] = useState(false);
+  const [activeBarMenu, setActiveBarMenu] = useState<string | null>(null);
+  const selectionModeRef = useRef<"box" | "lasso" | "insideArea" | "outsideArea" | "touchingRect" | "touchingLine">("box");
+  const lassoPoints = useRef<{ x: number; y: number }[]>([]);
+  const powerPreset = useRef<{ net: string; style: string }>({ net: "VCC", style: "bar" });
   const [findShowReplace, setFindShowReplace] = useState(false);
 
   // Context menu state
@@ -517,6 +523,150 @@ export function SchematicRenderer() {
       const r = label.rotation;
       const lx = label.position.x, ly = label.position.y;
 
+      // ── Altium-style power port symbols ──
+      if (label.label_type === "Power") {
+        const pColor = C.power; // red
+        const lw = 0.15;
+        const stemLen = 2.0;  // connection stem length
+        const symSize = 1.2;  // symbol head size
+
+        // Determine power style from shape or auto-detect from name
+        let style = label.shape || "input";
+        if (style === "input") {
+          // Auto-detect: GND-like names get ground symbol, others get bar
+          const lower = label.text.toLowerCase();
+          if (lower.includes("gnd") || lower.includes("vss") || lower.includes("ground")) {
+            style = "power_ground";
+          } else {
+            style = "bar";
+          }
+        }
+
+        const isGround = style.includes("ground") || style === "earth_ground";
+        // Ground: connection at top, symbol below. Others: connection at bottom, symbol above.
+        const dir = isGround ? 1 : -1; // 1 = symbol below origin, -1 = symbol above
+
+        ctx.save();
+        ctx.translate(lx, ly);
+        const rotRad = -(r * Math.PI) / 180;
+        ctx.rotate(rotRad);
+
+        ctx.strokeStyle = pColor;
+        ctx.fillStyle = pColor;
+        ctx.lineWidth = lw;
+        ctx.lineCap = "round";
+
+        // Draw stem from origin
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, dir * stemLen);
+        ctx.stroke();
+
+        // Symbol head position
+        const sy = dir * stemLen;
+
+        if (style === "bar") {
+          ctx.lineWidth = 0.2;
+          ctx.beginPath();
+          ctx.moveTo(-symSize, sy);
+          ctx.lineTo(symSize, sy);
+          ctx.stroke();
+        } else if (style === "arrow") {
+          ctx.lineWidth = 0.18;
+          ctx.beginPath();
+          ctx.moveTo(0, sy - 0.6);
+          ctx.lineTo(-symSize * 0.5, sy + 0.2);
+          ctx.moveTo(0, sy - 0.6);
+          ctx.lineTo(symSize * 0.5, sy + 0.2);
+          ctx.moveTo(0, sy - 0.6);
+          ctx.lineTo(0, sy);
+          ctx.stroke();
+        } else if (style === "power_ground") {
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.moveTo(-symSize, sy);
+          ctx.lineTo(symSize, sy);
+          ctx.moveTo(-symSize * 0.65, sy + dir * 0.4);
+          ctx.lineTo(symSize * 0.65, sy + dir * 0.4);
+          ctx.moveTo(-symSize * 0.3, sy + dir * 0.8);
+          ctx.lineTo(symSize * 0.3, sy + dir * 0.8);
+          ctx.stroke();
+        } else if (style === "signal_ground") {
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.moveTo(-symSize, sy);
+          ctx.lineTo(symSize, sy);
+          ctx.lineTo(0, sy + dir * symSize);
+          ctx.closePath();
+          ctx.stroke();
+        } else if (style === "earth_ground") {
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.moveTo(-symSize, sy);
+          ctx.lineTo(symSize, sy);
+          ctx.stroke();
+          for (let i = -3; i <= 3; i++) {
+            const sx = i * (symSize / 3);
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx - dir * 0.4, sy + dir * 0.6);
+            ctx.stroke();
+          }
+        } else if (style === "circle") {
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.arc(0, sy + dir * (-symSize * 0.4), symSize * 0.4, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (style === "wave") {
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.arc(-symSize * 0.35, sy, symSize * 0.35, Math.PI, 0);
+          ctx.arc(symSize * 0.35, sy, symSize * 0.35, Math.PI, 0, true);
+          ctx.stroke();
+        } else {
+          ctx.lineWidth = 0.2;
+          ctx.beginPath();
+          ctx.moveTo(-symSize, sy);
+          ctx.lineTo(symSize, sy);
+          ctx.stroke();
+        }
+
+        // Net name text — centered, on the opposite side from the symbol
+        ctx.restore();
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.fillStyle = pColor;
+        ctx.font = `${fs}px Roboto`;
+        ctx.textAlign = "center";
+
+        const norm = ((r % 360) + 360) % 360;
+        if (norm === 0) {
+          if (isGround) {
+            // Ground: text below the ground lines
+            ctx.textBaseline = "top";
+            ctx.fillText(text, 0, stemLen + 1.2);
+          } else {
+            // Bar/arrow: text above the symbol
+            ctx.textBaseline = "bottom";
+            ctx.fillText(text, 0, -(stemLen + 0.4));
+          }
+        } else if (norm === 180) {
+          if (isGround) {
+            ctx.textBaseline = "bottom";
+            ctx.fillText(text, 0, -(stemLen + 1.2));
+          } else {
+            ctx.textBaseline = "top";
+            ctx.fillText(text, 0, stemLen + 0.4);
+          }
+        } else {
+          ctx.textBaseline = isGround ? "top" : "bottom";
+          ctx.fillText(text, 0, isGround ? (stemLen + 1.2) : -(stemLen + 0.4));
+        }
+        ctx.restore();
+
+        continue; // Skip normal label rendering
+      }
+
       // Draw global label shape (flag/arrow)
       if (label.label_type === "Global" && label.shape) {
         ctx.font = `${fs}px Roboto`;
@@ -884,25 +1034,12 @@ export function SchematicRenderer() {
 
       // Helper: draw selection box with dashed outline + filled bg + corner handles
       const drawSelBox = (bx: number, by: number, bw: number, bh: number) => {
-        // Filled translucent background
-        ctx.fillStyle = C.selectionFill;
-        ctx.fillRect(bx, by, bw, bh);
-        // Dashed border
-        ctx.strokeStyle = C.selection;
-        ctx.lineWidth = 0.15;
-        ctx.setLineDash([0.4, 0.25]);
+        // Altium-style: thin green dashed outline, no fill
+        ctx.strokeStyle = "#66bb6a";
+        ctx.lineWidth = 0.08;
+        ctx.setLineDash([0.3, 0.2]);
         ctx.strokeRect(bx, by, bw, bh);
         ctx.setLineDash([]);
-        // Corner handles (green squares like Altium)
-        ctx.fillStyle = C.handleFill;
-        ctx.strokeStyle = C.handleBorder;
-        ctx.lineWidth = 0.08;
-        const corners = [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh],
-                          [bx + bw / 2, by], [bx + bw, by + bh / 2], [bx + bw / 2, by + bh], [bx, by + bh / 2]];
-        for (const [cx, cy] of corners) {
-          ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
-          ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs);
-        }
       };
 
       // Helper: draw endpoint handles for wires/buses
@@ -973,10 +1110,53 @@ export function SchematicRenderer() {
 
       for (const label of data.labels) {
         if (!selectedIds.has(label.uuid)) continue;
-        // Estimate text width based on character count
-        const tw = label.text.length * label.font_size * 0.65;
-        const th = label.font_size * 1.4;
-        drawSelBox(label.position.x - 0.3, label.position.y - th, tw + 0.6, th + 0.3);
+        if (label.label_type === "Power") {
+          // Power port: selection box covers symbol + stem + text
+          const stemLen = 2.0, symSize = 1.2;
+          const fs = label.font_size || 1.27;
+          const style = label.shape || "bar";
+          const isGnd = style.includes("ground") || style === "earth_ground";
+          const textW = label.text.length * fs * 0.55;
+          const halfW = Math.max(symSize, textW / 2) + 0.1;
+
+          if (isGnd) {
+            const top = label.position.y - 0.1;
+            const bottom = label.position.y + stemLen + 1.2 + fs;
+            drawSelBox(label.position.x - halfW, top, halfW * 2, bottom - top);
+          } else {
+            const top = label.position.y - stemLen - 0.3 - fs;
+            const bottom = label.position.y + 0.1;
+            drawSelBox(label.position.x - halfW, top, halfW * 2, bottom - top);
+          }
+        } else if ((label.label_type === "Global" || label.label_type === "Hierarchical") && label.shape) {
+          // Port flag shape: match the rendered flag dimensions
+          const fs = label.font_size || 1.27;
+          ctx.font = `${fs}px Roboto`;
+          const tw = ctx.measureText(label.text).width;
+          const h = fs * 1.4;
+          const pad = fs * 0.3;
+          const arrowW = h * 0.5;
+          const r = label.rotation;
+          const isHoriz = r === 0 || r === 180;
+
+          if (isHoriz) {
+            const connRight = r === 0;
+            const dir = connRight ? 1 : -1;
+            const bodyStart = dir > 0 ? arrowW : -arrowW;
+            const bodyEnd = dir > 0 ? arrowW + tw + pad * 2 : -arrowW - tw - pad * 2;
+            const x1 = label.position.x + Math.min(0, bodyStart, bodyEnd);
+            const x2 = label.position.x + Math.max(0, bodyStart, bodyEnd);
+            drawSelBox(x1, label.position.y - h / 2, x2 - x1, h);
+          } else {
+            const totalW = arrowW + tw + pad * 2;
+            drawSelBox(label.position.x - h / 2, label.position.y - totalW, h, totalW);
+          }
+        } else {
+          // Net label: selection box around text
+          const tw = label.text.length * label.font_size * 0.65;
+          const th = label.font_size * 1.4;
+          drawSelBox(label.position.x - 0.3, label.position.y - th, tw + 0.6, th + 0.3);
+        }
       }
 
       for (const j of data.junctions) {
@@ -1171,20 +1351,38 @@ export function SchematicRenderer() {
 
     // --- Drag-box selection rectangle ---
     if (selecting.current) {
-      const s = selectStart.current;
-      const e = selectEnd.current;
-      const rx = Math.min(s.x, e.x), ry = Math.min(s.y, e.y);
-      const rw = Math.abs(e.x - s.x), rh = Math.abs(e.y - s.y);
-      // Left-to-right = inside selection (solid), right-to-left = crossing (dashed)
-      const crossing = e.x < s.x;
-      ctx.strokeStyle = crossing ? "#4fc3f7" : "#00bfff";
-      ctx.fillStyle = crossing ? "rgba(79,195,247,0.08)" : "rgba(0,191,255,0.08)";
-      ctx.lineWidth = 0.2;
-      if (crossing) ctx.setLineDash([0.5, 0.3]);
-      else ctx.setLineDash([]);
-      ctx.fillRect(rx, ry, rw, rh);
-      ctx.strokeRect(rx, ry, rw, rh);
-      ctx.setLineDash([]);
+      if (selectionModeRef.current === "lasso" && lassoPoints.current.length > 1) {
+        // Lasso: draw freeform polygon
+        ctx.strokeStyle = "#00bfff";
+        ctx.fillStyle = "rgba(0,191,255,0.08)";
+        ctx.lineWidth = 0.2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(lassoPoints.current[0].x, lassoPoints.current[0].y);
+        for (let i = 1; i < lassoPoints.current.length; i++) {
+          ctx.lineTo(lassoPoints.current[i].x, lassoPoints.current[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Box selection (all rect-based modes)
+        const s = selectStart.current;
+        const e = selectEnd.current;
+        const rx = Math.min(s.x, e.x), ry = Math.min(s.y, e.y);
+        const rw = Math.abs(e.x - s.x), rh = Math.abs(e.y - s.y);
+        const mode = selectionModeRef.current;
+        const crossing = mode === "touchingRect" || (mode === "box" && e.x < s.x);
+        const isOutside = mode === "outsideArea";
+        ctx.strokeStyle = isOutside ? "#ff6b6b" : crossing ? "#4fc3f7" : "#00bfff";
+        ctx.fillStyle = isOutside ? "rgba(255,107,107,0.08)" : crossing ? "rgba(79,195,247,0.08)" : "rgba(0,191,255,0.08)";
+        ctx.lineWidth = 0.2;
+        if (crossing || isOutside) ctx.setLineDash([0.5, 0.3]);
+        else ctx.setLineDash([]);
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.setLineDash([]);
+      }
     }
 
     ctx.restore(); // End world-space transform
@@ -1272,83 +1470,19 @@ export function SchematicRenderer() {
         store.setEditMode("select");
         return;
       }
-      // Select mode: context menu on objects, pan on empty space
-      if (data) {
-        const r = canvasRef.current?.getBoundingClientRect();
-        if (!r) return;
-        const world = s2w(e.clientX - r.left, e.clientY - r.top);
-        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
-
-        // Right-click on empty space = pan (Altium behavior)
-        if (!hit && store.selectedIds.size === 0) {
-          dragging.current = true;
-          lastMouse.current = { x: e.clientX, y: e.clientY };
-          e.preventDefault();
-          return;
-        }
-
-        e.preventDefault();
-        // If right-clicked on an unselected object, select it first
-        if (hit && !store.selectedIds.has(hit.uuid)) {
-          store.select(hit.uuid);
-        }
-        const sel = useSchematicStore.getState().selectedIds;
-        const items: ContextMenuItem[] = [];
-        if (sel.size > 0) {
-          items.push({ label: "Cut", shortcut: "Ctrl+X", action: () => { useSchematicStore.getState().copySelected(); useSchematicStore.getState().deleteSelected(); } });
-          items.push({ label: "Copy", shortcut: "Ctrl+C", action: () => useSchematicStore.getState().copySelected() });
-          items.push({ label: "Duplicate", shortcut: "Ctrl+D", action: () => useSchematicStore.getState().duplicateSelected() });
-          items.push({ label: "Delete", shortcut: "Del", action: () => useSchematicStore.getState().deleteSelected() });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Rotate", shortcut: "Space", action: () => useSchematicStore.getState().rotateSelected() });
-          items.push({ label: "Flip Horizontal", shortcut: "X", action: () => useSchematicStore.getState().mirrorSelectedY() });
-          items.push({ label: "Flip Vertical", shortcut: "Y", action: () => useSchematicStore.getState().mirrorSelectedX() });
-          // Break Wire — only when a single wire is selected
-          if (hit && hit.type === "wire" && sel.size === 1) {
-            items.push({ separator: true, label: "", action: () => {} });
-            items.push({ label: "Break Wire", action: () => useSchematicStore.getState().breakWireAt(hit.uuid, snapPoint(world)) });
-          }
-          // Z-ordering
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Align to Grid", shortcut: "Shift+Ctrl+D", action: () => useSchematicStore.getState().alignSelectionToGrid() });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Bring to Front", action: () => useSchematicStore.getState().bringToFront() });
-          items.push({ label: "Send to Back", action: () => useSchematicStore.getState().sendToBack() });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Create Group", action: () => useSchematicStore.getState().createGroup(), disabled: sel.size < 2 });
-          if (sel.size > 1) {
-            items.push({ separator: true, label: "", action: () => {} });
-            items.push({ label: "Align Left", shortcut: "Shift+Ctrl+L", action: () => useSchematicStore.getState().alignSelected("left") });
-            items.push({ label: "Align Right", shortcut: "Shift+Ctrl+R", action: () => useSchematicStore.getState().alignSelected("right") });
-            items.push({ label: "Align Top", shortcut: "Shift+Ctrl+T", action: () => useSchematicStore.getState().alignSelected("top") });
-            items.push({ label: "Align Bottom", shortcut: "Shift+Ctrl+B", action: () => useSchematicStore.getState().alignSelected("bottom") });
-            items.push({ label: "Distribute Horizontally", action: () => useSchematicStore.getState().distributeSelected("horizontal") });
-            items.push({ label: "Distribute Vertically", action: () => useSchematicStore.getState().distributeSelected("vertical") });
-          }
-        } else {
-          items.push({ label: "Paste", shortcut: "Ctrl+V", action: () => useSchematicStore.getState().pasteClipboard({ x: 2.54, y: 2.54 }), disabled: !useSchematicStore.getState().clipboard });
-          items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => useSchematicStore.getState().selectAll() });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Place Wire", shortcut: "W", action: () => useSchematicStore.getState().setEditMode("drawWire") });
-          items.push({ label: "Place Net Label", shortcut: "L", action: () => useSchematicStore.getState().setEditMode("placeLabel") });
-          items.push({ label: "Place Power Port", action: () => useSchematicStore.getState().setEditMode("placePower") });
-          items.push({ label: "Place No Connect", action: () => useSchematicStore.getState().setEditMode("placeNoConnect") });
-          items.push({ label: "Place Bus Entry", action: () => useSchematicStore.getState().setEditMode("placeBusEntry") });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Place Line", action: () => useSchematicStore.getState().setEditMode("drawLine") });
-          items.push({ label: "Place Rectangle", action: () => useSchematicStore.getState().setEditMode("drawRect") });
-          items.push({ label: "Place Circle", action: () => useSchematicStore.getState().setEditMode("drawCircle") });
-          items.push({ label: "Place Polyline", action: () => useSchematicStore.getState().setEditMode("drawPolyline") });
-          items.push({ separator: true, label: "", action: () => {} });
-          items.push({ label: "Fit Document", shortcut: "Home", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" })) });
-        }
-        setCtxMenu({ x: e.clientX, y: e.clientY, items });
-        return;
-      }
-      // Fallback: pan
-      dragging.current = true;
-      lastMouse.current = { x: e.clientX, y: e.clientY };
+      // Select mode: right-click-drag = pan, right-click (no drag) = context menu
+      // Start pan immediately, show menu on mouseup if no drag occurred
       e.preventDefault();
+      dragging.current = true;
+      (dragging as any).totalPanDist = 0;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      const r2 = canvasRef.current?.getBoundingClientRect();
+      const world2 = r2 ? s2w(e.clientX - r2.left, e.clientY - r2.top) : { x: 0, y: 0 };
+      // Store position relative to canvas container for correct menu placement
+      const containerRect = canvasRef.current?.parentElement?.getBoundingClientRect();
+      const menuX = containerRect ? e.clientX - containerRect.left : e.clientX;
+      const menuY = containerRect ? e.clientY - containerRect.top : e.clientY;
+      (dragging as any).rightClickPos = { x: menuX, y: menuY, worldX: world2.x, worldY: world2.y };
       return;
     }
     // Middle button = pan
@@ -1397,7 +1531,7 @@ export function SchematicRenderer() {
         if (newData && newData.labels.length > 0) {
           const newLabel = newData.labels[newData.labels.length - 1];
           store.select(newLabel.uuid);
-          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "NET?", screenX: sp.x, screenY: sp.y - 10 });
+          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "NET?", screenX: sp.x, screenY: sp.y });
         }
         return;
       }
@@ -1406,12 +1540,13 @@ export function SchematicRenderer() {
         const eSnap = findNearestElectricalPoint(data, world.x, world.y);
         const pos = eSnap || world;
         const sp = w2s(pos.x, pos.y);
-        store.placePowerPort(pos, "VCC", "input");
+        const preset = powerPreset.current;
+        store.placePowerPort(pos, preset.net, preset.style);
         const newData = useSchematicStore.getState().data;
         if (newData && newData.labels.length > 0) {
           const newLabel = newData.labels[newData.labels.length - 1];
           store.select(newLabel.uuid);
-          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "VCC", screenX: sp.x, screenY: sp.y - 10 });
+          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: preset.net, screenX: sp.x, screenY: sp.y });
         }
         return;
       }
@@ -1436,7 +1571,7 @@ export function SchematicRenderer() {
         if (newData && newData.labels.length > 0) {
           const newLabel = newData.labels[newData.labels.length - 1];
           store.select(newLabel.uuid);
-          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "PORT?", screenX: sp.x, screenY: sp.y - 10 });
+          setInPlaceEdit({ uuid: newLabel.uuid, field: "text", value: "PORT?", screenX: sp.x, screenY: sp.y });
         }
         return;
       }
@@ -1581,11 +1716,14 @@ export function SchematicRenderer() {
         // Push undo before move
         store.pushUndo();
       } else {
-        // Start drag-box selection — also clear AutoFocus
+        // Start drag-box or lasso selection — also clear AutoFocus
         if (!e.shiftKey) { store.deselectAll(); useEditorStore.getState().setAutoFocus(null); }
         selecting.current = true;
         selectStart.current = { x: world.x, y: world.y };
         selectEnd.current = { x: world.x, y: world.y };
+        if (selectionModeRef.current === "lasso") {
+          lassoPoints.current = [{ x: world.x, y: world.y }];
+        }
       }
     }
   }, [data, s2w, ctxMenu]);
@@ -1600,8 +1738,11 @@ export function SchematicRenderer() {
 
     // Pan
     if (dragging.current) {
-      camRef.current.x += e.clientX - lastMouse.current.x;
-      camRef.current.y += e.clientY - lastMouse.current.y;
+      const dx = e.clientX - lastMouse.current.x;
+      const dy = e.clientY - lastMouse.current.y;
+      camRef.current.x += dx;
+      camRef.current.y += dy;
+      (dragging as any).totalPanDist = ((dragging as any).totalPanDist || 0) + Math.abs(dx) + Math.abs(dy);
       lastMouse.current = { x: e.clientX, y: e.clientY };
       cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(render);
@@ -1643,6 +1784,9 @@ export function SchematicRenderer() {
     // Drag-box selection update
     if (selecting.current) {
       selectEnd.current = { x: world.x, y: world.y };
+      if (selectionModeRef.current === "lasso") {
+        lassoPoints.current.push({ x: world.x, y: world.y });
+      }
       cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(render);
       return;
@@ -1685,19 +1829,158 @@ export function SchematicRenderer() {
   }, [render, s2w, updateStatusBar, data]);
 
   const handleMouseUp = useCallback(() => {
-    // Finalize drag-box selection
+    // Finalize selection
     if (selecting.current && data) {
       selecting.current = false;
       const s = selectStart.current, e = selectEnd.current;
-      // Only if dragged more than a tiny amount (avoid accidental micro-drags)
-      if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
-        const uuids = boxSelect(data, s.x, s.y, e.x, e.y, useEditorStore.getState().selectionFilter);
-        if (uuids.length > 0) {
-          useSchematicStore.getState().selectMultiple(uuids);
+      const filter = useEditorStore.getState().selectionFilter;
+      const mode = selectionModeRef.current;
+      let uuids: string[] = [];
+
+      if (mode === "lasso" && lassoPoints.current.length > 2) {
+        uuids = lassoSelect(data, lassoPoints.current, filter);
+        lassoPoints.current = [];
+      } else if (mode === "outsideArea" && (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5)) {
+        uuids = outsideBoxSelect(data, s.x, s.y, e.x, e.y, filter);
+      } else if (mode === "touchingRect" && (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5)) {
+        // Force crossing mode (R→L behavior)
+        uuids = boxSelect(data, e.x, e.y, s.x, s.y, filter);
+      } else if (mode === "insideArea" && (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5)) {
+        // Force inside mode (L→R behavior)
+        uuids = boxSelect(data, s.x, s.y, e.x, e.y, filter);
+      } else if (mode === "touchingLine") {
+        if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
+          uuids = lineSelect(data, s, e, 1.0, filter);
         }
+      } else if (Math.abs(e.x - s.x) > 0.5 || Math.abs(e.y - s.y) > 0.5) {
+        // Default box mode
+        uuids = boxSelect(data, s.x, s.y, e.x, e.y, filter);
+      }
+
+      if (uuids.length > 0) {
+        useSchematicStore.getState().selectMultiple(uuids);
       }
       cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(render);
+    }
+    // Right-click release without drag = show Altium-style context menu
+    if (dragging.current && (dragging as any).rightClickPos) {
+      const rcp = (dragging as any).rightClickPos;
+      const movedDist = (dragging as any).totalPanDist || 0;
+      if (movedDist < 5 && data) {
+        const world = { x: rcp.worldX, y: rcp.worldY };
+        const hit = hitTest(data, world.x, world.y, 2.0, useEditorStore.getState().selectionFilter);
+        const store = useSchematicStore.getState();
+
+        // If right-clicked on an unselected object, select it
+        if (hit && !store.selectedIds.has(hit.uuid)) {
+          store.select(hit.uuid);
+        }
+
+        const s = useSchematicStore.getState;
+        const sel = s().selectedIds;
+        const sep: ContextMenuItem = { separator: true, label: "", action: () => {} };
+        const items: ContextMenuItem[] = [];
+        const hasSel = sel.size > 0;
+
+        // Top section: Find
+        items.push({ label: "Find Similar Objects...", shortcut: "Shift+F", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "F", shiftKey: true })) });
+        items.push({ label: "Find Text...", shortcut: "Ctrl+F", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true })) });
+        items.push({ label: "Clear Filter", shortcut: "Shift+C", action: () => useEditorStore.getState().resetFilter() });
+        items.push(sep);
+
+        // Place submenu
+        items.push({ label: "Place", action: () => {}, children: [
+          { label: "Wire", shortcut: "Ctrl+W", action: () => s().setEditMode("drawWire") },
+          { label: "Bus", action: () => s().setEditMode("drawBus") },
+          { label: "Bus Entry", action: () => s().setEditMode("placeBusEntry") },
+          { label: "Net Label", action: () => s().setEditMode("placeLabel") },
+          { label: "Power Port", action: () => s().setEditMode("placePower") },
+          { label: "Port", action: () => s().setEditMode("placePort") },
+          { label: "No Connect", action: () => s().setEditMode("placeNoConnect") },
+          sep,
+          { label: "Part...", shortcut: "P", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" })) },
+          { label: "Sheet Symbol", action: () => s().setEditMode("placeSheetSymbol") },
+          { label: "Sheet Entry", action: () => {} },
+          sep,
+          { label: "Text String", action: () => s().setEditMode("placeText") },
+          { label: "Text Frame", action: () => {} },
+          { label: "Note", action: () => {} },
+          sep,
+          { label: "Drawing Tools", action: () => {}, children: [
+            { label: "Line", action: () => s().setEditMode("drawLine") },
+            { label: "Rectangle", action: () => s().setEditMode("drawRect") },
+            { label: "Circle", action: () => s().setEditMode("drawCircle") },
+            { label: "Polyline", action: () => s().setEditMode("drawPolyline") },
+          ]},
+        ]});
+
+        // Part Actions (when component selected)
+        if (hasSel) {
+          items.push({ label: "Part Actions", action: () => {}, children: [
+            { label: "Rotate", shortcut: "Space", action: () => s().rotateSelected() },
+            { label: "Flip Horizontal", shortcut: "X", action: () => s().mirrorSelectedY() },
+            { label: "Flip Vertical", shortcut: "Y", action: () => s().mirrorSelectedX() },
+            sep,
+            { label: "Bring to Front", action: () => s().bringToFront() },
+            { label: "Send to Back", action: () => s().sendToBack() },
+          ]});
+        }
+
+        // Sheet Actions
+        items.push({ label: "Sheet Actions", action: () => {}, children: [
+          { label: "Create Sheet Symbol From Sheet", action: () => {} },
+          { label: "Create Component From Sheet", action: () => {} },
+        ]});
+
+        // References (when selected)
+        if (hasSel) {
+          items.push({ label: "References", action: () => {} });
+        }
+
+        // Align (when multiple selected)
+        if (sel.size > 1) {
+          items.push({ label: "Align", action: () => {}, children: [
+            { label: "Align Left", shortcut: "Shift+Ctrl+L", action: () => s().alignSelected("left") },
+            { label: "Align Right", shortcut: "Shift+Ctrl+R", action: () => s().alignSelected("right") },
+            { label: "Align Top", shortcut: "Shift+Ctrl+T", action: () => s().alignSelected("top") },
+            { label: "Align Bottom", shortcut: "Shift+Ctrl+B", action: () => s().alignSelected("bottom") },
+            sep,
+            { label: "Distribute Horizontally", shortcut: "Shift+Ctrl+H", action: () => s().distributeSelected("horizontal") },
+            { label: "Distribute Vertically", shortcut: "Shift+Ctrl+V", action: () => s().distributeSelected("vertical") },
+            sep,
+            { label: "Align to Grid", shortcut: "Shift+Ctrl+D", action: () => s().alignSelectionToGrid() },
+          ]});
+        }
+
+        // Cross Probe
+        items.push({ label: "Cross Probe", action: () => {} });
+        items.push(sep);
+
+        // Clipboard
+        items.push({ label: "Cut", shortcut: "Ctrl+X", action: () => { s().copySelected(); s().deleteSelected(); }, disabled: !hasSel });
+        items.push({ label: "Copy", shortcut: "Ctrl+C", action: () => s().copySelected(), disabled: !hasSel });
+        items.push({ label: "Paste", shortcut: "Ctrl+V", action: () => s().pasteClipboard(world), disabled: !s().clipboard });
+        if (hasSel) {
+          items.push({ label: "Delete", shortcut: "Del", action: () => s().deleteSelected() });
+        }
+        items.push(sep);
+
+        // Break wire
+        if (hit && hit.type === "wire" && sel.size === 1) {
+          items.push({ label: "Break Wire", action: () => s().breakWireAt(hit.uuid, { x: world.x, y: world.y }) });
+          items.push(sep);
+        }
+
+        // Bottom section
+        items.push({ label: "Preferences...", action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "," })) });
+        if (hasSel) {
+          items.push({ label: "Properties...", shortcut: "F11", action: () => {} });
+        }
+
+        setCtxMenu({ x: rcp.x, y: rcp.y, items });
+      }
+      (dragging as any).rightClickPos = null;
     }
     dragging.current = false;
     moving.current = false;
@@ -1758,7 +2041,7 @@ export function SchematicRenderer() {
         if (Math.hypot(world.x - label.position.x, world.y - label.position.y) < 2.5) {
           store.select(label.uuid);
           const sp = w2s(label.position.x, label.position.y);
-          setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y - 10 });
+          setInPlaceEdit({ uuid: label.uuid, field: "text", value: label.text, screenX: sp.x, screenY: sp.y });
           return;
         }
       }
@@ -1840,13 +2123,13 @@ export function SchematicRenderer() {
           const sym = data.symbols.find(s => s.uuid === selId);
           if (sym) {
             const sp = w2s(sym.position.x, sym.position.y);
-            setInPlaceEdit({ uuid: selId, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y - 20 });
+            setInPlaceEdit({ uuid: selId, field: "reference", value: sym.reference, screenX: sp.x, screenY: sp.y });
             break;
           }
           const lbl = data.labels.find(l => l.uuid === selId);
           if (lbl) {
             const sp = w2s(lbl.position.x, lbl.position.y);
-            setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y - 10 });
+            setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y });
           }
           break;
         }
@@ -2129,12 +2412,13 @@ export function SchematicRenderer() {
           className="absolute z-40 bg-bg-primary border border-accent rounded px-1 py-0 outline-none caret-accent shadow-lg"
           style={{
             left: inPlaceEdit.screenX,
-            top: inPlaceEdit.screenY - camRef.current.zoom * 1.27,
+            top: inPlaceEdit.screenY,
             fontSize: `${Math.max(10, camRef.current.zoom * 1.27)}px`,
             fontFamily: "Roboto, sans-serif",
             minWidth: Math.max(60, inPlaceEdit.value.length * Math.max(7, camRef.current.zoom * 0.8)),
             color: "#e8c66a",
             lineHeight: 1.3,
+            transform: "translateY(-100%)",
           }}
         />
       )}
@@ -2145,76 +2429,224 @@ export function SchematicRenderer() {
       {/* Find/Replace */}
       <FindReplace open={findOpen} onClose={() => setFindOpen(false)} showReplace={findShowReplace} />
 
-      {/* Altium-style Active Bar — centered top */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-bg-surface/90 backdrop-blur-sm border border-border-subtle rounded-lg px-1.5 py-1 shadow-lg shadow-black/30">
-        <CanvasBtn active={editMode === "select"} label="Select (Esc)"
-          onClick={() => useSchematicStore.getState().setEditMode("select")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
-        </CanvasBtn>
-        <div className="w-px h-4 bg-border-subtle mx-0.5" />
-        {/* Wiring */}
-        <CanvasBtn active={editMode === "drawWire"} label="Wire (W)"
-          onClick={() => useSchematicStore.getState().setEditMode("drawWire")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "drawBus"} label="Bus (B)"
-          onClick={() => useSchematicStore.getState().setEditMode("drawBus")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "placeLabel"} label="Net Label (L)"
-          onClick={() => useSchematicStore.getState().setEditMode("placeLabel")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "placePower"} label="Power Port"
-          onClick={() => useSchematicStore.getState().setEditMode("placePower")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v10"/><path d="M5 12h14"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "placeNoConnect"} label="No Connect"
-          onClick={() => useSchematicStore.getState().setEditMode("placeNoConnect")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
-        </CanvasBtn>
-        <div className="w-px h-4 bg-border-subtle mx-0.5" />
-        {/* Placement */}
-        <CanvasBtn active={editMode === "placeSymbol"} label="Component (P)"
-          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" }))}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "placeText"} label="Text (T)"
-          onClick={() => useSchematicStore.getState().setEditMode("placeText")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>
-        </CanvasBtn>
-        <div className="w-px h-4 bg-border-subtle mx-0.5" />
-        {/* Drawing */}
-        <CanvasBtn active={editMode === "drawLine"} label="Line"
-          onClick={() => useSchematicStore.getState().setEditMode("drawLine")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "drawRect"} label="Rectangle"
-          onClick={() => useSchematicStore.getState().setEditMode("drawRect")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "drawCircle"} label="Circle"
-          onClick={() => useSchematicStore.getState().setEditMode("drawCircle")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
-        </CanvasBtn>
-        <CanvasBtn active={editMode === "drawPolyline"} label="Polyline"
-          onClick={() => useSchematicStore.getState().setEditMode("drawPolyline")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l6-10 4 6 6-12"/></svg>
-        </CanvasBtn>
-        <div className="w-px h-4 bg-border-subtle mx-0.5" />
-        {/* Actions */}
-        <CanvasBtn label="Rotate (Space)" onClick={() => {
-          const s = useSchematicStore.getState();
-          if (s.placingSymbol) s.rotatePlacement(); else s.rotateSelected();
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>
-        </CanvasBtn>
-        <CanvasBtn label="Delete (Del)" onClick={() => useSchematicStore.getState().deleteSelected()}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        </CanvasBtn>
-        <CanvasBtn label="Fit View (Home)" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }))}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
-        </CanvasBtn>
+      {/* ═══ Altium-style Active Bar ═══ */}
+      {activeBarMenu && <div className="absolute inset-0 z-30" onClick={() => setActiveBarMenu(null)} />}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30">
+        <div className="flex items-center bg-[#2a2d3d] border border-[#3d4054] rounded shadow-xl shadow-black/50 px-0.5 py-0.5 gap-px">
+
+          {/* Filter button (funnel) */}
+          <ActiveBarBtn icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L14 14v5a1 1 0 01-.55.9l-4 2A1 1 0 018 21v-7L1.2 4.6A1 1 0 012 3h1z"/></svg>}
+            label="Selection Filter" highlighted
+            onClick={() => setActiveBarMenu(activeBarMenu === "filter" ? null : "filter")}
+            menuOpen={activeBarMenu === "filter"}
+            menu={
+              <div className="p-2 min-w-[280px]">
+                <button onClick={() => {
+                    const keys = ["components","wires","buses","sheetSymbols","sheetEntries","labels","parameters","powerPorts","junctions","textNotes","drawings","noConnects"];
+                    const allOn = keys.every(k => selectionFilter[k]?.selectable !== false);
+                    if (allOn) keys.forEach(k => setFilterItem(k, "selectable", false));
+                    else useEditorStore.getState().resetFilter();
+                  }}
+                    className="px-3 py-1 mb-2 rounded border border-[#3d4054] text-[10px] text-text-secondary hover:bg-accent/15 hover:text-accent transition-colors">
+                    {(() => { const keys = ["components","wires","buses","sheetSymbols","sheetEntries","labels","parameters","powerPorts","junctions","textNotes","drawings","noConnects"];
+                      return keys.every(k => selectionFilter[k]?.selectable !== false) ? "All - Off" : "All - On"; })()}
+                </button>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "Components", key: "components" },
+                    { label: "Wires", key: "wires" },
+                    { label: "Buses", key: "buses" },
+                    { label: "Sheet Symbols", key: "sheetSymbols" },
+                    { label: "Sheet Entries", key: "sheetEntries" },
+                    { label: "Net Labels", key: "labels" },
+                    { label: "Parameters", key: "parameters" },
+                    { label: "Ports", key: "junctions" },
+                    { label: "Power Ports", key: "powerPorts" },
+                    { label: "Texts", key: "textNotes" },
+                    { label: "Drawing Objects", key: "drawings" },
+                    { label: "Other", key: "noConnects" },
+                  ].map((item, i) => {
+                    const on = selectionFilter[item.key]?.selectable !== false;
+                    return (
+                      <button key={`${item.key}-${i}`}
+                        onClick={() => setFilterItem(item.key, "selectable", !on)}
+                        className={`px-2.5 py-1 rounded border text-[10px] font-medium transition-colors ${
+                          on ? "bg-accent/15 text-accent border-accent/40"
+                             : "bg-transparent text-text-muted/40 border-[#3d4054] hover:text-text-muted/60"
+                        }`}>{item.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            } />
+          <div className="w-px h-5 bg-[#3d4054]" />
+
+          {/* Select */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>}
+            label="Select" active={editMode === "select"}
+            onClick={() => { useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "select"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "select" ? null : "select")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                <DropdownItem label="Lasso Select" onClick={() => { selectionModeRef.current = "lasso"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Inside Area" onClick={() => { selectionModeRef.current = "insideArea"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Outside Area" onClick={() => { selectionModeRef.current = "outsideArea"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Touching Rectangle" onClick={() => { selectionModeRef.current = "touchingRect"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Touching Line" onClick={() => { selectionModeRef.current = "touchingLine"; useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="All" onClick={() => { useSchematicStore.getState().selectAll(); setActiveBarMenu(null); }} />
+                <DropdownItem label="Connection" onClick={() => {
+                  // Select all objects on the same net as the current selection
+                  const store = useSchematicStore.getState();
+                  const data = store.data;
+                  if (!data || store.selectedIds.size === 0) { setActiveBarMenu(null); return; }
+                  const firstId = [...store.selectedIds][0];
+                  // Find net name from selected label or wire
+                  const label = data.labels.find(l => l.uuid === firstId);
+                  if (label) {
+                    const netName = label.text;
+                    const ids = new Set<string>();
+                    data.labels.filter(l => l.text === netName).forEach(l => ids.add(l.uuid));
+                    store.selectMultiple([...ids]);
+                  }
+                  setActiveBarMenu(null);
+                }} />
+                <DropdownItem label="Toggle Selection" onClick={() => { useSchematicStore.getState().invertSelection(); setActiveBarMenu(null); }} />
+              </div>
+            } />
+
+          {/* Move/Transform */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l3 3-3 3" /><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>}
+            label="Move"
+            onClick={() => setActiveBarMenu(null)}
+            menuOpen={activeBarMenu === "move"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "move" ? null : "move")}
+            menu={
+              <div className="py-1 min-w-[220px]">
+                <DropdownItem label="Drag" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Move" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Move Selection by X, Y..." onClick={() => setActiveBarMenu(null)} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Move To Front" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Rotate Selection" onClick={() => { useSchematicStore.getState().rotateSelected(); setActiveBarMenu(null); }} />
+                <DropdownItem label="Rotate Selection Clockwise" onClick={() => { useSchematicStore.getState().rotateSelected(); setActiveBarMenu(null); }} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Flip Selected Symbols Along X" onClick={() => { useSchematicStore.getState().mirrorSelectedX(); setActiveBarMenu(null); }} />
+                <DropdownItem label="Flip Selected Symbols Along Y" onClick={() => { useSchematicStore.getState().mirrorSelectedY(); setActiveBarMenu(null); }} />
+              </div>
+            } />
+          <div className="w-px h-5 bg-[#3d4054]" />
+
+          {/* Wiring */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
+            label="Wire" active={editMode === "drawWire" || editMode === "drawBus" || editMode === "placeLabel"}
+            onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "wire"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "wire" ? null : "wire")}
+            menu={
+              <div className="py-1 min-w-[140px]">
+                <DropdownItem label="Wire" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h8v-8"/></svg>}
+                  onClick={() => { useSchematicStore.getState().setEditMode("drawWire"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Bus" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M4 12h16"/></svg>}
+                  onClick={() => { useSchematicStore.getState().setEditMode("drawBus"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Bus Entry" onClick={() => { useSchematicStore.getState().setEditMode("placeBusEntry"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Net Label" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>}
+                  onClick={() => { useSchematicStore.getState().setEditMode("placeLabel"); setActiveBarMenu(null); }} />
+              </div>
+            } />
+
+          {/* Power Port */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 4v10"/><path d="M6 4h12"/></svg>}
+            label="Power Port" active={editMode === "placePower"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placePower"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "power"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "power" ? null : "power")}
+            menu={
+              <div className="py-1 min-w-[200px]">
+                {[
+                  { label: "Place GND power port", style: "power_ground", net: "GND" },
+                  { label: "Place VCC power port", style: "bar", net: "VCC" },
+                  { label: "Place +12 power port", style: "bar", net: "+12V" },
+                  { label: "Place +5 power port", style: "bar", net: "+5V" },
+                  { label: "Place -5 power port", style: "bar", net: "-5V" },
+                  { label: "Place +3.3V power port", style: "bar", net: "+3.3V" },
+                ].map(m => <DropdownItem key={m.label} label={m.label}
+                  onClick={() => { powerPreset.current = { net: m.net, style: m.style }; useSchematicStore.getState().setEditMode("placePower"); setActiveBarMenu(null); }} />)}
+                <div className="h-px bg-[#3d4054] my-1" />
+                {[
+                  { label: "Place Arrow style power port", style: "arrow", net: "VCC" },
+                  { label: "Place Wave style power port", style: "wave", net: "VAC" },
+                  { label: "Place Bar style power port", style: "bar", net: "VCC" },
+                  { label: "Place Circle style power port", style: "circle", net: "VCC" },
+                  { label: "Place Signal Ground power port", style: "signal_ground", net: "GND" },
+                  { label: "Place Earth power port", style: "earth_ground", net: "GND" },
+                ].map(m => <DropdownItem key={m.label} label={m.label}
+                  onClick={() => { powerPreset.current = { net: m.net, style: m.style }; useSchematicStore.getState().setEditMode("placePower"); setActiveBarMenu(null); }} />)}
+              </div>
+            } />
+
+          {/* No Connect */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>}
+            label="No Connect" active={editMode === "placeNoConnect"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placeNoConnect"); setActiveBarMenu(null); }} />
+          <div className="w-px h-5 bg-[#3d4054]" />
+
+          {/* Component */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>}
+            label="Place Component" active={editMode === "placeSymbol"}
+            onClick={() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" })); setActiveBarMenu(null); }} />
+
+          {/* Text */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>}
+            label="Text" active={editMode === "placeText"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placeText"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "text"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "text" ? null : "text")}
+            menu={
+              <div className="py-1 min-w-[140px]">
+                <DropdownItem label="Text String" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/></svg>}
+                  onClick={() => { useSchematicStore.getState().setEditMode("placeText"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Text Frame" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Note" onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
+          <div className="w-px h-5 bg-[#3d4054]" />
+
+          {/* Drawing tools */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20L20 4"/></svg>}
+            label="Line" active={editMode === "drawLine" || editMode === "drawRect" || editMode === "drawCircle" || editMode === "drawPolyline"}
+            onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "draw"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "draw" ? null : "draw")}
+            menu={
+              <div className="py-1 min-w-[130px]">
+                <DropdownItem label="Line" onClick={() => { useSchematicStore.getState().setEditMode("drawLine"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Rectangle" onClick={() => { useSchematicStore.getState().setEditMode("drawRect"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Circle" onClick={() => { useSchematicStore.getState().setEditMode("drawCircle"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Polyline" onClick={() => { useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
+              </div>
+            } />
+
+          {/* Rotate */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>}
+            label="Rotate (Space)"
+            onClick={() => { const s = useSchematicStore.getState(); if (s.placingSymbol) s.rotatePlacement(); else s.rotateSelected(); }} />
+
+          {/* Fit view */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>}
+            label="Fit View (Home)"
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }))} />
+        </div>
       </div>
 
       {/* Info overlay */}
@@ -2229,18 +2661,46 @@ export function SchematicRenderer() {
   );
 }
 
-function CanvasBtn({ children, label, active, onClick }: {
-  children: React.ReactNode; label: string; active?: boolean; onClick: () => void;
+// ── Active Bar multi-function button (left click = action, right click = dropdown) ──
+function ActiveBarBtn({ icon, label, active, highlighted, onClick, menu, menuOpen, onMenuToggle }: {
+  icon: React.ReactNode; label: string; active?: boolean; highlighted?: boolean;
+  onClick: () => void; menu?: React.ReactNode; menuOpen?: boolean; onMenuToggle?: () => void;
 }) {
+  const hasMenu = !!menu;
+  return (
+    <div className="relative">
+      <button
+        title={label}
+        onClick={onClick}
+        onContextMenu={(e) => { e.preventDefault(); if (onMenuToggle) onMenuToggle(); else if (hasMenu) onClick(); }}
+        className={`p-1.5 rounded transition-colors flex items-center gap-0 ${
+          active ? "bg-accent/25 text-accent"
+          : highlighted ? "text-accent hover:bg-accent/15"
+          : "text-text-muted/60 hover:bg-[#3d4054] hover:text-text-primary"
+        }`}
+      >
+        {icon}
+        {hasMenu && (
+          <svg width="6" height="6" viewBox="0 0 6 6" className="ml-px opacity-40"><path d="M1 2l2 2 2-2" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>
+        )}
+      </button>
+      {menuOpen && menu && (
+        <div className="absolute top-full left-0 mt-1 bg-[#2a2d3d] border border-[#3d4054] rounded shadow-xl shadow-black/60 z-50">
+          {menu}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownItem({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick: () => void }) {
   return (
     <button
-      title={label}
       onClick={onClick}
-      className={`p-1.5 rounded transition-colors ${
-        active ? "bg-accent/25 text-accent" : "text-text-muted/60 hover:bg-bg-hover hover:text-text-primary"
-      }`}
+      className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-text-secondary hover:bg-[#3d4054] hover:text-text-primary transition-colors text-left"
     >
-      {children}
+      {icon && <span className="w-4 shrink-0 flex justify-center">{icon}</span>}
+      {label}
     </button>
   );
 }

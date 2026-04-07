@@ -4,15 +4,8 @@ import { MenuBar } from "@/components/MenuBar";
 import { ToolbarStrip } from "@/components/ToolbarStrip";
 import { DocumentTabBar } from "@/components/DocumentTabBar";
 import { StatusBar } from "@/components/StatusBar";
-import { ProjectPanel } from "@/panels/ProjectPanel";
-import { PropertiesPanel } from "@/panels/PropertiesPanel";
-import { MessagesPanel } from "@/panels/MessagesPanel";
-import { ComponentPanel } from "@/panels/ComponentPanel";
-import { FilterPanel } from "@/panels/FilterPanel";
-import { ListPanel } from "@/panels/ListPanel";
-import { NavigatorPanel } from "@/panels/NavigatorPanel";
+import { DockPanel } from "@/components/DockPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
-import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
 import { PcbRenderer } from "@/canvas/PcbRenderer";
@@ -21,13 +14,11 @@ import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
 import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
-import { OutputJobsPanel } from "@/panels/OutputJobsPanel";
 import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { FindSimilarDialog } from "@/components/FindSimilarDialog";
 import { ParameterManager } from "@/components/ParameterManager";
 import { useLayoutStore } from "@/stores/layout";
-import { useEditorStore } from "@/stores/editor";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
@@ -35,9 +26,6 @@ import { useResizable } from "@/hooks/useResizable";
 import { printSchematic } from "@/lib/pdfExport";
 import { cn } from "@/lib/utils";
 import {
-  PanelLeftClose,
-  PanelRightClose,
-  PanelBottomClose,
   FolderOpen,
   Settings,
   MessageSquare,
@@ -184,11 +172,12 @@ function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showFindSimilar, setShowFindSimilar] = useState(false);
   const [showParamManager, setShowParamManager] = useState(false);
-  const [leftTab, setLeftTab] = useState<"projects" | "components" | "navigator">("projects");
-  const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
-  const [bottomTab, setBottomTab] = useState<"messages" | "output-jobs" | "signal">("messages");
+  const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const libEditorActive = useLibraryEditorStore((s) => s.active);
-  const editorMode = useEditorStore((s) => s.mode);
+  const activeTabId = useProjectStore((s) => s.activeTabId);
+  const openTabs = useProjectStore((s) => s.openTabs);
+  const activeTabType = activeTabId ? openTabs.find((t) => t.id === activeTabId)?.type : undefined;
+  const isPcbView = activeTabType === "pcb";
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -242,7 +231,7 @@ function App() {
       // P key (place component) — switch to components tab
       if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
-        setLeftTab("components");
+        useLayoutStore.getState().setDockActiveTab("left", "components");
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
       }
@@ -256,7 +245,7 @@ function App() {
       if (e.key === "A" && e.ctrlKey && e.shiftKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault();
-        setBottomTab("signal");
+        useLayoutStore.getState().setDockActiveTab("bottom", "signal");
         if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom();
       }
     };
@@ -269,11 +258,11 @@ function App() {
       <MenuBar
         onOpenProject={openProjectFlow}
         onSave={saveSchematicFlow}
-        onOpenComponentSearch={() => { setLeftTab("components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
+        onOpenComponentSearch={() => { setDockActiveTab("left", "components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
         onExportPdf={() => setShowPdfExport(true)}
         onExportBom={() => setShowBomConfig(true)}
         onExportNetlist={() => setShowNetlistExport(true)}
-        onOpenOutputJobs={() => { setBottomTab("output-jobs"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onOpenOutputJobs={() => { setDockActiveTab("bottom", "output-jobs"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
         onAnnotate={() => setShowAnnotation(true)}
         onPreferences={() => setShowPreferences(true)}
         onFindSimilar={() => setShowFindSimilar(true)}
@@ -283,7 +272,7 @@ function App() {
           if (data) printSchematic(data);
         }}
       />
-      {libEditorActive ? <LibraryEditorToolbar /> : editorMode === "pcb" ? <PcbToolbar /> : <ToolbarStrip />}
+      {libEditorActive ? <LibraryEditorToolbar /> : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
@@ -292,26 +281,7 @@ function App() {
         ) : (
           <>
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: leftPanelWidth }}>
-              {/* Tab bar */}
-              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                {(["projects", "components", "navigator"] as const).map(t => (
-                  <button key={t}
-                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                      leftTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                    onClick={() => setLeftTab(t)}>
-                    {t === "navigator" ? "Nav" : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-                <button onClick={toggleLeft}
-                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
-                  <PanelLeftClose size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden overflow-y-auto">
-                {leftTab === "projects" && <ProjectPanel />}
-                {leftTab === "components" && <ComponentPanel />}
-                {leftTab === "navigator" && <NavigatorPanel />}
-              </div>
+              <DockPanel dockId="left" onCollapse={toggleLeft} />
             </div>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => leftResize.onMouseDown(e, leftPanelWidth)} />
           </>
@@ -319,32 +289,14 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            {libEditorActive ? <LibraryEditorCanvas /> : editorMode === "pcb" ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
+            {libEditorActive ? <LibraryEditorCanvas /> : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
             <>
               <ResizeHandle direction="vertical" onMouseDown={(e) => bottomResize.onMouseDown(e, bottomPanelHeight)} />
               <div className="bg-bg-secondary shrink-0" style={{ height: bottomPanelHeight }}>
-                <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                  {(["messages", "output-jobs", "signal"] as const).map(t => (
-                    <button key={t}
-                      className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                        bottomTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                      onClick={() => setBottomTab(t)}>
-                      {t === "messages" ? "Messages" : t === "output-jobs" ? "Output Jobs" : "Signal"}
-                    </button>
-                  ))}
-                  <button onClick={toggleBottom}
-                    className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
-                    <PanelBottomClose size={14} />
-                  </button>
-                </div>
-                <div className="overflow-y-auto" style={{ height: bottomPanelHeight - 32 }}>
-                  {bottomTab === "messages" && <MessagesPanel />}
-                  {bottomTab === "output-jobs" && <OutputJobsPanel />}
-                  {bottomTab === "signal" && <SignalPanel />}
-                </div>
+                <DockPanel dockId="bottom" onCollapse={toggleBottom} />
               </div>
             </>
           ) : (
@@ -358,25 +310,7 @@ function App() {
           <>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => rightResize.onMouseDown(e, rightPanelWidth)} />
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: rightPanelWidth }}>
-              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                {(["properties", "filter", "list"] as const).map(t => (
-                  <button key={t}
-                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                      rightTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                    onClick={() => setRightTab(t)}>
-                    {t === "properties" ? "Props" : t === "filter" ? "Filter" : "List"}
-                  </button>
-                ))}
-                <button onClick={toggleRight}
-                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
-                  <PanelRightClose size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {rightTab === "properties" && <PropertiesPanel />}
-                {rightTab === "filter" && <FilterPanel />}
-                {rightTab === "list" && <ListPanel />}
-              </div>
+              <DockPanel dockId="right" onCollapse={toggleRight} />
             </div>
           </>
         )}
