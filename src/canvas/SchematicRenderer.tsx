@@ -490,6 +490,161 @@ export function SchematicRenderer() {
       }
     }
 
+    // Parameter Sets (purple/magenta table icon)
+    if (data.parameter_sets) {
+      for (const ps of data.parameter_sets) {
+        const sel = selectedIds.has(ps.uuid);
+        const px = ps.position.x, py = ps.position.y;
+        ctx.strokeStyle = sel ? C.selection : "#ab47bc";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(171,71,188,0.12)";
+        ctx.lineWidth = 0.15;
+        // Table icon: rectangle with horizontal lines
+        ctx.fillRect(px - 0.8, py - 0.6, 1.6, 1.2);
+        ctx.strokeRect(px - 0.8, py - 0.6, 1.6, 1.2);
+        ctx.beginPath();
+        ctx.moveTo(px - 0.8, py - 0.15); ctx.lineTo(px + 0.8, py - 0.15);
+        ctx.moveTo(px - 0.8, py + 0.3); ctx.lineTo(px + 0.8, py + 0.3);
+        ctx.stroke();
+        // Small dots
+        ctx.fillStyle = sel ? C.selection : "#ab47bc";
+        ctx.beginPath(); ctx.arc(px - 0.4, py - 0.38, 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px - 0.4, py + 0.08, 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px - 0.4, py + 0.52, 0.08, 0, Math.PI * 2); ctx.fill();
+        // Label
+        if (ps.parameters.length > 0) {
+          ctx.fillStyle = sel ? C.selection : "#ce93d8";
+          ctx.font = `${0.5}px sans-serif`;
+          ctx.textAlign = "left"; ctx.textBaseline = "top";
+          ctx.fillText(ps.parameters[0].key + "=" + ps.parameters[0].value, px + 1.0, py - 0.4);
+        }
+      }
+    }
+
+    // Differential Pair Directives (blue parallel lines with +/-)
+    if (data.diff_pair_directives) {
+      for (const dp of data.diff_pair_directives) {
+        const sel = selectedIds.has(dp.uuid);
+        const px = dp.position.x, py = dp.position.y;
+        ctx.strokeStyle = sel ? C.selection : "#42a5f5";
+        ctx.lineWidth = 0.15;
+        // Two parallel lines
+        ctx.beginPath();
+        ctx.moveTo(px - 0.8, py - 0.25); ctx.lineTo(px + 0.8, py - 0.25);
+        ctx.moveTo(px - 0.8, py + 0.25); ctx.lineTo(px + 0.8, py + 0.25);
+        ctx.stroke();
+        // + and - labels
+        ctx.fillStyle = sel ? C.selection : "#42a5f5";
+        ctx.font = `bold ${0.45}px sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("+", px + 1.1, py - 0.25);
+        ctx.fillText("\u2013", px + 1.1, py + 0.25);
+        // Net names
+        ctx.font = `${0.4}px sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        ctx.fillText(dp.positiveNet, px - 0.8, py - 0.8);
+        ctx.fillText(dp.negativeNet, px - 0.8, py + 0.5);
+      }
+    }
+
+    // Blankets (dashed orange polygon)
+    if (data.blankets) {
+      for (const bl of data.blankets) {
+        const sel = selectedIds.has(bl.uuid);
+        if (bl.points.length < 2) continue;
+        ctx.strokeStyle = sel ? C.selection : "#ff9800";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(255,152,0,0.06)";
+        ctx.lineWidth = 0.15;
+        ctx.setLineDash([0.4, 0.25]);
+        ctx.beginPath();
+        ctx.moveTo(bl.points[0].x, bl.points[0].y);
+        for (let i = 1; i < bl.points.length; i++) ctx.lineTo(bl.points[i].x, bl.points[i].y);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        // Parameters label
+        if (bl.parameters.length > 0) {
+          ctx.fillStyle = sel ? C.selection : "#ffb74d";
+          ctx.font = `${0.5}px sans-serif`;
+          ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+          ctx.fillText(bl.parameters.map(p => p.key + "=" + p.value).join(", "), bl.points[0].x + 0.3, bl.points[0].y - 0.2);
+        }
+      }
+    }
+
+    // Compile Masks (hatched gray rectangle)
+    if (data.compile_masks) {
+      for (const cm of data.compile_masks) {
+        const sel = selectedIds.has(cm.uuid);
+        const px = cm.position.x, py = cm.position.y;
+        const w = cm.size[0], h = cm.size[1];
+        ctx.strokeStyle = sel ? C.selection : "#78909c";
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(120,144,156,0.08)";
+        ctx.lineWidth = 0.15;
+        ctx.fillRect(px, py, w, h);
+        ctx.strokeRect(px, py, w, h);
+        // Hatching lines (diagonal)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, w, h);
+        ctx.clip();
+        ctx.strokeStyle = sel ? C.selection : "rgba(120,144,156,0.25)";
+        ctx.lineWidth = 0.08;
+        for (let d = -h; d < w + h; d += 0.8) {
+          ctx.beginPath();
+          ctx.moveTo(px + d, py);
+          ctx.lineTo(px + d - h, py + h);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // Label
+        ctx.fillStyle = sel ? C.selection : "#90a4ae";
+        ctx.font = `${0.5}px sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("Compile Mask", px + w / 2, py + h / 2);
+      }
+    }
+
+    // Notes (yellow/amber rectangle with text and pointer triangle)
+    if (data.notes) {
+      for (const n of data.notes) {
+        const sel = selectedIds.has(n.uuid);
+        const px = n.position.x, py = n.position.y;
+        const w = n.size[0], h = n.size[1];
+        // Pointer triangle (bottom-left)
+        ctx.fillStyle = sel ? C.selectionFill : "rgba(255,193,7,0.15)";
+        ctx.strokeStyle = sel ? C.selection : "#ffc107";
+        ctx.lineWidth = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(px, py + h);
+        ctx.lineTo(px - 0.5, py + h + 0.8);
+        ctx.lineTo(px + 0.8, py + h);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // Body rectangle
+        ctx.fillRect(px, py, w, h);
+        ctx.strokeRect(px, py, w, h);
+        // Text
+        ctx.fillStyle = sel ? C.selection : "#ffca28";
+        ctx.font = `${0.55}px sans-serif`;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        // Word-wrap text
+        const words = n.text.split(" ");
+        let line = "";
+        let ty = py + 0.3;
+        for (const word of words) {
+          const test = line + (line ? " " : "") + word;
+          if (ctx.measureText(test).width > w - 0.6 && line) {
+            ctx.fillText(line, px + 0.3, ty);
+            line = word;
+            ty += 0.65;
+          } else {
+            line = test;
+          }
+        }
+        if (line) ctx.fillText(line, px + 0.3, ty);
+      }
+    }
+
     // --- Symbols ---
     for (const sym of data.symbols) {
       const lib = data.lib_symbols[sym.lib_id];
@@ -1627,6 +1782,36 @@ export function SchematicRenderer() {
         return;
       }
 
+      if (store.editMode === "placeParameterSet") {
+        store.placeParameterSet(world);
+        return;
+      }
+
+      if (store.editMode === "placeDifferentialPair") {
+        store.placeDifferentialPairDirective(world);
+        return;
+      }
+
+      if (store.editMode === "placeBlanket") {
+        store.placeBlanket(world);
+        return;
+      }
+
+      if (store.editMode === "placeCompileMask") {
+        store.placeCompileMask(world);
+        return;
+      }
+
+      if (store.editMode === "placeTextFrame") {
+        store.placeTextFrame(world);
+        return;
+      }
+
+      if (store.editMode === "placeNote") {
+        store.placeNote(world);
+        return;
+      }
+
       if (store.editMode === "placePort") {
         const eSnap = findNearestElectricalPoint(data, world.x, world.y);
         const pos = eSnap || world;
@@ -1857,7 +2042,7 @@ export function SchematicRenderer() {
         animRef.current = requestAnimationFrame(render);
       }
       // Update cursor for drawing tool ghost previews
-      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc"];
+      const drawModes = ["drawLine", "drawRect", "drawCircle", "drawPolyline", "placeBusEntry", "placeSheetSymbol", "placeLabel", "placePower", "placeNoConnect", "placePort", "placeText", "placeNoErc", "placeParameterSet", "placeDifferentialPair", "placeBlanket", "placeCompileMask", "placeTextFrame", "placeNote"];
       if (drawModes.includes(store.editMode)) {
         placeCursorRef.current = snapPoint(world);
         cancelAnimationFrame(animRef.current);
@@ -2024,8 +2209,8 @@ export function SchematicRenderer() {
           { label: "Sheet Entry", action: () => {} },
           sep,
           { label: "Text String", action: () => s().setEditMode("placeText") },
-          { label: "Text Frame", action: () => {} },
-          { label: "Note", action: () => {} },
+          { label: "Text Frame", action: () => s().setEditMode("placeTextFrame") },
+          { label: "Note", action: () => s().setEditMode("placeNote") },
           sep,
           { label: "Drawing Tools", action: () => {}, children: [
             { label: "Line", action: () => s().setEditMode("drawLine") },
@@ -2644,9 +2829,18 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "move" ? null : "move")}
             menu={
               <div className="py-1 min-w-[220px]">
-                <DropdownItem label="Drag" onClick={() => setActiveBarMenu(null)} disabled />
-                <DropdownItem label="Move" onClick={() => setActiveBarMenu(null)} disabled />
-                <DropdownItem label="Move Selection by X, Y..." onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Drag" onClick={() => { useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Move" onClick={() => { useSchematicStore.getState().setEditMode("select"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Move Selection by X, Y..." onClick={() => {
+                  const input = prompt("Enter offset as X,Y (e.g. 2.54,0):");
+                  if (input) {
+                    const parts = input.split(",").map(s => parseFloat(s.trim()));
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                      useSchematicStore.getState().moveSelectionByXY(parts[0], parts[1]);
+                    }
+                  }
+                  setActiveBarMenu(null);
+                }} />
                 <div className="h-px bg-[#3d4054] my-1" />
                 <DropdownItem label="Move To Front" onClick={() => setActiveBarMenu(null)} />
                 <DropdownItem label="Rotate Selection" onClick={() => { useSchematicStore.getState().rotateSelected(); setActiveBarMenu(null); }} />
@@ -2767,11 +2961,11 @@ export function SchematicRenderer() {
             onMenuToggle={() => setActiveBarMenu(activeBarMenu === "directives" ? null : "directives")}
             menu={
               <div className="py-1 min-w-[180px]">
-                <DropdownItem label="Parameter Set" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Parameter Set" onClick={() => { useSchematicStore.getState().setEditMode("placeParameterSet"); setActiveBarMenu(null); }} />
                 <DropdownItem label="Generic No ERC" onClick={() => { useSchematicStore.getState().setEditMode("placeNoErc"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Differential Pair" onClick={() => setActiveBarMenu(null)} disabled />
-                <DropdownItem label="Blanket" onClick={() => setActiveBarMenu(null)} disabled />
-                <DropdownItem label="Compile Mask" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Differential Pair" onClick={() => { useSchematicStore.getState().setEditMode("placeDifferentialPair"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Blanket" onClick={() => { useSchematicStore.getState().setEditMode("placeBlanket"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Compile Mask" onClick={() => { useSchematicStore.getState().setEditMode("placeCompileMask"); setActiveBarMenu(null); }} />
               </div>
             } />
 
@@ -2786,8 +2980,8 @@ export function SchematicRenderer() {
               <div className="py-1 min-w-[140px]">
                 <DropdownItem label="Text String" icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/></svg>}
                   onClick={() => { useSchematicStore.getState().setEditMode("placeText"); setActiveBarMenu(null); }} />
-                <DropdownItem label="Text Frame" onClick={() => setActiveBarMenu(null)} disabled />
-                <DropdownItem label="Note" onClick={() => setActiveBarMenu(null)} disabled />
+                <DropdownItem label="Text Frame" onClick={() => { useSchematicStore.getState().setEditMode("placeTextFrame"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Note" onClick={() => { useSchematicStore.getState().setEditMode("placeNote"); setActiveBarMenu(null); }} />
               </div>
             } />
           <div className="w-px h-5 bg-[#3d4054]" />

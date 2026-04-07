@@ -1,8 +1,56 @@
 import { useSchematicStore } from "@/stores/schematic";
 import { useProjectStore } from "@/stores/project";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
+
+// --- Inline SVG icons for Altium-style decoration ---
+
+/** Small squiggly net icon */
+function NetIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      className={cn("shrink-0", className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+    >
+      <path d="M1 5 Q3 2 5 5 Q7 8 9 5" />
+    </svg>
+  );
+}
+
+/** Small port arrow icon */
+function PortIcon({ direction, className }: { direction?: string; className?: string }) {
+  // Arrow direction based on port type
+  const isInput = direction === "Input" || direction === "input";
+  const isOutput = direction === "Output" || direction === "output";
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      className={cn("shrink-0", className)}
+      fill="currentColor"
+      stroke="none"
+    >
+      {isInput ? (
+        // Arrow pointing right (into sheet)
+        <polygon points="2,2 8,5 2,8" />
+      ) : isOutput ? (
+        // Arrow pointing left (out of sheet)
+        <polygon points="8,2 2,5 8,8" />
+      ) : (
+        // Bidirectional diamond
+        <polygon points="5,1 9,5 5,9 1,5" />
+      )}
+    </svg>
+  );
+}
 
 // --- Collapsible section header (Altium-style bar) ---
 
@@ -48,27 +96,40 @@ function TableHead({ columns }: { columns: { label: string; flex?: string }[] })
   );
 }
 
-// --- Table row ---
+// --- Table row with expand arrow ---
 
 function TableRow({
   cells,
   selected,
   onClick,
+  icon,
+  expandable,
 }: {
   cells: { text: string; flex?: string; mono?: boolean }[];
   selected?: boolean;
   onClick?: () => void;
+  icon?: React.ReactNode;
+  expandable?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center w-full px-2 py-[1px] text-[10px] transition-colors text-left",
+        "flex items-center w-full px-2 py-[1px] text-[10px] transition-colors text-left gap-0.5",
         selected
           ? "bg-accent/15 text-accent"
           : "text-text-muted hover:bg-bg-hover/50 hover:text-text-primary"
       )}
     >
+      {/* Expand arrow (small triangle) */}
+      {expandable && (
+        <ChevronRight
+          size={8}
+          className="shrink-0 text-text-muted/40 mr-0.5"
+        />
+      )}
+      {/* Optional leading icon */}
+      {icon && <span className="shrink-0 mr-0.5">{icon}</span>}
       {cells.map((cell, i) => (
         <span
           key={i}
@@ -95,20 +156,22 @@ function DocumentsSection() {
   const openTabs = useProjectStore((s) => s.openTabs);
 
   const sheets = project?.sheets ?? [];
+  const projectName = project?.name ?? "Untitled";
 
   return (
     <div>
       <SectionHeader
-        title="Documents"
+        title={`Documents for ${projectName}`}
         open={open}
         onToggle={() => setOpen(!open)}
         count={sheets.length || undefined}
       />
       {open && (
         <div>
-          {/* Hierarchy label */}
-          <div className="px-2 py-0.5 text-[10px] text-text-muted/50 font-semibold select-none">
-            Flattened Hierarchy
+          {/* Flattened Hierarchy entry */}
+          <div className="flex items-center gap-1.5 px-3 py-[2px] text-[10px] text-text-muted/60 font-semibold select-none border-b border-border-subtle/30">
+            <ChevronDown size={8} className="text-text-muted/40" />
+            <span>Flattened Hierarchy</span>
           </div>
           {sheets.length === 0 ? (
             <div className="px-3 py-1 text-[10px] text-text-muted/40 italic">
@@ -123,19 +186,18 @@ function DocumentsSection() {
                 <button
                   key={sheet.filename}
                   className={cn(
-                    "flex items-center gap-1.5 w-full px-3 py-[2px] text-[10px] transition-colors",
+                    "flex items-center gap-1.5 w-full px-4 py-[2px] text-[10px] transition-colors",
                     isActive
                       ? "bg-accent/15 text-accent"
                       : "text-text-muted hover:bg-bg-hover/50 hover:text-text-primary"
                   )}
                 >
                   <FileText size={10} className="shrink-0 text-text-muted/50" />
-                  <span className="font-mono text-text-muted/60">[{idx + 1}]</span>
                   <span className="truncate">
                     {sheet.name}
                   </span>
-                  <span className="ml-auto text-text-muted/40 truncate text-[9px]">
-                    {sheet.filename}
+                  <span className="text-text-muted/50 font-mono text-[9px]">
+                    ([{idx + 1}] {sheet.filename})
                   </span>
                 </button>
               );
@@ -175,7 +237,8 @@ function InstanceSection() {
         <div>
           <TableHead
             columns={[
-              { label: "Instance", flex: "w-[72px] shrink-0" },
+              { label: "", flex: "w-[12px] shrink-0" },
+              { label: "Instance", flex: "w-[68px] shrink-0" },
               { label: "Comment", flex: "flex-1" },
               { label: "Type", flex: "w-[72px] shrink-0 text-right" },
             ]}
@@ -191,8 +254,9 @@ function InstanceSection() {
                   key={sym.uuid}
                   selected={selectedIds.has(sym.uuid)}
                   onClick={() => select(sym.uuid)}
+                  expandable
                   cells={[
-                    { text: sym.reference, flex: "w-[72px] shrink-0", mono: true },
+                    { text: sym.reference, flex: "w-[68px] shrink-0", mono: true },
                     { text: sym.value || "--", flex: "flex-1" },
                     { text: "Component", flex: "w-[72px] shrink-0 text-right" },
                   ]}
@@ -212,18 +276,21 @@ function NetBusSection() {
   const [open, setOpen] = useState(true);
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
-  const select = useSchematicStore((s) => s.select);
+  const selectMultiple = useSchematicStore((s) => s.selectMultiple);
 
   const nets = useMemo(() => {
     if (!data) return [];
 
     // Collect unique net names from labels, dedup, and determine scope
-    const netMap = new Map<string, { uuid: string; text: string; labelType: string }>();
+    const netMap = new Map<string, { uuids: string[]; text: string; labelType: string }>();
     for (const label of data.labels) {
       if (label.label_type === "Net" || label.label_type === "Global" || label.label_type === "Power") {
-        if (!netMap.has(label.text)) {
+        const existing = netMap.get(label.text);
+        if (existing) {
+          existing.uuids.push(label.uuid);
+        } else {
           netMap.set(label.text, {
-            uuid: label.uuid,
+            uuids: [label.uuid],
             text: label.text,
             labelType: label.label_type,
           });
@@ -248,6 +315,14 @@ function NetBusSection() {
     }
   };
 
+  const handleNetClick = useCallback(
+    (net: { uuids: string[] }) => {
+      // Select all labels belonging to this net to highlight the net
+      selectMultiple(net.uuids);
+    },
+    [selectMultiple]
+  );
+
   return (
     <div>
       <SectionHeader
@@ -260,6 +335,7 @@ function NetBusSection() {
         <div>
           <TableHead
             columns={[
+              { label: "", flex: "w-[14px] shrink-0" },
               { label: "Net / Bus", flex: "flex-1" },
               { label: "Scope", flex: "w-[110px] shrink-0 text-right" },
             ]}
@@ -270,17 +346,21 @@ function NetBusSection() {
             </div>
           ) : (
             <div className="max-h-[200px] overflow-y-auto">
-              {nets.map((net) => (
-                <TableRow
-                  key={net.uuid}
-                  selected={selectedIds.has(net.uuid)}
-                  onClick={() => select(net.uuid)}
-                  cells={[
-                    { text: net.text, flex: "flex-1", mono: true },
-                    { text: getScopeLabel(net.labelType), flex: "w-[110px] shrink-0 text-right" },
-                  ]}
-                />
-              ))}
+              {nets.map((net) => {
+                const isSelected = net.uuids.some((u) => selectedIds.has(u));
+                return (
+                  <TableRow
+                    key={net.text}
+                    selected={isSelected}
+                    onClick={() => handleNetClick(net)}
+                    icon={<NetIcon className="text-text-muted/50" />}
+                    cells={[
+                      { text: net.text, flex: "flex-1", mono: true },
+                      { text: getScopeLabel(net.labelType), flex: "w-[110px] shrink-0 text-right" },
+                    ]}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -339,7 +419,8 @@ function PortsSection() {
         <div>
           <TableHead
             columns={[
-              { label: "Port", flex: "w-[24px] shrink-0" },
+              { label: "", flex: "w-[14px] shrink-0" },
+              { label: "Port", flex: "w-[28px] shrink-0" },
               { label: "Name", flex: "flex-1" },
               { label: "Type", flex: "w-[90px] shrink-0 text-right" },
             ]}
@@ -355,8 +436,9 @@ function PortsSection() {
                   key={port.uuid}
                   selected={selectedIds.has(port.uuid)}
                   onClick={() => select(port.uuid)}
+                  icon={<PortIcon direction={port.portType} className="text-text-muted/50" />}
                   cells={[
-                    { text: String(idx + 1), flex: "w-[24px] shrink-0", mono: true },
+                    { text: String(idx + 1), flex: "w-[28px] shrink-0", mono: true },
                     { text: port.name, flex: "flex-1", mono: true },
                     { text: port.portType, flex: "w-[90px] shrink-0 text-right" },
                   ]}
