@@ -148,7 +148,7 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
     if (undoStack.length === 0 || !data) return;
     const prev = undoStack[undoStack.length - 1];
     set({
-      data: prev,
+      data: cloneData(prev),
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, cloneData(data)],
       selectedIds: new Set(),
@@ -161,9 +161,9 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
     if (redoStack.length === 0 || !data) return;
     const next = redoStack[redoStack.length - 1];
     set({
-      data: next,
+      data: cloneData(next),
       redoStack: redoStack.slice(0, -1),
-      undoStack: [...undoStack, cloneData(data!)],
+      undoStack: [...undoStack, cloneData(data)],
       selectedIds: new Set(),
       dirty: true,
     });
@@ -218,6 +218,7 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
   moveFootprint: (uuid, pos) => {
     const { data } = get();
     if (!data) return;
+    // NOTE: Caller must call pushUndo() before the first move tick in a drag gesture
     const nd = cloneData(data);
     const fp = nd.footprints.find((f) => f.uuid === uuid);
     if (fp) { fp.position = pos; }

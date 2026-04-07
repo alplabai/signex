@@ -127,6 +127,10 @@ export function toggleCrossSelect(): boolean {
   crossSelectEnabled = !crossSelectEnabled;
 
   if (crossSelectEnabled) {
+    // Clean up any existing subscriptions first (guard against double-enable)
+    unsubscribeSch?.();
+    unsubscribePcb?.();
+
     // Subscribe to schematic selection changes
     unsubscribeSch = useSchematicStore.subscribe((state) => {
       if (state.selectedIds.size > 0 && useEditorStore.getState().mode === "schematic") {

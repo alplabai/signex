@@ -21,8 +21,7 @@ function mmToGerber(mm: number): number {
 
 /** Format a Gerber coordinate value (no leading zeros). */
 function fmtCoord(mm: number): string {
-  const v = mmToGerber(mm);
-  return v >= 0 ? String(v) : String(v);
+  return String(mmToGerber(mm));
 }
 
 /** Format X/Y coordinate pair for Gerber. */

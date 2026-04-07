@@ -158,6 +158,11 @@ export class PcbWebGLContext {
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       throw new Error(`Shader link failed: ${gl.getProgramInfoLog(prog)}`);
     }
+    // Detach and delete shader objects after linking — prevent GPU memory leak
+    gl.detachShader(prog, vert);
+    gl.deleteShader(vert);
+    gl.detachShader(prog, frag);
+    gl.deleteShader(frag);
     return prog;
   }
 
