@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 export function MessagesPanel() {
   const data = useSchematicStore((s) => s.data);
+  const apiKeySet = useSignalStore((s) => s.apiKeySet);
   const [violations, setViolations] = useState<ErcViolation[]>([]);
   const [lastRun, setLastRun] = useState<string | null>(null);
 
@@ -17,7 +18,9 @@ export function MessagesPanel() {
     const store = useSignalStore.getState();
     store.addMessage({ role: "user", content: `Fix this ERC violation: "${violation.message}" (${violation.type.replace(/_/g, " ")})` });
 
-    store.addMessage({ role: "assistant", content: "", loading: true } as import("@/stores/signal").SignalMessage);
+    // Generate a specific ID so we can target this exact message
+    const fixMsgId = crypto.randomUUID();
+    store.addMessage({ role: "assistant", content: "", loading: true, id: fixMsgId } as import("@/stores/signal").SignalMessage);
     store.setLoading(true);
 
     try {
@@ -32,23 +35,17 @@ export function MessagesPanel() {
         erc_warnings: ercMarkers.filter((m) => m.severity === "warning").length,
         paper_size: schData?.paper_size || "A4",
         title: schData?.title_block?.title || "",
+        detailed_context: null,
+        design_brief: useSignalStore.getState().designBrief || null,
       };
       const response = await invoke<{ message: string; usage: { input_tokens: number; output_tokens: number } }>(
-        "signal_fix_erc", { violationMessage: violation.message, context }
+        "signal_fix_erc", { violationMessage: violation.message, context, model: store.model }
       );
-      // Find and update the loading message
-      const msgs = useSignalStore.getState().messages;
-      const loadingMsg = msgs.find((m) => m.loading);
-      if (loadingMsg) {
-        store.updateMessage(loadingMsg.id, { content: response.message, loading: false, usage: response.usage });
-      }
+      store.updateMessage(fixMsgId, { content: response.message, loading: false, usage: response.usage });
       store.addTokens(response.usage.input_tokens, response.usage.output_tokens);
+      store.addCost(response.usage.input_tokens, response.usage.output_tokens);
     } catch (e) {
-      const msgs = useSignalStore.getState().messages;
-      const loadingMsg = msgs.find((m) => m.loading);
-      if (loadingMsg) {
-        store.updateMessage(loadingMsg.id, { content: `Error: ${e}`, loading: false, role: "system" });
-      }
+      store.updateMessage(fixMsgId, { content: `Error: ${e}`, loading: false, role: "system" });
     } finally {
       store.setLoading(false);
     }
@@ -176,7 +173,7 @@ export function MessagesPanel() {
                   <span className="text-[9px] text-text-muted/40">
                     {v.type.replace(/_/g, " ")}
                   </span>
-                  {useSignalStore.getState().apiKeySet && (
+                  {apiKeySet && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

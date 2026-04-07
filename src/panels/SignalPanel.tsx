@@ -82,26 +82,28 @@ export function SignalPanel() {
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    // Read isLoading from store directly to avoid stale closure
+    if (!text || useSignalStore.getState().isLoading) return;
     setInput("");
-    const store = useSignalStore.getState();
 
+    // Build chat history BEFORE adding the new user message to avoid duplication
+    const prevMessages = useSignalStore.getState().messages
+      .filter((m) => !m.loading)
+      .map((m) => ({ role: m.role, content: m.content }));
+    const chatMessages = [...prevMessages, { role: "user", content: text }];
+
+    const store = useSignalStore.getState();
     store.addMessage({ role: "user", content: text });
 
     const msgId = crypto.randomUUID();
     store.addMessage({ role: "assistant", content: "", loading: true, id: msgId } as SignalMessage);
     store.setLoading(true);
 
-    // Start stream listener before sending
     await store.startStreamListener(msgId);
 
     try {
-      const chatMessages = [...store.messages.filter((m) => !m.loading), { role: "user", content: text }]
-        .map((m) => ({ role: m.role, content: m.content }));
-
       const context = buildContext();
 
-      // Capture screenshot if enabled
       let imageBase64: string | null = null;
       if (includeScreenshot) {
         const data = useSchematicStore.getState().data;
@@ -112,17 +114,19 @@ export function SignalPanel() {
         messageId: msgId,
         messages: chatMessages,
         context,
-        model: store.model,
+        model: useSignalStore.getState().model,
         imageBase64,
       });
     } catch (e) {
-      store.updateMessage(msgId, {
+      useSignalStore.getState().cancelStream(msgId);
+      useSignalStore.getState().updateMessage(msgId, {
         content: `Error: ${e instanceof Error ? e.message : String(e)}`,
         loading: false,
         role: "system",
       });
-      store.setLoading(false);
+      useSignalStore.getState().setLoading(false);
     }
+    inputRef.current?.focus();
   };
 
   const runDesignReview = async () => {

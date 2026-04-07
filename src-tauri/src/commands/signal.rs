@@ -3,14 +3,23 @@ use std::sync::Mutex;
 use tauri::Emitter;
 
 // Claude API configuration
+// SECURITY: API key held as plaintext String in process memory.
+// Consider OS keychain (tauri-plugin-stronghold) for distribution builds.
 static API_KEY: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 
+// Shared HTTP client — reuses connection pool, TLS sessions, DNS cache
+static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> =
+    std::sync::LazyLock::new(reqwest::Client::new);
+
 const DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
+const MAX_DESIGN_BRIEF_CHARS: usize = 500;
+const MAX_VIOLATION_MSG_CHARS: usize = 500;
+const MAX_TOOL_INPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
-    pub role: String,
+    pub role: String, // "user" | "assistant"
     pub content: String,
 }
 
@@ -52,10 +61,10 @@ struct ClaudeRequest {
     tools: Option<Vec<ToolDef>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct ClaudeApiMessage {
     role: String,
-    content: serde_json::Value, // String or array of content blocks
+    content: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +81,6 @@ struct ClaudeContent {
     #[serde(rename = "type")]
     content_type: String,
     text: Option<String>,
-    // Tool use fields
     id: Option<String>,
     name: Option<String>,
     input: Option<serde_json::Value>,
@@ -130,67 +138,68 @@ struct StreamError {
     error: String,
 }
 
-// --- Tool definitions ---
+// --- Tool definitions (cached) ---
 
-fn get_tool_definitions() -> Vec<ToolDef> {
-    vec![
-        ToolDef {
-            name: "add_component".to_string(),
-            description: "Add a component to the schematic at a specific position".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "reference_prefix": { "type": "string", "description": "Component prefix (R, C, U, L, D, Q, etc.)" },
-                    "value": { "type": "string", "description": "Component value (10k, 100nF, STM32F4, etc.)" },
-                    "x": { "type": "number", "description": "X position in mm" },
-                    "y": { "type": "number", "description": "Y position in mm" }
-                },
-                "required": ["reference_prefix", "value", "x", "y"]
-            }),
-        },
-        ToolDef {
-            name: "add_wire".to_string(),
-            description: "Draw a wire between two points on the schematic".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "start_x": { "type": "number" }, "start_y": { "type": "number" },
-                    "end_x": { "type": "number" }, "end_y": { "type": "number" }
-                },
-                "required": ["start_x", "start_y", "end_x", "end_y"]
-            }),
-        },
-        ToolDef {
-            name: "set_component_value".to_string(),
-            description: "Change the value of an existing component by its reference designator".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "reference": { "type": "string", "description": "Component reference (R1, C2, U3)" },
-                    "value": { "type": "string", "description": "New value" }
-                },
-                "required": ["reference", "value"]
-            }),
-        },
-        ToolDef {
-            name: "add_net_label".to_string(),
-            description: "Place a net label at a position on the schematic".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "text": { "type": "string", "description": "Net name (VCC, GND, SDA, etc.)" },
-                    "x": { "type": "number" }, "y": { "type": "number" }
-                },
-                "required": ["text", "x", "y"]
-            }),
-        },
-        ToolDef {
-            name: "run_erc".to_string(),
-            description: "Run Electrical Rules Check and return the results".to_string(),
-            input_schema: serde_json::json!({ "type": "object", "properties": {} }),
-        },
-    ]
-}
+static TOOL_DEFINITIONS: std::sync::LazyLock<Vec<ToolDef>> =
+    std::sync::LazyLock::new(|| {
+        vec![
+            ToolDef {
+                name: "add_component".into(),
+                description: "Add a component to the schematic at a specific position".into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "reference_prefix": { "type": "string", "description": "Component prefix (R, C, U, L, D, Q)" },
+                        "value": { "type": "string", "description": "Component value (10k, 100nF, STM32F4)" },
+                        "x": { "type": "number", "description": "X position in mm" },
+                        "y": { "type": "number", "description": "Y position in mm" }
+                    },
+                    "required": ["reference_prefix", "value", "x", "y"]
+                }),
+            },
+            ToolDef {
+                name: "add_wire".into(),
+                description: "Draw a wire between two points".into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "start_x": { "type": "number" }, "start_y": { "type": "number" },
+                        "end_x": { "type": "number" }, "end_y": { "type": "number" }
+                    },
+                    "required": ["start_x", "start_y", "end_x", "end_y"]
+                }),
+            },
+            ToolDef {
+                name: "set_component_value".into(),
+                description: "Change the value of an existing component by reference".into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "reference": { "type": "string" },
+                        "value": { "type": "string" }
+                    },
+                    "required": ["reference", "value"]
+                }),
+            },
+            ToolDef {
+                name: "add_net_label".into(),
+                description: "Place a net label at a position".into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string" },
+                        "x": { "type": "number" }, "y": { "type": "number" }
+                    },
+                    "required": ["text", "x", "y"]
+                }),
+            },
+            ToolDef {
+                name: "run_erc".into(),
+                description: "Run Electrical Rules Check and return results".into(),
+                input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+            },
+        ]
+    });
 
 fn build_system_prompt(context: &SchematicContext) -> String {
     let mut system = String::from(
@@ -205,43 +214,56 @@ fn build_system_prompt(context: &SchematicContext) -> String {
          - When asked to create or modify circuits, use the available tools.\n\n"
     );
 
-    // Design brief (persistent context)
+    // Design brief (persistent context, length-limited)
     if let Some(brief) = &context.design_brief {
         if !brief.is_empty() {
-            system.push_str(&format!("Design intent: {}\n\n", brief));
+            let truncated: String = brief.chars().take(MAX_DESIGN_BRIEF_CHARS).collect();
+            system.push_str(&format!("Design intent: {}\n\n", truncated));
         }
     }
 
-    system.push_str("Current schematic:\n");
-    system.push_str(&format!("- Title: {}\n", if context.title.is_empty() { "Untitled" } else { &context.title }));
-    system.push_str(&format!("- Paper: {}, Components: {}, Wires: {}, Nets: {}\n",
-        context.paper_size, context.component_count, context.wire_count, context.net_count));
+    // Schematic data section — clearly delimited as untrusted data
+    system.push_str("--- BEGIN SCHEMATIC DATA ---\n");
+    system.push_str(&format!(
+        "Title: {}\nPaper: {}, Components: {}, Wires: {}, Nets: {}\n",
+        if context.title.is_empty() { "Untitled" } else { &context.title },
+        context.paper_size, context.component_count, context.wire_count, context.net_count
+    ));
 
     if context.erc_errors > 0 || context.erc_warnings > 0 {
-        system.push_str(&format!("- ERC: {} errors, {} warnings\n", context.erc_errors, context.erc_warnings));
+        system.push_str(&format!(
+            "ERC: {} errors, {} warnings\n",
+            context.erc_errors, context.erc_warnings
+        ));
     }
 
     if !context.selected_components.is_empty() {
-        system.push_str("\nSelected:\n");
+        system.push_str("Selected:\n");
         for comp in &context.selected_components {
-            system.push_str(&format!("- {} = {} ({})\n", comp.reference, comp.value, comp.footprint));
+            system.push_str(&format!(
+                "  {} = {} ({})\n",
+                comp.reference, comp.value, comp.footprint
+            ));
         }
     }
 
-    // Rich detailed context (net connectivity, component list, ERC details)
     if let Some(detail) = &context.detailed_context {
         if !detail.is_empty() {
-            system.push_str("\n");
+            system.push('\n');
             system.push_str(detail);
+            system.push('\n');
         }
     }
 
+    system.push_str("--- END SCHEMATIC DATA ---\n");
     system
 }
 
 fn get_api_key() -> Result<String, String> {
     let guard = API_KEY.lock().unwrap_or_else(|e| e.into_inner());
-    guard.clone().ok_or_else(|| "API key not configured. Set it in Signal panel.".to_string())
+    guard
+        .clone()
+        .ok_or_else(|| "API key not configured. Set it in Signal panel.".to_string())
 }
 
 fn build_request(
@@ -258,27 +280,28 @@ fn build_request(
         .iter()
         .enumerate()
         .map(|(i, m)| {
-            // If this is the last user message and we have an image, send as multi-content
-            if i == messages.len() - 1 && m.role == "user" && image_base64.is_some() {
-                ClaudeApiMessage {
-                    role: m.role.clone(),
-                    content: serde_json::json!([
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": image_base64.unwrap()
-                            }
-                        },
-                        { "type": "text", "text": m.content }
-                    ]),
+            let is_last_user = i == messages.len() - 1 && m.role == "user";
+            if is_last_user {
+                if let Some(img) = image_base64 {
+                    return ClaudeApiMessage {
+                        role: m.role.clone(),
+                        content: serde_json::json!([
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": img
+                                }
+                            },
+                            { "type": "text", "text": m.content }
+                        ]),
+                    };
                 }
-            } else {
-                ClaudeApiMessage {
-                    role: m.role.clone(),
-                    content: serde_json::Value::String(m.content.clone()),
-                }
+            }
+            ClaudeApiMessage {
+                role: m.role.clone(),
+                content: serde_json::Value::String(m.content.clone()),
             }
         })
         .collect();
@@ -289,7 +312,15 @@ fn build_request(
         system,
         messages: claude_messages,
         stream: if stream { Some(true) } else { None },
-        tools: if enable_tools { Some(get_tool_definitions()) } else { None },
+        tools: if enable_tools {
+            Some(TOOL_DEFINITIONS.iter().map(|t| ToolDef {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                input_schema: t.input_schema.clone(),
+            }).collect())
+        } else {
+            None
+        },
     }
 }
 
@@ -308,7 +339,7 @@ pub fn has_api_key() -> bool {
     api_key.is_some()
 }
 
-/// Non-streaming chat (kept for backwards compat and simple queries)
+/// Non-streaming chat
 #[tauri::command]
 pub async fn signal_chat(
     messages: Vec<ChatMessage>,
@@ -318,13 +349,15 @@ pub async fn signal_chat(
 ) -> Result<SignalResponse, String> {
     let api_key = get_api_key()?;
     let request = build_request(
-        &messages, &context,
-        model.as_deref(), false, true,
+        &messages,
+        &context,
+        model.as_deref(),
+        false,
+        true,
         image_base64.as_deref(),
     );
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post("https://api.anthropic.com/v1/messages")
         .header("x-api-key", &api_key)
         .header("anthropic-version", "2023-06-01")
@@ -340,7 +373,9 @@ pub async fn signal_chat(
         return Err(format!("Claude API error ({}): {}", status, body));
     }
 
-    let claude_response: ClaudeResponse = response.json().await
+    let claude_response: ClaudeResponse = response
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     let mut message = String::new();
@@ -369,12 +404,16 @@ pub async fn signal_chat(
     Ok(SignalResponse {
         message,
         usage: claude_response.usage,
-        tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+        tool_calls: if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        },
         stop_reason: claude_response.stop_reason,
     })
 }
 
-/// Streaming chat — emits events as tokens arrive
+/// Streaming chat — emits Tauri events as tokens arrive
 #[tauri::command]
 pub async fn signal_chat_stream(
     app: tauri::AppHandle,
@@ -386,15 +425,16 @@ pub async fn signal_chat_stream(
 ) -> Result<(), String> {
     let api_key = get_api_key()?;
     let request = build_request(
-        &messages, &context,
-        model.as_deref(), true, true,
+        &messages,
+        &context,
+        model.as_deref(),
+        true,
+        true,
         image_base64.as_deref(),
     );
 
-    // Spawn the streaming task
     tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let response = match client
+        let response = match HTTP_CLIENT
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &api_key)
             .header("anthropic-version", "2023-06-01")
@@ -405,73 +445,113 @@ pub async fn signal_chat_stream(
         {
             Ok(r) => r,
             Err(e) => {
-                let _ = app.emit("signal:stream-error", StreamError {
-                    message_id, error: format!("Network error: {}", e),
-                });
+                let _ = app.emit(
+                    "signal:stream-error",
+                    StreamError {
+                        message_id,
+                        error: format!("Network error: {}", e),
+                    },
+                );
                 return;
             }
         };
 
         if !response.status().is_success() {
             let body = response.text().await.unwrap_or_default();
-            let _ = app.emit("signal:stream-error", StreamError {
-                message_id, error: format!("API error: {}", body),
-            });
+            let _ = app.emit(
+                "signal:stream-error",
+                StreamError {
+                    message_id,
+                    error: format!("API error: {}", body),
+                },
+            );
             return;
         }
 
-        // Read SSE stream
-        let mut buffer = String::new();
-        let mut usage = ClaudeUsage { input_tokens: 0, output_tokens: 0 };
+        // Read response body with error handling
+        let bytes = match response.bytes().await {
+            Ok(b) => b,
+            Err(e) => {
+                let _ = app.emit(
+                    "signal:stream-error",
+                    StreamError {
+                        message_id,
+                        error: format!("Failed to read stream: {}", e),
+                    },
+                );
+                return;
+            }
+        };
+        let text = String::from_utf8_lossy(&bytes);
+
+        // Parse SSE events
+        let mut usage = ClaudeUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+        };
         let mut tool_calls: Vec<ToolCall> = Vec::new();
-        let mut stop_reason = String::from("end_turn");
+        let mut stop_reason = String::new();
         let mut current_tool_id = String::new();
         let mut current_tool_name = String::new();
         let mut current_tool_input = String::new();
 
-        let bytes = response.bytes().await.unwrap_or_default();
-        let text = String::from_utf8_lossy(&bytes);
-
         for line in text.lines() {
-            if line.starts_with("data: ") {
-                let data = &line[6..];
-                if data == "[DONE]" { break; }
-
+            if let Some(data) = line.strip_prefix("data: ") {
                 if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                    let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    let event_type = event
+                        .get("type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("");
 
                     match event_type {
                         "content_block_delta" => {
                             if let Some(delta) = event.get("delta") {
-                                let delta_type = delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                                let delta_type =
+                                    delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
                                 if delta_type == "text_delta" {
-                                    if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
-                                        buffer.push_str(text);
-                                        let _ = app.emit("signal:stream-delta", StreamDelta {
-                                            text: text.to_string(),
-                                            message_id: message_id.clone(),
-                                        });
+                                    if let Some(t) = delta.get("text").and_then(|t| t.as_str()) {
+                                        let _ = app.emit(
+                                            "signal:stream-delta",
+                                            StreamDelta {
+                                                text: t.to_string(),
+                                                message_id: message_id.clone(),
+                                            },
+                                        );
                                     }
                                 } else if delta_type == "input_json_delta" {
-                                    if let Some(partial) = delta.get("partial_json").and_then(|t| t.as_str()) {
-                                        current_tool_input.push_str(partial);
+                                    if let Some(partial) =
+                                        delta.get("partial_json").and_then(|t| t.as_str())
+                                    {
+                                        if current_tool_input.len() + partial.len()
+                                            < MAX_TOOL_INPUT_BYTES
+                                        {
+                                            current_tool_input.push_str(partial);
+                                        }
                                     }
                                 }
                             }
                         }
                         "content_block_start" => {
                             if let Some(cb) = event.get("content_block") {
-                                let cb_type = cb.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                                if cb_type == "tool_use" {
-                                    current_tool_id = cb.get("id").and_then(|t| t.as_str()).unwrap_or("").to_string();
-                                    current_tool_name = cb.get("name").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                                if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                                    current_tool_id = cb
+                                        .get("id")
+                                        .and_then(|t| t.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    current_tool_name = cb
+                                        .get("name")
+                                        .and_then(|t| t.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
                                     current_tool_input.clear();
                                 }
                             }
                         }
                         "content_block_stop" => {
                             if !current_tool_name.is_empty() {
-                                let input = serde_json::from_str(&current_tool_input).unwrap_or(serde_json::json!({}));
+                                let input = serde_json::from_str(&current_tool_input)
+                                    .unwrap_or(serde_json::json!({}));
                                 tool_calls.push(ToolCall {
                                     id: current_tool_id.clone(),
                                     name: current_tool_name.clone(),
@@ -484,22 +564,32 @@ pub async fn signal_chat_stream(
                         }
                         "message_delta" => {
                             if let Some(u) = event.get("usage") {
-                                if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64()) {
+                                if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64())
+                                {
                                     usage.output_tokens = out as u32;
                                 }
                             }
-                            if let Some(sr) = event.get("delta").and_then(|d| d.get("stop_reason")).and_then(|s| s.as_str()) {
+                            if let Some(sr) = event
+                                .get("delta")
+                                .and_then(|d| d.get("stop_reason"))
+                                .and_then(|s| s.as_str())
+                            {
                                 stop_reason = sr.to_string();
                             }
                         }
                         "message_start" => {
                             if let Some(msg) = event.get("message") {
                                 if let Some(u) = msg.get("usage") {
-                                    if let Some(inp) = u.get("input_tokens").and_then(|t| t.as_u64()) {
+                                    if let Some(inp) =
+                                        u.get("input_tokens").and_then(|t| t.as_u64())
+                                    {
                                         usage.input_tokens = inp as u32;
                                     }
                                 }
                             }
+                        }
+                        "message_stop" => {
+                            break;
                         }
                         _ => {}
                     }
@@ -507,12 +597,19 @@ pub async fn signal_chat_stream(
             }
         }
 
-        let _ = app.emit("signal:stream-done", StreamDone {
-            message_id,
-            usage,
-            tool_calls,
-            stop_reason,
-        });
+        if stop_reason.is_empty() {
+            stop_reason = "end_turn".to_string();
+        }
+
+        let _ = app.emit(
+            "signal:stream-done",
+            StreamDone {
+                message_id,
+                usage,
+                tool_calls,
+                stop_reason,
+            },
+        );
     });
 
     Ok(())
@@ -530,7 +627,8 @@ pub async fn signal_review(
             - Incorrect pull-up/pull-down values\n\
             - Power rail issues\n\
             - Signal integrity concerns\n\
-            Provide a brief, actionable review.".to_string(),
+            Provide a brief, actionable review."
+            .to_string(),
     };
     signal_chat(vec![review_message], context, model, None).await
 }
@@ -541,11 +639,12 @@ pub async fn signal_fix_erc(
     context: SchematicContext,
     model: Option<String>,
 ) -> Result<SignalResponse, String> {
+    let msg: String = violation_message.chars().take(MAX_VIOLATION_MSG_CHARS).collect();
     let fix_message = ChatMessage {
         role: "user".to_string(),
         content: format!(
             "ERC violation: \"{}\"\n\nExplain the cause and suggest a specific fix. Be concise.",
-            violation_message
+            msg
         ),
     };
     signal_chat(vec![fix_message], context, model, None).await
