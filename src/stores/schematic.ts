@@ -303,6 +303,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   setEditMode: (mode) => {
     const state = get();
+    // Clear placement pause when changing modes
+    useEditorStore.getState().setPlacementPaused(false);
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
       set({ editMode: mode, wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode } });
