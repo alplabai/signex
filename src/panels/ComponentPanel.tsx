@@ -164,6 +164,11 @@ export function ComponentPanel() {
             displayResults.map((r) => (
               <button
                 key={`${r.library}:${r.symbol_id}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/signex-symbol", JSON.stringify(r));
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
                 className={cn(
                   "w-full flex items-start gap-2 px-2 py-1.5 text-left transition-colors border-b border-border-subtle/30",
                   selectedResult?.symbol_id === r.symbol_id && selectedResult?.library === r.library

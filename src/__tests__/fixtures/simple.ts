@@ -87,6 +87,10 @@ export function createSimpleSchematic(): SchematicData {
     net_classes: [],
     variants: [],
     document_parameters: [],
+    groups: [],
+    differential_pairs: [],
+    signal_harnesses: [],
+    constraints: [],
     lib_symbols: {
       "Device:R": resistorLib,
       "Device:C": capacitorLib,

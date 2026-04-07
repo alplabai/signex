@@ -15,6 +15,7 @@ export function AnnotationDialog({ open, onClose }: Props) {
   const [order, setOrder] = useState<AnnotationOrder>("down-across");
   const [startIndex, setStartIndex] = useState(1);
   const [scope, setScope] = useState<AnnotationScope>("all");
+  const [matchMultiPart, setMatchMultiPart] = useState<"none" | "per_sheet" | "whole">("per_sheet");
 
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
@@ -118,6 +119,17 @@ export function AnnotationDialog({ open, onClose }: Props) {
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Multi-part matching */}
+          <div className="space-y-1">
+            <span className="text-[#a6adc8]">Multi-Part Components</span>
+            <select value={matchMultiPart} onChange={(e) => setMatchMultiPart(e.target.value as "none" | "per_sheet" | "whole")}
+              className="w-full bg-[#313244] border border-[#45475a] rounded px-2 py-1 text-[11px] text-[#cdd6f4] outline-none focus:border-[#89b4fa]">
+              <option value="none">None (independent parts)</option>
+              <option value="per_sheet">Complete Existing Packages (Per Sheet)</option>
+              <option value="whole">Complete Existing Packages (Whole Project)</option>
+            </select>
           </div>
 
           {/* Preview table */}

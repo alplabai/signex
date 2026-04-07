@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { useSchematicStore } from "@/stores/schematic";
 import { invoke } from "@tauri-apps/api/core";
+import { generateBomHtml, generateBomExcel } from "@/lib/bomFormats";
 
 interface BomConfigDialogProps {
   open: boolean;
@@ -14,7 +15,7 @@ const GROUP_OPTIONS = ["Value", "Footprint", "Library"];
 export function BomConfigDialog({ open, onClose }: BomConfigDialogProps) {
   const [columns, setColumns] = useState<string[]>([...ALL_COLUMNS]);
   const [groupBy, setGroupBy] = useState<string[]>(["Value", "Footprint"]);
-  const [format, setFormat] = useState<"csv" | "tsv">("csv");
+  const [format, setFormat] = useState<"csv" | "tsv" | "html" | "excel">("csv");
   const [exporting, setExporting] = useState(false);
   const data = useSchematicStore((s) => s.data);
 
@@ -36,15 +37,25 @@ export function BomConfigDialog({ open, onClose }: BomConfigDialogProps) {
     if (!data) return;
     setExporting(true);
     try {
-      const result = await invoke<string>("generate_bom_configured", {
-        data,
-        columns,
-        groupBy,
-        format,
-      });
-      const ext = format === "tsv" ? "tsv" : "csv";
-      const mime = format === "tsv" ? "text/tab-separated-values" : "text/csv";
-      const blob = new Blob([result], { type: mime });
+      let content: string;
+      let ext: string;
+      let mime: string;
+
+      if (format === "html") {
+        content = generateBomHtml(data, columns);
+        ext = "html"; mime = "text/html";
+      } else if (format === "excel") {
+        content = generateBomExcel(data, columns);
+        ext = "xls"; mime = "application/vnd.ms-excel";
+      } else {
+        content = await invoke<string>("generate_bom_configured", {
+          data, columns, groupBy, format: format === "tsv" ? "tsv" : "csv",
+        });
+        ext = format === "tsv" ? "tsv" : "csv";
+        mime = format === "tsv" ? "text/tab-separated-values" : "text/csv";
+      }
+
+      const blob = new Blob([content], { type: mime });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -76,17 +87,14 @@ export function BomConfigDialog({ open, onClose }: BomConfigDialogProps) {
           {/* Format */}
           <div className="space-y-1.5">
             <span className="text-[#a6adc8]">Format</span>
-            <div className="flex gap-3 ml-1">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="format" checked={format === "csv"}
-                  onChange={() => setFormat("csv")} className="accent-[#89b4fa]" />
-                <span className="text-[#cdd6f4]">CSV</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="format" checked={format === "tsv"}
-                  onChange={() => setFormat("tsv")} className="accent-[#89b4fa]" />
-                <span className="text-[#cdd6f4]">TSV</span>
-              </label>
+            <div className="flex flex-wrap gap-3 ml-1">
+              {([["csv", "CSV"], ["tsv", "TSV"], ["html", "HTML"], ["excel", "Excel (.xls)"]] as const).map(([v, label]) => (
+                <label key={v} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="format" checked={format === v}
+                    onChange={() => setFormat(v)} className="accent-[#89b4fa]" />
+                  <span className="text-[#cdd6f4]">{label}</span>
+                </label>
+              ))}
             </div>
           </div>
 

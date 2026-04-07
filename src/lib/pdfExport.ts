@@ -438,7 +438,7 @@ function renderSchematicToCanvas(
 
   // Drawing objects
   for (const d of data.drawings) {
-    ctx.strokeStyle = C.body; ctx.lineWidth = Math.max(d.width || 0.15, 0.15);
+    ctx.strokeStyle = C.body; ctx.lineWidth = Math.max("width" in d ? d.width || 0.15 : 0.15, 0.15);
     if (d.type === "Line") {
       ctx.beginPath(); ctx.moveTo(d.start.x, d.start.y); ctx.lineTo(d.end.x, d.end.y); ctx.stroke();
     } else if (d.type === "Rect") {

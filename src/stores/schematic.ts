@@ -100,6 +100,7 @@ interface SchematicState {
   // Drawing object placement
   addDrawing: (drawing: SchDrawing) => void;
   placeSheetSymbol: (pos: SchPoint, name: string, filename: string) => void;
+  setSheetRepeat: (uuid: string, repeat: string, channelCount: number) => void;
 
   // Wire/Bus drawing
   startWire: (pos: SchPoint) => void;
@@ -119,6 +120,12 @@ interface SchematicState {
   // Z-ordering
   bringToFront: () => void;
   sendToBack: () => void;
+
+  // Groups
+  createGroup: () => void;
+  dissolveGroup: (groupUuid: string) => void;
+  selectGroupMembers: (memberUuid: string) => void;
+
   breakWireAt: (uuid: string, point: SchPoint) => void;
   alignSelectionToGrid: () => void;
   placeBusEntry: (pos: SchPoint) => void;
@@ -135,6 +142,21 @@ interface SchematicState {
   addDocumentParameter: (key: string, value: string) => void;
   removeDocumentParameter: (key: string) => void;
   updateDocumentParameter: (key: string, value: string) => void;
+
+  // Differential pairs
+  addDiffPair: (name: string, positiveNet: string, negativeNet: string) => void;
+  removeDiffPair: (name: string) => void;
+  // Signal harnesses
+  addHarness: (name: string, harnessType: string) => void;
+  removeHarness: (uuid: string) => void;
+  addHarnessMember: (harnessUuid: string, memberName: string, kind: "net" | "bus" | "harness", ref?: string) => void;
+  removeHarnessMember: (harnessUuid: string, memberName: string) => void;
+  // Design constraints
+  addConstraint: (name: string, type: string, scopeKind: string, value: number, unit: string) => void;
+  removeConstraint: (uuid: string) => void;
+  updateConstraintEnabled: (uuid: string, enabled: boolean) => void;
+  // Parameter resolution (component → variant → document → project)
+  resolveParameter: (key: string, componentUuid?: string, variantName?: string) => string;
 
   // Net classes
   addNetClass: (name: string) => void;
@@ -260,7 +282,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   loadSchematic: (data) =>
     set({
-      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [] },
+      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [], groups: data.groups || [], differential_pairs: data.differential_pairs || [], signal_harnesses: data.signal_harnesses || [], constraints: data.constraints || [] },
       dirty: false,
       selectedIds: new Set(),
       undoStack: [],
@@ -749,6 +771,127 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: nd, dirty: true });
   },
 
+  // --- Differential pairs ---
+  addDiffPair: (name, positiveNet, negativeNet) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.differential_pairs.some((dp) => dp.name === name)) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.differential_pairs.push({ name, positiveNet, negativeNet });
+    set({ data: nd, dirty: true });
+  },
+  removeDiffPair: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.differential_pairs = nd.differential_pairs.filter((dp) => dp.name !== name);
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Signal harnesses ---
+  addHarness: (name, harnessType) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.signal_harnesses.push({ uuid: crypto.randomUUID(), name, type: harnessType, members: [] });
+    set({ data: nd, dirty: true });
+  },
+  removeHarness: (uuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.signal_harnesses = nd.signal_harnesses.filter((h) => h.uuid !== uuid);
+    set({ data: nd, dirty: true });
+  },
+  addHarnessMember: (harnessUuid, memberName, kind, ref) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const h = nd.signal_harnesses.find((sh) => sh.uuid === harnessUuid);
+    if (h) h.members.push({ name: memberName, kind, ref });
+    set({ data: nd, dirty: true });
+  },
+  removeHarnessMember: (harnessUuid, memberName) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const h = nd.signal_harnesses.find((sh) => sh.uuid === harnessUuid);
+    if (h) h.members = h.members.filter((m) => m.name !== memberName);
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Design constraints ---
+  addConstraint: (name, type, scopeKind, value, unit) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.constraints.push({
+      uuid: crypto.randomUUID(),
+      name,
+      type: type as import("@/types").DesignConstraint["type"],
+      scope: { kind: scopeKind as import("@/types").ConstraintScope["kind"] },
+      value,
+      unit: unit as "mm" | "mil",
+      enabled: true,
+      priority: nd.constraints.length,
+    });
+    set({ data: nd, dirty: true });
+  },
+  removeConstraint: (uuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.constraints = nd.constraints.filter((c) => c.uuid !== uuid);
+    set({ data: nd, dirty: true });
+  },
+  updateConstraintEnabled: (uuid, enabled) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const c = nd.constraints.find((cr) => cr.uuid === uuid);
+    if (c) c.enabled = enabled;
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Parameter hierarchy resolution ---
+  resolveParameter: (key, componentUuid, variantName) => {
+    const { data } = get();
+    if (!data) return "";
+    // 1. Component field (highest priority)
+    if (componentUuid) {
+      const sym = data.symbols.find((s) => s.uuid === componentUuid);
+      if (sym?.fields[key]) return sym.fields[key];
+    }
+    // 2. Variant override
+    if (variantName && componentUuid) {
+      const variant = data.variants.find((v) => v.name === variantName);
+      if (variant?.components[componentUuid]) {
+        const vc = variant.components[componentUuid];
+        if (key === "Value" && vc.altValue) return vc.altValue;
+        if (key === "Footprint" && vc.altFootprint) return vc.altFootprint;
+      }
+    }
+    // 3. Document parameter
+    const docParam = data.document_parameters.find((p) => p.key === key);
+    if (docParam) return docParam.value;
+    // 4. Project parameter (lowest priority) — imported lazily to avoid circular deps
+    try {
+      // Dynamic import would be async, so we use title_block as fallback for project-level params
+      const tb = data.title_block || {};
+      if (tb[key]) return tb[key];
+    } catch { /* ignore */ }
+    return "";
+  },
+
   addNetClass: (name) => {
     const { data } = get();
     if (!data) return;
@@ -1119,6 +1262,20 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       pins: [],
     });
     set({ data: newData, dirty: true });
+  },
+
+  // Multi-channel: set Repeat on a sheet symbol (e.g., "Repeat(CH, 1, 4)" for 4 channels)
+  setSheetRepeat: (uuid, repeat, channelCount) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const sheet = nd.child_sheets.find((s) => s.uuid === uuid);
+    if (sheet) {
+      sheet.repeat = repeat;
+      sheet.channelCount = channelCount;
+    }
+    set({ data: nd, dirty: true });
   },
 
   // Wire drawing state machine
@@ -1505,6 +1662,37 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       arr.push(...sel, ...rest);
     }
     set({ data: nd, dirty: true });
+  },
+
+  createGroup: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size < 2) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.groups.push({
+      uuid: crypto.randomUUID(),
+      name: `Group ${nd.groups.length + 1}`,
+      memberUuids: [...selectedIds],
+    });
+    set({ data: nd, dirty: true });
+  },
+
+  dissolveGroup: (groupUuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.groups = nd.groups.filter((g) => g.uuid !== groupUuid);
+    set({ data: nd, dirty: true });
+  },
+
+  selectGroupMembers: (memberUuid) => {
+    const { data } = get();
+    if (!data) return;
+    const group = data.groups.find((g) => g.memberUuids.includes(memberUuid));
+    if (group) {
+      set({ selectedIds: new Set(group.memberUuids) });
+    }
   },
 
   breakWireAt: (uuid, point) => {
