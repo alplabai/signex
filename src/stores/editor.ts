@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { EditorMode, StatusBarState, SchPoint } from "@/types";
 
 export interface ErcMarker {
@@ -26,6 +27,8 @@ const DEFAULT_FILTER: SelectionFilter = {
   textNotes: { visible: true, selectable: true },
   drawings: { visible: true, selectable: true },
   sheetSymbols: { visible: true, selectable: true },
+  sheetEntries: { visible: true, selectable: true },
+  parameters: { visible: true, selectable: true },
 };
 
 interface EditorState {
@@ -68,7 +71,7 @@ interface EditorState {
   removeBookmark: (name: string) => void;
 }
 
-export const useEditorStore = create<EditorState>()((set) => ({
+export const useEditorStore = create<EditorState>()(persist((set) => ({
   mode: "schematic",
   gridVisible: true,
   netColorOverride: false,
@@ -139,4 +142,11 @@ export const useEditorStore = create<EditorState>()((set) => ({
     set((s) => ({ statusBar: { ...s.statusBar, gridSize: size } })),
   updateStatusBar: (partial) =>
     set((s) => ({ statusBar: { ...s.statusBar, ...partial } })),
+}), {
+  name: "signex-editor",
+  partialize: (state) => ({
+    selectionFilter: state.selectionFilter,
+    gridVisible: state.gridVisible,
+    autoJunction: state.autoJunction,
+  }),
 }));

@@ -1,5 +1,9 @@
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "@/stores/editor";
-import { Crosshair, Grid3x3, Magnet, Layers, MousePointer2, Zap } from "lucide-react";
+import { useLayoutStore } from "@/stores/layout";
+import { PANEL_DEFS } from "@/lib/panelRegistry";
+import type { PanelId } from "@/lib/panelRegistry";
+import { Crosshair, Grid3x3, Magnet, Layers, MousePointer2, Zap, PanelTop, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Unit conversion for display
@@ -114,6 +118,103 @@ export function StatusBar() {
         className="text-text-muted/60 uppercase font-mono text-[10px] hover:text-accent transition-colors px-1">
         {units}
       </button>
+      <Divider />
+
+      {/* Panels button */}
+      <PanelsButton />
+    </div>
+  );
+}
+
+function PanelsButton() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const docks = useLayoutStore((s) => s.docks);
+  const movePanel = useLayoutStore((s) => s.movePanel);
+  const removePanel = useLayoutStore((s) => s.removePanel);
+
+  // Build a set of currently visible panel IDs across all docks
+  const visiblePanels = new Set<string>([
+    ...docks.left,
+    ...docks.right,
+    ...docks.bottom,
+  ]);
+
+  const handleTogglePanel = useCallback(
+    (panelId: PanelId, defaultDock: "left" | "right" | "bottom") => {
+      if (visiblePanels.has(panelId)) {
+        removePanel(panelId);
+      } else {
+        movePanel(panelId, defaultDock);
+        // Ensure the dock is expanded
+        const store = useLayoutStore.getState();
+        if (defaultDock === "left" && store.leftCollapsed) store.toggleLeft();
+        if (defaultDock === "right" && store.rightCollapsed) store.toggleRight();
+        if (defaultDock === "bottom" && store.bottomCollapsed) store.toggleBottom();
+      }
+    },
+    [visiblePanels, movePanel, removePanel],
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        btnRef.current &&
+        !btnRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        onClick={() => setOpen((v) => !v)}
+        title="Toggle panels"
+        className={cn(
+          "flex items-center gap-1 px-1.5 text-[10px] uppercase font-semibold tracking-wider transition-colors",
+          open
+            ? "text-accent"
+            : "text-text-muted/60 hover:text-accent",
+        )}
+      >
+        <PanelTop size={11} />
+        Panels
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          className="absolute bottom-full right-0 mb-1 w-48 bg-bg-secondary border border-border-subtle rounded shadow-lg py-1 z-50"
+        >
+          {PANEL_DEFS.map((def) => {
+            const isVisible = visiblePanels.has(def.id);
+            return (
+              <button
+                key={def.id}
+                className="flex items-center w-full px-3 py-1 text-[11px] text-left hover:bg-bg-hover transition-colors"
+                onClick={() => handleTogglePanel(def.id, def.defaultDock)}
+              >
+                <span className="w-4 mr-2 flex-shrink-0">
+                  {isVisible && <Check size={11} className="text-accent" />}
+                </span>
+                <span className={isVisible ? "text-text-secondary" : "text-text-muted"}>
+                  {def.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
