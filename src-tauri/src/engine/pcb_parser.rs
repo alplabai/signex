@@ -1,6 +1,4 @@
-use super::sexpr::SExpr;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ═══════════════════════════════════════════════════════════════
 // KiCad PCB Parser (.kicad_pcb)
@@ -201,8 +199,7 @@ fn parse_uuid(node: &SExpr) -> String {
 }
 
 pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
-    let tokens = super::sexpr::tokenize(content)?;
-    let root = super::sexpr::parse_tokens(&tokens)?;
+    let root = super::sexpr::parse(content)?;
 
     if root.keyword() != Some("kicad_pcb") {
         return Err("Not a KiCad PCB file".to_string());
@@ -223,11 +220,11 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
     // Layers
     let layers: Vec<LayerDef> = if let Some(layers_node) = root.find("layers") {
         layers_node.children().iter().filter_map(|l| {
-            let id_num = l.first_arg()?;
+            let _id_num = l.first_arg()?;
             let name = l.arg(1)?;
             let ltype = l.arg(2).unwrap_or("signal");
             Some(LayerDef {
-                id: name.to_string(),
+                id: name.to_string(), // Use name as ID (e.g., "F.Cu") — matches frontend layer system
                 name: name.to_string(),
                 layer_type: ltype.to_string(),
             })
@@ -424,9 +421,9 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
             ["F.Cu".to_string(), "B.Cu".to_string()]
         };
         let net: u32 = v.find("net").and_then(|n| n.first_arg()?.parse().ok()).unwrap_or(0);
-        let via_type = if v.find("blind").is_some() { "blind" }
-            else if v.find("micro").is_some() { "micro" }
-            else { "through" };
+        let via_type = v.find("type")
+            .and_then(|t| t.first_arg())
+            .unwrap_or("through");
         Via { uuid: parse_uuid(v), position: pos, diameter, drill, layers, net, via_type: via_type.to_string() }
     }).collect();
 
@@ -446,14 +443,16 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, String> {
             } else { vec![] }
         } else { vec![] };
 
-        // Thermal
-        let thermal_relief = z.find("thermal_bridge_width").is_some();
-        let thermal_gap = z.find("thermal_gap").and_then(|t| t.first_arg()?.parse().ok()).unwrap_or(0.508);
-        let thermal_width = z.find("thermal_bridge_width").and_then(|t| t.first_arg()?.parse().ok()).unwrap_or(0.254);
+        // Thermal — under connect_pads node in KiCad format
+        let connect = z.find("connect_pads");
+        let thermal_relief = connect.and_then(|c| c.find("thermal_gap")).is_some();
+        let thermal_gap = connect.and_then(|c| c.find("thermal_gap")).and_then(|t| t.first_arg()?.parse().ok()).unwrap_or(0.508);
+        let thermal_width = connect.and_then(|c| c.find("thermal_bridge_width")).and_then(|t| t.first_arg()?.parse().ok()).unwrap_or(0.254);
 
         Zone {
             uuid: parse_uuid(z), net, net_name, layer, outline, priority,
-            fill_type: "solid".to_string(), thermal_relief, thermal_gap, thermal_width,
+            fill_type: z.find("fill").and_then(|f| f.find("type")).and_then(|t| t.first_arg()).unwrap_or("solid").to_string(),
+            thermal_relief, thermal_gap, thermal_width,
             clearance, min_thickness,
         }
     }).collect();
