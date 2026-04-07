@@ -2589,6 +2589,21 @@ export function SchematicRenderer() {
               </div>
             } />
 
+          {/* Harness */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 8h6l4 4h6"/><path d="M4 16h6l4-4"/><path d="M10 8v8"/></svg>}
+            label="Harness"
+            onClick={() => setActiveBarMenu(null)}
+            menuOpen={activeBarMenu === "harness"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "harness" ? null : "harness")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                <DropdownItem label="Signal Harness" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Harness Connector" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Harness Entry" onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
+
           {/* No Connect */}
           <ActiveBarBtn
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>}
@@ -2601,6 +2616,40 @@ export function SchematicRenderer() {
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>}
             label="Place Component" active={editMode === "placeSymbol"}
             onClick={() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "p" })); setActiveBarMenu(null); }} />
+
+          {/* Sheet Symbol */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 8h18"/><path d="M7 12h4"/><path d="M7 16h4"/></svg>}
+            label="Sheet Symbol" active={editMode === "placeSheetSymbol"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placeSheetSymbol"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "sheet"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "sheet" ? null : "sheet")}
+            menu={
+              <div className="py-1 min-w-[200px]">
+                <DropdownItem label="Sheet Symbol" onClick={() => { useSchematicStore.getState().setEditMode("placeSheetSymbol"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Sheet Entry" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Device Sheet Symbol" onClick={() => setActiveBarMenu(null)} />
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Reuse Block..." onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
+
+          {/* Parameter / Directives */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h6"/><circle cx="20" cy="12" r="2" fill="currentColor" stroke="none"/></svg>}
+            label="Directives" active={editMode === "placeNoErc"}
+            onClick={() => { useSchematicStore.getState().setEditMode("placeNoErc"); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "directives"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "directives" ? null : "directives")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                <DropdownItem label="Parameter Set" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Generic No ERC" onClick={() => { useSchematicStore.getState().setEditMode("placeNoErc"); setActiveBarMenu(null); }} />
+                <DropdownItem label="Differential Pair" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Blanket" onClick={() => setActiveBarMenu(null)} />
+                <DropdownItem label="Compile Mask" onClick={() => setActiveBarMenu(null)} />
+              </div>
+            } />
 
           {/* Text */}
           <ActiveBarBtn
@@ -2634,6 +2683,90 @@ export function SchematicRenderer() {
                 <DropdownItem label="Polyline" onClick={() => { useSchematicStore.getState().setEditMode("drawPolyline"); setActiveBarMenu(null); }} />
               </div>
             } />
+
+          {/* Net Colors */}
+          <ActiveBarBtn
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="2" width="9" height="9" rx="1" fill="#3b82f6" stroke="#3b82f6"/><rect x="13" y="2" width="9" height="9" rx="1" fill="#ef4444" stroke="#ef4444"/><rect x="2" y="13" width="9" height="9" rx="1" fill="#22c55e" stroke="#22c55e"/><rect x="13" y="13" width="9" height="9" rx="1" fill="#eab308" stroke="#eab308"/></svg>}
+            label="Net Colors" active={useEditorStore.getState().netColorOverride}
+            onClick={() => { useEditorStore.getState().toggleNetColors(); setActiveBarMenu(null); }}
+            menuOpen={activeBarMenu === "netcolors"}
+            onMenuToggle={() => setActiveBarMenu(activeBarMenu === "netcolors" ? null : "netcolors")}
+            menu={
+              <div className="py-1 min-w-[180px]">
+                {[
+                  { label: "Blue", color: "#3b82f6" },
+                  { label: "Light Green", color: "#4ade80" },
+                  { label: "Light Blue", color: "#38bdf8" },
+                  { label: "Red", color: "#ef4444" },
+                  { label: "Fuchsia", color: "#d946ef" },
+                  { label: "Yellow", color: "#facc15" },
+                  { label: "Dark Green", color: "#16a34a" },
+                ].map(c => (
+                  <button key={c.label} onClick={() => {
+                    const store = useEditorStore.getState();
+                    const schStore = useSchematicStore.getState();
+                    const sel = [...schStore.selectedIds];
+                    if (sel.length > 0 && schStore.data) {
+                      const colors = { ...store.netColors };
+                      for (const id of sel) {
+                        const lbl = schStore.data.labels.find(l => l.uuid === id);
+                        if (lbl) colors[lbl.text] = c.color;
+                      }
+                      store.setNetColors(colors);
+                      if (!store.netColorOverride) store.toggleNetColors();
+                    }
+                    setActiveBarMenu(null);
+                  }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-text-secondary hover:bg-[#3d4054] hover:text-text-primary transition-colors text-left">
+                    <span className="w-3 h-3 rounded-sm border border-white/20 shrink-0" style={{ backgroundColor: c.color }} />
+                    {c.label}
+                  </button>
+                ))}
+                <button onClick={() => {
+                    /* Custom color — prompt user */
+                    const hex = prompt("Enter hex color (e.g. #ff8800):");
+                    if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)) {
+                      const store = useEditorStore.getState();
+                      const schStore = useSchematicStore.getState();
+                      const sel = [...schStore.selectedIds];
+                      if (sel.length > 0 && schStore.data) {
+                        const colors = { ...store.netColors };
+                        for (const id of sel) {
+                          const lbl = schStore.data.labels.find(l => l.uuid === id);
+                          if (lbl) colors[lbl.text] = hex;
+                        }
+                        store.setNetColors(colors);
+                        if (!store.netColorOverride) store.toggleNetColors();
+                      }
+                    }
+                    setActiveBarMenu(null);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] text-text-secondary hover:bg-[#3d4054] hover:text-text-primary transition-colors text-left">
+                  <span className="w-3 h-3 rounded-sm border border-dashed border-white/40 shrink-0 bg-gradient-to-br from-red-500 via-green-500 to-blue-500" />
+                  Custom...
+                </button>
+                <div className="h-px bg-[#3d4054] my-1" />
+                <DropdownItem label="Clear Net Color" onClick={() => {
+                  const store = useEditorStore.getState();
+                  const schStore = useSchematicStore.getState();
+                  const sel = [...schStore.selectedIds];
+                  if (sel.length > 0 && schStore.data) {
+                    const colors = { ...store.netColors };
+                    for (const id of sel) {
+                      const lbl = schStore.data.labels.find(l => l.uuid === id);
+                      if (lbl) delete colors[lbl.text];
+                    }
+                    store.setNetColors(colors);
+                  }
+                  setActiveBarMenu(null);
+                }} />
+                <DropdownItem label="Clear All Net Colors" onClick={() => {
+                  useEditorStore.getState().setNetColors({});
+                  setActiveBarMenu(null);
+                }} />
+              </div>
+            } />
+          <div className="w-px h-5 bg-[#3d4054]" />
 
           {/* Rotate */}
           <ActiveBarBtn

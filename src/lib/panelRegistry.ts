@@ -22,4 +22,10 @@ export const PANEL_DEFS: PanelDef[] = [
   { id: "messages", title: "Messages", defaultDock: "bottom" },
   { id: "output-jobs", title: "Output Jobs", defaultDock: "bottom" },
   { id: "signal", title: "Signal", defaultDock: "bottom" },
+  { id: "inspector", title: "Inspector", defaultDock: "right" },
+  { id: "drc", title: "DRC", defaultDock: "bottom" },
+  { id: "layerStack", title: "Layers", defaultDock: "right" },
+  { id: "snippets", title: "Snippets", defaultDock: "right" },
+  { id: "variants", title: "Variants", defaultDock: "right" },
+  { id: "boardCrossSection", title: "Cross Section", defaultDock: "bottom" },
 ];

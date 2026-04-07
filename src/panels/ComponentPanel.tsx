@@ -126,15 +126,17 @@ export function ComponentPanel() {
         </button>
       </div>
 
-      {/* Preview strip */}
+      {/* Preview + Details (Altium-style) */}
       {preview && selectedResult && (
         <div className="border-b border-border-subtle bg-bg-surface/50">
+          {/* Symbol preview */}
           <div className="h-[100px]">
             <SymbolPreviewMini symbol={preview} />
           </div>
-          <div className="px-2 py-1 flex items-center gap-1">
+          {/* Action bar */}
+          <div className="px-2 py-1 flex items-center gap-1 border-t border-border-subtle/50">
             <div className="text-[10px] text-text-muted truncate flex-1">
-              {selectedResult.library}:{selectedResult.symbol_id}
+              {selectedResult.symbol_id}
             </div>
             <button onClick={editSymbol} title="Edit Symbol"
               className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors">
@@ -151,6 +153,29 @@ export function ComponentPanel() {
               Place
             </button>
           </div>
+          {/* Details section (Altium-style) */}
+          <div className="px-2 py-1.5 border-t border-border-subtle/50 text-[10px] space-y-0.5">
+            <div className="text-[11px] font-semibold text-text-secondary mb-1">Details</div>
+            {[
+              { label: "Library Path", value: selectedResult.library },
+              { label: "Library Ref", value: selectedResult.symbol_id },
+              { label: "Description", value: selectedResult.description || "—" },
+              { label: "Prefix", value: selectedResult.reference_prefix || "?" },
+              { label: "Pins", value: String(selectedResult.pin_count) },
+            ].map(row => (
+              <div key={row.label} className="flex gap-2">
+                <span className="text-text-muted/50 w-20 shrink-0">{row.label}</span>
+                <span className="text-text-secondary truncate">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Results count */}
+      {isSearching && displayResults.length > 0 && (
+        <div className="px-2 py-1 border-b border-border-subtle/50 text-[10px] text-text-muted/50">
+          Results: {displayResults.length}
         </div>
       )}
 

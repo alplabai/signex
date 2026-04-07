@@ -28,6 +28,7 @@ interface LayoutState {
   toggleBottom: () => void;
   togglePanel: (id: PanelId) => void;
   movePanel: (panelId: string, targetDock: DockId, index?: number) => void;
+  removePanel: (panelId: string) => void;
   setDockActiveTab: (dock: string, panelId: string) => void;
 }
 
@@ -102,6 +103,28 @@ export const useLayoutStore = create<LayoutState>()(
 
           return { docks: newDocks, activeTab: newActiveTab };
         }),
+      removePanel: (panelId) =>
+        set((s) => {
+          const newDocks = {
+            left: [...s.docks.left],
+            right: [...s.docks.right],
+            bottom: [...s.docks.bottom],
+          };
+          const newActiveTab = { ...s.activeTab };
+
+          for (const dock of ["left", "right", "bottom"] as DockId[]) {
+            const idx = newDocks[dock].indexOf(panelId as DockPanelId);
+            if (idx !== -1) {
+              newDocks[dock].splice(idx, 1);
+              if (newActiveTab[dock] === panelId && newDocks[dock].length > 0) {
+                newActiveTab[dock] = newDocks[dock][0];
+              }
+              break;
+            }
+          }
+
+          return { docks: newDocks, activeTab: newActiveTab };
+        }),
       setDockActiveTab: (dock, panelId) =>
         set((s) => ({
           activeTab: { ...s.activeTab, [dock]: panelId as DockPanelId },
@@ -109,10 +132,10 @@ export const useLayoutStore = create<LayoutState>()(
     }),
     {
       name: "signex-layout",
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
-        if (version < 2) {
+        if (version < 3) {
           // v0/v1 → v2: add docks and activeTab
           return {
             ...state,
