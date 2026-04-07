@@ -14,6 +14,8 @@ export type PcbEditMode =
   | "placeText"
   | "placeDimension";
 
+export type SingleLayerMode = "off" | "hide" | "grayscale" | "monochrome";
+
 interface PcbState {
   data: PcbData | null;
   editMode: PcbEditMode;
@@ -23,6 +25,10 @@ interface PcbState {
   dirty: boolean;
   undoStack: PcbData[];
   redoStack: PcbData[];
+  singleLayerMode: SingleLayerMode;
+  boardFlipped: boolean;
+  netColors: Record<number, string>;
+  netColorEnabled: boolean;
 
   // Routing state
   routingActive: boolean;
@@ -73,6 +79,12 @@ interface PcbState {
 
   // Board outline
   setBoardOutline: (outline: PcbPoint[]) => void;
+
+  // Display modes
+  cycleSingleLayerMode: () => void;
+  toggleBoardFlip: () => void;
+  toggleNetColors: () => void;
+  setNetColor: (net: number, color: string) => void;
 }
 
 const MAX_UNDO = 50;
@@ -95,6 +107,11 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
   dirty: false,
   undoStack: [],
   redoStack: [],
+
+  singleLayerMode: "off" as SingleLayerMode,
+  boardFlipped: false,
+  netColors: {},
+  netColorEnabled: false,
 
   routingActive: false,
   routingPoints: [],
@@ -341,4 +358,19 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
     nd.board.outline = outline;
     set({ data: nd, dirty: true });
   },
+
+  // --- Display modes ---
+  cycleSingleLayerMode: () => set((s) => {
+    const modes: SingleLayerMode[] = ["off", "hide", "grayscale", "monochrome"];
+    const idx = modes.indexOf(s.singleLayerMode);
+    return { singleLayerMode: modes[(idx + 1) % modes.length] };
+  }),
+
+  toggleBoardFlip: () => set((s) => ({ boardFlipped: !s.boardFlipped })),
+
+  toggleNetColors: () => set((s) => ({ netColorEnabled: !s.netColorEnabled })),
+
+  setNetColor: (net, color) => set((s) => ({
+    netColors: { ...s.netColors, [net]: color },
+  })),
 }));

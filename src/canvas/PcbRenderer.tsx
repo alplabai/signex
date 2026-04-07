@@ -32,6 +32,10 @@ export function PcbRenderer() {
   const editMode = usePcbStore((s) => s.editMode);
   const routingActive = usePcbStore((s) => s.routingActive);
   const routingPoints = usePcbStore((s) => s.routingPoints);
+  const singleLayerMode = usePcbStore((s) => s.singleLayerMode);
+  const boardFlipped = usePcbStore((s) => s.boardFlipped);
+  const netColorEnabled = usePcbStore((s) => s.netColorEnabled);
+  const netColors = usePcbStore((s) => s.netColors);
   const gridVisible = useEditorStore((s) => s.gridVisible);
 
   const s2w = useCallback((sx: number, sy: number): PcbPoint => {
@@ -78,6 +82,16 @@ export function PcbRenderer() {
     ctx.translate(cam.x, cam.y);
     ctx.scale(cam.zoom, cam.zoom);
 
+    // Board flip: mirror horizontally when viewing from bottom
+    if (boardFlipped) {
+      const boardCenterX = data.board.outline.length > 0
+        ? data.board.outline.reduce((s, p) => s + p.x, 0) / data.board.outline.length
+        : w / 2 / cam.zoom;
+      ctx.translate(boardCenterX, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-boardCenterX, 0);
+    }
+
     // Grid
     if (gridVisible && cam.zoom > 1) {
       const gs = data.board.setup.gridSize || 1.27;
@@ -121,7 +135,11 @@ export function PcbRenderer() {
       if (!visibleLayers.has(layer)) continue;
       const color = getLayerColor(layer);
       const isActive = layer === activeLayer;
-      const alpha = isActive ? 1.0 : 0.5;
+      // Single layer mode: hide/grayscale/mono non-active layers
+      let alpha = isActive ? 1.0 : 0.5;
+      if (singleLayerMode === "hide" && !isActive) continue;
+      if (singleLayerMode === "grayscale" && !isActive) alpha = 0.15;
+      if (singleLayerMode === "monochrome" && !isActive) alpha = 0.08;
 
       // Zones on this layer
       for (const zone of data.zones) {
@@ -145,7 +163,8 @@ export function PcbRenderer() {
         if (seg.layer !== layer) continue;
         const sel = selectedIds.has(seg.uuid);
         ctx.globalAlpha = alpha;
-        ctx.strokeStyle = sel ? "#00e5ff" : color;
+        const segColor = (netColorEnabled && netColors[seg.net]) ? netColors[seg.net] : color;
+        ctx.strokeStyle = sel ? "#00e5ff" : segColor;
         ctx.lineWidth = seg.width;
         ctx.beginPath();
         ctx.moveTo(seg.start.x, seg.start.y);
@@ -496,8 +515,18 @@ export function PcbRenderer() {
           break;
         case "f":
         case "F":
-          if (!e.ctrlKey && store.selectedIds.size > 0) {
+          if (e.ctrlKey) {
+            e.preventDefault();
+            store.toggleBoardFlip();
+          } else if (store.selectedIds.size > 0) {
             for (const id of store.selectedIds) store.flipFootprint(id);
+          }
+          break;
+        case "s":
+        case "S":
+          if (e.shiftKey && !e.ctrlKey) {
+            e.preventDefault();
+            store.cycleSingleLayerMode();
           }
           break;
         case "x":
@@ -508,11 +537,17 @@ export function PcbRenderer() {
         case "=":
           store.setActiveLayer(store.activeLayer === "F.Cu" ? "B.Cu" : "F.Cu");
           break;
+        case "F5":
+          store.toggleNetColors();
+          break;
         case "z":
           if (e.ctrlKey) { e.preventDefault(); store.undo(); }
           break;
         case "y":
           if (e.ctrlKey) { e.preventDefault(); store.redo(); }
+          break;
+        case "a":
+          if (e.ctrlKey) { e.preventDefault(); store.selectAll(); }
           break;
       }
     };

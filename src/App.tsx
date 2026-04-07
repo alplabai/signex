@@ -16,6 +16,7 @@ import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
 import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
 import { PcbRenderer } from "@/canvas/PcbRenderer";
+import { PcbToolbar } from "@/components/PcbToolbar";
 import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
@@ -282,7 +283,7 @@ function App() {
           if (data) printSchematic(data);
         }}
       />
-      {libEditorActive ? <LibraryEditorToolbar /> : <ToolbarStrip />}
+      {libEditorActive ? <LibraryEditorToolbar /> : editorMode === "pcb" ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
