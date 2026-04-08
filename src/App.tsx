@@ -14,9 +14,7 @@ import { PcbToolbar } from "@/components/PcbToolbar";
 import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
-import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
 import { FootprintEditorCanvas } from "@/canvas/FootprintEditorCanvas";
-import { FootprintEditorToolbar } from "@/components/FootprintEditorToolbar";
 import { useFootprintEditorStore } from "@/stores/footprintEditor";
 import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
@@ -326,7 +324,7 @@ function App() {
           if (data) printSchematic(data);
         }}
       />
-      {isLibraryView ? <LibraryEditorToolbar /> : isFpLibraryView ? <FootprintEditorToolbar /> : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
+      {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
