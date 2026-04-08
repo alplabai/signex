@@ -335,6 +335,11 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full gu
 
 Built by [Caner Alp](https://github.com/alpCaner) at [Alp Lab AB](https://alplab.ai).
 
+### Contributors
+
+- [Caner Alp](https://github.com/alpCaner)
+- [Hakan Gulen](https://github.com/hkngln)
+
 ---
 
 <p align="center">
