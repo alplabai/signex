@@ -334,6 +334,8 @@ function App() {
         onRunDrc={() => { setDockActiveTab("bottom", "drc"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
         onBackAnnotate={() => setShowBackAnnotation(true)}
         onErcMatrix={() => setShowErcMatrix(true)}
+        onConstraints={() => setShowConstraints(true)}
+        onViaStitching={() => setShowViaStitching(true)}
       />
       {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
