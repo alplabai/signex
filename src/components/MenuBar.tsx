@@ -16,6 +16,9 @@ interface MenuBarProps {
   onFindSimilar?: () => void;
   onParameterManager?: () => void;
   onPrint?: () => void;
+  onRunDrc?: () => void;
+  onBackAnnotate?: () => void;
+  onErcMatrix?: () => void;
 }
 
 interface MenuItem {
@@ -196,7 +199,7 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint, onRunDrc, onBackAnnotate, onErcMatrix }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
@@ -260,9 +263,9 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
       }};
       if (item.label === "Export as PDF...") return { ...item, disabled: false, action: onExportPdf };
       if (item.label === "Print...") return { ...item, disabled: false, action: onPrint };
-      if (item.label === "Electrical Rules Check...") return { ...item, disabled: false, action: () => {
-        /* ERC runs from Messages panel */
-      }};
+      if (item.label === "Electrical Rules Check...") return { ...item, disabled: false, action: onErcMatrix || (() => {}) };
+      if (item.label === "Design Rule Check...") return { ...item, disabled: false, action: onRunDrc };
+      if (item.label === "Back Annotate...") return { ...item, disabled: false, action: onBackAnnotate };
       // Design / Tools
       if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: onAnnotate };
       if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: onAnnotate };

@@ -20,6 +20,9 @@ import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { FindSimilarDialog } from "@/components/FindSimilarDialog";
 import { ParameterManager } from "@/components/ParameterManager";
+import { BackAnnotationDialog } from "@/components/BackAnnotationDialog";
+import { ErcMatrixDialog } from "@/components/ErcMatrixDialog";
+import { ViaStitchingDialog } from "@/components/ViaStitchingDialog";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
@@ -187,6 +190,9 @@ function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showFindSimilar, setShowFindSimilar] = useState(false);
   const [showParamManager, setShowParamManager] = useState(false);
+  const [showBackAnnotation, setShowBackAnnotation] = useState(false);
+  const [showErcMatrix, setShowErcMatrix] = useState(false);
+  const [showViaStitching, setShowViaStitching] = useState(false);
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const libEditorActive = useLibraryEditorStore((s) => s.active);
   const fpEditorActive = useFootprintEditorStore((s) => s.active);
@@ -323,6 +329,9 @@ function App() {
           const data = useSchematicStore.getState().data;
           if (data) printSchematic(data);
         }}
+        onRunDrc={() => { setDockActiveTab("bottom", "drc"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onBackAnnotate={() => setShowBackAnnotation(true)}
+        onErcMatrix={() => setShowErcMatrix(true)}
       />
       {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
@@ -378,6 +387,9 @@ function App() {
       <PreferencesDialog open={showPreferences} onClose={() => setShowPreferences(false)} />
       <FindSimilarDialog open={showFindSimilar} onClose={() => setShowFindSimilar(false)} />
       <ParameterManager open={showParamManager} onClose={() => setShowParamManager(false)} />
+      <BackAnnotationDialog open={showBackAnnotation} onClose={() => setShowBackAnnotation(false)} />
+      <ErcMatrixDialog open={showErcMatrix} onClose={() => setShowErcMatrix(false)} />
+      <ViaStitchingDialog open={showViaStitching} onClose={() => setShowViaStitching(false)} />
     </div>
   );
 }
