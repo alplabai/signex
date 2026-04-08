@@ -75,17 +75,20 @@ npm run tauri dev    # Start dev mode
 
 ## Architecture Overview
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| `src/stores/schematic.ts` | Main state store — all editing operations | ~1300 |
-| `src/canvas/SchematicRenderer.tsx` | Canvas2D rendering + mouse/keyboard handlers | ~1900 |
-| `src/canvas/hitTest.ts` | Hit detection and box selection | ~300 |
-| `src/lib/netResolver.ts` | Net connectivity (union-find) | ~200 |
-| `src/lib/erc.ts` | Electrical rules check (11 checks) | ~250 |
-| `src/lib/ercMatrix.ts` | Pin-to-pin connection matrix (12x12) | ~200 |
-| `src/panels/PropertiesPanel.tsx` | Altium-style properties for all types | ~900 |
-| `src-tauri/src/engine/parser.rs` | KiCad S-expression parser | ~900 |
-| `src-tauri/src/engine/writer.rs` | KiCad S-expression writer | ~300 |
+| File | Purpose |
+|------|---------|
+| `src/stores/schematic.ts` | Main schematic state store — all editing operations |
+| `src/canvas/SchematicRenderer.tsx` | Schematic Canvas2D rendering + mouse/keyboard handlers |
+| `src/canvas/schematicDrawHelpers.ts` | Schematic draw helpers (shapes, symbols, labels) |
+| `src/canvas/PcbRenderer.tsx` | PCB Canvas2D rendering |
+| `src/canvas/hitTest*.ts` | Hit detection (point, area, connectivity, flood fill) |
+| `src/lib/themes.ts` | 6 built-in themes with full canvas color definitions |
+| `src/stores/theme.ts` | Theme state store with persistence |
+| `src/lib/pcbRouter.ts` | PCB interactive routing engine |
+| `src/lib/pcbDrc.ts` | PCB DRC engine (15 check types) |
+| `src-tauri/src/engine/parser.rs` | KiCad schematic S-expression parser |
+| `src-tauri/src/engine/pcb_parser.rs` | KiCad PCB S-expression parser |
+| `src-tauri/src/engine/writer.rs` | KiCad S-expression writer |
 
 ### Key Patterns
 
@@ -121,13 +124,13 @@ Check the [Issues](https://github.com/alplabai/signex/issues) tab for open tasks
 
 | Area | Difficulty | Description |
 |------|-----------|-------------|
-| ERC | Easy | Add more violation types to `src/lib/erc.ts` |
+| Themes | Easy | Add new color themes to `src/lib/themes.ts` |
 | Properties | Easy | Improve property editing for specific object types |
-| Drawing | Medium | Add ellipse, bezier, polygon placement tools |
-| Export | Medium | PDF export, improved netlist format |
-| Panels | Medium | Enhance Filter/List/Navigator panels |
-| PCB | Hard | Start Phase 6 — PCB layout editor |
-| AI | Hard | Start Phase 5 — Claude API integration |
+| Panels | Medium | Enhance Navigator, Inspector, Variants panels |
+| Export | Medium | Improve Gerber/ODB++ output fidelity |
+| 3D | Medium | STEP/VRML model import for PCB 3D viewer |
+| Simulation | Hard | SPICE netlist generation and waveform viewer |
+| Collaboration | Hard | Comment threads, design diff, real-time editing |
 
 ## Questions?
 
