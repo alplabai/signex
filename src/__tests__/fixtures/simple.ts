@@ -4,7 +4,7 @@ import type { SchematicData, SchSymbol, LibSymbol } from "@/types";
 export const resistorLib: LibSymbol = {
   id: "Device:R",
   graphics: [
-    { type: "Rectangle", start: { x: -1.016, y: -2.54 }, end: { x: 1.016, y: 2.54 }, width: 0.254, fill: false },
+    { type: "Rectangle", start: { x: -1.016, y: -2.54 }, end: { x: 1.016, y: 2.54 }, width: 0.254, fill_type: "none" },
   ],
   pins: [
     { pin_type: "passive", shape: "line", position: { x: 0, y: 3.81 }, rotation: 270, length: 1.27, name: "~", number: "1", name_visible: false, number_visible: false },
@@ -19,8 +19,8 @@ export const resistorLib: LibSymbol = {
 export const capacitorLib: LibSymbol = {
   id: "Device:C",
   graphics: [
-    { type: "Polyline", points: [{ x: -2.032, y: -0.762 }, { x: 2.032, y: -0.762 }], width: 0.508, fill: false },
-    { type: "Polyline", points: [{ x: -2.032, y: 0.762 }, { x: 2.032, y: 0.762 }], width: 0.508, fill: false },
+    { type: "Polyline", points: [{ x: -2.032, y: -0.762 }, { x: 2.032, y: -0.762 }], width: 0.508, fill_type: "none" },
+    { type: "Polyline", points: [{ x: -2.032, y: 0.762 }, { x: 2.032, y: 0.762 }], width: 0.508, fill_type: "none" },
   ],
   pins: [
     { pin_type: "passive", shape: "line", position: { x: 0, y: 2.54 }, rotation: 270, length: 1.778, name: "~", number: "1", name_visible: false, number_visible: false },

@@ -54,7 +54,7 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   checkPinConnectionMatrix(nets, violations);
 
   // 10. Power pins not driven (power_in without power_out on net)
-  checkPowerPinNotDriven(nets, violations);
+  checkPowerPinNotDriven(nets, violations, data);
 
   // 11. Nets with wires but no label
   checkNetNoLabel(nets, violations);
@@ -90,10 +90,10 @@ function checkDuplicateDesignators(data: SchematicData, violations: ErcViolation
 }
 
 function checkUnconnectedPins(data: SchematicData, nets: NetInfo[], violations: ErcViolation[]) {
-  // Build set of all pin positions that are on a net with at least one wire
+  // Build set of all pin positions that are on a net with at least one wire or label
   const connectedPinKeys = new Set<string>();
   for (const net of nets) {
-    if (net.wireUuids.length > 0) {
+    if (net.wireUuids.length > 0 || net.labelUuids.length > 0) {
       for (const pin of net.pins) {
         connectedPinKeys.add(`${pin.symbolUuid}:${pin.pinNumber}`);
       }
@@ -233,14 +233,20 @@ function checkPinConnectionMatrix(nets: NetInfo[], violations: ErcViolation[]) {
   }
 }
 
-function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[]) {
+function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[], data?: SchematicData) {
   for (const net of nets) {
     const powerInputs = net.pins.filter(p => p.pinType === "power_in" || p.pinType === "power_input");
     if (powerInputs.length === 0) continue;
     const hasPowerSource = net.pins.some(p =>
       p.pinType === "power_out" || p.pinType === "power_output" || p.pinType === "output"
     );
-    const hasPowerLabel = net.labelUuids.length > 0;
+    // Only count power labels (label_type === "Power") as a driving source
+    const hasPowerLabel = data
+      ? net.labelUuids.some(uuid => {
+          const lbl = data.labels.find(l => l.uuid === uuid);
+          return lbl?.label_type === "Power";
+        })
+      : net.labelUuids.length > 0;
     if (!hasPowerSource && !hasPowerLabel) {
       violations.push({
         type: "power_pin_not_driven",

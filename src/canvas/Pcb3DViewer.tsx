@@ -71,8 +71,18 @@ export function Pcb3DViewer({ data }: Props) {
       }
 
       // Helpers
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matCache = new Map<number, any>();
+      const getMat = (color: number) => {
+        let mat = matCache.get(color);
+        if (!mat) {
+          mat = new THREE.MeshPhongMaterial({ color });
+          matCache.set(color, mat);
+        }
+        return mat;
+      };
       const addMesh = (geo: unknown, color: number, pos: [number, number, number], rz = 0) => {
-        const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color }));
+        const mesh = new THREE.Mesh(geo, getMat(color));
         mesh.position.set(...pos);
         if (rz) mesh.rotation.z = rz;
         scene.add(mesh);

@@ -75,7 +75,10 @@ impl SExpr {
 
     /// Get nth argument as f64
     pub fn arg_f64(&self, n: usize) -> Option<f64> {
-        self.arg(n).and_then(|s| s.parse::<f64>().ok())
+        self.arg(n).and_then(|s| {
+            let v = s.parse::<f64>().ok()?;
+            if v.is_finite() { Some(v) } else { None }
+        })
     }
 
     /// Find a (property "Key" "Value" ...) by key name

@@ -29,6 +29,7 @@ const DEFAULT_FILTER: SelectionFilter = {
   sheetSymbols: { visible: true, selectable: true },
   sheetEntries: { visible: true, selectable: true },
   parameters: { visible: true, selectable: true },
+  ports: { visible: true, selectable: true },
 };
 
 interface EditorState {

@@ -152,14 +152,16 @@ export function offsetPolygon(polygon: PcbPoint[], offset: number): PcbPoint[] {
     const len2 = Math.hypot(dx2, dy2) || 1;
     const nx2 = -dy2 / len2, ny2 = dx2 / len2;
 
-    // Average normal for the vertex
+    // Miter-scaled offset: dot product of normals gives cos(angle/2)
+    const dot = nx1 * nx2 + ny1 * ny2;
+    const miterScale = 1 / Math.max(0.2, (1 + dot) / 2);
     const nx = (nx1 + nx2) / 2;
     const ny = (ny1 + ny2) / 2;
     const nlen = Math.hypot(nx, ny) || 1;
 
     result.push({
-      x: curr.x + (nx / nlen) * offset,
-      y: curr.y + (ny / nlen) * offset,
+      x: curr.x + (nx / nlen) * offset * miterScale,
+      y: curr.y + (ny / nlen) * offset * miterScale,
     });
   }
 

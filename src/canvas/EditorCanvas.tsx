@@ -44,28 +44,27 @@ export function EditorCanvas({ onOpenProject }: EditorCanvasProps) {
       setMode("schematic");
     }
 
-    const timer = setTimeout(() => {
-      invoke<SchematicData>("get_schematic", {
-        projectDir: project.dir,
-        filename,
-      })
-        .then((data) => {
-          if (!cancelled) {
-            loadSchematic(data);
-            setLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(String(err));
-            setLoading(false);
-          }
+    queueMicrotask(async () => {
+      if (cancelled) return;
+      try {
+        const data = await invoke<SchematicData>("get_schematic", {
+          projectDir: project.dir,
+          filename,
         });
-    }, 16);
+        if (!cancelled) {
+          loadSchematic(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(String(err));
+          setLoading(false);
+        }
+      }
+    });
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [project, activeTabId, setMode, loadSchematic]);
 

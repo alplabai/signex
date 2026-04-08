@@ -36,7 +36,7 @@ class UnionFind {
 // Point → index mapping. Round to 1 decimal place (0.1mm buckets)
 // so the bucket size matches the connectivity tolerance (TOL = 0.05).
 function pointKey(p: SchPoint): string {
-  return `${Math.round(p.x * 10)},${Math.round(p.y * 10)}`;
+  return `${Math.round(p.x * 20)},${Math.round(p.y * 20)}`;
 }
 
 /**

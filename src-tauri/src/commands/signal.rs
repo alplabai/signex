@@ -17,12 +17,22 @@ static SIGNEX_BACKEND: std::sync::LazyLock<Mutex<Option<String>>> =
 
 // Shared HTTP client — reuses connection pool, TLS sessions, DNS cache
 static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> =
-    std::sync::LazyLock::new(reqwest::Client::new);
+    std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("Failed to build HTTP client")
+    });
 
 const DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 const MAX_DESIGN_BRIEF_CHARS: usize = 500;
 const MAX_VIOLATION_MSG_CHARS: usize = 500;
 const MAX_TOOL_INPUT_BYTES: usize = 64 * 1024;
+const MAX_DETAILED_CONTEXT_CHARS: usize = 32_000;
+const MAX_MESSAGES: usize = 50;
+const MAX_MESSAGE_CHARS: usize = 8_000;
+const MAX_IMAGE_BASE64_BYTES: usize = 6 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -262,7 +272,7 @@ fn build_system_prompt(context: &SchematicContext) -> String {
         system.push_str("Selected:\n");
         for comp in &context.selected_components {
             system.push_str(&format!(
-                "  {} = {} ({})\n",
+                "  REF={:?} VALUE={:?} FP={:?}\n",
                 comp.reference, comp.value, comp.footprint
             ));
         }
@@ -270,9 +280,10 @@ fn build_system_prompt(context: &SchematicContext) -> String {
 
     if let Some(detail) = &context.detailed_context {
         if !detail.is_empty() {
-            system.push('\n');
-            system.push_str(detail);
-            system.push('\n');
+            let truncated: String = detail.chars().take(MAX_DETAILED_CONTEXT_CHARS).collect();
+            system.push_str("<schematic_detail>\n");
+            system.push_str(&truncated);
+            system.push_str("\n</schematic_detail>\n");
         }
     }
 
@@ -282,19 +293,33 @@ fn build_system_prompt(context: &SchematicContext) -> String {
 
 /// Get API endpoint and key — supports direct Anthropic or Signex proxy
 fn get_api_config() -> Result<(String, String), String> {
-    // Check Signex backend first (managed mode)
-    let backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(url) = backend.as_ref() {
-        // Signex backend handles auth — use a session token or empty key
+    let backend_url = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(url) = backend_url {
         return Ok((format!("{}/v1/messages", url), String::new()));
     }
-
-    // Direct Anthropic API with user's key
-    let guard = API_KEY.lock().unwrap_or_else(|e| e.into_inner());
-    let key = guard
-        .clone()
-        .ok_or_else(|| "API key not configured. Set it in Signal panel or connect to Signex Pro.".to_string())?;
+    let api_key = API_KEY.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let key = api_key.ok_or_else(|| "API key not configured. Set it in Signal panel or connect to Signex Pro.".to_string())?;
     Ok(("https://api.anthropic.com/v1/messages".to_string(), key))
+}
+
+fn validate_chat_inputs(messages: &[ChatMessage], image_base64: Option<&str>) -> Result<(), String> {
+    if messages.len() > MAX_MESSAGES {
+        return Err(format!("Too many messages (max {})", MAX_MESSAGES));
+    }
+    for msg in messages {
+        if msg.role != "user" && msg.role != "assistant" {
+            return Err(format!("Invalid message role: {}", msg.role));
+        }
+        if msg.content.len() > MAX_MESSAGE_CHARS {
+            return Err(format!("Message too large (max {} chars)", MAX_MESSAGE_CHARS));
+        }
+    }
+    if let Some(img) = image_base64 {
+        if img.len() > MAX_IMAGE_BASE64_BYTES {
+            return Err("Image too large (max 6MB base64)".to_string());
+        }
+    }
+    Ok(())
 }
 
 fn build_request(
@@ -367,6 +392,11 @@ pub fn set_api_key(key: String) -> Result<(), String> {
 /// Set the Signex Pro backend URL for managed API access
 #[tauri::command]
 pub fn set_signex_backend(url: String) -> Result<(), String> {
+    if !url.is_empty() {
+        if !url.starts_with("https://") && !url.starts_with("http://localhost") {
+            return Err("Backend URL must use HTTPS (or http://localhost for development)".to_string());
+        }
+    }
     let mut backend = SIGNEX_BACKEND.lock().unwrap_or_else(|e| e.into_inner());
     *backend = if url.is_empty() { None } else { Some(url) };
     Ok(())
@@ -397,6 +427,7 @@ pub async fn signal_chat(
     model: Option<String>,
     image_base64: Option<String>,
 ) -> Result<SignalResponse, String> {
+    validate_chat_inputs(&messages, image_base64.as_deref())?;
     let (api_url, api_key) = get_api_config()?;
     let request = build_request(
         &messages,
@@ -473,6 +504,7 @@ pub async fn signal_chat_stream(
     model: Option<String>,
     image_base64: Option<String>,
 ) -> Result<(), String> {
+    validate_chat_inputs(&messages, image_base64.as_deref())?;
     let (api_url, api_key) = get_api_config()?;
     let request = build_request(
         &messages,
@@ -484,7 +516,7 @@ pub async fn signal_chat_stream(
     );
 
     tokio::spawn(async move {
-        let response = match HTTP_CLIENT
+        let mut response = match HTTP_CLIENT
             .post(&api_url)
             .header("x-api-key", &api_key)
             .header("anthropic-version", "2023-06-01")
@@ -518,23 +550,7 @@ pub async fn signal_chat_stream(
             return;
         }
 
-        // Read response body with error handling
-        let bytes = match response.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                let _ = app.emit(
-                    "signal:stream-error",
-                    StreamError {
-                        message_id,
-                        error: format!("Failed to read stream: {}", e),
-                    },
-                );
-                return;
-            }
-        };
-        let text = String::from_utf8_lossy(&bytes);
-
-        // Parse SSE events
+        // Stream response incrementally — process SSE lines as chunks arrive
         let mut usage = ClaudeUsage {
             input_tokens: 0,
             output_tokens: 0,
@@ -544,106 +560,124 @@ pub async fn signal_chat_stream(
         let mut current_tool_id = String::new();
         let mut current_tool_name = String::new();
         let mut current_tool_input = String::new();
+        let mut line_buf = String::new();
+        let mut done = false;
 
-        for line in text.lines() {
-            if let Some(data) = line.strip_prefix("data: ") {
-                if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                    let event_type = event
-                        .get("type")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("");
+        while let Ok(Some(chunk)) = response.chunk().await {
+            line_buf.push_str(&String::from_utf8_lossy(&chunk));
 
-                    match event_type {
-                        "content_block_delta" => {
-                            if let Some(delta) = event.get("delta") {
-                                let delta_type =
-                                    delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                                if delta_type == "text_delta" {
-                                    if let Some(t) = delta.get("text").and_then(|t| t.as_str()) {
-                                        let _ = app.emit(
-                                            "signal:stream-delta",
-                                            StreamDelta {
-                                                text: t.to_string(),
-                                                message_id: message_id.clone(),
-                                            },
-                                        );
-                                    }
-                                } else if delta_type == "input_json_delta" {
-                                    if let Some(partial) =
-                                        delta.get("partial_json").and_then(|t| t.as_str())
+            // Process all complete lines in the buffer
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim_end().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                let data = match line.strip_prefix("data: ") {
+                    Some(d) => d,
+                    None => continue,
+                };
+                let event = match serde_json::from_str::<serde_json::Value>(data) {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                let event_type = event
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+
+                match event_type {
+                    "content_block_delta" => {
+                        if let Some(delta) = event.get("delta") {
+                            let delta_type =
+                                delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            if delta_type == "text_delta" {
+                                if let Some(t) = delta.get("text").and_then(|t| t.as_str()) {
+                                    let _ = app.emit(
+                                        "signal:stream-delta",
+                                        StreamDelta {
+                                            text: t.to_string(),
+                                            message_id: message_id.clone(),
+                                        },
+                                    );
+                                }
+                            } else if delta_type == "input_json_delta" {
+                                if let Some(partial) =
+                                    delta.get("partial_json").and_then(|t| t.as_str())
+                                {
+                                    if current_tool_input.len() + partial.len()
+                                        < MAX_TOOL_INPUT_BYTES
                                     {
-                                        if current_tool_input.len() + partial.len()
-                                            < MAX_TOOL_INPUT_BYTES
-                                        {
-                                            current_tool_input.push_str(partial);
-                                        }
+                                        current_tool_input.push_str(partial);
                                     }
                                 }
                             }
                         }
-                        "content_block_start" => {
-                            if let Some(cb) = event.get("content_block") {
-                                if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                                    current_tool_id = cb
-                                        .get("id")
-                                        .and_then(|t| t.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_name = cb
-                                        .get("name")
-                                        .and_then(|t| t.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_input.clear();
-                                }
-                            }
-                        }
-                        "content_block_stop" => {
-                            if !current_tool_name.is_empty() {
-                                let input = serde_json::from_str(&current_tool_input)
-                                    .unwrap_or(serde_json::json!({}));
-                                tool_calls.push(ToolCall {
-                                    id: current_tool_id.clone(),
-                                    name: current_tool_name.clone(),
-                                    input,
-                                });
-                                current_tool_name.clear();
-                                current_tool_id.clear();
+                    }
+                    "content_block_start" => {
+                        if let Some(cb) = event.get("content_block") {
+                            if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                                current_tool_id = cb
+                                    .get("id")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                current_tool_name = cb
+                                    .get("name")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
                                 current_tool_input.clear();
                             }
                         }
-                        "message_delta" => {
-                            if let Some(u) = event.get("usage") {
-                                if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64())
-                                {
-                                    usage.output_tokens = out as u32;
-                                }
-                            }
-                            if let Some(sr) = event
-                                .get("delta")
-                                .and_then(|d| d.get("stop_reason"))
-                                .and_then(|s| s.as_str())
-                            {
-                                stop_reason = sr.to_string();
-                            }
-                        }
-                        "message_start" => {
-                            if let Some(msg) = event.get("message") {
-                                if let Some(u) = msg.get("usage") {
-                                    if let Some(inp) =
-                                        u.get("input_tokens").and_then(|t| t.as_u64())
-                                    {
-                                        usage.input_tokens = inp as u32;
-                                    }
-                                }
-                            }
-                        }
-                        "message_stop" => {
-                            break;
-                        }
-                        _ => {}
                     }
+                    "content_block_stop" => {
+                        if !current_tool_name.is_empty() {
+                            let input = serde_json::from_str(&current_tool_input)
+                                .unwrap_or(serde_json::json!({}));
+                            tool_calls.push(ToolCall {
+                                id: current_tool_id.clone(),
+                                name: current_tool_name.clone(),
+                                input,
+                            });
+                            current_tool_name.clear();
+                            current_tool_id.clear();
+                            current_tool_input.clear();
+                        }
+                    }
+                    "message_delta" => {
+                        if let Some(u) = event.get("usage") {
+                            if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64())
+                            {
+                                usage.output_tokens = out as u32;
+                            }
+                        }
+                        if let Some(sr) = event
+                            .get("delta")
+                            .and_then(|d| d.get("stop_reason"))
+                            .and_then(|s| s.as_str())
+                        {
+                            stop_reason = sr.to_string();
+                        }
+                    }
+                    "message_start" => {
+                        if let Some(msg) = event.get("message") {
+                            if let Some(u) = msg.get("usage") {
+                                if let Some(inp) =
+                                    u.get("input_tokens").and_then(|t| t.as_u64())
+                                {
+                                    usage.input_tokens = inp as u32;
+                                }
+                            }
+                        }
+                    }
+                    "message_stop" => {
+                        done = true;
+                        break;
+                    }
+                    _ => {}
                 }
+            }
+            if done {
+                break;
             }
         }
 

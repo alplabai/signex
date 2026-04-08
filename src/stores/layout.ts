@@ -178,9 +178,12 @@ export const useLayoutStore = create<LayoutState>()(
         }),
 
       updateFloatingPosition: (panelId, x, y) =>
-        set((s) => ({
-          floatingPanels: { ...s.floatingPanels, [panelId]: { ...s.floatingPanels[panelId], x, y } },
-        })),
+        set((s) => {
+          if (!s.floatingPanels[panelId]) return s;
+          return {
+            floatingPanels: { ...s.floatingPanels, [panelId]: { ...s.floatingPanels[panelId], x, y } },
+          };
+        }),
 
       closeFloatingPanel: (panelId) =>
         set((s) => {

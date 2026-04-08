@@ -24,6 +24,7 @@ import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
+import { useThemeStore } from "@/stores/theme";
 import { useResizable } from "@/hooks/useResizable";
 import { printSchematic } from "@/lib/pdfExport";
 import { cn } from "@/lib/utils";
@@ -208,6 +209,10 @@ function App() {
   const leftResize = useResizable({ direction: "horizontal", onResize: setLeftWidth, min: 180, max: 500 });
   const rightResize = useResizable({ direction: "horizontal", onResize: setRightWidth, min: 200, max: 500, reverse: true });
   const bottomResize = useResizable({ direction: "vertical", onResize: setBottomHeight, min: 100, max: 400, reverse: true });
+
+  useEffect(() => {
+    useThemeStore.getState().applyActiveTheme();
+  }, []);
 
   useEffect(() => {
     invoke<AppInfo>("get_app_info")

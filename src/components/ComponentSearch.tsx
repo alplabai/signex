@@ -284,7 +284,7 @@ function SymbolPreview({ symbol }: { symbol: LibSymbol }) {
           ctx.beginPath();
           ctx.moveTo(g.points[0].x, g.points[0].y);
           for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
-          if (g.fill) ctx.fill();
+          if (g.fill_type !== "none") ctx.fill();
           ctx.stroke();
           break;
         }
@@ -298,7 +298,7 @@ function SymbolPreview({ symbol }: { symbol: LibSymbol }) {
         case "Circle": {
           ctx.beginPath();
           ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
-          if (g.fill) ctx.fill();
+          if (g.fill_type !== "none") ctx.fill();
           ctx.stroke();
           break;
         }

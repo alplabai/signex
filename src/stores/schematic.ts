@@ -325,7 +325,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (undoStack.length === 0 || !data) return;
     const prev = undoStack[undoStack.length - 1];
     set({
-      data: prev,
+      data: cloneData(prev),
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, cloneData(data)],
       dirty: true,
@@ -338,7 +338,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (redoStack.length === 0 || !data) return;
     const next = redoStack[redoStack.length - 1];
     set({
-      data: next,
+      data: cloneData(next),
       redoStack: redoStack.slice(0, -1),
       undoStack: [...undoStack, cloneData(data)],
       dirty: true,
@@ -553,7 +553,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    newData.symbols.push({ ...symbol, uuid: generateUuid() });
+    newData.symbols.push({ ...structuredClone(symbol), uuid: generateUuid() });
     set({ data: newData, dirty: true });
   },
 
@@ -831,6 +831,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   addHarness: (name, harnessType) => {
     const { data } = get();
     if (!data) return;
+    if (data.signal_harnesses.some((h) => h.name === name)) return;
     get().pushUndo();
     const nd = cloneData(data);
     nd.signal_harnesses.push({ uuid: crypto.randomUUID(), name, type: harnessType, members: [] });
@@ -1169,10 +1170,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
+    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: pos,
+      position: snapped,
       rotation: 0,
       label_type: "Net",
       shape: "",
@@ -1198,10 +1200,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         powerStyle = "bar";
       }
     }
+    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text: netName,
-      position: pos,
+      position: snapped,
       rotation: 0,
       label_type: "Power",
       shape: powerStyle,
@@ -1939,8 +1942,9 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const nd = cloneData(data);
+    const uuidSet = new Set(uuids);
     for (const sym of nd.symbols) {
-      if (!uuids.includes(sym.uuid)) continue;
+      if (!uuidSet.has(sym.uuid)) continue;
       switch (key) {
         case "value": sym.value = value; break;
         case "footprint": sym.footprint = value; break;
@@ -1954,8 +1958,9 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const nd = cloneData(data);
+    const uuidSet = new Set(uuids);
     for (const label of nd.labels) {
-      if (!uuids.includes(label.uuid)) continue;
+      if (!uuidSet.has(label.uuid)) continue;
       if (key === "text") label.text = value;
     }
     set({ data: nd, dirty: true });

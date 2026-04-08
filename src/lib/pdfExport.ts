@@ -68,7 +68,7 @@ function arcCenter(p1: SchPoint, p2: SchPoint, p3: SchPoint): SchPoint | null {
 function isCounterClockwise(a1: number, aMid: number, a2: number): boolean {
   const norm = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const n1 = norm(a1), nM = norm(aMid), n2 = norm(a2);
-  return n1 < n2 ? !(nM >= n1 && nM <= n2) : (nM >= n2 && nM <= n1);
+  return n1 < n2 ? (nM >= n1 && nM <= n2) : !(nM >= n2 && nM <= n1);
 }
 
 const txt = (s: string) => s.replace(/\{slash\}/g, "/");
@@ -78,7 +78,8 @@ function drawGraphicTransformed(
   sx: number, sy: number, rot: number, mx: boolean, my: boolean,
 ) {
   const t = (lx: number, ly: number) => symToSch(lx, ly, sx, sy, rot, mx, my);
-  ctx.lineWidth = Math.max(g.width || 0.1, 0.1);
+  const gWidth = "width" in g ? g.width : 0;
+  ctx.lineWidth = Math.max(gWidth || 0.1, 0.1);
   switch (g.type) {
     case "Polyline": {
       if (g.points.length < 2) break;
@@ -89,7 +90,13 @@ function drawGraphicTransformed(
         const [xi, yi] = t(g.points[i].x, g.points[i].y);
         ctx.lineTo(xi, yi);
       }
-      if (g.fill) { ctx.fillStyle = C.body; ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+      if (g.fill_type === "background") {
+        ctx.fillStyle = C.bodyFill;
+        ctx.fill();
+      } else if (g.fill_type === "outline") {
+        ctx.fillStyle = C.body;
+        ctx.fill();
+      }
       ctx.stroke();
       break;
     }
@@ -98,8 +105,8 @@ function drawGraphicTransformed(
       const [x2, y2] = t(g.end.x, g.end.y);
       const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
       const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
-      ctx.fillStyle = C.bodyFill;
-      ctx.fillRect(rx, ry, rw, rh);
+      if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+      else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fillRect(rx, ry, rw, rh); }
       ctx.strokeRect(rx, ry, rw, rh);
       break;
     }
@@ -107,7 +114,8 @@ function drawGraphicTransformed(
       const [cx, cy] = t(g.center.x, g.center.y);
       ctx.beginPath();
       ctx.arc(cx, cy, g.radius, 0, Math.PI * 2);
-      if (g.fill) { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+      if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+      else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
       ctx.stroke();
       break;
     }
@@ -209,7 +217,7 @@ export function renderSchematicToCanvas(
     ctx.textBaseline = "middle";
     ctx.fillText(substituteSpecialStrings(tb.title || "", data), tbx + 1, tby + 25);
     ctx.font = "1.2px sans-serif";
-    ctx.fillText(tb.title || "", tbx + 8, tby + 5);
+    ctx.fillText(tb.comment1 || "", tbx + 8, tby + 5);
     ctx.fillText(tb.date || "", tbx + 58, tby + 5);
     ctx.fillText(tb.rev || "", tbx + 8, tby + 15);
     ctx.fillText(tb.company || "", tbx + 63, tby + 15);
