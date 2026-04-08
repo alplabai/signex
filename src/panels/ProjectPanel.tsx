@@ -177,14 +177,17 @@ export function ProjectPanel() {
       {
         label: `${sheet.symbols_count} components`,
         icon: <Component size={11} className="text-text-muted/50" />,
+        onContextMenu: handleProjectContextMenu,
       },
       {
         label: `${sheet.wires_count} wires`,
         icon: <Cable size={11} className="text-text-muted/50" />,
+        onContextMenu: handleProjectContextMenu,
       },
       {
         label: `${sheet.labels_count} labels`,
         icon: <Tag size={11} className="text-text-muted/50" />,
+        onContextMenu: handleProjectContextMenu,
       },
     ],
   }));
@@ -197,6 +200,7 @@ export function ProjectPanel() {
           {
             label: project.pcb_file,
             icon: <Cpu size={12} className="text-success/70" />,
+            onContextMenu: handleProjectContextMenu,
             onClick: () => {
               const tabId = `pcb-${project.path}:${project.pcb_file}`;
               openTab({
@@ -225,6 +229,7 @@ export function ProjectPanel() {
         expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
         isFolder: true,
         defaultExpanded: false,
+        onContextMenu: handleProjectContextMenu,
         children: [],
       },
       {
@@ -241,6 +246,7 @@ export function ProjectPanel() {
         expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
         isFolder: true,
         defaultExpanded: false,
+        onContextMenu: handleProjectContextMenu,
         children: [],
       },
       {
@@ -249,6 +255,7 @@ export function ProjectPanel() {
         expandedIcon: <FolderOpen size={12} className="text-purple-400/70" />,
         isFolder: true,
         defaultExpanded: false,
+        onContextMenu: handleProjectContextMenu,
         children: [],
       },
       {
@@ -257,6 +264,7 @@ export function ProjectPanel() {
         expandedIcon: <FolderOpen size={12} className="text-text-muted/60" />,
         isFolder: true,
         defaultExpanded: false,
+        onContextMenu: handleProjectContextMenu,
         children: [],
       },
     ],
