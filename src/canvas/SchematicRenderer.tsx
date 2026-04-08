@@ -9,6 +9,7 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
 import type { Graphic, SchPoint, TextPropData } from "@/types";
 import { substituteSpecialStrings } from "@/lib/specialStrings";
+import { useThemeStore } from "@/stores/theme";
 import {
   PAPER, C, txt,
   symToSch, pinEnd, findNearestElectricalPoint,
@@ -39,6 +40,10 @@ export function SchematicRenderer() {
   const drawStart = useRef<SchPoint | null>(null);
   const drawMid = useRef<SchPoint | null>(null); // For 3-click arc
   const polyPoints = useRef<SchPoint[]>([]); // For polyline accumulation
+  // Canvas theme colors — synced to module-level C object each frame
+  const canvasColors = useThemeStore((s) => s.getActiveTheme().tokens.canvas);
+  const canvasColorsRef = useRef(canvasColors);
+  useEffect(() => { canvasColorsRef.current = canvasColors; Object.assign(C, canvasColors); }, [canvasColors]);
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
@@ -97,7 +102,8 @@ export function SchematicRenderer() {
   ) => {
     const t = (lx: number, ly: number) => symToSch(lx, ly, sx, sy, rot, mx, my);
 
-    ctx.lineWidth = Math.max(g.width || 0.1, 0.1);
+    const gWidth = "width" in g ? (g.width as number) : 0;
+    ctx.lineWidth = Math.max(gWidth || 0.1, 0.1);
 
     switch (g.type) {
       case "Polyline": {
@@ -109,7 +115,8 @@ export function SchematicRenderer() {
           const [xi, yi] = t(g.points[i].x, g.points[i].y);
           ctx.lineTo(xi, yi);
         }
-        if (g.fill) { ctx.fillStyle = C.body; ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
         ctx.stroke();
         break;
       }
@@ -118,9 +125,8 @@ export function SchematicRenderer() {
         const [x2, y2] = t(g.end.x, g.end.y);
         const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
         const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
-        // Always fill rectangles with paper bg to make body opaque
-        ctx.fillStyle = C.bodyFill;
-        ctx.fillRect(rx, ry, rw, rh);
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fillRect(rx, ry, rw, rh); }
         ctx.strokeRect(rx, ry, rw, rh);
         break;
       }
@@ -128,7 +134,8 @@ export function SchematicRenderer() {
         const [cx, cy] = t(g.center.x, g.center.y);
         ctx.beginPath();
         ctx.arc(cx, cy, g.radius, 0, Math.PI * 2);
-        if (g.fill) { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
         ctx.stroke();
         break;
       }

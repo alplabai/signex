@@ -242,7 +242,7 @@ export function LibraryEditorCanvas() {
           start: { x: sw.x - 2.54, y: sw.y - 2.54 },
           end: { x: sw.x + 2.54, y: sw.y + 2.54 },
           width: 0.254,
-          fill: false,
+          fill_type: "none",
         });
         store.setEditMode("select");
       } else if (store.editMode === "addCircle") {
@@ -251,7 +251,7 @@ export function LibraryEditorCanvas() {
           center: sw,
           radius: 2.54,
           width: 0.254,
-          fill: false,
+          fill_type: "none",
         });
         store.setEditMode("select");
       } else if (store.editMode === "addPolyline") {
@@ -263,7 +263,7 @@ export function LibraryEditorCanvas() {
             { x: sw.x + 2.54, y: sw.y },
           ],
           width: 0.254,
-          fill: false,
+          fill_type: "none",
         });
         store.setEditMode("select");
       } else if (store.editMode === "addArc") {
@@ -273,6 +273,7 @@ export function LibraryEditorCanvas() {
           mid: { x: sw.x, y: sw.y - 2.54 },
           end: { x: sw.x + 2.54, y: sw.y },
           width: 0.254,
+          fill_type: "none",
         });
         store.setEditMode("select");
       }
@@ -371,7 +372,8 @@ function renderSymbol(
     const g = sym.graphics[i];
     const isSelected = sel?.type === "graphic" && sel.index === i;
     ctx.strokeStyle = isSelected ? COLORS.selected : COLORS.body;
-    ctx.lineWidth = Math.max(g.width || 0.1, 0.1);
+    const gWidth = "width" in g ? g.width : 0;
+    ctx.lineWidth = Math.max(gWidth || 0.1, 0.1);
 
     switch (g.type) {
       case "Polyline": {
@@ -379,11 +381,12 @@ function renderSymbol(
         ctx.beginPath();
         ctx.moveTo(g.points[0].x, g.points[0].y);
         for (let j = 1; j < g.points.length; j++) ctx.lineTo(g.points[j].x, g.points[j].y);
-        if (g.fill) {
+        if (g.fill_type === "background") {
           ctx.fillStyle = COLORS.bodyFill;
-          ctx.globalAlpha = 0.15;
           ctx.fill();
-          ctx.globalAlpha = 1;
+        } else if (g.fill_type === "outline") {
+          ctx.fillStyle = COLORS.body;
+          ctx.fill();
         }
         ctx.stroke();
         break;
@@ -391,14 +394,26 @@ function renderSymbol(
       case "Rectangle": {
         const rx = Math.min(g.start.x, g.end.x), ry = Math.min(g.start.y, g.end.y);
         const rw = Math.abs(g.end.x - g.start.x), rh = Math.abs(g.end.y - g.start.y);
-        if (g.fill) { ctx.fillStyle = COLORS.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        if (g.fill_type === "background") {
+          ctx.fillStyle = COLORS.bodyFill;
+          ctx.fillRect(rx, ry, rw, rh);
+        } else if (g.fill_type === "outline") {
+          ctx.fillStyle = COLORS.body;
+          ctx.fillRect(rx, ry, rw, rh);
+        }
         ctx.strokeRect(rx, ry, rw, rh);
         break;
       }
       case "Circle": {
         ctx.beginPath();
         ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
-        if (g.fill) { ctx.fillStyle = COLORS.bodyFill; ctx.fill(); }
+        if (g.fill_type === "background") {
+          ctx.fillStyle = COLORS.bodyFill;
+          ctx.fill();
+        } else if (g.fill_type === "outline") {
+          ctx.fillStyle = COLORS.body;
+          ctx.fill();
+        }
         ctx.stroke();
         break;
       }
@@ -498,12 +513,12 @@ function hitTestGraphic(point: SchPoint, g: Graphic): boolean {
       return (
         Math.abs(point.x - ix) < tol || Math.abs(point.x - ex) < tol ||
         Math.abs(point.y - iy) < tol || Math.abs(point.y - ey) < tol ||
-        g.fill
+        g.fill_type !== "none"
       );
     }
     case "Circle": {
       const d = dist(point, g.center);
-      return g.fill ? d <= g.radius + tol : Math.abs(d - g.radius) < tol;
+      return g.fill_type !== "none" ? d <= g.radius + tol : Math.abs(d - g.radius) < tol;
     }
     case "Polyline": {
       for (let i = 0; i < g.points.length - 1; i++) {
@@ -515,6 +530,17 @@ function hitTestGraphic(point: SchPoint, g: Graphic): boolean {
       return (
         pointToSegmentDist(point, g.start, g.mid) < tol ||
         pointToSegmentDist(point, g.mid, g.end) < tol
+      );
+    }
+    case "Text": {
+      return dist(point, g.position) < tol * 4;
+    }
+    case "TextBox": {
+      return (
+        point.x >= g.position.x - tol &&
+        point.x <= g.position.x + Math.abs(g.size.x) + tol &&
+        point.y >= g.position.y - tol &&
+        point.y <= g.position.y + Math.abs(g.size.y) + tol
       );
     }
   }

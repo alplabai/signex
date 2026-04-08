@@ -176,16 +176,16 @@ pub struct BoardText {
 
 fn parse_point(node: &SExpr) -> Point {
     Point {
-        x: node.arg(0).and_then(|s| s.parse().ok()).unwrap_or(0.0),
-        y: node.arg(1).and_then(|s| s.parse().ok()).unwrap_or(0.0),
+        x: node.arg(0).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0),
+        y: node.arg(1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0),
     }
 }
 
 fn parse_at(node: &SExpr) -> (Point, f64) {
     if let Some(at) = node.find("at") {
-        let x = at.arg(0).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-        let y = at.arg(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-        let rot = at.arg(2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        let x = at.arg(0).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+        let y = at.arg(1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+        let rot = at.arg(2).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
         (Point { x, y }, rot)
     } else {
         (Point { x: 0.0, y: 0.0 }, 0.0)
@@ -194,8 +194,8 @@ fn parse_at(node: &SExpr) -> (Point, f64) {
 
 fn parse_uuid(node: &SExpr) -> String {
     node.find("uuid")
-        .and_then(|u| u.first_arg())
-        .map(|s| s.to_string())
+        .and_then(|u: &SExpr| u.first_arg())
+        .map(|s: &str| s.to_string())
         .unwrap_or_else(|| format!("gen-{}", uuid::Uuid::new_v4()))
 }
 
@@ -473,9 +473,9 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             shape: None,
         });
         let pad_layers: Vec<String> = if let Some(layers) = p.find("layers") {
-            layers.children().iter().filter_map(|c| {
-                if let SExpr::Atom(s) = c { Some(s.clone()) } else { None }
-            }).collect()
+            layers.children().iter().filter_map(|s| {
+                s.keyword().or_else(|| if let SExpr::Atom(a) = s { Some(a.as_str()) } else { None })
+            }).map(|s| s.to_string()).collect()
         } else {
             vec![layer.clone()]
         };

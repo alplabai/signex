@@ -518,7 +518,7 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
             Graphic::Polyline {
                 points,
                 width,
-                fill,
+                fill_type,
             } => {
                 wln!(out, "\t\t\t\t(polyline");
                 w!(out, "\t\t\t\t\t(pts");
@@ -527,45 +527,33 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
                 }
                 wln!(out, ")");
                 wln!(out, "\t\t\t\t\t(stroke (width {}) (type default))", width);
-                wln!(
-            out,
-            "\t\t\t\t\t(fill (type {}))",
-                    if *fill { "outline" } else { "none" }
-        );
+                wln!(out, "\t\t\t\t\t(fill (type {}))", fill_type);
                 wln!(out, "\t\t\t\t)");
             }
             Graphic::Rectangle {
                 start,
                 end,
                 width,
-                fill,
+                fill_type,
             } => {
                 wln!(out, "\t\t\t\t(rectangle");
                 wln!(out, "\t\t\t\t\t(start {} {})", start.x, start.y);
                 wln!(out, "\t\t\t\t\t(end {} {})", end.x, end.y);
                 wln!(out, "\t\t\t\t\t(stroke (width {}) (type default))", width);
-                wln!(
-            out,
-            "\t\t\t\t\t(fill (type {}))",
-                    if *fill { "outline" } else { "none" }
-        );
+                wln!(out, "\t\t\t\t\t(fill (type {}))", fill_type);
                 wln!(out, "\t\t\t\t)");
             }
             Graphic::Circle {
                 center,
                 radius,
                 width,
-                fill,
+                fill_type,
             } => {
                 wln!(out, "\t\t\t\t(circle");
                 wln!(out, "\t\t\t\t\t(center {} {})", center.x, center.y);
                 wln!(out, "\t\t\t\t\t(radius {})", radius);
                 wln!(out, "\t\t\t\t\t(stroke (width {}) (type default))", width);
-                wln!(
-            out,
-            "\t\t\t\t\t(fill (type {}))",
-                    if *fill { "outline" } else { "none" }
-        );
+                wln!(out, "\t\t\t\t\t(fill (type {}))", fill_type);
                 wln!(out, "\t\t\t\t)");
             }
             Graphic::Arc {
@@ -573,13 +561,47 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
                 mid,
                 end,
                 width,
+                fill_type,
             } => {
                 wln!(out, "\t\t\t\t(arc");
                 wln!(out, "\t\t\t\t\t(start {} {})", start.x, start.y);
                 wln!(out, "\t\t\t\t\t(mid {} {})", mid.x, mid.y);
                 wln!(out, "\t\t\t\t\t(end {} {})", end.x, end.y);
                 wln!(out, "\t\t\t\t\t(stroke (width {}) (type default))", width);
-                wln!(out, "\t\t\t\t\t(fill (type none))");
+                wln!(out, "\t\t\t\t\t(fill (type {}))", fill_type);
+                wln!(out, "\t\t\t\t)");
+            }
+            Graphic::Text {
+                text,
+                position,
+                rotation,
+                font_size,
+                bold,
+                italic,
+                ..
+            } => {
+                wln!(out, "\t\t\t\t(text {:?}", text);
+                wln!(out, "\t\t\t\t\t(at {} {} {})", position.x, position.y, rotation);
+                wln!(out, "\t\t\t\t\t(effects (font (size {} {}){}{}))", font_size, font_size, if *bold { " (bold yes)" } else { "" }, if *italic { " (italic yes)" } else { "" });
+                wln!(out, "\t\t\t\t)");
+            }
+            Graphic::TextBox {
+                text,
+                position,
+                rotation,
+                size,
+                font_size,
+                bold,
+                italic,
+                width,
+                fill_type,
+            } => {
+                wln!(out, "\t\t\t\t(text_box {:?}", text);
+                wln!(out, "\t\t\t\t\t(at {} {} {})", position.x, position.y, rotation);
+                wln!(out, "\t\t\t\t\t(size {} {})", size.x, size.y);
+                wln!(out, "\t\t\t\t\t(stroke (width {}) (type default))", width);
+                wln!(out, "\t\t\t\t\t(fill (type {}))", fill_type);
+                wln!(out, "\t\t\t\t\t(effects (font (size {} {}){}{}))", font_size, font_size, if *bold { " (bold yes)" } else { "" }, if *italic { " (italic yes)" } else { "" });
                 wln!(out, "\t\t\t\t)");
             }
         }

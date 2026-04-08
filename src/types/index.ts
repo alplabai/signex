@@ -270,11 +270,36 @@ export interface LibSymbol {
   alternate_pins?: SchPin[]; // Alternate pin configuration (same numbers, different graphics)
 }
 
+export type FillType = "none" | "outline" | "background";
+
 export type Graphic =
-  | { type: "Polyline"; points: SchPoint[]; width: number; fill: boolean }
-  | { type: "Rectangle"; start: SchPoint; end: SchPoint; width: number; fill: boolean }
-  | { type: "Circle"; center: SchPoint; radius: number; width: number; fill: boolean }
-  | { type: "Arc"; start: SchPoint; mid: SchPoint; end: SchPoint; width: number };
+  | { type: "Polyline"; points: SchPoint[]; width: number; fill_type: FillType }
+  | { type: "Rectangle"; start: SchPoint; end: SchPoint; width: number; fill_type: FillType }
+  | { type: "Circle"; center: SchPoint; radius: number; width: number; fill_type: FillType }
+  | { type: "Arc"; start: SchPoint; mid: SchPoint; end: SchPoint; width: number; fill_type: FillType }
+  | {
+    type: "Text";
+    text: string;
+    position: SchPoint;
+    rotation: number;
+    font_size: number;
+    bold: boolean;
+    italic: boolean;
+    justify_h: "left" | "right" | "center";
+    justify_v: "top" | "bottom" | "center";
+  }
+  | {
+    type: "TextBox";
+    text: string;
+    position: SchPoint;
+    rotation: number;
+    size: SchPoint;
+    font_size: number;
+    bold: boolean;
+    italic: boolean;
+    width: number;
+    fill_type: FillType;
+  };
 
 export interface SchPin {
   pin_type: string;
