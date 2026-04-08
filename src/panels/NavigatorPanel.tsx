@@ -1,6 +1,7 @@
 import { useSchematicStore } from "@/stores/schematic";
 import { useProjectStore } from "@/stores/project";
-import { ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { zoomToObject, zoomToObjects } from "@/lib/crossProbe";
+import { ChevronDown, ChevronRight, FileText, Search } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
@@ -211,19 +212,19 @@ function DocumentsSection() {
 
 // --- Instance (Components) section ---
 
-function InstanceSection() {
+function InstanceSection({ filter = "" }: { filter?: string }) {
   const [open, setOpen] = useState(true);
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
   const select = useSchematicStore((s) => s.select);
 
-  const components = useMemo(
-    () =>
-      (data?.symbols ?? [])
-        .filter((s) => !s.is_power)
-        .sort((a, b) => a.reference.localeCompare(b.reference, undefined, { numeric: true })),
-    [data?.symbols]
-  );
+  const components = useMemo(() => {
+    const q = filter.toLowerCase();
+    return (data?.symbols ?? [])
+      .filter((s) => !s.is_power)
+      .filter((s) => !q || s.reference.toLowerCase().includes(q) || s.value.toLowerCase().includes(q))
+      .sort((a, b) => a.reference.localeCompare(b.reference, undefined, { numeric: true }));
+  }, [data?.symbols, filter]);
 
   return (
     <div>
@@ -253,7 +254,7 @@ function InstanceSection() {
                 <TableRow
                   key={sym.uuid}
                   selected={selectedIds.has(sym.uuid)}
-                  onClick={() => select(sym.uuid)}
+                  onClick={() => { select(sym.uuid); zoomToObject(sym.uuid); }}
                   expandable
                   cells={[
                     { text: sym.reference, flex: "w-[68px] shrink-0", mono: true },
@@ -272,7 +273,7 @@ function InstanceSection() {
 
 // --- Net / Bus section ---
 
-function NetBusSection() {
+function NetBusSection({ filter = "" }: { filter?: string }) {
   const [open, setOpen] = useState(true);
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
@@ -280,8 +281,8 @@ function NetBusSection() {
 
   const nets = useMemo(() => {
     if (!data) return [];
+    const q = filter.toLowerCase();
 
-    // Collect unique net names from labels, dedup, and determine scope
     const netMap = new Map<string, { uuids: string[]; text: string; labelType: string }>();
     for (const label of data.labels) {
       if (label.label_type === "Net" || label.label_type === "Global" || label.label_type === "Power") {
@@ -298,10 +299,10 @@ function NetBusSection() {
       }
     }
 
-    return Array.from(netMap.values()).sort((a, b) =>
-      a.text.localeCompare(b.text, undefined, { numeric: true })
-    );
-  }, [data?.labels]);
+    return Array.from(netMap.values())
+      .filter(n => !q || n.text.toLowerCase().includes(q))
+      .sort((a, b) => a.text.localeCompare(b.text, undefined, { numeric: true }));
+  }, [data?.labels, filter]);
 
   const getScopeLabel = (labelType: string) => {
     switch (labelType) {
@@ -317,8 +318,8 @@ function NetBusSection() {
 
   const handleNetClick = useCallback(
     (net: { uuids: string[] }) => {
-      // Select all labels belonging to this net to highlight the net
       selectMultiple(net.uuids);
+      if (net.uuids.length > 0) zoomToObjects(net.uuids);
     },
     [selectMultiple]
   );
@@ -371,7 +372,7 @@ function NetBusSection() {
 
 // --- Ports section ---
 
-function PortsSection() {
+function PortsSection({ filter = "" }: { filter?: string }) {
   const [open, setOpen] = useState(true);
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
@@ -379,33 +380,26 @@ function PortsSection() {
 
   const ports = useMemo(() => {
     if (!data) return [];
+    const q = filter.toLowerCase();
 
     const items: { uuid: string; name: string; portType: string }[] = [];
 
-    // Hierarchical labels act as ports (sheet interface)
     for (const label of data.labels) {
       if (label.label_type === "Hierarchical") {
-        items.push({
-          uuid: label.uuid,
-          name: label.text,
-          portType: "Hierarchical",
-        });
+        items.push({ uuid: label.uuid, name: label.text, portType: "Hierarchical" });
       }
     }
 
-    // Sheet pins are also ports
     for (const sheet of data.child_sheets) {
       for (const pin of sheet.pins) {
-        items.push({
-          uuid: pin.uuid,
-          name: pin.name,
-          portType: pin.direction || "Bidirectional",
-        });
+        items.push({ uuid: pin.uuid, name: pin.name, portType: pin.direction || "Bidirectional" });
       }
     }
 
-    return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  }, [data?.labels, data?.child_sheets]);
+    return items
+      .filter(p => !q || p.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }, [data?.labels, data?.child_sheets, filter]);
 
   return (
     <div>
@@ -435,7 +429,7 @@ function PortsSection() {
                 <TableRow
                   key={port.uuid}
                   selected={selectedIds.has(port.uuid)}
-                  onClick={() => select(port.uuid)}
+                  onClick={() => { select(port.uuid); zoomToObject(port.uuid); }}
                   icon={<PortIcon direction={port.portType} className="text-text-muted/50" />}
                   cells={[
                     { text: String(idx + 1), flex: "w-[28px] shrink-0", mono: true },
@@ -456,6 +450,7 @@ function PortsSection() {
 
 export function NavigatorPanel() {
   const data = useSchematicStore((s) => s.data);
+  const [search, setSearch] = useState("");
 
   if (!data) {
     return (
@@ -467,11 +462,24 @@ export function NavigatorPanel() {
 
   return (
     <div className="text-xs overflow-y-auto h-full flex flex-col">
+      {/* Search bar */}
+      <div className="px-2 py-1 border-b border-border-subtle bg-bg-surface/80 shrink-0 flex items-center gap-1.5">
+        <Search size={10} className="text-text-muted/40 shrink-0" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="flex-1 bg-transparent text-[10px] text-text-primary placeholder:text-text-muted/30 outline-none"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="text-text-muted/40 hover:text-text-primary text-[10px]">&times;</button>
+        )}
+      </div>
       <DocumentsSection />
-      <InstanceSection />
-      <NetBusSection />
-      <PortsSection />
-      {/* Fill remaining space */}
+      <InstanceSection filter={search} />
+      <NetBusSection filter={search} />
+      <PortsSection filter={search} />
       <div className="flex-1" />
     </div>
   );

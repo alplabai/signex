@@ -197,6 +197,11 @@ interface SchematicState {
   mirrorPlacementY: () => void;
   placeSymbolAt: (pos: SchPoint) => void;
   cancelPlacement: () => void;
+
+  // Cross-probe zoom
+  zoomToRequest: { x: number; y: number; zoom?: number } | null;
+  requestZoomTo: (target: { x: number; y: number; zoom?: number }) => void;
+  clearZoomRequest: () => void;
 }
 
 function generateUuid(): string {
@@ -1764,6 +1769,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   cancelPlacement: () => {
     set({ placingSymbol: null, editMode: "select" });
   },
+
+  // Cross-probe zoom
+  zoomToRequest: null,
+  requestZoomTo: (target) => set({ zoomToRequest: target }),
+  clearZoomRequest: () => set({ zoomToRequest: null }),
 
   // Find Similar: select all objects matching the selected object's type/lib_id
   findSimilar: () => {

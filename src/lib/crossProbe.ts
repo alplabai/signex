@@ -12,6 +12,7 @@
 import { useSchematicStore } from "@/stores/schematic";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
+import { getObjectBounds, rectCenter } from "@/lib/objectBounds";
 
 export type CrossProbeDirection = "sch-to-pcb" | "pcb-to-sch";
 
@@ -156,4 +157,35 @@ export function toggleCrossSelect(): boolean {
 
 export function isCrossSelectEnabled(): boolean {
   return crossSelectEnabled;
+}
+
+/** Zoom the schematic canvas to center on a specific object. */
+export function zoomToObject(uuid: string) {
+  const store = useSchematicStore.getState();
+  if (!store.data) return;
+  const bounds = getObjectBounds(uuid, store.data);
+  if (!bounds) return;
+  const center = rectCenter(bounds);
+  const extent = Math.max(bounds.width, bounds.height, 20);
+  store.requestZoomTo({ x: center.x, y: center.y, zoom: 800 / extent });
+}
+
+/** Zoom to fit multiple objects. */
+export function zoomToObjects(uuids: string[]) {
+  const store = useSchematicStore.getState();
+  if (!store.data || uuids.length === 0) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const uuid of uuids) {
+    const b = getObjectBounds(uuid, store.data);
+    if (!b) continue;
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.width);
+    maxY = Math.max(maxY, b.y + b.height);
+  }
+  if (minX === Infinity) return;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const extent = Math.max(maxX - minX, maxY - minY, 20);
+  store.requestZoomTo({ x: cx, y: cy, zoom: 800 / extent });
 }
