@@ -15,9 +15,10 @@ import { SnippetsPanel } from "@/panels/SnippetsPanel";
 import { VariantPanel } from "@/panels/VariantPanel";
 import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
 import { LibraryPanel } from "@/panels/LibraryPanel";
+import { SchLibraryPanel } from "@/panels/SchLibraryPanel";
 
 export type PanelId =
-  | "projects" | "components" | "navigator" | "libraryMgmt"
+  | "projects" | "components" | "navigator" | "libraryMgmt" | "schLibrary"
   | "properties" | "filter" | "list"
   | "messages" | "output-jobs" | "signal"
   | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection";
@@ -40,6 +41,9 @@ export const PANEL_DEFS: PanelDef[] = [
   { id: "properties", title: "Properties", defaultDock: "right", context: "both" },
   { id: "messages", title: "Messages", defaultDock: "bottom", context: "both" },
   { id: "signal", title: "Signal", defaultDock: "bottom", context: "both" },
+
+  // Library editor panels
+  { id: "schLibrary", title: "SCH Library", defaultDock: "left", context: "both" },
 
   // Schematic-only panels
   { id: "filter", title: "SCH Filter", defaultDock: "right", context: "schematic" },
@@ -65,6 +69,7 @@ export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
   components: ComponentPanel,
   navigator: NavigatorPanel,
   libraryMgmt: LibraryPanel,
+  schLibrary: SchLibraryPanel,
   properties: PropertiesPanel,
   filter: FilterPanel,
   list: ListPanel,

@@ -18,7 +18,7 @@ export function FootprintEditorProperties() {
   if (!footprint) return <div className="w-[280px] border-l border-border bg-bg-primary p-3 text-[10px] text-text-muted/50">No footprint loaded</div>;
 
   return (
-    <div className="flex flex-col h-full w-[280px] border-l border-border bg-bg-primary">
+    <div className="flex flex-col h-full">
       {/* Tabs */}
       <div className="flex border-b border-border-subtle bg-bg-secondary/80 shrink-0">
         {([["properties", "Properties"], ["padTable", "Pad Table"]] as const).map(([id, label]) => (

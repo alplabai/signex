@@ -5,6 +5,7 @@ export type PanelId =
   | "components"
   | "navigator"
   | "libraryMgmt"
+  | "schLibrary"
   | "properties"
   | "filter"
   | "list"

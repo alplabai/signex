@@ -306,7 +306,7 @@ export function LibraryEditorProperties() {
   const setPanelView = useLibraryEditorStore(s => s.setPanelView);
 
   return (
-    <div className="flex flex-col h-full w-[280px] border-l border-border bg-bg-primary">
+    <div className="flex flex-col h-full">
       <TabBar view={panelView} setView={setPanelView} />
       <div className="flex-1 overflow-hidden">
         {panelView === "properties" ? <PropertiesTab /> : <PinTableTab />}

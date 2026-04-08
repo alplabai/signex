@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useFootprintEditorStore } from "@/stores/footprintEditor";
+import { useProjectStore } from "@/stores/project";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
 
 /** Footprint data returned from Rust pcb_parser (snake_case field names) */
@@ -193,6 +194,9 @@ export function ComponentPanel() {
       pin_name_offset: 1.016,
     };
     useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.snxsym", "NewSymbol");
+    // Open as document tab (Altium-style)
+    const ps = useProjectStore.getState();
+    ps.openTab({ id: "lib-sym-NewSymbol", name: "NewSymbol.snxsym", type: "library", dirty: false });
   };
 
   const newFootprint = () => {
@@ -206,6 +210,8 @@ export function ComponentPanel() {
       courtyard: [],
       model3d: "",
     }, "user_library.snxpkg", "NewFootprint");
+    const ps = useProjectStore.getState();
+    ps.openTab({ id: "lib-fp-NewFootprint", name: "NewFootprint.snxpkg", type: "library", dirty: false });
   };
 
   const placeComponent = async (result: SymbolSearchResult) => {

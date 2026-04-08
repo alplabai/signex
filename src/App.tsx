@@ -15,10 +15,8 @@ import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
 import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
-import { LibraryEditorProperties } from "@/components/LibraryEditorProperties";
 import { FootprintEditorCanvas } from "@/canvas/FootprintEditorCanvas";
 import { FootprintEditorToolbar } from "@/components/FootprintEditorToolbar";
-import { FootprintEditorProperties } from "@/components/FootprintEditorProperties";
 import { useFootprintEditorStore } from "@/stores/footprintEditor";
 import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
@@ -198,6 +196,8 @@ function App() {
   const openTabs = useProjectStore((s) => s.openTabs);
   const activeTabType = activeTabId ? openTabs.find((t) => t.id === activeTabId)?.type : undefined;
   const isPcbView = activeTabType === "pcb";
+  const isLibraryView = activeTabType === "library" || libEditorActive;
+  const isFpLibraryView = fpEditorActive;
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -319,7 +319,7 @@ function App() {
           if (data) printSchematic(data);
         }}
       />
-      {libEditorActive ? <LibraryEditorToolbar /> : fpEditorActive ? <FootprintEditorToolbar /> : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
+      {isLibraryView ? <LibraryEditorToolbar /> : isFpLibraryView ? <FootprintEditorToolbar /> : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
@@ -336,17 +336,7 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            {libEditorActive ? (
-              <div className="flex h-full">
-                <div className="flex-1 min-w-0"><LibraryEditorCanvas /></div>
-                <LibraryEditorProperties />
-              </div>
-            ) : fpEditorActive ? (
-              <div className="flex h-full">
-                <div className="flex-1 min-w-0"><FootprintEditorCanvas /></div>
-                <FootprintEditorProperties />
-              </div>
-            ) : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
+            {isLibraryView ? <LibraryEditorCanvas /> : isFpLibraryView ? <FootprintEditorCanvas /> : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
