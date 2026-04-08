@@ -4,6 +4,9 @@ import type { PcbData, PcbPoint, PcbLayerId } from "@/types/pcb";
 export type PcbEditMode =
   | "select"
   | "routeTrack"
+  | "routeDiffPair"
+  | "routeMultiTrack"
+  | "lengthTune"
   | "placeVia"
   | "placeFootprint"
   | "drawBoardOutline"
@@ -37,6 +40,7 @@ interface PcbState {
   routingWidth: number;
   routingNet: number;
   routeCornerMode: "45" | "90" | "arc45" | "arc90" | "any";
+  routeMode: "ignore" | "walkaround" | "push" | "hug_push";
 
   // Actions
   loadPcb: (data: PcbData) => void;
@@ -119,6 +123,7 @@ export const usePcbStore = create<PcbState>()((set, get) => ({
   routingWidth: 0.25,
   routingNet: 0,
   routeCornerMode: "45",
+  routeMode: "walkaround",
 
   loadPcb: (data) => set({
     data,

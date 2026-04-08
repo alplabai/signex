@@ -1,17 +1,32 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
+import { useLibraryEditorStore } from "@/stores/libraryEditor";
+import { useFootprintEditorStore } from "@/stores/footprintEditor";
 import { MousePointer2, Eye, EyeOff, ChevronDown, ChevronRight, Lock, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mmToDisplay, displayToMm } from "@/lib/units";
 import { useProjectStore } from "@/stores/project";
 import { BUILT_IN_TEMPLATES } from "@/lib/sheetTemplate";
+import { LibraryEditorProperties } from "@/components/LibraryEditorProperties";
+import { FootprintEditorProperties as FpEditorProps } from "@/components/FootprintEditorProperties";
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN PANEL ROUTER
 // ═══════════════════════════════════════════════════════════════════
 
 export function PropertiesPanel() {
+  const libEditorActive = useLibraryEditorStore((s) => s.active);
+  const fpEditorActive = useFootprintEditorStore((s) => s.active);
+
+  // Context-aware: show library/footprint properties when those editors are active
+  if (libEditorActive) return <LibraryEditorProperties />;
+  if (fpEditorActive) return <FpEditorProps />;
+
+  return <SchematicPropertiesPanel />;
+}
+
+function SchematicPropertiesPanel() {
   const data = useSchematicStore((s) => s.data);
   const selectedIds = useSchematicStore((s) => s.selectedIds);
   const editMode = useSchematicStore((s) => s.editMode);

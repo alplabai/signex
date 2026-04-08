@@ -1,7 +1,13 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useEditorStore } from "@/stores/editor";
 import type { LibSymbol, SchPin, Graphic, SchPoint } from "@/types";
+import {
+  MousePointer2, Move, Pin, Square, Minus, Circle, Spline, Type, Hexagon,
+  AlignLeft, X as XIcon, ChevronDown, ChevronRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { LibEditMode } from "@/stores/libraryEditor";
 
 const GRID_SIZE = 1.27; // mm
 const PIN_HIT_RADIUS = 1.0;
@@ -201,24 +207,32 @@ export function LibraryEditorCanvas() {
 
       const store = useLibraryEditorStore.getState();
 
-      if (store.editMode === "select" && symbol) {
+      if (store.editMode === "select") {
+        const sym = store.symbol;
+        if (!sym) return;
         // Hit test pins
-        for (let i = 0; i < symbol.pins.length; i++) {
-          const pin = symbol.pins[i];
+        for (let i = 0; i < sym.pins.length; i++) {
+          const pin = sym.pins[i];
           const pe = pinEnd(pin);
           if (dist(world, pin.position) < PIN_HIT_RADIUS || dist(world, pe) < PIN_HIT_RADIUS) {
             store.setSelectedItem({ type: "pin", index: i });
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(render);
             return;
           }
         }
         // Hit test graphics
-        for (let i = 0; i < symbol.graphics.length; i++) {
-          if (hitTestGraphic(world, symbol.graphics[i])) {
+        for (let i = 0; i < sym.graphics.length; i++) {
+          if (hitTestGraphic(world, sym.graphics[i])) {
             store.setSelectedItem({ type: "graphic", index: i });
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(render);
             return;
           }
         }
         store.setSelectedItem(null);
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
       } else if (store.editMode === "addPin") {
         // Auto-increment: find next unused pin number
         const usedNums = new Set(symbol ? symbol.pins.map((p) => parseInt(p.number, 10)).filter((n) => !isNaN(n)) : []);
@@ -236,6 +250,8 @@ export function LibraryEditorCanvas() {
           number_visible: true,
         });
         // Stay in addPin mode for rapid placement (right-click or Escape to exit)
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
       } else if (store.editMode === "addRect") {
         store.addGraphic({
           type: "Rectangle",
@@ -327,6 +343,8 @@ export function LibraryEditorCanvas() {
         const dy = e.clientY - panStartRef.current.y;
         viewRef.current.offsetX = panStartRef.current.ox + dx;
         viewRef.current.offsetY = panStartRef.current.oy + dy;
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
         return;
       }
       const canvas = canvasRef.current;
@@ -336,8 +354,10 @@ export function LibraryEditorCanvas() {
       const sy = e.clientY - rect.top;
       const world = screenToWorld(sx, sy);
       cursorWorldRef.current = { x: snap(world.x), y: snap(world.y) };
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
     },
-    [snap, screenToWorld]
+    [snap, screenToWorld, render]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -358,8 +378,10 @@ export function LibraryEditorCanvas() {
       v.offsetX = sx - (sx - v.offsetX) * (newZoom / v.zoom);
       v.offsetY = sy - (sy - v.offsetY) * (newZoom / v.zoom);
       v.zoom = newZoom;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
     },
-    []
+    [render]
   );
 
   // Keyboard
@@ -381,6 +403,13 @@ export function LibraryEditorCanvas() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       <canvas
@@ -390,11 +419,235 @@ export function LibraryEditorCanvas() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
         className="absolute inset-0"
         style={{ cursor: editMode === "select" ? "default" : "crosshair" }}
       />
+      {/* Floating Active Bar (Altium-style) */}
+      <LibActiveBar editMode={editMode} />
+      {/* Right-click context menu */}
+      {ctxMenu && <LibCanvasContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />}
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS RIGHT-CLICK CONTEXT MENU (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function LibCanvasContextMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
+  const setEditMode = useLibraryEditorStore(s => s.setEditMode);
+  const [sub, setSub] = useState<string | null>(null);
+
+  const act = (fn?: () => void) => { fn?.(); onClose(); };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[80]" onClick={onClose} />
+      <div className="fixed z-[85] bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[200px] text-[11px]"
+        style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 400) }}>
+        <MenuItem label="Find Similar Objects..." onClick={() => act()} />
+        <MenuItem label="Clear Filter" shortcut="Shift+C" onClick={() => act()} />
+        <MenuSep />
+
+        {/* Place submenu */}
+        <div className="relative" onMouseEnter={() => setSub("place")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="Place" hasSubmenu />
+          {sub === "place" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="Pin" icon={<Pin size={12} />} onClick={() => act(() => setEditMode("addPin"))} />
+              <MenuItem label="Arc" icon={<Spline size={12} />} onClick={() => act(() => setEditMode("addArc"))} />
+              <MenuItem label="Full Circle" icon={<Circle size={12} />} onClick={() => act(() => setEditMode("addCircle"))} />
+              <MenuItem label="Ellipse" icon={<Circle size={12} />} onClick={() => act(() => setEditMode("addEllipse"))} />
+              <MenuItem label="Line" icon={<Minus size={12} />} onClick={() => act(() => setEditMode("addPolyline"))} />
+              <MenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => act(() => setEditMode("addRect"))} />
+              <MenuItem label="Polygon" icon={<Hexagon size={12} />} onClick={() => act(() => setEditMode("addPolygon"))} />
+              <MenuSep />
+              <MenuItem label="Text String" icon={<Type size={12} />} onClick={() => act(() => setEditMode("addText"))} />
+            </div>
+          )}
+        </div>
+
+        {/* Tools submenu */}
+        <div className="relative" onMouseEnter={() => setSub("tools")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="Tools" hasSubmenu />
+          {sub === "tools" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="New Component" onClick={() => act()} />
+              <MenuItem label="Remove Component" onClick={() => act()} />
+              <MenuSep />
+              <MenuItem label="New Part" onClick={() => act()} />
+              <MenuItem label="Remove Part" onClick={() => act()} />
+              <MenuItem label="Next Part" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        {/* View submenu */}
+        <div className="relative" onMouseEnter={() => setSub("view")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="View" hasSubmenu />
+          {sub === "view" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="Fit All Objects" shortcut="Ctrl+PgDn" onClick={() => act()} />
+              <MenuItem label="Fit Document" onClick={() => act()} />
+              <MenuSep />
+              <MenuItem label="Zoom In" shortcut="PgUp" onClick={() => act()} />
+              <MenuItem label="Zoom Out" shortcut="PgDn" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        <MenuSep />
+        <MenuItem label="Cut" shortcut="Ctrl+X" onClick={() => act()} />
+        <MenuItem label="Copy" shortcut="Ctrl+C" onClick={() => act()} />
+        <MenuItem label="Paste" shortcut="Ctrl+V" onClick={() => act()} />
+        <MenuSep />
+        <MenuItem label="Preferences..." onClick={() => act()} />
+        <MenuItem label="Supplier Links..." onClick={() => act()} />
+      </div>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVE BAR — floating toolbar on canvas (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function LibActiveBar({ editMode }: { editMode: LibEditMode }) {
+  const setEditMode = useLibraryEditorStore(s => s.setEditMode);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const close = () => setOpenMenu(null);
+
+  return (
+    <>
+      {openMenu && <div className="absolute inset-0 z-30" onClick={close} />}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-px bg-bg-secondary/95 border border-border-subtle rounded-lg shadow-lg px-1 py-0.5">
+        {/* Filter */}
+        <ABBtn icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L14 14v5a1 1 0 01-.55.9l-4 2A1 1 0 018 21v-7L1.2 4.6A1 1 0 012 3h1z"/></svg>}
+          title="Filter" />
+
+        {/* Move — with dropdown */}
+        <ABBtn icon={<Move size={14} />} title="Move" hasMenu
+          menuOpen={openMenu === "move"} onMenuToggle={() => setOpenMenu(openMenu === "move" ? null : "move")}
+          menu={<>
+            <MenuItem label="Move" onClick={close} />
+            <MenuItem label="Rotate Selection" onClick={() => { close(); }} />
+            <MenuItem label="Bring To Front" onClick={close} />
+            <MenuItem label="Send To Back" onClick={close} />
+          </>} />
+
+        {/* Selection — with dropdown */}
+        <ABBtn icon={<MousePointer2 size={14} />} title="Select"
+          active={editMode === "select"}
+          onClick={() => setEditMode("select")}
+          hasMenu menuOpen={openMenu === "sel"} onMenuToggle={() => setOpenMenu(openMenu === "sel" ? null : "sel")}
+          menu={<>
+            <MenuItem label="Lasso Select" onClick={close} />
+            <MenuItem label="Inside Area" onClick={close} />
+            <MenuItem label="Touching Rectangle" onClick={close} />
+            <MenuItem label="All" onClick={close} />
+            <MenuItem label="Toggle Selection" onClick={close} />
+          </>} />
+
+        {/* Place Component */}
+        <ABBtn icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+          title="Place Component" />
+
+        {/* Place Pin */}
+        <ABBtn icon={<Pin size={14} />} title="Place Pin"
+          active={editMode === "addPin"}
+          onClick={() => setEditMode("addPin")} />
+
+        {/* Align — with dropdown */}
+        <ABBtn icon={<AlignLeft size={14} />} title="Align" hasMenu
+          menuOpen={openMenu === "align"} onMenuToggle={() => setOpenMenu(openMenu === "align" ? null : "align")}
+          menu={<>
+            <MenuItem label="Align Left" onClick={close} />
+            <MenuItem label="Align Right" onClick={close} />
+            <MenuItem label="Align Horizontal Centers" onClick={close} />
+            <MenuItem label="Distribute Horizontally" onClick={close} />
+            <MenuSep />
+            <MenuItem label="Align Top" onClick={close} />
+            <MenuItem label="Align Bottom" onClick={close} />
+            <MenuItem label="Align Vertical Centers" onClick={close} />
+            <MenuItem label="Distribute Vertically" onClick={close} />
+            <MenuSep />
+            <MenuItem label="Align To Grid" onClick={close} />
+          </>} />
+
+        {/* No Connect */}
+        <ABBtn icon={<XIcon size={14} />} title="No Connect" />
+
+        {/* Draw — with dropdown */}
+        <ABBtn icon={<Minus size={14} />} title="Draw" hasMenu
+          menuOpen={openMenu === "draw"} onMenuToggle={() => setOpenMenu(openMenu === "draw" ? null : "draw")}
+          menu={<>
+            <MenuItem label="Line" icon={<Minus size={12} />} onClick={() => { setEditMode("addPolyline"); close(); }} />
+            <MenuItem label="Arc" icon={<Spline size={12} />} onClick={() => { setEditMode("addArc"); close(); }} />
+            <MenuItem label="Full Circle" icon={<Circle size={12} />} onClick={() => { setEditMode("addCircle"); close(); }} />
+            <MenuItem label="Ellipse" icon={<Circle size={12} />} onClick={() => { setEditMode("addEllipse"); close(); }} />
+            <MenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => { setEditMode("addRect"); close(); }} />
+            <MenuItem label="Polygon" icon={<Hexagon size={12} />} onClick={() => { setEditMode("addPolygon"); close(); }} />
+          </>} />
+
+        {/* Text — with dropdown */}
+        <ABBtn icon={<Type size={14} />} title="Text" hasMenu
+          menuOpen={openMenu === "text"} onMenuToggle={() => setOpenMenu(openMenu === "text" ? null : "text")}
+          menu={<>
+            <MenuItem label="Text String" icon={<Type size={12} />} onClick={() => { setEditMode("addText"); close(); }} />
+          </>} />
+      </div>
+    </>
+  );
+}
+
+function ABBtn({ icon, title, active, onClick, hasMenu, menuOpen, onMenuToggle, menu }: {
+  icon: React.ReactNode; title: string; active?: boolean; onClick?: () => void;
+  hasMenu?: boolean; menuOpen?: boolean; onMenuToggle?: () => void; menu?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div className="flex items-center">
+        <button title={title} onClick={onClick}
+          className={cn("p-1.5 rounded-l transition-colors",
+            active ? "bg-accent/20 text-accent" : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+            !hasMenu && "rounded-r"
+          )}>
+          {icon}
+        </button>
+        {hasMenu && (
+          <button onClick={onMenuToggle}
+            className={cn("px-0.5 py-1.5 rounded-r transition-colors border-l border-border-subtle/30",
+              menuOpen ? "bg-accent/20 text-accent" : "text-text-muted/40 hover:bg-bg-hover hover:text-text-primary"
+            )}>
+            <ChevronDown size={8} />
+          </button>
+        )}
+      </div>
+      {menuOpen && menu && (
+        <div className="absolute top-full left-0 mt-1 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[160px] z-50">
+          {menu}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({ label, icon, onClick, shortcut, hasSubmenu }: { label: string; icon?: React.ReactNode; onClick?: () => void; shortcut?: string; hasSubmenu?: boolean }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2 w-full px-3 py-1 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary text-left">
+      {icon && <span className="w-4 shrink-0">{icon}</span>}
+      <span className="flex-1">{label}</span>
+      {shortcut && <span className="text-text-muted/40 text-[10px]">{shortcut}</span>}
+      {hasSubmenu && <ChevronRight size={10} className="text-text-muted/40" />}
+    </button>
+  );
+}
+
+function MenuSep() {
+  return <div className="my-1 border-t border-border-subtle" />;
 }
 
 // ═══════════════════════════════════════════════════════════════

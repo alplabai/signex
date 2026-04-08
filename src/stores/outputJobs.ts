@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type OutputJobType = "bom" | "netlist" | "pdf" | "png";
+export type OutputJobType = "bom" | "netlist" | "pdf" | "png" | "gerber" | "odb" | "step" | "pick_place" | "ipc2581" | "assembly_svg";
 
 export interface OutputJobConfig {
   // BOM
@@ -14,6 +14,8 @@ export interface OutputJobConfig {
   pdfDpi?: 150 | 300;
   pdfColorMode?: "color" | "monochrome";
   pdfShowGrid?: boolean;
+  // Assembly
+  assemblySide?: "top" | "bottom";
 }
 
 export interface OutputJob {
@@ -38,6 +40,12 @@ const defaultConfig: Record<OutputJobType, OutputJobConfig> = {
   netlist: { netlistFormat: "kicad" },
   pdf: { pdfDpi: 300, pdfColorMode: "color", pdfShowGrid: false },
   png: {},
+  gerber: {},
+  odb: {},
+  step: {},
+  pick_place: {},
+  ipc2581: {},
+  assembly_svg: { assemblySide: "top" },
 };
 
 const typeLabels: Record<OutputJobType, string> = {
@@ -45,6 +53,12 @@ const typeLabels: Record<OutputJobType, string> = {
   netlist: "Netlist",
   pdf: "PDF Export",
   png: "PNG Export",
+  gerber: "Gerber (RS-274X)",
+  odb: "ODB++",
+  step: "STEP 3D",
+  pick_place: "Pick & Place",
+  ipc2581: "IPC-2581",
+  assembly_svg: "Assembly Drawing",
 };
 
 export function getJobTypeLabel(type: OutputJobType): string {

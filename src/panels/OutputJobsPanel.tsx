@@ -2,8 +2,13 @@ import { useState } from "react";
 import { Play, Plus, Trash2, ChevronDown, ChevronUp, Settings2, PlayCircle, Loader2 } from "lucide-react";
 import { useOutputJobsStore, getJobTypeLabel } from "@/stores/outputJobs";
 import { useSchematicStore } from "@/stores/schematic";
+import { usePcbStore } from "@/stores/pcb";
 import { invoke } from "@tauri-apps/api/core";
 import { exportSchematicPdf } from "@/lib/pdfExport";
+import { exportGerberSet } from "@/lib/pcbGerberExport";
+import { generateOdbPlusPlus } from "@/lib/pcbOdbExport";
+import { generateStepFile } from "@/lib/pcbStepExport";
+import { generatePickAndPlace, generateAssemblySvg, generateIpc2581 } from "@/lib/pcbOutputFormats";
 import { cn } from "@/lib/utils";
 import type { OutputJob, OutputJobType } from "@/stores/outputJobs";
 
@@ -15,12 +20,13 @@ export function OutputJobsPanel() {
   const updateJob = useOutputJobsStore((s) => s.updateJob);
   const reorderJob = useOutputJobsStore((s) => s.reorderJob);
   const data = useSchematicStore((s) => s.data);
+  const pcbData = usePcbStore((s) => s.data);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runningAll, setRunningAll] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
 
-  const jobTypes: OutputJobType[] = ["bom", "netlist", "pdf", "png"];
+  const jobTypes: OutputJobType[] = ["bom", "netlist", "pdf", "png", "gerber", "odb", "step", "pick_place", "ipc2581", "assembly_svg"];
 
   const runJob = async (job: OutputJob) => {
     if (!data) return;
@@ -60,6 +66,43 @@ export function OutputJobsPanel() {
         }
         case "png": {
           window.dispatchEvent(new CustomEvent("alp-export-png"));
+          break;
+        }
+        case "gerber": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const files = exportGerberSet(pcbData);
+          for (const f of files) downloadBlob(f.content, f.filename, "application/octet-stream");
+          break;
+        }
+        case "odb": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const odbFiles = generateOdbPlusPlus(pcbData);
+          for (const f of odbFiles) downloadBlob(f.content, f.filename, "text/plain");
+          break;
+        }
+        case "step": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const stepContent = generateStepFile(pcbData);
+          downloadBlob(stepContent, "board.step", "application/step");
+          break;
+        }
+        case "pick_place": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const ppContent = generatePickAndPlace(pcbData);
+          downloadBlob(ppContent, "pick_and_place.csv", "text/csv");
+          break;
+        }
+        case "ipc2581": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const ipcContent = generateIpc2581(pcbData);
+          downloadBlob(ipcContent, "board.xml", "application/xml");
+          break;
+        }
+        case "assembly_svg": {
+          if (!pcbData) { alert("No PCB data loaded"); break; }
+          const side = job.config.assemblySide || "top";
+          const svgContent = generateAssemblySvg(pcbData, side);
+          downloadBlob(svgContent, `assembly_${side}.svg`, "image/svg+xml");
           break;
         }
       }
@@ -255,6 +298,47 @@ function JobConfigPanel({ job, onUpdate }: { job: OutputJob; onUpdate: (u: Parti
       {job.type === "png" && (
         <div className="text-[10px] text-text-muted/60 italic">
           Uses current canvas settings
+        </div>
+      )}
+
+      {job.type === "gerber" && (
+        <div className="text-[10px] text-text-muted/60 italic">
+          Exports all copper, silkscreen, mask, paste layers + drill file
+        </div>
+      )}
+
+      {job.type === "odb" && (
+        <div className="text-[10px] text-text-muted/60 italic">
+          ODB++ directory-based fabrication format
+        </div>
+      )}
+
+      {job.type === "step" && (
+        <div className="text-[10px] text-text-muted/60 italic">
+          STEP AP214 3D board geometry for mechanical review
+        </div>
+      )}
+
+      {job.type === "pick_place" && (
+        <div className="text-[10px] text-text-muted/60 italic">
+          CSV centroid file for pick-and-place machines
+        </div>
+      )}
+
+      {job.type === "ipc2581" && (
+        <div className="text-[10px] text-text-muted/60 italic">
+          IPC-2581 XML board description
+        </div>
+      )}
+
+      {job.type === "assembly_svg" && (
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-text-muted w-14">Side</span>
+          <select value={job.config.assemblySide || "top"} onChange={(e) => updateConfig("assemblySide", e.target.value)}
+            className="bg-bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px] text-text-primary outline-none focus:border-accent">
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+          </select>
         </div>
       )}
     </div>

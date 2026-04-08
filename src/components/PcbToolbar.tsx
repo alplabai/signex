@@ -2,11 +2,17 @@ import {
   MousePointer2, Minus, Circle, Square, Type, Ruler,
   Layers, FlipVertical, Palette, RotateCw,
   Undo2, Redo2, Trash2,
+  AlignStartVertical, AlignEndVertical, AlignCenterVertical,
+  AlignStartHorizontal, AlignEndHorizontal, AlignCenterHorizontal,
+  ArrowLeftRight, ArrowUpDown, Droplets,
+  GitBranch, Waves, Cable,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePcbStore } from "@/stores/pcb";
 import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import type { PcbEditMode } from "@/stores/pcb";
+import { alignFootprints, distributeFootprints } from "@/lib/pcbPlacement";
+import { generateTeardrops } from "@/lib/pcbRouter";
 
 function ToolBtn({ icon, label, active, disabled, onClick }: {
   icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; onClick?: () => void;
@@ -32,6 +38,8 @@ export function PcbToolbar() {
   const singleLayerMode = usePcbStore((s) => s.singleLayerMode);
   const boardFlipped = usePcbStore((s) => s.boardFlipped);
   const netColorEnabled = usePcbStore((s) => s.netColorEnabled);
+  const routeMode = usePcbStore((s) => s.routeMode);
+  const routeCornerMode = usePcbStore((s) => s.routeCornerMode);
   const store = usePcbStore;
 
   const setMode = (mode: PcbEditMode) => store.getState().setEditMode(mode);
@@ -48,6 +56,28 @@ export function PcbToolbar() {
       {/* Routing */}
       <ToolBtn icon={<Minus size={15} />} label="Route Track (X)" active={editMode === "routeTrack"} onClick={() => setMode("routeTrack")} />
       <ToolBtn icon={<Circle size={15} />} label="Place Via" active={editMode === "placeVia"} onClick={() => setMode("placeVia")} />
+      <ToolBtn icon={<GitBranch size={15} />} label="Diff Pair Route" active={editMode === "routeDiffPair"} onClick={() => setMode("routeDiffPair")} />
+      <ToolBtn icon={<Cable size={15} />} label="Multi-Track Route" active={editMode === "routeMultiTrack"} onClick={() => setMode("routeMultiTrack")} />
+      <ToolBtn icon={<Waves size={15} />} label="Length Tuning" active={editMode === "lengthTune"} onClick={() => setMode("lengthTune")} />
+      <select value={routeMode}
+        onChange={(e) => store.setState({ routeMode: e.target.value as "ignore" | "walkaround" | "push" | "hug_push" })}
+        title="Route Mode"
+        className="bg-transparent border border-border-subtle rounded px-1 py-0.5 text-[9px] text-text-secondary outline-none focus:border-accent max-w-[85px]">
+        <option value="ignore">Ignore</option>
+        <option value="walkaround">Walk</option>
+        <option value="push">Push</option>
+        <option value="hug_push">Hug</option>
+      </select>
+      <select value={routeCornerMode}
+        onChange={(e) => store.setState({ routeCornerMode: e.target.value as "45" | "90" | "arc45" | "arc90" | "any" })}
+        title="Corner Style"
+        className="bg-transparent border border-border-subtle rounded px-1 py-0.5 text-[9px] text-text-secondary outline-none focus:border-accent max-w-[65px]">
+        <option value="45">45°</option>
+        <option value="90">90°</option>
+        <option value="arc45">Arc 45</option>
+        <option value="arc90">Arc 90</option>
+        <option value="any">Any</option>
+      </select>
       <Sep />
 
       {/* Drawing */}
@@ -64,6 +94,30 @@ export function PcbToolbar() {
         onClick={() => store.getState().toggleBoardFlip()} />
       <ToolBtn icon={<Palette size={15} />} label="Net Colors (F5)" active={netColorEnabled}
         onClick={() => store.getState().toggleNetColors()} />
+      <Sep />
+
+      {/* Alignment */}
+      <ToolBtn icon={<AlignStartVertical size={15} />} label="Align Left" onClick={() => alignFootprints("left")} />
+      <ToolBtn icon={<AlignEndVertical size={15} />} label="Align Right" onClick={() => alignFootprints("right")} />
+      <ToolBtn icon={<AlignCenterVertical size={15} />} label="Align Center H" onClick={() => alignFootprints("centerH")} />
+      <ToolBtn icon={<AlignStartHorizontal size={15} />} label="Align Top" onClick={() => alignFootprints("top")} />
+      <ToolBtn icon={<AlignEndHorizontal size={15} />} label="Align Bottom" onClick={() => alignFootprints("bottom")} />
+      <ToolBtn icon={<AlignCenterHorizontal size={15} />} label="Align Center V" onClick={() => alignFootprints("centerV")} />
+      <ToolBtn icon={<ArrowLeftRight size={15} />} label="Distribute Horizontally" onClick={() => distributeFootprints("horizontal")} />
+      <ToolBtn icon={<ArrowUpDown size={15} />} label="Distribute Vertically" onClick={() => distributeFootprints("vertical")} />
+      <Sep />
+
+      {/* Teardrops */}
+      <ToolBtn icon={<Droplets size={15} />} label="Generate Teardrops"
+        onClick={() => {
+          const s = store.getState();
+          if (!s.data) return;
+          s.pushUndo();
+          const nd = structuredClone(s.data);
+          const newSegs = generateTeardrops(nd, 0.5, 0.5);
+          nd.segments = [...nd.segments, ...newSegs];
+          usePcbStore.setState({ data: nd, dirty: true });
+        }} />
       <Sep />
 
       {/* Actions */}

@@ -14,12 +14,17 @@ import { PcbToolbar } from "@/components/PcbToolbar";
 import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
-import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
-import { LibraryEditorProperties } from "@/components/LibraryEditorProperties";
+import { FootprintEditorCanvas } from "@/canvas/FootprintEditorCanvas";
+import { useFootprintEditorStore } from "@/stores/footprintEditor";
 import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { FindSimilarDialog } from "@/components/FindSimilarDialog";
 import { ParameterManager } from "@/components/ParameterManager";
+import { BackAnnotationDialog } from "@/components/BackAnnotationDialog";
+import { ErcMatrixDialog } from "@/components/ErcMatrixDialog";
+import { ViaStitchingDialog } from "@/components/ViaStitchingDialog";
+import { ConstraintEditorDialog } from "@/components/ConstraintEditorDialog";
+import { BgaFanoutDialog } from "@/components/BgaFanoutDialog";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
@@ -187,12 +192,20 @@ function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showFindSimilar, setShowFindSimilar] = useState(false);
   const [showParamManager, setShowParamManager] = useState(false);
+  const [showBackAnnotation, setShowBackAnnotation] = useState(false);
+  const [showErcMatrix, setShowErcMatrix] = useState(false);
+  const [showViaStitching, setShowViaStitching] = useState(false);
+  const [showConstraints, setShowConstraints] = useState(false);
+  const [showBgaFanout, setShowBgaFanout] = useState(false);
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const libEditorActive = useLibraryEditorStore((s) => s.active);
+  const fpEditorActive = useFootprintEditorStore((s) => s.active);
   const activeTabId = useProjectStore((s) => s.activeTabId);
   const openTabs = useProjectStore((s) => s.openTabs);
   const activeTabType = activeTabId ? openTabs.find((t) => t.id === activeTabId)?.type : undefined;
   const isPcbView = activeTabType === "pcb";
+  const isLibraryView = activeTabType === "library" || libEditorActive;
+  const isFpLibraryView = fpEditorActive;
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -295,6 +308,13 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Disable browser context menu globally (EDA apps use custom menus)
+  useEffect(() => {
+    const prevent = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", prevent);
+    return () => document.removeEventListener("contextmenu", prevent);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
       <MenuBar
@@ -313,8 +333,15 @@ function App() {
           const data = useSchematicStore.getState().data;
           if (data) printSchematic(data);
         }}
+        onRunDrc={() => { setDockActiveTab("bottom", "drc"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onBackAnnotate={() => setShowBackAnnotation(true)}
+        onErcMatrix={() => setShowErcMatrix(true)}
+        onConstraints={() => setShowConstraints(true)}
+        onViaStitching={() => setShowViaStitching(true)}
+        onBgaFanout={() => setShowBgaFanout(true)}
+        isPcbView={isPcbView}
       />
-      {libEditorActive ? <LibraryEditorToolbar /> : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
+      {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
@@ -331,12 +358,7 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            {libEditorActive ? (
-              <div className="flex h-full">
-                <div className="flex-1 min-w-0"><LibraryEditorCanvas /></div>
-                <LibraryEditorProperties />
-              </div>
-            ) : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
+            {isLibraryView ? <LibraryEditorCanvas /> : isFpLibraryView ? <FootprintEditorCanvas /> : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
@@ -373,6 +395,11 @@ function App() {
       <PreferencesDialog open={showPreferences} onClose={() => setShowPreferences(false)} />
       <FindSimilarDialog open={showFindSimilar} onClose={() => setShowFindSimilar(false)} />
       <ParameterManager open={showParamManager} onClose={() => setShowParamManager(false)} />
+      <BackAnnotationDialog open={showBackAnnotation} onClose={() => setShowBackAnnotation(false)} />
+      <ErcMatrixDialog open={showErcMatrix} onClose={() => setShowErcMatrix(false)} />
+      <ViaStitchingDialog open={showViaStitching} onClose={() => setShowViaStitching(false)} />
+      <ConstraintEditorDialog open={showConstraints} onClose={() => setShowConstraints(false)} />
+      <BgaFanoutDialog open={showBgaFanout} onClose={() => setShowBgaFanout(false)} />
     </div>
   );
 }

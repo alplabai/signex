@@ -11,25 +11,25 @@ Target: schematic capture, PCB layout, 3D viewer, SI simulation, AI copilot (Sig
 - **Parser:** Pure Rust S-expression parser for KiCad format (.kicad_sch, .kicad_sym)
 - **3D:** Three.js (future)
 - **AI:** Claude API via Rust reqwest client — branded "Signal"
-- **State:** Zustand (9 stores: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme)
+- **State:** Zustand (10 stores: layout, project, editor, schematic, pcb, libraryEditor, footprintEditor, outputJobs, signal, theme)
 
 ## Project Structure
 ```
 src-tauri/src/          Rust backend
-  commands/             Tauri IPC commands (project, schematic, save, library)
+  commands/             Tauri IPC commands (project, schematic, pcb, save, library, export, signal)
   engine/               KiCad S-expr parser, document model, writer
     parser.rs           Schematic + symbol library parser
     sexpr.rs            Generic S-expression tokenizer
     writer.rs           KiCad S-expr serializer
     document.rs         Document model (future)
 src/                    React frontend
-  components/           Shell: MenuBar, ToolbarStrip, TabBar, StatusBar, ComponentSearch
-  panels/               Dockable panels: Project, Properties, Messages, Signal
-  canvas/               SchematicRenderer (Canvas2D), EditorCanvas, hitTest
-  stores/               Zustand state: layout, project, editor, schematic
+  components/           Shell: MenuBar, ToolbarStrip, PcbToolbar, FootprintEditorToolbar, StatusBar, dialogs (29 files)
+  panels/               Dockable panels: Properties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs, LayerStack, DRC, Inspector, NetClass, NetInspector, PcbLibrary, SchLibrary + more (21 files)
+  canvas/               SchematicRenderer, PcbRenderer, FootprintEditorCanvas, Pcb3DViewer, PcbWebGLRenderer, hitTest
+  stores/               Zustand state: layout, project, editor, schematic, pcb, libraryEditor, footprintEditor, outputJobs, signal, theme
   hooks/                useResizable, useTauriCommand
   types/                TypeScript type definitions
-  lib/                  Utilities (cn)
+  lib/                  ERC, net resolver, geometry, PDF, BOM, PCB router/DRC/ratsnest/copper pour/Gerber/ODB++/STEP, Signal AI, themes
 ```
 
 ## Commands

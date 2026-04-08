@@ -6,6 +6,9 @@ import { useProjectStore } from "@/stores/project";
 import { DEFAULT_LAYER_COLORS, LAYER_DISPLAY_NAMES } from "@/types/pcb";
 import { computeRatsnest, getPadPosition } from "@/lib/pcbRatsnest";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
+import { checkOnlineDrc, generateTeardrops } from "@/lib/pcbRouter";
+import { alignFootprints } from "@/lib/pcbPlacement";
+import { fillZones } from "@/lib/pcbCopperPour";
 import type { PcbData, PcbPoint, PcbLayerId } from "@/types/pcb";
 
 interface Camera { x: number; y: number; zoom: number }
@@ -644,6 +647,28 @@ export function PcbRenderer() {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
+
+      // Online DRC during routing — show violation markers (synchronous)
+      if (routingPoints.length >= 2) {
+        const routeSegs = [];
+        const pcbState = usePcbStore.getState();
+        for (let i = 1; i < routingPoints.length; i++) {
+          routeSegs.push({
+            uuid: "", start: routingPoints[i - 1], end: routingPoints[i],
+            width: pcbState.routingWidth, layer: pcbState.routingLayer, net: pcbState.routingNet,
+          });
+        }
+        const violations = checkOnlineDrc(data, routeSegs, data.board?.setup?.clearance || 0.2);
+        for (const v of violations) {
+          ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+          ctx.beginPath();
+          ctx.arc(v.position.x, v.position.y, 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ff0000";
+          ctx.lineWidth = 0.08;
+          ctx.stroke();
+        }
+      }
     }
 
     // Selection highlight
@@ -773,6 +798,14 @@ export function PcbRenderer() {
         items.push({ label: "Rotate 90\u00b0", shortcut: "Space", action: () => { for (const id of sel) store.rotateFootprint(id, 90); } });
         items.push({ label: "Flip Side", shortcut: "F", action: () => { for (const id of sel) store.flipFootprint(id); } });
         items.push({ separator: true, label: "", action: () => {} });
+        // Alignment (when multiple selected)
+        if (sel.size >= 2) {
+          items.push({ label: "Align Left", action: () => { alignFootprints("left"); } });
+          items.push({ label: "Align Right", action: () => { alignFootprints("right"); } });
+          items.push({ label: "Align Top", action: () => { alignFootprints("top"); } });
+          items.push({ label: "Align Bottom", action: () => { alignFootprints("bottom"); } });
+          items.push({ separator: true, label: "", action: () => {} });
+        }
         items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
       } else {
         items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
@@ -781,6 +814,22 @@ export function PcbRenderer() {
         items.push({ label: "Place Via", action: () => store.setEditMode("placeVia") });
         items.push({ label: "Board Outline", action: () => store.setEditMode("drawBoardOutline") });
         items.push({ label: "Place Zone", action: () => store.setEditMode("placeZone") });
+        items.push({ separator: true, label: "", action: () => {} });
+        items.push({ label: "Fill All Zones", action: () => {
+          if (!data) return;
+          store.pushUndo();
+          const nd = structuredClone(data);
+          fillZones(nd);
+          usePcbStore.setState({ data: nd, dirty: true });
+        }});
+        items.push({ label: "Generate Teardrops", action: () => {
+          if (!data) return;
+          store.pushUndo();
+          const nd = structuredClone(data);
+          const newSegs = generateTeardrops(nd, 0.5, 0.5);
+          nd.segments = [...nd.segments, ...newSegs];
+          usePcbStore.setState({ data: nd, dirty: true });
+        }});
       }
 
       if (items.length > 0) {

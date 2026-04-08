@@ -11,6 +11,7 @@ import type {
   PcbGraphic,
   PcbPoint,
 } from "@/types/pcb";
+import { generateX2Header } from "./pcbGerberX2";
 
 // --- Coordinate Helpers ---
 
@@ -192,6 +193,10 @@ export function generateGerber(data: PcbData, layer: PcbLayerId): string {
   for (const g of boardGraphics) {
     apertures.getOrCreate("C", [graphicWidth(g)]);
   }
+
+  // --- Gerber X2 Extended Attributes ---
+  const x2Header = generateX2Header(data, layer);
+  if (x2Header) lines.push(x2Header);
 
   // --- Header ---
 

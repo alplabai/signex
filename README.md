@@ -91,8 +91,9 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 </details>
 
 <details>
-<summary><strong>Library Editor</strong></summary>
+<summary><strong>Library Editors</strong></summary>
 
+**Schematic Symbol Editor**
 - Symbol editor canvas with grid, origin cross, zoom/pan
 - Add/edit/remove pins with auto-increment numbering
 - Add/edit/remove graphics (rect, polyline, circle, arc)
@@ -101,6 +102,16 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - DeMorgan alternate display mode toggle
 - Save to native .snxsym format, read .kicad_sym
 - New/Edit/Duplicate from Components panel
+
+**Footprint Editor**
+- Footprint editor canvas with grid, origin cross, zoom/pan
+- Active Bar floating toolbar (pad, line, arc, circle, polygon, courtyard, text)
+- Add/edit/remove pads (SMD, through-hole, with shape/size/drill)
+- Add/edit/remove graphics on silkscreen, fabrication, courtyard layers
+- Context menu with layer-aware operations
+- PCB Library panel with footprint list, add/edit/duplicate/delete
+- Save to native .snxpkg format
+- Footprint picker dialog for component model assignment
 </details>
 
 <details>
@@ -109,7 +120,7 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - Net classes with add/remove/assign
 - Differential pairs (_P/_N naming)
 - Signal harnesses with nested members
-- Design Constraint Manager (clearance, trace width, via size, diff pair gap, length match)
+- Design Constraint Manager dialog (clearance, trace width, via size, diff pair gap, length match, per-net-class rules)
 - Design variants (fitted/not-fitted/alternate)
 - Document and project parameters with hierarchy resolution
 - Parameter Manager (spreadsheet editing across all components)
@@ -151,14 +162,15 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - Copper pour with polygon clipping, thermal relief, obstacle subtraction
 - DRC engine: 15 check types (clearance, width, via, annular ring, hole-to-hole, short circuit, mask sliver, etc.)
 - Ratsnest engine (MST-based, union-find connectivity)
-- Via stitching (grid + fence patterns)
+- Via stitching dialog (grid + fence patterns, net/layer/spacing config)
 - Teardrops for pad/via transitions
+- BGA fanout dialog (dog-bone escape with pitch/via/layer config)
 - Cross-probing between schematic and PCB (bidirectional)
-- Back annotation / ECO (PCB changes synced to schematic)
+- Back annotation dialog / ECO (PCB changes synced to schematic with preview)
 - 3D viewer with Three.js (board body, pads, traces, vias, component bodies)
 - Board cross-section stackup visualization
 - Single layer mode (Shift+S), board flip (Ctrl+F), net colors (F5)
-- Gerber RS-274X + X2, Excellon drill, ODB++, STEP, IPC-2581
+- Gerber RS-274X + X2 (with aperture attributes), Excellon drill, ODB++, STEP, IPC-2581
 - PCB PDF export (multi-layer), pick-and-place CSV, assembly SVG
 - Layer sets (7 presets + custom save/load)
 </details>
@@ -178,6 +190,7 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 
 - **Properties** -- context-aware editing for schematic and PCB objects
 - **Components** -- 226 KiCad libraries with search, preview, edit, drag-and-drop
+- **SCH Library** -- symbol library browser with edit/add/duplicate
 - **SCH Filter** -- toggle visibility/selectability per object type
 - **SCH List** -- sortable tables with editable cells and resolved nets tab
 - **Navigator** -- schematic overview with object tree
@@ -188,6 +201,9 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - **Layer Stack** -- PCB layer visibility, active layer, Altium naming
 - **DRC Results** -- PCB design rule violations with click-to-select
 - **PCB Properties** -- board setup, footprint/segment/via properties
+- **PCB Library** -- footprint library browser with edit/add/duplicate/delete
+- **Net Classes** -- create/edit net classes, assign nets, set rules
+- **Net Inspector** -- net-level analysis with length, via count, layer usage
 - **Board Cross-Section** -- layer stackup visualization
 - **Inspector** -- detailed read-only property table for any object
 - **Design Variants** -- create/manage assembly variants (fitted/not-fitted)
@@ -286,7 +302,7 @@ npm run tauri dev
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Styling | Tailwind CSS 4 |
 | Canvas | Canvas2D (schematic + PCB), WebGL2 framework ready, Three.js (3D viewer) |
-| State | Zustand (9 stores: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme) |
+| State | Zustand (10 stores: layout, project, editor, schematic, pcb, libraryEditor, footprintEditor, outputJobs, signal, theme) |
 | Parser | Pure Rust S-expression parser |
 | AI | Claude API via Rust reqwest (streaming SSE, tool use, vision) |
 
@@ -297,11 +313,11 @@ src-tauri/src/
   commands/           Tauri IPC (project, schematic, pcb, save, library, export, signal)
   engine/             KiCad S-expr parser (schematic + PCB), writer, document model
 src/
-  canvas/             SchematicRenderer, PcbRenderer, Pcb3DViewer, PcbWebGLRenderer, hitTest
-  components/         MenuBar, ToolbarStrip, PcbToolbar, StatusBar, dialogs (18 files)
-  panels/             Properties, PcbProperties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs, LayerStack, DRC, Inspector, Variants, Snippets, CrossSection (16 files)
-  stores/             Zustand: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme
-  lib/                Schematic (ERC, net resolver, geometry, PDF, BOM) + PCB (router, DRC, ratsnest, copper pour, Gerber, ODB++, STEP, cross-probe) + Signal AI + themes
+  canvas/             SchematicRenderer, PcbRenderer, FootprintEditorCanvas, Pcb3DViewer, PcbWebGLRenderer, hitTest
+  components/         MenuBar, ToolbarStrip, PcbToolbar, FootprintEditorToolbar, StatusBar, dialogs (29 files)
+  panels/             Properties, PcbProperties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs, LayerStack, DRC, Inspector, Variants, Snippets, CrossSection, NetClass, NetInspector, PcbLibrary, SchLibrary (21 files)
+  stores/             Zustand: layout, project, editor, schematic, pcb, libraryEditor, footprintEditor, outputJobs, signal, theme
+  lib/                Schematic (ERC, net resolver, geometry, PDF, BOM) + PCB (router, DRC, ratsnest, copper pour, Gerber/X2, ODB++, STEP, cross-probe, back-annotation, via stitching, placement) + Signal AI + themes
   __tests__/          Vitest test suite
 docs/                 Roadmap, master plan, Altium reference
 ```

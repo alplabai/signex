@@ -4,6 +4,8 @@ import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus, Star, Folde
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
+import { useFootprintEditorStore } from "@/stores/footprintEditor";
+import { useProjectStore } from "@/stores/project";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
 
 /** Footprint data returned from Rust pcb_parser (snake_case field names) */
@@ -182,16 +184,31 @@ export function ComponentPanel() {
   const newSymbol = () => {
     const emptySymbol: LibSymbol = {
       id: "NewSymbol",
-      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill_type: "none" }],
-      pins: [
-        { pin_type: "passive", shape: "line", position: { x: -5.08, y: 2.54 }, rotation: 0, length: 2.54, name: "1", number: "1", name_visible: true, number_visible: true },
-        { pin_type: "passive", shape: "line", position: { x: -5.08, y: -2.54 }, rotation: 0, length: 2.54, name: "2", number: "2", name_visible: true, number_visible: true },
-      ],
+      graphics: [],
+      pins: [],
       show_pin_numbers: true,
       show_pin_names: true,
       pin_name_offset: 1.016,
     };
     useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.snxsym", "NewSymbol");
+    // Open as document tab (Altium-style)
+    const ps = useProjectStore.getState();
+    ps.openTab({ id: "lib-sym-NewSymbol", name: "NewSymbol.snxsym", type: "library", dirty: false });
+  };
+
+  const newFootprint = () => {
+    useFootprintEditorStore.getState().openFootprint({
+      id: "NewFootprint",
+      pads: [],
+      graphics: [
+        { type: "rect", start: { x: -1.5, y: -1.5 }, end: { x: 1.5, y: 1.5 }, layer: "F.Fab" as any, width: 0.1 },
+        { type: "rect", start: { x: -1.8, y: -1.8 }, end: { x: 1.8, y: 1.8 }, layer: "F.CrtYd" as any, width: 0.05 },
+      ],
+      courtyard: [],
+      model3d: "",
+    }, "user_library.snxpkg", "NewFootprint");
+    const ps = useProjectStore.getState();
+    ps.openTab({ id: "lib-fp-NewFootprint", name: "NewFootprint.snxpkg", type: "library", dirty: false });
   };
 
   const placeComponent = async (result: SymbolSearchResult) => {
@@ -300,6 +317,10 @@ export function ComponentPanel() {
         <button onClick={newSymbol} title="New Symbol"
           className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors shrink-0">
           <FilePlus size={13} />
+        </button>
+        <button onClick={newFootprint} title="New Footprint"
+          className="p-1 rounded text-text-muted/40 hover:text-success hover:bg-success/10 transition-colors shrink-0">
+          <Cpu size={13} />
         </button>
       </div>
 
