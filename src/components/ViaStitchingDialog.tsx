@@ -25,6 +25,9 @@ export function ViaStitchingDialog({ open, onClose }: Props) {
   const handleApply = () => {
     if (!pcbData) return;
 
+    if (spacing <= 0 || diameter <= 0 || drill <= 0) return;
+    if (drill >= diameter) { alert("Drill must be smaller than diameter"); return; }
+
     const options = {
       net: netNumber,
       diameter,

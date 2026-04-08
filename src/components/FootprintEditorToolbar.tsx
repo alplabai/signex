@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   MousePointer2, Square, Minus, Circle, Spline, Type,
   Trash2, Save, Undo2, Redo2, X, CircleDot,
@@ -49,15 +50,23 @@ export function FootprintEditorToolbar() {
     else if (s.selectedItem?.type === "graphic") s.removeGraphic(s.selectedItem.index);
   };
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
   const handleSave = async () => {
+    if (saving) return;
     const store = useFootprintEditorStore.getState();
     if (!store.footprint || !store.sourcePath) return;
+    setSaving(true);
+    setSaveError(null);
     try {
       const rustFp = toRustFootprint(store.footprint);
       await invoke("save_footprint", { filePath: store.sourcePath, footprint: rustFp });
       useFootprintEditorStore.setState({ dirty: false });
     } catch (err) {
-      alert(`Failed to save footprint: ${err}`);
+      setSaveError(String(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,8 +135,9 @@ export function FootprintEditorToolbar() {
 
       <Sep />
 
-      <ToolBtn icon={<Save size={15} />} label="Save Footprint"
-        disabled={!dirty} onClick={handleSave} />
+      <ToolBtn icon={<Save size={15} />} label={saveError ? `Save failed: ${saveError}` : "Save Footprint"}
+        disabled={!dirty || saving} onClick={handleSave} />
+      {saveError && <span className="text-[9px] text-error truncate max-w-[150px]">{saveError}</span>}
 
       <div className="flex-1" />
 
@@ -140,7 +150,7 @@ export function FootprintEditorToolbar() {
 /** Convert frontend FootprintData to the shape Rust's PcbFootprint expects (snake_case keys) */
 function toRustFootprint(fp: FootprintData) {
   return {
-    uuid: crypto.randomUUID(),
+    uuid: (fp as any).uuid || crypto.randomUUID(),
     reference: "REF**",
     value: fp.id,
     footprint_id: fp.id,

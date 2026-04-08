@@ -41,9 +41,13 @@ export function BackAnnotationDialog({ open, onClose }: Props) {
 
   const handleApply = () => {
     if (!schData || changes.length === 0) return;
-    const count = applyEcoChanges(schData, changes);
+    // Clone data to avoid mutating the live store object
+    const store = useSchematicStore.getState();
+    store.pushUndo();
+    const cloned = structuredClone(schData);
+    const count = applyEcoChanges(cloned, changes);
     if (count > 0) {
-      useSchematicStore.setState({ dirty: true });
+      useSchematicStore.setState({ data: cloned, dirty: true });
     }
     setApplied(true);
   };

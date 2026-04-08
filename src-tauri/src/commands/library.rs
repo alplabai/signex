@@ -504,20 +504,37 @@ fn validate_footprint_path(path_str: &str) -> Result<PathBuf, String> {
         _ => return Err("Invalid footprint file extension (expected .kicad_mod or .snxpkg)".to_string()),
     }
 
-    // Reject path traversal
+    // Reject path traversal and absolute paths
     for comp in path.components() {
         if matches!(
             comp,
             std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
         ) {
             return Err("Path traversal not allowed".to_string());
         }
     }
 
     if path.exists() {
-        path.canonicalize()
-            .map_err(|e| format!("Invalid footprint path: {}", e))
+        let canonical = path.canonicalize()
+            .map_err(|e| format!("Invalid footprint path: {}", e))?;
+        // Allow .snxpkg files anywhere (user-created libraries)
+        if canonical.extension().and_then(|e| e.to_str()) == Some("snxpkg") {
+            return Ok(canonical);
+        }
+        // Allow inside KiCad footprints dir
+        if let Some(fp_dir) = find_kicad_footprints_dir() {
+            if let Ok(canonical_fp_dir) = fp_dir.canonicalize() {
+                if canonical.starts_with(&canonical_fp_dir) {
+                    return Ok(canonical);
+                }
+            }
+        }
+        // Allow existing .kicad_mod files (already validated extension)
+        Ok(canonical)
     } else {
+        // For new files, only allow relative paths (no absolute)
         Ok(path.to_path_buf())
     }
 }
@@ -549,7 +566,10 @@ pub async fn save_footprint(
         std::fs::write(&tmp_path, &output)
             .map_err(|e| format!("Failed to write temp file: {}", e))?;
         std::fs::rename(&tmp_path, path)
-            .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&tmp_path);
+                format!("Failed to rename temp file: {}", e)
+            })?;
 
         Ok(())
     })

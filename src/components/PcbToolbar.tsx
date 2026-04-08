@@ -38,6 +38,8 @@ export function PcbToolbar() {
   const singleLayerMode = usePcbStore((s) => s.singleLayerMode);
   const boardFlipped = usePcbStore((s) => s.boardFlipped);
   const netColorEnabled = usePcbStore((s) => s.netColorEnabled);
+  const routeMode = usePcbStore((s) => s.routeMode);
+  const routeCornerMode = usePcbStore((s) => s.routeCornerMode);
   const store = usePcbStore;
 
   const setMode = (mode: PcbEditMode) => store.getState().setEditMode(mode);
@@ -57,7 +59,7 @@ export function PcbToolbar() {
       <ToolBtn icon={<GitBranch size={15} />} label="Diff Pair Route" active={editMode === "routeDiffPair"} onClick={() => setMode("routeDiffPair")} />
       <ToolBtn icon={<Cable size={15} />} label="Multi-Track Route" active={editMode === "routeMultiTrack"} onClick={() => setMode("routeMultiTrack")} />
       <ToolBtn icon={<Waves size={15} />} label="Length Tuning" active={editMode === "lengthTune"} onClick={() => setMode("lengthTune")} />
-      <select value={store.getState().routeMode}
+      <select value={routeMode}
         onChange={(e) => store.setState({ routeMode: e.target.value as "ignore" | "walkaround" | "push" | "hug_push" })}
         title="Route Mode"
         className="bg-transparent border border-border-subtle rounded px-1 py-0.5 text-[9px] text-text-secondary outline-none focus:border-accent max-w-[85px]">
@@ -66,7 +68,7 @@ export function PcbToolbar() {
         <option value="push">Push</option>
         <option value="hug_push">Hug</option>
       </select>
-      <select value={store.getState().routeCornerMode}
+      <select value={routeCornerMode}
         onChange={(e) => store.setState({ routeCornerMode: e.target.value as "45" | "90" | "arc45" | "arc90" | "any" })}
         title="Corner Style"
         className="bg-transparent border border-border-subtle rounded px-1 py-0.5 text-[9px] text-text-secondary outline-none focus:border-accent max-w-[65px]">
