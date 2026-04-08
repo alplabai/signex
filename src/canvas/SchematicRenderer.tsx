@@ -7,95 +7,15 @@ import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect, connecti
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
+import type { Graphic, SchPoint, TextPropData } from "@/types";
 import { substituteSpecialStrings } from "@/lib/specialStrings";
-import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
+import {
+  PAPER, C, txt,
+  symToSch, pinEnd, findNearestElectricalPoint,
+} from "./schematicDrawHelpers";
 interface Camera { x: number; y: number; zoom: number }
 const IMAGE_CACHE = new Map<string, HTMLImageElement>();
 const MAX_IMAGE_CACHE = 100;
-
-const PAPER: Record<string, [number, number]> = {
-  A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
-  A: [279.4, 215.9], B: [431.8, 279.4], C: [558.8, 431.8], D: [863.6, 558.8],
-};
-
-const C = {
-  bg: "#1a1b2e", paper: "#1e2035", paperBorder: "#2a2d4a",
-  grid: "#2d3060", gridMajor: "#3a3f75",
-  wire: "#4fc3f7", junction: "#4fc3f7",
-  body: "#9fa8da", bodyFill: "#1e2035",
-  pin: "#81c784", pinName: "#90a4ae", pinNum: "#607d8b",
-  ref: "#e8c66a", val: "#9598b3",
-  labelNet: "#81c784", labelGlobal: "#ff8a65", labelHier: "#ba68c8",
-  sheet: "#5b8def", sheetText: "#cdd6f4",
-  noConnect: "#e8667a", power: "#ef5350",
-  selection: "#00bcd4", selectionFill: "rgba(0,188,212,0.06)",
-  bus: "#4a86c8", busEntry: "#4a86c8",
-  handleFill: "#4caf50", handleBorder: "#2e7d32",
-};
-
-const txt = (s: string) => s.replace(/\{slash\}/g, "/");
-
-// Transform a point from symbol-local (Y-up) to schematic (Y-down) space
-function symToSch(lx: number, ly: number, sx: number, sy: number, rot: number, mx: boolean, my: boolean): [number, number] {
-  // 1. Flip Y (symbol Y-up → screen Y-down)
-  const x = lx;
-  const y = -ly;
-
-  // 2. Rotate (KiCad CW in screen space = negate for math CCW)
-  const rad = -(rot * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  let rx = x * cos - y * sin;
-  let ry = x * sin + y * cos;
-
-  // 3. Mirror AFTER rotation (KiCad applies mirror post-rotation)
-  if (mx) ry = -ry;
-  if (my) rx = -rx;
-
-  return [sx + rx, sy + ry];
-}
-
-// Pin end position in symbol-local space
-function pinEnd(pin: SchPin): SchPoint {
-  const rad = (pin.rotation * Math.PI) / 180;
-  return {
-    x: pin.position.x + Math.cos(rad) * pin.length,
-    y: pin.position.y + Math.sin(rad) * pin.length,
-  };
-}
-
-const ELECTRICAL_SNAP_RANGE = 2.0; // World units — snap to pins/wire endpoints within this range
-
-/** Find nearest pin endpoint or wire endpoint for electrical snapping */
-function findNearestElectricalPoint(
-  data: SchematicData, worldX: number, worldY: number
-): SchPoint | null {
-  let bestDist = ELECTRICAL_SNAP_RANGE;
-  let bestPoint: SchPoint | null = null;
-
-  // Check all symbol pin endpoints (snap to pin tip, not pin base)
-  for (const sym of data.symbols) {
-    const lib = data.lib_symbols[sym.lib_id];
-    if (!lib) continue;
-    for (const pin of lib.pins) {
-      const pe = pinEnd(pin);
-      const [px, py] = symToSch(pe.x, pe.y,
-        sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y);
-      const d = Math.hypot(worldX - px, worldY - py);
-      if (d < bestDist) { bestDist = d; bestPoint = { x: px, y: py }; }
-    }
-  }
-
-  // Check wire endpoints
-  for (const wire of data.wires) {
-    for (const pt of [wire.start, wire.end]) {
-      const d = Math.hypot(worldX - pt.x, worldY - pt.y);
-      if (d < bestDist) { bestDist = d; bestPoint = { x: pt.x, y: pt.y }; }
-    }
-  }
-
-  return bestPoint;
-}
 
 export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
