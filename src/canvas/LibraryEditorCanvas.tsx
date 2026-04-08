@@ -201,24 +201,32 @@ export function LibraryEditorCanvas() {
 
       const store = useLibraryEditorStore.getState();
 
-      if (store.editMode === "select" && symbol) {
+      if (store.editMode === "select") {
+        const sym = store.symbol;
+        if (!sym) return;
         // Hit test pins
-        for (let i = 0; i < symbol.pins.length; i++) {
-          const pin = symbol.pins[i];
+        for (let i = 0; i < sym.pins.length; i++) {
+          const pin = sym.pins[i];
           const pe = pinEnd(pin);
           if (dist(world, pin.position) < PIN_HIT_RADIUS || dist(world, pe) < PIN_HIT_RADIUS) {
             store.setSelectedItem({ type: "pin", index: i });
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(render);
             return;
           }
         }
         // Hit test graphics
-        for (let i = 0; i < symbol.graphics.length; i++) {
-          if (hitTestGraphic(world, symbol.graphics[i])) {
+        for (let i = 0; i < sym.graphics.length; i++) {
+          if (hitTestGraphic(world, sym.graphics[i])) {
             store.setSelectedItem({ type: "graphic", index: i });
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(render);
             return;
           }
         }
         store.setSelectedItem(null);
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
       } else if (store.editMode === "addPin") {
         // Auto-increment: find next unused pin number
         const usedNums = new Set(symbol ? symbol.pins.map((p) => parseInt(p.number, 10)).filter((n) => !isNaN(n)) : []);
@@ -236,6 +244,8 @@ export function LibraryEditorCanvas() {
           number_visible: true,
         });
         // Stay in addPin mode for rapid placement (right-click or Escape to exit)
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
       } else if (store.editMode === "addRect") {
         store.addGraphic({
           type: "Rectangle",
@@ -327,6 +337,8 @@ export function LibraryEditorCanvas() {
         const dy = e.clientY - panStartRef.current.y;
         viewRef.current.offsetX = panStartRef.current.ox + dx;
         viewRef.current.offsetY = panStartRef.current.oy + dy;
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
         return;
       }
       const canvas = canvasRef.current;
@@ -336,8 +348,10 @@ export function LibraryEditorCanvas() {
       const sy = e.clientY - rect.top;
       const world = screenToWorld(sx, sy);
       cursorWorldRef.current = { x: snap(world.x), y: snap(world.y) };
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
     },
-    [snap, screenToWorld]
+    [snap, screenToWorld, render]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -358,8 +372,10 @@ export function LibraryEditorCanvas() {
       v.offsetX = sx - (sx - v.offsetX) * (newZoom / v.zoom);
       v.offsetY = sy - (sy - v.offsetY) * (newZoom / v.zoom);
       v.zoom = newZoom;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
     },
-    []
+    [render]
   );
 
   // Keyboard

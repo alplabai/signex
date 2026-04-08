@@ -184,11 +184,8 @@ export function ComponentPanel() {
   const newSymbol = () => {
     const emptySymbol: LibSymbol = {
       id: "NewSymbol",
-      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill_type: "none" }],
-      pins: [
-        { pin_type: "passive", shape: "line", position: { x: -5.08, y: 2.54 }, rotation: 0, length: 2.54, name: "1", number: "1", name_visible: true, number_visible: true },
-        { pin_type: "passive", shape: "line", position: { x: -5.08, y: -2.54 }, rotation: 0, length: 2.54, name: "2", number: "2", name_visible: true, number_visible: true },
-      ],
+      graphics: [],
+      pins: [],
       show_pin_numbers: true,
       show_pin_names: true,
       pin_name_offset: 1.016,
