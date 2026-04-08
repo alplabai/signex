@@ -41,11 +41,16 @@ const SEVERITY_LABELS: Record<ErcSeverity, string> = {
   error: "E",
 };
 
+// Precompute the static matrix — only calculated once at module load
+const MATRIX_CELLS = PIN_TYPES.map((row) =>
+  PIN_TYPES.map((col) => checkPinConnection(row, col))
+);
+
 export function ErcMatrixDialog({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="ERC Pin Connection Matrix">
       <div className="bg-bg-secondary border border-border-subtle rounded-lg shadow-2xl max-w-[680px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
@@ -72,13 +77,13 @@ export function ErcMatrixDialog({ open, onClose }: Props) {
               </tr>
             </thead>
             <tbody>
-              {PIN_TYPES.map((row) => (
+              {PIN_TYPES.map((row, ri) => (
                 <tr key={row}>
                   <td className="p-1 text-right text-text-muted font-medium pr-2 border-r border-border-subtle sticky left-0 bg-bg-secondary z-10 whitespace-nowrap">
                     {PIN_LABELS[row]}
                   </td>
-                  {PIN_TYPES.map((col) => {
-                    const severity = checkPinConnection(row, col);
+                  {PIN_TYPES.map((col, ci) => {
+                    const severity = MATRIX_CELLS[ri][ci];
                     return (
                       <td key={col}
                         className={cn("p-1 text-center border border-border-subtle/20 min-w-[38px]", SEVERITY_COLORS[severity])}

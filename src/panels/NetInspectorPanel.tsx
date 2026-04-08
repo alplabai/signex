@@ -81,7 +81,15 @@ export function NetInspectorPanel() {
           <div key={r.number}
             className="flex items-center px-2 py-[2px] border-b border-border-subtle/20 hover:bg-bg-hover/30 cursor-pointer text-[10px]"
             onClick={() => {
-              usePcbStore.getState().setNetColor(r.number, "#ff0");
+              const store = usePcbStore.getState();
+              const current = store.netColors[r.number];
+              if (current) {
+                // Toggle off — remove the color override
+                const { [r.number]: _, ...rest } = store.netColors;
+                usePcbStore.setState({ netColors: rest });
+              } else {
+                store.setNetColor(r.number, "#ffff00");
+              }
             }}
           >
             <span className="flex-1 font-mono truncate text-text-primary">{r.name || `Net ${r.number}`}</span>

@@ -419,7 +419,7 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
       }};
       if (item.label === "Length Tuning") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("lengthTune")); } };
       if (item.label === "Layer Stack Manager...") return { ...item, action: () => {} };
-      void onBgaFanout;
+      if (item.label === "BGA Fanout..." && !onBgaFanout) return item; // suppress unused warning
 
       return item;
     }),

@@ -60,8 +60,8 @@ export function PcbLibraryPanel() {
           };
           store.openFootprint(emptyFp, store.sourcePath || "user_library.snxpkg", "NewFootprint");
         }} />
-        <ActionButton icon={<Trash2 size={12} />} label="Delete" onClick={() => {}} />
-        <ActionButton icon={<Pencil size={12} />} label="Edit" onClick={() => {}} />
+        <ActionButton icon={<Trash2 size={12} />} label="Delete" disabled onClick={() => {}} />
+        <ActionButton icon={<Pencil size={12} />} label="Edit" disabled onClick={() => {}} />
       </div>
     </div>
   );
@@ -119,11 +119,15 @@ function FootprintTreeItem({ footprint, isActive }: {
   );
 }
 
-function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+function ActionButton({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1 px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded transition-colors"
+      disabled={disabled}
+      className={cn(
+        "flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-colors",
+        disabled ? "text-text-muted/30 cursor-default" : "text-text-secondary hover:text-text-primary hover:bg-bg-hover"
+      )}
     >
       {icon}
       <span>{label}</span>

@@ -41,7 +41,7 @@ export function BgaFanoutDialog({ open, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="BGA Fanout">
       <div className="bg-bg-secondary border border-border-subtle rounded-lg shadow-2xl w-[360px]">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
           <span className="text-xs font-semibold">BGA Fanout</span>

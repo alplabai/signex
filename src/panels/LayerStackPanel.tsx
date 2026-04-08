@@ -44,7 +44,14 @@ const LAYER_PRESETS: { label: string; layers: PcbLayerId[] }[] = [
 function loadCustomPresets(): { label: string; layers: PcbLayerId[] }[] {
   try {
     const raw = localStorage.getItem("signex-layer-presets");
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p: unknown) =>
+      typeof p === "object" && p !== null &&
+      typeof (p as any).label === "string" &&
+      Array.isArray((p as any).layers)
+    );
   } catch { return []; }
 }
 
@@ -100,15 +107,13 @@ export function LayerStackPanel() {
             const all = [...LAYER_PRESETS, ...customPresets];
             const preset = all.find(p => p.label === e.target.value);
             if (!preset) return;
-            const store = usePcbStore.getState();
-            // Turn off all, then enable preset layers
-            const newVisible = new Set<string>(preset.layers);
-            store.setAllLayersVisible(); // reset
-            // We need to toggle off layers not in the preset
+            // First set all visible, then re-read fresh state and toggle off non-preset layers
+            usePcbStore.getState().setAllLayersVisible();
+            const freshStore = usePcbStore.getState();
+            const wanted = new Set<string>(preset.layers);
             for (const l of [...COPPER_LAYERS, ...TECH_LAYERS.map(t => t.id)]) {
-              const isVis = (store.visibleLayers as Set<string>).has(l);
-              const shouldVis = newVisible.has(l);
-              if (isVis && !shouldVis) store.toggleLayerVisibility(l);
+              const isVis = (freshStore.visibleLayers as Set<string>).has(l);
+              if (isVis && !wanted.has(l)) freshStore.toggleLayerVisibility(l);
             }
           }}
           defaultValue=""

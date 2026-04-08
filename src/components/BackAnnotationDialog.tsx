@@ -58,7 +58,7 @@ export function BackAnnotationDialog({ open, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Back Annotate from PCB">
       <div className="bg-bg-secondary border border-border-subtle rounded-lg shadow-2xl w-[560px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
@@ -93,8 +93,8 @@ export function BackAnnotationDialog({ open, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {changes.map((c, i) => (
-                    <tr key={i} className="border-b border-border-subtle/30 hover:bg-bg-hover/30">
+                  {changes.map((c) => (
+                    <tr key={`${c.reference}-${c.type}`} className="border-b border-border-subtle/30 hover:bg-bg-hover/30">
                       <td className="py-1.5 px-2 font-mono font-medium">{c.reference}</td>
                       <td className={cn("py-1.5 px-2", TYPE_COLORS[c.type])}>
                         {TYPE_LABELS[c.type] || c.type}
