@@ -1,15 +1,7 @@
 import {
-  MousePointer2,
-  Pin,
-  Square,
-  Minus,
-  Circle,
-  Spline,
-  Trash2,
-  Save,
-  Undo2,
-  Redo2,
-  X,
+  MousePointer2, Pin, Square, Minus, Circle, Spline,
+  Trash2, Save, Undo2, Redo2, X, Type, Hexagon, Ellipsis,
+  Table2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
@@ -48,6 +40,8 @@ export function LibraryEditorToolbar() {
   const undoStack = useLibraryEditorStore((s) => s.undoStack);
   const redoStack = useLibraryEditorStore((s) => s.redoStack);
   const symbol = useLibraryEditorStore((s) => s.symbol);
+  const panelView = useLibraryEditorStore((s) => s.panelView);
+  const setPanelView = useLibraryEditorStore((s) => s.setPanelView);
 
   const handleDelete = () => {
     const store = useLibraryEditorStore.getState();
@@ -88,30 +82,49 @@ export function LibraryEditorToolbar() {
 
       <Separator />
 
+      {/* Selection */}
       <ToolBtn icon={<MousePointer2 size={15} />} label="Select (Esc)"
         active={editMode === "select"} onClick={() => setEditMode("select")} />
-      <ToolBtn icon={<Pin size={15} />} label="Add Pin"
+
+      <Separator />
+
+      {/* Pin */}
+      <ToolBtn icon={<Pin size={15} />} label="Place Pin (P)"
         active={editMode === "addPin"} onClick={() => setEditMode("addPin")} />
 
       <Separator />
 
-      <ToolBtn icon={<Square size={15} />} label="Add Rectangle"
+      {/* Graphics */}
+      <ToolBtn icon={<Square size={15} />} label="Rectangle"
         active={editMode === "addRect"} onClick={() => setEditMode("addRect")} />
-      <ToolBtn icon={<Minus size={15} />} label="Add Polyline"
+      <ToolBtn icon={<Minus size={15} />} label="Polyline"
         active={editMode === "addPolyline"} onClick={() => setEditMode("addPolyline")} />
-      <ToolBtn icon={<Circle size={15} />} label="Add Circle"
+      <ToolBtn icon={<Circle size={15} />} label="Circle"
         active={editMode === "addCircle"} onClick={() => setEditMode("addCircle")} />
-      <ToolBtn icon={<Spline size={15} />} label="Add Arc"
+      <ToolBtn icon={<Spline size={15} />} label="Arc"
         active={editMode === "addArc"} onClick={() => setEditMode("addArc")} />
+      <ToolBtn icon={<Ellipsis size={15} />} label="Ellipse"
+        active={editMode === "addEllipse"} onClick={() => setEditMode("addEllipse")} />
+      <ToolBtn icon={<Hexagon size={15} />} label="Polygon"
+        active={editMode === "addPolygon"} onClick={() => setEditMode("addPolygon")} />
+      <ToolBtn icon={<Type size={15} />} label="Text"
+        active={editMode === "addText"} onClick={() => setEditMode("addText")} />
 
       <Separator />
 
-      <ToolBtn icon={<Trash2 size={15} />} label="Delete Selected (Del)"
+      {/* Edit actions */}
+      <ToolBtn icon={<Trash2 size={15} />} label="Delete (Del)"
         disabled={!selectedItem} onClick={handleDelete} />
       <ToolBtn icon={<Undo2 size={15} />} label="Undo (Ctrl+Z)"
         disabled={undoStack.length === 0} onClick={() => useLibraryEditorStore.getState().undo()} />
       <ToolBtn icon={<Redo2 size={15} />} label="Redo (Ctrl+Y)"
         disabled={redoStack.length === 0} onClick={() => useLibraryEditorStore.getState().redo()} />
+
+      <Separator />
+
+      {/* Pin Table toggle */}
+      <ToolBtn icon={<Table2 size={15} />} label="Pin Table"
+        active={panelView === "pinTable"} onClick={() => setPanelView(panelView === "pinTable" ? "properties" : "pinTable")} />
 
       <Separator />
 

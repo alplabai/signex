@@ -15,6 +15,7 @@ import { ExportPdfDialog } from "@/components/ExportPdfDialog";
 import { BomConfigDialog } from "@/components/BomConfigDialog";
 import { NetlistExportDialog } from "@/components/NetlistExportDialog";
 import { LibraryEditorToolbar } from "@/components/LibraryEditorToolbar";
+import { LibraryEditorProperties } from "@/components/LibraryEditorProperties";
 import { AnnotationDialog } from "@/components/AnnotationDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { FindSimilarDialog } from "@/components/FindSimilarDialog";
@@ -330,7 +331,12 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            {libEditorActive ? <LibraryEditorCanvas /> : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
+            {libEditorActive ? (
+              <div className="flex h-full">
+                <div className="flex-1 min-w-0"><LibraryEditorCanvas /></div>
+                <LibraryEditorProperties />
+              </div>
+            ) : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
