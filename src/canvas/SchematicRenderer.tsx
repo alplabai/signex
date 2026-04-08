@@ -1697,6 +1697,21 @@ export function SchematicRenderer() {
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 
+  // Cross-probe zoom: when a panel requests zoom-to-object
+  const zoomToRequest = useSchematicStore((s) => s.zoomToRequest);
+  useEffect(() => {
+    if (!zoomToRequest || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const zoom = zoomToRequest.zoom ?? 6;
+    camRef.current = {
+      zoom,
+      x: rect.width / 2 - zoomToRequest.x * zoom,
+      y: rect.height / 2 - zoomToRequest.y * zoom,
+    };
+    useSchematicStore.getState().clearZoomRequest();
+    render();
+  }, [zoomToRequest, render]);
+
   // ResizeObserver — mount once, call latest render via ref to avoid recreation
   const renderRef = useRef(render);
   renderRef.current = render;

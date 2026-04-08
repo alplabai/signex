@@ -4,6 +4,7 @@ export type PanelId =
   | "projects"
   | "components"
   | "navigator"
+  | "libraryMgmt"
   | "properties"
   | "filter"
   | "list"

@@ -14,9 +14,10 @@ import { LayerStackPanel } from "@/panels/LayerStackPanel";
 import { SnippetsPanel } from "@/panels/SnippetsPanel";
 import { VariantPanel } from "@/panels/VariantPanel";
 import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
+import { LibraryPanel } from "@/panels/LibraryPanel";
 
 export type PanelId =
-  | "projects" | "components" | "navigator"
+  | "projects" | "components" | "navigator" | "libraryMgmt"
   | "properties" | "filter" | "list"
   | "messages" | "output-jobs" | "signal"
   | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection";
@@ -35,6 +36,7 @@ export const PANEL_DEFS: PanelDef[] = [
   { id: "projects", title: "Projects", defaultDock: "left", context: "both" },
   { id: "components", title: "Components", defaultDock: "left", context: "both" },
   { id: "navigator", title: "Navigator", defaultDock: "left", context: "both" },
+  { id: "libraryMgmt", title: "Libraries", defaultDock: "left", context: "both" },
   { id: "properties", title: "Properties", defaultDock: "right", context: "both" },
   { id: "messages", title: "Messages", defaultDock: "bottom", context: "both" },
   { id: "signal", title: "Signal", defaultDock: "bottom", context: "both" },
@@ -62,6 +64,7 @@ export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
   projects: ProjectPanel,
   components: ComponentPanel,
   navigator: NavigatorPanel,
+  libraryMgmt: LibraryPanel,
   properties: PropertiesPanel,
   filter: FilterPanel,
   list: ListPanel,
