@@ -773,6 +773,14 @@ export function PcbRenderer() {
         items.push({ label: "Rotate 90\u00b0", shortcut: "Space", action: () => { for (const id of sel) store.rotateFootprint(id, 90); } });
         items.push({ label: "Flip Side", shortcut: "F", action: () => { for (const id of sel) store.flipFootprint(id); } });
         items.push({ separator: true, label: "", action: () => {} });
+        // Alignment (when multiple selected)
+        if (sel.size >= 2) {
+          items.push({ label: "Align Left", action: () => { import("@/lib/pcbPlacement").then(m => m.alignFootprints("left")); } });
+          items.push({ label: "Align Right", action: () => { import("@/lib/pcbPlacement").then(m => m.alignFootprints("right")); } });
+          items.push({ label: "Align Top", action: () => { import("@/lib/pcbPlacement").then(m => m.alignFootprints("top")); } });
+          items.push({ label: "Align Bottom", action: () => { import("@/lib/pcbPlacement").then(m => m.alignFootprints("bottom")); } });
+          items.push({ separator: true, label: "", action: () => {} });
+        }
         items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
       } else {
         items.push({ label: "Select All", shortcut: "Ctrl+A", action: () => store.selectAll() });
@@ -781,6 +789,26 @@ export function PcbRenderer() {
         items.push({ label: "Place Via", action: () => store.setEditMode("placeVia") });
         items.push({ label: "Board Outline", action: () => store.setEditMode("drawBoardOutline") });
         items.push({ label: "Place Zone", action: () => store.setEditMode("placeZone") });
+        items.push({ separator: true, label: "", action: () => {} });
+        items.push({ label: "Fill All Zones", action: () => {
+          import("@/lib/pcbCopperPour").then(m => {
+            if (!data) return;
+            store.pushUndo();
+            const nd = structuredClone(data);
+            m.fillZones(nd);
+            usePcbStore.setState({ data: nd, dirty: true });
+          });
+        }});
+        items.push({ label: "Generate Teardrops", action: () => {
+          import("@/lib/pcbRouter").then(m => {
+            if (!data) return;
+            store.pushUndo();
+            const nd = structuredClone(data);
+            const newSegs = m.generateTeardrops(nd, 0.5, 0.5);
+            nd.segments = [...nd.segments, ...newSegs];
+            usePcbStore.setState({ data: nd, dirty: true });
+          });
+        }});
       }
 
       if (items.length > 0) {
