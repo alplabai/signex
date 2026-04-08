@@ -6,6 +6,7 @@ export type PanelId =
   | "navigator"
   | "libraryMgmt"
   | "schLibrary"
+  | "pcbLibrary"
   | "properties"
   | "filter"
   | "list"

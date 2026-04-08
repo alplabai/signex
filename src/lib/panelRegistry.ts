@@ -16,9 +16,10 @@ import { VariantPanel } from "@/panels/VariantPanel";
 import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
 import { LibraryPanel } from "@/panels/LibraryPanel";
 import { SchLibraryPanel } from "@/panels/SchLibraryPanel";
+import { PcbLibraryPanel } from "@/panels/PcbLibraryPanel";
 
 export type PanelId =
-  | "projects" | "components" | "navigator" | "libraryMgmt" | "schLibrary"
+  | "projects" | "components" | "navigator" | "libraryMgmt" | "schLibrary" | "pcbLibrary"
   | "properties" | "filter" | "list"
   | "messages" | "output-jobs" | "signal"
   | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection";
@@ -44,6 +45,7 @@ export const PANEL_DEFS: PanelDef[] = [
 
   // Library editor panels
   { id: "schLibrary", title: "SCH Library", defaultDock: "left", context: "both" },
+  { id: "pcbLibrary", title: "PCB Library", defaultDock: "left", context: "both" },
 
   // Schematic-only panels
   { id: "filter", title: "SCH Filter", defaultDock: "right", context: "schematic" },
@@ -70,6 +72,7 @@ export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
   navigator: NavigatorPanel,
   libraryMgmt: LibraryPanel,
   schLibrary: SchLibraryPanel,
+  pcbLibrary: PcbLibraryPanel,
   properties: PropertiesPanel,
   filter: FilterPanel,
   list: ListPanel,

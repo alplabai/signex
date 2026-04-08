@@ -1,4 +1,5 @@
 use crate::engine::parser::*;
+use crate::engine::pcb_parser;
 use std::fmt::Write;
 
 // String's Write impl is infallible — this macro avoids 211 `.unwrap()` calls
@@ -637,4 +638,160 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     wln!(out, "\t\t\t)");
 
     wln!(out, "\t\t)");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KiCad Footprint Writer (.kicad_mod)
+// ═══════════════════════════════════════════════════════════════
+
+/// Serialize a Footprint to KiCad `.kicad_mod` S-expression format
+pub fn write_footprint_module(fp: &pcb_parser::Footprint) -> String {
+    let mut out = String::with_capacity(8 * 1024);
+    wln!(out, "(footprint \"{}\"", escape_kicad_string(&fp.footprint_id));
+    wln!(out, "\t(version 20240108)");
+    wln!(out, "\t(generator \"signex\")");
+    wln!(out, "\t(generator_version \"0.1\")");
+    wln!(out, "\t(layer \"{}\")", escape_kicad_string(&fp.layer));
+
+    // Reference and value text fields
+    wln!(out, "\t(property \"Reference\" \"{}\"", escape_kicad_string(&fp.reference));
+    wln!(out, "\t\t(at 0 -2)");
+    wln!(out, "\t\t(layer \"F.SilkS\")");
+    wln!(out, "\t\t(effects (font (size 1 1) (thickness 0.15)))");
+    wln!(out, "\t)");
+
+    wln!(out, "\t(property \"Value\" \"{}\"", escape_kicad_string(&fp.value));
+    wln!(out, "\t\t(at 0 2)");
+    wln!(out, "\t\t(layer \"F.Fab\")");
+    wln!(out, "\t\t(effects (font (size 1 1) (thickness 0.15)))");
+    wln!(out, "\t)");
+
+    // Graphics
+    for g in &fp.graphics {
+        write_fp_graphic(&mut out, g);
+    }
+
+    // Pads
+    for p in &fp.pads {
+        write_fp_pad(&mut out, p);
+    }
+
+    wln!(out, ")");
+    out
+}
+
+fn write_fp_graphic(out: &mut String, g: &pcb_parser::FpGraphic) {
+    match g.graphic_type.as_str() {
+        "line" => {
+            if let (Some(s), Some(e)) = (&g.start, &g.end) {
+                wln!(out, "\t(fp_line");
+                wln!(out, "\t\t(start {} {})", s.x, s.y);
+                wln!(out, "\t\t(end {} {})", e.x, e.y);
+                wln!(out, "\t\t(stroke (width {}) (type default))", g.width);
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t)");
+            }
+        }
+        "rect" => {
+            if let (Some(s), Some(e)) = (&g.start, &g.end) {
+                wln!(out, "\t(fp_rect");
+                wln!(out, "\t\t(start {} {})", s.x, s.y);
+                wln!(out, "\t\t(end {} {})", e.x, e.y);
+                wln!(out, "\t\t(stroke (width {}) (type default))", g.width);
+                if g.fill == Some(true) {
+                    wln!(out, "\t\t(fill solid)");
+                }
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t)");
+            }
+        }
+        "circle" => {
+            if let (Some(c), Some(r)) = (&g.center, g.radius) {
+                wln!(out, "\t(fp_circle");
+                wln!(out, "\t\t(center {} {})", c.x, c.y);
+                wln!(out, "\t\t(end {} {})", c.x + r, c.y);
+                wln!(out, "\t\t(stroke (width {}) (type default))", g.width);
+                if g.fill == Some(true) {
+                    wln!(out, "\t\t(fill solid)");
+                }
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t)");
+            }
+        }
+        "arc" => {
+            if let (Some(s), Some(m), Some(e)) = (&g.start, &g.mid, &g.end) {
+                wln!(out, "\t(fp_arc");
+                wln!(out, "\t\t(start {} {})", s.x, s.y);
+                wln!(out, "\t\t(mid {} {})", m.x, m.y);
+                wln!(out, "\t\t(end {} {})", e.x, e.y);
+                wln!(out, "\t\t(stroke (width {}) (type default))", g.width);
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t)");
+            }
+        }
+        "poly" => {
+            if g.points.len() >= 2 {
+                wln!(out, "\t(fp_poly");
+                w!(out, "\t\t(pts");
+                for p in &g.points {
+                    w!(out, " (xy {} {})", p.x, p.y);
+                }
+                wln!(out, ")");
+                wln!(out, "\t\t(stroke (width {}) (type default))", g.width);
+                if g.fill == Some(true) {
+                    wln!(out, "\t\t(fill solid)");
+                }
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t)");
+            }
+        }
+        "text" => {
+            if let (Some(text), Some(pos)) = (&g.text, &g.position) {
+                let fs = g.font_size.unwrap_or(1.0);
+                let rot = g.rotation.unwrap_or(0.0);
+                wln!(out, "\t(fp_text user \"{}\"", escape_kicad_string(text));
+                if rot != 0.0 {
+                    wln!(out, "\t\t(at {} {} {})", pos.x, pos.y, rot);
+                } else {
+                    wln!(out, "\t\t(at {} {})", pos.x, pos.y);
+                }
+                wln!(out, "\t\t(layer \"{}\")", escape_kicad_string(&g.layer));
+                wln!(out, "\t\t(effects (font (size {} {}) (thickness 0.15)))", fs, fs);
+                wln!(out, "\t)");
+            }
+        }
+        _ => {}
+    }
+}
+
+fn write_fp_pad(out: &mut String, p: &pcb_parser::Pad) {
+    w!(out, "\t(pad \"{}\" {} {}",
+        escape_kicad_string(&p.number),
+        escape_kicad_string(&p.pad_type),
+        escape_kicad_string(&p.shape)
+    );
+    wln!(out, "");
+    wln!(out, "\t\t(at {} {})", p.position.x, p.position.y);
+    wln!(out, "\t\t(size {} {})", p.size[0], p.size[1]);
+
+    if let Some(drill) = &p.drill {
+        if let Some(shape) = &drill.shape {
+            wln!(out, "\t\t(drill {} {})", shape, drill.diameter);
+        } else {
+            wln!(out, "\t\t(drill {})", drill.diameter);
+        }
+    }
+
+    w!(out, "\t\t(layers");
+    for l in &p.layers {
+        w!(out, " \"{}\"", escape_kicad_string(l));
+    }
+    wln!(out, ")");
+
+    if let Some(rr) = p.roundrect_ratio {
+        wln!(out, "\t\t(roundrect_rratio {})", rr);
+    }
+
+    wln!(out, "\t\t(uuid \"{}\")", escape_kicad_string(&p.uuid));
+    wln!(out, "\t)");
 }

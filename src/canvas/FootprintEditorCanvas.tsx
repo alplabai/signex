@@ -1,8 +1,13 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useFootprintEditorStore } from "@/stores/footprintEditor";
-import type { FootprintData } from "@/stores/footprintEditor";
+import type { FootprintData, FpEditMode } from "@/stores/footprintEditor";
 import type { PcbGraphic } from "@/types/pcb";
 import { DEFAULT_LAYER_COLORS } from "@/types/pcb";
+import {
+  MousePointer2, Move, Square, Minus, Circle, Spline, Type,
+  AlignLeft, ChevronDown, ChevronRight, CircleDot,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const GRID_MM = 0.1; // 0.1mm grid for PCB
 const PAD_HIT_RADIUS = 0.3;
@@ -31,6 +36,8 @@ export function FootprintEditorCanvas() {
   const panStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
   const cursorRef = useRef({ x: 0, y: 0 });
   const rafRef = useRef(0);
+
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
   const footprint = useFootprintEditorStore(s => s.footprint);
   const selectedItem = useFootprintEditorStore(s => s.selectedItem);
@@ -291,16 +298,240 @@ export function FootprintEditorCanvas() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       <canvas ref={canvasRef}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+        onContextMenu={handleContextMenu}
         className="absolute inset-0"
         style={{ cursor: editMode === "select" ? "default" : "crosshair" }}
       />
+      <FpActiveBar editMode={editMode} />
+      {ctxMenu && <FpCanvasContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />}
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS RIGHT-CLICK CONTEXT MENU (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function FpCanvasContextMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
+  const setEditMode = useFootprintEditorStore(s => s.setEditMode);
+  const [sub, setSub] = useState<string | null>(null);
+
+  const act = (fn?: () => void) => { fn?.(); onClose(); };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[80]" onClick={onClose} />
+      <div className="fixed z-[85] bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[200px] text-[11px]"
+        style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 400) }}>
+        <FpMenuItem label="Find Similar Objects..." onClick={() => act()} />
+        <FpMenuItem label="Clear Filter" shortcut="Shift+C" onClick={() => act()} />
+        <FpMenuSep />
+
+        {/* Place submenu */}
+        <div className="relative" onMouseEnter={() => setSub("place")} onMouseLeave={() => setSub(null)}>
+          <FpMenuItem label="Place" hasSubmenu />
+          {sub === "place" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <FpMenuItem label="SMD Pad" icon={<Square size={12} />} onClick={() => act(() => setEditMode("addPadSmd"))} />
+              <FpMenuItem label="Through-Hole Pad" icon={<CircleDot size={12} />} onClick={() => act(() => setEditMode("addPadTh"))} />
+              <FpMenuSep />
+              <FpMenuItem label="Line" icon={<Minus size={12} />} onClick={() => act(() => setEditMode("addLine"))} />
+              <FpMenuItem label="Arc" icon={<Spline size={12} />} onClick={() => act(() => setEditMode("addArc"))} />
+              <FpMenuItem label="Circle" icon={<Circle size={12} />} onClick={() => act(() => setEditMode("addCircle"))} />
+              <FpMenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => act(() => setEditMode("addRect"))} />
+              <FpMenuSep />
+              <FpMenuItem label="Text" icon={<Type size={12} />} onClick={() => act(() => setEditMode("addText"))} />
+            </div>
+          )}
+        </div>
+
+        {/* Tools submenu */}
+        <div className="relative" onMouseEnter={() => setSub("tools")} onMouseLeave={() => setSub(null)}>
+          <FpMenuItem label="Tools" hasSubmenu />
+          {sub === "tools" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <FpMenuItem label="New Footprint" onClick={() => act()} />
+              <FpMenuItem label="Remove Footprint" onClick={() => act()} />
+              <FpMenuSep />
+              <FpMenuItem label="Renumber Pads" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        {/* View submenu */}
+        <div className="relative" onMouseEnter={() => setSub("view")} onMouseLeave={() => setSub(null)}>
+          <FpMenuItem label="View" hasSubmenu />
+          {sub === "view" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <FpMenuItem label="Fit All Objects" shortcut="Ctrl+PgDn" onClick={() => act()} />
+              <FpMenuItem label="Fit Document" onClick={() => act()} />
+              <FpMenuSep />
+              <FpMenuItem label="Zoom In" shortcut="PgUp" onClick={() => act()} />
+              <FpMenuItem label="Zoom Out" shortcut="PgDn" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        <FpMenuSep />
+        <FpMenuItem label="Cut" shortcut="Ctrl+X" onClick={() => act()} />
+        <FpMenuItem label="Copy" shortcut="Ctrl+C" onClick={() => act()} />
+        <FpMenuItem label="Paste" shortcut="Ctrl+V" onClick={() => act()} />
+        <FpMenuSep />
+        <FpMenuItem label="Preferences..." onClick={() => act()} />
+      </div>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVE BAR — floating toolbar on canvas (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function FpActiveBar({ editMode }: { editMode: FpEditMode }) {
+  const setEditMode = useFootprintEditorStore(s => s.setEditMode);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const close = () => setOpenMenu(null);
+
+  return (
+    <>
+      {openMenu && <div className="absolute inset-0 z-30" onClick={close} />}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-px bg-bg-secondary/95 border border-border-subtle rounded-lg shadow-lg px-1 py-0.5">
+        {/* Filter */}
+        <ABBtn icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L14 14v5a1 1 0 01-.55.9l-4 2A1 1 0 018 21v-7L1.2 4.6A1 1 0 012 3h1z"/></svg>}
+          title="Filter" />
+
+        {/* Move — with dropdown */}
+        <ABBtn icon={<Move size={14} />} title="Move" hasMenu
+          menuOpen={openMenu === "move"} onMenuToggle={() => setOpenMenu(openMenu === "move" ? null : "move")}
+          menu={<>
+            <FpMenuItem label="Move" onClick={close} />
+            <FpMenuItem label="Rotate Selection" onClick={close} />
+            <FpMenuItem label="Bring To Front" onClick={close} />
+            <FpMenuItem label="Send To Back" onClick={close} />
+          </>} />
+
+        {/* Selection — with dropdown */}
+        <ABBtn icon={<MousePointer2 size={14} />} title="Select"
+          active={editMode === "select"}
+          onClick={() => setEditMode("select")}
+          hasMenu menuOpen={openMenu === "sel"} onMenuToggle={() => setOpenMenu(openMenu === "sel" ? null : "sel")}
+          menu={<>
+            <FpMenuItem label="Lasso Select" onClick={close} />
+            <FpMenuItem label="Inside Area" onClick={close} />
+            <FpMenuItem label="Touching Rectangle" onClick={close} />
+            <FpMenuItem label="All" onClick={close} />
+            <FpMenuItem label="Toggle Selection" onClick={close} />
+          </>} />
+
+        {/* Pad placement — with dropdown */}
+        <ABBtn icon={<Square size={14} />} title="Place Pad"
+          active={editMode === "addPadSmd" || editMode === "addPadTh"}
+          onClick={() => setEditMode("addPadSmd")}
+          hasMenu menuOpen={openMenu === "pad"} onMenuToggle={() => setOpenMenu(openMenu === "pad" ? null : "pad")}
+          menu={<>
+            <FpMenuItem label="SMD Pad" icon={<Square size={12} />} onClick={() => { setEditMode("addPadSmd"); close(); }} />
+            <FpMenuItem label="Through-Hole Pad" icon={<CircleDot size={12} />} onClick={() => { setEditMode("addPadTh"); close(); }} />
+          </>} />
+
+        {/* Align — with dropdown */}
+        <ABBtn icon={<AlignLeft size={14} />} title="Align" hasMenu
+          menuOpen={openMenu === "align"} onMenuToggle={() => setOpenMenu(openMenu === "align" ? null : "align")}
+          menu={<>
+            <FpMenuItem label="Align Left" onClick={close} />
+            <FpMenuItem label="Align Right" onClick={close} />
+            <FpMenuItem label="Align Horizontal Centers" onClick={close} />
+            <FpMenuItem label="Distribute Horizontally" onClick={close} />
+            <FpMenuSep />
+            <FpMenuItem label="Align Top" onClick={close} />
+            <FpMenuItem label="Align Bottom" onClick={close} />
+            <FpMenuItem label="Align Vertical Centers" onClick={close} />
+            <FpMenuItem label="Distribute Vertically" onClick={close} />
+            <FpMenuSep />
+            <FpMenuItem label="Align To Grid" onClick={close} />
+          </>} />
+
+        {/* Draw — with dropdown */}
+        <ABBtn icon={<Minus size={14} />} title="Draw"
+          active={editMode === "addLine" || editMode === "addArc" || editMode === "addCircle" || editMode === "addRect"}
+          onClick={() => setEditMode("addLine")}
+          hasMenu menuOpen={openMenu === "draw"} onMenuToggle={() => setOpenMenu(openMenu === "draw" ? null : "draw")}
+          menu={<>
+            <FpMenuItem label="Line" icon={<Minus size={12} />} onClick={() => { setEditMode("addLine"); close(); }} />
+            <FpMenuItem label="Arc" icon={<Spline size={12} />} onClick={() => { setEditMode("addArc"); close(); }} />
+            <FpMenuItem label="Circle" icon={<Circle size={12} />} onClick={() => { setEditMode("addCircle"); close(); }} />
+            <FpMenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => { setEditMode("addRect"); close(); }} />
+          </>} />
+
+        {/* Text — with dropdown */}
+        <ABBtn icon={<Type size={14} />} title="Text"
+          active={editMode === "addText"}
+          onClick={() => setEditMode("addText")}
+          hasMenu menuOpen={openMenu === "text"} onMenuToggle={() => setOpenMenu(openMenu === "text" ? null : "text")}
+          menu={<>
+            <FpMenuItem label="Text String" icon={<Type size={12} />} onClick={() => { setEditMode("addText"); close(); }} />
+          </>} />
+      </div>
+    </>
+  );
+}
+
+function ABBtn({ icon, title, active, onClick, hasMenu, menuOpen, onMenuToggle, menu }: {
+  icon: React.ReactNode; title: string; active?: boolean; onClick?: () => void;
+  hasMenu?: boolean; menuOpen?: boolean; onMenuToggle?: () => void; menu?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div className="flex items-center">
+        <button title={title} onClick={onClick}
+          className={cn("p-1.5 rounded-l transition-colors",
+            active ? "bg-accent/20 text-accent" : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+            !hasMenu && "rounded-r"
+          )}>
+          {icon}
+        </button>
+        {hasMenu && (
+          <button onClick={onMenuToggle}
+            className={cn("px-0.5 py-1.5 rounded-r transition-colors border-l border-border-subtle/30",
+              menuOpen ? "bg-accent/20 text-accent" : "text-text-muted/40 hover:bg-bg-hover hover:text-text-primary"
+            )}>
+            <ChevronDown size={8} />
+          </button>
+        )}
+      </div>
+      {menuOpen && menu && (
+        <div className="absolute top-full left-0 mt-1 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[160px] z-50">
+          {menu}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FpMenuItem({ label, icon, onClick, shortcut, hasSubmenu }: { label: string; icon?: React.ReactNode; onClick?: () => void; shortcut?: string; hasSubmenu?: boolean }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2 w-full px-3 py-1 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary text-left">
+      {icon && <span className="w-4 shrink-0">{icon}</span>}
+      <span className="flex-1">{label}</span>
+      {shortcut && <span className="text-text-muted/40 text-[10px]">{shortcut}</span>}
+      {hasSubmenu && <ChevronRight size={10} className="text-text-muted/40" />}
+    </button>
+  );
+}
+
+function FpMenuSep() {
+  return <div className="my-1 border-t border-border-subtle" />;
 }
 
 // ═══════════════════════════════════════════════════════════════

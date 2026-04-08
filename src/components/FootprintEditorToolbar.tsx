@@ -4,7 +4,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFootprintEditorStore } from "@/stores/footprintEditor";
+import type { FootprintData } from "@/stores/footprintEditor";
 import { LAYER_DISPLAY_NAMES, DEFAULT_LAYER_COLORS } from "@/types/pcb";
+import type { PcbGraphic } from "@/types/pcb";
+import { invoke } from "@tauri-apps/api/core";
 
 function ToolBtn({ icon, label, active, disabled, onClick }: {
   icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; onClick?: () => void;
@@ -47,7 +50,15 @@ export function FootprintEditorToolbar() {
   };
 
   const handleSave = async () => {
-    // Tauri save_footprint command will be implemented when Rust backend supports .snxpkg format
+    const store = useFootprintEditorStore.getState();
+    if (!store.footprint || !store.sourcePath) return;
+    try {
+      const rustFp = toRustFootprint(store.footprint);
+      await invoke("save_footprint", { filePath: store.sourcePath, footprint: rustFp });
+      useFootprintEditorStore.setState({ dirty: false });
+    } catch (err) {
+      alert(`Failed to save footprint: ${err}`);
+    }
   };
 
   return (
@@ -115,8 +126,8 @@ export function FootprintEditorToolbar() {
 
       <Sep />
 
-      <ToolBtn icon={<Save size={15} />} label="Save Footprint (backend pending)"
-        disabled={true} onClick={handleSave} />
+      <ToolBtn icon={<Save size={15} />} label="Save Footprint"
+        disabled={!dirty} onClick={handleSave} />
 
       <div className="flex-1" />
 
@@ -124,4 +135,50 @@ export function FootprintEditorToolbar() {
         onClick={() => useFootprintEditorStore.getState().closeEditor()} />
     </div>
   );
+}
+
+/** Convert frontend FootprintData to the shape Rust's PcbFootprint expects (snake_case keys) */
+function toRustFootprint(fp: FootprintData) {
+  return {
+    uuid: crypto.randomUUID(),
+    reference: "REF**",
+    value: fp.id,
+    footprint_id: fp.id,
+    position: { x: 0, y: 0 },
+    rotation: 0,
+    layer: "F.Cu",
+    locked: false,
+    pads: fp.pads.map(p => ({
+      uuid: p.uuid,
+      number: p.number,
+      pad_type: p.type,
+      shape: p.shape,
+      position: p.position,
+      size: p.size,
+      drill: p.drill ? { diameter: p.drill.diameter, shape: p.drill.shape ?? null } : null,
+      layers: p.layers,
+      net: null,
+      roundrect_ratio: p.roundrectRatio ?? null,
+    })),
+    graphics: fp.graphics.map(toRustGraphic),
+  };
+}
+
+function toRustGraphic(g: PcbGraphic) {
+  return {
+    graphic_type: g.type,
+    layer: g.layer,
+    width: "width" in g ? g.width : 0.12,
+    start: "start" in g ? g.start : null,
+    end: "end" in g ? g.end : null,
+    center: "center" in g ? g.center : null,
+    mid: "mid" in g ? g.mid : null,
+    radius: "radius" in g ? g.radius : null,
+    points: "points" in g ? g.points : [],
+    text: g.type === "text" ? g.text : null,
+    font_size: g.type === "text" ? g.fontSize : null,
+    position: g.type === "text" ? g.position : null,
+    rotation: g.type === "text" ? g.rotation : null,
+    fill: "fill" in g ? g.fill : null,
+  };
 }

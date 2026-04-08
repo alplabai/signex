@@ -494,3 +494,65 @@ pub async fn get_footprint(footprint_id: String) -> Result<PcbFootprint, String>
     .await
     .map_err(|e| format!("Task failed: {}", e))?
 }
+
+/// Validate a footprint library path (must be .kicad_mod or .snxpkg)
+fn validate_footprint_path(path_str: &str) -> Result<PathBuf, String> {
+    let path = Path::new(path_str);
+
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("kicad_mod") | Some("snxpkg") => {}
+        _ => return Err("Invalid footprint file extension (expected .kicad_mod or .snxpkg)".to_string()),
+    }
+
+    // Reject path traversal
+    for comp in path.components() {
+        if matches!(
+            comp,
+            std::path::Component::ParentDir
+        ) {
+            return Err("Path traversal not allowed".to_string());
+        }
+    }
+
+    if path.exists() {
+        path.canonicalize()
+            .map_err(|e| format!("Invalid footprint path: {}", e))
+    } else {
+        Ok(path.to_path_buf())
+    }
+}
+
+/// Save a footprint to a .kicad_mod file
+#[tauri::command]
+pub async fn save_footprint(
+    file_path: String,
+    footprint: PcbFootprint,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let validated = validate_footprint_path(&file_path)?;
+        let path = validated.as_path();
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            }
+        }
+
+        // Serialize footprint to KiCad S-expression format
+        let output = writer::write_footprint_module(&footprint);
+
+        // Atomic write: write to temp file then rename
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("kicad_mod");
+        let tmp_path = path.with_extension(format!("{}.tmp", ext));
+        std::fs::write(&tmp_path, &output)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        std::fs::rename(&tmp_path, path)
+            .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
