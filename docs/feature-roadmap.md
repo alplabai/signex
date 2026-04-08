@@ -80,8 +80,6 @@
 
 ---
 
-## Upcoming
-
 ### Phase 5: Signal AI
 - [x] Claude API integration via Rust reqwest with streaming SSE
 - [x] Chat panel with markdown rendering and model selection (Sonnet 4 / Opus 4)
@@ -98,6 +96,15 @@
 - [x] Session cost tracking with per-model pricing
 - [x] Export chat as markdown
 - [x] Ctrl+Shift+A shortcut
+
+---
+
+### Theme System
+- [x] 6 built-in themes: Catppuccin Mocha, VS Code Dark, GitHub Dark, Altium Dark, Solarized Light, Nord
+- [x] Full canvas theming (background, grid, wire, junction, component body, text)
+- [x] Fill type support (background, outline, none) for correct symbol rendering
+- [x] Theme persistence across sessions
+- [x] Theme editor panel for customization
 
 ---
 
@@ -163,8 +170,9 @@
 ### Phase 8: Collaboration
 - [ ] Comment threads on schematic/PCB
 - [ ] Schematic/PCB diff/comparison
-- [ ] Git integration
-- [ ] Real-time multi-user editing
+- [ ] Git integration for version control
+- [ ] Real-time multi-user editing (CRDT)
+- [ ] Design review workflow (comments, approvals)
 
 ### Phase 9: Ecosystem
 - [ ] Plugin system (Rust + WASM)

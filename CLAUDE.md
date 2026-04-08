@@ -11,7 +11,7 @@ Target: schematic capture, PCB layout, 3D viewer, SI simulation, AI copilot (Sig
 - **Parser:** Pure Rust S-expression parser for KiCad format (.kicad_sch, .kicad_sym)
 - **3D:** Three.js (future)
 - **AI:** Claude API via Rust reqwest client — branded "Signal"
-- **State:** Zustand (4 stores: layout, project, editor, schematic)
+- **State:** Zustand (9 stores: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme)
 
 ## Project Structure
 ```
@@ -39,7 +39,7 @@ src/                    React frontend
 - `npx tsc --noEmit` — TypeScript check
 
 ## Conventions
-- Dark theme (Catppuccin Mocha-inspired palette)
+- 6 built-in themes (Catppuccin Mocha default, VS Code Dark, GitHub Dark, Altium Dark, Solarized Light, Nord)
 - 13px base font size (dense EDA UI)
 - All panels collapsible, layout persisted to localStorage
 - Altium-compatible keyboard shortcuts (see docs/altium-schematic-reference.md)

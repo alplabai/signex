@@ -25,7 +25,7 @@
 
 Signex is an open-source desktop EDA tool built for hardware engineers who want Altium Designer-class UX without the Altium price tag. It reads and writes KiCad files natively, so you can use existing KiCad libraries and schematics while enjoying a modern, fast editing experience.
 
-> **Status:** Alpha. Schematic capture is fully functional with ~85% Altium feature parity. Signal AI copilot is integrated. PCB layout and simulation are next.
+> **Status:** Alpha. Schematic capture and PCB layout are fully functional with Altium-class feature parity. Signal AI copilot and 6 built-in themes are integrated. Simulation is next.
 
 ## Why Signex?
 
@@ -33,6 +33,7 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 - **KiCad file compatibility** (.kicad_sch, .kicad_sym read/write, KiCad 8/9/10)
 - **Native desktop app** via Tauri v2 (Rust backend, React frontend) -- fast startup, low memory
 - **Signal AI copilot** -- Claude-powered design assistant with streaming, tool use, and visual context
+- **6 built-in themes** -- Catppuccin Mocha, VS Code Dark, GitHub Dark, Altium Dark, Solarized Light, Nord
 - **Built by hardware engineers** for hardware engineers
 
 ## Features
@@ -163,6 +164,16 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 </details>
 
 <details>
+<summary><strong>Theme System</strong></summary>
+
+- 6 built-in themes: Catppuccin Mocha, VS Code Dark, GitHub Dark, Altium Dark, Solarized Light, Nord
+- Full canvas theming: background, grid, wire, junction, component body, text colors
+- Fill type support: background fill, outline fill, and no fill for correct symbol rendering
+- Theme persisted across sessions via Zustand store
+- Theme editor panel for customization
+</details>
+
+<details>
 <summary><strong>Panels (Altium-style)</strong></summary>
 
 - **Properties** -- context-aware editing for schematic and PCB objects
@@ -195,8 +206,10 @@ Signex is an open-source desktop EDA tool built for hardware engineers who want 
 | **Phase 4+: Altium Parity** | Done | 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, design variants, parameter manager, multi-channel, BOM formats |
 | **Phase 5: Signal AI** | Done | Claude API streaming, tool use, visual context, circuit templates, design review |
 | **Phase 6: PCB Layout** | Done | KiCad PCB parser, routing (walkaround/push/diff pair), 15-type DRC, copper pour, Gerber/ODB++/STEP export, 3D viewer, cross-probing |
+| **Theme System** | Done | 6 built-in themes, canvas theming, fill type support, theme editor |
 | **Phase 7: Simulation** | Planned | SPICE integration, signal integrity, power analysis |
-| **Phase 8: Ecosystem** | Planned | Plugin system, community libraries, cloud storage |
+| **Phase 8: Collaboration** | Planned | Comment threads, design diff, Git integration, real-time multi-user |
+| **Phase 9: Ecosystem** | Planned | Plugin system, community libraries, cloud storage |
 
 See [docs/feature-roadmap.md](docs/feature-roadmap.md) for the detailed roadmap.
 
@@ -273,7 +286,7 @@ npm run tauri dev
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Styling | Tailwind CSS 4 |
 | Canvas | Canvas2D (schematic + PCB), WebGL2 framework ready, Three.js (3D viewer) |
-| State | Zustand (8 stores: layout, project, editor, schematic, libraryEditor, outputJobs, signal, pcb) |
+| State | Zustand (9 stores: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme) |
 | Parser | Pure Rust S-expression parser |
 | AI | Claude API via Rust reqwest (streaming SSE, tool use, vision) |
 
@@ -287,8 +300,8 @@ src/
   canvas/             SchematicRenderer, PcbRenderer, Pcb3DViewer, PcbWebGLRenderer, hitTest
   components/         MenuBar, ToolbarStrip, PcbToolbar, StatusBar, dialogs (18 files)
   panels/             Properties, PcbProperties, Components, Messages, Signal, Filter, List, Navigator, OutputJobs, LayerStack, DRC, Inspector, Variants, Snippets, CrossSection (16 files)
-  stores/             Zustand: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal
-  lib/                Schematic (ERC, net resolver, geometry, PDF, BOM) + PCB (router, DRC, ratsnest, copper pour, Gerber, ODB++, STEP, cross-probe) + Signal AI
+  stores/             Zustand: layout, project, editor, schematic, pcb, libraryEditor, outputJobs, signal, theme
+  lib/                Schematic (ERC, net resolver, geometry, PDF, BOM) + PCB (router, DRC, ratsnest, copper pour, Gerber, ODB++, STEP, cross-probe) + Signal AI + themes
   __tests__/          Vitest test suite
 docs/                 Roadmap, master plan, Altium reference
 ```
