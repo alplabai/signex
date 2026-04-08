@@ -34,13 +34,20 @@ pub async fn save_schematic(
         let canonical_dir = dir
             .canonicalize()
             .map_err(|e| format!("Invalid project dir: {}", e))?;
-        let canonical_path = dir.join(&filename).parent().unwrap_or(dir).to_path_buf();
-        let canonical_path = if canonical_path.as_os_str().is_empty() {
-            canonical_dir.clone()
-        } else {
-            canonical_path
-                .canonicalize()
+        let canonical_path = if path.exists() {
+            path.canonicalize()
                 .map_err(|e| format!("Invalid path: {}", e))?
+        } else {
+            let parent = path.parent().unwrap_or(dir);
+            let canonical_parent = if parent.as_os_str().is_empty() {
+                canonical_dir.clone()
+            } else {
+                parent
+                    .canonicalize()
+                    .map_err(|e| format!("Invalid path: {}", e))?
+            };
+            let file_name = path.file_name().ok_or_else(|| "Missing filename".to_string())?;
+            canonical_parent.join(file_name)
         };
         if !canonical_path.starts_with(&canonical_dir) {
             return Err("Path escapes project directory".to_string());

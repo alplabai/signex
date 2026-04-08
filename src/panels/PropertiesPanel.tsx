@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
 import { MousePointer2, Eye, EyeOff, ChevronDown, ChevronRight, Lock, X, Plus } from "lucide-react";
@@ -33,7 +33,7 @@ export function PropertiesPanel() {
 
   if (selectedIds.size === 0) return <DocumentProps />;
 
-  const sel = {
+  const sel = useMemo(() => ({
     symbols: data.symbols.filter((s) => selectedIds.has(s.uuid)),
     wires: data.wires.filter((w) => selectedIds.has(w.uuid)),
     labels: data.labels.filter((l) => selectedIds.has(l.uuid)),
@@ -43,7 +43,7 @@ export function PropertiesPanel() {
     buses: data.buses.filter((b) => selectedIds.has(b.uuid)),
     busEntries: data.bus_entries.filter((be) => selectedIds.has(be.uuid)),
     childSheets: data.child_sheets.filter((cs) => selectedIds.has(cs.uuid)),
-  };
+  }), [data, selectedIds]);
   const total = sel.symbols.length + sel.wires.length + sel.labels.length +
     sel.junctions.length + sel.noConnects.length + sel.textNotes.length +
     sel.buses.length + sel.busEntries.length + sel.childSheets.length;
@@ -110,73 +110,73 @@ export function PropertiesPanel() {
 // DOCUMENT OPTIONS (Nothing Selected)
 // ═══════════════════════════════════════════════════════════════════
 
-function PlacementProps({ editMode, paused }: { editMode: string; paused: boolean }) {
-  const PLACEMENT_INFO: Record<string, { title: string; fields: { label: string; key: string; default: string }[] }> = {
-    drawWire: { title: "Wire", fields: [] },
-    drawBus: { title: "Bus", fields: [
-      { label: "Bus Name", key: "busName", default: "" },
-    ]},
-    placeLabel: { title: "Net Label", fields: [
-      { label: "Net Name", key: "netName", default: "NET?" },
-      { label: "Orientation", key: "rotation", default: "0" },
-      { label: "Font Size", key: "fontSize", default: "1.27" },
-    ]},
-    placePower: { title: "Power Port", fields: [
-      { label: "Net Name", key: "netName", default: "VCC" },
-      { label: "Style", key: "style", default: "bar" },
-      { label: "Orientation", key: "rotation", default: "0" },
-    ]},
-    placeNoConnect: { title: "No Connect", fields: [] },
-    placeNoErc: { title: "No ERC Directive", fields: [] },
-    placeSymbol: { title: "Component", fields: [
-      { label: "Designator", key: "reference", default: "U?" },
-      { label: "Comment", key: "value", default: "" },
-    ]},
-    placeText: { title: "Text String", fields: [
-      { label: "Text", key: "text", default: "" },
-      { label: "Font Size", key: "fontSize", default: "1.27" },
-    ]},
-    placeTextFrame: { title: "Text Frame", fields: [
-      { label: "Text", key: "text", default: "" },
-    ]},
-    placeNote: { title: "Note", fields: [
-      { label: "Text", key: "text", default: "" },
-    ]},
-    placeSheetSymbol: { title: "Sheet Symbol", fields: [
-      { label: "Sheet Name", key: "sheetName", default: "" },
-      { label: "Filename", key: "filename", default: "" },
-    ]},
-    placeBusEntry: { title: "Bus Entry", fields: [] },
-    placePort: { title: "Port", fields: [
-      { label: "Name", key: "name", default: "" },
-      { label: "I/O Type", key: "ioType", default: "Bidirectional" },
-    ]},
-    drawLine: { title: "Line", fields: [
-      { label: "Line Width", key: "width", default: "0.15" },
-    ]},
-    drawRect: { title: "Rectangle", fields: [
-      { label: "Line Width", key: "width", default: "0.15" },
-      { label: "Fill", key: "fill", default: "false" },
-    ]},
-    drawCircle: { title: "Circle", fields: [
-      { label: "Line Width", key: "width", default: "0.15" },
-      { label: "Fill", key: "fill", default: "false" },
-    ]},
-    drawPolyline: { title: "Polyline", fields: [
-      { label: "Line Width", key: "width", default: "0.15" },
-    ]},
-    placeParameterSet: { title: "Parameter Set", fields: [] },
-    placeDifferentialPair: { title: "Differential Pair", fields: [
-      { label: "Positive Net", key: "posNet", default: "" },
-      { label: "Negative Net", key: "negNet", default: "" },
-    ]},
-    placeBlanket: { title: "Blanket", fields: [] },
-    placeCompileMask: { title: "Compile Mask", fields: [] },
-    placeHarness: { title: "Signal Harness", fields: [] },
-    placeHarnessConnector: { title: "Harness Connector", fields: [] },
-    placeHarnessEntry: { title: "Harness Entry", fields: [] },
-  };
+const PLACEMENT_INFO: Record<string, { title: string; fields: { label: string; key: string; default: string }[] }> = {
+  drawWire: { title: "Wire", fields: [] },
+  drawBus: { title: "Bus", fields: [
+    { label: "Bus Name", key: "busName", default: "" },
+  ]},
+  placeLabel: { title: "Net Label", fields: [
+    { label: "Net Name", key: "netName", default: "NET?" },
+    { label: "Orientation", key: "rotation", default: "0" },
+    { label: "Font Size", key: "fontSize", default: "1.27" },
+  ]},
+  placePower: { title: "Power Port", fields: [
+    { label: "Net Name", key: "netName", default: "VCC" },
+    { label: "Style", key: "style", default: "bar" },
+    { label: "Orientation", key: "rotation", default: "0" },
+  ]},
+  placeNoConnect: { title: "No Connect", fields: [] },
+  placeNoErc: { title: "No ERC Directive", fields: [] },
+  placeSymbol: { title: "Component", fields: [
+    { label: "Designator", key: "reference", default: "U?" },
+    { label: "Comment", key: "value", default: "" },
+  ]},
+  placeText: { title: "Text String", fields: [
+    { label: "Text", key: "text", default: "" },
+    { label: "Font Size", key: "fontSize", default: "1.27" },
+  ]},
+  placeTextFrame: { title: "Text Frame", fields: [
+    { label: "Text", key: "text", default: "" },
+  ]},
+  placeNote: { title: "Note", fields: [
+    { label: "Text", key: "text", default: "" },
+  ]},
+  placeSheetSymbol: { title: "Sheet Symbol", fields: [
+    { label: "Sheet Name", key: "sheetName", default: "" },
+    { label: "Filename", key: "filename", default: "" },
+  ]},
+  placeBusEntry: { title: "Bus Entry", fields: [] },
+  placePort: { title: "Port", fields: [
+    { label: "Name", key: "name", default: "" },
+    { label: "I/O Type", key: "ioType", default: "Bidirectional" },
+  ]},
+  drawLine: { title: "Line", fields: [
+    { label: "Line Width", key: "width", default: "0.15" },
+  ]},
+  drawRect: { title: "Rectangle", fields: [
+    { label: "Line Width", key: "width", default: "0.15" },
+    { label: "Fill", key: "fill", default: "false" },
+  ]},
+  drawCircle: { title: "Circle", fields: [
+    { label: "Line Width", key: "width", default: "0.15" },
+    { label: "Fill", key: "fill", default: "false" },
+  ]},
+  drawPolyline: { title: "Polyline", fields: [
+    { label: "Line Width", key: "width", default: "0.15" },
+  ]},
+  placeParameterSet: { title: "Parameter Set", fields: [] },
+  placeDifferentialPair: { title: "Differential Pair", fields: [
+    { label: "Positive Net", key: "posNet", default: "" },
+    { label: "Negative Net", key: "negNet", default: "" },
+  ]},
+  placeBlanket: { title: "Blanket", fields: [] },
+  placeCompileMask: { title: "Compile Mask", fields: [] },
+  placeHarness: { title: "Signal Harness", fields: [] },
+  placeHarnessConnector: { title: "Harness Connector", fields: [] },
+  placeHarnessEntry: { title: "Harness Entry", fields: [] },
+};
 
+function PlacementProps({ editMode, paused }: { editMode: string; paused: boolean }) {
   const info = PLACEMENT_INFO[editMode] || { title: editMode, fields: [] };
 
   return (

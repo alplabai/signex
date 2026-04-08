@@ -87,6 +87,17 @@ export function ComponentPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const menuRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  // Cleanup active resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (resizeCleanupRef.current) {
+        resizeCleanupRef.current();
+        resizeCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -104,7 +115,7 @@ export function ComponentPanel() {
   const fetchLibraries = useCallback(() => {
     invoke<LibraryInfo[]>("list_libraries")
       .then(setLibraries)
-      .catch(() => {});
+      .catch((e) => console.warn("list_libraries failed", e));
   }, []);
 
   useEffect(() => { fetchLibraries(); }, [fetchLibraries]);
@@ -171,7 +182,7 @@ export function ComponentPanel() {
   const newSymbol = () => {
     const emptySymbol: LibSymbol = {
       id: "NewSymbol",
-      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill: false }],
+      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill_type: "none" }],
       pins: [
         { pin_type: "passive", shape: "line", position: { x: -5.08, y: 2.54 }, rotation: 0, length: 2.54, name: "1", number: "1", name_visible: true, number_visible: true },
         { pin_type: "passive", shape: "line", position: { x: -5.08, y: -2.54 }, rotation: 0, length: 2.54, name: "2", number: "2", name_visible: true, number_visible: true },
@@ -425,6 +436,11 @@ export function ComponentPanel() {
                 setDetailsHeight(Math.max(60, Math.min(maxH, startH + delta)));
               };
               const onUp = () => {
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+                resizeCleanupRef.current = null;
+              };
+              resizeCleanupRef.current = () => {
                 window.removeEventListener("mousemove", onMove);
                 window.removeEventListener("mouseup", onUp);
               };
@@ -796,10 +812,7 @@ function FootprintPreviewMini({ footprintId }: { footprintId: string }) {
           ctx.font = `${fontSize}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.save();
-          ctx.scale(1, -1); // Flip for text since we may have inverted Y
           // Note: coordinate system is not inverted here (PCB Y goes down)
-          ctx.restore();
         }
       }
     }
@@ -905,14 +918,14 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
       if (g.type === "Polyline" && g.points.length >= 2) {
         ctx.beginPath(); ctx.moveTo(g.points[0].x, g.points[0].y);
         for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
-        if (g.fill) ctx.fill(); ctx.stroke();
+        if (g.fill_type !== "none") ctx.fill(); ctx.stroke();
       } else if (g.type === "Rectangle") {
         const rx = Math.min(g.start.x, g.end.x), ry = Math.min(g.start.y, g.end.y);
         ctx.fillRect(rx, ry, Math.abs(g.end.x - g.start.x), Math.abs(g.end.y - g.start.y));
         ctx.strokeRect(rx, ry, Math.abs(g.end.x - g.start.x), Math.abs(g.end.y - g.start.y));
       } else if (g.type === "Circle") {
         ctx.beginPath(); ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
-        if (g.fill) ctx.fill(); ctx.stroke();
+        if (g.fill_type !== "none") ctx.fill(); ctx.stroke();
       }
     }
     // Green pins on cream background

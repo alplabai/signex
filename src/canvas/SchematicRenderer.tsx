@@ -7,94 +7,16 @@ import { hitTest, boxSelect, lassoSelect, outsideBoxSelect, lineSelect, connecti
 import { FindReplace } from "@/components/FindReplace";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { resolveNets } from "@/lib/netResolver";
+import type { Graphic, SchPoint, TextPropData } from "@/types";
 import { substituteSpecialStrings } from "@/lib/specialStrings";
-import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
+import { useThemeStore } from "@/stores/theme";
+import {
+  PAPER, C, txt,
+  symToSch, pinEnd, findNearestElectricalPoint,
+} from "./schematicDrawHelpers";
 interface Camera { x: number; y: number; zoom: number }
 const IMAGE_CACHE = new Map<string, HTMLImageElement>();
-
-const PAPER: Record<string, [number, number]> = {
-  A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
-  A: [279.4, 215.9], B: [431.8, 279.4], C: [558.8, 431.8], D: [863.6, 558.8],
-};
-
-const C = {
-  bg: "#1a1b2e", paper: "#1e2035", paperBorder: "#2a2d4a",
-  grid: "#2d3060", gridMajor: "#3a3f75",
-  wire: "#4fc3f7", junction: "#4fc3f7",
-  body: "#9fa8da", bodyFill: "#1e2035",
-  pin: "#81c784", pinName: "#90a4ae", pinNum: "#607d8b",
-  ref: "#e8c66a", val: "#9598b3",
-  labelNet: "#81c784", labelGlobal: "#ff8a65", labelHier: "#ba68c8",
-  sheet: "#5b8def", sheetText: "#cdd6f4",
-  noConnect: "#e8667a", power: "#ef5350",
-  selection: "#00bcd4", selectionFill: "rgba(0,188,212,0.06)",
-  bus: "#4a86c8", busEntry: "#4a86c8",
-  handleFill: "#4caf50", handleBorder: "#2e7d32",
-};
-
-const txt = (s: string) => s.replace(/\{slash\}/g, "/");
-
-// Transform a point from symbol-local (Y-up) to schematic (Y-down) space
-function symToSch(lx: number, ly: number, sx: number, sy: number, rot: number, mx: boolean, my: boolean): [number, number] {
-  // 1. Flip Y (symbol Y-up → screen Y-down)
-  const x = lx;
-  const y = -ly;
-
-  // 2. Rotate (KiCad CW in screen space = negate for math CCW)
-  const rad = -(rot * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  let rx = x * cos - y * sin;
-  let ry = x * sin + y * cos;
-
-  // 3. Mirror AFTER rotation (KiCad applies mirror post-rotation)
-  if (mx) ry = -ry;
-  if (my) rx = -rx;
-
-  return [sx + rx, sy + ry];
-}
-
-// Pin end position in symbol-local space
-function pinEnd(pin: SchPin): SchPoint {
-  const rad = (pin.rotation * Math.PI) / 180;
-  return {
-    x: pin.position.x + Math.cos(rad) * pin.length,
-    y: pin.position.y + Math.sin(rad) * pin.length,
-  };
-}
-
-const ELECTRICAL_SNAP_RANGE = 2.0; // World units — snap to pins/wire endpoints within this range
-
-/** Find nearest pin endpoint or wire endpoint for electrical snapping */
-function findNearestElectricalPoint(
-  data: SchematicData, worldX: number, worldY: number
-): SchPoint | null {
-  let bestDist = ELECTRICAL_SNAP_RANGE;
-  let bestPoint: SchPoint | null = null;
-
-  // Check all symbol pin endpoints (snap to pin tip, not pin base)
-  for (const sym of data.symbols) {
-    const lib = data.lib_symbols[sym.lib_id];
-    if (!lib) continue;
-    for (const pin of lib.pins) {
-      const pe = pinEnd(pin);
-      const [px, py] = symToSch(pe.x, pe.y,
-        sym.position.x, sym.position.y, sym.rotation, sym.mirror_x, sym.mirror_y);
-      const d = Math.hypot(worldX - px, worldY - py);
-      if (d < bestDist) { bestDist = d; bestPoint = { x: px, y: py }; }
-    }
-  }
-
-  // Check wire endpoints
-  for (const wire of data.wires) {
-    for (const pt of [wire.start, wire.end]) {
-      const d = Math.hypot(worldX - pt.x, worldY - pt.y);
-      if (d < bestDist) { bestDist = d; bestPoint = { x: pt.x, y: pt.y }; }
-    }
-  }
-
-  return bestPoint;
-}
+const MAX_IMAGE_CACHE = 100;
 
 export function SchematicRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -118,6 +40,10 @@ export function SchematicRenderer() {
   const drawStart = useRef<SchPoint | null>(null);
   const drawMid = useRef<SchPoint | null>(null); // For 3-click arc
   const polyPoints = useRef<SchPoint[]>([]); // For polyline accumulation
+  // Canvas theme colors — synced to module-level C object each frame
+  const canvasColors = useThemeStore((s) => s.getActiveTheme().tokens.canvas);
+  const canvasColorsRef = useRef(canvasColors);
+  useEffect(() => { canvasColorsRef.current = canvasColors; Object.assign(C, canvasColors); }, [canvasColors]);
   const updateStatusBar = useEditorStore((s) => s.updateStatusBar);
   const gridVisible = useEditorStore((s) => s.gridVisible);
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
@@ -176,7 +102,8 @@ export function SchematicRenderer() {
   ) => {
     const t = (lx: number, ly: number) => symToSch(lx, ly, sx, sy, rot, mx, my);
 
-    ctx.lineWidth = Math.max(g.width || 0.1, 0.1);
+    const gWidth = "width" in g ? (g.width as number) : 0;
+    ctx.lineWidth = Math.max(gWidth || 0.1, 0.1);
 
     switch (g.type) {
       case "Polyline": {
@@ -188,7 +115,8 @@ export function SchematicRenderer() {
           const [xi, yi] = t(g.points[i].x, g.points[i].y);
           ctx.lineTo(xi, yi);
         }
-        if (g.fill) { ctx.fillStyle = C.body; ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; }
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
         ctx.stroke();
         break;
       }
@@ -197,9 +125,8 @@ export function SchematicRenderer() {
         const [x2, y2] = t(g.end.x, g.end.y);
         const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
         const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
-        // Always fill rectangles with paper bg to make body opaque
-        ctx.fillStyle = C.bodyFill;
-        ctx.fillRect(rx, ry, rw, rh);
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fillRect(rx, ry, rw, rh); }
         ctx.strokeRect(rx, ry, rw, rh);
         break;
       }
@@ -207,7 +134,8 @@ export function SchematicRenderer() {
         const [cx, cy] = t(g.center.x, g.center.y);
         ctx.beginPath();
         ctx.arc(cx, cy, g.radius, 0, Math.PI * 2);
-        if (g.fill) { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
         ctx.stroke();
         break;
       }
@@ -1212,6 +1140,10 @@ export function SchematicRenderer() {
         // Image rendering uses cached HTMLImageElement
         let img = IMAGE_CACHE.get(d.uuid);
         if (!img && d.dataUrl) {
+          if (IMAGE_CACHE.size >= MAX_IMAGE_CACHE) {
+            const firstKey = IMAGE_CACHE.keys().next().value;
+            if (firstKey !== undefined) IMAGE_CACHE.delete(firstKey);
+          }
           img = new Image();
           img.src = d.dataUrl;
           IMAGE_CACHE.set(d.uuid, img);
@@ -1779,6 +1711,16 @@ export function SchematicRenderer() {
     return () => obs.disconnect();
   }, []); // Mount once — renderRef always has latest
 
+  // Cleanup autoPan interval on unmount
+  useEffect(() => {
+    return () => {
+      if (autoPanRef.current) {
+        clearInterval(autoPanRef.current);
+        autoPanRef.current = null;
+      }
+    };
+  }, []);
+
   // --- Altium mouse: scroll=zoom, right-drag=pan ---
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -2136,7 +2078,7 @@ export function SchematicRenderer() {
         window.addEventListener("mouseup", globalUp);
       }
     }
-  }, [data, s2w, ctxMenu]);
+  }, [data, s2w, w2s, ctxMenu]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -2601,14 +2543,6 @@ export function SchematicRenderer() {
             const sp = w2s(textPos.x, textPos.y);
             setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y });
           }
-          break;
-        }
-        case "Tab": {
-          // Tab = open properties panel
-          e.preventDefault();
-          const ly = useLayoutStore.getState();
-          ly.setDockActiveTab("right", "properties");
-          if (ly.rightCollapsed) ly.toggleRight();
           break;
         }
         case "w":

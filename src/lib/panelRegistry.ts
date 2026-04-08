@@ -1,4 +1,19 @@
 // Maps panel IDs to their React component and metadata
+import { ProjectPanel } from "@/panels/ProjectPanel";
+import { ComponentPanel } from "@/panels/ComponentPanel";
+import { NavigatorPanel } from "@/panels/NavigatorPanel";
+import { PropertiesPanel } from "@/panels/PropertiesPanel";
+import { FilterPanel } from "@/panels/FilterPanel";
+import { ListPanel } from "@/panels/ListPanel";
+import { MessagesPanel } from "@/panels/MessagesPanel";
+import { OutputJobsPanel } from "@/panels/OutputJobsPanel";
+import { SignalPanel } from "@/panels/SignalPanel";
+import { InspectorPanel } from "@/panels/InspectorPanel";
+import { DrcPanel } from "@/panels/DrcPanel";
+import { LayerStackPanel } from "@/panels/LayerStackPanel";
+import { SnippetsPanel } from "@/panels/SnippetsPanel";
+import { VariantPanel } from "@/panels/VariantPanel";
+import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
 
 export type PanelId =
   | "projects" | "components" | "navigator"
@@ -42,3 +57,21 @@ export const PANEL_DEFS: PanelDef[] = [
 export function getPanelsForContext(mode: "schematic" | "pcb"): PanelDef[] {
   return PANEL_DEFS.filter(p => p.context === "both" || p.context === mode);
 }
+
+export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
+  projects: ProjectPanel,
+  components: ComponentPanel,
+  navigator: NavigatorPanel,
+  properties: PropertiesPanel,
+  filter: FilterPanel,
+  list: ListPanel,
+  messages: MessagesPanel,
+  "output-jobs": OutputJobsPanel,
+  signal: SignalPanel,
+  inspector: InspectorPanel,
+  drc: DrcPanel,
+  layerStack: LayerStackPanel,
+  snippets: SnippetsPanel,
+  variants: VariantPanel,
+  boardCrossSection: BoardCrossSectionPanel,
+};

@@ -3,6 +3,8 @@ import type { ErcViolation } from "./erc";
 /**
  * Generate a self-contained HTML report for ERC violations.
  */
+const SEVERITY_COLORS: Record<string, string> = { error: "#f38ba8", warning: "#fab387" };
+
 export function generateErcHtmlReport(violations: ErcViolation[], projectName: string): string {
   const now = new Date();
   const timestamp = now.toLocaleString();
@@ -10,7 +12,7 @@ export function generateErcHtmlReport(violations: ErcViolation[], projectName: s
   const warnings = violations.filter(v => v.severity === "warning");
 
   const rows = violations.map((v, i) => {
-    const severityColor = v.severity === "error" ? "#f38ba8" : "#fab387";
+    const severityColor = SEVERITY_COLORS[v.severity] ?? "#cdd6f4";
     const severityLabel = v.severity === "error" ? "Error" : "Warning";
     const position = v.position ? `(${v.position.x.toFixed(2)}, ${v.position.y.toFixed(2)})` : "&mdash;";
     const typeLabel = v.type.replace(/_/g, " ");
@@ -155,5 +157,6 @@ function escapeHtml(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

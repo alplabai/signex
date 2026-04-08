@@ -567,7 +567,8 @@ const GERBER_LAYERS: { layer: PcbLayerId; suffix: string }[] = [
  * Filename prefix is derived from the board generator or defaults to "board".
  */
 export function exportGerberSet(data: PcbData): { filename: string; content: string }[] {
-  const prefix = data.board.generator || "board";
+  const rawPrefix = data.board.generator || "board";
+  const prefix = rawPrefix.replace(/[/\\:*?"<>|]/g, "_").slice(0, 64);
   const files: { filename: string; content: string }[] = [];
 
   for (const { layer, suffix } of GERBER_LAYERS) {

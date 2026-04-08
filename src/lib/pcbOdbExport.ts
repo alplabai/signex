@@ -504,9 +504,10 @@ function generateComponentList(data: PcbData, side: "top" | "bottom"): string {
   const footprints = data.footprints.filter((fp) => fp.layer === layer);
   for (const fp of footprints) {
     lines.push(`CMP ${fp.pads.length} ${fp.position.x.toFixed(4)} ${fp.position.y.toFixed(4)} ${fp.rotation.toFixed(1)} N ;0;0`);
-    lines.push(`PRP REF '${fp.reference}'`);
-    lines.push(`PRP VAL '${fp.value}'`);
-    lines.push(`PRP PKG '${fp.footprintId}'`);
+    const escPrp = (s: string) => s.replace(/'/g, "\\'");
+    lines.push(`PRP REF '${escPrp(fp.reference)}'`);
+    lines.push(`PRP VAL '${escPrp(fp.value)}'`);
+    lines.push(`PRP PKG '${escPrp(fp.footprintId)}'`);
     // Pad records
     for (const pad of fp.pads) {
       const pos = absolutePadPos(pad, fp);

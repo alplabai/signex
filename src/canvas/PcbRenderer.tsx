@@ -25,6 +25,7 @@ export function PcbRenderer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const camRef = useRef<Camera>({ x: 0, y: 0, zoom: 5 }); // PCB uses ~5 px/mm default
   const animRef = useRef(0);
+  const fittedRef = useRef(false);
   const dragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
 
@@ -247,8 +248,8 @@ export function PcbRenderer() {
       return;
     }
 
-    try {
     ctx.save();
+    try {
     ctx.translate(cam.x, cam.y);
     ctx.scale(cam.zoom, cam.zoom);
 
@@ -666,9 +667,9 @@ export function PcbRenderer() {
       ctx.setLineDash([]);
     }
 
-    ctx.restore();
     } catch (renderErr) {
       console.error("PCB render error:", renderErr);
+    } finally {
       ctx.restore();
     }
 
@@ -700,7 +701,7 @@ export function PcbRenderer() {
       if (!data) {
         camRef.current.x = rect.width / 2;
         camRef.current.y = rect.height / 2;
-      } else if (!(camRef.current as any)._fitted) {
+      } else if (!fittedRef.current) {
         // Auto-fit to board bounds on first load
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const p of data.board.outline) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
@@ -715,7 +716,7 @@ export function PcbRenderer() {
           camRef.current.zoom = zoom;
           camRef.current.x = rect.width / 2 - (minX + bw / 2) * zoom;
           camRef.current.y = rect.height / 2 - (minY + bh / 2) * zoom;
-          (camRef.current as any)._fitted = true;
+          fittedRef.current = true;
         }
       }
       render();
@@ -727,13 +728,10 @@ export function PcbRenderer() {
     return () => ro.disconnect();
   }, [render, data]);
 
-  // Animation loop
+  // Demand-driven render — re-render once whenever dependencies change
   useEffect(() => {
-    const loop = () => {
-      render();
-      animRef.current = requestAnimationFrame(loop);
-    };
-    animRef.current = requestAnimationFrame(loop);
+    cancelAnimationFrame(animRef.current);
+    animRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animRef.current);
   }, [render]);
 

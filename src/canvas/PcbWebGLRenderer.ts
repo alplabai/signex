@@ -100,6 +100,7 @@ export class PcbWebGLContext {
   private lineProgram: WebGLProgram | null = null;
   private quadVAO: WebGLVertexArrayObject | null = null;
   private unitQuadBuffer: WebGLBuffer | null = null;
+  private instanceBuffer: WebGLBuffer | null = null;
 
   // Camera
   private cameraX = 0;
@@ -241,14 +242,16 @@ export class PcbWebGLContext {
       instanceData[base + 7] = r.color[3];
     }
 
-    const instanceBuffer = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
+    if (!this.instanceBuffer) {
+      this.instanceBuffer = gl.createBuffer();
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
 
     gl.bindVertexArray(this.quadVAO);
 
     // Bind instance attributes
-    gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 0);
     gl.vertexAttribDivisor(1, 1);
@@ -271,7 +274,6 @@ export class PcbWebGLContext {
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, rects.length);
 
     gl.bindVertexArray(null);
-    gl.deleteBuffer(instanceBuffer);
   }
 
   /**
@@ -308,6 +310,7 @@ export class PcbWebGLContext {
     if (this.lineProgram) gl.deleteProgram(this.lineProgram);
     if (this.quadVAO) gl.deleteVertexArray(this.quadVAO);
     if (this.unitQuadBuffer) gl.deleteBuffer(this.unitQuadBuffer);
+    if (this.instanceBuffer) gl.deleteBuffer(this.instanceBuffer);
   }
 }
 
