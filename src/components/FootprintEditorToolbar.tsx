@@ -34,8 +34,8 @@ export function FootprintEditorToolbar() {
   const setEditMode = useFootprintEditorStore(s => s.setEditMode);
   const selectedItem = useFootprintEditorStore(s => s.selectedItem);
   const dirty = useFootprintEditorStore(s => s.dirty);
-  const undoStack = useFootprintEditorStore(s => s.undoStack);
-  const redoStack = useFootprintEditorStore(s => s.redoStack);
+  const canUndo = useFootprintEditorStore(s => s.undoStack.length > 0);
+  const canRedo = useFootprintEditorStore(s => s.redoStack.length > 0);
   const footprint = useFootprintEditorStore(s => s.footprint);
   const activeLayer = useFootprintEditorStore(s => s.activeLayer);
   const setActiveLayer = useFootprintEditorStore(s => s.setActiveLayer);
@@ -47,10 +47,7 @@ export function FootprintEditorToolbar() {
   };
 
   const handleSave = async () => {
-    const s = useFootprintEditorStore.getState();
-    if (!s.footprint || !s.sourcePath || !s.sourceId) return;
-    // TODO: Tauri save_footprint command
-    alert("Save footprint: " + s.sourceId + " → " + s.sourcePath + "\n(Backend save not yet implemented)");
+    // Tauri save_footprint command will be implemented when Rust backend supports .snxpkg format
   };
 
   return (
@@ -112,14 +109,14 @@ export function FootprintEditorToolbar() {
       <ToolBtn icon={<Trash2 size={15} />} label="Delete (Del)"
         disabled={!selectedItem} onClick={handleDelete} />
       <ToolBtn icon={<Undo2 size={15} />} label="Undo (Ctrl+Z)"
-        disabled={undoStack.length === 0} onClick={() => useFootprintEditorStore.getState().undo()} />
+        disabled={!canUndo} onClick={() => useFootprintEditorStore.getState().undo()} />
       <ToolBtn icon={<Redo2 size={15} />} label="Redo (Ctrl+Y)"
-        disabled={redoStack.length === 0} onClick={() => useFootprintEditorStore.getState().redo()} />
+        disabled={!canRedo} onClick={() => useFootprintEditorStore.getState().redo()} />
 
       <Sep />
 
-      <ToolBtn icon={<Save size={15} />} label="Save Footprint"
-        disabled={!dirty} onClick={handleSave} />
+      <ToolBtn icon={<Save size={15} />} label="Save Footprint (backend pending)"
+        disabled={true} onClick={handleSave} />
 
       <div className="flex-1" />
 

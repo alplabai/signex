@@ -182,7 +182,7 @@ function PadTable() {
           {footprint.pads.map((pad, i) => {
             const isSel = selectedItem?.type === "pad" && selectedItem.index === i;
             return (
-              <tr key={i} onClick={() => setSelectedItem({ type: "pad", index: i })}
+              <tr key={pad.uuid} onClick={() => setSelectedItem({ type: "pad", index: i })}
                 className={cn("border-b border-border-subtle/20 cursor-pointer", isSel ? "bg-accent/15" : "hover:bg-bg-hover/50")}>
                 <td className="px-1.5 py-0.5 font-mono">{pad.number}</td>
                 <td className="px-1.5 py-0.5">

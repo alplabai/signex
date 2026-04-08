@@ -129,9 +129,7 @@ export const useFootprintEditorStore = create<FootprintEditorState>()((set, get)
     const { footprint } = get();
     if (!footprint) return;
     get().pushUndo();
-    const fp = clone(footprint);
-    fp.pads.push(pad);
-    set({ footprint: fp, dirty: true });
+    set({ footprint: { ...clone(footprint), pads: [...footprint.pads, pad] }, dirty: true });
   },
 
   updatePad: (index, updates) => {
@@ -147,18 +145,14 @@ export const useFootprintEditorStore = create<FootprintEditorState>()((set, get)
     const { footprint } = get();
     if (!footprint || index < 0 || index >= footprint.pads.length) return;
     get().pushUndo();
-    const fp = clone(footprint);
-    fp.pads.splice(index, 1);
-    set({ footprint: fp, dirty: true, selectedItem: null });
+    set({ footprint: { ...clone(footprint), pads: footprint.pads.filter((_, i) => i !== index) }, dirty: true, selectedItem: null });
   },
 
   addGraphic: (graphic) => {
     const { footprint } = get();
     if (!footprint) return;
     get().pushUndo();
-    const fp = clone(footprint);
-    fp.graphics.push(graphic);
-    set({ footprint: fp, dirty: true });
+    set({ footprint: { ...clone(footprint), graphics: [...footprint.graphics, graphic] }, dirty: true });
   },
 
   updateGraphic: (index, graphic) => {
@@ -174,9 +168,7 @@ export const useFootprintEditorStore = create<FootprintEditorState>()((set, get)
     const { footprint } = get();
     if (!footprint || index < 0 || index >= footprint.graphics.length) return;
     get().pushUndo();
-    const fp = clone(footprint);
-    fp.graphics.splice(index, 1);
-    set({ footprint: fp, dirty: true, selectedItem: null });
+    set({ footprint: { ...clone(footprint), graphics: footprint.graphics.filter((_, i) => i !== index) }, dirty: true, selectedItem: null });
   },
 
   updateFootprintId: (id) => {

@@ -237,6 +237,8 @@ export function FootprintEditorCanvas() {
     if (isPanningRef.current) {
       viewRef.current.ox = panStartRef.current.ox + e.clientX - panStartRef.current.x;
       viewRef.current.oy = panStartRef.current.oy + e.clientY - panStartRef.current.y;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
       return;
     }
     const canvas = canvasRef.current;
@@ -244,23 +246,32 @@ export function FootprintEditorCanvas() {
     const rect = canvas.getBoundingClientRect();
     const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
     cursorRef.current = { x: snap(world.x), y: snap(world.y) };
-  }, [snap, screenToWorld]);
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(render);
+  }, [snap, screenToWorld, render]);
 
   const handleMouseUp = useCallback(() => { isPanningRef.current = false; }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
+  // Native wheel listener (non-passive) to prevent page scroll during zoom
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const v = viewRef.current;
-    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const newZoom = Math.max(5, Math.min(1000, v.zoom * factor));
-    v.ox = sx - (sx - v.ox) * (newZoom / v.zoom);
-    v.oy = sy - (sy - v.oy) * (newZoom / v.zoom);
-    v.zoom = newZoom;
-  }, []);
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+      const v = viewRef.current;
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const newZoom = Math.max(5, Math.min(1000, v.zoom * factor));
+      v.ox = sx - (sx - v.ox) * (newZoom / v.zoom);
+      v.oy = sy - (sy - v.oy) * (newZoom / v.zoom);
+      v.zoom = newZoom;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(render);
+    };
+    canvas.addEventListener("wheel", handler, { passive: false });
+    return () => canvas.removeEventListener("wheel", handler);
+  }, [render]);
 
   // Keyboard
   useEffect(() => {
@@ -285,7 +296,6 @@ export function FootprintEditorCanvas() {
       <canvas ref={canvasRef}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         className="absolute inset-0"
         style={{ cursor: editMode === "select" ? "default" : "crosshair" }}
       />
