@@ -3,6 +3,7 @@ import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import type { SchPin } from "@/types";
 import { cn } from "@/lib/utils";
 import { Eye, Lock, ChevronDown } from "lucide-react";
+import { FootprintPickerDialog } from "@/components/FootprintPickerDialog";
 
 const PIN_TYPES = [
   "passive", "input", "output", "bidirectional", "power_in", "power_out",
@@ -88,8 +89,16 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
   const setComponentType = useLibraryEditorStore(s => s.setComponentType);
   const mirrored = useLibraryEditorStore(s => s.mirrored);
   const setMirrored = useLibraryEditorStore(s => s.setMirrored);
+  const [fpPickerOpen, setFpPickerOpen] = useState(false);
 
   return (
+    <>
+    <FootprintPickerDialog
+      open={fpPickerOpen}
+      initialValue={footprint}
+      onClose={() => setFpPickerOpen(false)}
+      onSelect={(id) => setFootprint(id)}
+    />
     <>
       {/* General section */}
       <SectionHeader title="General" />
@@ -159,10 +168,11 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
             <span className="w-[140px] text-right">Value</span>
           </div>
           {(paramTab === "All" || paramTab === "Footprints") && (
-            <div className="flex items-center px-2 py-1 hover:bg-bg-hover/30 border-b border-border-subtle/20">
+            <div className="flex items-center px-2 py-1 hover:bg-bg-hover/30 border-b border-border-subtle/20 gap-1">
               <span className="flex-1 text-text-secondary">Footprint</span>
-              <input value={footprint} onChange={e => setFootprint(e.target.value)}
-                placeholder="(none)" className="w-[140px] text-right bg-transparent outline-none text-[10px] font-mono text-text-primary" />
+              <span className="font-mono text-text-muted/60 truncate max-w-[100px]">{footprint || "(none)"}</span>
+              <button onClick={() => setFpPickerOpen(true)}
+                className="text-[9px] text-accent hover:underline shrink-0">Show</button>
             </div>
           )}
           {(paramTab === "All" || paramTab === "Models") && (
@@ -180,7 +190,8 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
         </div>
 
         <div className="flex items-center justify-end gap-1 mt-1.5">
-          <button className="px-2 py-0.5 text-[9px] bg-bg-secondary border border-border-subtle rounded text-text-secondary hover:text-text-primary">
+          <button onClick={() => setFpPickerOpen(true)}
+            className="px-2 py-0.5 text-[9px] bg-bg-secondary border border-border-subtle rounded text-text-secondary hover:text-text-primary">
             Add <ChevronDown size={8} className="inline" />
           </button>
         </div>
@@ -232,6 +243,7 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
             className={cn(inp, "w-16")} />
         </Row>
       </div>
+    </>
     </>
   );
 }
