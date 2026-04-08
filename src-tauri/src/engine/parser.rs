@@ -71,25 +71,47 @@ pub enum Graphic {
     Polyline {
         points: Vec<Point>,
         width: f64,
-        fill: bool,
+        fill_type: String,
     },
     Rectangle {
         start: Point,
         end: Point,
         width: f64,
-        fill: bool,
+        fill_type: String,
     },
     Circle {
         center: Point,
         radius: f64,
         width: f64,
-        fill: bool,
+        fill_type: String,
     },
     Arc {
         start: Point,
         mid: Point,
         end: Point,
         width: f64,
+        fill_type: String,
+    },
+    Text {
+        text: String,
+        position: Point,
+        rotation: f64,
+        font_size: f64,
+        bold: bool,
+        italic: bool,
+        justify_h: String,
+        justify_v: String,
+    },
+    TextBox {
+        text: String,
+        position: Point,
+        rotation: f64,
+        size: Point,
+        font_size: f64,
+        bold: bool,
+        italic: bool,
+        width: f64,
+        fill_type: String,
     },
 }
 
@@ -369,12 +391,12 @@ fn parse_uuid(node: &SExpr) -> String {
         })
 }
 
-fn parse_fill_type(node: &SExpr) -> bool {
+fn parse_fill_type(node: &SExpr) -> String {
     node.find("fill")
         .and_then(|f| f.find("type"))
         .and_then(|t| t.first_arg())
-        .map(|t| t == "outline" || t == "background")
-        .unwrap_or(false)
+        .unwrap_or("none")
+        .to_string()
 }
 
 fn parse_stroke_width(node: &SExpr) -> f64 {
@@ -425,99 +447,139 @@ fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         .and_then(|o| o.arg_f64(0))
         .unwrap_or(0.508);
 
+    // Sort sub-symbols so body-style-0 (_X_0) subs come AFTER body-style->=1 subs
+    // (for correct rendering order)
+    fn is_body_style_0(sub: &SExpr) -> bool {
+        sub.first_arg()
+            .and_then(|name| name.rsplit('_').next())
+            .and_then(|s| s.parse::<u32>().ok())
+            .map(|n| n == 0)
+            .unwrap_or(false)
+    }
+
+    let mut all_subs = symbol_node.find_all("symbol");
+    all_subs.sort_by_key(|s| if is_body_style_0(s) { 1_u8 } else { 0_u8 });
+
     // Collect graphics and pins from sub-symbols (e.g., "R_0_1" for graphics, "R_1_1" for pins)
-    for sub in symbol_node.find_all("symbol") {
-        for poly in sub.find_all("polyline") {
-            if let Some(pts) = poly.find("pts") {
-                let points: Vec<Point> = pts
-                    .find_all("xy")
-                    .iter()
-                    .map(|xy| Point {
-                        x: xy.arg_f64(0).unwrap_or(0.0),
-                        y: xy.arg_f64(1).unwrap_or(0.0),
-                    })
-                    .collect();
-                if !points.is_empty() {
-                    graphics.push(Graphic::Polyline {
-                        points,
-                        width: parse_stroke_width(poly),
-                        fill: parse_fill_type(poly),
+    for sub in &all_subs {
+        for child in sub.children() {
+            match child.keyword() {
+                Some("polyline") => {
+                    if let Some(pts) = child.find("pts") {
+                        let points: Vec<Point> = pts
+                            .find_all("xy")
+                            .iter()
+                            .map(|xy| Point {
+                                x: xy.arg_f64(0).unwrap_or(0.0),
+                                y: xy.arg_f64(1).unwrap_or(0.0),
+                            })
+                            .collect();
+                        if !points.is_empty() {
+                            graphics.push(Graphic::Polyline {
+                                points,
+                                width: parse_stroke_width(child),
+                                fill_type: parse_fill_type(child),
+                            });
+                        }
+                    }
+                }
+                Some("rectangle") => {
+                    let start = child
+                        .find("start")
+                        .map(|s| Point {
+                            x: s.arg_f64(0).unwrap_or(0.0),
+                            y: s.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    let end = child
+                        .find("end")
+                        .map(|e| Point {
+                            x: e.arg_f64(0).unwrap_or(0.0),
+                            y: e.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    graphics.push(Graphic::Rectangle {
+                        start,
+                        end,
+                        width: parse_stroke_width(child),
+                        fill_type: parse_fill_type(child),
                     });
                 }
+                Some("circle") => {
+                    let center = child
+                        .find("center")
+                        .map(|c| Point {
+                            x: c.arg_f64(0).unwrap_or(0.0),
+                            y: c.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    let radius = child
+                        .find("radius")
+                        .and_then(|r| r.arg_f64(0))
+                        .unwrap_or(1.0);
+                    graphics.push(Graphic::Circle {
+                        center,
+                        radius,
+                        width: parse_stroke_width(child),
+                        fill_type: parse_fill_type(child),
+                    });
+                }
+                Some("arc") => {
+                    let start = child
+                        .find("start")
+                        .map(|s| Point {
+                            x: s.arg_f64(0).unwrap_or(0.0),
+                            y: s.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    let mid = child
+                        .find("mid")
+                        .map(|m| Point {
+                            x: m.arg_f64(0).unwrap_or(0.0),
+                            y: m.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    let end = child
+                        .find("end")
+                        .map(|e| Point {
+                            x: e.arg_f64(0).unwrap_or(0.0),
+                            y: e.arg_f64(1).unwrap_or(0.0),
+                        })
+                        .unwrap_or(Point { x: 0.0, y: 0.0 });
+                    graphics.push(Graphic::Arc {
+                        start,
+                        mid,
+                        end,
+                        width: parse_stroke_width(child),
+                        fill_type: parse_fill_type(child),
+                    });
+                }
+                Some("text") => {
+                    let text = child.first_arg().unwrap_or("").to_string();
+                    let (position, rotation) = parse_at(child);
+                    let effects = child.find("effects");
+                    let font = effects.and_then(|e| e.find("font"));
+                    let font_size = font.and_then(|f| f.find("size")).and_then(|s| s.arg_f64(0)).unwrap_or(1.27);
+                    let bold = font.and_then(|f| f.find("bold")).and_then(|b| b.first_arg()).map(|v| v == "yes").unwrap_or(false);
+                    let italic = font.and_then(|f| f.find("italic")).and_then(|b| b.first_arg()).map(|v| v == "yes").unwrap_or(false);
+                    let justify = effects.and_then(|e| e.find("justify"));
+                    let justify_h = justify.and_then(|j| j.first_arg()).map(|v| match v { "left" => "left", "right" => "right", _ => "center" }).unwrap_or("center").to_string();
+                    let justify_v = justify.and_then(|j| j.arg(1)).map(|v| match v { "top" => "top", "bottom" => "bottom", _ => "center" }).unwrap_or("center").to_string();
+                    graphics.push(Graphic::Text { text, position, rotation, font_size, bold, italic, justify_h, justify_v });
+                }
+                Some("text_box") => {
+                    let text = child.first_arg().unwrap_or("").to_string();
+                    let (position, rotation) = parse_at(child);
+                    let size = child.find("size").map(|s| Point { x: s.arg_f64(0).unwrap_or(0.0), y: s.arg_f64(1).unwrap_or(0.0) }).unwrap_or(Point { x: 0.0, y: 0.0 });
+                    let effects = child.find("effects");
+                    let font = effects.and_then(|e| e.find("font"));
+                    let font_size = font.and_then(|f| f.find("size")).and_then(|s| s.arg_f64(0)).unwrap_or(1.27);
+                    let bold = font.and_then(|f| f.find("bold")).and_then(|b| b.first_arg()).map(|v| v == "yes").unwrap_or(false);
+                    let italic = font.and_then(|f| f.find("italic")).and_then(|b| b.first_arg()).map(|v| v == "yes").unwrap_or(false);
+                    graphics.push(Graphic::TextBox { text, position, rotation, size, font_size, bold, italic, width: parse_stroke_width(child), fill_type: parse_fill_type(child) });
+                }
+                _ => {}
             }
-        }
-
-        for rect in sub.find_all("rectangle") {
-            let start = rect
-                .find("start")
-                .map(|s| Point {
-                    x: s.arg_f64(0).unwrap_or(0.0),
-                    y: s.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let end = rect
-                .find("end")
-                .map(|e| Point {
-                    x: e.arg_f64(0).unwrap_or(0.0),
-                    y: e.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            graphics.push(Graphic::Rectangle {
-                start,
-                end,
-                width: parse_stroke_width(rect),
-                fill: parse_fill_type(rect),
-            });
-        }
-
-        for circ in sub.find_all("circle") {
-            let center = circ
-                .find("center")
-                .map(|c| Point {
-                    x: c.arg_f64(0).unwrap_or(0.0),
-                    y: c.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let radius = circ
-                .find("radius")
-                .and_then(|r| r.arg_f64(0))
-                .unwrap_or(1.0);
-            graphics.push(Graphic::Circle {
-                center,
-                radius,
-                width: parse_stroke_width(circ),
-                fill: parse_fill_type(circ),
-            });
-        }
-
-        for arc in sub.find_all("arc") {
-            let start = arc
-                .find("start")
-                .map(|s| Point {
-                    x: s.arg_f64(0).unwrap_or(0.0),
-                    y: s.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let mid = arc
-                .find("mid")
-                .map(|m| Point {
-                    x: m.arg_f64(0).unwrap_or(0.0),
-                    y: m.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let end = arc
-                .find("end")
-                .map(|e| Point {
-                    x: e.arg_f64(0).unwrap_or(0.0),
-                    y: e.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            graphics.push(Graphic::Arc {
-                start,
-                mid,
-                end,
-                width: parse_stroke_width(arc),
-            });
         }
 
         // Parse pins

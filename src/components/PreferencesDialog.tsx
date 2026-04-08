@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { BUILT_IN_TEMPLATES } from "@/lib/sheetTemplate";
+import { ThemeEditor } from "@/components/ThemeEditor";
 
 interface Props {
   open: boolean;
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export function PreferencesDialog({ open, onClose }: Props) {
-  const [tab, setTab] = useState<"general" | "display" | "project" | "erc">("general");
+  const [tab, setTab] = useState<"general" | "display" | "project" | "erc" | "theme">("general");
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
   const snapEnabled = useEditorStore((s) => s.statusBar.snapEnabled);
   const units = useEditorStore((s) => s.statusBar.units);
@@ -32,11 +33,11 @@ export function PreferencesDialog({ open, onClose }: Props) {
         </div>
 
         <div className="flex border-b border-border-subtle px-4">
-          {(["general", "display", "project", "erc"] as const).map(t => (
+          {(["general", "display", "project", "erc", "theme"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={cn("px-3 py-2 text-xs border-b-2 transition-colors capitalize",
                 tab === t ? "border-accent text-accent font-semibold" : "border-transparent text-text-muted hover:text-text-secondary")}>
-              {t === "erc" ? "ERC" : t}
+              {t === "theme" ? "Theme" : t === "erc" ? "ERC" : t}
             </button>
           ))}
         </div>
@@ -133,6 +134,7 @@ export function PreferencesDialog({ open, onClose }: Props) {
               ))}
             </Section>
           )}
+          {tab === "theme" && <ThemeEditor />}
         </div>
 
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-border-subtle">

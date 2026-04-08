@@ -182,7 +182,7 @@ export function ComponentPanel() {
   const newSymbol = () => {
     const emptySymbol: LibSymbol = {
       id: "NewSymbol",
-      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill: false }],
+      graphics: [{ type: "Rectangle", start: { x: -2.54, y: -5.08 }, end: { x: 2.54, y: 5.08 }, width: 0.254, fill_type: "none" }],
       pins: [
         { pin_type: "passive", shape: "line", position: { x: -5.08, y: 2.54 }, rotation: 0, length: 2.54, name: "1", number: "1", name_visible: true, number_visible: true },
         { pin_type: "passive", shape: "line", position: { x: -5.08, y: -2.54 }, rotation: 0, length: 2.54, name: "2", number: "2", name_visible: true, number_visible: true },
@@ -918,14 +918,14 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
       if (g.type === "Polyline" && g.points.length >= 2) {
         ctx.beginPath(); ctx.moveTo(g.points[0].x, g.points[0].y);
         for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
-        if (g.fill) ctx.fill(); ctx.stroke();
+        if (g.fill_type !== "none") ctx.fill(); ctx.stroke();
       } else if (g.type === "Rectangle") {
         const rx = Math.min(g.start.x, g.end.x), ry = Math.min(g.start.y, g.end.y);
         ctx.fillRect(rx, ry, Math.abs(g.end.x - g.start.x), Math.abs(g.end.y - g.start.y));
         ctx.strokeRect(rx, ry, Math.abs(g.end.x - g.start.x), Math.abs(g.end.y - g.start.y));
       } else if (g.type === "Circle") {
         ctx.beginPath(); ctx.arc(g.center.x, g.center.y, g.radius, 0, Math.PI * 2);
-        if (g.fill) ctx.fill(); ctx.stroke();
+        if (g.fill_type !== "none") ctx.fill(); ctx.stroke();
       }
     }
     // Green pins on cream background
