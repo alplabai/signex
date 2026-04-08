@@ -55,12 +55,7 @@ export function routeMultiTrack(
         net,
       };
 
-      // Apply corner style
-      if (options.cornerStyle === "45" && i < waypoints.length - 2) {
-        segments.push(seg);
-      } else {
-        segments.push(seg);
-      }
+      segments.push(seg);
     }
   }
 
@@ -96,14 +91,9 @@ export function generateBgaFanout(
   const fp = data.footprints.find((f) => f.uuid === options.footprintUuid);
   if (!fp) return { segments, vias };
 
-  // Calculate footprint center
-  let cx = 0, cy = 0;
-  for (const pad of fp.pads) {
-    cx += fp.position.x + pad.position.x;
-    cy += fp.position.y + pad.position.y;
-  }
-  cx /= fp.pads.length || 1;
-  cy /= fp.pads.length || 1;
+  // Use footprint position as centroid
+  const cx = fp.position.x;
+  const cy = fp.position.y;
 
   for (let i = 0; i < fp.pads.length; i++) {
     const pad = fp.pads[i];

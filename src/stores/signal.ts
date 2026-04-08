@@ -100,17 +100,20 @@ export const useSignalStore = create<SignalState>()(
       },
 
       startStreamListener: async (messageId) => {
+        cleanupListeners(messageId);
         const unlisteners: UnlistenFn[] = [];
 
         const u1 = await listen<{ text: string; message_id: string }>(
           "signal:stream-delta",
           (event) => {
             if (event.payload.message_id === messageId) {
-              const s = useSignalStore.getState();
-              const msg = s.messages.find((m) => m.id === messageId);
-              if (msg) {
-                s.updateMessage(messageId, { content: (msg.content || "") + event.payload.text });
-              }
+              set((s) => ({
+                messages: s.messages.map((m) =>
+                  m.id === messageId
+                    ? { ...m, content: (m.content || "") + event.payload.text }
+                    : m
+                ),
+              }));
             }
           }
         );
@@ -162,11 +165,11 @@ export const useSignalStore = create<SignalState>()(
         const s = get();
         const msg = s.messages.find((m) => m.id === messageId && m.loading);
         if (msg) {
-          useSignalStore.getState().updateMessage(messageId, {
+          s.updateMessage(messageId, {
             loading: false,
             content: msg.content || "(cancelled)",
           });
-          useSignalStore.getState().setLoading(false);
+          s.setLoading(false);
         }
       },
     }),

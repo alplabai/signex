@@ -82,31 +82,40 @@ export function LibraryEditorCanvas() {
     // Grid
     if (gridVisible) {
       const tl = screenToWorld(0, 0);
-      const br = screenToWorld(w, h);
+      const br = screenToWorld(w / dpr, h / dpr);
       const gs = GRID_SIZE;
       const startX = Math.floor(tl.x / gs) * gs;
       const startY = Math.floor(tl.y / gs) * gs;
       ctx.globalAlpha = 0.4;
+
+      // Pass 1: minor grid lines
+      ctx.strokeStyle = COLORS.grid;
+      ctx.lineWidth = 0.02;
+      ctx.beginPath();
       for (let x = startX; x <= br.x; x += gs) {
-        const ix = Math.round(x / gs);
-        const major = ix % 10 === 0;
-        ctx.strokeStyle = major ? COLORS.gridMajor : COLORS.grid;
-        ctx.lineWidth = (major ? 0.06 : 0.02);
-        ctx.beginPath();
-        ctx.moveTo(x, tl.y);
-        ctx.lineTo(x, br.y);
-        ctx.stroke();
+        if (Math.round(x / gs) % 10 === 0) continue;
+        ctx.moveTo(x, tl.y); ctx.lineTo(x, br.y);
       }
       for (let y = startY; y <= br.y; y += gs) {
-        const iy = Math.round(y / gs);
-        const major = iy % 10 === 0;
-        ctx.strokeStyle = major ? COLORS.gridMajor : COLORS.grid;
-        ctx.lineWidth = (major ? 0.06 : 0.02);
-        ctx.beginPath();
-        ctx.moveTo(tl.x, y);
-        ctx.lineTo(br.x, y);
-        ctx.stroke();
+        if (Math.round(y / gs) % 10 === 0) continue;
+        ctx.moveTo(tl.x, y); ctx.lineTo(br.x, y);
       }
+      ctx.stroke();
+
+      // Pass 2: major grid lines
+      ctx.strokeStyle = COLORS.gridMajor;
+      ctx.lineWidth = 0.06;
+      ctx.beginPath();
+      for (let x = startX; x <= br.x; x += gs) {
+        if (Math.round(x / gs) % 10 !== 0) continue;
+        ctx.moveTo(x, tl.y); ctx.lineTo(x, br.y);
+      }
+      for (let y = startY; y <= br.y; y += gs) {
+        if (Math.round(y / gs) % 10 !== 0) continue;
+        ctx.moveTo(tl.x, y); ctx.lineTo(br.x, y);
+      }
+      ctx.stroke();
+
       ctx.globalAlpha = 1;
     }
 
@@ -163,13 +172,10 @@ export function LibraryEditorCanvas() {
     return () => ro.disconnect();
   }, [render]);
 
-  // Animation frame for smooth rendering
+  // Demand-driven render — re-render once whenever dependencies change
   useEffect(() => {
-    const loop = () => {
-      render();
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(rafRef.current);
   }, [render]);
 

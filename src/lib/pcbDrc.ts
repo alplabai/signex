@@ -474,13 +474,23 @@ function midpoint(a: PcbPoint, b: PcbPoint): PcbPoint {
 function ptSegDist(p: PcbPoint, a: PcbPoint, b: PcbPoint): number {
   const dx = b.x - a.x, dy = b.y - a.y;
   const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  if (lenSq < 1e-12) return Math.hypot(p.x - a.x, p.y - a.y);
   let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
   t = Math.max(0, Math.min(1, t));
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+function segsCross(a1: PcbPoint, a2: PcbPoint, b1: PcbPoint, b2: PcbPoint): boolean {
+  const cross = (o: PcbPoint, p: PcbPoint, q: PcbPoint) =>
+    (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const d1 = cross(b1, b2, a1), d2 = cross(b1, b2, a2);
+  const d3 = cross(a1, a2, b1), d4 = cross(a1, a2, b2);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
 function segDist(a1: PcbPoint, a2: PcbPoint, b1: PcbPoint, b2: PcbPoint): number {
+  if (segsCross(a1, a2, b1, b2)) return 0;
   return Math.min(
     ptSegDist(a1, b1, b2), ptSegDist(a2, b1, b2),
     ptSegDist(b1, a1, a2), ptSegDist(b2, a1, a2),

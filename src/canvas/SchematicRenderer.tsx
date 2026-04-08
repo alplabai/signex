@@ -11,6 +11,7 @@ import { substituteSpecialStrings } from "@/lib/specialStrings";
 import type { Graphic, SchematicData, SchPin, SchPoint, TextPropData } from "@/types";
 interface Camera { x: number; y: number; zoom: number }
 const IMAGE_CACHE = new Map<string, HTMLImageElement>();
+const MAX_IMAGE_CACHE = 100;
 
 const PAPER: Record<string, [number, number]> = {
   A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
@@ -1212,6 +1213,10 @@ export function SchematicRenderer() {
         // Image rendering uses cached HTMLImageElement
         let img = IMAGE_CACHE.get(d.uuid);
         if (!img && d.dataUrl) {
+          if (IMAGE_CACHE.size >= MAX_IMAGE_CACHE) {
+            const firstKey = IMAGE_CACHE.keys().next().value;
+            if (firstKey !== undefined) IMAGE_CACHE.delete(firstKey);
+          }
           img = new Image();
           img.src = d.dataUrl;
           IMAGE_CACHE.set(d.uuid, img);
@@ -1779,6 +1784,16 @@ export function SchematicRenderer() {
     return () => obs.disconnect();
   }, []); // Mount once — renderRef always has latest
 
+  // Cleanup autoPan interval on unmount
+  useEffect(() => {
+    return () => {
+      if (autoPanRef.current) {
+        clearInterval(autoPanRef.current);
+        autoPanRef.current = null;
+      }
+    };
+  }, []);
+
   // --- Altium mouse: scroll=zoom, right-drag=pan ---
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -2136,7 +2151,7 @@ export function SchematicRenderer() {
         window.addEventListener("mouseup", globalUp);
       }
     }
-  }, [data, s2w, ctxMenu]);
+  }, [data, s2w, w2s, ctxMenu]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -2601,14 +2616,6 @@ export function SchematicRenderer() {
             const sp = w2s(textPos.x, textPos.y);
             setInPlaceEdit({ uuid: selId, field: "text", value: lbl.text, screenX: sp.x, screenY: sp.y });
           }
-          break;
-        }
-        case "Tab": {
-          // Tab = open properties panel
-          e.preventDefault();
-          const ly = useLayoutStore.getState();
-          ly.setDockActiveTab("right", "properties");
-          if (ly.rightCollapsed) ly.toggleRight();
           break;
         }
         case "w":

@@ -87,6 +87,17 @@ export function ComponentPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const menuRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  // Cleanup active resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (resizeCleanupRef.current) {
+        resizeCleanupRef.current();
+        resizeCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -104,7 +115,7 @@ export function ComponentPanel() {
   const fetchLibraries = useCallback(() => {
     invoke<LibraryInfo[]>("list_libraries")
       .then(setLibraries)
-      .catch(() => {});
+      .catch((e) => console.warn("list_libraries failed", e));
   }, []);
 
   useEffect(() => { fetchLibraries(); }, [fetchLibraries]);
@@ -425,6 +436,11 @@ export function ComponentPanel() {
                 setDetailsHeight(Math.max(60, Math.min(maxH, startH + delta)));
               };
               const onUp = () => {
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+                resizeCleanupRef.current = null;
+              };
+              resizeCleanupRef.current = () => {
                 window.removeEventListener("mousemove", onMove);
                 window.removeEventListener("mouseup", onUp);
               };
@@ -796,10 +812,7 @@ function FootprintPreviewMini({ footprintId }: { footprintId: string }) {
           ctx.font = `${fontSize}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.save();
-          ctx.scale(1, -1); // Flip for text since we may have inverted Y
           // Note: coordinate system is not inverted here (PCB Y goes down)
-          ctx.restore();
         }
       }
     }

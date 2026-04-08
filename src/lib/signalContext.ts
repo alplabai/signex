@@ -49,8 +49,8 @@ export function buildRichContext(
         parts.push(`  + ${unnamed.length} unnamed nets`);
       }
     }
-  } catch {
-    // Net resolution may fail on incomplete schematics
+  } catch (e) {
+    console.warn("Net resolution failed:", e);
   }
 
   // Net classes

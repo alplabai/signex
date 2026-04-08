@@ -39,6 +39,12 @@ pub async fn get_schematic(
             return Err(format!("Schematic not found: {}", filename));
         }
 
+        const MAX_SCH_BYTES: u64 = 100 * 1024 * 1024;
+        let metadata = std::fs::metadata(&sch_path).map_err(|e| format!("Cannot stat file: {}", e))?;
+        if metadata.len() > MAX_SCH_BYTES {
+            return Err(format!("Schematic file too large ({} MiB, limit 100 MiB)", metadata.len() / 1_048_576));
+        }
+
         let content = std::fs::read_to_string(&sch_path)
             .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
 
