@@ -516,7 +516,7 @@ pub async fn signal_chat_stream(
     );
 
     tokio::spawn(async move {
-        let response = match HTTP_CLIENT
+        let mut response = match HTTP_CLIENT
             .post(&api_url)
             .header("x-api-key", &api_key)
             .header("anthropic-version", "2023-06-01")
@@ -550,23 +550,7 @@ pub async fn signal_chat_stream(
             return;
         }
 
-        // Read response body with error handling
-        let bytes = match response.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                let _ = app.emit(
-                    "signal:stream-error",
-                    StreamError {
-                        message_id,
-                        error: format!("Failed to read stream: {}", e),
-                    },
-                );
-                return;
-            }
-        };
-        let text = String::from_utf8_lossy(&bytes);
-
-        // Parse SSE events
+        // Stream response incrementally — process SSE lines as chunks arrive
         let mut usage = ClaudeUsage {
             input_tokens: 0,
             output_tokens: 0,
@@ -576,106 +560,124 @@ pub async fn signal_chat_stream(
         let mut current_tool_id = String::new();
         let mut current_tool_name = String::new();
         let mut current_tool_input = String::new();
+        let mut line_buf = String::new();
+        let mut done = false;
 
-        for line in text.lines() {
-            if let Some(data) = line.strip_prefix("data: ") {
-                if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                    let event_type = event
-                        .get("type")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("");
+        while let Ok(Some(chunk)) = response.chunk().await {
+            line_buf.push_str(&String::from_utf8_lossy(&chunk));
 
-                    match event_type {
-                        "content_block_delta" => {
-                            if let Some(delta) = event.get("delta") {
-                                let delta_type =
-                                    delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                                if delta_type == "text_delta" {
-                                    if let Some(t) = delta.get("text").and_then(|t| t.as_str()) {
-                                        let _ = app.emit(
-                                            "signal:stream-delta",
-                                            StreamDelta {
-                                                text: t.to_string(),
-                                                message_id: message_id.clone(),
-                                            },
-                                        );
-                                    }
-                                } else if delta_type == "input_json_delta" {
-                                    if let Some(partial) =
-                                        delta.get("partial_json").and_then(|t| t.as_str())
+            // Process all complete lines in the buffer
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim_end().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                let data = match line.strip_prefix("data: ") {
+                    Some(d) => d,
+                    None => continue,
+                };
+                let event = match serde_json::from_str::<serde_json::Value>(data) {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                let event_type = event
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+
+                match event_type {
+                    "content_block_delta" => {
+                        if let Some(delta) = event.get("delta") {
+                            let delta_type =
+                                delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            if delta_type == "text_delta" {
+                                if let Some(t) = delta.get("text").and_then(|t| t.as_str()) {
+                                    let _ = app.emit(
+                                        "signal:stream-delta",
+                                        StreamDelta {
+                                            text: t.to_string(),
+                                            message_id: message_id.clone(),
+                                        },
+                                    );
+                                }
+                            } else if delta_type == "input_json_delta" {
+                                if let Some(partial) =
+                                    delta.get("partial_json").and_then(|t| t.as_str())
+                                {
+                                    if current_tool_input.len() + partial.len()
+                                        < MAX_TOOL_INPUT_BYTES
                                     {
-                                        if current_tool_input.len() + partial.len()
-                                            < MAX_TOOL_INPUT_BYTES
-                                        {
-                                            current_tool_input.push_str(partial);
-                                        }
+                                        current_tool_input.push_str(partial);
                                     }
                                 }
                             }
                         }
-                        "content_block_start" => {
-                            if let Some(cb) = event.get("content_block") {
-                                if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                                    current_tool_id = cb
-                                        .get("id")
-                                        .and_then(|t| t.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_name = cb
-                                        .get("name")
-                                        .and_then(|t| t.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_input.clear();
-                                }
-                            }
-                        }
-                        "content_block_stop" => {
-                            if !current_tool_name.is_empty() {
-                                let input = serde_json::from_str(&current_tool_input)
-                                    .unwrap_or(serde_json::json!({}));
-                                tool_calls.push(ToolCall {
-                                    id: current_tool_id.clone(),
-                                    name: current_tool_name.clone(),
-                                    input,
-                                });
-                                current_tool_name.clear();
-                                current_tool_id.clear();
+                    }
+                    "content_block_start" => {
+                        if let Some(cb) = event.get("content_block") {
+                            if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                                current_tool_id = cb
+                                    .get("id")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                current_tool_name = cb
+                                    .get("name")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
                                 current_tool_input.clear();
                             }
                         }
-                        "message_delta" => {
-                            if let Some(u) = event.get("usage") {
-                                if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64())
-                                {
-                                    usage.output_tokens = out as u32;
-                                }
-                            }
-                            if let Some(sr) = event
-                                .get("delta")
-                                .and_then(|d| d.get("stop_reason"))
-                                .and_then(|s| s.as_str())
-                            {
-                                stop_reason = sr.to_string();
-                            }
-                        }
-                        "message_start" => {
-                            if let Some(msg) = event.get("message") {
-                                if let Some(u) = msg.get("usage") {
-                                    if let Some(inp) =
-                                        u.get("input_tokens").and_then(|t| t.as_u64())
-                                    {
-                                        usage.input_tokens = inp as u32;
-                                    }
-                                }
-                            }
-                        }
-                        "message_stop" => {
-                            break;
-                        }
-                        _ => {}
                     }
+                    "content_block_stop" => {
+                        if !current_tool_name.is_empty() {
+                            let input = serde_json::from_str(&current_tool_input)
+                                .unwrap_or(serde_json::json!({}));
+                            tool_calls.push(ToolCall {
+                                id: current_tool_id.clone(),
+                                name: current_tool_name.clone(),
+                                input,
+                            });
+                            current_tool_name.clear();
+                            current_tool_id.clear();
+                            current_tool_input.clear();
+                        }
+                    }
+                    "message_delta" => {
+                        if let Some(u) = event.get("usage") {
+                            if let Some(out) = u.get("output_tokens").and_then(|t| t.as_u64())
+                            {
+                                usage.output_tokens = out as u32;
+                            }
+                        }
+                        if let Some(sr) = event
+                            .get("delta")
+                            .and_then(|d| d.get("stop_reason"))
+                            .and_then(|s| s.as_str())
+                        {
+                            stop_reason = sr.to_string();
+                        }
+                    }
+                    "message_start" => {
+                        if let Some(msg) = event.get("message") {
+                            if let Some(u) = msg.get("usage") {
+                                if let Some(inp) =
+                                    u.get("input_tokens").and_then(|t| t.as_u64())
+                                {
+                                    usage.input_tokens = inp as u32;
+                                }
+                            }
+                        }
+                    }
+                    "message_stop" => {
+                        done = true;
+                        break;
+                    }
+                    _ => {}
                 }
+            }
+            if done {
+                break;
             }
         }
 
