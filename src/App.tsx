@@ -24,6 +24,7 @@ import { BackAnnotationDialog } from "@/components/BackAnnotationDialog";
 import { ErcMatrixDialog } from "@/components/ErcMatrixDialog";
 import { ViaStitchingDialog } from "@/components/ViaStitchingDialog";
 import { ConstraintEditorDialog } from "@/components/ConstraintEditorDialog";
+import { BgaFanoutDialog } from "@/components/BgaFanoutDialog";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
@@ -195,6 +196,7 @@ function App() {
   const [showErcMatrix, setShowErcMatrix] = useState(false);
   const [showViaStitching, setShowViaStitching] = useState(false);
   const [showConstraints, setShowConstraints] = useState(false);
+  const [showBgaFanout, setShowBgaFanout] = useState(false);
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const libEditorActive = useLibraryEditorStore((s) => s.active);
   const fpEditorActive = useFootprintEditorStore((s) => s.active);
@@ -336,6 +338,8 @@ function App() {
         onErcMatrix={() => setShowErcMatrix(true)}
         onConstraints={() => setShowConstraints(true)}
         onViaStitching={() => setShowViaStitching(true)}
+        onBgaFanout={() => setShowBgaFanout(true)}
+        isPcbView={isPcbView}
       />
       {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
@@ -395,6 +399,7 @@ function App() {
       <ErcMatrixDialog open={showErcMatrix} onClose={() => setShowErcMatrix(false)} />
       <ViaStitchingDialog open={showViaStitching} onClose={() => setShowViaStitching(false)} />
       <ConstraintEditorDialog open={showConstraints} onClose={() => setShowConstraints(false)} />
+      <BgaFanoutDialog open={showBgaFanout} onClose={() => setShowBgaFanout(false)} />
     </div>
   );
 }

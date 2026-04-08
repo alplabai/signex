@@ -644,6 +644,30 @@ export function PcbRenderer() {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
+
+      // Online DRC during routing — show violation markers
+      if (routingPoints.length >= 2) {
+        import("@/lib/pcbRouter").then(({ checkOnlineDrc }) => {
+          const routeSegs = [];
+          const store = usePcbStore.getState();
+          for (let i = 1; i < routingPoints.length; i++) {
+            routeSegs.push({
+              uuid: "", start: routingPoints[i - 1], end: routingPoints[i],
+              width: store.routingWidth, layer: store.routingLayer, net: store.routingNet,
+            });
+          }
+          const violations = checkOnlineDrc(data, routeSegs, data.board?.setup?.clearance || 0.2);
+          for (const v of violations) {
+            ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+            ctx.beginPath();
+            ctx.arc(v.position.x, v.position.y, 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#ff0000";
+            ctx.lineWidth = 0.08;
+            ctx.stroke();
+          }
+        });
+      }
     }
 
     // Selection highlight

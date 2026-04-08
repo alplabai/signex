@@ -5,6 +5,7 @@ import {
   AlignStartVertical, AlignEndVertical, AlignCenterVertical,
   AlignStartHorizontal, AlignEndHorizontal, AlignCenterHorizontal,
   ArrowLeftRight, ArrowUpDown, Droplets,
+  GitBranch, Waves, Cable,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePcbStore } from "@/stores/pcb";
@@ -53,6 +54,9 @@ export function PcbToolbar() {
       {/* Routing */}
       <ToolBtn icon={<Minus size={15} />} label="Route Track (X)" active={editMode === "routeTrack"} onClick={() => setMode("routeTrack")} />
       <ToolBtn icon={<Circle size={15} />} label="Place Via" active={editMode === "placeVia"} onClick={() => setMode("placeVia")} />
+      <ToolBtn icon={<GitBranch size={15} />} label="Diff Pair Route" active={editMode === "routeDiffPair"} onClick={() => setMode("routeDiffPair")} />
+      <ToolBtn icon={<Cable size={15} />} label="Multi-Track Route" active={editMode === "routeMultiTrack"} onClick={() => setMode("routeMultiTrack")} />
+      <ToolBtn icon={<Waves size={15} />} label="Length Tuning" active={editMode === "lengthTune"} onClick={() => setMode("lengthTune")} />
       <select value={store.getState().routeMode}
         onChange={(e) => store.setState({ routeMode: e.target.value as "ignore" | "walkaround" | "push" | "hug_push" })}
         title="Route Mode"

@@ -4,6 +4,9 @@ import type { PcbData, PcbPoint, PcbLayerId } from "@/types/pcb";
 export type PcbEditMode =
   | "select"
   | "routeTrack"
+  | "routeDiffPair"
+  | "routeMultiTrack"
+  | "lengthTune"
   | "placeVia"
   | "placeFootprint"
   | "drawBoardOutline"

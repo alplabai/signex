@@ -1,4 +1,5 @@
-import { Eye, EyeOff, Layers } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, Layers, Save } from "lucide-react";
 import { usePcbStore } from "@/stores/pcb";
 import { useEditorStore } from "@/stores/editor";
 import { useProjectStore } from "@/stores/project";
@@ -30,6 +31,29 @@ const TECH_LAYERS: { id: PcbLayerId; label: string }[] = [
   { id: "Cmts.User", label: "User Comments" },
 ];
 
+const LAYER_PRESETS: { label: string; layers: PcbLayerId[] }[] = [
+  { label: "All Layers", layers: [...COPPER_LAYERS, ...TECH_LAYERS.map(l => l.id)] },
+  { label: "Front Only", layers: ["F.Cu", "F.SilkS", "F.Mask", "F.Paste", "F.Fab", "F.CrtYd", "Edge.Cuts"] },
+  { label: "Back Only", layers: ["B.Cu", "B.SilkS", "B.Mask", "B.Paste", "B.Fab", "B.CrtYd", "Edge.Cuts"] },
+  { label: "Copper Only", layers: [...COPPER_LAYERS] },
+  { label: "Assembly Top", layers: ["F.Cu", "F.SilkS", "F.Fab", "F.CrtYd", "Edge.Cuts"] },
+  { label: "Assembly Bottom", layers: ["B.Cu", "B.SilkS", "B.Fab", "B.CrtYd", "Edge.Cuts"] },
+  { label: "Fabrication", layers: ["F.Cu", "B.Cu", "F.Mask", "B.Mask", "F.Paste", "B.Paste", "F.SilkS", "B.SilkS", "Edge.Cuts"] },
+];
+
+function loadCustomPresets(): { label: string; layers: PcbLayerId[] }[] {
+  try {
+    const raw = localStorage.getItem("signex-layer-presets");
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveCustomPreset(name: string, layers: PcbLayerId[]) {
+  const existing = loadCustomPresets();
+  existing.push({ label: name, layers });
+  localStorage.setItem("signex-layer-presets", JSON.stringify(existing));
+}
+
 export function LayerStackPanel() {
   const data = usePcbStore((s) => s.data);
   const activeLayer = usePcbStore((s) => s.activeLayer);
@@ -38,6 +62,7 @@ export function LayerStackPanel() {
   const toggleLayerVisibility = usePcbStore((s) => s.toggleLayerVisibility);
   const editorMode = useEditorStore((s) => s.mode);
   const project = useProjectStore((s) => s.project);
+  const [customPresets, setCustomPresets] = useState(loadCustomPresets);
 
   // Only show in PCB mode with a project open
   if (!project || editorMode !== "pcb") {
@@ -66,6 +91,47 @@ export function LayerStackPanel() {
           <button onClick={() => usePcbStore.getState().setAllLayersVisible()}
             className="text-[10px] text-accent hover:underline">All On</button>
         </div>
+      </div>
+
+      {/* Layer Presets */}
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0">
+        <select
+          onChange={(e) => {
+            const all = [...LAYER_PRESETS, ...customPresets];
+            const preset = all.find(p => p.label === e.target.value);
+            if (!preset) return;
+            const store = usePcbStore.getState();
+            // Turn off all, then enable preset layers
+            const newVisible = new Set<string>(preset.layers);
+            store.setAllLayersVisible(); // reset
+            // We need to toggle off layers not in the preset
+            for (const l of [...COPPER_LAYERS, ...TECH_LAYERS.map(t => t.id)]) {
+              const isVis = (store.visibleLayers as Set<string>).has(l);
+              const shouldVis = newVisible.has(l);
+              if (isVis && !shouldVis) store.toggleLayerVisibility(l);
+            }
+          }}
+          defaultValue=""
+          className="flex-1 bg-bg-surface border border-border-subtle rounded px-1.5 py-0.5 text-[9px] outline-none focus:border-accent"
+        >
+          <option value="" disabled>Presets...</option>
+          {LAYER_PRESETS.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+          {customPresets.length > 0 && <option disabled>--- Custom ---</option>}
+          {customPresets.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+        </select>
+        <button
+          title="Save current layer set"
+          onClick={() => {
+            const name = prompt("Preset name:");
+            if (!name) return;
+            const layers = [...visibleLayers] as PcbLayerId[];
+            saveCustomPreset(name, layers);
+            setCustomPresets(loadCustomPresets());
+          }}
+          className="p-0.5 text-text-muted hover:text-accent"
+        >
+          <Save size={11} />
+        </button>
       </div>
 
       {/* Layer list */}

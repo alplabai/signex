@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
+import { toggleCrossSelect } from "@/lib/crossProbe";
 
 interface MenuBarProps {
   onOpenProject?: () => void;
@@ -21,6 +22,8 @@ interface MenuBarProps {
   onErcMatrix?: () => void;
   onConstraints?: () => void;
   onViaStitching?: () => void;
+  onBgaFanout?: () => void;
+  isPcbView?: boolean;
 }
 
 interface MenuItem {
@@ -201,12 +204,73 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint, onRunDrc, onBackAnnotate, onErcMatrix, onConstraints, onViaStitching }: MenuBarProps) {
+// PCB-specific menu overrides for Place, Design, Tools
+const pcbPlaceMenu: MenuGroup = {
+  label: "Place",
+  items: [
+    { label: "Route Track", shortcut: "X" },
+    { label: "Differential Pair Route" },
+    { label: "Multi-Track Route" },
+    { separator: true, label: "" },
+    { label: "Via" },
+    { label: "Footprint" },
+    { separator: true, label: "" },
+    { label: "Zone" },
+    { label: "Keepout" },
+    { label: "Board Outline" },
+    { separator: true, label: "" },
+    { label: "Text" },
+    { label: "Line" },
+    { label: "Dimension" },
+  ],
+};
+
+const pcbDesignMenu: MenuGroup = {
+  label: "Design",
+  items: [
+    { label: "Design Rules...", disabled: true },
+    { label: "Board Setup...", disabled: true },
+    { label: "Layer Stack Manager..." },
+    { separator: true, label: "" },
+    { label: "Import Changes From Schematic...", disabled: true },
+    { label: "Back Annotate to Schematic...", disabled: true },
+  ],
+};
+
+const pcbToolsMenu: MenuGroup = {
+  label: "Tools",
+  items: [
+    { label: "Design Rule Check..." },
+    { separator: true, label: "" },
+    { label: "Fill All Zones" },
+    { label: "Remove Dead Copper", disabled: true },
+    { separator: true, label: "" },
+    { label: "Via Stitching..." },
+    { label: "BGA Fanout..." },
+    { label: "Generate Teardrops" },
+    { label: "Length Tuning" },
+    { separator: true, label: "" },
+    { label: "Cross Select Mode", shortcut: "Shift+Ctrl+X" },
+    { separator: true, label: "" },
+    { label: "Preferences..." },
+  ],
+};
+
+export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint, onRunDrc, onBackAnnotate, onErcMatrix, onConstraints, onViaStitching, onBgaFanout, isPcbView }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
+  // Swap Place/Design/Tools menus when in PCB view
+  const baseMenus = isPcbView
+    ? menus.map((m) =>
+        m.label === "Place" ? pcbPlaceMenu
+        : m.label === "Design" ? pcbDesignMenu
+        : m.label === "Tools" ? pcbToolsMenu
+        : m)
+    : menus;
+
   // Wire up actions
-  const actionMenus = menus.map((menu) => ({
+  const actionMenus = baseMenus.map((menu) => ({
     ...menu,
     items: menu.items.map((item) => {
       if (item.id === "file-open") return { ...item, action: onOpenProject };
@@ -311,15 +375,51 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
       if (item.label === "Import Changes From PCB...") return { ...item, disabled: false, action: onBackAnnotate };
       if (item.label === "Document Options...") return { ...item, disabled: false, action: onConstraints };
       // Tools menu
-      if (item.label === "Cross Select Mode") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Cross Select Mode") return { ...item, disabled: false, action: () => toggleCrossSelect() };
       if (item.label === "Component Cross Reference...") return { ...item, disabled: false, action: () => {} };
       if (item.label === "Number Schematic Sheets...") return { ...item, disabled: false, action: () => {} };
       if (item.label === "Cross Reference...") return { ...item, disabled: false, action: () => {} };
       if (item.label === "Signal (AI)") return { ...item, action: () => {
         // Open Signal panel — handled via layout store from App
       }};
-      // Not used from menu directly, but available via toolbar
-      void onViaStitching;
+      // PCB-specific Place menu actions
+      if (item.label === "Route Track" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeTrack")); } };
+      if (item.label === "Differential Pair Route") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeDiffPair")); } };
+      if (item.label === "Multi-Track Route") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeMultiTrack")); } };
+      if (item.label === "Via" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeVia")); } };
+      if (item.label === "Footprint" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeFootprint")); } };
+      if (item.label === "Zone") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeZone")); } };
+      if (item.label === "Keepout") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeKeepout")); } };
+      if (item.label === "Board Outline") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("drawBoardOutline")); } };
+      if (item.label === "Text" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeText")); } };
+      if (item.label === "Dimension") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeDimension")); } };
+      // PCB-specific Tools menu
+      if (item.label === "Fill All Zones") return { ...item, action: () => {
+        Promise.all([import("@/lib/pcbCopperPour"), import("@/stores/pcb")]).then(([cpMod, pcbMod]) => {
+          const store = pcbMod.usePcbStore.getState();
+          if (!store.data) return;
+          store.pushUndo();
+          const nd = structuredClone(store.data);
+          cpMod.fillZones(nd);
+          pcbMod.usePcbStore.setState({ data: nd, dirty: true });
+        });
+      }};
+      if (item.label === "Via Stitching...") return { ...item, action: onViaStitching };
+      if (item.label === "BGA Fanout...") return { ...item, action: onBgaFanout };
+      if (item.label === "Generate Teardrops" && isPcbView) return { ...item, action: () => {
+        Promise.all([import("@/lib/pcbRouter"), import("@/stores/pcb")]).then(([rtMod, pcbMod]) => {
+          const store = pcbMod.usePcbStore.getState();
+          if (!store.data) return;
+          store.pushUndo();
+          const nd = structuredClone(store.data);
+          const newSegs = rtMod.generateTeardrops(nd, 0.5, 0.5);
+          nd.segments = [...nd.segments, ...newSegs];
+          pcbMod.usePcbStore.setState({ data: nd, dirty: true });
+        });
+      }};
+      if (item.label === "Length Tuning") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("lengthTune")); } };
+      if (item.label === "Layer Stack Manager...") return { ...item, action: () => {} };
+      void onBgaFanout;
 
       return item;
     }),
