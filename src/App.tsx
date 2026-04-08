@@ -23,6 +23,7 @@ import { ParameterManager } from "@/components/ParameterManager";
 import { BackAnnotationDialog } from "@/components/BackAnnotationDialog";
 import { ErcMatrixDialog } from "@/components/ErcMatrixDialog";
 import { ViaStitchingDialog } from "@/components/ViaStitchingDialog";
+import { ConstraintEditorDialog } from "@/components/ConstraintEditorDialog";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
@@ -193,6 +194,7 @@ function App() {
   const [showBackAnnotation, setShowBackAnnotation] = useState(false);
   const [showErcMatrix, setShowErcMatrix] = useState(false);
   const [showViaStitching, setShowViaStitching] = useState(false);
+  const [showConstraints, setShowConstraints] = useState(false);
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const libEditorActive = useLibraryEditorStore((s) => s.active);
   const fpEditorActive = useFootprintEditorStore((s) => s.active);
@@ -390,6 +392,7 @@ function App() {
       <BackAnnotationDialog open={showBackAnnotation} onClose={() => setShowBackAnnotation(false)} />
       <ErcMatrixDialog open={showErcMatrix} onClose={() => setShowErcMatrix(false)} />
       <ViaStitchingDialog open={showViaStitching} onClose={() => setShowViaStitching(false)} />
+      <ConstraintEditorDialog open={showConstraints} onClose={() => setShowConstraints(false)} />
     </div>
   );
 }

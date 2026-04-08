@@ -7,6 +7,8 @@ export type PanelId =
   | "libraryMgmt"
   | "schLibrary"
   | "pcbLibrary"
+  | "netClasses"
+  | "netInspector"
   | "properties"
   | "filter"
   | "list"
