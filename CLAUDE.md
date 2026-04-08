@@ -44,7 +44,7 @@ src/                    React frontend
 - All panels collapsible, layout persisted to localStorage
 - Altium-compatible keyboard shortcuts (see docs/altium-schematic-reference.md)
 - KiCad file format compatibility (.kicad_sch read/write)
-- Native format: .snxsch/.snxpcb/.snxprj/.snxsym (future)
+- Native format: .snxsch/.snxpcb/.snxprj/.snxsym/.snxpkg (future)
 - GPL-3.0 license (KiCad derivative)
 
 ## Phase Status
@@ -64,6 +64,6 @@ src/                    React frontend
 - Three.js for 3D PCB viewer
 - GAL abstraction layer for future WebGPU/wgpu migration
 - Pure Rust parser for both .kicad_sch and .kicad_pcb — simpler build, no C++ toolchain dependency
-- Native file extensions: .snxsch/.snxpcb/.snxprj/.snxsym
+- Native file extensions: .snxsch/.snxpcb/.snxprj/.snxsym/.snxpkg
 - Wire cursor + placement cursor use refs (not Zustand) to avoid 60Hz state churn
 - structuredClone for undo snapshots instead of JSON roundtrip

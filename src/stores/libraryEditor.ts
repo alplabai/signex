@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import type { LibSymbol, SchPin, Graphic, SchPoint } from "@/types";
 
-export type LibEditMode = "select" | "addPin" | "addRect" | "addPolyline" | "addCircle" | "addArc";
+export type LibEditMode = "select" | "addPin" | "addRect" | "addPolyline" | "addCircle" | "addArc" | "addText" | "addEllipse" | "addPolygon";
+
+export type LibPanelView = "properties" | "pinTable";
 
 export type LibSelectedItem =
   | { type: "pin"; index: number }
@@ -45,7 +47,12 @@ interface LibraryEditorState {
 
   // Symbol metadata
   updateSymbolMeta: (updates: Partial<Pick<LibSymbol, "show_pin_numbers" | "show_pin_names" | "pin_name_offset">>) => void;
+  updateSymbolId: (id: string) => void;
   toggleDisplayMode: () => void;
+
+  // Panel view
+  panelView: LibPanelView;
+  setPanelView: (view: LibPanelView) => void;
 }
 
 function cloneSymbol(sym: LibSymbol): LibSymbol {
@@ -63,6 +70,7 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
   redoStack: [],
   sourcePath: null,
   sourceLibId: null,
+  panelView: "properties" as LibPanelView,
 
   openSymbol: (symbol, sourcePath, libId) => {
     set({
@@ -201,7 +209,18 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
     set({ symbol: newSym, dirty: true });
   },
 
+  updateSymbolId: (id) => {
+    const { symbol } = get();
+    if (!symbol) return;
+    get().pushUndo();
+    const newSym = cloneSymbol(symbol);
+    newSym.id = id;
+    set({ symbol: newSym, dirty: true, sourceLibId: id });
+  },
+
   toggleDisplayMode: () => {
     set((s) => ({ displayMode: s.displayMode === "normal" ? "alternate" : "normal" }));
   },
+
+  setPanelView: (view) => set({ panelView: view }),
 }));

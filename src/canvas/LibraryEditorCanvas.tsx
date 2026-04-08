@@ -276,6 +276,45 @@ export function LibraryEditorCanvas() {
           fill_type: "none",
         });
         store.setEditMode("select");
+      } else if (store.editMode === "addText") {
+        const text = prompt("Enter text:");
+        if (text) {
+          store.addGraphic({
+            type: "Text",
+            text,
+            position: sw,
+            rotation: 0,
+            font_size: 1.27,
+            bold: false,
+            italic: false,
+            justify_h: "left",
+            justify_v: "center",
+          });
+        }
+        store.setEditMode("select");
+      } else if (store.editMode === "addEllipse") {
+        // Ellipse as a circle — KiCad symbol format uses circles
+        store.addGraphic({
+          type: "Circle",
+          center: sw,
+          radius: 2.54,
+          width: 0.254,
+          fill_type: "none",
+        });
+        store.setEditMode("select");
+      } else if (store.editMode === "addPolygon") {
+        store.addGraphic({
+          type: "Polyline",
+          points: [
+            { x: sw.x, y: sw.y - 2.54 },
+            { x: sw.x + 2.2, y: sw.y + 1.27 },
+            { x: sw.x - 2.2, y: sw.y + 1.27 },
+            { x: sw.x, y: sw.y - 2.54 }, // closed
+          ],
+          width: 0.254,
+          fill_type: "outline",
+        });
+        store.setEditMode("select");
       }
     },
     [symbol, snap, screenToWorld]
@@ -422,6 +461,32 @@ function renderSymbol(
         ctx.moveTo(g.start.x, g.start.y);
         ctx.quadraticCurveTo(g.mid.x, g.mid.y, g.end.x, g.end.y);
         ctx.stroke();
+        break;
+      }
+      case "Text": {
+        ctx.fillStyle = isSelected ? COLORS.selected : COLORS.body;
+        const fs = g.font_size || 1.27;
+        ctx.font = `${g.bold ? "bold " : ""}${g.italic ? "italic " : ""}${fs}px sans-serif`;
+        ctx.textBaseline = "top";
+        ctx.textAlign = g.justify_h === "right" ? "right" : g.justify_h === "center" ? "center" : "left";
+        ctx.save();
+        ctx.translate(g.position.x, g.position.y);
+        if (g.rotation) ctx.rotate((g.rotation * Math.PI) / 180);
+        ctx.fillText(g.text, 0, 0);
+        ctx.restore();
+        break;
+      }
+      case "TextBox": {
+        const rx = g.position.x, ry = g.position.y;
+        const rw = Math.abs(g.size.x), rh = Math.abs(g.size.y);
+        ctx.strokeStyle = isSelected ? COLORS.selected : COLORS.body;
+        ctx.lineWidth = 0.1;
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.fillStyle = isSelected ? COLORS.selected : COLORS.body;
+        ctx.font = `${g.font_size || 1.0}px sans-serif`;
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.fillText(g.text, rx + 0.3, ry + 0.3);
         break;
       }
     }
