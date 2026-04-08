@@ -76,6 +76,18 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
 }) {
   const updateSymbolId = useLibraryEditorStore(s => s.updateSymbolId);
   const updateSymbolMeta = useLibraryEditorStore(s => s.updateSymbolMeta);
+  const designatorPrefix = useLibraryEditorStore(s => s.designatorPrefix);
+  const setDesignatorPrefix = useLibraryEditorStore(s => s.setDesignatorPrefix);
+  const comment = useLibraryEditorStore(s => s.comment);
+  const setComment = useLibraryEditorStore(s => s.setComment);
+  const description = useLibraryEditorStore(s => s.description);
+  const setDescription = useLibraryEditorStore(s => s.setDescription);
+  const footprint = useLibraryEditorStore(s => s.footprint);
+  const setFootprint = useLibraryEditorStore(s => s.setFootprint);
+  const componentType = useLibraryEditorStore(s => s.componentType);
+  const setComponentType = useLibraryEditorStore(s => s.setComponentType);
+  const mirrored = useLibraryEditorStore(s => s.mirrored);
+  const setMirrored = useLibraryEditorStore(s => s.setMirrored);
 
   return (
     <>
@@ -87,36 +99,40 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
         </Row>
         <Row label="Designator">
           <div className="flex items-center gap-1">
-            <input value="" placeholder="?" className={cn(inp, "flex-1")} disabled />
-            <Eye size={12} className="text-text-muted/40 shrink-0" />
-            <Lock size={12} className="text-text-muted/40 shrink-0" />
+            <input value={designatorPrefix} onChange={e => setDesignatorPrefix(e.target.value)}
+              placeholder="U?" className={cn(inp, "flex-1")} />
+            <button className="text-text-muted/40 hover:text-accent" title="Toggle visibility"><Eye size={12} /></button>
+            <button className="text-text-muted/40 hover:text-accent" title="Lock"><Lock size={12} /></button>
           </div>
         </Row>
         <Row label="Comment">
           <div className="flex items-center gap-1">
-            <input value="*" className={cn(inp, "flex-1")} disabled />
-            <Eye size={12} className="text-text-muted/40 shrink-0" />
-            <Lock size={12} className="text-text-muted/40 shrink-0" />
+            <input value={comment} onChange={e => setComment(e.target.value)} className={cn(inp, "flex-1")} />
+            <button className="text-text-muted/40 hover:text-accent" title="Toggle visibility"><Eye size={12} /></button>
+            <button className="text-text-muted/40 hover:text-accent" title="Lock"><Lock size={12} /></button>
           </div>
         </Row>
         <Row label="Part">
           <div className="flex items-center gap-1">
-            <select className={cn(inp, "flex-1")} disabled>
-              <option>Part A</option>
+            <select className={cn(inp, "flex-1")} defaultValue="A">
+              {Array.from({ length: symbol.unit_count ?? 1 }, (_, i) => (
+                <option key={i} value={String.fromCharCode(65 + i)}>Part {String.fromCharCode(65 + i)}</option>
+              ))}
             </select>
             <span className="text-text-muted/50 whitespace-nowrap">of Parts</span>
-            <input value={symbol.unit_count ?? 1} className={cn(inp, "w-8 text-center")} disabled />
+            <input value={symbol.unit_count ?? 1} className={cn(inp, "w-8 text-center")} readOnly />
           </div>
         </Row>
         <Row label="Description">
-          <textarea rows={3} className={cn(inp, "resize-none")} placeholder="" />
+          <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)}
+            className={cn(inp, "resize-none")} />
         </Row>
         <Row label="Type">
-          <select className={inp}>
-            <option>Standard (No BOM)</option>
-            <option>Standard</option>
-            <option>Mechanical</option>
-            <option>Graphical</option>
+          <select value={componentType} onChange={e => setComponentType(e.target.value as any)} className={inp}>
+            <option value="standard_no_bom">Standard (No BOM)</option>
+            <option value="standard">Standard</option>
+            <option value="mechanical">Mechanical</option>
+            <option value="graphical">Graphical</option>
           </select>
         </Row>
       </div>
@@ -124,7 +140,6 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
       {/* Parameters section */}
       <SectionHeader title="Parameters" />
       <div className="px-1.5 py-1">
-        {/* Sub-tabs: All | Footprints | Models | Parameters | Links | Rules */}
         <div className="flex flex-wrap gap-0.5 mb-1.5">
           {["All", "Footprints", "Models", "Parameters", "Links", "Rules"].map(t => (
             <button key={t} onClick={() => setParamTab(t)}
@@ -138,23 +153,32 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
           ))}
         </div>
 
-        {/* Parameters table */}
         <div className="border border-border-subtle rounded overflow-hidden">
           <div className="flex items-center px-2 py-0.5 bg-bg-secondary/60 border-b border-border-subtle text-[9px] font-semibold text-text-muted/50">
             <span className="flex-1">Name</span>
-            <span className="w-[120px] text-right">Value</span>
+            <span className="w-[140px] text-right">Value</span>
           </div>
-          <div className="flex items-center px-2 py-1 hover:bg-bg-hover/30">
-            <span className="flex-1 text-text-secondary">Footprint</span>
-            <span className="w-[120px] text-right font-mono text-text-muted/60 truncate">(none)</span>
-          </div>
-          <div className="px-2 py-2 text-center text-text-muted/30">No Models</div>
-          <div className="px-2 py-1 text-center text-text-muted/30">No Parameters</div>
-          <div className="px-2 py-1 text-center text-text-muted/30">No Links</div>
-          <div className="px-2 py-1 text-center text-text-muted/30">No Rules</div>
+          {(paramTab === "All" || paramTab === "Footprints") && (
+            <div className="flex items-center px-2 py-1 hover:bg-bg-hover/30 border-b border-border-subtle/20">
+              <span className="flex-1 text-text-secondary">Footprint</span>
+              <input value={footprint} onChange={e => setFootprint(e.target.value)}
+                placeholder="(none)" className="w-[140px] text-right bg-transparent outline-none text-[10px] font-mono text-text-primary" />
+            </div>
+          )}
+          {(paramTab === "All" || paramTab === "Models") && (
+            <div className="px-2 py-1.5 text-center text-text-muted/30">No Models</div>
+          )}
+          {(paramTab === "All" || paramTab === "Parameters") && (
+            <div className="px-2 py-1.5 text-center text-text-muted/30">No Parameters</div>
+          )}
+          {(paramTab === "All" || paramTab === "Links") && (
+            <div className="px-2 py-1.5 text-center text-text-muted/30">No Links</div>
+          )}
+          {(paramTab === "All" || paramTab === "Rules") && (
+            <div className="px-2 py-1.5 text-center text-text-muted/30">No Rules</div>
+          )}
         </div>
 
-        {/* Add / Edit / Delete buttons */}
         <div className="flex items-center justify-end gap-1 mt-1.5">
           <button className="px-2 py-0.5 text-[9px] bg-bg-secondary border border-border-subtle rounded text-text-secondary hover:text-text-primary">
             Add <ChevronDown size={8} className="inline" />
@@ -166,17 +190,17 @@ function GeneralTab({ symbol, paramTab, setParamTab }: {
       <SectionHeader title="Graphical" />
       <div className="px-3 py-2 space-y-2">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" className="rounded" />
+          <input type="checkbox" checked={mirrored} onChange={e => setMirrored(e.target.checked)} className="rounded" />
           <span className="text-text-secondary">Mirrored</span>
         </label>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="text-text-muted/60">Local Colors</span>
           <span className="text-text-muted/50">Fills</span>
-          <div className="w-4 h-4 rounded border border-white/10 bg-[#666644]" />
+          <div className="w-4 h-4 rounded border border-white/10 bg-[#666644] cursor-pointer" title="Fill color" />
           <span className="text-text-muted/50">Lines</span>
-          <div className="w-4 h-4 rounded border border-white/10 bg-[#cc4444]" />
+          <div className="w-4 h-4 rounded border border-white/10 bg-[#cc4444] cursor-pointer" title="Line color" />
           <span className="text-text-muted/50">Pins</span>
-          <div className="w-4 h-4 rounded border border-white/10 bg-[#888888]" />
+          <div className="w-4 h-4 rounded border border-white/10 bg-[#888888] cursor-pointer" title="Pin color" />
         </div>
       </div>
 

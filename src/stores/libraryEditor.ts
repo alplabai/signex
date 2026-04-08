@@ -23,6 +23,14 @@ interface LibraryEditorState {
   sourcePath: string | null;
   sourceLibId: string | null;
 
+  // Component metadata (persisted alongside symbol)
+  designatorPrefix: string;
+  comment: string;
+  description: string;
+  footprint: string;
+  componentType: "standard" | "standard_no_bom" | "mechanical" | "graphical";
+  mirrored: boolean;
+
   // Lifecycle
   openSymbol: (symbol: LibSymbol, sourcePath: string, libId: string) => void;
   closeEditor: () => void;
@@ -50,6 +58,14 @@ interface LibraryEditorState {
   updateSymbolId: (id: string) => void;
   toggleDisplayMode: () => void;
 
+  // Component metadata setters
+  setDesignatorPrefix: (v: string) => void;
+  setComment: (v: string) => void;
+  setDescription: (v: string) => void;
+  setFootprint: (v: string) => void;
+  setComponentType: (v: LibraryEditorState["componentType"]) => void;
+  setMirrored: (v: boolean) => void;
+
   // Panel view
   panelView: LibPanelView;
   setPanelView: (view: LibPanelView) => void;
@@ -70,6 +86,12 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
   redoStack: [],
   sourcePath: null,
   sourceLibId: null,
+  designatorPrefix: "U",
+  comment: "*",
+  description: "",
+  footprint: "",
+  componentType: "standard_no_bom" as LibraryEditorState["componentType"],
+  mirrored: false,
   panelView: "properties" as LibPanelView,
 
   openSymbol: (symbol, sourcePath, libId) => {
@@ -221,6 +243,13 @@ export const useLibraryEditorStore = create<LibraryEditorState>()((set, get) => 
   toggleDisplayMode: () => {
     set((s) => ({ displayMode: s.displayMode === "normal" ? "alternate" : "normal" }));
   },
+
+  setDesignatorPrefix: (v) => set({ designatorPrefix: v, dirty: true }),
+  setComment: (v) => set({ comment: v, dirty: true }),
+  setDescription: (v) => set({ description: v, dirty: true }),
+  setFootprint: (v) => set({ footprint: v, dirty: true }),
+  setComponentType: (v) => set({ componentType: v, dirty: true }),
+  setMirrored: (v) => set({ mirrored: v, dirty: true }),
 
   setPanelView: (view) => set({ panelView: view }),
 }));

@@ -1,7 +1,13 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
 import { useEditorStore } from "@/stores/editor";
 import type { LibSymbol, SchPin, Graphic, SchPoint } from "@/types";
+import {
+  MousePointer2, Move, Pin, Square, Minus, Circle, Spline, Type, Hexagon,
+  AlignLeft, X as XIcon, ChevronDown,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { LibEditMode } from "@/stores/libraryEditor";
 
 const GRID_SIZE = 1.27; // mm
 const PIN_HIT_RADIUS = 1.0;
@@ -409,8 +415,149 @@ export function LibraryEditorCanvas() {
         className="absolute inset-0"
         style={{ cursor: editMode === "select" ? "default" : "crosshair" }}
       />
+      {/* Floating Active Bar (Altium-style) */}
+      <LibActiveBar editMode={editMode} />
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVE BAR — floating toolbar on canvas (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function LibActiveBar({ editMode }: { editMode: LibEditMode }) {
+  const setEditMode = useLibraryEditorStore(s => s.setEditMode);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const close = () => setOpenMenu(null);
+
+  return (
+    <>
+      {openMenu && <div className="absolute inset-0 z-30" onClick={close} />}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-px bg-bg-secondary/95 border border-border-subtle rounded-lg shadow-lg px-1 py-0.5">
+        {/* Filter */}
+        <ABBtn icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L14 14v5a1 1 0 01-.55.9l-4 2A1 1 0 018 21v-7L1.2 4.6A1 1 0 012 3h1z"/></svg>}
+          title="Filter" />
+
+        {/* Move — with dropdown */}
+        <ABBtn icon={<Move size={14} />} title="Move" hasMenu
+          menuOpen={openMenu === "move"} onMenuToggle={() => setOpenMenu(openMenu === "move" ? null : "move")}
+          menu={<>
+            <MenuItem label="Move" onClick={close} />
+            <MenuItem label="Rotate Selection" onClick={() => { close(); }} />
+            <MenuItem label="Bring To Front" onClick={close} />
+            <MenuItem label="Send To Back" onClick={close} />
+          </>} />
+
+        {/* Selection — with dropdown */}
+        <ABBtn icon={<MousePointer2 size={14} />} title="Select"
+          active={editMode === "select"}
+          onClick={() => setEditMode("select")}
+          hasMenu menuOpen={openMenu === "sel"} onMenuToggle={() => setOpenMenu(openMenu === "sel" ? null : "sel")}
+          menu={<>
+            <MenuItem label="Lasso Select" onClick={close} />
+            <MenuItem label="Inside Area" onClick={close} />
+            <MenuItem label="Touching Rectangle" onClick={close} />
+            <MenuItem label="All" onClick={close} />
+            <MenuItem label="Toggle Selection" onClick={close} />
+          </>} />
+
+        {/* Place Component */}
+        <ABBtn icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+          title="Place Component" />
+
+        {/* Place Pin */}
+        <ABBtn icon={<Pin size={14} />} title="Place Pin"
+          active={editMode === "addPin"}
+          onClick={() => setEditMode("addPin")} />
+
+        {/* Align — with dropdown */}
+        <ABBtn icon={<AlignLeft size={14} />} title="Align" hasMenu
+          menuOpen={openMenu === "align"} onMenuToggle={() => setOpenMenu(openMenu === "align" ? null : "align")}
+          menu={<>
+            <MenuItem label="Align Left" onClick={close} />
+            <MenuItem label="Align Right" onClick={close} />
+            <MenuItem label="Align Horizontal Centers" onClick={close} />
+            <MenuItem label="Distribute Horizontally" onClick={close} />
+            <MenuSep />
+            <MenuItem label="Align Top" onClick={close} />
+            <MenuItem label="Align Bottom" onClick={close} />
+            <MenuItem label="Align Vertical Centers" onClick={close} />
+            <MenuItem label="Distribute Vertically" onClick={close} />
+            <MenuSep />
+            <MenuItem label="Align To Grid" onClick={close} />
+          </>} />
+
+        {/* No Connect */}
+        <ABBtn icon={<XIcon size={14} />} title="No Connect" />
+
+        {/* Draw — with dropdown */}
+        <ABBtn icon={<Minus size={14} />} title="Draw" hasMenu
+          menuOpen={openMenu === "draw"} onMenuToggle={() => setOpenMenu(openMenu === "draw" ? null : "draw")}
+          menu={<>
+            <MenuItem label="Line" icon={<Minus size={12} />} onClick={() => { setEditMode("addPolyline"); close(); }} />
+            <MenuItem label="Arc" icon={<Spline size={12} />} onClick={() => { setEditMode("addArc"); close(); }} />
+            <MenuItem label="Full Circle" icon={<Circle size={12} />} onClick={() => { setEditMode("addCircle"); close(); }} />
+            <MenuItem label="Ellipse" icon={<Circle size={12} />} onClick={() => { setEditMode("addEllipse"); close(); }} />
+            <MenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => { setEditMode("addRect"); close(); }} />
+            <MenuItem label="Polygon" icon={<Hexagon size={12} />} onClick={() => { setEditMode("addPolygon"); close(); }} />
+          </>} />
+
+        {/* Text — with dropdown */}
+        <ABBtn icon={<Type size={14} />} title="Text" hasMenu
+          menuOpen={openMenu === "text"} onMenuToggle={() => setOpenMenu(openMenu === "text" ? null : "text")}
+          menu={<>
+            <MenuItem label="Text String" icon={<Type size={12} />} onClick={() => { setEditMode("addText"); close(); }} />
+          </>} />
+      </div>
+    </>
+  );
+}
+
+function ABBtn({ icon, title, active, onClick, hasMenu, menuOpen, onMenuToggle, menu }: {
+  icon: React.ReactNode; title: string; active?: boolean; onClick?: () => void;
+  hasMenu?: boolean; menuOpen?: boolean; onMenuToggle?: () => void; menu?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div className="flex items-center">
+        <button title={title} onClick={onClick}
+          className={cn("p-1.5 rounded-l transition-colors",
+            active ? "bg-accent/20 text-accent" : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+            !hasMenu && "rounded-r"
+          )}>
+          {icon}
+        </button>
+        {hasMenu && (
+          <button onClick={onMenuToggle}
+            className={cn("px-0.5 py-1.5 rounded-r transition-colors border-l border-border-subtle/30",
+              menuOpen ? "bg-accent/20 text-accent" : "text-text-muted/40 hover:bg-bg-hover hover:text-text-primary"
+            )}>
+            <ChevronDown size={8} />
+          </button>
+        )}
+      </div>
+      {menuOpen && menu && (
+        <div className="absolute top-full left-0 mt-1 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[160px] z-50">
+          {menu}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick?: () => void }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2 w-full px-3 py-1 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary text-left">
+      {icon && <span className="w-4 shrink-0">{icon}</span>}
+      {label}
+    </button>
+  );
+}
+
+function MenuSep() {
+  return <div className="my-1 border-t border-border-subtle" />;
 }
 
 // ═══════════════════════════════════════════════════════════════
