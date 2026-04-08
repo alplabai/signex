@@ -17,6 +17,21 @@ export function PropertiesPanel() {
   const editMode = useSchematicStore((s) => s.editMode);
   const placementPaused = useEditorStore((s) => s.placementPaused);
 
+  const sel = useMemo(() => ({
+    symbols:     (data?.symbols      ?? []).filter((s) => selectedIds.has(s.uuid)),
+    wires:       (data?.wires        ?? []).filter((w) => selectedIds.has(w.uuid)),
+    labels:      (data?.labels       ?? []).filter((l) => selectedIds.has(l.uuid)),
+    junctions:   (data?.junctions    ?? []).filter((j) => selectedIds.has(j.uuid)),
+    noConnects:  (data?.no_connects  ?? []).filter((nc) => selectedIds.has(nc.uuid)),
+    textNotes:   (data?.text_notes   ?? []).filter((t) => selectedIds.has(t.uuid)),
+    buses:       (data?.buses        ?? []).filter((b) => selectedIds.has(b.uuid)),
+    busEntries:  (data?.bus_entries  ?? []).filter((be) => selectedIds.has(be.uuid)),
+    childSheets: (data?.child_sheets ?? []).filter((cs) => selectedIds.has(cs.uuid)),
+  }), [data, selectedIds]);
+  const total = sel.symbols.length + sel.wires.length + sel.labels.length +
+    sel.junctions.length + sel.noConnects.length + sel.textNotes.length +
+    sel.buses.length + sel.busEntries.length + sel.childSheets.length;
+
   if (!data) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-text-muted text-xs gap-3 p-6">
@@ -32,21 +47,6 @@ export function PropertiesPanel() {
   }
 
   if (selectedIds.size === 0) return <DocumentProps />;
-
-  const sel = useMemo(() => ({
-    symbols: data.symbols.filter((s) => selectedIds.has(s.uuid)),
-    wires: data.wires.filter((w) => selectedIds.has(w.uuid)),
-    labels: data.labels.filter((l) => selectedIds.has(l.uuid)),
-    junctions: data.junctions.filter((j) => selectedIds.has(j.uuid)),
-    noConnects: data.no_connects.filter((nc) => selectedIds.has(nc.uuid)),
-    textNotes: data.text_notes.filter((t) => selectedIds.has(t.uuid)),
-    buses: data.buses.filter((b) => selectedIds.has(b.uuid)),
-    busEntries: data.bus_entries.filter((be) => selectedIds.has(be.uuid)),
-    childSheets: data.child_sheets.filter((cs) => selectedIds.has(cs.uuid)),
-  }), [data, selectedIds]);
-  const total = sel.symbols.length + sel.wires.length + sel.labels.length +
-    sel.junctions.length + sel.noConnects.length + sel.textNotes.length +
-    sel.buses.length + sel.busEntries.length + sel.childSheets.length;
 
   if (sel.symbols.length === 1 && total === 1) return <ComponentProps uuid={sel.symbols[0].uuid} />;
   if (sel.wires.length === 1 && total === 1) return <WireProps uuid={sel.wires[0].uuid} />;
