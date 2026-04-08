@@ -333,31 +333,40 @@ function PanelContextMenu({ x, y, onClose, recentProjects }: {
 function ProjectContextMenu({ x, y, onClose, onExplore, projectName }: {
   x: number; y: number; onClose: () => void; onExplore: () => void; projectName: string;
 }) {
-  const [showAddNew, setShowAddNew] = useState(false);
+  const [sub, setSub] = useState<string | null>(null);
   return (
     <>
       <div className="fixed inset-0 z-[90]" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-      <div className="fixed z-[95] bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[220px]"
-        style={{ left: x, top: y }}>
-        <ContextMenuItem label={`Validate PCB Project ${projectName}`} onClick={onClose} disabled />
+      <div className="fixed z-[95] bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[260px]"
+        style={{ left: Math.min(x, window.innerWidth - 280), top: Math.min(y, window.innerHeight - 500) }}>
+        <ContextMenuItem label={`Validate PCB Project ${projectName}`} disabled />
         <ContextMenuSep />
-        <div className="relative" onMouseEnter={() => setShowAddNew(true)} onMouseLeave={() => setShowAddNew(false)}>
+
+        {/* Add New to Project — submenu */}
+        <div className="relative" onMouseEnter={() => setSub("addNew")} onMouseLeave={() => setSub(null)}>
           <ContextMenuItem label="Add New to Project" hasSubmenu />
-          {showAddNew && (
-            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
-              <ContextMenuItem label="Schematic" icon={<FileText size={12} />} onClick={onClose} />
-              <ContextMenuItem label="PCB" icon={<Cpu size={12} />} onClick={onClose} />
+          {sub === "addNew" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px] z-[100]">
+              <ContextMenuItem label="Schematic" icon={<FileText size={12} className="text-warning/70" />} onClick={onClose} />
+              <ContextMenuItem label="PCB" icon={<Cpu size={12} className="text-success/70" />} onClick={onClose} />
+              <ContextMenuItem label="PCB3D" icon={<Cpu size={12} className="text-accent/70" />} onClick={onClose} disabled />
+              <ContextMenuItem label="Draftsman Document" disabled />
               <ContextMenuSep />
               <ContextMenuItem label="Schematic Library" icon={<FileText size={12} className="text-accent" />} onClick={onClose} />
               <ContextMenuItem label="PCB Library" icon={<Cpu size={12} className="text-success" />} onClick={onClose} />
+              <ContextMenuItem label="Pad Via Library" disabled />
               <ContextMenuSep />
+              <ContextMenuItem label="CAM Document" disabled />
               <ContextMenuItem label="Output Job File" onClick={onClose} />
+              <ContextMenuItem label="Database Link File" disabled />
             </div>
           )}
         </div>
+
         <ContextMenuItem label="Add Existing to Project..." onClick={onClose} />
-        <ContextMenuSep />
+        <ContextMenuItem label="Save to Server..." disabled />
         <ContextMenuItem label="Save" icon={<Save size={12} />} onClick={onClose} />
+        <ContextMenuItem label="Make a copy..." disabled />
         <ContextMenuItem label="Rename..." onClick={onClose} />
         <ContextMenuSep />
         <ContextMenuItem label="Close Project Documents" onClick={onClose} />
@@ -366,6 +375,26 @@ function ProjectContextMenu({ x, y, onClose, onExplore, projectName }: {
         <ContextMenuItem label="Explore" onClick={onExplore} />
         <ContextMenuItem label="Variants..." onClick={onClose} />
         <ContextMenuSep />
+
+        {/* History & Version Control — submenu */}
+        <div className="relative" onMouseEnter={() => setSub("history")} onMouseLeave={() => setSub(null)}>
+          <ContextMenuItem label="History && Version Control" hasSubmenu />
+          {sub === "history" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[160px] z-[100]">
+              <ContextMenuItem label="Show History" disabled />
+              <ContextMenuItem label="Compare..." disabled />
+            </div>
+          )}
+        </div>
+
+        <ContextMenuSep />
+        <ContextMenuItem label="Project Packager..." disabled />
+        <ContextMenuItem label="Project Releaser..." disabled />
+        <ContextMenuSep />
+        <ContextMenuItem label="Show in Explorer" onClick={onExplore} />
+        <ContextMenuItem label="Show in Web Browser" disabled />
+        <ContextMenuSep />
+        <ContextMenuItem label="Share..." disabled />
         <ContextMenuItem label="Project Options..." onClick={onClose} />
       </div>
     </>
