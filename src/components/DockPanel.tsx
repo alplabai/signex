@@ -1,23 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useLayoutStore } from "@/stores/layout";
 import { useEditorStore } from "@/stores/editor";
-import { PANEL_DEFS } from "@/lib/panelRegistry";
+import { PANEL_DEFS, PANEL_COMPONENTS } from "@/lib/panelRegistry";
 import type { PanelId } from "@/lib/panelRegistry";
-import { ProjectPanel } from "@/panels/ProjectPanel";
-import { ComponentPanel } from "@/panels/ComponentPanel";
-import { NavigatorPanel } from "@/panels/NavigatorPanel";
-import { PropertiesPanel } from "@/panels/PropertiesPanel";
-import { FilterPanel } from "@/panels/FilterPanel";
-import { ListPanel } from "@/panels/ListPanel";
-import { MessagesPanel } from "@/panels/MessagesPanel";
-import { OutputJobsPanel } from "@/panels/OutputJobsPanel";
-import { SignalPanel } from "@/panels/SignalPanel";
-import { InspectorPanel } from "@/panels/InspectorPanel";
-import { DrcPanel } from "@/panels/DrcPanel";
-import { LayerStackPanel } from "@/panels/LayerStackPanel";
-import { SnippetsPanel } from "@/panels/SnippetsPanel";
-import { VariantPanel } from "@/panels/VariantPanel";
-import { BoardCrossSectionPanel } from "@/panels/BoardCrossSectionPanel";
 import { PanelLeftClose, PanelRightClose, PanelBottomClose } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
@@ -26,24 +11,6 @@ interface DockPanelProps {
   dockId: "left" | "right" | "bottom";
   onCollapse: () => void;
 }
-
-const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
-  projects: ProjectPanel,
-  components: ComponentPanel,
-  navigator: NavigatorPanel,
-  properties: PropertiesPanel,
-  filter: FilterPanel,
-  list: ListPanel,
-  messages: MessagesPanel,
-  "output-jobs": OutputJobsPanel,
-  signal: SignalPanel,
-  inspector: InspectorPanel,
-  drc: DrcPanel,
-  layerStack: LayerStackPanel,
-  snippets: SnippetsPanel,
-  variants: VariantPanel,
-  boardCrossSection: BoardCrossSectionPanel,
-};
 
 function getTabLabel(panelId: PanelId): string {
   const def = PANEL_DEFS.find((d) => d.id === panelId);
@@ -65,7 +32,10 @@ const COLLAPSE_ICONS = {
   bottom: PanelBottomClose,
 };
 
-// Global drag state for cross-dock communication
+// Global drag state for cross-dock communication.
+// NOTE(HMR): These module-level mutable globals are intentionally shared across
+// all DockPanel instances. In development, Vite HMR re-executes this module,
+// resetting them — any in-flight drag will be cancelled. Acceptable for production.
 let draggingPanel: { panelId: PanelId; fromDock: string } | null = null;
 const dockElements = new Map<string, HTMLElement>();
 // Global ghost state — updated by source, read by all
@@ -102,15 +72,20 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
   const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
   const movePanel = useLayoutStore((s) => s.movePanel);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [, setDragOver] = useState(false);
+  const dragOverRef = useRef(false);
   const [, forceUpdate] = useState(0);
 
   // Subscribe to global ghost changes + clear drag highlight when drag ends
   useEffect(() => {
     const fn = () => {
       forceUpdate(n => n + 1);
-      // Clear drag highlight when no panel is being dragged
-      if (!globalGhost && dragOver) setDragOver(false);
+      // Clear drag highlight when no panel is being dragged.
+      // Use dragOverRef instead of dragOver to avoid stale closure with [] deps.
+      if (!globalGhost && dragOverRef.current) {
+        setDragOver(false);
+        dragOverRef.current = false;
+      }
     };
     ghostListeners.add(fn);
     return () => { ghostListeners.delete(fn); };
@@ -133,6 +108,7 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
         const rect = containerRef.current.getBoundingClientRect();
         const over = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
         setDragOver(over);
+        dragOverRef.current = over;
       }
     };
 
@@ -149,6 +125,7 @@ export function DockPanel({ dockId, onCollapse }: DockPanelProps) {
       globalGhost = null;
       notifyGhostChange();
       setDragOver(false);
+      dragOverRef.current = false;
     };
 
     window.addEventListener("mousemove", onMove);

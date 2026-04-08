@@ -1,4 +1,5 @@
 import type { PcbData, PcbPoint, PcbZone } from "@/types/pcb";
+import { subtractRect } from "./pcbPolygonClip";
 
 /**
  * Copper pour fill computation.
@@ -135,20 +136,31 @@ function collectObstacles(data: PcbData, zone: PcbZone): Obstacle[] {
 }
 
 function computeSimpleFill(zone: PcbZone, obstacles: Obstacle[]): PcbPoint[][] {
-  // Simplified: return the zone outline as the fill polygon
-  // In production, we'd subtract obstacle polygons from the zone polygon
-  // using Clipper library (polygon boolean difference)
-  //
-  // For now, return the outline itself — the renderer will draw the
-  // filled zone, and obstacles will be visually on top
-
   if (obstacles.length === 0) {
     return [zone.outline];
   }
 
-  // Return the outline as a single filled polygon
-  // The renderer handles obstacle overlap by drawing pads/traces on top
-  return [zone.outline];
+  // Subtract each obstacle's axis-aligned bounding rect from the fill polygons
+  let polygons: PcbPoint[][] = [zone.outline];
+  for (const obs of obstacles) {
+    if (obs.sameNet) continue; // Same-net obstacles don't block the pour
+    // Compute AABB of the obstacle polygon
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of obs.polygon) {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y > maxY) maxY = pt.y;
+    }
+    const next: PcbPoint[][] = [];
+    for (const poly of polygons) {
+      const result = subtractRect(poly, { x: minX, y: minY }, { x: maxX, y: maxY });
+      next.push(...result);
+    }
+    polygons = next;
+  }
+
+  return polygons.length > 0 ? polygons : [zone.outline];
 }
 
 /**
@@ -162,16 +174,16 @@ export function generateThermalRelief(
   gap: number,
 ): { start: PcbPoint; end: PcbPoint }[] {
   const outerR = Math.max(padW, padH) / 2 + gap + 1.0; // Extend spokes into pour
-  const hw = spokeWidth / 2;
+  void spokeWidth; // Width applied by the renderer, not the spoke geometry
 
   return [
-    // Top spoke
-    { start: { x: padX - hw, y: padY - padH / 2 - gap }, end: { x: padX + hw, y: padY - outerR } },
-    // Bottom spoke
-    { start: { x: padX - hw, y: padY + padH / 2 + gap }, end: { x: padX + hw, y: padY + outerR } },
-    // Left spoke
-    { start: { x: padX - padW / 2 - gap, y: padY - hw }, end: { x: padX - outerR, y: padY + hw } },
-    // Right spoke
-    { start: { x: padX + padW / 2 + gap, y: padY - hw }, end: { x: padX + outerR, y: padY + hw } },
+    // Top spoke (same x=padX, going upward)
+    { start: { x: padX, y: padY - padH / 2 - gap }, end: { x: padX, y: padY - outerR } },
+    // Bottom spoke (same x=padX, going downward)
+    { start: { x: padX, y: padY + padH / 2 + gap }, end: { x: padX, y: padY + outerR } },
+    // Left spoke (same y=padY, going left)
+    { start: { x: padX - padW / 2 - gap, y: padY }, end: { x: padX - outerR, y: padY } },
+    // Right spoke (same y=padY, going right)
+    { start: { x: padX + padW / 2 + gap, y: padY }, end: { x: padX + outerR, y: padY } },
   ];
 }

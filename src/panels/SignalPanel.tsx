@@ -159,7 +159,10 @@ export function SignalPanel() {
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "signal-chat.md"; a.click();
+    a.href = url; a.download = "signal-chat.md";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -341,7 +344,7 @@ function MessageBubble({ message }: { message: SignalMessage }) {
           <div className="mt-2 space-y-1">
             {message.toolCalls.map((tc) => (
               <div key={tc.id} className="flex items-center gap-1.5 text-[9px] text-accent/60 bg-accent/5 rounded px-2 py-0.5">
-                <Zap size={8} /> {tc.name}({JSON.stringify(tc.input).slice(0, 60)}...)
+                <Zap size={8} /> {tc.name}({(() => { try { return JSON.stringify(tc.input).slice(0, 60); } catch { return "..."; } })()}...)
               </div>
             ))}
           </div>

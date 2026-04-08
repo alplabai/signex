@@ -33,12 +33,6 @@ interface OutputJobsState {
   reorderJob: (id: string, direction: "up" | "down") => void;
 }
 
-let nextId = 1;
-
-function makeId(): string {
-  return `job_${Date.now()}_${nextId++}`;
-}
-
 const defaultConfig: Record<OutputJobType, OutputJobConfig> = {
   bom: { bomColumns: ["Designator", "Value", "Footprint", "Library", "Quantity"], bomGroupBy: ["Value", "Footprint"], bomFormat: "csv" },
   netlist: { netlistFormat: "kicad" },
@@ -64,7 +58,7 @@ export const useOutputJobsStore = create<OutputJobsState>()(
 
       addJob: (type) => {
         const job: OutputJob = {
-          id: makeId(),
+          id: crypto.randomUUID(),
           name: typeLabels[type],
           type,
           enabled: true,

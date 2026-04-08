@@ -675,7 +675,9 @@ export function outsideBoxSelect(
     if (isSelectable("wire", filter)) allUuids.push(wire.uuid);
   }
   for (const label of data.labels) {
-    if (isSelectable("label", filter)) allUuids.push(label.uuid);
+    const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
+    if (filter && filter[filterKey]?.selectable === false) continue;
+    allUuids.push(label.uuid);
   }
   for (const j of data.junctions) {
     if (isSelectable("junction", filter)) allUuids.push(j.uuid);
@@ -739,7 +741,8 @@ export function lineSelect(
   }
 
   for (const label of data.labels) {
-    if (!isSelectable("label", filter)) continue;
+    const filterKey = label.label_type === "Power" ? "powerPorts" : "labels";
+    if (filter && filter[filterKey]?.selectable === false) continue;
     if (distToSegment(label.position, lineStart, lineEnd) <= tolerance) {
       selected.push(label.uuid);
     }
@@ -822,8 +825,10 @@ export function connectionSelect(
     return lib.pins.map(pin => symToSch(pin.position.x, pin.position.y, sym));
   };
 
+  const wireByUuid = new Map(data.wires.map(w => [w.uuid, w]));
+
   // Find the clicked object
-  const clickedWire = data.wires.find(w => w.uuid === startUuid);
+  const clickedWire = wireByUuid.get(startUuid);
   const clickedLabel = data.labels.find(l => l.uuid === startUuid);
   const clickedSymbol = data.symbols.find(s => s.uuid === startUuid);
   const clickedJunction = data.junctions.find(j => j.uuid === startUuid);
@@ -852,7 +857,7 @@ export function connectionSelect(
     for (const j of data.junctions) {
       if (!isSelectable("junction", filter)) continue;
       for (const wUuid of connectedWireUuids) {
-        const w = data.wires.find(wire => wire.uuid === wUuid);
+        const w = wireByUuid.get(wUuid);
         if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
           result.push(j.uuid);
           break;
@@ -867,7 +872,7 @@ export function connectionSelect(
       for (const pinPos of pinPositions) {
         let connected = false;
         for (const wUuid of connectedWireUuids) {
-          const w = data.wires.find(wire => wire.uuid === wUuid);
+          const w = wireByUuid.get(wUuid);
           if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
             connected = true;
             break;
@@ -894,7 +899,7 @@ export function connectionSelect(
     for (const label of data.labels) {
       if (!isSelectable("label", filter)) continue;
       for (const wUuid of connectedWireUuids) {
-        const w = data.wires.find(wire => wire.uuid === wUuid);
+        const w = wireByUuid.get(wUuid);
         if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
           result.push(label.uuid);
           break;
@@ -906,7 +911,7 @@ export function connectionSelect(
     for (const j of data.junctions) {
       if (!isSelectable("junction", filter)) continue;
       for (const wUuid of connectedWireUuids) {
-        const w = data.wires.find(wire => wire.uuid === wUuid);
+        const w = wireByUuid.get(wUuid);
         if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
           result.push(j.uuid);
           break;
@@ -921,7 +926,7 @@ export function connectionSelect(
       for (const pinPos of pinPositions) {
         let connected = false;
         for (const wUuid of connectedWireUuids) {
-          const w = data.wires.find(wire => wire.uuid === wUuid);
+          const w = wireByUuid.get(wUuid);
           if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
             connected = true;
             break;
@@ -934,7 +939,7 @@ export function connectionSelect(
     // Also include labels with same net name (for global connectivity)
     const netLabels = data.labels.filter(l => {
       for (const wUuid of connectedWireUuids) {
-        const w = data.wires.find(wire => wire.uuid === wUuid);
+        const w = wireByUuid.get(wUuid);
         if (w && (ptEq(l.position, w.start) || ptEq(l.position, w.end))) return true;
       }
       return false;
@@ -972,7 +977,7 @@ export function connectionSelect(
       for (const label of data.labels) {
         if (!isSelectable("label", filter)) continue;
         for (const wUuid of connectedWireUuids) {
-          const w = data.wires.find(wire => wire.uuid === wUuid);
+          const w = wireByUuid.get(wUuid);
           if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
             result.push(label.uuid);
             break;
@@ -984,7 +989,7 @@ export function connectionSelect(
       for (const j of data.junctions) {
         if (!isSelectable("junction", filter)) continue;
         for (const wUuid of connectedWireUuids) {
-          const w = data.wires.find(wire => wire.uuid === wUuid);
+          const w = wireByUuid.get(wUuid);
           if (w && (ptEq(j.position, w.start) || ptEq(j.position, w.end))) {
             result.push(j.uuid);
             break;
@@ -1011,7 +1016,7 @@ export function connectionSelect(
     for (const label of data.labels) {
       if (!isSelectable("label", filter)) continue;
       for (const wUuid of connectedWireUuids) {
-        const w = data.wires.find(wire => wire.uuid === wUuid);
+        const w = wireByUuid.get(wUuid);
         if (w && (ptEq(label.position, w.start) || ptEq(label.position, w.end))) {
           result.push(label.uuid);
           break;
@@ -1025,7 +1030,7 @@ export function connectionSelect(
       for (const pinPos of pinPositions) {
         let connected = false;
         for (const wUuid of connectedWireUuids) {
-          const w = data.wires.find(wire => wire.uuid === wUuid);
+          const w = wireByUuid.get(wUuid);
           if (w && (ptEq(pinPos, w.start) || ptEq(pinPos, w.end))) {
             connected = true;
             break;
@@ -1042,9 +1047,14 @@ export function connectionSelect(
   return [startUuid];
 }
 
+function wirePointKey(p: SchPoint, epsilon: number): string {
+  const bucket = Math.round(1 / epsilon);
+  return `${Math.round(p.x * bucket)},${Math.round(p.y * bucket)}`;
+}
+
 /**
  * Flood-fill connected wires starting from seed points.
- * Adds all transitively connected wire UUIDs to the `visited` set.
+ * Uses a spatial index (Map<pointKey, wireUuids[]>) for O(n) instead of O(n^2).
  */
 function floodFillWires(
   data: SchematicData,
@@ -1052,21 +1062,29 @@ function floodFillWires(
   visited: Set<string>,
   epsilon: number,
 ): void {
-  const ptEq = (a: SchPoint, b: SchPoint) =>
-    Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
+  // Build spatial index: pointKey → [wireUuid, ...]
+  const index = new Map<string, string[]>();
+  for (const wire of data.wires) {
+    const ks = wirePointKey(wire.start, epsilon);
+    const ke = wirePointKey(wire.end, epsilon);
+    if (!index.has(ks)) index.set(ks, []);
+    if (!index.has(ke)) index.set(ke, []);
+    index.get(ks)!.push(wire.uuid);
+    index.get(ke)!.push(wire.uuid);
+  }
 
-  // Collect frontier points to search from
+  const wireByUuid = new Map(data.wires.map(w => [w.uuid, w]));
+
   const frontier: SchPoint[] = [...seedPoints];
-
   while (frontier.length > 0) {
     const point = frontier.pop()!;
-    for (const wire of data.wires) {
-      if (visited.has(wire.uuid)) continue;
-      if (ptEq(point, wire.start) || ptEq(point, wire.end)) {
-        visited.add(wire.uuid);
-        // Add the other endpoint to frontier
-        frontier.push(wire.start, wire.end);
-      }
+    const key = wirePointKey(point, epsilon);
+    const candidates = index.get(key) || [];
+    for (const uuid of candidates) {
+      if (visited.has(uuid)) continue;
+      visited.add(uuid);
+      const wire = wireByUuid.get(uuid)!;
+      frontier.push(wire.start, wire.end);
     }
   }
 }

@@ -1313,6 +1313,16 @@ fn collect_sheets(
             if has_traversal {
                 continue;
             }
+            let joined = dir.join(&child);
+            if joined.exists() {
+                if let Ok(canonical) = joined.canonicalize() {
+                    if let Ok(canonical_dir) = dir.canonicalize() {
+                        if !canonical.starts_with(&canonical_dir) {
+                            continue;
+                        }
+                    }
+                }
+            }
             queue.push((child, depth + 1));
         }
     }

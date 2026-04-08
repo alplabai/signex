@@ -1,14 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::engine::parser::{self, LibSymbol, SymbolMeta};
 use crate::engine::pcb_parser::{self, Footprint as PcbFootprint};
 use crate::engine::writer;
 
 // In-memory cache for parsed libraries
-type LibraryCache = HashMap<String, Vec<(LibSymbol, SymbolMeta)>>;
+const MAX_CACHE_ENTRIES: usize = 50;
+type LibraryCache = HashMap<String, Arc<Vec<(LibSymbol, SymbolMeta)>>>;
 static LIBRARY_CACHE: std::sync::LazyLock<Mutex<LibraryCache>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -128,24 +129,29 @@ pub async fn list_libraries() -> Result<Vec<LibraryInfo>, String> {
 }
 
 /// Load and cache a single library file
-fn load_library(path: &str) -> Result<Vec<(LibSymbol, SymbolMeta)>, String> {
+fn load_library(path: &str) -> Result<Arc<Vec<(LibSymbol, SymbolMeta)>>, String> {
     // Check cache first
     {
         let cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(cached) = cache.get(path) {
-            return Ok(cached.clone());
+            return Ok(Arc::clone(cached));
         }
     }
 
     // Parse the file
     let content =
         std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
-    let symbols = parser::parse_symbol_library(&content)?;
+    let symbols = Arc::new(parser::parse_symbol_library(&content)?);
 
-    // Store in cache
+    // Store in cache with eviction when full
     {
         let mut cache = LIBRARY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        cache.insert(path.to_string(), symbols.clone());
+        if cache.len() >= MAX_CACHE_ENTRIES {
+            if let Some(key) = cache.keys().next().cloned() {
+                cache.remove(&key);
+            }
+        }
+        cache.insert(path.to_string(), Arc::clone(&symbols));
     }
 
     Ok(symbols)
@@ -159,6 +165,7 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
 
         let query_lower = query.to_lowercase();
         let query_parts: Vec<&str> = query_lower.split_whitespace().collect();
+        let effective_limit = if limit > 0 { limit as usize } else { 1000 };
         let mut results = Vec::new();
 
         let entries: Vec<_> = std::fs::read_dir(&dir)
@@ -181,7 +188,7 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
                 Err(_) => continue,
             };
 
-            for (_lib_sym, meta) in &symbols {
+            for (_lib_sym, meta) in symbols.iter() {
                 // Score match
                 let searchable = format!(
                     "{} {} {} {} {}",
@@ -203,7 +210,7 @@ pub async fn search_symbols(query: String, limit: u32) -> Result<Vec<SymbolSearc
                         footprint: meta.footprint.clone(),
                         pin_count: meta.pin_count,
                     });
-                    if limit > 0 && results.len() >= limit as usize {
+                    if results.len() >= effective_limit {
                         return Ok(results);
                     }
                 }
@@ -232,8 +239,7 @@ pub async fn list_library_symbols(library_name: String) -> Result<Vec<SymbolSear
         let symbols = load_library(&path_str)
             .map_err(|e| format!("Failed to load library: {}", e))?;
 
-        let results: Vec<SymbolSearchResult> = symbols
-            .iter()
+        let results: Vec<SymbolSearchResult> = symbols.iter()
             .map(|(_lib_sym, meta)| SymbolSearchResult {
                 library: library_name.clone(),
                 symbol_id: meta.symbol_id.clone(),
@@ -262,9 +268,14 @@ fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, Strin
         _ => return Err("Invalid library file extension".to_string()),
     }
 
-    // Reject path traversal components
+    // Reject path traversal components and absolute paths
     for comp in path.components() {
-        if matches!(comp, std::path::Component::ParentDir) {
+        if matches!(
+            comp,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        ) {
             return Err("Path traversal not allowed".to_string());
         }
     }
@@ -302,10 +313,9 @@ pub async fn get_symbol(library_path: String, symbol_id: String) -> Result<LibSy
         let path_str = validated_path.to_string_lossy().to_string();
         let symbols = load_library(&path_str)?;
 
-        symbols
-            .into_iter()
+        symbols.iter()
             .find(|(_, meta)| meta.symbol_id == symbol_id)
-            .map(|(lib, _)| lib)
+            .map(|(lib, _)| lib.clone())
             .ok_or_else(|| format!("Symbol '{}' not found in library", symbol_id))
     })
     .await

@@ -68,7 +68,7 @@ function arcCenter(p1: SchPoint, p2: SchPoint, p3: SchPoint): SchPoint | null {
 function isCounterClockwise(a1: number, aMid: number, a2: number): boolean {
   const norm = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const n1 = norm(a1), nM = norm(aMid), n2 = norm(a2);
-  return n1 < n2 ? !(nM >= n1 && nM <= n2) : (nM >= n2 && nM <= n1);
+  return n1 < n2 ? (nM >= n1 && nM <= n2) : !(nM >= n2 && nM <= n1);
 }
 
 const txt = (s: string) => s.replace(/\{slash\}/g, "/");
@@ -209,7 +209,7 @@ export function renderSchematicToCanvas(
     ctx.textBaseline = "middle";
     ctx.fillText(substituteSpecialStrings(tb.title || "", data), tbx + 1, tby + 25);
     ctx.font = "1.2px sans-serif";
-    ctx.fillText(tb.title || "", tbx + 8, tby + 5);
+    ctx.fillText(tb.comment1 || "", tbx + 8, tby + 5);
     ctx.fillText(tb.date || "", tbx + 58, tby + 5);
     ctx.fillText(tb.rev || "", tbx + 8, tby + 15);
     ctx.fillText(tb.company || "", tbx + 63, tby + 15);
