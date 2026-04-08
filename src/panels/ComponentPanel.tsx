@@ -4,6 +4,7 @@ import { Search, Package, Cpu, ChevronRight, Pencil, Copy, FilePlus, Star, Folde
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useLibraryEditorStore } from "@/stores/libraryEditor";
+import { useFootprintEditorStore } from "@/stores/footprintEditor";
 import type { LibSymbol, SymbolSearchResult, LibraryInfo } from "@/types";
 
 /** Footprint data returned from Rust pcb_parser (snake_case field names) */
@@ -194,6 +195,19 @@ export function ComponentPanel() {
     useLibraryEditorStore.getState().openSymbol(emptySymbol, "user_library.snxsym", "NewSymbol");
   };
 
+  const newFootprint = () => {
+    useFootprintEditorStore.getState().openFootprint({
+      id: "NewFootprint",
+      pads: [],
+      graphics: [
+        { type: "rect", start: { x: -1.5, y: -1.5 }, end: { x: 1.5, y: 1.5 }, layer: "F.Fab" as any, width: 0.1 },
+        { type: "rect", start: { x: -1.8, y: -1.8 }, end: { x: 1.8, y: 1.8 }, layer: "F.CrtYd" as any, width: 0.05 },
+      ],
+      courtyard: [],
+      model3d: "",
+    }, "user_library.snxpkg", "NewFootprint");
+  };
+
   const placeComponent = async (result: SymbolSearchResult) => {
     let sym = preview;
     if (!sym || selectedResult?.symbol_id !== result.symbol_id) {
@@ -300,6 +314,10 @@ export function ComponentPanel() {
         <button onClick={newSymbol} title="New Symbol"
           className="p-1 rounded text-text-muted/40 hover:text-accent hover:bg-accent/10 transition-colors shrink-0">
           <FilePlus size={13} />
+        </button>
+        <button onClick={newFootprint} title="New Footprint"
+          className="p-1 rounded text-text-muted/40 hover:text-success hover:bg-success/10 transition-colors shrink-0">
+          <Cpu size={13} />
         </button>
       </div>
 
