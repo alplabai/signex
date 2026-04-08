@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
+import { usePcbStore } from "@/stores/pcb";
 import { toggleCrossSelect } from "@/lib/crossProbe";
+import { fillZones } from "@/lib/pcbCopperPour";
+import { generateTeardrops } from "@/lib/pcbRouter";
 
 interface MenuBarProps {
   onOpenProject?: () => void;
@@ -383,43 +386,38 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExport
         // Open Signal panel — handled via layout store from App
       }};
       // PCB-specific Place menu actions
-      if (item.label === "Route Track" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeTrack")); } };
-      if (item.label === "Differential Pair Route") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeDiffPair")); } };
-      if (item.label === "Multi-Track Route") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("routeMultiTrack")); } };
-      if (item.label === "Via" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeVia")); } };
-      if (item.label === "Footprint" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeFootprint")); } };
-      if (item.label === "Zone") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeZone")); } };
-      if (item.label === "Keepout") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeKeepout")); } };
-      if (item.label === "Board Outline") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("drawBoardOutline")); } };
-      if (item.label === "Text" && isPcbView) return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeText")); } };
-      if (item.label === "Dimension") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("placeDimension")); } };
+      if (item.label === "Route Track" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("routeTrack") };
+      if (item.label === "Differential Pair Route") return { ...item, action: () => usePcbStore.getState().setEditMode("routeDiffPair") };
+      if (item.label === "Multi-Track Route") return { ...item, action: () => usePcbStore.getState().setEditMode("routeMultiTrack") };
+      if (item.label === "Via" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeVia") };
+      if (item.label === "Footprint" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeFootprint") };
+      if (item.label === "Zone") return { ...item, action: () => usePcbStore.getState().setEditMode("placeZone") };
+      if (item.label === "Keepout") return { ...item, action: () => usePcbStore.getState().setEditMode("placeKeepout") };
+      if (item.label === "Board Outline") return { ...item, action: () => usePcbStore.getState().setEditMode("drawBoardOutline") };
+      if (item.label === "Text" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeText") };
+      if (item.label === "Dimension") return { ...item, action: () => usePcbStore.getState().setEditMode("placeDimension") };
       // PCB-specific Tools menu
       if (item.label === "Fill All Zones") return { ...item, action: () => {
-        Promise.all([import("@/lib/pcbCopperPour"), import("@/stores/pcb")]).then(([cpMod, pcbMod]) => {
-          const store = pcbMod.usePcbStore.getState();
-          if (!store.data) return;
-          store.pushUndo();
-          const nd = structuredClone(store.data);
-          cpMod.fillZones(nd);
-          pcbMod.usePcbStore.setState({ data: nd, dirty: true });
-        });
+        const store = usePcbStore.getState();
+        if (!store.data) return;
+        store.pushUndo();
+        const nd = structuredClone(store.data);
+        fillZones(nd);
+        usePcbStore.setState({ data: nd, dirty: true });
       }};
       if (item.label === "Via Stitching...") return { ...item, action: onViaStitching };
       if (item.label === "BGA Fanout...") return { ...item, action: onBgaFanout };
       if (item.label === "Generate Teardrops" && isPcbView) return { ...item, action: () => {
-        Promise.all([import("@/lib/pcbRouter"), import("@/stores/pcb")]).then(([rtMod, pcbMod]) => {
-          const store = pcbMod.usePcbStore.getState();
-          if (!store.data) return;
-          store.pushUndo();
-          const nd = structuredClone(store.data);
-          const newSegs = rtMod.generateTeardrops(nd, 0.5, 0.5);
-          nd.segments = [...nd.segments, ...newSegs];
-          pcbMod.usePcbStore.setState({ data: nd, dirty: true });
-        });
+        const store = usePcbStore.getState();
+        if (!store.data) return;
+        store.pushUndo();
+        const nd = structuredClone(store.data);
+        const newSegs = generateTeardrops(nd, 0.5, 0.5);
+        nd.segments = [...nd.segments, ...newSegs];
+        usePcbStore.setState({ data: nd, dirty: true });
       }};
-      if (item.label === "Length Tuning") return { ...item, action: () => { import("@/stores/pcb").then(m => m.usePcbStore.getState().setEditMode("lengthTune")); } };
+      if (item.label === "Length Tuning") return { ...item, action: () => usePcbStore.getState().setEditMode("lengthTune") };
       if (item.label === "Layer Stack Manager...") return { ...item, action: () => {} };
-      if (item.label === "BGA Fanout..." && !onBgaFanout) return item; // suppress unused warning
 
       return item;
     }),
