@@ -300,6 +300,13 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Disable browser context menu globally (EDA apps use custom menus)
+  useEffect(() => {
+    const prevent = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", prevent);
+    return () => document.removeEventListener("contextmenu", prevent);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
       <MenuBar

@@ -4,7 +4,7 @@ import { useEditorStore } from "@/stores/editor";
 import type { LibSymbol, SchPin, Graphic, SchPoint } from "@/types";
 import {
   MousePointer2, Move, Pin, Square, Minus, Circle, Spline, Type, Hexagon,
-  AlignLeft, X as XIcon, ChevronDown,
+  AlignLeft, X as XIcon, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LibEditMode } from "@/stores/libraryEditor";
@@ -403,6 +403,13 @@ export function LibraryEditorCanvas() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       <canvas
@@ -412,12 +419,93 @@ export function LibraryEditorCanvas() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
         className="absolute inset-0"
         style={{ cursor: editMode === "select" ? "default" : "crosshair" }}
       />
       {/* Floating Active Bar (Altium-style) */}
       <LibActiveBar editMode={editMode} />
+      {/* Right-click context menu */}
+      {ctxMenu && <LibCanvasContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS RIGHT-CLICK CONTEXT MENU (Altium-style)
+// ═══════════════════════════════════════════════════════════════
+
+function LibCanvasContextMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
+  const setEditMode = useLibraryEditorStore(s => s.setEditMode);
+  const [sub, setSub] = useState<string | null>(null);
+
+  const act = (fn?: () => void) => { fn?.(); onClose(); };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[80]" onClick={onClose} />
+      <div className="fixed z-[85] bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[200px] text-[11px]"
+        style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 400) }}>
+        <MenuItem label="Find Similar Objects..." onClick={() => act()} />
+        <MenuItem label="Clear Filter" shortcut="Shift+C" onClick={() => act()} />
+        <MenuSep />
+
+        {/* Place submenu */}
+        <div className="relative" onMouseEnter={() => setSub("place")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="Place" hasSubmenu />
+          {sub === "place" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="Pin" icon={<Pin size={12} />} onClick={() => act(() => setEditMode("addPin"))} />
+              <MenuItem label="Arc" icon={<Spline size={12} />} onClick={() => act(() => setEditMode("addArc"))} />
+              <MenuItem label="Full Circle" icon={<Circle size={12} />} onClick={() => act(() => setEditMode("addCircle"))} />
+              <MenuItem label="Ellipse" icon={<Circle size={12} />} onClick={() => act(() => setEditMode("addEllipse"))} />
+              <MenuItem label="Line" icon={<Minus size={12} />} onClick={() => act(() => setEditMode("addPolyline"))} />
+              <MenuItem label="Rectangle" icon={<Square size={12} />} onClick={() => act(() => setEditMode("addRect"))} />
+              <MenuItem label="Polygon" icon={<Hexagon size={12} />} onClick={() => act(() => setEditMode("addPolygon"))} />
+              <MenuSep />
+              <MenuItem label="Text String" icon={<Type size={12} />} onClick={() => act(() => setEditMode("addText"))} />
+            </div>
+          )}
+        </div>
+
+        {/* Tools submenu */}
+        <div className="relative" onMouseEnter={() => setSub("tools")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="Tools" hasSubmenu />
+          {sub === "tools" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="New Component" onClick={() => act()} />
+              <MenuItem label="Remove Component" onClick={() => act()} />
+              <MenuSep />
+              <MenuItem label="New Part" onClick={() => act()} />
+              <MenuItem label="Remove Part" onClick={() => act()} />
+              <MenuItem label="Next Part" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        {/* View submenu */}
+        <div className="relative" onMouseEnter={() => setSub("view")} onMouseLeave={() => setSub(null)}>
+          <MenuItem label="View" hasSubmenu />
+          {sub === "view" && (
+            <div className="absolute left-full top-0 bg-bg-secondary border border-border-subtle rounded shadow-xl py-1 min-w-[180px]">
+              <MenuItem label="Fit All Objects" shortcut="Ctrl+PgDn" onClick={() => act()} />
+              <MenuItem label="Fit Document" onClick={() => act()} />
+              <MenuSep />
+              <MenuItem label="Zoom In" shortcut="PgUp" onClick={() => act()} />
+              <MenuItem label="Zoom Out" shortcut="PgDn" onClick={() => act()} />
+            </div>
+          )}
+        </div>
+
+        <MenuSep />
+        <MenuItem label="Cut" shortcut="Ctrl+X" onClick={() => act()} />
+        <MenuItem label="Copy" shortcut="Ctrl+C" onClick={() => act()} />
+        <MenuItem label="Paste" shortcut="Ctrl+V" onClick={() => act()} />
+        <MenuSep />
+        <MenuItem label="Preferences..." onClick={() => act()} />
+        <MenuItem label="Supplier Links..." onClick={() => act()} />
+      </div>
+    </>
   );
 }
 
@@ -546,12 +634,14 @@ function ABBtn({ icon, title, active, onClick, hasMenu, menuOpen, onMenuToggle, 
   );
 }
 
-function MenuItem({ label, icon, onClick }: { label: string; icon?: React.ReactNode; onClick?: () => void }) {
+function MenuItem({ label, icon, onClick, shortcut, hasSubmenu }: { label: string; icon?: React.ReactNode; onClick?: () => void; shortcut?: string; hasSubmenu?: boolean }) {
   return (
     <button onClick={onClick}
       className="flex items-center gap-2 w-full px-3 py-1 text-[11px] text-text-secondary hover:bg-bg-hover hover:text-text-primary text-left">
       {icon && <span className="w-4 shrink-0">{icon}</span>}
-      {label}
+      <span className="flex-1">{label}</span>
+      {shortcut && <span className="text-text-muted/40 text-[10px]">{shortcut}</span>}
+      {hasSubmenu && <ChevronRight size={10} className="text-text-muted/40" />}
     </button>
   );
 }

@@ -50,9 +50,9 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
           }
         }}
         onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
           if (node.onContextMenu) {
-            e.preventDefault();
-            e.stopPropagation();
             node.onContextMenu(e);
           }
         }}
@@ -161,6 +161,7 @@ export function ProjectPanel() {
     label: `[${idx + 1}] ${sheet.name}`,
     icon: <FileText size={12} className="text-warning/70" />,
     badge: `${sheet.symbols_count}c ${sheet.wires_count}w`,
+    onContextMenu: handleProjectContextMenu,
     onClick: () => {
       const tabId = `sch-${project.path}:${sheet.filename}`;
       openTab({
@@ -231,6 +232,7 @@ export function ProjectPanel() {
         icon: <FolderClosed size={12} className="text-warning/80" />,
         expandedIcon: <FolderOpen size={12} className="text-warning/80" />,
         isFolder: true,
+        onContextMenu: handleProjectContextMenu,
         children: sourceDocChildren,
       },
       {
@@ -261,7 +263,7 @@ export function ProjectPanel() {
   };
 
   return (
-    <div className="py-1" onContextMenu={handlePanelContextMenu}>
+    <div className="py-1 h-full" onContextMenu={(e) => { e.preventDefault(); handlePanelContextMenu(e); }}>
       <TreeItem node={tree} />
       {project.format === "kicad" && (
         <div className="mx-3 mt-3 px-2 py-1.5 text-[10px] text-text-muted/40 bg-bg-surface/30 rounded border border-border-subtle">
