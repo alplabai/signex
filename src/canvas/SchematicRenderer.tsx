@@ -622,14 +622,22 @@ export function SchematicRenderer() {
         const dx = ex - px, dy = ey - py;
         const len = Math.hypot(dx, dy) || 1;
 
-        // Pin number (midpoint, perpendicular offset)
+        // Pin number (midpoint, offset toward the "upper" side of the stub)
         if (lib.show_pin_numbers && pin.number_visible && pin.number !== "~") {
           ctx.fillStyle = C.pinNum;
           ctx.font = "1.0px Roboto";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "bottom";
           const nmx = (px + ex) / 2, nmy = (py + ey) / 2;
-          ctx.fillText(txt(pin.number), nmx - dy / len * 0.5, nmy + dx / len * 0.5);
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            // Horizontal stub — number above the line
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(txt(pin.number), nmx, nmy - 0.3);
+          } else {
+            // Vertical stub — number to the left of the line
+            ctx.textAlign = "right";
+            ctx.textBaseline = "middle";
+            ctx.fillText(txt(pin.number), nmx - 0.3, nmy);
+          }
         }
 
         // Pin name (inner end toward body, using lib pin_name_offset)

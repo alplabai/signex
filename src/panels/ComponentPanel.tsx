@@ -908,13 +908,16 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
+    const draw = () => {
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (w === 0 || h === 0) return;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const expand = (x: number, y: number) => { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); };
@@ -970,7 +973,13 @@ function SymbolPreviewMini({ symbol }: { symbol: LibSymbol }) {
       ctx.lineTo(pin.position.x + Math.cos(rad) * pin.length, pin.position.y + Math.sin(rad) * pin.length);
       ctx.stroke();
     }
-    ctx.restore();
+      ctx.restore();
+    };
+
+    draw();
+    const ro = new ResizeObserver(draw);
+    ro.observe(canvas);
+    return () => ro.disconnect();
   }, [symbol]);
 
   return <canvas ref={canvasRef} className="w-full h-full" />;
