@@ -249,6 +249,13 @@ function InlineRename({
   );
 }
 
+// ─── Migrate legacy tokens that predate the canvas field ─────────────────────
+
+function ensureCanvas(t: ThemeTokens): ThemeTokens {
+  if (t.canvas) return t;
+  return { ...t, canvas: BUILT_IN_THEMES[0].tokens.canvas };
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ThemeEditor() {
@@ -272,7 +279,7 @@ export function ThemeEditor() {
   const isBuiltIn = BUILT_IN_THEMES.some((t) => t.id === activeThemeId);
 
   // Local edit buffer — updated as user edits colors
-  const [tokens, setTokens] = useState<ThemeTokens>(activeTheme.tokens);
+  const [tokens, setTokens] = useState<ThemeTokens>(ensureCanvas(activeTheme.tokens));
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -280,7 +287,7 @@ export function ThemeEditor() {
   // Sync buffer when active theme changes
   useEffect(() => {
     const t = getAllThemes().find((th) => th.id === activeThemeId);
-    if (t) setTokens(t.tokens);
+    if (t) setTokens(ensureCanvas(t.tokens));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThemeId]);
 
