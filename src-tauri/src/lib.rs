@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use commands::{export, library, pcb, project, save, schematic, signal};
+use commands::{export, library, pcb, project, save, schematic, signal, simulation};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,6 +35,9 @@ pub fn run() {
             signal::signal_chat_stream,
             signal::signal_review,
             signal::signal_fix_erc,
+            simulation::detect_solvers,
+            simulation::get_spice_netlist,
+            simulation::run_spice_simulation,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

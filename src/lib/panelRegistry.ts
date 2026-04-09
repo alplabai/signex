@@ -19,12 +19,15 @@ import { SchLibraryPanel } from "@/panels/SchLibraryPanel";
 import { PcbLibraryPanel } from "@/panels/PcbLibraryPanel";
 import { NetClassPanel } from "@/panels/NetClassPanel";
 import { NetInspectorPanel } from "@/panels/NetInspectorPanel";
+import SimulationPanel from "@/panels/SimulationPanel";
+import WaveformPanel from "@/panels/WaveformPanel";
 
 export type PanelId =
   | "projects" | "components" | "navigator" | "libraryMgmt" | "schLibrary" | "pcbLibrary" | "netClasses" | "netInspector"
   | "properties" | "filter" | "list"
   | "messages" | "output-jobs" | "signal"
-  | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection";
+  | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection"
+  | "simulation" | "waveform";
 
 export type EditorContext = "schematic" | "pcb" | "both";
 
@@ -63,6 +66,10 @@ export const PANEL_DEFS: PanelDef[] = [
   { id: "layerStack", title: "Layers", defaultDock: "right", context: "pcb" },
   { id: "drc", title: "DRC", defaultDock: "bottom", context: "pcb" },
   { id: "boardCrossSection", title: "Cross Section", defaultDock: "bottom", context: "pcb" },
+
+  // Simulation panels (available in both)
+  { id: "simulation", title: "Simulation", defaultDock: "bottom", context: "both" },
+  { id: "waveform", title: "Waveform", defaultDock: "bottom", context: "both" },
 ];
 
 /** Get panels available for the current editor mode */
@@ -91,4 +98,6 @@ export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
   snippets: SnippetsPanel,
   variants: VariantPanel,
   boardCrossSection: BoardCrossSectionPanel,
+  simulation: SimulationPanel,
+  waveform: WaveformPanel,
 };

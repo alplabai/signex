@@ -5,3 +5,4 @@ pub mod project;
 pub mod save;
 pub mod schematic;
 pub mod signal;
+pub mod simulation;
