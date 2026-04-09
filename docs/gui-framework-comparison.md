@@ -1,183 +1,305 @@
-# GUI Framework Comparison: egui vs Slint for Signex
+# GUI Framework Decision: Bevy + bevy_egui for Signex
 
-## Context
+## Final Architecture Decision
 
-Signex is an AI-First EDA tool (Altium-class schematic/PCB editor) currently built on Tauri + React + Canvas2D, with plans for wgpu rendering, ngspice simulation integration, and waveform visualization. This document compares egui and Slint as potential Rust-native GUI frameworks.
+**Bevy (wgpu viewport) + bevy_egui (panels/toolbars)**
 
-## Summary Table
-
-| Dimension | egui | Slint | Better for Signex |
-|---|---|---|---|
-| **Rendering approach** | Immediate mode, CPU tessellation + GPU raster (wgpu/glow) | Retained mode, GPU-accelerated (Skia/FemtoVG/software) | Depends on use case |
-| **Custom waveform rendering** | Direct WGPU render pass injection; Painter API; Scene pan/zoom | Image-buffer pattern; Path element; no GPU canvas callback | **egui** |
-| **Large dataset plotting** | egui_plot for <50K pts; custom WGPU path for 1M+ pts | Image-buffer regeneration on each viewport change | **egui** |
-| **Standard UI performance** | 1-2ms/frame typical; can degrade with huge layouts | Skia backend: ~2% CPU; reactive dirty-region updates only | **Slint** |
-| **Cross-platform** | Windows, macOS, Linux, Web, Android | Windows, macOS, Linux, Web, Embedded | Tie |
-| **Native look-and-feel** | Not a goal; consistent custom style | Fluent/Material/Cupertino themes | **Slint** |
-| **API stability** | Breaking changes between releases | Stable 1.x API with backward compatibility | **Slint** |
-| **Community/ecosystem** | ~22K stars, 14M+ downloads, large third-party crate ecosystem | ~18.5K stars, 195+ contributors, commercial backing | Tie |
-| **Licensing** | MIT / Apache-2.0 (fully permissive) | Royalty-free for desktop, GPLv3, or commercial license | **egui** |
-| **Hot reload** | Not built-in | First-class live preview of .slint files | **Slint** |
-| **Developer ergonomics** | Pure Rust, no DSL, low learning curve | .slint DSL + Rust bindings, visual tooling, steeper curve | **egui** |
-| **Backend thread integration** | Send+Sync context, request_repaint() from any thread | invoke_from_event_loop(), !Send components | **egui** |
-| **Accessibility** | AccessKit (Windows/macOS) | AccessKit (Windows/macOS), Qt backend on Linux | Tie |
-
----
-
-## 1. Performance
-
-### egui (Immediate Mode)
-
-- Redraws entire UI from scratch every frame; typical frame takes 1-2ms on CPU
-- Only repaints on user interaction or active animation (idle CPU usage is low)
-- Rendering backends: `egui-wgpu` (WebGPU, GPU-accelerated) and `egui_glow` (OpenGL)
-- Layout and tessellation happen on CPU every frame; `rayon` feature enables parallel tessellation
-- Version 0.31+ improved tessellator to produce fewer vertices and less overdraw
-- **Risk**: `egui_plot` struggles with >100K points due to per-frame CPU tessellation. For million-point waveforms, use `egui_wgpu_plot` (GPU-side vertex buffers that only update on data change)
-
-### Slint (Retained Mode)
-
-- Declarative `.slint` markup compiled ahead of time; UI components laid out in contiguous memory
-- Reactive property system: only changed parts of UI are re-evaluated
-- Three rendering backends:
-  - **Skia** (recommended for desktop): OpenGL, Vulkan, Metal, Direct3D. ~2% CPU for typical UIs vs ~30% with FemtoVG for animated demos
-  - **FemtoVG**: Lightweight, OpenGL ES 2.0 or WGPU. Aimed at embedded/WASM
-  - **Software renderer**: Pure CPU, <300 KiB RAM, for embedded targets
-- Natural advantage for complex, mostly-static UIs with occasional updates
-
-### Verdict
-
-For Signex's data-heavy waveform views with constantly changing simulation data, egui's immediate mode is a natural fit. For the standard UI panels (properties, component browser, project navigator), Slint's retained mode would be more efficient.
-
----
-
-## 2. Custom 2D Rendering (Critical for EDA)
-
-This is the **most important factor** for Signex. Schematics, waveforms, PCB layouts, and net highlighting are all custom 2D canvases.
-
-### egui
-
-- **Painter API**: `egui::Painter` provides direct access to draw lines, circles, rectangles, Bezier curves, and arbitrary `Shape` objects anywhere in the UI
-- **Scene container** (v0.31+): A pannable, zoomable canvas that can contain widgets and child UIs - directly useful for a waveform viewer
-- **egui_plot**: Dedicated 2D plotting widget (line, scatter, bar). Works well for <50K points; bottleneck beyond that
-- **WGPU callback**: Inject a custom WGPU render pass into any UI region. Write fully custom GPU shaders for million-point waveforms with persistent vertex buffers. `egui_wgpu_plot` demonstrates this pattern
-- **Recommended architecture**: egui for standard UI (toolbars, menus, panels, property editors) + custom WGPU render pass for the waveform/schematic canvas
-
-### Slint
-
-- **Path element**: `.slint` markup supports `Path` with MoveTo, LineTo, ArcTo, CubicTo, Close. Suitable for static/semi-static vector graphics
-- **Image-buffer pattern**: Render plots in Rust (e.g., via `plotters` crate) into a pixel buffer, wrap in `slint::Image`, display in `Image` element. CPU-to-GPU copy on every data/viewport change
-- **No direct GPU canvas API**: No equivalent to egui's WGPU callback. Open GitHub discussions requesting this (#676, #1080). The image-buffer workaround is the only option
-- Ships a plotter demo using the image-buffer pattern
-
-### Verdict
-
-**egui wins by a wide margin.** The ability to inject custom WGPU render passes directly into the UI is architecturally ideal for waveform visualization. Slint's image-buffer approach adds latency and CPU overhead on every viewport change, which is problematic for interactive pan/zoom of large waveforms.
-
----
-
-## 3. Cross-Platform Support
-
-Both cover Windows, macOS, and Linux well. egui additionally targets Android (via eframe) and has experimental iOS support. Slint additionally targets embedded microcontrollers (STM32, RP2040, RPi) which is not relevant for Signex.
-
-Both compile to WebAssembly for browser deployment.
-
-**Native look-and-feel**: egui explicitly does not aim for native appearance. Slint ships Fluent, Material, and Cupertino themes. For an EDA tool, pixel-perfect native appearance is less important than functional polish, so this is not a deciding factor.
-
----
-
-## 4. Licensing
-
-| | egui | Slint |
+| Layer | Technology | Role |
 |---|---|---|
-| **License** | MIT / Apache-2.0 | Royalty-free (desktop), GPLv3, or commercial |
-| **Commercial use** | Unrestricted | Free for desktop via royalty-free license |
-| **Open source** | Fully permissive | Must be GPLv3 if using free license for open-source |
-| **Future risk** | None (permissive, irrevocable) | Dependent on SixtyFPS GmbH maintaining royalty-free tier |
+| **Rendering engine** | Bevy (wgpu) | Schematic canvas, PCB layout, 3D viewer, waveform plots |
+| **UI panels** | egui via bevy_egui | Property inspector, component browser, menus, toolbars, dialogs |
+| **2D shapes** | bevy_prototype_lyon + Bevy Gizmos | Wires, pads, tracks, symbol graphics, grid |
+| **Camera** | Bevy Camera2d + bevy_pancam | Pan/zoom/fit-to-screen |
+| **Hit testing** | Bevy built-in picking (0.15+) | Click-to-select on schematic elements |
+| **3D PCB viewer** | Bevy Camera3d + PBR | Future — Bevy already supports this natively |
 
-**egui wins.** MIT/Apache-2.0 is simpler, more permissive, and has zero ambiguity for any use case.
+## Why Bevy + egui Over Pure egui
 
----
+| Concern | Pure egui (eframe) | Bevy + bevy_egui |
+|---|---|---|
+| **2D rendering** | egui::Painter (CPU tessellation each frame) | Bevy Mesh/Sprite (GPU-resident, batched) |
+| **Pan/zoom** | Manual transform math or Scene container | Bevy Camera2d + OrthographicProjection (native) |
+| **Hit testing** | Custom math per element type | Bevy MeshPickingPlugin or bevy_mod_picking (built-in) |
+| **3D viewer** | Not possible — need separate wgpu integration | Same app, same window — just add Camera3d |
+| **ECS data model** | Manual state management (AppState struct) | Entities with Components — scalable, queryable, parallelized |
+| **Large schematics** | Degrades — CPU re-tessellates everything per frame | GPU-batched — thousands of entities at 60fps |
+| **Waveform rendering** | WGPU callback injection (works but bolted on) | Native Bevy mesh with custom shader |
+| **PCB copper pour** | Would need raw wgpu code | Bevy mesh system handles complex polygons |
+| **Simulation integration** | Background thread + request_repaint() | Bevy async tasks + ECS event system |
 
-## 5. Ecosystem & Maturity
+### The Key Insight
 
-### egui
+egui is an **immediate-mode UI toolkit** — excellent for panels, forms, and toolbars. But Signex's core is a **2D/3D graphics application** that needs a proper rendering engine. Bevy provides that engine, while bevy_egui lets us keep egui for the UI chrome. Best of both worlds.
 
-- ~22K GitHub stars, 14M+ crates.io downloads
-- Actively developed; sponsored by Rerun (funded startup using egui in production for multimodal data visualization)
-- Rich third-party ecosystem: `egui_plot`, `egui_dock` (dockable panels), `egui_extras`, `egui-notify`, `egui_graphs`
-- API still evolving with breaking changes between releases
+## How bevy_egui Works
 
-### Slint
+bevy_egui renders egui as an overlay on top of Bevy's rendering pipeline:
 
-- ~18.5K GitHub stars, 195+ contributors
-- Backed by SixtyFPS GmbH with commercial customers in embedded/automotive
-- Stable 1.x API with backward compatibility guarantees
-- Multi-language: Rust, C++, JavaScript, Python
-- Tooling: VS Code extension with live preview, Figma plugin, SlintPad online editor
-- Smaller third-party ecosystem
+```
+┌─────────────────────────────────────────────────────┐
+│  Bevy Window                                        │
+│  ┌──────────┬──────────────────────┬──────────────┐ │
+│  │ egui     │   Bevy 2D Viewport   │ egui         │ │
+│  │ Project  │   (Camera2d)         │ Properties   │ │
+│  │ Panel    │                      │ Panel        │ │
+│  │          │   Schematic canvas   │              │ │
+│  │          │   rendered by Bevy   │              │ │
+│  │          │   meshes/sprites     │              │ │
+│  ├──────────┴──────────────────────┴──────────────┤ │
+│  │ egui StatusBar                                 │ │
+│  └────────────────────────────────────────────────┘ │
+│  egui MenuBar (top)                                 │
+└─────────────────────────────────────────────────────┘
+```
 
----
+- egui panels use `SidePanel`, `TopBottomPanel`, `Window`
+- Bevy viewport fills the `CentralPanel` remainder
+- bevy_egui handles input routing: clicks on egui panels go to egui, clicks on viewport go to Bevy
+- Both share the same wgpu surface — zero overhead for compositing
 
-## 6. Developer Experience
+## Bevy ECS Architecture for Schematics
 
-### egui
+### Entity-Component Mapping
 
-- **Pure Rust**: No DSL, no macros, no separate markup files. `ui.label("Hello")` and `ui.button("Click")` directly in Rust
-- **Hot reload**: Not built-in (community solutions exist via `hot-lib-reloader`)
-- **Learning curve**: Very low for Rust developers
-- **Compilation**: Fast by Rust standards, targets 60Hz in debug builds
+Every schematic element becomes a Bevy Entity with typed Components:
 
-### Slint
+```rust
+// Components
+#[derive(Component)] struct SchematicWire { start: Vec2, end: Vec2 }
+#[derive(Component)] struct SchematicSymbol { lib_id: String, reference: String, value: String }
+#[derive(Component)] struct SchematicJunction;
+#[derive(Component)] struct SchematicLabel { text: String, label_type: LabelType }
+#[derive(Component)] struct SchematicPin { name: String, number: String, pin_type: PinType }
+#[derive(Component)] struct Selected;        // Marker component
+#[derive(Component)] struct Hoverable;       // Can be hovered/picked
+#[derive(Component)] struct NetId(String);   // Net membership
 
-- **Declarative DSL**: `.slint` markup language for UI, Rust for business logic
-- **Hot reload**: First-class. VS Code extension provides live preview that updates as you edit `.slint` files
-- **Learning curve**: Moderate (new DSL + bridging between .slint and Rust)
-- **Tooling**: VS Code extension with autocomplete, go-to-definition, syntax highlighting, and visual live preview
+// Bevy built-in components used:
+// Transform — position, rotation, scale
+// Visibility — show/hide
+// Mesh2d + MeshMaterial2d — rendered shape
+```
 
-For Signex, where most complexity is in custom rendering (not standard UI layouts), egui's "everything in Rust" approach is more productive overall.
+### Systems (replace SchematicRenderer.tsx)
 
----
+```rust
+// Rendering systems (run every frame)
+fn render_grid(gizmos: Gizmos, camera: Query<&OrthographicProjection>) { ... }
+fn render_wires(query: Query<(&SchematicWire, &Transform, Option<&Selected>)>, gizmos: Gizmos) { ... }
+fn render_selection_overlay(query: Query<&Transform, With<Selected>>, gizmos: Gizmos) { ... }
 
-## 7. Integration with ngspice / Heavy Backends
+// Input systems
+fn handle_keyboard(keys: Res<ButtonInput<KeyCode>>, ...) { ... }
+fn handle_mouse_click(picks: Query<&PickingInteraction>, ...) { ... }
+fn handle_pan_zoom(pancam: Query<&mut PanCam>, ...) { ... }
 
-### egui
+// Logic systems
+fn auto_junction_detection(...) { ... }
+fn electrical_snap(...) { ... }
+fn wire_drawing_mode(...) { ... }
+```
 
-- Heavy computation runs on background threads
-- Standard Rust patterns: `mpsc::channel`, `Arc<Mutex<T>>`, tokio on separate thread
-- `egui::Context` is `Send + Sync`: worker threads call `ctx.request_repaint()` to wake UI when new data arrives
-- Immediate mode naturally picks up new state next frame
-- **Precedent**: Rerun Viewer handles streaming multimodal data with this exact pattern
+### Advantages Over Current Architecture
 
-### Slint
+1. **Parallel systems**: Bevy automatically parallelizes non-conflicting systems. Rendering, hit-testing, and ERC can run concurrently
+2. **Spatial queries**: Bevy's query system replaces manual iteration over arrays
+3. **Entity lifecycle**: Spawn/despawn replaces array push/splice for adding/removing elements
+4. **Change detection**: `Changed<T>` filter — only process entities that actually changed (replaces dirty flags)
+5. **Events**: `EventWriter<T>` / `EventReader<T>` for decoupled communication (replaces callback chains)
 
-- `slint::invoke_from_event_loop()` lets background threads schedule closures on UI thread
-- Slint components are `!Send` (cannot be moved across threads)
-- All UI updates must go through `invoke_from_event_loop`, adding indirection
-- **Precedent**: `cargo-ui` uses tokio on a separate thread communicating with Slint UI
+## 2D Shape Rendering Strategy
 
-**egui is slightly more ergonomic** for the "simulation thread pushes waveform data to UI" pattern, thanks to `Send + Sync` context and direct `request_repaint()`.
+### bevy_prototype_lyon (Vector Shapes)
 
----
+For symbol graphics (polylines, rectangles, circles, arcs):
 
-## Recommendation
+```rust
+// Rectangle
+commands.spawn((
+    ShapeBundle {
+        path: GeometryBuilder::build_as(&shapes::Rectangle {
+            extents: Vec2::new(width, height), ..default()
+        }),
+        ..default()
+    },
+    Stroke::new(Color::hex("9fa8da"), 0.15),
+    Fill::color(Color::hex("1e2035")),
+));
 
-### For Signex: **egui**
+// Polyline (symbol outline)
+let mut path_builder = PathBuilder::new();
+path_builder.move_to(points[0]);
+for p in &points[1..] { path_builder.line_to(*p); }
+commands.spawn((ShapeBundle { path: path_builder.build(), ..default() }, Stroke::new(color, width)));
 
-1. **Custom GPU rendering is the killer feature.** An EDA waveform viewer's core is a high-performance, interactive, zoomable display of potentially millions of data points. egui's WGPU render pass injection is architecturally ideal. Slint's image-buffer workaround adds unacceptable latency for smooth pan/zoom.
+// Circle (junction)
+commands.spawn((
+    ShapeBundle {
+        path: GeometryBuilder::build_as(&shapes::Circle { radius: 0.3, ..default() }),
+        ..default()
+    },
+    Fill::color(Color::hex("4fc3f7")),
+));
 
-2. **The Rerun precedent.** Rerun Viewer is a production application on egui handling exactly this class of problem: streaming large-scale time-series and multidimensional data visualization with interactive scrubbing. The Rerun team achieved 30-120x rendering speedups through sub-pixel aggregation, GPU-side transforms, and query caching.
+// Arc (via lyon's arc_to)
+let mut builder = PathBuilder::new();
+builder.move_to(start);
+builder.arc_to(radius, radius, 0.0, flags, end);
+```
 
-3. **Simpler backend integration.** `Send + Sync` egui context and `request_repaint()` from worker threads maps cleanly to the "simulation thread pushes new waveform data to UI" pattern.
+### Bevy Gizmos (Lightweight Overlays)
 
-4. **Licensing simplicity.** MIT/Apache-2.0 gives zero constraints.
+For grid, selection box, crosshair cursor, wire preview:
 
-5. **Ecosystem for EDA.** `egui_dock` for dockable panels, `egui_plot` for quick plotting, custom WGPU for high-performance rendering.
+```rust
+fn render_grid(mut gizmos: Gizmos, camera: Query<&OrthographicProjection>) {
+    // Grid lines — drawn every frame, zero allocation
+    for x in grid_range_x {
+        gizmos.line_2d(Vec2::new(x, min_y), Vec2::new(x, max_y), GRID_COLOR);
+    }
+}
 
-### When Slint would be preferable
+fn render_selection_box(mut gizmos: Gizmos, drag: Res<DragState>) {
+    if let Some(rect) = drag.selection_rect() {
+        gizmos.rect_2d(rect.center(), rect.size(), SELECTION_COLOR);
+    }
+}
 
-If Signex were primarily a forms-and-panels UI with minimal custom rendering (e.g., standard widgets doing most of the work), Slint's retained-mode efficiency, live preview tooling, and native styling would provide a better developer experience.
+fn render_crosshair(mut gizmos: Gizmos, cursor: Res<WorldCursor>) {
+    gizmos.line_2d(Vec2::new(cursor.x - 3.0, cursor.y), Vec2::new(cursor.x + 3.0, cursor.y), CURSOR_COLOR);
+    gizmos.line_2d(Vec2::new(cursor.x, cursor.y - 3.0), Vec2::new(cursor.x, cursor.y + 3.0), CURSOR_COLOR);
+}
+```
 
-### Consideration: Current Architecture
+### Text Rendering
 
-Signex currently uses Tauri + React + Canvas2D, which is already functional. Before switching to either framework, evaluate whether the current stack has actual problems that need solving, or whether the better path is to evolve the existing architecture (e.g., add wgpu rendering to the Tauri shell for the PCB phase, as the current roadmap plans).
+```rust
+// Symbol reference designator
+commands.spawn((
+    Text2d::new("R1"),
+    TextFont { font_size: 1.27, ..default() },
+    TextColor(Color::hex("e8c66a")),
+    Transform::from_translation(Vec3::new(x, y, Z_TEXT)),
+));
+```
+
+## Camera & Viewport
+
+### bevy_pancam for Pan/Zoom
+
+```rust
+app.add_plugins(PanCamPlugin);
+
+commands.spawn((
+    Camera2d,
+    OrthographicProjection { scale: 1.0, ..OrthographicProjection::default_2d() },
+    PanCam {
+        grab_buttons: vec![MouseButton::Right, MouseButton::Middle],
+        zoom_to_cursor: true,
+        min_scale: 0.01,   // max zoom in
+        max_scale: 100.0,  // max zoom out
+        ..default()
+    },
+));
+```
+
+### Viewport Restriction (Don't Render Behind egui Panels)
+
+```rust
+fn update_viewport(
+    mut camera: Query<&mut Camera>,
+    egui_ctx: Query<&EguiContext>,
+) {
+    // bevy_egui reports how much space egui panels occupy
+    // Adjust camera viewport to the remaining area
+    let available = egui_ctx.single().available_rect();
+    camera.single_mut().viewport = Some(Viewport {
+        physical_position: UVec2::new(available.min.x as u32, available.min.y as u32),
+        physical_size: UVec2::new(available.width() as u32, available.height() as u32),
+        ..default()
+    });
+}
+```
+
+## Hit Testing / Picking
+
+### Bevy Built-in Picking (0.15+)
+
+```rust
+app.add_plugins(MeshPickingPlugin);
+
+// Make entities pickable
+commands.spawn((
+    Mesh2d(mesh_handle),
+    MeshMaterial2d(material_handle),
+    PickableBundle::default(),  // Makes this entity clickable
+    SchematicWire { start, end },
+));
+
+// React to picks
+fn handle_selection(
+    mut picks: EventReader<Pointer<Click>>,
+    mut commands: Commands,
+) {
+    for event in picks.read() {
+        let entity = event.target;
+        commands.entity(entity).insert(Selected);
+    }
+}
+```
+
+For wire segments (line picking with tolerance), add invisible mesh strips along wire paths as pick targets.
+
+## 3D PCB Viewer (Future — Already Built Into Bevy)
+
+```rust
+// Same app, just add a 3D camera and meshes
+fn setup_3d_view(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 50.0, 100.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    // PCB board as a box mesh
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(100.0, 1.6, 80.0))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::hex("1a5c1a"),
+            ..default()
+        })),
+    ));
+
+    // Components as 3D meshes, traces as flat quads on the board surface
+    // STEP file import via bevy_stl or custom loader
+}
+```
+
+No separate rendering engine needed — Bevy handles 2D schematics and 3D PCB views in the same application.
+
+## Comparison With Alternatives Considered
+
+### vs Slint
+Slint has no custom rendering canvas, no 3D support, GPL license. Not viable for an EDA tool.
+
+### vs Pure egui (eframe)
+egui alone handles UI well but lacks a proper 2D/3D rendering engine. Would require bolting on raw wgpu for schematics and PCB. Bevy provides this natively with batching, spatial queries, and an ECS data model that fits EDA entities.
+
+### vs Current Stack (Tauri + React + Canvas2D)
+Canvas2D hits a wall at PCB complexity. No 3D. IPC serialization boundary wastes CPU. Two-process architecture. Bevy + bevy_egui is a single Rust process with GPU rendering.
+
+## Key Dependencies
+
+```toml
+[dependencies]
+bevy = "0.15"
+bevy_egui = "0.35"
+bevy_prototype_lyon = "0.13"   # 2D vector shapes (lyon tessellation)
+bevy_pancam = "0.14"           # Pan/zoom camera controls
+rfd = "0.15"                   # Native file dialogs
+serde = "1"                    # Serialization
+serde_json = "1"               # JSON
+arboard = "3"                  # Clipboard
+tokio = "1"                    # Async (file I/O, ngspice)
+uuid = "1"                     # UUIDs
+egui_dock = "0.15"             # Dockable panels (works with bevy_egui)
+```
