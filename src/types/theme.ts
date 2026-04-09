@@ -27,6 +27,8 @@ export interface SchematicCanvasTokens {
   busEntry: string;
   handleFill: string;
   handleBorder: string;
+  /** Font family used for all schematic canvas text (pins, labels, properties, etc.) */
+  schFont: string;
 }
 
 /** All design tokens that make up a Signex theme. */
