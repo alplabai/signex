@@ -2,11 +2,31 @@ import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore } from "@/stores/editor";
+import { usePcbStore } from "@/stores/pcb";
+import { toggleCrossSelect } from "@/lib/crossProbe";
+import { fillZones } from "@/lib/pcbCopperPour";
+import { generateTeardrops } from "@/lib/pcbRouter";
 
 interface MenuBarProps {
   onOpenProject?: () => void;
   onSave?: () => void;
   onOpenComponentSearch?: () => void;
+  onExportPdf?: () => void;
+  onExportBom?: () => void;
+  onExportNetlist?: () => void;
+  onOpenOutputJobs?: () => void;
+  onAnnotate?: () => void;
+  onPreferences?: () => void;
+  onFindSimilar?: () => void;
+  onParameterManager?: () => void;
+  onPrint?: () => void;
+  onRunDrc?: () => void;
+  onBackAnnotate?: () => void;
+  onErcMatrix?: () => void;
+  onConstraints?: () => void;
+  onViaStitching?: () => void;
+  onBgaFanout?: () => void;
+  isPcbView?: boolean;
 }
 
 interface MenuItem {
@@ -34,6 +54,7 @@ const menus: MenuGroup[] = [
       { label: "Save As...", shortcut: "Ctrl+Alt+S", disabled: true },
       { separator: true, label: "" },
       { label: "Export as PNG...", disabled: true },
+      { label: "Export as PDF...", disabled: true },
       { label: "Print...", shortcut: "Ctrl+P", disabled: true },
       { separator: true, label: "" },
       { label: "Recent Projects", disabled: true },
@@ -149,6 +170,7 @@ const menus: MenuGroup[] = [
     label: "Tools",
     items: [
       { label: "Annotate Schematics...", shortcut: "T, A", disabled: true },
+      { label: "Parameter Manager...", disabled: true },
       { label: "Back Annotate...", disabled: true },
       { label: "Number Schematic Sheets...", disabled: true },
       { separator: true, label: "" },
@@ -165,10 +187,13 @@ const menus: MenuGroup[] = [
     label: "Reports",
     items: [
       { label: "Bill of Materials...", disabled: true },
+      { label: "Export Netlist...", disabled: true },
       { label: "Component Cross Reference...", disabled: true },
       { separator: true, label: "" },
       { label: "Design Rule Check...", disabled: true },
       { label: "Electrical Rules Check...", disabled: true },
+      { separator: true, label: "" },
+      { label: "Output Jobs...", disabled: true },
     ],
   },
   {
@@ -182,12 +207,73 @@ const menus: MenuGroup[] = [
   },
 ];
 
-export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBarProps) {
+// PCB-specific menu overrides for Place, Design, Tools
+const pcbPlaceMenu: MenuGroup = {
+  label: "Place",
+  items: [
+    { label: "Route Track", shortcut: "X" },
+    { label: "Differential Pair Route" },
+    { label: "Multi-Track Route" },
+    { separator: true, label: "" },
+    { label: "Via" },
+    { label: "Footprint" },
+    { separator: true, label: "" },
+    { label: "Zone" },
+    { label: "Keepout" },
+    { label: "Board Outline" },
+    { separator: true, label: "" },
+    { label: "Text" },
+    { label: "Line" },
+    { label: "Dimension" },
+  ],
+};
+
+const pcbDesignMenu: MenuGroup = {
+  label: "Design",
+  items: [
+    { label: "Design Rules...", disabled: true },
+    { label: "Board Setup...", disabled: true },
+    { label: "Layer Stack Manager..." },
+    { separator: true, label: "" },
+    { label: "Import Changes From Schematic...", disabled: true },
+    { label: "Back Annotate to Schematic...", disabled: true },
+  ],
+};
+
+const pcbToolsMenu: MenuGroup = {
+  label: "Tools",
+  items: [
+    { label: "Design Rule Check..." },
+    { separator: true, label: "" },
+    { label: "Fill All Zones" },
+    { label: "Remove Dead Copper", disabled: true },
+    { separator: true, label: "" },
+    { label: "Via Stitching..." },
+    { label: "BGA Fanout..." },
+    { label: "Generate Teardrops" },
+    { label: "Length Tuning" },
+    { separator: true, label: "" },
+    { label: "Cross Select Mode", shortcut: "Shift+Ctrl+X" },
+    { separator: true, label: "" },
+    { label: "Preferences..." },
+  ],
+};
+
+export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch, onExportPdf, onExportBom, onExportNetlist, onOpenOutputJobs, onAnnotate, onPreferences, onFindSimilar, onParameterManager, onPrint, onRunDrc, onBackAnnotate, onErcMatrix, onConstraints, onViaStitching, onBgaFanout, isPcbView }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
+  // Swap Place/Design/Tools menus when in PCB view
+  const baseMenus = isPcbView
+    ? menus.map((m) =>
+        m.label === "Place" ? pcbPlaceMenu
+        : m.label === "Design" ? pcbDesignMenu
+        : m.label === "Tools" ? pcbToolsMenu
+        : m)
+    : menus;
+
   // Wire up actions
-  const actionMenus = menus.map((menu) => ({
+  const actionMenus = baseMenus.map((menu) => ({
     ...menu,
     items: menu.items.map((item) => {
       if (item.id === "file-open") return { ...item, action: onOpenProject };
@@ -232,34 +318,106 @@ export function MenuBar({ onOpenProject, onSave, onOpenComponentSearch }: MenuBa
       if (item.label === "Bus" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawBus") };
       if (item.label === "Line") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawLine") };
       if (item.label === "Rectangle" && menu.label === "Place") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawRect") };
+      if (item.label === "Arc") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("drawCircle") };
+      if (item.label === "Ellipse") return { ...item, disabled: false, label: "Circle", action: () => useSchematicStore.getState().setEditMode("drawCircle") };
+      if (item.label === "Polygon") return { ...item, disabled: false, label: "Polyline", action: () => useSchematicStore.getState().setEditMode("drawPolyline") };
       // Tools
       // Reports / Output
-      if (item.label === "Bill of Materials...") return { ...item, disabled: false, action: async () => {
-        const data = useSchematicStore.getState().data;
-        if (!data) return;
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const csv = await invoke<string>("generate_bom", { data });
-          // Download as file
-          const blob = new Blob([csv], { type: "text/csv" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a"); a.href = url; a.download = "bom.csv"; a.click();
-          URL.revokeObjectURL(url);
-        } catch (e) { console.error("BOM generation failed:", e); }
-      }};
+      if (item.label === "Bill of Materials...") return { ...item, disabled: false, action: onExportBom };
+      if (item.label === "Export Netlist...") return { ...item, disabled: false, action: onExportNetlist };
+      if (item.label === "Output Jobs...") return { ...item, disabled: false, action: onOpenOutputJobs };
       if (item.label === "Export as PNG...") return { ...item, disabled: false, action: () => {
         // Trigger export via custom event — renderer handles it
         window.dispatchEvent(new CustomEvent("alp-export-png"));
       }};
-      if (item.label === "Electrical Rules Check...") return { ...item, disabled: false, action: () => {
-        /* ERC runs from Messages panel */
-      }};
+      if (item.label === "Export as PDF...") return { ...item, disabled: false, action: onExportPdf };
+      if (item.label === "Print...") return { ...item, disabled: false, action: onPrint };
+      if (item.label === "Electrical Rules Check...") return { ...item, disabled: false, action: onErcMatrix || (() => {}) };
+      if (item.label === "Design Rule Check...") return { ...item, disabled: false, action: onRunDrc };
+      if (item.label === "Back Annotate...") return { ...item, disabled: false, action: onBackAnnotate };
       // Design / Tools
-      if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
-      if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: () => useSchematicStore.getState().annotateAll() };
+      if (item.label === "Annotate Schematics..." && menu.label === "Design") return { ...item, disabled: false, action: onAnnotate };
+      if (item.label === "Annotate Schematics..." && menu.label === "Tools") return { ...item, disabled: false, action: onAnnotate };
+      if (item.label === "Preferences...") return { ...item, disabled: false, action: onPreferences };
+      if (item.label === "Find Similar Objects") return { ...item, disabled: false, action: onFindSimilar };
+      if (item.label === "Parameter Manager...") return { ...item, disabled: false, action: onParameterManager };
       if (item.label === "Reset Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDesignators() };
       if (item.label === "Reset Duplicate Designators") return { ...item, disabled: false, action: () => useSchematicStore.getState().resetDuplicateDesignators() };
+      if (item.label === "Sheet Symbol...") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeSheetSymbol") };
+      if (item.label === "Bus Entry") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeBusEntry") };
       if (item.label === "No ERC") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNoErc") };
+      if (item.label === "Break Wire") return { ...item, disabled: false, action: () => {
+        // Break wire at midpoint of selected wire
+        const store = useSchematicStore.getState();
+        if (store.selectedIds.size === 1 && store.data) {
+          const uuid = [...store.selectedIds][0];
+          const wire = store.data.wires.find((w) => w.uuid === uuid);
+          if (wire) {
+            const mid = { x: (wire.start.x + wire.end.x) / 2, y: (wire.start.y + wire.end.y) / 2 };
+            store.breakWireAt(uuid, mid);
+          }
+        }
+      }};
+      if (item.label === "Align to Grid") return { ...item, disabled: false, action: () => useSchematicStore.getState().alignSelectionToGrid() };
+      if (item.label === "Smart Paste...") return { ...item, disabled: false, action: () => useSchematicStore.getState().smartPaste({ x: 2.54, y: 2.54 }) };
+      // Place menu — remaining items
+      if (item.label === "Text Frame") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeTextFrame" as any) };
+      if (item.label === "Note") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeNote" as any) };
+      if (item.label === "Image...") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeImage" as any) };
+      if (item.label === "Sheet Entry") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeSheetEntry" as any) };
+      if (item.label === "Directive") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeParameterSet" as any) };
+      if (item.label === "Junction") return { ...item, disabled: false, action: () => useSchematicStore.getState().setEditMode("placeJunction" as any) };
+      // View menu
+      if (item.label === "Fit All Objects") return { ...item, disabled: false, action: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" })) };
+      if (item.label === "Toggle Net Color Override") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Navigator") return { ...item, disabled: false, action: () => {
+        // Handled from App.tsx via layout store
+      }};
+      // Design menu
+      if (item.label === "Update PCB Document...") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Import Changes From PCB...") return { ...item, disabled: false, action: onBackAnnotate };
+      if (item.label === "Document Options...") return { ...item, disabled: false, action: onConstraints };
+      // Tools menu
+      if (item.label === "Cross Select Mode") return { ...item, disabled: false, action: () => toggleCrossSelect() };
+      if (item.label === "Component Cross Reference...") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Number Schematic Sheets...") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Cross Reference...") return { ...item, disabled: false, action: () => {} };
+      if (item.label === "Signal (AI)") return { ...item, action: () => {
+        // Open Signal panel — handled via layout store from App
+      }};
+      // PCB-specific Place menu actions
+      if (item.label === "Route Track" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("routeTrack") };
+      if (item.label === "Differential Pair Route") return { ...item, action: () => usePcbStore.getState().setEditMode("routeDiffPair") };
+      if (item.label === "Multi-Track Route") return { ...item, action: () => usePcbStore.getState().setEditMode("routeMultiTrack") };
+      if (item.label === "Via" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeVia") };
+      if (item.label === "Footprint" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeFootprint") };
+      if (item.label === "Zone") return { ...item, action: () => usePcbStore.getState().setEditMode("placeZone") };
+      if (item.label === "Keepout") return { ...item, action: () => usePcbStore.getState().setEditMode("placeKeepout") };
+      if (item.label === "Board Outline") return { ...item, action: () => usePcbStore.getState().setEditMode("drawBoardOutline") };
+      if (item.label === "Text" && isPcbView) return { ...item, action: () => usePcbStore.getState().setEditMode("placeText") };
+      if (item.label === "Dimension") return { ...item, action: () => usePcbStore.getState().setEditMode("placeDimension") };
+      // PCB-specific Tools menu
+      if (item.label === "Fill All Zones") return { ...item, action: () => {
+        const store = usePcbStore.getState();
+        if (!store.data) return;
+        store.pushUndo();
+        const nd = structuredClone(store.data);
+        fillZones(nd);
+        usePcbStore.setState({ data: nd, dirty: true });
+      }};
+      if (item.label === "Via Stitching...") return { ...item, action: onViaStitching };
+      if (item.label === "BGA Fanout...") return { ...item, action: onBgaFanout };
+      if (item.label === "Generate Teardrops" && isPcbView) return { ...item, action: () => {
+        const store = usePcbStore.getState();
+        if (!store.data) return;
+        store.pushUndo();
+        const nd = structuredClone(store.data);
+        const newSegs = generateTeardrops(nd, 0.5, 0.5);
+        nd.segments = [...nd.segments, ...newSegs];
+        usePcbStore.setState({ data: nd, dirty: true });
+      }};
+      if (item.label === "Length Tuning") return { ...item, action: () => usePcbStore.getState().setEditMode("lengthTune") };
+      if (item.label === "Layer Stack Manager...") return { ...item, action: () => {} };
 
       return item;
     }),

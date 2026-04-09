@@ -1,8 +1,8 @@
-// Document model — immutable with undo/redo stack (command pattern)
-// Phase 1 will implement full editing
+// Document model — reserved for future native .snxsch format
 
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DocumentType {
     Schematic,
@@ -11,6 +11,7 @@ pub enum DocumentType {
     OutputJob,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub id: String,

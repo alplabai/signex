@@ -1,17 +1,25 @@
 import { create } from "zustand";
-import type { DocumentTab, ProjectInfo } from "@/types";
+import type { DocumentTab, ProjectInfo, ProjectParameter } from "@/types";
 
 interface ProjectState {
   project: ProjectInfo | null;
   openTabs: DocumentTab[];
   activeTabId: string | null;
   recentProjects: string[];
+  activeTemplate: string;
+  netScope: "global" | "flat" | "hierarchical";
+  projectParameters: ProjectParameter[];
 
   setProject: (project: ProjectInfo | null) => void;
   openTab: (tab: DocumentTab) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   addRecentProject: (path: string) => void;
+  setActiveTemplate: (name: string) => void;
+  setNetScope: (scope: "global" | "flat" | "hierarchical") => void;
+  addProjectParameter: (key: string, value: string) => void;
+  updateProjectParameter: (key: string, value: string) => void;
+  removeProjectParameter: (key: string) => void;
 }
 
 export const useProjectStore = create<ProjectState>()((set) => ({
@@ -19,6 +27,9 @@ export const useProjectStore = create<ProjectState>()((set) => ({
   openTabs: [],
   activeTabId: null,
   recentProjects: [],
+  activeTemplate: "Blank",
+  netScope: "flat",
+  projectParameters: [],
 
   setProject: (project) => set({ project }),
 
@@ -47,5 +58,20 @@ export const useProjectStore = create<ProjectState>()((set) => ({
   addRecentProject: (path) =>
     set((s) => ({
       recentProjects: [path, ...s.recentProjects.filter((p) => p !== path)].slice(0, 10),
+    })),
+
+  setActiveTemplate: (name) => set({ activeTemplate: name }),
+  setNetScope: (scope) => set({ netScope: scope }),
+  addProjectParameter: (key, value) =>
+    set((s) => ({
+      projectParameters: [...s.projectParameters.filter((p) => p.key !== key), { key, value }],
+    })),
+  updateProjectParameter: (key, value) =>
+    set((s) => ({
+      projectParameters: s.projectParameters.map((p) => (p.key === key ? { ...p, value } : p)),
+    })),
+  removeProjectParameter: (key) =>
+    set((s) => ({
+      projectParameters: s.projectParameters.filter((p) => p.key !== key),
     })),
 }));

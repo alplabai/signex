@@ -32,7 +32,9 @@ impl SExpr {
 
     /// Find the first child list with the given keyword
     pub fn find(&self, keyword: &str) -> Option<&SExpr> {
-        self.children().iter().find(|c| c.keyword() == Some(keyword))
+        self.children()
+            .iter()
+            .find(|c| c.keyword() == Some(keyword))
     }
 
     /// Find all child lists with the given keyword
@@ -73,16 +75,17 @@ impl SExpr {
 
     /// Get nth argument as f64
     pub fn arg_f64(&self, n: usize) -> Option<f64> {
-        self.arg(n).and_then(|s| s.parse::<f64>().ok())
+        self.arg(n).and_then(|s| {
+            let v = s.parse::<f64>().ok()?;
+            if v.is_finite() { Some(v) } else { None }
+        })
     }
 
     /// Find a (property "Key" "Value" ...) by key name
     pub fn property(&self, key: &str) -> Option<&str> {
         for child in self.children() {
-            if child.keyword() == Some("property") {
-                if child.first_arg() == Some(key) {
-                    return child.arg(1);
-                }
+            if child.keyword() == Some("property") && child.first_arg() == Some(key) {
+                return child.arg(1);
             }
         }
         None
@@ -96,30 +99,43 @@ pub fn parse(input: &str) -> Result<SExpr, String> {
     Ok(expr)
 }
 
-/// Parse multiple top-level expressions (KiCad files have one root list)
-fn parse_tokens(tokens: &[Token], pos: usize) -> Result<(SExpr, usize), String> {
-    if pos >= tokens.len() {
-        return Err("Unexpected end of input".to_string());
-    }
+/// Iterative S-expression parser (no recursion — safe for arbitrarily deep input)
+fn parse_tokens(tokens: &[Token], start: usize) -> Result<(SExpr, usize), String> {
+    let mut stack: Vec<Vec<SExpr>> = Vec::new();
+    let mut i = start;
 
-    match &tokens[pos] {
-        Token::Open => {
-            let mut items = Vec::new();
-            let mut i = pos + 1;
-            loop {
-                if i >= tokens.len() {
-                    return Err("Unclosed parenthesis".to_string());
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::Open => {
+                stack.push(Vec::new());
+                i += 1;
+            }
+            Token::Close => {
+                let items = stack.pop().ok_or("Unexpected ')'")?;
+                let expr = SExpr::List(items);
+                if let Some(top) = stack.last_mut() {
+                    top.push(expr);
+                    i += 1;
+                } else {
+                    return Ok((expr, i + 1));
                 }
-                if tokens[i] == Token::Close {
-                    return Ok((SExpr::List(items), i + 1));
+            }
+            Token::Str(s) => {
+                let atom = SExpr::Atom(s.clone());
+                if let Some(top) = stack.last_mut() {
+                    top.push(atom);
+                } else {
+                    return Ok((atom, i + 1));
                 }
-                let (expr, next) = parse_tokens(tokens, i)?;
-                items.push(expr);
-                i = next;
+                i += 1;
             }
         }
-        Token::Close => Err("Unexpected ')'".to_string()),
-        Token::Str(s) => Ok((SExpr::Atom(s.clone()), pos + 1)),
+    }
+
+    if !stack.is_empty() {
+        Err("Unclosed parenthesis".to_string())
+    } else {
+        Err("Unexpected end of input".to_string())
     }
 }
 
@@ -147,24 +163,24 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 i += 1;
             }
             b'"' => {
-                // Quoted string
+                // Quoted string — collect raw bytes and decode as UTF-8
                 i += 1;
                 let start = i;
-                let mut s = String::new();
+                let mut raw: Vec<u8> = Vec::new();
                 while i < len && bytes[i] != b'"' {
                     if bytes[i] == b'\\' && i + 1 < len {
                         match bytes[i + 1] {
-                            b'n' => s.push('\n'),
-                            b'\\' => s.push('\\'),
-                            b'"' => s.push('"'),
+                            b'n' => raw.push(b'\n'),
+                            b'\\' => raw.push(b'\\'),
+                            b'"' => raw.push(b'"'),
                             other => {
-                                s.push('\\');
-                                s.push(other as char);
+                                raw.push(b'\\');
+                                raw.push(other);
                             }
                         }
                         i += 2;
                     } else {
-                        s.push(bytes[i] as char);
+                        raw.push(bytes[i]);
                         i += 1;
                     }
                 }
@@ -172,6 +188,8 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     return Err(format!("Unclosed string starting at byte {}", start - 1));
                 }
                 i += 1; // skip closing "
+                let s = String::from_utf8(raw)
+                    .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).to_string());
                 tokens.push(Token::Str(s));
             }
             b' ' | b'\t' | b'\n' | b'\r' => {
@@ -198,16 +216,37 @@ mod tests {
 
     #[test]
     fn test_real_kicad_file() {
-        let path = r"C:\Users\caner\Documents\GitHub\smart-home-hub-pcb\smart-home-hub.kicad_sch";
-        if !std::path::Path::new(path).exists() {
-            return; // skip if file not present
+        // Use KICAD_TEST_FILE env var to point to a real .kicad_sch for integration testing
+        let path = match std::env::var("KICAD_TEST_FILE") {
+            Ok(p) => p,
+            Err(_) => return, // skip if env var not set
+        };
+        if !std::path::Path::new(&path).exists() {
+            return;
         }
-        let content = std::fs::read_to_string(path).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
         let start = std::time::Instant::now();
         let expr = parse(&content).unwrap();
         let elapsed = start.elapsed();
         println!("Parsed {} bytes in {:?}", content.len(), elapsed);
         assert_eq!(expr.keyword(), Some("kicad_sch"));
+    }
+
+    #[test]
+    fn test_deeply_nested() {
+        // Verify the iterative parser handles reasonable nesting depth
+        // (limited by Drop recursion on the SExpr tree, not the parser itself)
+        let depth = 500;
+        let input = format!("{}a{}", "(".repeat(depth), ")".repeat(depth));
+        let result = parse(&input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_unicode_string() {
+        let expr = parse(r#"(component "100µF" "日本語")"#).unwrap();
+        assert_eq!(expr.first_arg(), Some("100µF"));
+        assert_eq!(expr.arg(1), Some("日本語"));
     }
 
     #[test]
@@ -230,7 +269,8 @@ mod tests {
 
     #[test]
     fn test_property() {
-        let expr = parse(r#"(symbol (property "Reference" "R1") (property "Value" "10k"))"#).unwrap();
+        let expr =
+            parse(r#"(symbol (property "Reference" "R1") (property "Value" "10k"))"#).unwrap();
         assert_eq!(expr.property("Reference"), Some("R1"));
         assert_eq!(expr.property("Value"), Some("10k"));
     }

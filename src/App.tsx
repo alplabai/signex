@@ -4,26 +4,37 @@ import { MenuBar } from "@/components/MenuBar";
 import { ToolbarStrip } from "@/components/ToolbarStrip";
 import { DocumentTabBar } from "@/components/DocumentTabBar";
 import { StatusBar } from "@/components/StatusBar";
-import { ProjectPanel } from "@/panels/ProjectPanel";
-import { PropertiesPanel } from "@/panels/PropertiesPanel";
-import { MessagesPanel } from "@/panels/MessagesPanel";
-import { ComponentPanel } from "@/panels/ComponentPanel";
-import { FilterPanel } from "@/panels/FilterPanel";
-import { ListPanel } from "@/panels/ListPanel";
-import { NavigatorPanel } from "@/panels/NavigatorPanel";
+import { DockPanel } from "@/components/DockPanel";
+import { FloatingPanel } from "@/components/FloatingPanel";
 import { ComponentSearch } from "@/components/ComponentSearch";
-// Signal panel available for AI integration (Phase 1 stub)
-// import { SignalPanel } from "@/panels/SignalPanel";
 import { EditorCanvas } from "@/canvas/EditorCanvas";
+import { LibraryEditorCanvas } from "@/canvas/LibraryEditorCanvas";
+import { PcbRenderer } from "@/canvas/PcbRenderer";
+import { PcbToolbar } from "@/components/PcbToolbar";
+import { ExportPdfDialog } from "@/components/ExportPdfDialog";
+import { BomConfigDialog } from "@/components/BomConfigDialog";
+import { NetlistExportDialog } from "@/components/NetlistExportDialog";
+import { FootprintEditorCanvas } from "@/canvas/FootprintEditorCanvas";
+import { useFootprintEditorStore } from "@/stores/footprintEditor";
+import { AnnotationDialog } from "@/components/AnnotationDialog";
+import { PreferencesDialog } from "@/components/PreferencesDialog";
+import { FindSimilarDialog } from "@/components/FindSimilarDialog";
+import { ParameterManager } from "@/components/ParameterManager";
+import { BackAnnotationDialog } from "@/components/BackAnnotationDialog";
+import { ErcMatrixDialog } from "@/components/ErcMatrixDialog";
+import { ViaStitchingDialog } from "@/components/ViaStitchingDialog";
+import { ConstraintEditorDialog } from "@/components/ConstraintEditorDialog";
+import { BgaFanoutDialog } from "@/components/BgaFanoutDialog";
 import { useLayoutStore } from "@/stores/layout";
 import { useProjectStore } from "@/stores/project";
 import { useSchematicStore } from "@/stores/schematic";
+import { useEditorStore } from "@/stores/editor";
+import { useLibraryEditorStore } from "@/stores/libraryEditor";
+import { useThemeStore } from "@/stores/theme";
 import { useResizable } from "@/hooks/useResizable";
+import { printSchematic } from "@/lib/pdfExport";
 import { cn } from "@/lib/utils";
 import {
-  PanelLeftClose,
-  PanelRightClose,
-  PanelBottomClose,
   FolderOpen,
   Settings,
   MessageSquare,
@@ -76,28 +87,6 @@ async function saveSchematicFlow() {
   } catch (err) {
     alert(`Failed to save: ${err}`);
   }
-}
-
-function PanelHeader({
-  title,
-  onCollapse,
-  collapseIcon,
-}: {
-  title: string;
-  onCollapse: () => void;
-  collapseIcon: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center h-8 px-3 text-[11px] font-semibold text-text-muted uppercase tracking-widest bg-bg-tertiary border-b border-border-subtle select-none">
-      <span className="flex-1">{title}</span>
-      <button
-        onClick={onCollapse}
-        className="p-0.5 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors"
-      >
-        {collapseIcon}
-      </button>
-    </div>
-  );
 }
 
 function CollapsedRail({
@@ -183,10 +172,40 @@ function ResizeHandle({
   );
 }
 
+function FloatingPanelsRenderer() {
+  const floatingPanels = useLayoutStore((s) => s.floatingPanels);
+  return (
+    <>
+      {Object.entries(floatingPanels).map(([panelId, state]) => (
+        <FloatingPanel key={panelId} panelId={panelId} x={state.x} y={state.y} width={state.width} height={state.height} />
+      ))}
+    </>
+  );
+}
+
 function App() {
   const [componentSearchOpen, setComponentSearchOpen] = useState(false);
-  const [leftTab, setLeftTab] = useState<"projects" | "components" | "navigator">("projects");
-  const [rightTab, setRightTab] = useState<"properties" | "filter" | "list">("properties");
+  const [showPdfExport, setShowPdfExport] = useState(false);
+  const [showBomConfig, setShowBomConfig] = useState(false);
+  const [showNetlistExport, setShowNetlistExport] = useState(false);
+  const [showAnnotation, setShowAnnotation] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showFindSimilar, setShowFindSimilar] = useState(false);
+  const [showParamManager, setShowParamManager] = useState(false);
+  const [showBackAnnotation, setShowBackAnnotation] = useState(false);
+  const [showErcMatrix, setShowErcMatrix] = useState(false);
+  const [showViaStitching, setShowViaStitching] = useState(false);
+  const [showConstraints, setShowConstraints] = useState(false);
+  const [showBgaFanout, setShowBgaFanout] = useState(false);
+  const setDockActiveTab = useLayoutStore((s) => s.setDockActiveTab);
+  const libEditorActive = useLibraryEditorStore((s) => s.active);
+  const fpEditorActive = useFootprintEditorStore((s) => s.active);
+  const activeTabId = useProjectStore((s) => s.activeTabId);
+  const openTabs = useProjectStore((s) => s.openTabs);
+  const activeTabType = activeTabId ? openTabs.find((t) => t.id === activeTabId)?.type : undefined;
+  const isPcbView = activeTabType === "pcb";
+  const isLibraryView = activeTabType === "library" || libEditorActive;
+  const isFpLibraryView = fpEditorActive;
 
   const leftCollapsed = useLayoutStore((s) => s.leftCollapsed);
   const rightCollapsed = useLayoutStore((s) => s.rightCollapsed);
@@ -206,6 +225,10 @@ function App() {
   const bottomResize = useResizable({ direction: "vertical", onResize: setBottomHeight, min: 100, max: 400, reverse: true });
 
   useEffect(() => {
+    useThemeStore.getState().applyActiveTheme();
+  }, []);
+
+  useEffect(() => {
     invoke<AppInfo>("get_app_info")
       .then((info) => { document.title = `${info.name} v${info.version}`; })
       .catch(() => {});
@@ -215,6 +238,11 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "o") { e.preventDefault(); openProjectFlow(); }
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveSchematicFlow(); }
+      if (e.ctrlKey && e.key === "p") {
+        e.preventDefault();
+        const data = useSchematicStore.getState().data;
+        if (data) printSchematic(data);
+      }
       if (e.ctrlKey && e.key === "c") {
         if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
           e.preventDefault(); useSchematicStore.getState().copySelected();
@@ -235,13 +263,56 @@ function App() {
       // P key (place component) — switch to components tab
       if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey &&
           !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
-        setLeftTab("components");
+        useLayoutStore.getState().setDockActiveTab("left", "components");
         const layout = useLayoutStore.getState();
         if (layout.leftCollapsed) layout.toggleLeft();
+      }
+      // Tab — Pause placement and open Properties panel (Altium behavior)
+      if (e.key === "Tab" &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        const editor = useEditorStore.getState();
+        const schematic = useSchematicStore.getState();
+        const layout = useLayoutStore.getState();
+
+        if (schematic.editMode !== "select" || schematic.placingSymbol) {
+          // Toggle placement pause
+          const newPaused = !editor.placementPaused;
+          editor.setPlacementPaused(newPaused);
+          if (newPaused) {
+            // Pause: open properties panel and focus it
+            layout.setDockActiveTab("right", "properties");
+            if (layout.rightCollapsed) layout.toggleRight();
+          }
+        } else if (schematic.selectedIds.size > 0) {
+          // Object selected: just open properties
+          layout.setDockActiveTab("right", "properties");
+          if (layout.rightCollapsed) layout.toggleRight();
+        }
+      }
+      // Shift+F — Find Similar Objects
+      if (e.key === "F" && e.shiftKey && !e.ctrlKey &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setShowFindSimilar(true);
+      }
+      // Ctrl+Shift+A — Open Signal AI panel
+      if (e.key === "A" && e.ctrlKey && e.shiftKey &&
+          !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        useLayoutStore.getState().setDockActiveTab("bottom", "signal");
+        if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Disable browser context menu globally (EDA apps use custom menus)
+  useEffect(() => {
+    const prevent = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", prevent);
+    return () => document.removeEventListener("contextmenu", prevent);
   }, []);
 
   return (
@@ -249,9 +320,28 @@ function App() {
       <MenuBar
         onOpenProject={openProjectFlow}
         onSave={saveSchematicFlow}
-        onOpenComponentSearch={() => { setLeftTab("components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
+        onOpenComponentSearch={() => { setDockActiveTab("left", "components"); if (useLayoutStore.getState().leftCollapsed) useLayoutStore.getState().toggleLeft(); }}
+        onExportPdf={() => setShowPdfExport(true)}
+        onExportBom={() => setShowBomConfig(true)}
+        onExportNetlist={() => setShowNetlistExport(true)}
+        onOpenOutputJobs={() => { setDockActiveTab("bottom", "output-jobs"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onAnnotate={() => setShowAnnotation(true)}
+        onPreferences={() => setShowPreferences(true)}
+        onFindSimilar={() => setShowFindSimilar(true)}
+        onParameterManager={() => setShowParamManager(true)}
+        onPrint={() => {
+          const data = useSchematicStore.getState().data;
+          if (data) printSchematic(data);
+        }}
+        onRunDrc={() => { setDockActiveTab("bottom", "drc"); if (useLayoutStore.getState().bottomCollapsed) useLayoutStore.getState().toggleBottom(); }}
+        onBackAnnotate={() => setShowBackAnnotation(true)}
+        onErcMatrix={() => setShowErcMatrix(true)}
+        onConstraints={() => setShowConstraints(true)}
+        onViaStitching={() => setShowViaStitching(true)}
+        onBgaFanout={() => setShowBgaFanout(true)}
+        isPcbView={isPcbView}
       />
-      <ToolbarStrip />
+      {isLibraryView || isFpLibraryView ? null : isPcbView ? <PcbToolbar /> : <ToolbarStrip />}
       <DocumentTabBar />
 
       <div className="flex flex-1 min-h-0">
@@ -260,26 +350,7 @@ function App() {
         ) : (
           <>
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: leftPanelWidth }}>
-              {/* Tab bar */}
-              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                {(["projects", "components", "navigator"] as const).map(t => (
-                  <button key={t}
-                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                      leftTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                    onClick={() => setLeftTab(t)}>
-                    {t === "navigator" ? "Nav" : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-                <button onClick={toggleLeft}
-                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
-                  <PanelLeftClose size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden overflow-y-auto">
-                {leftTab === "projects" && <ProjectPanel />}
-                {leftTab === "components" && <ComponentPanel />}
-                {leftTab === "navigator" && <NavigatorPanel />}
-              </div>
+              <DockPanel dockId="left" onCollapse={toggleLeft} />
             </div>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => leftResize.onMouseDown(e, leftPanelWidth)} />
           </>
@@ -287,15 +358,14 @@ function App() {
 
         <div className="flex flex-col flex-1 min-w-0">
           <div className="flex-1 min-h-0">
-            <EditorCanvas onOpenProject={openProjectFlow} />
+            {isLibraryView ? <LibraryEditorCanvas /> : isFpLibraryView ? <FootprintEditorCanvas /> : isPcbView ? <PcbRenderer /> : <EditorCanvas onOpenProject={openProjectFlow} />}
           </div>
 
           {!bottomCollapsed ? (
             <>
               <ResizeHandle direction="vertical" onMouseDown={(e) => bottomResize.onMouseDown(e, bottomPanelHeight)} />
               <div className="bg-bg-secondary shrink-0" style={{ height: bottomPanelHeight }}>
-                <PanelHeader title="Messages" onCollapse={toggleBottom} collapseIcon={<PanelBottomClose size={14} />} />
-                <div className="overflow-y-auto" style={{ height: bottomPanelHeight - 32 }}><MessagesPanel /></div>
+                <DockPanel dockId="bottom" onCollapse={toggleBottom} />
               </div>
             </>
           ) : (
@@ -309,32 +379,27 @@ function App() {
           <>
             <ResizeHandle direction="horizontal" onMouseDown={(e) => rightResize.onMouseDown(e, rightPanelWidth)} />
             <div className="flex flex-col bg-bg-secondary overflow-hidden shrink-0" style={{ width: rightPanelWidth }}>
-              <div className="flex items-center h-8 bg-bg-tertiary border-b border-border-subtle select-none">
-                {(["properties", "filter", "list"] as const).map(t => (
-                  <button key={t}
-                    className={cn("flex-1 h-full text-[10px] font-semibold uppercase tracking-wider transition-colors",
-                      rightTab === t ? "text-text-secondary border-b-2 border-accent" : "text-text-muted/40 hover:text-text-muted/70")}
-                    onClick={() => setRightTab(t)}>
-                    {t === "properties" ? "Props" : t === "filter" ? "Filter" : "List"}
-                  </button>
-                ))}
-                <button onClick={toggleRight}
-                  className="p-1 mx-1 rounded hover:bg-bg-hover text-text-muted/40 hover:text-text-secondary transition-colors">
-                  <PanelRightClose size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {rightTab === "properties" && <PropertiesPanel />}
-                {rightTab === "filter" && <FilterPanel />}
-                {rightTab === "list" && <ListPanel />}
-              </div>
+              <DockPanel dockId="right" onCollapse={toggleRight} />
             </div>
           </>
         )}
       </div>
 
       <StatusBar />
+      <FloatingPanelsRenderer />
       <ComponentSearch open={componentSearchOpen} onClose={() => setComponentSearchOpen(false)} />
+      <ExportPdfDialog open={showPdfExport} onClose={() => setShowPdfExport(false)} />
+      <BomConfigDialog open={showBomConfig} onClose={() => setShowBomConfig(false)} />
+      <NetlistExportDialog open={showNetlistExport} onClose={() => setShowNetlistExport(false)} />
+      <AnnotationDialog open={showAnnotation} onClose={() => setShowAnnotation(false)} />
+      <PreferencesDialog open={showPreferences} onClose={() => setShowPreferences(false)} />
+      <FindSimilarDialog open={showFindSimilar} onClose={() => setShowFindSimilar(false)} />
+      <ParameterManager open={showParamManager} onClose={() => setShowParamManager(false)} />
+      <BackAnnotationDialog open={showBackAnnotation} onClose={() => setShowBackAnnotation(false)} />
+      <ErcMatrixDialog open={showErcMatrix} onClose={() => setShowErcMatrix(false)} />
+      <ViaStitchingDialog open={showViaStitching} onClose={() => setShowViaStitching(false)} />
+      <ConstraintEditorDialog open={showConstraints} onClose={() => setShowConstraints(false)} />
+      <BgaFanoutDialog open={showBgaFanout} onClose={() => setShowBgaFanout(false)} />
     </div>
   );
 }

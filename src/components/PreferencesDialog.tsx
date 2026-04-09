@@ -1,7 +1,10 @@
-import { useState } from "react";
 import { useEditorStore } from "@/stores/editor";
+import { useProjectStore } from "@/stores/project";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { BUILT_IN_TEMPLATES } from "@/lib/sheetTemplate";
+import { ThemeEditor } from "@/components/ThemeEditor";
 
 interface Props {
   open: boolean;
@@ -9,34 +12,36 @@ interface Props {
 }
 
 export function PreferencesDialog({ open, onClose }: Props) {
-  const [tab, setTab] = useState<"general" | "display" | "erc">("general");
+  const [tab, setTab] = useState<"general" | "display" | "project" | "erc" | "theme">("general");
   const gridSize = useEditorStore((s) => s.statusBar.gridSize);
   const snapEnabled = useEditorStore((s) => s.statusBar.snapEnabled);
   const units = useEditorStore((s) => s.statusBar.units);
+  const autoJunction = useEditorStore((s) => s.autoJunction);
+  const electricalSnapRange = useEditorStore((s) => s.electricalSnapRange);
+  const ercSeverity = useEditorStore((s) => s.ercSeverity);
+  const activeTemplate = useProjectStore((s) => s.activeTemplate);
+  const netScope = useProjectStore((s) => s.netScope);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-bg-surface border border-border rounded-lg shadow-2xl w-[520px] max-h-[80vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <h2 className="text-sm font-semibold text-text-primary">Preferences</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-bg-hover text-text-muted"><X size={16} /></button>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-border-subtle px-4">
-          {(["general", "display", "erc"] as const).map(t => (
+          {(["general", "display", "project", "erc", "theme"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={cn("px-3 py-2 text-xs border-b-2 transition-colors capitalize",
                 tab === t ? "border-accent text-accent font-semibold" : "border-transparent text-text-muted hover:text-text-secondary")}>
-              {t === "erc" ? "ERC" : t}
+              {t === "theme" ? "Theme" : t === "erc" ? "ERC" : t}
             </button>
           ))}
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 text-xs space-y-4">
           {tab === "general" && (
             <>
@@ -49,23 +54,20 @@ export function PreferencesDialog({ open, onClose }: Props) {
                 </Row>
                 <Row label="Snap Enabled">
                   <input type="checkbox" checked={snapEnabled}
-                    onChange={() => useEditorStore.getState().toggleSnap()} />
+                    onChange={() => useEditorStore.getState().toggleSnap()} className="accent-[#89b4fa]" />
                 </Row>
                 <Row label="Electrical Snap Range">
-                  <input type="number" value={2.0} step={0.1}
-                    className="w-20 bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] font-mono outline-none" />
-                  <span className="text-text-muted/50 text-[10px]">world units</span>
+                  <input type="number" value={electricalSnapRange} step={0.1} min={0.5} max={10}
+                    onChange={(e) => useEditorStore.getState().setElectricalSnapRange(parseFloat(e.target.value) || 2.0)}
+                    className="w-20 bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] font-mono outline-none focus:border-accent" />
+                  <span className="text-text-muted/50 text-[10px]">mm</span>
                 </Row>
               </Section>
               <Section title="Editing">
-                <Row label="Auto-Junction at T-Intersections"><input type="checkbox" defaultChecked /></Row>
-                <Row label="Break Wires at Auto-Junctions"><input type="checkbox" defaultChecked /></Row>
-                <Row label="Optimize Wires & Buses"><input type="checkbox" defaultChecked /></Row>
-                <Row label="Enable In-Place Editing (F2)"><input type="checkbox" defaultChecked /></Row>
-              </Section>
-              <Section title="Auto-Increment">
-                <Row label="Primary (Numeric)"><input type="checkbox" defaultChecked /></Row>
-                <Row label="Secondary (Alpha)"><input type="checkbox" /></Row>
+                <Row label="Auto-Junction at T-Intersections">
+                  <input type="checkbox" checked={autoJunction}
+                    onChange={(e) => useEditorStore.getState().setAutoJunction(e.target.checked)} className="accent-[#89b4fa]" />
+                </Row>
               </Section>
             </>
           )}
@@ -81,59 +83,61 @@ export function PreferencesDialog({ open, onClose }: Props) {
                   </select>
                 </Row>
               </Section>
-              <Section title="Cursor">
-                <Row label="Cursor Type">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Large 90</option><option>Small 90</option><option>Small 45</option><option>Tiny 45</option>
+              <Section title="Rendering">
+                <Row label="Display Net Color Override">
+                  <input type="checkbox" checked={useEditorStore.getState().netColorOverride}
+                    onChange={() => useEditorStore.getState().toggleNetColors()} className="accent-[#89b4fa]" />
+                </Row>
+              </Section>
+            </>
+          )}
+          {tab === "project" && (
+            <>
+              <Section title="Sheet Template">
+                <Row label="Active Template">
+                  <select value={activeTemplate} onChange={(e) => useProjectStore.getState().setActiveTemplate(e.target.value)}
+                    className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none focus:border-accent">
+                    {BUILT_IN_TEMPLATES.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                   </select>
                 </Row>
               </Section>
-              <Section title="Rendering">
-                <Row label="Display Cross-Overs"><input type="checkbox" defaultChecked /></Row>
-                <Row label="Display Net Color Override"><input type="checkbox" /></Row>
-                <Row label="AutoFocus (Dim Unconnected)"><input type="checkbox" defaultChecked /></Row>
+              <Section title="Net Connectivity">
+                <Row label="Net Identifier Scope">
+                  <select value={netScope} onChange={(e) => useProjectStore.getState().setNetScope(e.target.value as "global" | "flat" | "hierarchical")}
+                    className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none focus:border-accent">
+                    <option value="global">Global (all sheets)</option>
+                    <option value="flat">Flat (ports connect same-level)</option>
+                    <option value="hierarchical">Hierarchical (ports ↔ sheet entries)</option>
+                  </select>
+                </Row>
               </Section>
             </>
           )}
           {tab === "erc" && (
-            <>
-              <Section title="Violation Severity">
-                <Row label="Duplicate Designators">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Error</option><option>Warning</option><option>No Report</option>
+            <Section title="Violation Severity">
+              {[
+                ["duplicate_designator", "Duplicate Designators"],
+                ["unconnected_pin", "Unconnected Pins"],
+                ["output_conflict", "Output-to-Output Conflict"],
+                ["single_pin_net", "Single Pin Net"],
+                ["no_driver", "No Driver on Net"],
+              ].map(([key, label]) => (
+                <Row key={key} label={label}>
+                  <select value={ercSeverity[key] || "warning"}
+                    onChange={(e) => useEditorStore.getState().setErcSeverity(key, e.target.value as "error" | "warning" | "none")}
+                    className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none focus:border-accent">
+                    <option value="error">Error</option>
+                    <option value="warning">Warning</option>
+                    <option value="none">No Report</option>
                   </select>
                 </Row>
-                <Row label="Unconnected Pins">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Warning</option><option>Error</option><option>No Report</option>
-                  </select>
-                </Row>
-                <Row label="Output-to-Output Conflict">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Error</option><option>Warning</option><option>No Report</option>
-                  </select>
-                </Row>
-                <Row label="Single Pin Net">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Warning</option><option>Error</option><option>No Report</option>
-                  </select>
-                </Row>
-                <Row label="No Driver on Net">
-                  <select className="bg-bg-primary border border-border-subtle rounded px-2 py-1 text-[11px] outline-none">
-                    <option>Warning</option><option>Error</option><option>No Report</option>
-                  </select>
-                </Row>
-              </Section>
-            </>
+              ))}
+            </Section>
           )}
+          {tab === "theme" && <ThemeEditor />}
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-border-subtle">
-          <button onClick={onClose}
-            className="px-4 py-1.5 rounded text-xs bg-bg-hover text-text-secondary hover:bg-bg-surface transition-colors">
-            Cancel
-          </button>
           <button onClick={onClose}
             className="px-4 py-1.5 rounded text-xs bg-accent/20 text-accent hover:bg-accent/30 transition-colors">
             OK

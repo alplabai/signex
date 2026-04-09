@@ -1,5 +1,5 @@
-use std::path::Path;
 use crate::engine::{parser::SchematicSheet, writer};
+use std::path::Path;
 
 /// Validate that a filename doesn't escape the project directory via traversal
 fn validate_filename(filename: &str) -> Result<(), String> {
@@ -31,20 +31,39 @@ pub async fn save_schematic(
         let path = dir.join(&filename);
 
         // Double-check resolved path is within project dir
-        let canonical_dir = dir.canonicalize()
-            .map_err(|e| format!("Invalid project dir: {}", e))?;
-        let canonical_path = path.parent()
-            .unwrap_or(dir)
+        let canonical_dir = dir
             .canonicalize()
-            .map_err(|e| format!("Invalid path: {}", e))?;
+            .map_err(|e| format!("Invalid project dir: {}", e))?;
+        let canonical_path = if path.exists() {
+            path.canonicalize()
+                .map_err(|e| format!("Invalid path: {}", e))?
+        } else {
+            let parent = path.parent().unwrap_or(dir);
+            let canonical_parent = if parent.as_os_str().is_empty() {
+                canonical_dir.clone()
+            } else {
+                parent
+                    .canonicalize()
+                    .map_err(|e| format!("Invalid path: {}", e))?
+            };
+            let file_name = path.file_name().ok_or_else(|| "Missing filename".to_string())?;
+            canonical_parent.join(file_name)
+        };
         if !canonical_path.starts_with(&canonical_dir) {
             return Err("Path escapes project directory".to_string());
         }
 
         let content = writer::write_schematic(&data);
 
-        std::fs::write(&path, content)
-            .map_err(|e| format!("Failed to write {}: {}", filename, e))
+        // Atomic write: write to temp file then rename (prevents corruption on crash)
+        let tmp_path = path.with_extension("kicad_sch.tmp");
+        std::fs::write(&tmp_path, &content)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        std::fs::rename(&tmp_path, &path).map_err(|e| {
+            // Clean up temp file on rename failure
+            let _ = std::fs::remove_file(&tmp_path);
+            format!("Failed to save {}: {}", filename, e)
+        })
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

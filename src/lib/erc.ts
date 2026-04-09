@@ -5,9 +5,8 @@ import { checkPinConnection } from "./ercMatrix";
 
 export type ErcViolationType =
   | "duplicate_designator" | "unconnected_pin" | "floating_wire"
-  | "no_driver" | "single_pin_net" | "missing_power"
+  | "no_driver" | "single_pin_net"
   | "output_to_output" | "multiple_net_names" | "unannotated"
-  | "missing_no_connect" | "wire_not_connected"
   | "pin_conflict" | "power_pin_not_driven" | "net_no_label";
 
 export interface ErcViolation {
@@ -43,8 +42,7 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   // 5. No driver (net has inputs but no output/bidirectional/passive)
   checkNoDriver(nets, violations);
 
-  // 6. Output-to-output conflict (two output pins on same net)
-  checkOutputConflict(nets, violations);
+  // 6. Output-to-output is covered by pin connection matrix (check #9)
 
   // 7. Multiple net names on same net
   checkMultipleNetNames(nets, violations, data);
@@ -56,7 +54,7 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   checkPinConnectionMatrix(nets, violations);
 
   // 10. Power pins not driven (power_in without power_out on net)
-  checkPowerPinNotDriven(nets, violations);
+  checkPowerPinNotDriven(nets, violations, data);
 
   // 11. Nets with wires but no label
   checkNetNoLabel(nets, violations);
@@ -64,7 +62,7 @@ export function runErc(data: SchematicData): { violations: ErcViolation[]; nets:
   // Filter out violations at No ERC directive positions
   const filtered = violations.filter(v => {
     if (!v.position || noErcPositions.length === 0) return true;
-    return !noErcPositions.some(p => pointsMatch(p, v.position!, 1.0));
+    return !noErcPositions.some(p => pointsMatch(p, v.position!, 0.15));
   });
 
   return { violations: filtered, nets };
@@ -92,10 +90,10 @@ function checkDuplicateDesignators(data: SchematicData, violations: ErcViolation
 }
 
 function checkUnconnectedPins(data: SchematicData, nets: NetInfo[], violations: ErcViolation[]) {
-  // Build set of all pin positions that are on a net with at least one wire
+  // Build set of all pin positions that are on a net with at least one wire or label
   const connectedPinKeys = new Set<string>();
   for (const net of nets) {
-    if (net.wireUuids.length > 0) {
+    if (net.wireUuids.length > 0 || net.labelUuids.length > 0) {
       for (const pin of net.pins) {
         connectedPinKeys.add(`${pin.symbolUuid}:${pin.pinNumber}`);
       }
@@ -155,28 +153,13 @@ function checkNoDriver(nets: NetInfo[], violations: ErcViolation[]) {
   const driverTypes = new Set(["output", "bidirectional", "passive", "power_out", "tri_state"]);
   for (const net of nets) {
     if (net.pins.length < 2) continue;
-    if (!net.name) continue; // Only check named nets
     const hasDriver = net.pins.some(p => driverTypes.has(p.pinType));
     if (!hasDriver) {
       violations.push({
         type: "no_driver",
         severity: "warning",
-        message: `Net "${net.name}" has no driving source (${net.pins.length} pins, all inputs)`,
+        message: `Net "${net.name || "(unnamed)"}" has no driving source (${net.pins.length} pins, all inputs)`,
         uuids: net.pins.map(p => p.symbolUuid),
-      });
-    }
-  }
-}
-
-function checkOutputConflict(nets: NetInfo[], violations: ErcViolation[]) {
-  for (const net of nets) {
-    const outputs = net.pins.filter(p => p.pinType === "output" || p.pinType === "power_out");
-    if (outputs.length > 1) {
-      violations.push({
-        type: "output_to_output",
-        severity: "error",
-        message: `Net "${net.name || "(unnamed)"}" has ${outputs.length} output drivers: ${outputs.map(o => `${o.symbolRef}:${o.pinNumber}`).join(", ")}`,
-        uuids: outputs.map(o => o.symbolUuid),
       });
     }
   }
@@ -225,8 +208,8 @@ function checkPinConnectionMatrix(nets: NetInfo[], violations: ErcViolation[]) {
     for (let i = 0; i < net.pins.length; i++) {
       for (let j = i + 1; j < net.pins.length; j++) {
         const a = net.pins[i], b = net.pins[j];
-        // Avoid duplicate reports for same symbol pair
-        const pairKey = [a.symbolUuid, b.symbolUuid].sort().join(":");
+        // Avoid duplicate reports for same pin pair
+        const pairKey = [`${a.symbolUuid}:${a.pinNumber}`, `${b.symbolUuid}:${b.pinNumber}`].sort().join("|");
         if (checked.has(pairKey)) continue;
         checked.add(pairKey);
         const severity = checkPinConnection(a.pinType, b.pinType);
@@ -250,14 +233,20 @@ function checkPinConnectionMatrix(nets: NetInfo[], violations: ErcViolation[]) {
   }
 }
 
-function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[]) {
+function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[], data?: SchematicData) {
   for (const net of nets) {
     const powerInputs = net.pins.filter(p => p.pinType === "power_in" || p.pinType === "power_input");
     if (powerInputs.length === 0) continue;
     const hasPowerSource = net.pins.some(p =>
       p.pinType === "power_out" || p.pinType === "power_output" || p.pinType === "output"
     );
-    const hasPowerLabel = net.labelUuids.length > 0;
+    // Only count power labels (label_type === "Power") as a driving source
+    const hasPowerLabel = data
+      ? net.labelUuids.some(uuid => {
+          const lbl = data.labels.find(l => l.uuid === uuid);
+          return lbl?.label_type === "Power";
+        })
+      : net.labelUuids.length > 0;
     if (!hasPowerSource && !hasPowerLabel) {
       violations.push({
         type: "power_pin_not_driven",
@@ -271,7 +260,9 @@ function checkPowerPinNotDriven(nets: NetInfo[], violations: ErcViolation[]) {
 
 function checkNetNoLabel(nets: NetInfo[], violations: ErcViolation[]) {
   for (const net of nets) {
-    if (net.pins.length >= 2 && net.labelUuids.length === 0 && net.wireUuids.length > 0) {
+    // Only warn for nets with signal pins (input/output), not passive-only nets
+    const hasSignalPin = net.pins.some(p => ["input", "output", "bidirectional", "tri_state"].includes(p.pinType));
+    if (net.pins.length >= 2 && net.labelUuids.length === 0 && net.wireUuids.length > 0 && hasSignalPin) {
       violations.push({
         type: "net_no_label",
         severity: "warning",
