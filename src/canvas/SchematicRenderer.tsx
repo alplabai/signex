@@ -811,7 +811,11 @@ export function SchematicRenderer() {
       }
 
       // Phase 4: Pin numbers + names on top of the body
-      const nameOffset = lib.pin_name_offset > 0 ? lib.pin_name_offset : 0.4;
+      const nameOffset = lib.pin_name_offset > 0 ? lib.pin_name_offset : 0.508;
+      const pinFontSize = 1.27 * SCH_FONT_SCALE;
+      // KiCad pin_layout_cache: centerY = midpoint.y - (textSize/2 + clearance + thickness)
+      // textSize/2 = 0.635, clearance ≈ 0.15, thickness ≈ 0.12 → total ≈ 0.9mm
+      const numPerp = 1.27 / 2 + 0.25; // perpendicular offset from stub to text center (mm)
       for (const pin of lib.pins) {
         if (pin.hidden) continue;
         const [px, py] = symToSch(
@@ -829,34 +833,37 @@ export function SchematicRenderer() {
           dy = ey - py;
         const len = Math.hypot(dx, dy) || 1;
 
-        // Pin number — at the wire-side tip, offset perpendicular to the stub
+        // Pin number — at midpoint of stub, offset perpendicular
         if (lib.show_pin_numbers && pin.number_visible && pin.number !== "~") {
           ctx.fillStyle = C.pinNum;
-          ctx.font = `${1.27 * SCH_FONT_SCALE}px ${C.schFont}`;
-          // Place at 25% from wire-tip toward body so it sits near the stub end
-          const nmx = px + (dx / len) * pin.length * 0.35;
-          const nmy = py + (dy / len) * pin.length * 0.35;
+          ctx.font = `${pinFontSize}px ${C.schFont}`;
+          // Midpoint of the stub
+          const nmx = (px + ex) / 2;
+          const nmy = (py + ey) / 2;
           ctx.save();
           ctx.translate(nmx, nmy);
           if (Math.abs(dx) >= Math.abs(dy)) {
-            // Horizontal stub — number above the line
+            // Horizontal stub — number above the line, centered along stub
             ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            ctx.fillText(txt(pin.number), 0, -0.2);
+            ctx.textBaseline = "middle";
+            drawLatexLine(ctx, txt(pin.number), 0, -numPerp, pinFontSize);
           } else {
-            // Vertical stub — number to the left of the stub
+            // Vertical stub — number to the side of the stub, centered along stub
+            // After -PI/2 rotation: rotated-y+ = original-x+ (rightward)
+            // So y = -numPerp places text numPerp to the LEFT of midpoint in original space
             ctx.rotate(-Math.PI / 2);
             ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            ctx.fillText(txt(pin.number), 0, -0.2);
+            ctx.textBaseline = "middle";
+            drawLatexLine(ctx, txt(pin.number), 0, -numPerp, pinFontSize);
           }
           ctx.restore();
         }
 
-        // Pin name (inner end toward body, using lib pin_name_offset)
+        // Pin name — at body end offset inward by pin_name_offset
         if (lib.show_pin_names && pin.name_visible && pin.name !== "~") {
           ctx.fillStyle = C.pinName;
-          ctx.font = `${1.27 * SCH_FONT_SCALE}px ${C.schFont}`;
+          ctx.font = `${pinFontSize}px ${C.schFont}`;
+          // (ex,ey) is the body-side end; move slightly inward along stub direction
           const nx = ex + (dx / len) * nameOffset;
           const ny = ey + (dy / len) * nameOffset;
           ctx.save();
@@ -865,16 +872,13 @@ export function SchematicRenderer() {
             // Horizontal stub — draw text flat
             ctx.textBaseline = "middle";
             ctx.textAlign = dx > 0 ? "left" : "right";
-            ctx.fillText(txt(pin.name), 0, 0);
+            drawLatexLine(ctx, txt(pin.name), 0, 0, pinFontSize);
           } else {
             // Vertical stub — rotate 90° CCW so text reads along the pin
-            // After -PI/2 rotation: canvas X points up on screen, canvas Y points right
             ctx.rotate(-Math.PI / 2);
             ctx.textBaseline = "middle";
-            // dy > 0: stub goes down (body below wire) → "left" extends text upward (into body)
-            // dy < 0: stub goes up (body above wire) → "right" extends text upward (into body)
             ctx.textAlign = dy > 0 ? "left" : "right";
-            ctx.fillText(txt(pin.name), 0, 0);
+            drawLatexLine(ctx, txt(pin.name), 0, 0, pinFontSize);
           }
           ctx.restore();
         }
