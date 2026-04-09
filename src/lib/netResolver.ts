@@ -33,9 +33,10 @@ class UnionFind {
   }
 }
 
-// Point → index mapping with spatial tolerance
+// Point → index mapping. Round to 1 decimal place (0.1mm buckets)
+// so the bucket size matches the connectivity tolerance (TOL = 0.05).
 function pointKey(p: SchPoint): string {
-  return `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+  return `${Math.round(p.x * 20)},${Math.round(p.y * 20)}`;
 }
 
 /**
@@ -102,9 +103,8 @@ export function resolveNets(data: SchematicData): NetInfo[] {
     uf.union(wn.startIdx, wn.endIdx);
   }
 
-  // Union all nodes at the same position (junctions, pins, labels at wire endpoints)
-  // This is already handled by getNode returning the same index for matching points.
-  // But we also need to union junctions with any wire passing through them.
+  // Union junctions with any wire passing through them (mid-segment T-junctions).
+  // getNode handles endpoint matching, but junctions at wire midpoints need explicit union.
   for (const j of junctionNodes) {
     // Junction connects all wires whose endpoints match the junction position
     for (const wn of wireNodes) {

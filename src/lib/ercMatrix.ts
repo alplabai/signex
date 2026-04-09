@@ -199,7 +199,7 @@ const matrix: Record<string, Record<string, ErcSeverity>> = {
 export function checkPinConnection(typeA: string, typeB: string): ErcSeverity {
   const a = normalizeType(typeA);
   const b = normalizeType(typeB);
-  return matrix[a]?.[b] ?? matrix[b]?.[a] ?? "ok";
+  return matrix[a]?.[b] ?? matrix[b]?.[a] ?? "warning";
 }
 
 /** Normalize KiCad pin type strings to our matrix keys */

@@ -1,14 +1,55 @@
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, Play, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Play, Trash2, Download, Zap } from "lucide-react";
 import { useSchematicStore } from "@/stores/schematic";
 import { useEditorStore, type ErcMarker } from "@/stores/editor";
+import { useSignalStore } from "@/stores/signal";
 import { runErc, type ErcViolation } from "@/lib/erc";
+import { generateErcHtmlReport } from "@/lib/ercReport";
+import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 
 export function MessagesPanel() {
   const data = useSchematicStore((s) => s.data);
+  const apiKeySet = useSignalStore((s) => s.apiKeySet);
   const [violations, setViolations] = useState<ErcViolation[]>([]);
   const [lastRun, setLastRun] = useState<string | null>(null);
+
+  const askSignalFix = async (violation: ErcViolation) => {
+    const store = useSignalStore.getState();
+    store.addMessage({ role: "user", content: `Fix this ERC violation: "${violation.message}" (${violation.type.replace(/_/g, " ")})` });
+
+    // Generate a specific ID so we can target this exact message
+    const fixMsgId = crypto.randomUUID();
+    store.addMessage({ role: "assistant", content: "", loading: true, id: fixMsgId } as import("@/stores/signal").SignalMessage);
+    store.setLoading(true);
+
+    try {
+      const schData = useSchematicStore.getState().data;
+      const ercMarkers = useEditorStore.getState().ercMarkers;
+      const context = {
+        component_count: schData?.symbols.filter((s) => !s.is_power).length || 0,
+        wire_count: schData?.wires.length || 0,
+        net_count: schData?.labels.length || 0,
+        selected_components: [] as { reference: string; value: string; footprint: string; lib_id: string }[],
+        erc_errors: ercMarkers.filter((m) => m.severity === "error").length,
+        erc_warnings: ercMarkers.filter((m) => m.severity === "warning").length,
+        paper_size: schData?.paper_size || "A4",
+        title: schData?.title_block?.title || "",
+        detailed_context: null,
+        design_brief: useSignalStore.getState().designBrief || null,
+      };
+      const response = await invoke<{ message: string; usage: { input_tokens: number; output_tokens: number } }>(
+        "signal_fix_erc", { violationMessage: violation.message, context, model: store.model }
+      );
+      store.updateMessage(fixMsgId, { content: response.message, loading: false, usage: response.usage });
+      store.addTokens(response.usage.input_tokens, response.usage.output_tokens);
+      store.addCost(response.usage.input_tokens, response.usage.output_tokens);
+    } catch (e) {
+      store.updateMessage(fixMsgId, { content: `Error: ${e}`, loading: false, role: "system" });
+    } finally {
+      store.setLoading(false);
+    }
+  };
 
   const handleRunErc = () => {
     if (!data) return;
@@ -54,10 +95,29 @@ export function MessagesPanel() {
           className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors text-[11px]">
           <Play size={11} /> Run ERC
         </button>
-        <button onClick={() => { setViolations([]); setLastRun(null); }}
+        <button onClick={() => { setViolations([]); setLastRun(null); useEditorStore.getState().setErcMarkers([]); }}
           className="p-1 rounded text-text-muted/50 hover:text-text-primary hover:bg-bg-hover transition-colors">
           <Trash2 size={12} />
         </button>
+        {violations.length > 0 && (
+          <button onClick={() => {
+            const d = useSchematicStore.getState().data;
+            const projectName = d?.title_block?.["Title"] || d?.title_block?.["title"] || "Untitled";
+            const html = generateErcHtmlReport(violations, projectName);
+            const blob = new Blob([html], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `erc-report-${projectName.replace(/\s+/g, "-").toLowerCase()}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/10 text-accent/80 hover:bg-accent/20 hover:text-accent transition-colors text-[11px]">
+            <Download size={11} /> Export Report
+          </button>
+        )}
         <div className="flex-1" />
         {lastRun && (
           <span className="text-text-muted/40 text-[10px]">
@@ -109,8 +169,21 @@ export function MessagesPanel() {
                 )}>
                   {v.message}
                 </div>
-                <div className="text-[9px] text-text-muted/40 mt-0.5">
-                  {v.type.replace(/_/g, " ")}
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[9px] text-text-muted/40">
+                    {v.type.replace(/_/g, " ")}
+                  </span>
+                  {apiKeySet && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        askSignalFix(v);
+                      }}
+                      className="text-[9px] text-accent/50 hover:text-accent transition-colors flex items-center gap-0.5"
+                      title="Ask Signal for a fix">
+                      <Zap size={8} /> Fix
+                    </button>
+                  )}
                 </div>
               </div>
             </button>

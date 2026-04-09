@@ -55,23 +55,24 @@ src/                             # Bevy application
 - `cargo clippy --workspace -- -D warnings` — Lint
 
 ## Conventions
-- Dark theme (Catppuccin Mocha-inspired palette)
+- 6 built-in themes (Catppuccin Mocha default, VS Code Dark, GitHub Dark, Altium Dark, Solarized Light, Nord)
 - 13px base font size (dense EDA UI)
 - All panels collapsible, layout persisted to localStorage
 - Altium-compatible keyboard shortcuts (see docs/altium-schematic-reference.md)
 - KiCad file format compatibility (.kicad_sch read/write)
-- Native format: .alpsch/.alppcb (future)
+- Native format: .snxsch/.snxpcb/.snxprj/.snxsym/.snxpkg (future)
 - GPL-3.0 license (KiCad derivative)
 
 ## Phase Status
 - [x] Phase 0: Viewer — KiCad parser, Canvas2D renderer, symbol transforms, multi-sheet nav
 - [x] Phase 1: Editor foundation — selection, move, wire, delete, rotate, undo/redo, save, properties
-- [x] Phase 1.5: Grid/snap toggle, component library browser (226 KiCad libs), menu wiring
-- [ ] Phase 2: Core editing — drag-box select, auto-junction, electrical snap, rubber-band, copy/paste, net labels, power ports, ERC
-- [ ] Phase 3: Validation — ERC, annotation, cross-reference
-- [ ] Phase 4: Advanced — library editor, drawing objects, BOM, PDF export
-- [ ] Phase 5: Signal AI — Claude API integration, design assistance
-- [ ] Phase 6: PCB layout — layer stack, routing, DRC, copper pour, 3D viewer
+- [x] Phase 2: Core editing — drag-box, auto-junction, rubber-band, copy/paste, labels, power ports, ERC
+- [x] Phase 3: Validation — ERC 11 checks + pin matrix, annotation, AutoFocus, net color override
+- [x] Phase 4: Advanced — library editor, PDF/print, output jobs, templates, title block, BOM formats
+- [x] Phase 4+: Altium parity — 40+ features: selection filter, drawing tools, net classes, diff pairs, harnesses, constraints, variants, parameter manager, multi-channel
+- [x] Phase 5: Signal AI — Claude API streaming, tool use, visual context, circuit templates, design review
+- [x] Phase 6: PCB layout — KiCad PCB parser, routing (walkaround/push/diff pair/length tune), 15-type DRC, copper pour, Gerber/ODB++/STEP export, 3D viewer, cross-probing
+- [ ] Phase 7: Simulation — SPICE, signal integrity, power analysis
 
 ## Architecture Decisions
 - **Bevy + bevy_egui**: Bevy for 2D/3D rendering + ECS, egui for UI panels/toolbars via bevy_egui
@@ -85,6 +86,7 @@ src/                             # Bevy application
 - **bevy_pancam**: right-click pan matches Altium UX
 - **Simulation**: ngspice (SPICE), OpenEMS (RF/EM FDTD), Elmer FEM (thermal) — all subprocess-based, AsyncComputeTaskPool, graceful fallback if not installed
 - **Plugin system**: Extism WASM — 5 host function categories (Document, Mutation, UI, Query, Sim)
+- **Native file extensions**: .snxsch/.snxpcb/.snxprj/.snxsym/.snxpkg
 
 ---
 

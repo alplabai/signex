@@ -1,7 +1,7 @@
 mod commands;
 mod engine;
 
-use commands::{export, library, project, save, schematic};
+use commands::{export, library, pcb, project, save, schematic, signal};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,10 +17,28 @@ pub fn run() {
             save::save_schematic,
             library::list_libraries,
             library::search_symbols,
+            library::list_library_symbols,
             library::get_symbol,
+            library::save_symbol,
+            library::get_footprint,
+            library::save_footprint,
             export::generate_bom,
+            export::generate_bom_configured,
             export::export_netlist,
+            export::export_netlist_xml,
+            pcb::get_pcb,
+            signal::set_api_key,
+            signal::set_signex_backend,
+            signal::has_api_key,
+            signal::get_api_mode,
+            signal::signal_chat,
+            signal::signal_chat_stream,
+            signal::signal_review,
+            signal::signal_fix_erc,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Signex");
+        .unwrap_or_else(|e| {
+            eprintln!("Signex failed to start: {}", e);
+            std::process::exit(1);
+        });
 }

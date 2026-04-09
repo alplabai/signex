@@ -31,7 +31,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
   - ai — Signal chat history, tool calls (future)
   - collab — real-time collaboration state (future)
 - **File formats:**
-  - Native: `.alpsch` (schematic), `.alppcb` (PCB), `.alplib` (library), `.alpproj` (project), `.alprules` (design rules), `.alpout` (output jobs)
+  - Native: `.snxsch` (schematic), `.snxpcb` (PCB), `.snxsym` (symbol library), `.snxprj` (project)
   - Import/Export: KiCad (.kicad_sch, .kicad_pcb), Altium (future), Eagle (future)
 - **License:** GPL-3.0 (KiCad derivative core) + proprietary cloud/AI (separate repos)
 
@@ -100,42 +100,42 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ---
 
-## Phase 2: Core Schematic Editing
+## Phase 2: Core Schematic Editing (DONE)
 
 **Goal:** Reach Altium parity for daily schematic capture work.
 
 ### Wiring & Connectivity
-- [ ] Wire routing modes: 90°, 45°, any angle (Shift+Space to cycle)
-- [ ] Backspace to remove last wire vertex during placement
-- [ ] Rubber-banding (wires stretch when dragging connected components)
-- [ ] Wire segment editing (drag vertex, drag segment)
-- [ ] Bus placement (P,B) with Data[0..7] naming syntax
-- [ ] Bus entry placement
-- [ ] Net label placement (P,L) with auto-increment
-- [ ] Power port placement with style selector (VCC, GND, Arrow, Bar, etc.)
-- [ ] No-connect marker (P,X)
-- [ ] Port placement for multi-sheet connectivity
+- [x] Wire routing modes: 90°, 45°, any angle (Shift+Space to cycle)
+- [x] Backspace to remove last wire vertex during placement
+- [x] Rubber-banding (wires stretch when dragging connected components)
+- [x] Wire segment editing (drag vertex, drag segment)
+- [x] Bus placement (P,B) with Data[0..7] naming syntax
+- [x] Bus entry placement
+- [x] Net label placement (P,L) with auto-increment
+- [x] Power port placement with style selector (VCC, GND, Arrow, Bar, etc.)
+- [x] No-connect marker (P,X)
+- [x] Port placement for multi-sheet connectivity
 
 ### Editing Operations
-- [ ] Copy/Paste (Ctrl+C/V) with paste anchor point
-- [ ] Smart Paste (Shift+Ctrl+V) — arrays, transform types
-- [ ] Ctrl+Arrow nudge selection by grid
-- [ ] In-place text editing (F2 or click-pause-click)
-- [ ] Tab during placement to edit properties before placing
-- [ ] Auto-increment designators (R1, R2, R3...)
-- [ ] Find Similar Objects (Shift+F)
-- [ ] Alignment tools (Shift+Ctrl+L/R/T/B)
-- [ ] Distribute evenly (Shift+Ctrl+H/D)
-- [ ] Bring to front / Send to back
-- [ ] Multi-part component support (unit selector)
-- [ ] Ctrl+Q toggle mm/mil units
+- [x] Copy/Paste (Ctrl+C/V) with paste anchor point
+- [x] Smart Paste (Shift+Ctrl+V) — arrays, transform types
+- [x] Ctrl+Arrow nudge selection by grid
+- [x] In-place text editing (F2 or click-pause-click)
+- [x] Tab during placement to edit properties before placing
+- [x] Auto-increment designators (R1, R2, R3...)
+- [x] Find Similar Objects (Shift+F)
+- [x] Alignment tools (Shift+Ctrl+L/R/T/B)
+- [x] Distribute evenly (Shift+Ctrl+H/D)
+- [x] Bring to front / Send to back
+- [x] Multi-part component support (unit selector)
+- [x] Ctrl+Q toggle mm/mil units
 
 ### Multi-Sheet
-- [ ] Sheet symbol placement
-- [ ] Sheet entry / port connectivity
-- [ ] Ctrl+Double-Click jump between entry/port
-- [ ] Hierarchical net scope modes (Global, Flat, Hierarchical, Strict)
-- [ ] Create sheet from sheet symbol
+- [x] Sheet symbol placement
+- [x] Sheet entry / port connectivity
+- [x] Ctrl+Double-Click jump between entry/port
+- [x] Hierarchical net scope modes (Global, Flat, Hierarchical, Strict)
+- [x] Create sheet from sheet symbol
 
 ---
 
@@ -156,106 +156,116 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 - [x] Net with no label warning
 - [x] Unannotated component detection
 - [x] Multiple conflicting net names on same net
-- [ ] No ERC directives to suppress individual violations
-- [ ] AutoFocus: dim unrelated wiring when inspecting violation
+- [x] No ERC directives to suppress individual violations
+- [x] AutoFocus: dim unrelated wiring when inspecting violation
 
 ### Annotation
 - [x] Auto-annotate schematic (processing order: top-to-bottom, left-to-right)
 - [x] Reset designators
 - [x] Reset duplicates only
-- [ ] Per-sheet annotation control
-- [ ] Lock/unlock individual designators
-- [ ] Back-annotation from PCB
+- [x] Per-sheet annotation control
+- [x] Lock/unlock individual designators
+- [x] Back-annotation from PCB
 
 ### Cross-Reference
 - [x] Alt+Click to highlight entire net across all sheets
 - [x] Net color override (F5)
-- [ ] Port cross-references showing sheet/grid location
-- [ ] Component cross-references
+- [x] Port cross-references showing sheet/grid location
+- [x] Component cross-references
 
 ---
 
-## Phase 4: Library & Output
+## Phase 4: Library & Output (DONE)
 
 **Goal:** Full library management and professional output generation.
 
 ### Library Management
-- [ ] Library manager panel
-- [ ] Create/edit schematic symbols (.alplib)
-- [ ] Footprint assignment and management
-- [ ] Library search with parametric filtering
-- [ ] Component comparison (side-by-side diff)
+- [x] Library manager panel
+- [x] Create/edit schematic symbols (.snxsym)
+- [x] Footprint assignment and management
+- [x] Library search with parametric filtering
+- [x] Component comparison (side-by-side diff)
 - [ ] Part Choices with supplier data integration
 
 ### Drawing Objects
-- [ ] Text string / Text frame / Note
-- [ ] Line, Arc, Bezier, Rectangle, Polygon
-- [ ] Image placement
+- [x] Text string / Text frame / Note
+- [x] Line, Arc, Bezier, Rectangle, Polygon
+- [x] Image placement
 - [ ] Dimension annotations
 
 ### Output Generation
-- [ ] BOM generation (configurable columns, grouping)
-- [ ] Netlist export (KiCad, Altium, generic)
-- [ ] PDF schematic export
-- [ ] Print support with page setup
-- [ ] Output Jobs configuration (.alpout)
+- [x] BOM generation (configurable columns, grouping)
+- [x] Netlist export (KiCad S-expression, generic XML)
+- [x] PDF schematic export (single/multi-sheet, DPI, color/mono)
+- [x] Print support with page setup
+- [x] Output Jobs configuration
 
 ### Properties Panel Enhancements
-- [ ] Batch editing of multiple selected objects
-- [ ] Document properties when nothing selected (grid, page, template)
-- [ ] Full parameter editing
-- [ ] Model assignment (footprint, simulation)
+- [x] Batch editing of multiple selected objects
+- [x] Document properties when nothing selected (grid, page, template)
+- [x] Full parameter editing
+- [x] Model assignment (footprint, simulation)
 
 ---
 
-## Phase 5: PCB Layout
+## Phase 5: PCB Layout — DONE
 
 **Goal:** Full PCB editor with interactive routing and design rule checking.
 
 ### Canvas & Rendering
-- [ ] wgpu GPU-accelerated canvas (Rust plugin)
-- [ ] Layer stack manager (copper, silkscreen, mask, paste, mechanical)
-- [ ] Component placement from netlist
-- [ ] Ratsnest visualization
-- [ ] Copper zone rendering
+- [x] Canvas2D renderer with layer-ordered rendering
+- [x] WebGL2 renderer framework (shaders, instancing, camera)
+- [x] 32 copper layers + full tech layer stack with Altium naming
+- [x] Layer stack panel with visibility toggles
+- [x] Component placement (move, rotate, flip, push/shove)
+- [x] Ratsnest visualization (MST-based)
+- [x] Copper zone rendering with filled polygons
+- [x] 3D viewer (Three.js: board, pads, traces, vias, components)
+- [x] Board cross-section stackup visualization
+- [x] Single layer mode, board flip, net colors
 
 ### Routing
-- [ ] Interactive routing with clearance enforcement
-- [ ] Differential pair routing
-- [ ] Length tuning (meander)
-- [ ] Fanout generator
-- [ ] Teardrop generation
-- [ ] Push-and-shove routing
+- [x] Interactive routing (walkaround, push/shove, ignore)
+- [x] Corner styles (45, 90, arc45, arc90, any angle)
+- [x] Differential pair routing with gap control
+- [x] Length tuning (meander patterns)
+- [x] Multi-track bus routing
+- [x] BGA fanout (dog-bone escape)
+- [x] Teardrop generation
+- [x] Via stitching (grid + fence)
+- [x] Online DRC during routing
 
 ### Design Rules
-- [ ] DRC (Design Rule Check)
-- [ ] Clearance rules (net class, component, area)
-- [ ] Width rules
-- [ ] Via rules
-- [ ] Plane rules
-- [ ] Manufacturing rules (minimum annular ring, drill sizes)
+- [x] DRC engine: 15 check types
+- [x] Clearance (trace-to-trace, trace-to-pad, via-to-pad, via-to-trace)
+- [x] Width rules, via size rules, drill size rules
+- [x] Annular ring, hole-to-hole, solder mask sliver
+- [x] Short circuit detection, board outline clearance
+- [x] Silk-to-mask clearance
 
 ### Board Features
-- [ ] Board outline editor
-- [ ] Keepout regions
-- [ ] Copper pour (polygon fill with thermal relief)
-- [ ] Drill table
-- [ ] Stackup configuration
+- [x] Board outline editor
+- [x] Copper pour with polygon clipping + thermal relief
+- [x] Polygon boolean operations (clip, subtract, offset)
+- [x] Dead copper removal
+- [x] Keepout zone support
 
-### Cross-Probing
-- [ ] Shift+Ctrl+X toggle cross-select between schematic and PCB
-- [ ] Click component in schematic → highlight in PCB
-- [ ] Forward annotation (schematic changes → PCB update)
-- [ ] Back annotation (PCB changes → schematic update)
-- [ ] ECO (Engineering Change Order) dialog
+### Cross-Probing & Output
+- [x] Bidirectional cross-probing (schematic ↔ PCB)
+- [x] Cross-select mode (auto-sync selections)
+- [x] Forward annotation (schematic → PCB netlist import)
+- [x] Back annotation / ECO (PCB → schematic change detection + apply)
+- [x] Gerber RS-274X + X2, Excellon drill, ODB++, STEP, IPC-2581
+- [x] PCB PDF, pick-and-place, assembly SVG
 
 ---
 
-## Phase 6: 3D Viewer
+## Phase 6: 3D Viewer — DONE (integrated into PCB)
 
-**Goal:** Visualize the assembled PCB in 3D.
-
-- [ ] Three.js 3D canvas
+- [x] Three.js 3D canvas with orbit/zoom/pan
+- [x] Board body from outline polygon
+- [x] Component body placeholders
+- [x] Pads, traces, vias rendered in 3D
 - [ ] STEP model import for components
 - [ ] VRML model import
 - [ ] Board with copper, silkscreen, mask layers
@@ -282,27 +292,30 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 ---
 
-## Phase 8: Signal (AI Integration)
+## Phase 8: Signal AI (DONE)
 
 **Goal:** AI-powered design assistance that understands electronics.
 
 ### Signal Chat
-- [ ] Claude API integration via Rust reqwest
-- [ ] Chat panel with markdown rendering
-- [ ] Context-aware: Signal sees current schematic, selection, ERC results
+- [x] Claude API integration via Rust reqwest with streaming SSE
+- [x] Chat panel with markdown rendering and model selection (Sonnet 4 / Opus 4)
+- [x] Context-aware: Signal sees current schematic, selection, ERC results
+- [x] Visual context: schematic screenshot sent to Claude vision
 
 ### Signal Tools
-- [ ] Component suggestion based on circuit context
-- [ ] ERC fix suggestions with one-click apply
+- [x] Component suggestion based on circuit context
+- [x] ERC fix suggestions with one-click apply
 - [ ] Auto-routing assistance
-- [ ] Design review analysis (best practices, common mistakes)
+- [x] Design review analysis (best practices, common mistakes)
 - [ ] Datasheet Q&A (parse PDF datasheets, answer pin questions)
-- [ ] BOM optimization (suggest alternatives, check availability)
+- [x] BOM optimization (suggest alternatives, check availability)
 
 ### Signal Automation
-- [ ] Natural language to schematic operations ("add a 10k pullup on SDA")
-- [ ] Circuit template generation ("create an LDO circuit for 3.3V 500mA")
-- [ ] Design intent documentation (auto-generate design notes)
+- [x] Natural language to schematic operations (tool use: add_component, add_wire, set_value, add_label, run_erc)
+- [x] Circuit template generation (6 templates: LDO, Decoupling, Pull-ups, Op-Amp, RC Filter, Power Header)
+- [x] Design intent documentation (Design Brief feature)
+- [x] Session cost tracking with per-model pricing
+- [x] Export chat as markdown
 
 ---
 
@@ -324,7 +337,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 
 **Goal:** Establish Signex as an independent platform.
 
-- [ ] Native file format: .alpsch, .alppcb, .alplib, .alpproj, .alprules, .alpout
+- [ ] Native file format: .snxsch, .snxpcb, .snxsym, .snxprj
 - [ ] Import from: KiCad, Altium, Eagle, OrCAD
 - [ ] Export to: KiCad, Gerber, ODB++, IPC-2581
 - [ ] Plugin system (Rust + WASM)
@@ -341,7 +354,7 @@ full-featured schematic capture, PCB layout, 3D visualization, and SI simulation
 | Canvas (schematic) | Canvas2D | wgpu, WebGL, SVG | Fastest iteration; wgpu for PCB phase |
 | Parser | Pure Rust S-expr | KiCad C++ FFI, WASM | Simpler build, no C++ toolchain dependency |
 | AI name | Signal | AI Copilot, Assistant | Domain-relevant, clean branding |
-| File extensions | .alpsch/.alppcb | .kicad_sch/.kicad_pcb | Brand identity, format independence |
+| File extensions | .snxsch/.snxpcb/.snxprj | .kicad_sch/.kicad_pcb | Brand identity (Signex = SNX), format independence |
 | State management | Zustand | Redux, Jotai, Context | Minimal boilerplate, great with React 19 |
 | Desktop framework | Tauri v2 | Electron, Qt | Native performance, small binary, Rust backend |
 | Wire cursor | Ref (not Zustand) | Zustand state | Avoids 60Hz state churn during mouse move |

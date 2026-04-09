@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
-import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult } from "@/types";
+import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult, DesignConstraint, ConstraintScope, Graphic } from "@/types";
 
-export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect";
+export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry" | "placeParameterSet" | "placeDifferentialPair" | "placeBlanket" | "placeCompileMask" | "placeTextFrame" | "placeNote" | "placeHarness" | "placeHarnessConnector" | "placeHarnessEntry";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
 
 interface WireDrawState {
@@ -73,6 +73,13 @@ interface SchematicState {
   // Clipboard
   copySelected: () => void;
   pasteClipboard: (offset: SchPoint) => void;
+  smartPaste: (offset: SchPoint) => void;
+  pasteArray: (offset: SchPoint, rows: number, cols: number, spacingX: number, spacingY: number) => void;
+
+  // Selection memory (Ctrl+1-8 store, Alt+1-8 recall)
+  selectionMemory: Map<number, Set<string>>;
+  storeSelection: (slot: number) => void;
+  recallSelection: (slot: number) => void;
   clipboard: {
     symbols: SchSymbol[]; wires: SchWire[]; labels: SchLabel[];
     junctions: SchJunction[]; noConnects: SchNoConnect[]; textNotes: TextNote[];
@@ -92,6 +99,17 @@ interface SchematicState {
 
   // Drawing object placement
   addDrawing: (drawing: SchDrawing) => void;
+  placeSheetSymbol: (pos: SchPoint, name: string, filename: string) => void;
+
+  // Directive / annotation placement
+  placeParameterSet: (pos: SchPoint) => void;
+  placeDifferentialPairDirective: (pos: SchPoint) => void;
+  placeBlanket: (pos: SchPoint) => void;
+  placeCompileMask: (pos: SchPoint) => void;
+  placeTextFrame: (pos: SchPoint) => void;
+  placeNote: (pos: SchPoint) => void;
+  moveSelectionByXY: (dx: number, dy: number) => void;
+  setSheetRepeat: (uuid: string, repeat: string, channelCount: number) => void;
 
   // Wire/Bus drawing
   startWire: (pos: SchPoint) => void;
@@ -103,6 +121,7 @@ interface SchematicState {
 
   // Selection helpers
   selectAll: () => void;
+  invertSelection: () => void;
 
   // Alignment
   alignSelected: (direction: "left" | "right" | "top" | "bottom" | "centerH" | "centerV") => void;
@@ -112,6 +131,53 @@ interface SchematicState {
   bringToFront: () => void;
   sendToBack: () => void;
 
+  // Groups
+  createGroup: () => void;
+  dissolveGroup: (groupUuid: string) => void;
+  selectGroupMembers: (memberUuid: string) => void;
+
+  breakWireAt: (uuid: string, point: SchPoint) => void;
+  alignSelectionToGrid: () => void;
+  placeBusEntry: (pos: SchPoint) => void;
+
+  // Document properties
+  updateDocumentProp: (key: string, value: string) => void;
+
+  // Design variants
+  addVariant: (name: string) => void;
+  removeVariant: (name: string) => void;
+  setVariantComponent: (variantName: string, uuid: string, fitted: boolean, altValue?: string, altFootprint?: string) => void;
+
+  // Document parameters
+  addDocumentParameter: (key: string, value: string) => void;
+  removeDocumentParameter: (key: string) => void;
+  updateDocumentParameter: (key: string, value: string) => void;
+
+  // Differential pairs
+  addDiffPair: (name: string, positiveNet: string, negativeNet: string) => void;
+  removeDiffPair: (name: string) => void;
+  // Signal harnesses
+  addHarness: (name: string, harnessType: string) => void;
+  removeHarness: (uuid: string) => void;
+  addHarnessMember: (harnessUuid: string, memberName: string, kind: "net" | "bus" | "harness", ref?: string) => void;
+  removeHarnessMember: (harnessUuid: string, memberName: string) => void;
+  // Design constraints
+  addConstraint: (name: string, type: DesignConstraint["type"], scopeKind: ConstraintScope["kind"], value: number, unit: "mm" | "mil") => void;
+  removeConstraint: (uuid: string) => void;
+  updateConstraintEnabled: (uuid: string, enabled: boolean) => void;
+  // Parameter resolution (component → variant → document → project)
+  resolveParameter: (key: string, componentUuid?: string, variantName?: string) => string;
+
+  // Net classes
+  addNetClass: (name: string) => void;
+  removeNetClass: (name: string) => void;
+  assignNetToClass: (netName: string, className: string) => void;
+  removeNetFromClass: (netName: string, className: string) => void;
+
+  // Symbol field editing
+  updateSymbolField: (uuid: string, key: string, value: string) => void;
+  removeSymbolField: (uuid: string, key: string) => void;
+
   // Batch editing
   updateMultipleSymbolProp: (uuids: string[], key: string, value: string) => void;
   updateMultipleLabelProp: (uuids: string[], key: string, value: string) => void;
@@ -119,6 +185,7 @@ interface SchematicState {
   // Find Similar & Annotation
   findSimilar: () => void;
   annotateAll: () => void;
+  annotateWithOptions: (opts: { order: "down-across" | "up-across" | "across-down" | "across-up"; startIndex: number; scope: "all" | "selected" | "unannotated" }) => void;
   resetDesignators: () => void;
   resetDuplicateDesignators: () => void;
   annotateSelected: () => void;
@@ -130,10 +197,58 @@ interface SchematicState {
   mirrorPlacementY: () => void;
   placeSymbolAt: (pos: SchPoint) => void;
   cancelPlacement: () => void;
+
+  // Cross-probe zoom
+  zoomToRequest: { x: number; y: number; zoom?: number } | null;
+  requestZoomTo: (target: { x: number; y: number; zoom?: number }) => void;
+  clearZoomRequest: () => void;
 }
 
 function generateUuid(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Compute the bounding box of a symbol's graphics in schematic (Y-down) space,
+ * relative to the symbol origin (0,0). Used to auto-place ref/val text outside
+ * the component body when placing from the library.
+ */
+function symbolGraphicsBBox(
+  graphics: Graphic[], rot: number, mx: boolean, my: boolean
+): { top: number; bottom: number; left: number; right: number } {
+  let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
+  const rad = -(rot * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const transform = (lx: number, ly: number): [number, number] => {
+    const x = lx, y = -ly; // Y-up → Y-down
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
+    if (mx) ry = -ry;
+    if (my) rx = -rx;
+    return [rx, ry];
+  };
+  const visit = (lx: number, ly: number) => {
+    const [rx, ry] = transform(lx, ly);
+    if (rx < minX) minX = rx; if (rx > maxX) maxX = rx;
+    if (ry < minY) minY = ry; if (ry > maxY) maxY = ry;
+  };
+  for (const g of graphics) {
+    if (g.type === "Polyline") { for (const p of g.points) visit(p.x, p.y); }
+    else if (g.type === "Rectangle") { visit(g.start.x, g.start.y); visit(g.end.x, g.end.y); }
+    else if (g.type === "Circle") {
+      visit(g.center.x - g.radius, g.center.y);
+      visit(g.center.x + g.radius, g.center.y);
+      visit(g.center.x, g.center.y - g.radius);
+      visit(g.center.x, g.center.y + g.radius);
+    }
+  }
+  const margin = 1.27;
+  return {
+    top:    isFinite(minY) ? minY - margin : -3,
+    bottom: isFinite(maxY) ? maxY + margin : 3,
+    left:   isFinite(minX) ? minX : -3,
+    right:  isFinite(maxX) ? maxX : 3,
+  };
 }
 
 function snapToGrid(v: number, grid: number): number {
@@ -218,13 +333,14 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode },
   placingSymbol: null,
   clipboard: null,
+  selectionMemory: new Map(),
   selectedIds: new Set<string>(),
   undoStack: [],
   redoStack: [],
 
   loadSchematic: (data) =>
     set({
-      data,
+      data: { ...data, net_classes: data.net_classes || [], variants: data.variants || [], document_parameters: data.document_parameters || [], groups: data.groups || [], differential_pairs: data.differential_pairs || [], signal_harnesses: data.signal_harnesses || [], constraints: data.constraints || [], parameter_sets: data.parameter_sets || [], diff_pair_directives: data.diff_pair_directives || [], blankets: data.blankets || [], compile_masks: data.compile_masks || [], notes: data.notes || [] },
       dirty: false,
       selectedIds: new Set(),
       undoStack: [],
@@ -235,6 +351,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
 
   setEditMode: (mode) => {
     const state = get();
+    // Clear placement pause when changing modes
+    useEditorStore.getState().setPlacementPaused(false);
     // Cancel any active wire drawing when switching modes
     if (state.wireDrawing.active && mode !== "drawWire") {
       set({ editMode: mode, wireDrawing: { points: [], active: false, routingMode: "manhattan" as WireRoutingMode } });
@@ -255,7 +373,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (undoStack.length === 0 || !data) return;
     const prev = undoStack[undoStack.length - 1];
     set({
-      data: prev,
+      data: cloneData(prev),
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, cloneData(data)],
       dirty: true,
@@ -268,7 +386,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (redoStack.length === 0 || !data) return;
     const next = redoStack[redoStack.length - 1];
     set({
-      data: next,
+      data: cloneData(next),
       redoStack: redoStack.slice(0, -1),
       undoStack: [...undoStack, cloneData(data)],
       dirty: true,
@@ -286,6 +404,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
   deselectAll: () => set({ selectedIds: new Set() }),
 
+  // NOTE: Caller must call pushUndo() before the first move tick in a drag gesture
   moveElements: (uuids, dx, dy, noRubberBand) => {
     const { data } = get();
     if (!data) return;
@@ -350,6 +469,12 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
         nc.position.y += dy;
       }
     }
+    for (const ne of newData.no_erc_directives) {
+      if (idSet.has(ne.uuid)) {
+        ne.position.x += dx;
+        ne.position.y += dy;
+      }
+    }
     for (const note of newData.text_notes) {
       if (idSet.has(note.uuid)) {
         note.position.x += dx;
@@ -381,13 +506,29 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     }
 
     for (const d of newData.drawings) {
-      const uuid = "uuid" in d ? (d as { uuid: string }).uuid : "";
+      const uuid = d.uuid;
       if (!idSet.has(uuid)) continue;
       if (d.type === "Line") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
       else if (d.type === "Rect") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
       else if (d.type === "Circle") { d.center.x += dx; d.center.y += dy; }
       else if (d.type === "Arc") { d.start.x += dx; d.start.y += dy; d.mid.x += dx; d.mid.y += dy; d.end.x += dx; d.end.y += dy; }
       else if (d.type === "Polyline") { for (const p of d.points) { p.x += dx; p.y += dy; } }
+      else if (d.type === "TextFrame") { d.start.x += dx; d.start.y += dy; d.end.x += dx; d.end.y += dy; }
+    }
+    for (const ps of newData.parameter_sets) {
+      if (idSet.has(ps.uuid)) { ps.position.x += dx; ps.position.y += dy; }
+    }
+    for (const dp of newData.diff_pair_directives) {
+      if (idSet.has(dp.uuid)) { dp.position.x += dx; dp.position.y += dy; }
+    }
+    for (const bl of newData.blankets) {
+      if (idSet.has(bl.uuid)) { for (const p of bl.points) { p.x += dx; p.y += dy; } }
+    }
+    for (const cm of newData.compile_masks) {
+      if (idSet.has(cm.uuid)) { cm.position.x += dx; cm.position.y += dy; }
+    }
+    for (const n of newData.notes) {
+      if (idSet.has(n.uuid)) { n.position.x += dx; n.position.y += dy; }
     }
 
     // Rubber-banding: stretch non-selected wires connected to moving symbol pins
@@ -409,6 +550,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  // NOTE: Caller must call pushUndo() before the first endpoint drag tick
   moveWireEndpoint: (uuid, endpoint, pos) => {
     const { data } = get();
     if (!data) return;
@@ -418,6 +560,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const snapped = snapPoint(pos);
     if (endpoint === "start") { wire.start = snapped; }
     else { wire.end = snapped; }
+    autoJunction(newData, [snapped]);
     set({ data: newData, dirty: true });
   },
 
@@ -458,7 +601,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    newData.symbols.push({ ...symbol, uuid: generateUuid() });
+    newData.symbols.push({ ...structuredClone(symbol), uuid: generateUuid() });
     set({ data: newData, dirty: true });
   },
 
@@ -496,6 +639,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     newData.child_sheets = newData.child_sheets.filter((cs) => !selectedIds.has(cs.uuid));
     newData.drawings = newData.drawings.filter((d) => !selectedIds.has(d.uuid));
     newData.no_erc_directives = newData.no_erc_directives.filter((d) => !selectedIds.has(d.uuid));
+    newData.parameter_sets = newData.parameter_sets.filter((ps) => !selectedIds.has(ps.uuid));
+    newData.diff_pair_directives = newData.diff_pair_directives.filter((dp) => !selectedIds.has(dp.uuid));
+    newData.blankets = newData.blankets.filter((bl) => !selectedIds.has(bl.uuid));
+    newData.compile_masks = newData.compile_masks.filter((cm) => !selectedIds.has(cm.uuid));
+    newData.notes = newData.notes.filter((n) => !selectedIds.has(n.uuid));
     set({ data: newData, dirty: true, selectedIds: new Set() });
   },
 
@@ -506,7 +654,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const newData = cloneData(data);
     for (const sym of newData.symbols) {
       if (selectedIds.has(sym.uuid)) {
-        sym.rotation = ((sym.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+        sym.rotation = (sym.rotation + 90) % 360;
       }
     }
     set({ data: newData, dirty: true });
@@ -535,13 +683,56 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
 
   duplicateSelected: () => {
-    const store = get();
-    store.copySelected();
-    // Paste with small offset
-    const updated = get(); // re-read after copy
-    if (updated.clipboard) {
-      updated.pasteClipboard({ x: 2.54, y: 2.54 });
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+    const ox = 2.54, oy = 2.54;
+
+    for (const sym of data.symbols) {
+      if (!selectedIds.has(sym.uuid)) continue;
+      const n = structuredClone(sym);
+      n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+      n.val_text.position.x += ox; n.val_text.position.y += oy;
+      // Reset reference to prefix? to avoid duplicate designators
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
+      newData.symbols.push(n); newIds.push(n.uuid);
     }
+    for (const w of data.wires) {
+      if (!selectedIds.has(w.uuid)) continue;
+      const n = structuredClone(w);
+      n.uuid = generateUuid();
+      n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+      newData.wires.push(n); newIds.push(n.uuid);
+    }
+    for (const l of data.labels) {
+      if (!selectedIds.has(l.uuid)) continue;
+      const n = structuredClone(l);
+      n.uuid = generateUuid(); n.position.x += ox; n.position.y += oy;
+      newData.labels.push(n); newIds.push(n.uuid);
+    }
+    for (const j of data.junctions) {
+      if (!selectedIds.has(j.uuid)) continue;
+      const n = structuredClone(j);
+      n.uuid = generateUuid(); n.position.x += ox; n.position.y += oy;
+      newData.junctions.push(n); newIds.push(n.uuid);
+    }
+    for (const d of data.drawings) {
+      if (!selectedIds.has(d.uuid)) continue;
+      const n = structuredClone(d);
+      n.uuid = generateUuid();
+      if (n.type === "Line" || n.type === "Rect") { n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy; }
+      else if (n.type === "Circle") { n.center.x += ox; n.center.y += oy; }
+      else if (n.type === "Arc") { n.start.x += ox; n.start.y += oy; n.mid.x += ox; n.mid.y += oy; n.end.x += ox; n.end.y += oy; }
+      else if (n.type === "Polyline") { for (const p of n.points) { p.x += ox; p.y += oy; } }
+      newData.drawings.push(n); newIds.push(n.uuid);
+    }
+
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
   },
 
   // Property editing
@@ -559,6 +750,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "x": sym.position.x = isNaN(parseFloat(value)) ? sym.position.x : parseFloat(value); break;
       case "y": sym.position.y = isNaN(parseFloat(value)) ? sym.position.y : parseFloat(value); break;
       case "rotation": sym.rotation = (parseInt(value) || 0) % 360; break;
+      case "is_power": sym.is_power = value === "true"; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -574,6 +766,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "text": label.text = value; break;
       case "x": label.position.x = isNaN(parseFloat(value)) ? label.position.x : parseFloat(value); break;
       case "y": label.position.y = isNaN(parseFloat(value)) ? label.position.y : parseFloat(value); break;
+      case "rotation": label.rotation = (parseInt(value) || 0) % 360; break;
+      case "shape": label.shape = value; break;
     }
     set({ data: newData, dirty: true });
   },
@@ -589,8 +783,263 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "text": note.text = value; break;
       case "x": note.position.x = isNaN(parseFloat(value)) ? note.position.x : parseFloat(value); break;
       case "y": note.position.y = isNaN(parseFloat(value)) ? note.position.y : parseFloat(value); break;
+      case "rotation": note.rotation = (parseInt(value) || 0) % 360; break;
     }
     set({ data: newData, dirty: true });
+  },
+
+  updateDocumentProp: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    if (key === "paper_size") newData.paper_size = value;
+    else newData.title_block[key] = value;
+    set({ data: newData, dirty: true });
+  },
+
+  addVariant: (name) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.variants.some((v) => v.name === name)) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.variants.push({ name, description: "", components: {} });
+    set({ data: nd, dirty: true });
+  },
+
+  removeVariant: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.variants = nd.variants.filter((v) => v.name !== name);
+    set({ data: nd, dirty: true });
+  },
+
+  setVariantComponent: (variantName, uuid, fitted, altValue, altFootprint) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const v = nd.variants.find((vr) => vr.name === variantName);
+    if (v) v.components[uuid] = { fitted, altValue, altFootprint };
+    set({ data: nd, dirty: true });
+  },
+
+  addDocumentParameter: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.document_parameters = nd.document_parameters.filter((p) => p.key !== key);
+    nd.document_parameters.push({ key, value, scope: "document" });
+    set({ data: nd, dirty: true });
+  },
+
+  removeDocumentParameter: (key) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.document_parameters = nd.document_parameters.filter((p) => p.key !== key);
+    set({ data: nd, dirty: true });
+  },
+
+  updateDocumentParameter: (key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const p = nd.document_parameters.find((dp) => dp.key === key);
+    if (p) p.value = value;
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Differential pairs ---
+  addDiffPair: (name, positiveNet, negativeNet) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.differential_pairs.some((dp) => dp.name === name)) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.differential_pairs.push({ name, positiveNet, negativeNet });
+    set({ data: nd, dirty: true });
+  },
+  removeDiffPair: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.differential_pairs = nd.differential_pairs.filter((dp) => dp.name !== name);
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Signal harnesses ---
+  addHarness: (name, harnessType) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.signal_harnesses.some((h) => h.name === name)) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.signal_harnesses.push({ uuid: crypto.randomUUID(), name, type: harnessType, members: [] });
+    set({ data: nd, dirty: true });
+  },
+  removeHarness: (uuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.signal_harnesses = nd.signal_harnesses.filter((h) => h.uuid !== uuid);
+    set({ data: nd, dirty: true });
+  },
+  addHarnessMember: (harnessUuid, memberName, kind, ref) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const h = nd.signal_harnesses.find((sh) => sh.uuid === harnessUuid);
+    if (h) h.members.push({ name: memberName, kind, ref });
+    set({ data: nd, dirty: true });
+  },
+  removeHarnessMember: (harnessUuid, memberName) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const h = nd.signal_harnesses.find((sh) => sh.uuid === harnessUuid);
+    if (h) h.members = h.members.filter((m) => m.name !== memberName);
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Design constraints ---
+  addConstraint: (name, type, scopeKind, value, unit) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.constraints.push({
+      uuid: crypto.randomUUID(),
+      name,
+      type,
+      scope: { kind: scopeKind },
+      value,
+      unit,
+      enabled: true,
+      priority: nd.constraints.length,
+    });
+    set({ data: nd, dirty: true });
+  },
+  removeConstraint: (uuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.constraints = nd.constraints.filter((c) => c.uuid !== uuid);
+    set({ data: nd, dirty: true });
+  },
+  updateConstraintEnabled: (uuid, enabled) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const c = nd.constraints.find((cr) => cr.uuid === uuid);
+    if (c) c.enabled = enabled;
+    set({ data: nd, dirty: true });
+  },
+
+  // --- Parameter hierarchy resolution: variant → component → document → project ---
+  resolveParameter: (key, componentUuid, variantName) => {
+    const { data } = get();
+    if (!data) return "";
+    // 1. Variant override (highest priority — design variants must be able to override component values)
+    if (variantName && componentUuid) {
+      const variant = data.variants.find((v) => v.name === variantName);
+      if (variant?.components[componentUuid]) {
+        const vc = variant.components[componentUuid];
+        if (key === "Value" && vc.altValue) return vc.altValue;
+        if (key === "Footprint" && vc.altFootprint) return vc.altFootprint;
+      }
+    }
+    // 2. Component field
+    if (componentUuid) {
+      const sym = data.symbols.find((s) => s.uuid === componentUuid);
+      if (sym?.fields[key]) return sym.fields[key];
+    }
+    // 3. Document parameter
+    const docParam = data.document_parameters.find((p) => p.key === key);
+    if (docParam) return docParam.value;
+    // 4. Title block / project-level fallback
+    const tb = data.title_block || {};
+    if (tb[key]) return tb[key];
+    return "";
+  },
+
+  addNetClass: (name) => {
+    const { data } = get();
+    if (!data) return;
+    if (data.net_classes.some((nc) => nc.name === name)) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.net_classes.push({ name, nets: [] });
+    set({ data: newData, dirty: true });
+  },
+
+  removeNetClass: (name) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.net_classes = newData.net_classes.filter((nc) => nc.name !== name);
+    set({ data: newData, dirty: true });
+  },
+
+  assignNetToClass: (netName, className) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    // Remove from any existing class
+    for (const nc of newData.net_classes) {
+      nc.nets = nc.nets.filter((n) => n !== netName);
+    }
+    const cls = newData.net_classes.find((nc) => nc.name === className);
+    if (cls) cls.nets.push(netName);
+    set({ data: newData, dirty: true });
+  },
+
+  removeNetFromClass: (netName, className) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const cls = newData.net_classes.find((nc) => nc.name === className);
+    if (cls) cls.nets = cls.nets.filter((n) => n !== netName);
+    set({ data: newData, dirty: true });
+  },
+
+  updateSymbolField: (uuid, key, value) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find((s) => s.uuid === uuid);
+    if (sym) {
+      sym.fields[key] = value;
+      set({ data: newData, dirty: true });
+    }
+  },
+
+  removeSymbolField: (uuid, key) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const sym = newData.symbols.find((s) => s.uuid === uuid);
+    if (sym) {
+      delete sym.fields[key];
+      set({ data: newData, dirty: true });
+    }
   },
 
   // Clipboard — copies all element types
@@ -625,6 +1074,9 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       n.position.x += ox; n.position.y += oy;
       n.ref_text.position.x += ox; n.ref_text.position.y += oy;
       n.val_text.position.x += ox; n.val_text.position.y += oy;
+      // Reset reference to prefix? to avoid duplicate designators
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
       newData.symbols.push(n); newIds.push(n.uuid);
     }
     for (const w of clipboard.wires) {
@@ -668,6 +1120,98 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
   },
 
+  // Smart Paste: convert labels ↔ ports, net labels ↔ global labels
+  smartPaste: (offset) => {
+    const { data, clipboard } = get();
+    if (!data || !clipboard) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+    const ox = offset.x, oy = offset.y;
+
+    // Convert labels to ports and vice versa
+    for (const l of clipboard.labels) {
+      const n = structuredClone(l);
+      n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      // Toggle: Net → Global, Global → Net, Hierarchical → Port (skip)
+      if (n.label_type === "Net") n.label_type = "Global";
+      else if (n.label_type === "Global") n.label_type = "Net";
+      newData.labels.push(n);
+      newIds.push(n.uuid);
+    }
+    // Copy everything else as-is
+    for (const sym of clipboard.symbols) {
+      const n = structuredClone(sym); n.uuid = generateUuid();
+      n.position.x += ox; n.position.y += oy;
+      const prefix = n.reference.replace(/[0-9?]+$/, "");
+      n.reference = `${prefix}?`;
+      n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+      n.val_text.position.x += ox; n.val_text.position.y += oy;
+      newData.symbols.push(n); newIds.push(n.uuid);
+    }
+    for (const w of clipboard.wires) {
+      const n = structuredClone(w); n.uuid = generateUuid();
+      n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+      newData.wires.push(n); newIds.push(n.uuid);
+    }
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  // Paste Array: paste clipboard in a grid pattern
+  pasteArray: (offset, rows, cols, spacingX, spacingY) => {
+    const { data, clipboard } = get();
+    if (!data || !clipboard) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const newIds: string[] = [];
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const ox = offset.x + c * spacingX;
+        const oy = offset.y + r * spacingY;
+        for (const sym of clipboard.symbols) {
+          const n = structuredClone(sym); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          n.ref_text.position.x += ox; n.ref_text.position.y += oy;
+          n.val_text.position.x += ox; n.val_text.position.y += oy;
+          const prefix = n.reference.replace(/[0-9?]+$/, "");
+          n.reference = `${prefix}?`;
+          newData.symbols.push(n); newIds.push(n.uuid);
+        }
+        for (const w of clipboard.wires) {
+          const n = structuredClone(w); n.uuid = generateUuid();
+          n.start.x += ox; n.start.y += oy; n.end.x += ox; n.end.y += oy;
+          newData.wires.push(n); newIds.push(n.uuid);
+        }
+        for (const l of clipboard.labels) {
+          const n = structuredClone(l); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          newData.labels.push(n); newIds.push(n.uuid);
+        }
+        for (const j of clipboard.junctions) {
+          const n = structuredClone(j); n.uuid = generateUuid();
+          n.position.x += ox; n.position.y += oy;
+          newData.junctions.push(n); newIds.push(n.uuid);
+        }
+      }
+    }
+    set({ data: newData, dirty: true, selectedIds: new Set(newIds) });
+  },
+
+  storeSelection: (slot) => {
+    const { selectedIds, selectionMemory } = get();
+    const newMem = new Map(selectionMemory);
+    newMem.set(slot, new Set(selectedIds));
+    set({ selectionMemory: newMem });
+  },
+
+  recallSelection: (slot) => {
+    const { selectionMemory } = get();
+    const stored = selectionMemory.get(slot);
+    if (stored) set({ selectedIds: new Set(stored) });
+  },
+
   // Net label placement
   placeNetLabel: (pos, text) => {
     const { data } = get();
@@ -689,11 +1233,21 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   },
 
   // Power port placement (creates a power symbol)
-  placePowerPort: (pos, netName, _style) => {
+  placePowerPort: (pos, netName, style) => {
     const { data } = get();
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
+    // Auto-detect style from name if not specified
+    let powerStyle = style || "input";
+    if (powerStyle === "input") {
+      const lower = netName.toLowerCase();
+      if (lower.includes("gnd") || lower.includes("vss") || lower.includes("ground")) {
+        powerStyle = "power_ground";
+      } else {
+        powerStyle = "bar";
+      }
+    }
     const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
@@ -701,7 +1255,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       position: snapped,
       rotation: 0,
       label_type: "Power",
-      shape: "input",
+      shape: powerStyle,
       font_size: 1.27,
       justify: "left",
     });
@@ -747,11 +1301,10 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const newData = cloneData(data);
-    const snapped = snapPoint(pos);
     newData.labels.push({
       uuid: generateUuid(),
       text,
-      position: snapped,
+      position: pos, // Already snapped by caller
       rotation: 0,
       label_type: "Hierarchical",
       shape: shape || "bidirectional",
@@ -785,6 +1338,145 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const newData = cloneData(data);
     newData.drawings.push(drawing);
     set({ data: newData, dirty: true });
+  },
+
+  placeSheetSymbol: (pos, name, filename) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    newData.child_sheets.push({
+      uuid: crypto.randomUUID(),
+      name,
+      filename,
+      position: pos,
+      size: [25.4, 20.32] as [number, number],
+      pins: [],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  // --- Directive / annotation placement ---
+
+  placeParameterSet: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.parameter_sets.push({
+      uuid: generateUuid(),
+      position: snapped,
+      parameters: [{ key: "Name", value: "Value" }],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeDifferentialPairDirective: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.diff_pair_directives.push({
+      uuid: generateUuid(),
+      position: snapped,
+      positiveNet: "DP_P",
+      negativeNet: "DP_N",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeBlanket: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    const w = 10, h = 7;
+    newData.blankets.push({
+      uuid: generateUuid(),
+      points: [
+        { x: snapped.x, y: snapped.y },
+        { x: snapped.x + w, y: snapped.y },
+        { x: snapped.x + w, y: snapped.y + h },
+        { x: snapped.x, y: snapped.y + h },
+      ],
+      parameters: [],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeCompileMask: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.compile_masks.push({
+      uuid: generateUuid(),
+      position: snapped,
+      size: [10, 7],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeTextFrame: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.drawings.push({
+      type: "TextFrame",
+      uuid: generateUuid(),
+      start: snapped,
+      end: { x: snapped.x + 12, y: snapped.y + 6 },
+      text: "Text Frame",
+      fontSize: 1.27,
+      width: 0.15,
+      fill: false,
+      fillColor: undefined,
+      color: "#b0bec5",
+      lineStyle: "solid",
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  placeNote: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+    const snapped = snapPoint(pos);
+    newData.notes.push({
+      uuid: generateUuid(),
+      text: "Note",
+      position: snapped,
+      size: [10, 5],
+    });
+    set({ data: newData, dirty: true });
+  },
+
+  moveSelectionByXY: (dx, dy) => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    get().pushUndo();
+    get().moveElements(Array.from(selectedIds), dx, dy);
+  },
+
+  // Multi-channel: set Repeat on a sheet symbol (e.g., "Repeat(CH, 1, 4)" for 4 channels)
+  setSheetRepeat: (uuid, repeat, channelCount) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const sheet = nd.child_sheets.find((s) => s.uuid === uuid);
+    if (sheet) {
+      sheet.repeat = repeat;
+      sheet.channelCount = channelCount;
+    }
+    set({ data: nd, dirty: true });
   },
 
   // Wire drawing state machine
@@ -855,17 +1547,17 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     get().pushUndo();
     const newData = cloneData(data);
 
-    // Create wire segments between consecutive points
+    // Create wire segments between consecutive points (spread to avoid storing by reference)
     const newWirePoints: SchPoint[] = [];
     for (let i = 0; i < wireDrawing.points.length - 1; i++) {
       newData.wires.push({
         uuid: generateUuid(),
-        start: wireDrawing.points[i],
-        end: wireDrawing.points[i + 1],
+        start: { ...wireDrawing.points[i] },
+        end: { ...wireDrawing.points[i + 1] },
       });
-      newWirePoints.push(wireDrawing.points[i]);
+      newWirePoints.push({ ...wireDrawing.points[i] });
     }
-    newWirePoints.push(wireDrawing.points[wireDrawing.points.length - 1]);
+    newWirePoints.push({ ...wireDrawing.points[wireDrawing.points.length - 1] });
 
     // Auto-junction: check if any new wire endpoint touches an existing wire's midpoint
     autoJunction(newData, newWirePoints);
@@ -894,8 +1586,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     for (let i = 0; i < wireDrawing.points.length - 1; i++) {
       newData.buses.push({
         uuid: generateUuid(),
-        start: wireDrawing.points[i],
-        end: wireDrawing.points[i + 1],
+        start: { ...wireDrawing.points[i] },
+        end: { ...wireDrawing.points[i + 1] },
       });
     }
     set({ data: newData, dirty: true, wireDrawing: { points: [], active: false, routingMode: mode } });
@@ -919,6 +1611,27 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ selectedIds: ids });
   },
 
+  invertSelection: () => {
+    const { data, selectedIds } = get();
+    if (!data) return;
+    const all = new Set<string>();
+    for (const s of data.symbols) if (!s.is_power) all.add(s.uuid);
+    for (const w of data.wires) all.add(w.uuid);
+    for (const l of data.labels) all.add(l.uuid);
+    for (const j of data.junctions) all.add(j.uuid);
+    for (const nc of data.no_connects) all.add(nc.uuid);
+    for (const t of data.text_notes) all.add(t.uuid);
+    for (const b of data.buses) all.add(b.uuid);
+    for (const be of data.bus_entries) all.add(be.uuid);
+    for (const cs of data.child_sheets) all.add(cs.uuid);
+    for (const d of data.drawings) all.add(d.uuid);
+    const inverted = new Set<string>();
+    for (const id of all) {
+      if (!selectedIds.has(id)) inverted.add(id);
+    }
+    set({ selectedIds: inverted });
+  },
+
   alignSelected: (direction) => {
     const { data, selectedIds } = get();
     if (!data || selectedIds.size < 2) return;
@@ -936,7 +1649,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     get().pushUndo();
     const newData = cloneData(data);
 
-    let target: number;
+    let target = 0;
     switch (direction) {
       case "left": target = Math.min(...positions.map(p => p.x)); break;
       case "right": target = Math.max(...positions.map(p => p.x)); break;
@@ -944,6 +1657,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       case "bottom": target = Math.max(...positions.map(p => p.y)); break;
       case "centerH": target = positions.reduce((s, p) => s + p.x, 0) / positions.length; break;
       case "centerV": target = positions.reduce((s, p) => s + p.y, 0) / positions.length; break;
+      default: return; // unknown direction
     }
 
     for (const pos of positions) {
@@ -1047,10 +1761,17 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const existing = newData.symbols
       .filter((s) => s.reference.startsWith(prefix))
       .map((s) => parseInt(s.reference.slice(prefix.length)) || 0);
-    const nextNum = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+    const nextNum = (existing.length > 0 ? existing.reduce((max, v) => v > max ? v : max, 0) : 0) + 1;
     const reference = `${prefix}${nextNum}`;
 
     const fs = 1.27;
+    // Compute bounding box of the symbol body to place ref/val text outside it
+    const bbox = symbolGraphicsBBox(
+      placingSymbol.lib.graphics,
+      placingSymbol.rotation,
+      placingSymbol.mirrorX,
+      placingSymbol.mirrorY,
+    );
     const newSymbol: SchSymbol = {
       uuid: generateUuid(),
       lib_id: `${placingSymbol.meta.library}:${placingSymbol.meta.symbol_id}`,
@@ -1064,13 +1785,13 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       unit: 1,
       is_power: false,
       ref_text: {
-        position: { x: snapped.x, y: snapped.y - 2 },
+        position: { x: snapped.x, y: snapped.y + bbox.top },
         rotation: 0, font_size: fs,
         justify_h: "center", justify_v: "bottom",
         hidden: false,
       },
       val_text: {
-        position: { x: snapped.x, y: snapped.y + 2 },
+        position: { x: snapped.x, y: snapped.y + bbox.bottom },
         rotation: 0, font_size: fs,
         justify_h: "center", justify_v: "top",
         hidden: false,
@@ -1081,6 +1802,7 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       on_board: true,
       exclude_from_sim: false,
       locked: false,
+      fields: {},
     };
 
     // Also add the lib symbol to the document so rendering works
@@ -1097,6 +1819,11 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
   cancelPlacement: () => {
     set({ placingSymbol: null, editMode: "select" });
   },
+
+  // Cross-probe zoom
+  zoomToRequest: null,
+  requestZoomTo: (target) => set({ zoomToRequest: target }),
+  clearZoomRequest: () => set({ zoomToRequest: null }),
 
   // Find Similar: select all objects matching the selected object's type/lib_id
   findSimilar: () => {
@@ -1172,14 +1899,112 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: nd, dirty: true });
   },
 
+  createGroup: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size < 2) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.groups.push({
+      uuid: crypto.randomUUID(),
+      name: `Group ${nd.groups.length + 1}`,
+      memberUuids: [...selectedIds],
+    });
+    set({ data: nd, dirty: true });
+  },
+
+  dissolveGroup: (groupUuid) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.groups = nd.groups.filter((g) => g.uuid !== groupUuid);
+    set({ data: nd, dirty: true });
+  },
+
+  selectGroupMembers: (memberUuid) => {
+    const { data } = get();
+    if (!data) return;
+    const group = data.groups.find((g) => g.memberUuids.includes(memberUuid));
+    if (group) {
+      set({ selectedIds: new Set(group.memberUuids) });
+    }
+  },
+
+  breakWireAt: (uuid, point) => {
+    const { data } = get();
+    if (!data) return;
+    const wire = data.wires.find((w) => w.uuid === uuid);
+    if (!wire) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    const idx = nd.wires.findIndex((w) => w.uuid === uuid);
+    if (idx < 0) return;
+    const w = nd.wires[idx];
+    // Split wire into two at the given point
+    const w1 = { uuid: crypto.randomUUID(), start: { ...w.start }, end: { ...point } };
+    const w2 = { uuid: crypto.randomUUID(), start: { ...point }, end: { ...w.end } };
+    nd.wires.splice(idx, 1, w1, w2);
+    set({ data: nd, dirty: true });
+  },
+
+  alignSelectionToGrid: () => {
+    const { data, selectedIds } = get();
+    if (!data || selectedIds.size === 0) return;
+    const editor = useEditorStore.getState();
+    const gs = editor.statusBar.gridSize;
+    const snap = (v: number) => Math.round(v / gs) * gs;
+    get().pushUndo();
+    const nd = cloneData(data);
+    for (const sym of nd.symbols) {
+      if (!selectedIds.has(sym.uuid)) continue;
+      sym.position = { x: snap(sym.position.x), y: snap(sym.position.y) };
+    }
+    for (const w of nd.wires) {
+      if (!selectedIds.has(w.uuid)) continue;
+      w.start = { x: snap(w.start.x), y: snap(w.start.y) };
+      w.end = { x: snap(w.end.x), y: snap(w.end.y) };
+    }
+    for (const l of nd.labels) {
+      if (!selectedIds.has(l.uuid)) continue;
+      l.position = { x: snap(l.position.x), y: snap(l.position.y) };
+    }
+    for (const j of nd.junctions) {
+      if (!selectedIds.has(j.uuid)) continue;
+      j.position = { x: snap(j.position.x), y: snap(j.position.y) };
+    }
+    for (const nc of nd.no_connects) {
+      if (!selectedIds.has(nc.uuid)) continue;
+      nc.position = { x: snap(nc.position.x), y: snap(nc.position.y) };
+    }
+    for (const tn of nd.text_notes) {
+      if (!selectedIds.has(tn.uuid)) continue;
+      tn.position = { x: snap(tn.position.x), y: snap(tn.position.y) };
+    }
+    set({ data: nd, dirty: true });
+  },
+
+  placeBusEntry: (pos) => {
+    const { data } = get();
+    if (!data) return;
+    get().pushUndo();
+    const nd = cloneData(data);
+    nd.bus_entries.push({
+      uuid: crypto.randomUUID(),
+      position: pos,
+      size: [2.54, 2.54] as [number, number],
+    });
+    set({ data: nd, dirty: true });
+  },
+
   // Batch editing
   updateMultipleSymbolProp: (uuids, key, value) => {
     const { data } = get();
     if (!data) return;
     get().pushUndo();
     const nd = cloneData(data);
+    const uuidSet = new Set(uuids);
     for (const sym of nd.symbols) {
-      if (!uuids.includes(sym.uuid)) continue;
+      if (!uuidSet.has(sym.uuid)) continue;
       switch (key) {
         case "value": sym.value = value; break;
         case "footprint": sym.footprint = value; break;
@@ -1193,8 +2018,9 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     if (!data) return;
     get().pushUndo();
     const nd = cloneData(data);
+    const uuidSet = new Set(uuids);
     for (const label of nd.labels) {
-      if (!uuids.includes(label.uuid)) continue;
+      if (!uuidSet.has(label.uuid)) continue;
       if (key === "text") label.text = value;
     }
     set({ data: nd, dirty: true });
@@ -1247,6 +2073,57 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     set({ data: newData, dirty: true });
   },
 
+  annotateWithOptions: ({ order, startIndex, scope }) => {
+    const { data, selectedIds } = get();
+    if (!data) return;
+    get().pushUndo();
+    const newData = cloneData(data);
+
+    const groups = new Map<string, typeof newData.symbols>();
+    for (const sym of newData.symbols) {
+      if (sym.is_power) continue;
+      const prefix = sym.reference.replace(/[0-9?]+$/, "");
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix)!.push(sym);
+    }
+
+    for (const [prefix, syms] of groups) {
+      const usedNumbers = new Set<number>();
+      for (const sym of syms) {
+        const num = parseInt(sym.reference.replace(/^[A-Z]+/, ""), 10);
+        if (!isNaN(num) && !sym.reference.endsWith("?")) usedNumbers.add(num);
+      }
+
+      const sortFn = (a: { position: SchPoint }, b: { position: SchPoint }) => {
+        switch (order) {
+          case "down-across": { const dy = a.position.y - b.position.y; return Math.abs(dy) > 2 ? dy : a.position.x - b.position.x; }
+          case "up-across": { const dy = b.position.y - a.position.y; return Math.abs(dy) > 2 ? dy : a.position.x - b.position.x; }
+          case "across-down": { const dx = a.position.x - b.position.x; return Math.abs(dx) > 2 ? dx : a.position.y - b.position.y; }
+          case "across-up": { const dx = a.position.x - b.position.x; return Math.abs(dx) > 2 ? dx : b.position.y - a.position.y; }
+          default: return 0;
+        }
+      };
+
+      const toAnnotate = syms.filter((s) => {
+        if (s.locked) return false;
+        if (scope === "selected") return selectedIds.has(s.uuid);
+        if (scope === "unannotated") return s.reference.endsWith("?") || s.reference === prefix;
+        return true; // "all"
+      });
+      toAnnotate.sort(sortFn);
+
+      let nextNum = startIndex;
+      for (const sym of toAnnotate) {
+        while (usedNumbers.has(nextNum)) nextNum++;
+        sym.reference = `${prefix}${nextNum}`;
+        usedNumbers.add(nextNum);
+        nextNum++;
+      }
+    }
+
+    set({ data: newData, dirty: true });
+  },
+
   // Annotate only selected symbols
   annotateSelected: () => {
     const { data, selectedIds } = get();
@@ -1264,7 +2141,8 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       const usedNumbers = new Set<number>();
       for (const s of newData.symbols) {
         if (s.is_power) continue;
-        const num = parseInt(s.reference.replace(/^[A-Z]+/, ""), 10);
+        if (!s.reference.startsWith(prefix) || !/^\d/.test(s.reference.slice(prefix.length))) continue;
+        const num = parseInt(s.reference.slice(prefix.length), 10);
         if (!isNaN(num) && !s.reference.endsWith("?") && !selectedIds.has(s.uuid)) usedNumbers.add(num);
       }
       syms.sort((a, b) => {
