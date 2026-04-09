@@ -1,4 +1,5 @@
 pub mod document;
+pub mod impedance_solver;
 pub mod ngspice_ffi;
 pub mod parser;
 pub mod pcb_parser;

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Emitter;
 
+use crate::engine::impedance_solver::{self, ImpedanceRequest, ImpedanceResult, StackupLayer};
 use crate::engine::ngspice_ffi::{self, NgspiceInstance, NgspiceMessage};
 use crate::engine::parser::SchematicSheet;
 use crate::engine::spice_netlist::{self, AnalysisConfig, AnalysisType};
@@ -298,4 +299,49 @@ fn which_executable(name: &str) -> Option<std::path::PathBuf> {
         }
     }
     None
+}
+
+// --- Impedance commands ---
+
+#[tauri::command]
+pub fn calculate_impedance(request: ImpedanceRequest) -> Result<ImpedanceResult, String> {
+    impedance_solver::solve_impedance(&request)
+}
+
+#[tauri::command]
+pub fn get_default_stackup(layer_count: u32) -> Vec<StackupLayer> {
+    match layer_count {
+        2 => vec![
+            StackupLayer { name: "Top".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "FR4".into(), height_um: 1500.0, dielectric_er: 4.3, is_copper: false },
+            StackupLayer { name: "Bottom".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+        ],
+        4 => vec![
+            StackupLayer { name: "Top".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Prepreg".into(), height_um: 200.0, dielectric_er: 4.2, is_copper: false },
+            StackupLayer { name: "Inner 1".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Core".into(), height_um: 800.0, dielectric_er: 4.5, is_copper: false },
+            StackupLayer { name: "Inner 2".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Prepreg".into(), height_um: 200.0, dielectric_er: 4.2, is_copper: false },
+            StackupLayer { name: "Bottom".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+        ],
+        6 => vec![
+            StackupLayer { name: "Top".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Prepreg".into(), height_um: 150.0, dielectric_er: 4.2, is_copper: false },
+            StackupLayer { name: "Inner 1".into(), height_um: 17.5, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Core".into(), height_um: 200.0, dielectric_er: 4.5, is_copper: false },
+            StackupLayer { name: "Inner 2".into(), height_um: 17.5, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Core".into(), height_um: 600.0, dielectric_er: 4.5, is_copper: false },
+            StackupLayer { name: "Inner 3".into(), height_um: 17.5, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Core".into(), height_um: 200.0, dielectric_er: 4.5, is_copper: false },
+            StackupLayer { name: "Inner 4".into(), height_um: 17.5, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "Prepreg".into(), height_um: 150.0, dielectric_er: 4.2, is_copper: false },
+            StackupLayer { name: "Bottom".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+        ],
+        _ => vec![
+            StackupLayer { name: "Top".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+            StackupLayer { name: "FR4".into(), height_um: 1500.0, dielectric_er: 4.3, is_copper: false },
+            StackupLayer { name: "Bottom".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
+        ],
+    }
 }

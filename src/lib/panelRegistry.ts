@@ -21,13 +21,14 @@ import { NetClassPanel } from "@/panels/NetClassPanel";
 import { NetInspectorPanel } from "@/panels/NetInspectorPanel";
 import SimulationPanel from "@/panels/SimulationPanel";
 import WaveformPanel from "@/panels/WaveformPanel";
+import ImpedancePanel from "@/panels/ImpedancePanel";
 
 export type PanelId =
   | "projects" | "components" | "navigator" | "libraryMgmt" | "schLibrary" | "pcbLibrary" | "netClasses" | "netInspector"
   | "properties" | "filter" | "list"
   | "messages" | "output-jobs" | "signal"
   | "inspector" | "drc" | "layerStack" | "snippets" | "variants" | "boardCrossSection"
-  | "simulation" | "waveform";
+  | "simulation" | "waveform" | "impedance";
 
 export type EditorContext = "schematic" | "pcb" | "both";
 
@@ -70,6 +71,7 @@ export const PANEL_DEFS: PanelDef[] = [
   // Simulation panels (available in both)
   { id: "simulation", title: "Simulation", defaultDock: "bottom", context: "both" },
   { id: "waveform", title: "Waveform", defaultDock: "bottom", context: "both" },
+  { id: "impedance", title: "Impedance", defaultDock: "right", context: "pcb" },
 ];
 
 /** Get panels available for the current editor mode */
@@ -100,4 +102,5 @@ export const PANEL_COMPONENTS: Record<PanelId, React.FC> = {
   boardCrossSection: BoardCrossSectionPanel,
   simulation: SimulationPanel,
   waveform: WaveformPanel,
+  impedance: ImpedancePanel,
 };

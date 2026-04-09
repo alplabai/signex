@@ -38,6 +38,8 @@ pub fn run() {
             simulation::detect_solvers,
             simulation::get_spice_netlist,
             simulation::run_spice_simulation,
+            simulation::calculate_impedance,
+            simulation::get_default_stackup,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
