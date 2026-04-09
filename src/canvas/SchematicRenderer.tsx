@@ -98,9 +98,12 @@ export function SchematicRenderer() {
 
   const drawGraphicTransformed = useCallback((
     ctx: CanvasRenderingContext2D, g: Graphic,
-    sx: number, sy: number, rot: number, mx: boolean, my: boolean
+    sx: number, sy: number, rot: number, mx: boolean, my: boolean,
+    mode: 'full' | 'fillOnly' | 'strokeOnly' = 'full'
   ) => {
     const t = (lx: number, ly: number) => symToSch(lx, ly, sx, sy, rot, mx, my);
+    const doFill   = mode !== 'strokeOnly';
+    const doStroke = mode !== 'fillOnly';
 
     const gWidth = "width" in g ? (g.width as number) : 0;
     ctx.lineWidth = Math.max(gWidth || 0.1, 0.1);
@@ -115,9 +118,9 @@ export function SchematicRenderer() {
           const [xi, yi] = t(g.points[i].x, g.points[i].y);
           ctx.lineTo(xi, yi);
         }
-        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
-        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
-        ctx.stroke();
+        if (doFill && g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (doFill && g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
+        if (doStroke) ctx.stroke();
         break;
       }
       case "Rectangle": {
@@ -125,18 +128,18 @@ export function SchematicRenderer() {
         const [x2, y2] = t(g.end.x, g.end.y);
         const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
         const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
-        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
-        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fillRect(rx, ry, rw, rh); }
-        ctx.strokeRect(rx, ry, rw, rh);
+        if (doFill && g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fillRect(rx, ry, rw, rh); }
+        else if (doFill && g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fillRect(rx, ry, rw, rh); }
+        if (doStroke) ctx.strokeRect(rx, ry, rw, rh);
         break;
       }
       case "Circle": {
         const [cx, cy] = t(g.center.x, g.center.y);
         ctx.beginPath();
         ctx.arc(cx, cy, g.radius, 0, Math.PI * 2);
-        if (g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
-        else if (g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
-        ctx.stroke();
+        if (doFill && g.fill_type === "background") { ctx.fillStyle = C.bodyFill; ctx.fill(); }
+        else if (doFill && g.fill_type === "outline") { ctx.fillStyle = C.body; ctx.fill(); }
+        if (doStroke) ctx.stroke();
         break;
       }
       case "Arc": {
@@ -144,7 +147,7 @@ export function SchematicRenderer() {
         const [mx1, my1] = t(g.mid.x, g.mid.y);
         const [ex1, ey1] = t(g.end.x, g.end.y);
         const center = arcCenter({ x: sx1, y: sy1 }, { x: mx1, y: my1 }, { x: ex1, y: ey1 });
-        if (center) {
+        if (center && doStroke) {
           const r = Math.hypot(sx1 - center.x, sy1 - center.y);
           const a1 = Math.atan2(sy1 - center.y, sx1 - center.x);
           const a2 = Math.atan2(ey1 - center.y, ex1 - center.x);
@@ -582,52 +585,59 @@ export function SchematicRenderer() {
       const sx = sym.position.x, sy = sym.position.y;
       const rot = sym.rotation, mx = sym.mirror_x, my = sym.mirror_y;
 
-      // Draw graphics (transformed from symbol-local Y-up to screen Y-down)
-      ctx.strokeStyle = sym.is_power ? C.power : C.body;
-      for (const g of lib.graphics) {
-        drawGraphicTransformed(ctx, g, sx, sy, rot, mx, my);
-      }
+      const bodyStroke = sym.is_power ? C.power : C.body;
 
-      // Draw pins — all in screen space, no canvas transform needed
+      // Phase 1: Pin lines (stubs) drawn first, under the body fill
       for (const pin of lib.pins) {
-        if (pin.hidden) continue; // Hidden pins still connect electrically but are not drawn
+        if (pin.hidden) continue;
         const [px, py] = symToSch(pin.position.x, pin.position.y, sx, sy, rot, mx, my);
         const pe = pinEnd(pin);
         const [ex, ey] = symToSch(pe.x, pe.y, sx, sy, rot, mx, my);
-
-        // Pin line
         ctx.strokeStyle = C.pin;
         ctx.lineWidth = 0.1;
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(ex, ey);
         ctx.stroke();
+      }
 
-        // Pin number (midpoint of pin line) — respect lib symbol visibility
+      // Phase 2: Body fill on top of pin stubs — covers inner portions of stubs
+      ctx.strokeStyle = bodyStroke;
+      for (const g of lib.graphics) {
+        drawGraphicTransformed(ctx, g, sx, sy, rot, mx, my, 'fillOnly');
+      }
+
+      // Phase 3: Body stroke (outline) — clean border on top of fill
+      for (const g of lib.graphics) {
+        drawGraphicTransformed(ctx, g, sx, sy, rot, mx, my, 'strokeOnly');
+      }
+
+      // Phase 4: Pin numbers + names on top of the body
+      const nameOffset = lib.pin_name_offset > 0 ? lib.pin_name_offset : 0.4;
+      for (const pin of lib.pins) {
+        if (pin.hidden) continue;
+        const [px, py] = symToSch(pin.position.x, pin.position.y, sx, sy, rot, mx, my);
+        const pe = pinEnd(pin);
+        const [ex, ey] = symToSch(pe.x, pe.y, sx, sy, rot, mx, my);
+        const dx = ex - px, dy = ey - py;
+        const len = Math.hypot(dx, dy) || 1;
+
+        // Pin number (midpoint, perpendicular offset)
         if (lib.show_pin_numbers && pin.number_visible && pin.number !== "~") {
           ctx.fillStyle = C.pinNum;
           ctx.font = "1.0px Roboto";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
           const nmx = (px + ex) / 2, nmy = (py + ey) / 2;
-          // Offset perpendicular to pin direction
-          const dx = ex - px, dy = ey - py;
-          const len = Math.hypot(dx, dy) || 1;
           ctx.fillText(txt(pin.number), nmx - dy / len * 0.5, nmy + dx / len * 0.5);
         }
 
-        // Pin name (at inner end, toward body) — respect lib symbol visibility
+        // Pin name (inner end toward body, using lib pin_name_offset)
         if (lib.show_pin_names && pin.name_visible && pin.name !== "~") {
           ctx.fillStyle = C.pinName;
           ctx.font = "0.75px Roboto";
-          const dx = ex - px, dy = ey - py;
-          const len = Math.hypot(dx, dy) || 1;
-          // Name is drawn at pin end (inside body), along pin direction
-          const offset = 0.4;
-          const nx = ex + (dx / len) * offset;
-          const ny = ey + (dy / len) * offset;
-
-          // Determine text alignment based on pin direction
+          const nx = ex + (dx / len) * nameOffset;
+          const ny = ey + (dy / len) * nameOffset;
           if (Math.abs(dx) > Math.abs(dy)) {
             ctx.textBaseline = "middle";
             ctx.textAlign = dx > 0 ? "left" : "right";

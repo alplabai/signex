@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { useEditorStore } from "@/stores/editor";
-import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult, DesignConstraint, ConstraintScope } from "@/types";
+import type { SchematicData, SchPoint, SchSymbol, SchWire, SchLabel, SchJunction, SchNoConnect, TextNote, SchBus, SchBusEntry, SchDrawing, LibSymbol, SymbolSearchResult, DesignConstraint, ConstraintScope, Graphic } from "@/types";
 
 export type EditMode = "select" | "drawWire" | "drawBus" | "placeSymbol" | "placeLabel" | "placePower" | "placeNoConnect" | "placeNoErc" | "placePort" | "placeText" | "drawLine" | "drawRect" | "drawCircle" | "drawPolyline" | "placeSheetSymbol" | "placeBusEntry" | "placeParameterSet" | "placeDifferentialPair" | "placeBlanket" | "placeCompileMask" | "placeTextFrame" | "placeNote" | "placeHarness" | "placeHarnessConnector" | "placeHarnessEntry";
 export type WireRoutingMode = "manhattan" | "diagonal" | "free";
@@ -206,6 +206,49 @@ interface SchematicState {
 
 function generateUuid(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Compute the bounding box of a symbol's graphics in schematic (Y-down) space,
+ * relative to the symbol origin (0,0). Used to auto-place ref/val text outside
+ * the component body when placing from the library.
+ */
+function symbolGraphicsBBox(
+  graphics: Graphic[], rot: number, mx: boolean, my: boolean
+): { top: number; bottom: number; left: number; right: number } {
+  let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
+  const rad = -(rot * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const transform = (lx: number, ly: number): [number, number] => {
+    const x = lx, y = -ly; // Y-up → Y-down
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
+    if (mx) ry = -ry;
+    if (my) rx = -rx;
+    return [rx, ry];
+  };
+  const visit = (lx: number, ly: number) => {
+    const [rx, ry] = transform(lx, ly);
+    if (rx < minX) minX = rx; if (rx > maxX) maxX = rx;
+    if (ry < minY) minY = ry; if (ry > maxY) maxY = ry;
+  };
+  for (const g of graphics) {
+    if (g.type === "Polyline") { for (const p of g.points) visit(p.x, p.y); }
+    else if (g.type === "Rectangle") { visit(g.start.x, g.start.y); visit(g.end.x, g.end.y); }
+    else if (g.type === "Circle") {
+      visit(g.center.x - g.radius, g.center.y);
+      visit(g.center.x + g.radius, g.center.y);
+      visit(g.center.x, g.center.y - g.radius);
+      visit(g.center.x, g.center.y + g.radius);
+    }
+  }
+  const margin = 1.27;
+  return {
+    top:    isFinite(minY) ? minY - margin : -3,
+    bottom: isFinite(maxY) ? maxY + margin : 3,
+    left:   isFinite(minX) ? minX : -3,
+    right:  isFinite(maxX) ? maxX : 3,
+  };
 }
 
 function snapToGrid(v: number, grid: number): number {
@@ -1722,6 +1765,13 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
     const reference = `${prefix}${nextNum}`;
 
     const fs = 1.27;
+    // Compute bounding box of the symbol body to place ref/val text outside it
+    const bbox = symbolGraphicsBBox(
+      placingSymbol.lib.graphics,
+      placingSymbol.rotation,
+      placingSymbol.mirrorX,
+      placingSymbol.mirrorY,
+    );
     const newSymbol: SchSymbol = {
       uuid: generateUuid(),
       lib_id: `${placingSymbol.meta.library}:${placingSymbol.meta.symbol_id}`,
@@ -1735,13 +1785,13 @@ export const useSchematicStore = create<SchematicState>()((set, get) => ({
       unit: 1,
       is_power: false,
       ref_text: {
-        position: { x: snapped.x, y: snapped.y - 2 },
+        position: { x: snapped.x, y: snapped.y + bbox.top },
         rotation: 0, font_size: fs,
         justify_h: "center", justify_v: "bottom",
         hidden: false,
       },
       val_text: {
-        position: { x: snapped.x, y: snapped.y + 2 },
+        position: { x: snapped.x, y: snapped.y + bbox.bottom },
         rotation: 0, font_size: fs,
         justify_h: "center", justify_v: "top",
         hidden: false,
