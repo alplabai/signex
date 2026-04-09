@@ -212,10 +212,14 @@ export function ComponentPanel() {
   };
 
   const placeComponent = async (result: SymbolSearchResult) => {
-    let sym = preview;
-    if (!sym || selectedResult?.symbol_id !== result.symbol_id) {
-      const lib = libraries.find((l) => l.name === result.library);
-      if (!lib) return;
+    if (!useSchematicStore.getState().data) return; // no schematic open
+    const lib = libraries.find((l) => l.name === result.library);
+    if (!lib) return;
+    let sym: LibSymbol;
+    // Use cached preview only when it's guaranteed to match (avoids race on double-click)
+    if (preview && selectedResult?.symbol_id === result.symbol_id && selectedResult?.library === result.library) {
+      sym = preview;
+    } else {
       try {
         sym = await invoke<LibSymbol>("get_symbol", { libraryPath: lib.path, symbolId: result.symbol_id });
       } catch { return; }
@@ -230,6 +234,14 @@ export function ComponentPanel() {
 
   // Filter results by selected library
   const filteredResults = selectedLib === "all" ? displayResults : displayResults.filter(r => r.library === selectedLib);
+
+  // When a specific library is selected from the dropdown, auto-expand it in the tree
+  useEffect(() => {
+    if (selectedLib === "all") return;
+    const lib = libraries.find((l) => l.name === selectedLib);
+    if (lib && expandedLib !== selectedLib) expandLibrary(lib);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLib, libraries]);
 
   const handleRefresh = () => {
     libCacheRef.current = {};
@@ -411,7 +423,7 @@ export function ComponentPanel() {
               Loading libraries...
             </div>
           ) : (
-            libraries.map((lib) => (
+            libraries.filter((lib) => selectedLib === "all" || lib.name === selectedLib).map((lib) => (
               <div key={lib.name}>
                 <button
                   className="w-full flex items-center gap-1.5 px-2 py-1 text-left hover:bg-bg-hover transition-colors text-[11px]"
