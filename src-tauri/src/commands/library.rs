@@ -268,14 +268,10 @@ fn validate_library_path(library_path: &str) -> Result<std::path::PathBuf, Strin
         _ => return Err("Invalid library file extension".to_string()),
     }
 
-    // Reject path traversal components and absolute paths
+    // Reject relative path traversal (..); absolute paths are validated
+    // against the KiCad symbols dir via canonicalization below.
     for comp in path.components() {
-        if matches!(
-            comp,
-            std::path::Component::ParentDir
-                | std::path::Component::RootDir
-                | std::path::Component::Prefix(_)
-        ) {
+        if matches!(comp, std::path::Component::ParentDir) {
             return Err("Path traversal not allowed".to_string());
         }
     }
@@ -504,14 +500,10 @@ fn validate_footprint_path(path_str: &str) -> Result<PathBuf, String> {
         _ => return Err("Invalid footprint file extension (expected .kicad_mod or .snxpkg)".to_string()),
     }
 
-    // Reject path traversal and absolute paths
+    // Reject relative path traversal (..); absolute paths are validated
+    // against the KiCad footprints dir via canonicalization below.
     for comp in path.components() {
-        if matches!(
-            comp,
-            std::path::Component::ParentDir
-                | std::path::Component::RootDir
-                | std::path::Component::Prefix(_)
-        ) {
+        if matches!(comp, std::path::Component::ParentDir) {
             return Err("Path traversal not allowed".to_string());
         }
     }

@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Iosevka — bundled locally in assets/fonts, no internet required */
+@import "./assets/fonts/iosevka/iosevka.css";
 
 @theme {
   --color-bg-primary: #1a1b2e;
@@ -25,7 +27,9 @@
   --font-mono: "Roboto Mono", monospace;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   padding: 0;
@@ -40,17 +44,27 @@ html, body, #root {
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
 
 /* Panel resize handle */
 .resize-handle {
   position: relative;
 }
 .resize-handle::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   cursor: col-resize;

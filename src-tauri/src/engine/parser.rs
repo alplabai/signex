@@ -1333,6 +1333,8 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
     }
 
     let mut results = Vec::new();
+    // child_id -> parent_id for (extends ...) symbols
+    let mut extends_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     // Build a set of all top-level symbol IDs for O(1) subsymbol checks
     let all_sym_ids: std::collections::HashSet<String> = root
@@ -1357,6 +1359,11 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
                     continue;
                 }
             }
+        }
+
+        // Record (extends "ParentId") relationship
+        if let Some(parent_id) = sym_node.find("extends").and_then(|e| e.first_arg()) {
+            extends_map.insert(id.clone(), parent_id.to_string());
         }
 
         // Extract properties
@@ -1386,6 +1393,40 @@ pub fn parse_symbol_library(content: &str) -> Result<Vec<(LibSymbol, SymbolMeta)
         };
 
         results.push((lib, meta));
+    }
+
+    // Second pass: resolve (extends) — derived symbols inherit graphics/pins from parent.
+    // Handles transitive chains (A extends B extends C) by iterating until stable.
+    if !extends_map.is_empty() {
+        // Build id -> index lookup
+        let id_to_idx: std::collections::HashMap<String, usize> = results
+            .iter()
+            .enumerate()
+            .map(|(i, (_, meta))| (meta.symbol_id.clone(), i))
+            .collect();
+
+        // Resolve potentially chained extends (up to 8 levels deep)
+        for _ in 0..8 {
+            let mut changed = false;
+            for (child_id, parent_id) in &extends_map {
+                let child_idx = match id_to_idx.get(child_id) { Some(&i) => i, None => continue };
+                let parent_idx = match id_to_idx.get(parent_id) { Some(&i) => i, None => continue };
+                if results[child_idx].0.pins.is_empty() && results[child_idx].0.graphics.is_empty()
+                    && (!results[parent_idx].0.pins.is_empty() || !results[parent_idx].0.graphics.is_empty())
+                {
+                    let parent_lib = results[parent_idx].0.clone();
+                    let child = &mut results[child_idx].0;
+                    child.graphics = parent_lib.graphics;
+                    child.pins = parent_lib.pins;
+                    child.show_pin_numbers = parent_lib.show_pin_numbers;
+                    child.show_pin_names = parent_lib.show_pin_names;
+                    child.pin_name_offset = parent_lib.pin_name_offset;
+                    results[child_idx].1.pin_count = results[child_idx].0.pins.len();
+                    changed = true;
+                }
+            }
+            if !changed { break; }
+        }
     }
 
     Ok(results)

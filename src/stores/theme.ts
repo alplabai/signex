@@ -47,6 +47,8 @@ interface ThemeState {
   customThemes: Theme[];
   /** UI zoom scale factor, e.g. 1.0 = 100%, 1.25 = 125% */
   uiScale: number;
+  /** Per-user schematic canvas font override, applied on top of the active theme. */
+  schFontOverride: string | null;
 
   /** Returns built-ins + user custom themes. */
   getAllThemes: () => Theme[];
@@ -54,6 +56,8 @@ interface ThemeState {
 
   setActiveTheme: (id: string) => void;
   setUiScale: (scale: number) => void;
+  /** Set the schematic canvas font family (overrides active theme's schFont). */
+  setSchFont: (font: string) => void;
   /** Update tokens for a custom theme; no-op for built-ins. */
   updateCustomTheme: (id: string, tokens: ThemeTokens) => void;
   /** Rename a custom theme. */
@@ -74,6 +78,7 @@ export const useThemeStore = create<ThemeState>()(
       activeThemeId: "catppuccin-mocha",
       customThemes: [],
       uiScale: 1.0,
+      schFontOverride: null,
 
       getAllThemes: () => [...BUILT_IN_THEMES, ...get().customThemes],
 
@@ -95,6 +100,10 @@ export const useThemeStore = create<ThemeState>()(
       setUiScale: (scale) => {
         set({ uiScale: scale });
         applyUiScale(scale);
+      },
+
+      setSchFont: (font) => {
+        set({ schFontOverride: font || null });
       },
 
       updateCustomTheme: (id, tokens) => {
