@@ -1,8 +1,11 @@
 pub mod document;
+pub mod elmer_bridge;
 pub mod impedance_solver;
 pub mod ngspice_ffi;
+pub mod openems_bridge;
 pub mod parser;
 pub mod pcb_parser;
 pub mod sexpr;
 pub mod spice_netlist;
+pub mod touchstone;
 pub mod writer;

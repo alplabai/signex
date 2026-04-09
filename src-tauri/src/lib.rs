@@ -40,6 +40,9 @@ pub fn run() {
             simulation::run_spice_simulation,
             simulation::calculate_impedance,
             simulation::get_default_stackup,
+            simulation::run_openems_simulation,
+            simulation::run_pcb_thermal,
+            simulation::run_pcb_ir_drop,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

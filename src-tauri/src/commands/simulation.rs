@@ -3,10 +3,13 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Emitter;
 
+use crate::engine::elmer_bridge::{self, ThermalConfig, IrDropConfig, FieldResult as ElmerFieldResult};
 use crate::engine::impedance_solver::{self, ImpedanceRequest, ImpedanceResult, StackupLayer};
 use crate::engine::ngspice_ffi::{self, NgspiceInstance, NgspiceMessage};
+use crate::engine::openems_bridge::{self, EmConfig, EmPcbGeometry, EmResult};
 use crate::engine::parser::SchematicSheet;
 use crate::engine::spice_netlist::{self, AnalysisConfig, AnalysisType};
+use crate::engine::touchstone;
 
 // --- Types ---
 
@@ -344,4 +347,149 @@ pub fn get_default_stackup(layer_count: u32) -> Vec<StackupLayer> {
             StackupLayer { name: "Bottom".into(), height_um: 35.0, dielectric_er: 1.0, is_copper: true },
         ],
     }
+}
+
+// --- OpenEMS commands ---
+
+#[tauri::command]
+pub async fn run_openems_simulation(
+    app: tauri::AppHandle,
+    sim_id: String,
+    geometry: EmPcbGeometry,
+    config: EmConfig,
+) -> Result<EmResult, String> {
+    let openems_path = openems_bridge::detect_openems()
+        .ok_or_else(|| "OpenEMS not found. Install OpenEMS or add it to PATH.".to_string())?;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 10.0,
+        message: "Generating CSXCAD geometry...".to_string(),
+    });
+
+    let xml = openems_bridge::generate_csxcad_xml(&geometry, &config)?;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 20.0,
+        message: "Running OpenEMS...".to_string(),
+    });
+
+    // Write XML to temp dir and run
+    let result = tokio::task::spawn_blocking(move || {
+        let tmp = tempfile::tempdir()
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let xml_path = tmp.path().join("simulation.xml");
+        let output_dir = tmp.path().join("output");
+        std::fs::write(&xml_path, &xml)
+            .map_err(|e| format!("Failed to write XML: {}", e))?;
+
+        openems_bridge::run_openems(&openems_path, &xml_path, &output_dir, None)
+    })
+    .await
+    .map_err(|e| format!("OpenEMS task failed: {}", e))??;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id, percent: 100.0,
+        message: format!("Done in {}ms", result.elapsed_ms),
+    });
+
+    Ok(result)
+}
+
+// --- Elmer commands ---
+
+#[tauri::command]
+pub async fn run_pcb_thermal(
+    app: tauri::AppHandle,
+    sim_id: String,
+    thermal_config: ThermalConfig,
+    board_width_mm: f64,
+    board_height_mm: f64,
+) -> Result<ElmerFieldResult, String> {
+    let solver_path = elmer_bridge::detect_elmer_solver()
+        .ok_or_else(|| "ElmerSolver not found. Install Elmer or add it to PATH.".to_string())?;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 10.0,
+        message: "Generating thermal SIF...".to_string(),
+    });
+
+    let sif = elmer_bridge::generate_thermal_sif(&thermal_config, board_width_mm, board_height_mm);
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 30.0,
+        message: "Running ElmerSolver...".to_string(),
+    });
+
+    let result = tokio::task::spawn_blocking(move || {
+        let tmp = tempfile::tempdir()
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let sif_path = tmp.path().join("case.sif");
+        std::fs::write(&sif_path, &sif)
+            .map_err(|e| format!("Failed to write SIF: {}", e))?;
+
+        elmer_bridge::run_elmer(&solver_path, tmp.path(), None)?;
+
+        // Parse results
+        let vtu_path = tmp.path().join("results.vtu");
+        if vtu_path.exists() {
+            elmer_bridge::parse_vtu(&vtu_path)
+        } else {
+            Err("No results.vtu output found".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("Thermal task failed: {}", e))??;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id, percent: 100.0, message: "Thermal analysis complete".to_string(),
+    });
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn run_pcb_ir_drop(
+    app: tauri::AppHandle,
+    sim_id: String,
+    ir_config: IrDropConfig,
+) -> Result<ElmerFieldResult, String> {
+    let solver_path = elmer_bridge::detect_elmer_solver()
+        .ok_or_else(|| "ElmerSolver not found. Install Elmer or add it to PATH.".to_string())?;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 10.0,
+        message: "Generating IR drop SIF...".to_string(),
+    });
+
+    let sif = elmer_bridge::generate_ir_drop_sif(&ir_config);
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id: sim_id.clone(), percent: 30.0,
+        message: "Running ElmerSolver...".to_string(),
+    });
+
+    let result = tokio::task::spawn_blocking(move || {
+        let tmp = tempfile::tempdir()
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let sif_path = tmp.path().join("case.sif");
+        std::fs::write(&sif_path, &sif)
+            .map_err(|e| format!("Failed to write SIF: {}", e))?;
+
+        elmer_bridge::run_elmer(&solver_path, tmp.path(), None)?;
+
+        let vtu_path = tmp.path().join("results.vtu");
+        if vtu_path.exists() {
+            elmer_bridge::parse_vtu(&vtu_path)
+        } else {
+            Err("No results.vtu output found".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("IR drop task failed: {}", e))??;
+
+    let _ = app.emit("sim:progress", SimProgress {
+        sim_id, percent: 100.0, message: "IR drop analysis complete".to_string(),
+    });
+
+    Ok(result)
 }
