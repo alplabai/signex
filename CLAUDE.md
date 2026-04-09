@@ -4,41 +4,55 @@
 Desktop EDA tool with Altium Designer-class UX.
 Target: schematic capture, PCB layout, 3D viewer, SI simulation, AI copilot (Signal).
 
-## Architecture (Current — migrating to Bevy)
-- **Desktop shell:** Tauri v2 (Rust backend) → migrating to Bevy + bevy_egui
-- **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS 4 → migrating to egui panels via bevy_egui
-- **Canvas:** Canvas2D → migrating to Bevy 2D (wgpu, bevy_prototype_lyon, Gizmos)
-- **Camera:** → Bevy Camera2d + bevy_pancam (pan/zoom)
-- **Parser:** Pure Rust S-expression parser for KiCad format (.kicad_sch, .kicad_sym) — unchanged
-- **3D:** Three.js (future) → Bevy Camera3d + PBR (built-in)
-- **AI:** Claude API via Rust reqwest client — branded "Signal"
-- **State:** Zustand (4 stores) → Bevy ECS (entities + components + systems)
-- **Picking:** → Bevy MeshPickingPlugin (built-in 0.15+)
+## Architecture — Target Stack
+- **Rendering:** Bevy 0.18 (wgpu) — 2D schematic + 2D PCB + 3D PCB viewer
+- **UI Panels:** egui 0.34 via bevy_egui 0.39 — toolbars, inspectors, panels, dialogs
+- **2D Shapes:** bevy_prototype_lyon 0.16 — schematic symbols, wires, pads, tracks
+- **Camera 2D:** bevy_pancam 0.20 — right-click pan, scroll zoom (Altium-style)
+- **Camera 3D:** bevy_panorbit_camera 0.34 — orbit for 3D PCB viewer
+- **Parser:** Pure Rust S-expression parser for KiCad format (.kicad_sch, .kicad_pcb, .kicad_sym)
+- **Simulation:** ngspice 46 (SPICE), OpenEMS 0.0.36 (RF/EM FDTD), Elmer FEM 26.1 (thermal)
+- **AI:** Claude API via reqwest — branded "Signal" copilot
+- **State:** Bevy ECS — entities + components + systems (replaces Zustand)
+- **Picking:** Bevy MeshPickingPlugin (built-in)
+- **Plugins:** Extism 1.21 (WASM) — third-party plugin API
 
-## Project Structure
+## Source Stack (being migrated)
+- Tauri v2 + React 19 + TypeScript + Canvas2D + Zustand
+- Legacy code moved to `_legacy/` for reference during port
+
+## Workspace Structure (Target)
 ```
-src-tauri/src/          Rust backend
-  commands/             Tauri IPC commands (project, schematic, save, library)
-  engine/               KiCad S-expr parser, document model, writer
-    parser.rs           Schematic + symbol library parser
-    sexpr.rs            Generic S-expression tokenizer
-    writer.rs           KiCad S-expr serializer
-    document.rs         Document model (future)
-src/                    React frontend
-  components/           Shell: MenuBar, ToolbarStrip, TabBar, StatusBar, ComponentSearch
-  panels/               Dockable panels: Project, Properties, Messages, Signal
-  canvas/               SchematicRenderer (Canvas2D), EditorCanvas, hitTest
-  stores/               Zustand state: layout, project, editor, schematic
-  hooks/                useResizable, useTauriCommand
-  types/                TypeScript type definitions
-  lib/                  Utilities (cn)
+Cargo.toml                       # [workspace] manifest
+libs/
+  kicad-parser/                  # S-expr parser — .kicad_sch, .kicad_pcb, .kicad_sym
+  kicad-writer/                  # S-expr serializer — write back to KiCad format
+  eda-types/                     # Domain types — schematic, pcb, net, layer, sim, violation
+  pcb-geom/                      # Polygon boolean (Clipper2), copper pour, ratsnest, mesh gen
+  spice-gen/                     # SchematicDoc → .cir netlist, .raw parser
+  openems-bridge/                # PCB → CSX XML, HDF5 S-param reader
+  elmer-bridge/                  # PCB → .sif, GMSH mesh gen, VTK thermal reader
+  step-loader/                   # STEP import via truck-modeling
+  plugin-api/                    # WASM host functions + types (Extism)
+src/                             # Bevy application
+  main.rs                        # App::new() + plugin chain
+  plugins/                       # Bevy plugins (viewport_2d, viewport_3d, view_mode, sim)
+  render/schematic/              # Wire, symbol, pin, label, junction, sheet, text
+  render/pcb/                    # Track, pad, via, zone, silkscreen, layer compositing, shaders
+  render/mesh_3d/                # PCB extruder, layer stack, PBR materials, STEP, thermal overlay
+  systems/                       # ERC, DRC, router, ratsnest, annotation, undo
+  ui/schematic/                  # egui panels: properties, components, messages, navigator, signal AI
+  ui/pcb/                        # egui panels: layer stack, DRC, net class, inspector
+  ui/sim/                        # egui panels: waveform, S-params, thermal, job queue
+  state/                         # Bevy Resources: tool_state, selection, theme
+  api/                           # WASM plugin host functions + gateway
 ```
 
-## Commands
-- `npm run dev` — Vite dev server (frontend only)
-- `npm run tauri dev` — Full Tauri dev (frontend + Rust)
-- `npm run build` — Frontend production build
-- `npx tsc --noEmit` — TypeScript check
+## Commands (Target)
+- `cargo run` — Run Signex (debug, with dynamic_linking for fast iteration)
+- `cargo build --workspace --release` — Release build
+- `cargo test --workspace` — All tests
+- `cargo clippy --workspace -- -D warnings` — Lint
 
 ## Conventions
 - Dark theme (Catppuccin Mocha-inspired palette)
@@ -60,261 +74,179 @@ src/                    React frontend
 - [ ] Phase 6: PCB layout — layer stack, routing, DRC, copper pour, 3D viewer
 
 ## Architecture Decisions
-- Bevy + bevy_egui chosen: Bevy for 2D/3D rendering + ECS, egui for UI panels/toolbars
-- Bevy over pure egui: proper rendering engine with GPU batching, built-in picking, native 3D support
-- Workspace split: signex-engine (parser, types, no Bevy dep) + signex-gui (Bevy app)
-- Pure Rust parser instead of KiCad C++ FFI — simpler build, no C++ toolchain dependency
-- ECS entity-per-element: each wire/symbol/junction/label is a Bevy Entity with typed Components
-- Command-based undo (not full-state snapshots) — better for ECS architecture
-- bevy_prototype_lyon for static 2D shapes, Bevy Gizmos for dynamic overlays (grid, selection, cursor)
-- bevy_pancam for camera controls (right-click pan matches Altium UX)
+- **Bevy + bevy_egui**: Bevy for 2D/3D rendering + ECS, egui for UI panels/toolbars via bevy_egui
+- **Bevy over pure egui**: proper GPU rendering engine with batching, built-in picking, native 3D, ECS data model
+- **Render philosophy**: Read KiCad source (SCH_PAINTER, PCB_PAINTER) for render logic. UX follows Altium. Do NOT reference Canvas2D Signex renderer
+- **Workspace split**: 10 library crates (no Bevy dep) + 1 Bevy app crate
+- **Pure Rust parser**: no KiCad C++ FFI — simpler build, no C++ toolchain dependency
+- **ECS entity-per-element**: each wire/symbol/junction/label is a Bevy Entity with typed Components
+- **Command-based undo**: not full-state snapshots — better for ECS architecture
+- **bevy_prototype_lyon**: static 2D shapes; Bevy Gizmos for dynamic overlays (grid, selection, cursor)
+- **bevy_pancam**: right-click pan matches Altium UX
+- **Simulation**: ngspice (SPICE), OpenEMS (RF/EM FDTD), Elmer FEM (thermal) — all subprocess-based, AsyncComputeTaskPool, graceful fallback if not installed
+- **Plugin system**: Extism WASM — 5 host function categories (Document, Mutation, UI, Query, Sim)
 
 ---
 
-## Bevy + egui Porting Plan
+## Bevy + egui Migration Plan
 
-**Decision:** Migrate from Tauri + React + Canvas2D → Bevy (wgpu) + bevy_egui.
-**Why:** GPU-rendered 2D/3D viewport, ECS data model for schematic entities, zero IPC overhead, single Rust process, 3D PCB viewer built-in.
-**Detailed reference:** `docs/gui-framework-comparison.md`
+**Source:** Tauri v2 + React 19 + TypeScript + Canvas2D + Zustand
+**Target:** Bevy 0.18 + bevy_egui 0.39 + wgpu (native) + Rust workspace
+**Reference:** `docs/gui-framework-comparison.md`, Architecture.md agent dependency tree
 
-### Architecture Split
-- **Bevy** → schematic/PCB canvas rendering, camera (pan/zoom), entity management, picking, 3D viewer
-- **egui (via bevy_egui)** → UI panels, menus, toolbars, property inspector, dialogs, status bar
-- **Engine crate** → KiCad parser/writer, library search, export (unchanged)
+### Agent Dependency Tree
+```
+Agent 0  (Workspace Architect)
+├── Agent 1  (KiCad Parser/Writer — port existing Rust)
+│   └── Agent 2  (EDA Types — domain types + sim types)
+│       ├── Agent 3  (PCB Geometry — Clipper2, mesh gen)
+│       │   ├── Agent 8  (2D PCB Renderer — instanced tracks/pads)
+│       │   │   └── Agent 9  (3D PCB Renderer — Bevy PBR, STEP, thermal overlay)
+│       │   │       ├── Agent 13 (OpenEMS — RF/EM FDTD → S-params)
+│       │   │       └── Agent 14 (Elmer FEM — thermal → 3D overlay)
+│       │   └── Agent 11 (Router & Ratsnest)
+│       └── Agent 10 (ERC + DRC Engine — 11 ERC + 15 DRC rules)
+└── Agent 4  (Bevy App Scaffolder)
+    ├── Agent 5  (egui Schematic Panels — 9 panels + Signal AI)
+    ├── Agent 6  (egui PCB + Sim Panels — 8 PCB + 5 sim panels)
+    ├── Agent 7  (2D Schematic Renderer — KiCad SCH_PAINTER reference)
+    │   └── Agent 8  (2D PCB Renderer)
+    └── Agent 12 (ngspice Bridge — netlist gen + .raw parser)
+        ├── Agent 13 (OpenEMS)
+        └── Agent 14 (Elmer FEM)
+            └── Agent 15 (WASM Plugin API — Extism) ← last
+```
 
-### Migration Phases
+### Agent 0 — Workspace Architect
+Remove Tauri + npm entirely. Move legacy TS/TSX to `_legacy/` (port agents reference it). Create Cargo workspace:
+```
+Cargo.toml                    # [workspace] manifest
+libs/kicad-parser/            libs/kicad-writer/
+libs/eda-types/               libs/pcb-geom/
+libs/spice-gen/               libs/openems-bridge/
+libs/elmer-bridge/            libs/step-loader/
+libs/plugin-api/
+src/                          # Bevy app
+```
 
-#### Phase 0: Scaffold & Bevy App Shell (Week 1)
-- Create `signex-gui` crate with Bevy app
-- Add dependencies: bevy, bevy_egui, bevy_prototype_lyon, bevy_pancam, rfd, egui_dock
-- Set up Bevy App with: DefaultPlugins, EguiPlugin, ShapePlugin (lyon), PanCamPlugin
-- Create empty egui side panels (left, right, bottom) + menu bar + status bar
-- Spawn Camera2d with OrthographicProjection + PanCam (right-click pan, scroll zoom)
-- Verify builds on Windows, macOS, Linux
-- Port color palette to Bevy `Color` / egui `Color32` constants
+### Agent 1 — KiCad Parser/Writer Port
+Move `src-tauri/src/engine/` → workspace crates. Remove `#[tauri::command]`, `tauri::State`. Keep S-expr tokenizer, KiCad 8/9/10 support, existing tests.
 
-#### Phase 1: Engine Extraction (Week 1)
-- Extract `engine/` into standalone `signex-engine` crate (parser.rs, writer.rs, sexpr.rs, library.rs, export.rs)
-- Remove `#[tauri::command]` wrappers → plain `pub fn` API
-- Engine crate has zero dependency on Bevy or egui — pure data types + I/O
-- `signex-gui` depends on `signex-engine`
+### Agent 2 — EDA Types
+Extract all domain types to `libs/eda-types/`. No Bevy dependency. Includes:
+- `schematic.rs` — Wire, Label, Symbol, Sheet, Junction, BusEntry
+- `pcb.rs` — Track, Pad, Via, Zone, Footprint
+- `net.rs` — Net, NetClass, Pin, DiffPair
+- `layer.rs` — LayerId (0-63), LayerKind, LayerStackup
+- `violation.rs` — ErcViolation (11 types), DrcViolation (15 types)
+- `sim.rs` — SpiceModelRef, SimJob, SimKind, SimStatus, WaveformData, SParamData, ThermalMap
 
-#### Phase 2: ECS Data Model (Week 1-2)
-- Define Bevy Components for every schematic element:
-  - `SchematicWire { start: Vec2, end: Vec2 }` + `Transform` + `Mesh2d`
-  - `SchematicSymbol { lib_id, reference, value, unit, ... }` + child entities for graphics/pins
-  - `SchematicJunction` (marker) + `Transform`
-  - `SchematicLabel { text, label_type, shape }` + `Transform` + `Text2d`
-  - `SchematicNoConnect` + `SchematicBus` + `SchematicBusEntry` + `SchematicTextNote`
-  - `Selected` marker component, `Hoverable` marker, `NetId(String)`
-- Write `spawn_schematic()` system: takes parsed `SchematicSheet` → spawns all entities
-- Write `collect_schematic()` system: queries all entities → builds `SchematicSheet` for saving
-- Port Zustand schematic store actions (1,320 LOC) → Bevy systems + commands
-- Undo/redo: snapshot `World` state or command-based undo stack
+### Agent 3 — PCB Geometry (Clipper2)
+Port TS geometry → Rust. polygon boolean (Clipper2), copper pour, ratsnest (MST/UnionFind), extrude 2D→3D, GMSH mesh gen (Elmer input), hit testing. All coords in KiCad IU (1 IU = 1nm).
 
-#### Phase 3: Schematic Renderer — Bevy Systems (Week 2-3)
-Port SchematicRenderer.tsx (1,885 LOC) → Bevy rendering systems:
+### Agent 4 — Bevy App Scaffolder
+Tauri main.rs → Bevy App. Plugins: viewport_2d (Camera2d + bevy_pancam), viewport_3d (PerspectiveCamera + bevy_panorbit_camera), view_mode (Schematic | Pcb2D | Pcb3D), schematic/pcb/sim (empty). Theme resource (CatppuccinMocha, VsCodeDark, AltiumDark, etc.).
 
-**Static shapes via bevy_prototype_lyon** (spawned once, updated on change):
-- Symbol graphics: `PathBuilder` → polylines, rectangles, circles, arcs
-- Wires: `Mesh2d` line strips with configurable width
-- Junctions: `Circle` shape fill
-- Labels: polygon outlines (input/output/bidirectional shapes)
-- No-connect: X-shaped line pairs
-- Bus entries: angled line segments
+### Agent 5 — egui Schematic Panels (9 panels)
+Properties, Components (226 KiCad libs), Messages (ERC), Filter, List, Navigator, Signal AI (Claude streaming + tool use: run_spice_sim, show_waveform, analyze_thermal, check_si), OutputJobs, Variants. Pattern: `EventWriter` for mutations, never direct Resource mutate.
 
-**Dynamic overlays via Bevy Gizmos** (redrawn each frame, zero allocation):
-- Grid lines (major/minor, adaptive to zoom level)
-- Selection box (dashed rectangle)
-- Wire drawing preview (Manhattan/diagonal/free routing)
-- Crosshair cursor
-- Selection handles (corner + midpoint squares)
-- Rubber-band wire preview
+### Agent 6 — egui PCB + Simulation Panels
+**PCB (8):** LayerStack, DRCResults, PCBProperties, PCBLibrary, NetClass, NetInspector, CrossSection, Inspector.
+**Sim (5):** Waveform (ngspice — multi-trace, cursor, PNG/CSV export), SParams (OpenEMS — S11/S21 dB + Smith chart), Thermal (Elmer — color ramp, min/max, CSV), SimConfig (DC/AC/Transient/SI/Thermal), JobQueue (UUID, tool, status, duration). Sim panels show placeholder until engines complete.
 
-**Text via Text2d**:
-- Reference designators (R1, C1)
-- Values (10kΩ, 100nF)
-- Pin names and numbers
-- Net label text
-- Text notes
+### Agent 7 — 2D Schematic Renderer
+**Reference KiCad source: eeschema/sch_painter.cpp, sch_symbol.cpp, sch_label.cpp, common/gal/opengl_gal.cpp**
+Render order (from KiCad SCH_PAINTER): 1.Sheet borders 2.Drawing objects 3.Wires & buses 4.Bus entries 5.Junctions 6.No-connect 7.Net labels 8.Global/hier labels 9.Power ports 10.Symbols 11.Pins 12.Text
+Static shapes: bevy_prototype_lyon. Dynamic overlays: Bevy Gizmos. Text: Text2d.
 
-**Canvas2D → Bevy Mapping:**
-| Canvas2D | Bevy Equivalent |
-|---|---|
-| `fillRect` | `lyon::shapes::Rectangle` + `Fill` |
-| `strokeRect` | `lyon::shapes::Rectangle` + `Stroke` |
-| `beginPath+lineTo+stroke` | `lyon::PathBuilder` + `Stroke` or `Gizmos::line_2d()` |
-| `arc(full circle)` | `lyon::shapes::Circle` + `Fill`/`Stroke` |
-| `arc(partial)` | `lyon::PathBuilder::arc()` |
-| `fillText` | `Text2d` + `TextFont` + `TextColor` |
-| `setLineDash` | `Gizmos::line_2d()` with manual dash segmentation |
-| `translate/rotate` | `Transform` component (position, rotation) |
-| `globalAlpha` | `Color::with_alpha()` or `Visibility` |
-| `measureText` | `TextPipeline::measure()` or layout query |
+### Agent 8 — 2D PCB Renderer (Instanced)
+**Reference KiCad source: pcbnew/pcb_painter.cpp, zone.cpp, pad.cpp**
+Instanced rendering mandatory — 100K+ tracks/pads. Custom WGSL shaders for track.wgsl, pad.wgsl. Layer compositing order (KiCad): B.Cu→...→F.Cu (32 copper), paste, mask, silk, courtyard, fab, edge cuts.
 
-#### Phase 4: Input & Interaction (Week 3)
-- **Picking**: Use Bevy's built-in `MeshPickingPlugin` for click-to-select on entities
-  - Wire picking: spawn invisible mesh strip along wire path as pick target
-  - Symbol picking: bounding box mesh as pick target
-  - Pin picking: small circle mesh at pin endpoint
-- **Keyboard shortcuts**: Bevy `ButtonInput<KeyCode>` in systems
-  - Port all 40+ shortcuts (W=wire, R=rotate, Space=rotate, Delete, Ctrl+Z, etc.)
-- **Mouse interaction**:
-  - Left-click: select (via picking events)
-  - Right-click + drag: pan (via bevy_pancam)
-  - Middle-drag: pan (via bevy_pancam)
-  - Scroll: zoom (via bevy_pancam)
-  - Left-drag: box select or move selected
-  - Alt+click: select entire net
-- **Wire drawing mode**: state machine resource + Gizmos preview + click-to-place
-- **Component placement mode**: ghost entity follows cursor, click to commit
-- **Rubber-band**: query wires connected to moved symbols, update endpoints
-- **In-place text editing**: egui `TextEdit` overlay positioned at entity's screen coords
+### Agent 9 — 3D PCB Renderer (Bevy PBR)
+Three.js → Bevy PBR. pcb-geom::extrude → Bevy Mesh. Layer stack: FR4 1.6mm, copper 35/70µm, soldermask 25µm, silkscreen 10µm. PBR materials: copper (metallic=1.0, roughness=0.3), soldermask (green/red/blue/black, alpha=0.95), FR4 (roughness=0.9). STEP async load (truck, AsyncComputeTaskPool). Thermal overlay hook for Agent 14.
 
-#### Phase 5: UI Panels via egui (Week 3-4)
-All panels render via bevy_egui — egui systems that access Bevy world via `EguiContexts`:
+### Agent 10 — ERC & DRC Engine
+**ERC (11 rules):** unconnected wire/pin, conflicting nets, duplicate refs, pin conflict (12x12 matrix), missing power pin, label/hier pin not connected.
+**DRC (15 rules):** clearance, min trace width, min via, annular ring, hole spacing, short circuit, solder mask sliver, courtyard overlap, footprint overlap, pad not connected, via not on copper, drill range, net stub, diff pair skew, length mismatch.
 
-- **MenuBar** → `egui::TopBottomPanel::top()` with `menu::bar()`
-- **ToolbarStrip** → `egui::TopBottomPanel::top()` (second row) with icon buttons
-- **StatusBar** → `egui::TopBottomPanel::bottom()` — cursor pos, grid, zoom, units
-- **ProjectPanel** → `egui::SidePanel::left()` — file tree with CollapsingHeader
-- **ComponentPanel** → TextEdit search + ScrollArea list → spawns symbols on select
-- **PropertiesPanel** → `egui::SidePanel::right()` — reads `Selected` entities, edits components
-  - Largest port (~1,044 LOC React → ~500 LOC egui). Use `egui::Grid` for property rows
-  - Directly mutates Bevy components via `Query<&mut SchematicSymbol, With<Selected>>`
-- **MessagesPanel** → `egui::TopBottomPanel::bottom()` or dock tab — ERC markers
-- **NavigatorPanel** → render minimap to `egui::ColorImage`
-- **Dialogs**: Preferences, Find/Replace, About → `egui::Window` (floating)
-- **Context menu** → `egui::Area` positioned at cursor on right-click
-- **File dialog** → rfd (already works with Bevy, no Tauri needed)
-- **Docking** → egui_dock for panel rearrangement (Altium-style)
+### Agent 11 — Router & Ratsnest
+Interactive router: walkaround, push/shove, diff pair (gap control), meander (length tuning). Ratsnest: MST + UnionFind.
 
-#### Phase 6: State & Logic Systems (Week 4)
-- Port ERC (erc.ts 284 LOC + ercMatrix.ts 217 LOC) → Bevy system querying entities
-- Port net resolver (netResolver.ts 196 LOC) → Bevy system with `NetId` components
-- Port auto-annotation → system that queries `SchematicSymbol` entities, assigns designators
-- Port clipboard → `arboard` crate + custom serialize/deserialize of selected entities
-- Port undo/redo → command pattern: each action records its inverse
-  - Better than full-state snapshots for ECS (entities are transient)
-  - Alternative: use `bevy_undo` crate if mature enough
-- Layout persistence → serialize panel state (egui_dock) + camera transform to JSON
+### Agent 12 — ngspice Bridge
+`libs/spice-gen/`: SchematicDoc → .cir netlist (component values → SPICE elements, nets → node numbers, GND → node 0). .raw binary/ASCII parser. Subprocess: `ngspice -b -r output.raw netlist.cir`. AsyncComputeTaskPool. Waveform panel: multi-trace, dual cursor, delta readout, PNG/CSV export. Signal AI integration: waveform data as Claude context.
 
-#### Phase 7: Polish & Parity (Week 4-5)
-- Theme: Catppuccin Mocha palette → `egui::Visuals` + Bevy `ClearColor`
-- Font: load Roboto/Inter via Bevy `AssetServer`, configure 13px base for egui
-- Tab bar: multi-sheet navigation (egui tab strip or custom)
-- Window title: `Window { title: "Signex — project.kicad_pro *", .. }`
-- Dirty indicator: track `Changed<SchematicSymbol>` etc.
-- Zoom-to-fit (Home key): compute bounding box of all entities, set camera transform
-- Focus mode: dim non-focused entities via `Visibility` or alpha tint
-- Grid snap: round cursor world position to grid increments
-- Test all keyboard shortcuts match Altium reference doc
+### Agent 13 — OpenEMS (RF/EM FDTD)
+`libs/openems-bridge/`: PCB → CSX XML (traces → rectangular conductors, vias → cylinders, planes → copper sheets, board → FR4 substrate). Port definitions (lumped, waveguide, diff). Auto-mesh + refinement near conductors. HDF5 output → SParamData. UI: S11/S21 magnitude dB, phase, Smith chart, E-field 3D overlay (Bevy gizmo). Graceful error if OpenEMS not installed.
 
-#### Phase 8: Cleanup & Cutover (Week 5-6)
-- Remove Tauri, React, TypeScript, npm dependencies
-- Remove src/, package.json, vite.config.ts, tsconfig.json, tailwind.config.ts, src-tauri/
-- Project structure becomes workspace: `signex-engine` + `signex-gui`
-- Write Rust tests (port 53 Vitest tests + add Bevy system tests)
-- Verify KiCad file round-trip: open → edit → save → reopen in KiCad
-- Cross-platform build verification (Windows, macOS, Linux)
-- Binary size and startup time benchmarks
+### Agent 14 — Elmer FEM (Thermal)
+`libs/elmer-bridge/`: .sif generator (HeatEquation solver). Materials: FR4 k=0.3 W/(m·K), copper k=385, solder k=50. Boundary: component → heat source (W), board bottom → convection (h=5 natural, h=50 forced). GMSH bridge for mesh (.msh). VTK output → ThermalMap. 3D overlay: temperature → vertex color (blue=20°C → red=100°C). Component power input UI.
 
-### Key Dependencies
+### Agent 15 — WASM Plugin API (Extism)
+5 host function categories: Document (get_schematic, get_pcb, get_netlist), Mutation (add/delete/move/route), UI (toast, panel, menu, toolbar), Query (run_erc, run_drc, query_entities), Sim (run_spice, get_waveform, run_thermal, get_thermal_map). Permission gateway + undo stack integration.
+
+### Workspace Dependencies (Latest Versions)
 ```toml
-[workspace]
-members = ["signex-engine", "signex-gui"]
-
-# signex-engine/Cargo.toml — zero Bevy dependency
-[dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-uuid = { version = "1", features = ["v4"] }
-
-# signex-gui/Cargo.toml
-[dependencies]
-signex-engine = { path = "../signex-engine" }
-bevy = "0.15"                    # Game engine (wgpu, ECS, windowing)
-bevy_egui = "0.35"               # egui integration for Bevy
-bevy_prototype_lyon = "0.13"     # 2D vector shapes (lyon tessellation)
-bevy_pancam = "0.14"             # Pan/zoom camera controls
-rfd = "0.15"                     # Native file dialogs (already used)
-egui_dock = "0.15"               # Dockable panel layout
-arboard = "3"                    # Clipboard
-tokio = { version = "1", features = ["rt-multi-thread"] }  # Async I/O, ngspice
-reqwest = { version = "0.12", features = ["json"] }        # Claude API
+[workspace.dependencies]
+bevy                 = { version = "0.18", default-features = false, features = [
+                         "bevy_winit","bevy_render","bevy_core_pipeline",
+                         "bevy_pbr","bevy_asset","bevy_sprite","bevy_text",
+                         "bevy_gizmos","multi_threaded","hdr"] }
+bevy_egui            = "0.39"
+bevy_pancam          = "0.20"
+bevy_panorbit_camera = "0.34"
+bevy_prototype_lyon  = "0.16"
+egui_dock            = "0.19"
+extism               = "1.21"
+serde                = { version = "1", features = ["derive"] }
+serde_json           = "1"
+tokio                = { version = "1", features = ["full"] }
+reqwest              = { version = "0.12", features = ["json","rustls-tls","stream"], default-features = false }
+uuid                 = { version = "1", features = ["v4","serde"] }
+chrono               = { version = "0.4", features = ["serde"] }
+thiserror            = "1"
+anyhow               = "1"
+nom                  = "8"
+hdf5                 = "0.8"          # OpenEMS HDF5 output
+vtkio                = "0.6"          # Elmer VTK output
+truck-modeling       = "0.6"          # STEP import
+nalgebra             = "0.34"
+clipper2             = "0.5"          # Polygon boolean ops
+rfd                  = "0.17"         # Native file dialogs
+arboard              = "3.6"          # Clipboard
 ```
 
-### Architecture After Migration
-```
-signex-engine/                # Standalone crate — no Bevy dependency
-  src/
-    lib.rs                   # Public API
-    parser.rs                # KiCad S-expr parser
-    sexpr.rs                 # S-expression tokenizer
-    writer.rs                # KiCad S-expr serializer
-    types.rs                 # SchematicSheet, Symbol, Wire, etc.
-    library.rs               # Symbol library search (226 KiCad libs)
-    export.rs                # BOM, netlist generation
+### External Tool Versions
+| Tool | Version | Purpose |
+|---|---|---|
+| ngspice | 46 | SPICE circuit simulation |
+| OpenEMS | 0.0.36 | RF/EM FDTD simulation |
+| Elmer FEM | 26.1 | Thermal FEM simulation |
+| GMSH | 4.15.2 | Mesh generation (Elmer input) |
 
-signex-gui/                  # Bevy application
-  src/
-    main.rs                  # Entry: App::new() + plugins
-    plugins/
-      mod.rs                 # Plugin registration
-      schematic.rs           # SchematicPlugin — all schematic systems
-      ui.rs                  # UiPlugin — all egui panel systems
-      input.rs               # InputPlugin — keyboard/mouse handling
-    components/              # Bevy ECS components
-      mod.rs                 # Component definitions
-      wire.rs                # SchematicWire
-      symbol.rs              # SchematicSymbol + child graphics/pins
-      label.rs               # SchematicLabel, NetLabel, PowerPort
-      junction.rs            # SchematicJunction
-      selection.rs           # Selected, Hoverable, Dragging
-    systems/
-      render/
-        grid.rs              # Grid rendering (Gizmos)
-        symbols.rs           # Symbol spawning & mesh generation
-        wires.rs             # Wire mesh generation
-        labels.rs            # Label text + shape rendering
-        overlays.rs          # Selection box, handles, crosshair, wire preview
-      input/
-        shortcuts.rs         # Keyboard shortcut dispatch
-        mouse.rs             # Click, drag, box-select
-        picking.rs           # Entity picking reactions
-        wire_drawing.rs      # Wire placement state machine
-        placement.rs         # Component placement mode
-      logic/
-        erc.rs               # Electrical rules checking
-        net_resolver.rs      # Net connectivity analysis
-        annotation.rs        # Auto-annotation, designator assignment
-        snap.rs              # Grid snap, electrical snap
-        undo.rs              # Undo/redo command stack
-    ui/                      # egui panels (via bevy_egui)
-      menu.rs                # Menu bar
-      toolbar.rs             # Toolbar strip
-      status_bar.rs          # Status bar (cursor, grid, zoom)
-      properties.rs          # Property inspector (reads/writes ECS components)
-      components.rs          # Component library browser
-      project.rs             # Project tree panel
-      messages.rs            # ERC messages panel
-      navigator.rs           # Sheet minimap
-      dialogs.rs             # Preferences, Find/Replace, About
-      dock.rs                # egui_dock layout management
-    resources/               # Bevy Resources (global state)
-      project.rs             # ProjectInfo, open tabs, active sheet
-      editor.rs              # EditMode, grid settings, snap settings
-      colors.rs              # Color palette constants
-      clipboard.rs           # Clipboard contents
-    startup.rs               # Asset loading, default camera, initial state
-```
+### Simulation Rules (All Agents)
+- All sim tools run in `AsyncComputeTaskPool` — main thread never blocks
+- Every job gets UUID, writes to `SimResultStore` resource
+- Tool not found → graceful error message, never crash
+- Sim results feed Signal AI panel (Claude context)
 
-### Risk Mitigation
-- **Bevy learning curve**: Bevy's ECS is different from React. Budget time for the team to learn the entity/component/system paradigm. Start with the rendering systems (most mechanical port), then tackle interaction
-- **bevy_prototype_lyon performance**: For very large schematics (1000+ symbols), lyon tessellation at spawn time is fine. But if shapes change often, profile and consider raw Mesh generation
-- **Text rendering**: Bevy's Text2d is functional but less polished than browser text. Test font scaling at extreme zoom levels. May need SDF text for crisp rendering at all scales
-- **Picking tolerance on thin wires**: Bevy's mesh picking requires the pick target to have area. For wires, spawn invisible quads (2-3px wide) along wire paths as pick hitboxes
-- **Undo/redo in ECS**: Full world snapshots are expensive. Use command-based undo (record each action + its inverse). More work upfront but scales better
-- **Compile times**: Bevy is heavy. Use `dynamic_linking` feature during development. Split into workspace crates for incremental builds
-- **egui_dock + bevy_egui**: Verify compatibility between versions. Pin exact versions in Cargo.toml
-- **3D PCB viewer (future)**: Already possible in same Bevy app — just add Camera3d + 3D meshes. STEP/3D model import via community crates when needed
+### Quality Constraints
+- `unwrap()`/`expect()` forbidden in production — use `?` or `match`
+- `clippy::all` + `clippy::pedantic` zero warnings
+- `unsafe` forbidden (WASM FFI exception, must be commented)
+- Every public function has doc comment
+- Commit format: `feat(agent-N): description` / `fix(agent-N): description`
+
+### Final Validation
+```bash
+cargo build --workspace --release
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+# 1. Open .kicad_pro → schematic renders correctly
+# 2. PCB edit → DRC 15 rules pass
+# 3. SPICE sim → waveform visible
+# 4. OpenEMS → S-param plot visible
+# 5. Elmer → 3D thermal overlay visible
+# 6. Signal AI → tool use works (sim tools included)
+# 7. WASM plugin load → toast visible
+```
