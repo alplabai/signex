@@ -22,6 +22,10 @@ cargo test --workspace           # All tests
 cargo clippy --workspace -- -D warnings  # Lint
 ```
 
+## Rules
+
+- **Never add Claude as a commit author, co-author, or contributor.** No `Co-Authored-By` lines. No mentions in CONTRIBUTORS files. Claude is a tool, not a contributor.
+
 ## Conventions
 
 - **Coordinate system:** i64 nanometers internally. KiCad uses mm floats — convert at parse/write boundary.
