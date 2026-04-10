@@ -23,11 +23,26 @@ pub fn draw_text_note(
 
     let sp = transform.to_screen_point(note.position.x, note.position.y);
 
+    let h_align = match note.justify_h {
+        HAlign::Left => iced::alignment::Horizontal::Left,
+        HAlign::Center => iced::alignment::Horizontal::Center,
+        HAlign::Right => iced::alignment::Horizontal::Right,
+    };
+
+    let v_align = match note.justify_v {
+        VAlign::Top => iced::alignment::Vertical::Top,
+        VAlign::Center => iced::alignment::Vertical::Center,
+        VAlign::Bottom => iced::alignment::Vertical::Bottom,
+    };
+
     let text = canvas::Text {
         content: note.text.clone(),
         position: sp,
         color,
         size: iced::Pixels(screen_font),
+        font: crate::IOSEVKA,
+        align_x: h_align.into(),
+        align_y: v_align.into(),
         ..canvas::Text::default()
     };
 
@@ -74,6 +89,7 @@ pub fn draw_text_prop(
         position: sp,
         color,
         size: iced::Pixels(screen_font),
+        font: crate::IOSEVKA,
         align_x: h_align.into(),
         align_y: v_align.into(),
         ..canvas::Text::default()
