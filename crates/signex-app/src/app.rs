@@ -133,11 +133,15 @@ impl Signex {
             project_path: None,
             panel_ctx: crate::panels::PanelContext {
                 project_name: None,
+                project_file: None,
                 sym_count: 0,
                 wire_count: 0,
                 label_count: 0,
+                junction_count: 0,
                 child_sheets: vec![],
                 has_schematic: false,
+                paper_size: "A4".to_string(),
+                lib_symbol_count: 0,
             },
         };
         (app, Task::none())
@@ -347,13 +351,23 @@ impl Signex {
             project_name: self.project_path.as_ref().and_then(|p| {
                 p.file_stem().map(|s| s.to_string_lossy().to_string())
             }),
+            project_file: self.project_path.as_ref().and_then(|p| {
+                p.file_name().map(|s| s.to_string_lossy().to_string())
+            }),
             sym_count: self.schematic.as_ref().map(|s| s.symbols.len()).unwrap_or(0),
             wire_count: self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0),
             label_count: self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0),
+            junction_count: self.schematic.as_ref().map(|s| s.junctions.len()).unwrap_or(0),
             child_sheets: self.schematic.as_ref()
                 .map(|s| s.child_sheets.iter().map(|c| c.name.clone()).collect())
                 .unwrap_or_default(),
             has_schematic: self.schematic.is_some(),
+            paper_size: self.schematic.as_ref()
+                .map(|s| s.paper_size.clone())
+                .unwrap_or_else(|| "A4".to_string()),
+            lib_symbol_count: self.schematic.as_ref()
+                .map(|s| s.lib_symbols.len())
+                .unwrap_or(0),
         };
     }
 
@@ -399,7 +413,7 @@ impl Signex {
         let bottom_panel = self.dock.view_region(PanelPosition::Bottom, &self.panel_ctx).map(Message::Dock);
         let bottom = container(bottom_panel)
             .width(Length::Fill)
-            .height(160)
+            .height(120)
             .style(crate::styles::panel_region);
 
         // Status bar
