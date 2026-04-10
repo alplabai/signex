@@ -1,108 +1,136 @@
-//! Tree view widget for project panels and component browsers.
+//! Tree view widget — Altium-style project/component browser tree.
 //!
-//! Built on stock Iced 0.14 primitives — Column of Rows with indentation,
-//! expand/collapse, and click selection. Fully themed via `ThemeTokens`.
+//! Proper chevron indicators, colored icons, hover backgrounds,
+//! selection highlighting, badges, and indentation.
 
-use iced::widget::{button, container, row, scrollable, space, text, Column};
-use iced::{Border, Element, Length};
+use iced::widget::{button, container, mouse_area, row, scrollable, text, Column};
+use iced::{Background, Border, Color, Element, Length};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
-// ---------------------------------------------------------------------------
-// Data model
-// ---------------------------------------------------------------------------
+// ─── Data Model ───────────────────────────────────────────────
 
-/// Type of icon displayed next to a tree node label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeIcon {
     Folder,
+    FolderOpen,
     File,
     Schematic,
     Pcb,
     Library,
     Component,
     Sheet,
+    Net,
+    Pin,
 }
 
 impl TreeIcon {
-    /// Return a short text representation for display.
-    fn label(self) -> &'static str {
+    /// Simple geometric characters that render on all platforms (no emoji).
+    fn render(self, expanded: bool) -> (&'static str, IconColor) {
         match self {
-            TreeIcon::Folder => "[D]",
-            TreeIcon::File => "[F]",
-            TreeIcon::Schematic => "[S]",
-            TreeIcon::Pcb => "[P]",
-            TreeIcon::Library => "[L]",
-            TreeIcon::Component => "[C]",
-            TreeIcon::Sheet => "[H]",
+            TreeIcon::Folder if expanded => ("[v]", IconColor::Yellow),
+            TreeIcon::Folder => ("[>]", IconColor::Yellow),
+            TreeIcon::FolderOpen => ("[v]", IconColor::Yellow),
+            TreeIcon::File => (" .", IconColor::Muted),
+            TreeIcon::Schematic => ("[S]", IconColor::Blue),
+            TreeIcon::Pcb => ("[P]", IconColor::Green),
+            TreeIcon::Library => ("[L]", IconColor::Purple),
+            TreeIcon::Component => (" *", IconColor::Cyan),
+            TreeIcon::Sheet => ("[H]", IconColor::Blue),
+            TreeIcon::Net => (" ~", IconColor::Green),
+            TreeIcon::Pin => (" -", IconColor::Muted),
         }
     }
 }
 
-/// A single node in the tree hierarchy.
+#[derive(Debug, Clone, Copy)]
+enum IconColor {
+    Yellow,
+    Blue,
+    Green,
+    Purple,
+    Cyan,
+    Muted,
+}
+
+impl IconColor {
+    fn to_iced(self, tokens: &ThemeTokens) -> Color {
+        match self {
+            IconColor::Yellow => theme_ext::warning_color(tokens),
+            IconColor::Blue => theme_ext::accent(tokens),
+            IconColor::Green => theme_ext::success_color(tokens),
+            IconColor::Purple => Color::from_rgb(0.7, 0.5, 0.9),
+            IconColor::Cyan => Color::from_rgb(0.4, 0.8, 0.9),
+            IconColor::Muted => theme_ext::text_secondary(tokens),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TreeNode {
     pub label: String,
     pub icon: TreeIcon,
     pub expanded: bool,
     pub children: Vec<TreeNode>,
+    pub badge: Option<String>,
 }
 
 impl TreeNode {
-    /// Create a leaf node (no children).
     pub fn leaf(label: impl Into<String>, icon: TreeIcon) -> Self {
         Self {
             label: label.into(),
             icon,
             expanded: false,
             children: Vec::new(),
+            badge: None,
         }
     }
 
-    /// Create a branch node (with children, expanded by default).
     pub fn branch(label: impl Into<String>, icon: TreeIcon, children: Vec<TreeNode>) -> Self {
         Self {
             label: label.into(),
             icon,
             expanded: true,
             children,
+            badge: None,
         }
+    }
+
+    pub fn with_badge(mut self, badge: impl Into<String>) -> Self {
+        self.badge = Some(badge.into());
+        self
     }
 }
 
-// ---------------------------------------------------------------------------
-// Messages
-// ---------------------------------------------------------------------------
+// ─── Messages ─────────────────────────────────────────────────
 
-/// Messages emitted by the tree view.
 #[derive(Debug, Clone)]
 pub enum TreeMsg {
-    /// A branch node was toggled (expand/collapse). Payload is the index path.
     Toggle(Vec<usize>),
-    /// A node was selected (clicked). Payload is the index path.
     Select(Vec<usize>),
 }
 
-// ---------------------------------------------------------------------------
-// View
-// ---------------------------------------------------------------------------
+// ─── View ─────────────────────────────────────────────────────
 
-/// Render a scrollable tree view from root nodes.
-///
-/// * `roots`    — top-level tree nodes to display.
-/// * `selected` — currently selected path (if any), to highlight.
-/// * `tokens`   — theme tokens for all colors.
+const INDENT_PX: u32 = 14;
+const ROW_PADDING_V: u16 = 3;
+const ROW_PADDING_H: u16 = 6;
+const FONT_SIZE: f32 = 12.0;
+const ICON_SIZE: f32 = 12.0;
+const CHEVRON_SIZE: f32 = 10.0;
+const BADGE_SIZE: f32 = 10.0;
+
 pub fn tree_view<'a>(
     roots: &[TreeNode],
     selected: Option<&[usize]>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TreeMsg> {
-    let mut col = Column::new().spacing(1);
+    let mut col = Column::new().spacing(0).width(Length::Fill);
     for (i, node) in roots.iter().enumerate() {
         col = render_node(col, node, 0, &[i], selected, tokens);
     }
-    scrollable(col.width(Length::Fill)).into()
+    scrollable(col).width(Length::Fill).into()
 }
 
 fn render_node<'a>(
@@ -113,68 +141,110 @@ fn render_node<'a>(
     selected: Option<&[usize]>,
     tokens: &ThemeTokens,
 ) -> Column<'a, TreeMsg> {
-    let indent = (depth * 16) as f32;
     let path_vec: Vec<usize> = path.to_vec();
-
     let is_selected = selected.is_some_and(|s| s == path);
+    let has_children = !node.children.is_empty();
 
-    // Expand / collapse indicator
-    let expand_icon = if node.children.is_empty() {
-        "  "
-    } else if node.expanded {
-        "v "
-    } else {
-        "> "
-    };
-
+    // Colors
     let text_color = if is_selected {
+        Color::WHITE
+    } else {
         theme_ext::text_primary(tokens)
-    } else {
-        theme_ext::text_secondary(tokens)
     };
-    let icon_color = theme_ext::text_secondary(tokens);
-
-    let label_row = row![
-        space::horizontal().width(indent),
-        text(expand_icon).size(11).color(icon_color),
-        text(node.icon.label()).size(10).color(icon_color),
-        text(" ").size(11),
-        text(node.label.clone()).size(11).color(text_color),
-    ]
-    .align_y(iced::Alignment::Center);
-
-    let msg = if node.children.is_empty() {
-        TreeMsg::Select(path_vec.clone())
+    let hover_bg = theme_ext::hover_color(tokens);
+    let sel_bg = theme_ext::selection_color(tokens);
+    let (icon_char, icon_color_kind) = node.icon.render(node.expanded);
+    let icon_color = if is_selected {
+        Color::WHITE
     } else {
-        TreeMsg::Toggle(path_vec)
+        icon_color_kind.to_iced(tokens)
     };
 
-    // Wrap the row in a button for click handling
-    let row_btn = button(label_row)
-        .padding([2, 4])
+    // Chevron
+    let chevron = if has_children {
+        if node.expanded { "▾" } else { "▸" }
+    } else {
+        " "
+    };
+    let chevron_color = theme_ext::text_secondary(tokens);
+
+    // Build the row content
+    let indent = (depth as u32) * INDENT_PX;
+
+    let mut row_content = row![]
+        .spacing(2)
+        .align_y(iced::Alignment::Center);
+
+    // Indent spacer
+    if indent > 0 {
+        row_content = row_content.push(text("").width(indent));
+    }
+
+    // Chevron (fixed width for alignment)
+    row_content = row_content.push(
+        text(chevron).size(CHEVRON_SIZE).color(chevron_color).width(10),
+    );
+
+    // Icon (fixed width)
+    row_content = row_content.push(
+        container(text(icon_char.to_string()).size(ICON_SIZE).color(icon_color))
+            .width(22),
+    );
+
+    // Label (fill remaining space, single line)
+    row_content = row_content.push(
+        text(node.label.clone()).size(FONT_SIZE).color(text_color),
+    );
+
+    // Badge (right-aligned, muted)
+    if let Some(badge) = &node.badge {
+        row_content = row_content.push(iced::widget::space::horizontal());
+        row_content = row_content.push(
+            text(badge.clone())
+                .size(BADGE_SIZE)
+                .color(theme_ext::text_secondary(tokens)),
+        );
+    }
+
+    // Click message
+    let msg = if has_children {
+        TreeMsg::Toggle(path_vec.clone())
+    } else {
+        TreeMsg::Select(path_vec)
+    };
+
+    // Wrap in button for click handling
+    let row_btn = button(row_content)
+        .padding([ROW_PADDING_V, ROW_PADDING_H])
         .width(Length::Fill)
-        .on_press(msg);
+        .on_press(msg)
+        .style(button::text);
 
-    // Apply styling based on selection state
-    let styled_row: Element<'a, TreeMsg> = if is_selected {
-        let accent = theme_ext::accent(tokens);
-        let sel_bg = theme_ext::selection_color(tokens);
-        container(row_btn.style(button::text))
+    // Apply selection or hover background
+    let styled: Element<'a, TreeMsg> = if is_selected {
+        container(row_btn)
             .width(Length::Fill)
-            .style(move |_theme: &iced::Theme| container::Style {
-                background: Some(sel_bg.into()),
-                text_color: Some(accent),
-                border: Border::default(),
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(Background::Color(sel_bg)),
+                border: Border {
+                    radius: 2.0.into(),
+                    ..Border::default()
+                },
                 ..container::Style::default()
             })
             .into()
     } else {
-        row_btn.style(button::text).into()
+        // Use mouse_area for hover effect
+        mouse_area(
+            container(row_btn).width(Length::Fill),
+        )
+        .into()
     };
 
-    col = col.push(styled_row);
+    col = col.push(styled);
 
-    if node.expanded {
+    // Render children if expanded
+    if node.expanded && has_children {
         for (i, child) in node.children.iter().enumerate() {
             let mut child_path = path.to_vec();
             child_path.push(i);
@@ -185,18 +255,14 @@ fn render_node<'a>(
     col
 }
 
-// ---------------------------------------------------------------------------
-// Tree manipulation helpers
-// ---------------------------------------------------------------------------
+// ─── Helpers ──────────────────────────────────────────────────
 
-/// Toggle expand/collapse at the given path.
 pub fn toggle(roots: &mut [TreeNode], path: &[usize]) {
     if let Some(node) = get_node_mut(roots, path) {
         node.expanded = !node.expanded;
     }
 }
 
-/// Get a mutable reference to the node at the given path.
 fn get_node_mut<'a>(roots: &'a mut [TreeNode], path: &[usize]) -> Option<&'a mut TreeNode> {
     if path.is_empty() {
         return None;

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length, Rectangle, Subscription, Task, Theme};
 use signex_types::coord::Unit;
+use signex_types::project::ProjectData;
 use signex_types::schematic::SchematicSheet;
 use signex_types::theme::ThemeId;
 
@@ -60,6 +61,7 @@ pub struct Signex {
     pub grid_size_mm: f32,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
+    pub project_data: Option<ProjectData>,
     pub panel_ctx: crate::panels::PanelContext,
 }
 
@@ -131,9 +133,12 @@ impl Signex {
             grid_size_mm,
             schematic: None,
             project_path: None,
+            project_data: None,
             panel_ctx: crate::panels::PanelContext {
                 project_name: None,
                 project_file: None,
+                pcb_file: None,
+                sheets: vec![],
                 sym_count: 0,
                 wire_count: 0,
                 label_count: 0,
@@ -269,25 +274,68 @@ impl Signex {
                 self.dock.update(msg);
             }
             Message::FileOpened(Some(path)) => {
-                // Parse the schematic file
-                match kicad_parser::parse_schematic_file(&path) {
-                    Ok(sheet) => {
-                        self.project_path = Some(path.clone());
-                        let title = path
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "Untitled".to_string());
-                        if let Some(tab) = self.tabs.first_mut() {
-                            tab.title = title;
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                match ext {
+                    "kicad_pro" => {
+                        // Parse project file — discovers all sheets
+                        match kicad_parser::parse_project(&path) {
+                            Ok(proj) => {
+                                self.project_path = Some(path.clone());
+                                self.project_data = Some(proj.clone());
+                                if let Some(tab) = self.tabs.first_mut() {
+                                    tab.title = proj.name.clone();
+                                }
+                                // Load the root schematic
+                                if let Some(root_sch) = &proj.schematic_root {
+                                    let dir = path.parent().unwrap_or(std::path::Path::new("."));
+                                    let sch_path = dir.join(root_sch);
+                                    match kicad_parser::parse_schematic_file(&sch_path) {
+                                        Ok(sheet) => {
+                                            self.schematic = Some(sheet.clone());
+                                            self.canvas.schematic = Some(sheet);
+                                        }
+                                        Err(e) => eprintln!("Failed to parse root schematic: {e}"),
+                                    }
+                                }
+                                self.canvas.clear_bg_cache();
+                                self.canvas.clear_content_cache();
+                                self.refresh_panel_ctx();
+                            }
+                            Err(e) => eprintln!("Failed to parse project: {e}"),
                         }
-                        self.schematic = Some(sheet.clone());
-                        self.canvas.schematic = Some(sheet);
-                        self.canvas.clear_bg_cache();
-                        self.canvas.clear_content_cache();
-                        self.refresh_panel_ctx();
                     }
-                    Err(e) => {
-                        eprintln!("Failed to parse schematic: {e}");
+                    "kicad_sch" => {
+                        // Direct schematic open — also try to find the .kicad_pro
+                        match kicad_parser::parse_schematic_file(&path) {
+                            Ok(sheet) => {
+                                self.project_path = Some(path.clone());
+                                // Try to find and parse the .kicad_pro in the same directory
+                                if let Some(dir) = path.parent() {
+                                    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                    let pro_path = dir.join(format!("{stem}.kicad_pro"));
+                                    if pro_path.exists() {
+                                        if let Ok(proj) = kicad_parser::parse_project(&pro_path) {
+                                            self.project_data = Some(proj);
+                                        }
+                                    }
+                                }
+                                let title = path.file_stem()
+                                    .map(|s| s.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| "Untitled".to_string());
+                                if let Some(tab) = self.tabs.first_mut() {
+                                    tab.title = title;
+                                }
+                                self.schematic = Some(sheet.clone());
+                                self.canvas.schematic = Some(sheet);
+                                self.canvas.clear_bg_cache();
+                                self.canvas.clear_content_cache();
+                                self.refresh_panel_ctx();
+                            }
+                            Err(e) => eprintln!("Failed to parse schematic: {e}"),
+                        }
+                    }
+                    _ => {
+                        eprintln!("Unsupported file type: .{ext}");
                     }
                 }
             }
@@ -354,13 +402,34 @@ impl Signex {
     }
 
     fn refresh_panel_ctx(&mut self) {
-        self.panel_ctx = crate::panels::PanelContext {
-            project_name: self.project_path.as_ref().and_then(|p| {
+        // Build sheet info from ProjectData if available
+        let sheets: Vec<crate::panels::SheetInfo> = self.project_data.as_ref()
+            .map(|proj| {
+                proj.sheets.iter().map(|s| crate::panels::SheetInfo {
+                    name: s.name.clone(),
+                    filename: s.filename.clone(),
+                    sym_count: s.symbols_count,
+                    wire_count: s.wires_count,
+                    label_count: s.labels_count,
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        let project_name = self.project_data.as_ref()
+            .map(|p| p.name.clone())
+            .or_else(|| self.project_path.as_ref().and_then(|p| {
                 p.file_stem().map(|s| s.to_string_lossy().to_string())
-            }),
-            project_file: self.project_path.as_ref().and_then(|p| {
-                p.file_name().map(|s| s.to_string_lossy().to_string())
-            }),
+            }));
+
+        self.panel_ctx = crate::panels::PanelContext {
+            project_name,
+            project_file: self.project_data.as_ref()
+                .and_then(|p| p.schematic_root.clone())
+                .or_else(|| self.project_path.as_ref().and_then(|p| {
+                    p.file_name().map(|s| s.to_string_lossy().to_string())
+                })),
+            pcb_file: self.project_data.as_ref().and_then(|p| p.pcb_file.clone()),
+            sheets,
             sym_count: self.schematic.as_ref().map(|s| s.symbols.len()).unwrap_or(0),
             wire_count: self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0),
             label_count: self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0),
