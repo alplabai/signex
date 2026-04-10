@@ -122,9 +122,22 @@ See [`docs/signex-iced-migration-plan.md`](https://github.com/alplabai/signex/bl
 We welcome contributions! Here's how to get started:
 
 1. Check the [open issues](../../issues) or [milestones](../../milestones) for something to work on
-2. Fork the repo and create a feature branch
+2. Fork the repo and create a branch from `dev`
 3. Make your changes — ensure `cargo test` and `cargo clippy` pass
-4. Open a PR against `main`
+4. Open a PR against `dev` (not main)
+
+### Branching
+
+```
+main   ← stable releases only (protected, requires PR + approval)
+└─ dev ← integration branch (default, all PRs target here)
+   ├─ feature/...   new features
+   └─ fix/...       bug fixes
+```
+
+- **`main`** is protected. Only receives merges from `dev` after QA. Tagged with version numbers.
+- **`dev`** is the default branch. All feature and fix branches merge here via PR.
+- Branch naming: `feature/<description>` or `fix/<description>`
 
 ### Crate ownership
 
