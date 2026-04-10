@@ -7,7 +7,7 @@
 use iced::widget::{button, column, container, row, text, Column};
 use iced::{Element, Length};
 
-use crate::panels::{self, PanelKind};
+use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +21,7 @@ pub enum PanelPosition {
 pub enum DockMessage {
     SelectTab(PanelPosition, usize),
     ToggleCollapse(PanelPosition),
+    Panel(PanelMsg),
 }
 
 struct DockRegion {
@@ -86,6 +87,9 @@ impl DockArea {
                 };
                 region.collapsed = !region.collapsed;
             }
+            DockMessage::Panel(_) => {
+                // Panel messages handled by app.rs
+            }
         }
     }
 
@@ -140,8 +144,8 @@ impl DockArea {
         );
 
         // Panel content
-        let content = if let Some(panel) = region.panels.get(region.active) {
-            panels::view_panel(*panel, ctx)
+        let content: Element<'_, DockMessage> = if let Some(panel) = region.panels.get(region.active) {
+            panels::view_panel(*panel, ctx).map(DockMessage::Panel)
         } else {
             text("").into()
         };
