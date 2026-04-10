@@ -1,8 +1,11 @@
 //! Main Iced application — Message enum, update loop, view tree.
 
+use std::path::PathBuf;
+
 use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length, Rectangle, Subscription, Task, Theme};
 use signex_types::coord::Unit;
+use signex_types::schematic::SchematicSheet;
 use signex_types::theme::ThemeId;
 
 use crate::canvas::{CanvasEvent, SchematicCanvas};
@@ -27,6 +30,8 @@ pub enum Message {
     UnitCycled,
     GridToggle,
     GridCycle,
+    FileOpened(Option<PathBuf>),
+    SchematicLoaded(Box<SchematicSheet>),
     Noop,
 }
 
@@ -53,6 +58,8 @@ pub struct Signex {
     pub current_tool: Tool,
     pub canvas: SchematicCanvas,
     pub grid_size_mm: f32,
+    pub schematic: Option<SchematicSheet>,
+    pub project_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +128,8 @@ impl Signex {
             current_tool: Tool::Select,
             canvas: sch_canvas,
             grid_size_mm,
+            schematic: None,
+            project_path: None,
         };
         (app, Task::none())
     }
@@ -210,8 +219,9 @@ impl Signex {
                 // Grid only needs redraw on zoom/pan/grid-change.
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
-                // Zoom or pan changed — grid positions shifted, must redraw
+                // Zoom or pan changed — grid + schematic positions shifted, must redraw
                 self.canvas.clear_bg_cache();
+                self.canvas.clear_content_cache();
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
@@ -225,6 +235,35 @@ impl Signex {
             Message::Dock(msg) => {
                 self.dock.update(msg);
             }
+            Message::FileOpened(Some(path)) => {
+                // Parse the schematic file
+                match kicad_parser::parse_schematic_file(&path) {
+                    Ok(sheet) => {
+                        self.project_path = Some(path.clone());
+                        let title = path
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "Untitled".to_string());
+                        if let Some(tab) = self.tabs.first_mut() {
+                            tab.title = title;
+                        }
+                        self.schematic = Some(sheet.clone());
+                        self.canvas.schematic = Some(sheet);
+                        self.canvas.clear_bg_cache();
+                        self.canvas.clear_content_cache();
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse schematic: {e}");
+                    }
+                }
+            }
+            Message::FileOpened(None) => {
+                // User cancelled file dialog
+            }
+            Message::SchematicLoaded(sheet) => {
+                self.schematic = Some(*sheet);
+                self.canvas.clear_content_cache();
+            }
             Message::Noop => {}
         }
         Task::none()
@@ -237,7 +276,21 @@ impl Signex {
                 self.update_canvas_theme();
             }
             MenuMessage::NewProject => {}
-            MenuMessage::OpenProject => {}
+            MenuMessage::OpenProject => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open KiCad Schematic")
+                            .add_filter("KiCad Schematic", &["kicad_sch"])
+                            .add_filter("KiCad Project", &["kicad_pro"])
+                            .add_filter("All files", &["*"])
+                            .pick_file()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    Message::FileOpened,
+                );
+            }
             MenuMessage::Save => {}
             MenuMessage::Undo => {}
             MenuMessage::Redo => {}
@@ -273,6 +326,8 @@ impl Signex {
             signex_render::colors::to_iced(&colors.grid),
             signex_render::colors::to_iced(&colors.paper),
         );
+        self.canvas.canvas_colors = colors;
+        self.canvas.clear_content_cache();
     }
 
     pub fn view(&self) -> Element<'_, Message> {

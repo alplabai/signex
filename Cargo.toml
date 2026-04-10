@@ -30,6 +30,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 anyhow = "1"
 
+# File dialogs
+rfd = "0.15"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 kicad-parser = { path = "crates/kicad-parser" }

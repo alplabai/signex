@@ -52,10 +52,15 @@ pub struct SchematicCanvas {
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub theme_paper: Color,
+    pub canvas_colors: signex_types::theme::CanvasColors,
+    /// Reference to the currently loaded schematic (if any).
+    /// Set by the app when a file is opened.
+    pub schematic: Option<signex_types::schematic::SchematicSheet>,
 }
 
 impl SchematicCanvas {
     pub fn new() -> Self {
+        let default_colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
@@ -63,6 +68,8 @@ impl SchematicCanvas {
             theme_bg: Color::from_rgb8(0x1a, 0x1b, 0x2e),
             theme_grid: Color::from_rgb8(0x2d, 0x30, 0x60),
             theme_paper: Color::from_rgb8(0x1e, 0x20, 0x35),
+            canvas_colors: default_colors,
+            schematic: None,
         }
     }
 
@@ -223,9 +230,22 @@ impl canvas::Program<Message> for SchematicCanvas {
         });
         layers.push(bg);
 
-        // Layer 2: content (schematic elements — empty for v0.3, populated in v0.4)
-        let content = self.content_cache.draw(renderer, bounds.size(), |_frame| {
-            // No schematic content yet — this is where symbols, wires, etc. go
+        // Layer 2: content (schematic elements)
+        let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
+            if let Some(ref sheet) = self.schematic {
+                let transform = signex_render::schematic::ScreenTransform {
+                    offset_x: state.camera.offset.x,
+                    offset_y: state.camera.offset.y,
+                    scale: state.camera.scale,
+                };
+                signex_render::schematic::render_schematic(
+                    frame,
+                    sheet,
+                    &transform,
+                    &self.canvas_colors,
+                    bounds,
+                );
+            }
         });
         layers.push(content);
 
