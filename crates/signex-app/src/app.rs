@@ -206,11 +206,11 @@ impl Signex {
                 self.cursor_x = x as f64;
                 self.cursor_y = y as f64;
                 self.zoom = zoom_pct;
-                // Clear bg cache on every cursor move so crosshair + grid update
-                self.canvas.clear_bg_cache();
+                // Don't clear bg cache here — crosshair is in the overlay (uncached) layer.
+                // Grid only needs redraw on zoom/pan/grid-change.
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
-                // Zoom/pan changed — clear caches
+                // Zoom or pan changed — grid positions shifted, must redraw
                 self.canvas.clear_bg_cache();
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
