@@ -28,6 +28,7 @@ pub fn draw_text_note(
         position: sp,
         color,
         size: iced::Pixels(screen_font),
+        font: crate::IOSEVKA,
         ..canvas::Text::default()
     };
 
@@ -74,6 +75,7 @@ pub fn draw_text_prop(
         position: sp,
         color,
         size: iced::Pixels(screen_font),
+        font: crate::IOSEVKA,
         align_x: h_align.into(),
         align_y: v_align.into(),
         ..canvas::Text::default()

@@ -17,11 +17,18 @@ mod tree_view;
 
 use app::Signex;
 
+const IOSEVKA_REGULAR: &[u8] =
+    include_bytes!("../assets/fonts/Iosevka-Regular.ttf");
+const IOSEVKA_BOLD: &[u8] =
+    include_bytes!("../assets/fonts/Iosevka-Bold.ttf");
+
 fn main() -> iced::Result {
     iced::application(Signex::new, Signex::update, Signex::view)
         .title(Signex::title)
         .theme(Signex::theme)
         .subscription(Signex::subscription)
         .window_size(iced::Size::new(1400.0, 900.0))
+        .font(IOSEVKA_REGULAR)
+        .font(IOSEVKA_BOLD)
         .run()
 }

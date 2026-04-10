@@ -131,13 +131,44 @@ pub struct TextProp {
 // LibSymbol & graphics
 // ---------------------------------------------------------------------------
 
+/// A graphic primitive inside a library symbol, tagged with unit and body-style
+/// so the renderer can filter to only draw the correct unit for each instance.
+///
+/// - `unit == 0`       → common to ALL units (always rendered)
+/// - `unit == N`       → only rendered for symbol instances with `unit = N`
+/// - `body_style == 0` → common to all body styles (normal + De Morgan)
+/// - `body_style == 1` → normal body style (default)
+/// - `body_style == 2` → De Morgan body style
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibGraphic {
+    #[serde(default)]
+    pub unit: u32,
+    #[serde(default = "default_body_style")]
+    pub body_style: u32,
+    pub graphic: Graphic,
+}
+
+/// A pin inside a library symbol, tagged with unit and body-style.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibPin {
+    #[serde(default)]
+    pub unit: u32,
+    #[serde(default = "default_body_style")]
+    pub body_style: u32,
+    pub pin: Pin,
+}
+
+fn default_body_style() -> u32 {
+    1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
     #[serde(default)]
-    pub graphics: Vec<Graphic>,
+    pub graphics: Vec<LibGraphic>,
     #[serde(default)]
-    pub pins: Vec<Pin>,
+    pub pins: Vec<LibPin>,
     #[serde(default = "default_true")]
     pub show_pin_numbers: bool,
     #[serde(default = "default_true")]
@@ -341,15 +372,6 @@ pub struct TextNote {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchRectangle {
-    pub uuid: Uuid,
-    pub start: Point,
-    pub end: Point,
-    #[serde(default)]
-    pub stroke_type: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bus {
     pub uuid: Uuid,
     pub start: Point,
@@ -468,8 +490,6 @@ pub struct SchematicSheet {
     pub no_connects: Vec<NoConnect>,
     #[serde(default)]
     pub text_notes: Vec<TextNote>,
-    #[serde(default)]
-    pub rectangles: Vec<SchRectangle>,
     #[serde(default)]
     pub buses: Vec<Bus>,
     #[serde(default)]

@@ -18,36 +18,41 @@ use super::ScreenTransform;
 // ---------------------------------------------------------------------------
 
 fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
-    let lx = local.x;
-    let ly = -local.y; // Library Y-up → schematic Y-down
+    // Step 1: Flip Y — lib Y-up → schematic Y-down.
+    let x = local.x;
+    let y = -local.y;
 
-    let lx = if sym.mirror_x { -lx } else { lx };
-    let ly = if sym.mirror_y { -ly } else { ly };
-
-    let rad = sym.rotation.to_radians();
+    // Step 2: Rotate by NEGATIVE angle (CCW in Y-up = CW in Y-down).
+    let rad = -sym.rotation.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
 
-    let rx = lx * cos - ly * sin;
-    let ry = lx * sin + ly * cos;
+    // Step 3: Mirror AFTER rotation.
+    //   (mirror x) = mirror about X-axis → flip Y
+    //   (mirror y) = mirror about Y-axis → flip X
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
 
     (rx + sym.position.x, ry + sym.position.y)
 }
 
 /// Apply instance rotation + mirror to a direction vector (no translation).
-/// Direction vectors also need Y-flip from library space.
 fn instance_rotate_dir(sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
-    let lx = dx;
-    let ly = -dy; // Library Y-up → schematic Y-down
+    let x = dx;
+    let y = -dy; // lib Y-up → schematic Y-down
 
-    let lx = if sym.mirror_x { -lx } else { lx };
-    let ly = if sym.mirror_y { -ly } else { ly };
-
-    let rad = sym.rotation.to_radians();
+    let rad = -sym.rotation.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
 
-    (lx * cos - ly * sin, lx * sin + ly * cos)
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
+
+    (rx, ry)
 }
 
 // ---------------------------------------------------------------------------
@@ -56,16 +61,20 @@ fn instance_rotate_dir(sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
 
 /// Returns the unit direction vector a pin extends from its position
 /// based on the pin's local rotation (0=right, 90=up, 180=left, 270=down).
+/// Returns the unit direction vector a pin extends from its connection-point
+/// toward the symbol body, in lib-local Y-UP coordinates.
+/// 0=right, 90=up-in-lib, 180=left, 270=down-in-lib.
+/// Results are passed through instance_transform which applies Y-flip + rotation.
 fn pin_direction(pin: &Pin) -> (f64, f64) {
     let deg = ((pin.rotation % 360.0) + 360.0) % 360.0;
     match deg as i32 {
-        0 => (1.0, 0.0),        // points right (endpoint is to the right)
-        90 => (0.0, -1.0),      // points up
-        180 => (-1.0, 0.0),     // points left
-        270 => (0.0, 1.0),      // points down
+        0 => (1.0, 0.0),
+        90 => (0.0, 1.0),   // up in lib Y-up space
+        180 => (-1.0, 0.0),
+        270 => (0.0, -1.0), // down in lib Y-up space
         _ => {
             let rad = deg.to_radians();
-            (rad.cos(), -rad.sin())
+            (rad.cos(), rad.sin()) // lib Y-up: positive sin = upward
         }
     }
 }
@@ -74,7 +83,8 @@ fn pin_direction(pin: &Pin) -> (f64, f64) {
 // Draw all pins for a symbol
 // ---------------------------------------------------------------------------
 
-/// Draw all pins of a library symbol at the instance's position.
+/// Draw all pins of a library symbol at the instance's position,
+/// filtering to only the matching unit and normal body style.
 pub fn draw_symbol_pins(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -82,8 +92,16 @@ pub fn draw_symbol_pins(
     transform: &ScreenTransform,
     pin_color: Color,
 ) {
-    for pin in &lib.pins {
-        draw_pin(frame, sym, lib, pin, transform, pin_color);
+    for lp in &lib.pins {
+        // unit 0 = common; otherwise must match sym.unit
+        if lp.unit != 0 && lp.unit != sym.unit {
+            continue;
+        }
+        // Skip De Morgan body style (body_style 2)
+        if lp.body_style != 0 && lp.body_style != 1 {
+            continue;
+        }
+        draw_pin(frame, sym, lib, &lp.pin, transform, pin_color);
     }
 }
 
@@ -161,6 +179,7 @@ fn draw_pin(
             position: np,
             color: pin_color,
             size: iced::Pixels(screen_font),
+            font: crate::IOSEVKA,
             align_x: h_align.into(),
             align_y: iced::alignment::Vertical::Center.into(),
             ..canvas::Text::default()
@@ -189,6 +208,7 @@ fn draw_pin(
             position: np,
             color: pin_color,
             size: iced::Pixels(small_font),
+            font: crate::IOSEVKA,
             align_x: iced::alignment::Horizontal::Center.into(),
             align_y: iced::alignment::Vertical::Center.into(),
             ..canvas::Text::default()

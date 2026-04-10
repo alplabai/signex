@@ -6,3 +6,7 @@
 
 pub mod schematic;
 pub mod colors;
+
+/// The schematic canvas font. Loaded as a binary asset in `main.rs` and
+/// available by name once the application starts.
+pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");

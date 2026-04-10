@@ -6,9 +6,9 @@ use uuid::Uuid;
 
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibSymbol,
-    NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing, SchRectangle, SchematicSheet,
-    SheetPin, Symbol, TextNote, TextProp, VAlign, Wire,
+    Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
+    LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
+    SchematicSheet, SheetPin, Symbol, TextNote, TextProp, VAlign, Wire,
 };
 
 use crate::error::ParseError;
@@ -69,11 +69,7 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
         .and_then(|s| s.arg_f64(0))
         .unwrap_or(1.27);
 
-    let hidden = effects
-        .and_then(|e| e.find("hide"))
-        .and_then(|h| h.first_arg())
-        .map(|v| v == "yes")
-        .unwrap_or(false);
+    let hidden = is_effects_hidden(effects);
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
@@ -142,16 +138,26 @@ fn parse_stroke_width(node: &SExpr) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn is_text_hidden(node: &SExpr) -> bool {
-    // Check if (effects ... (hide yes)) or (effects ... (hide)) exists
-    let hide = node.find("effects").and_then(|e| e.find("hide"));
-    match hide {
-        Some(h) => {
-            // (hide yes) or (hide) without arg both mean hidden
-            h.first_arg().map(|v| v == "yes").unwrap_or(true)
-        }
-        None => false,
+/// Returns true if an `(effects ...)` node contains a hide marker.
+///
+/// Handles three formats across KiCad versions:
+/// - `(hide yes)`  — KiCad 7+ list form with explicit "yes"
+/// - `(hide)`      — KiCad 6 list form with no argument
+/// - `hide`        — KiCad 5/6 bare-atom form inside `(effects ...)`
+fn is_effects_hidden(effects: Option<&SExpr>) -> bool {
+    let Some(eff) = effects else { return false };
+    // Check for (hide yes) / (hide no) / (hide) as a list child
+    if let Some(h) = eff.find("hide") {
+        return h.first_arg().map(|v| v == "yes").unwrap_or(true);
     }
+    // Check for standalone 'hide' atom (KiCad 5/6 format)
+    eff.children()
+        .iter()
+        .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+}
+
+fn is_text_hidden(node: &SExpr) -> bool {
+    is_effects_hidden(node.find("effects"))
 }
 
 fn parse_halign(s: &str) -> HAlign {
@@ -211,10 +217,22 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let mut pins = Vec::new();
 
     // Check pin visibility flags
+    // Handles: (pin_numbers hide), (pin_numbers (hide yes)), (pin_numbers (hide))
     let show_pin_numbers = symbol_node
         .find("pin_numbers")
-        .and_then(|pn| pn.first_arg())
-        .map(|v| v != "hide")
+        .map(|pn| {
+            // atom form: (pin_numbers hide)
+            if pn.first_arg() == Some("hide") { return false; }
+            // list form: (pin_numbers (hide yes)) or (pin_numbers (hide))
+            if let Some(h) = pn.find("hide") {
+                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+            }
+            // child atom form: (pin_numbers ... hide ...)
+            if pn.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "hide")) {
+                return false;
+            }
+            true
+        })
         .unwrap_or(true);
 
     // pin_names can have: (pin_names hide), (pin_names (offset X) hide), (pin_names (offset X))
@@ -232,21 +250,38 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         .and_then(|o| o.arg_f64(0))
         .unwrap_or(0.508);
 
-    // Sort sub-symbols so body-style-0 (_X_0) subs come AFTER body-style->=1 subs
-    // (for correct rendering order)
-    fn is_body_style_0(sub: &SExpr) -> bool {
-        sub.first_arg()
-            .and_then(|name| name.rsplit('_').next())
+    /// Extract `(unit, body_style)` from a sub-symbol name like `"Device_R_1_1"`.
+    /// Format: `PREFIX_UNIT_BODYSTYLE` — we split from the right.
+    /// - unit 0 = common to all units
+    /// - body_style 1 = normal, 2 = De Morgan
+    fn sub_unit_style(sub: &SExpr) -> (u32, u32) {
+        let name = sub.first_arg().unwrap_or("");
+        // rsplitn(3, '_') gives [body_style, unit, prefix] from the right
+        let parts: Vec<&str> = name.rsplitn(3, '_').collect();
+        let body_style = parts
+            .first()
             .and_then(|s| s.parse::<u32>().ok())
-            .map(|n| n == 0)
-            .unwrap_or(false)
+            .unwrap_or(1);
+        let unit = parts
+            .get(1)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        (unit, body_style)
     }
 
-    let mut all_subs = symbol_node.find_all("symbol");
-    all_subs.sort_by_key(|s| if is_body_style_0(s) { 1_u8 } else { 0_u8 });
+    /// True if a sub-symbol name indicates unit=0 (common to all units).
+    fn is_unit_zero(sub: &SExpr) -> bool {
+        sub_unit_style(sub).0 == 0
+    }
 
-    // Collect graphics and pins from sub-symbols
+    // Sort sub-symbols so unit=0 (common) subs come AFTER unit-specific ones;
+    // this ensures common graphics paint over unit-specific ones.
+    let mut all_subs = symbol_node.find_all("symbol");
+    all_subs.sort_by_key(|s| if is_unit_zero(s) { 1_u8 } else { 0_u8 });
+
+    // Collect graphics and pins from sub-symbols, tagging each with unit/body_style
     for sub in &all_subs {
+        let (unit, body_style) = sub_unit_style(sub);
         for child in sub.children() {
             match child.keyword() {
                 Some("polyline") => {
@@ -260,10 +295,14 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                             })
                             .collect();
                         if !points.is_empty() {
-                            graphics.push(Graphic::Polyline {
-                                points,
-                                width: parse_stroke_width(child),
-                                fill: parse_fill_type(child),
+                            graphics.push(LibGraphic {
+                                unit,
+                                body_style,
+                                graphic: Graphic::Polyline {
+                                    points,
+                                    width: parse_stroke_width(child),
+                                    fill: parse_fill_type(child),
+                                },
                             });
                         }
                     }
@@ -283,11 +322,15 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                             y: e.arg_f64(1).unwrap_or(0.0),
                         })
                         .unwrap_or(Point { x: 0.0, y: 0.0 });
-                    graphics.push(Graphic::Rectangle {
-                        start,
-                        end,
-                        width: parse_stroke_width(child),
-                        fill: parse_fill_type(child),
+                    graphics.push(LibGraphic {
+                        unit,
+                        body_style,
+                        graphic: Graphic::Rectangle {
+                            start,
+                            end,
+                            width: parse_stroke_width(child),
+                            fill: parse_fill_type(child),
+                        },
                     });
                 }
                 Some("circle") => {
@@ -302,11 +345,15 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                         .find("radius")
                         .and_then(|r| r.arg_f64(0))
                         .unwrap_or(1.0);
-                    graphics.push(Graphic::Circle {
-                        center,
-                        radius,
-                        width: parse_stroke_width(child),
-                        fill: parse_fill_type(child),
+                    graphics.push(LibGraphic {
+                        unit,
+                        body_style,
+                        graphic: Graphic::Circle {
+                            center,
+                            radius,
+                            width: parse_stroke_width(child),
+                            fill: parse_fill_type(child),
+                        },
                     });
                 }
                 Some("arc") => {
@@ -331,12 +378,16 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                             y: e.arg_f64(1).unwrap_or(0.0),
                         })
                         .unwrap_or(Point { x: 0.0, y: 0.0 });
-                    graphics.push(Graphic::Arc {
-                        start,
-                        mid,
-                        end,
-                        width: parse_stroke_width(child),
-                        fill: parse_fill_type(child),
+                    graphics.push(LibGraphic {
+                        unit,
+                        body_style,
+                        graphic: Graphic::Arc {
+                            start,
+                            mid,
+                            end,
+                            width: parse_stroke_width(child),
+                            fill: parse_fill_type(child),
+                        },
                     });
                 }
                 Some("text") => {
@@ -349,14 +400,24 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                         .and_then(|s| s.arg_f64(0))
                         .unwrap_or(1.27);
                     let bold = font
-                        .and_then(|f| f.find("bold"))
-                        .and_then(|b| b.first_arg())
-                        .map(|v| v == "yes")
+                        .map(|f| {
+                            f.find("bold")
+                                .and_then(|b| b.first_arg())
+                                .map(|v| v == "yes")
+                                .unwrap_or_else(|| {
+                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                })
+                        })
                         .unwrap_or(false);
                     let italic = font
-                        .and_then(|f| f.find("italic"))
-                        .and_then(|b| b.first_arg())
-                        .map(|v| v == "yes")
+                        .map(|f| {
+                            f.find("italic")
+                                .and_then(|b| b.first_arg())
+                                .map(|v| v == "yes")
+                                .unwrap_or_else(|| {
+                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                })
+                        })
                         .unwrap_or(false);
                     let justify = effects.and_then(|e| e.find("justify"));
                     let justify_h = justify
@@ -367,15 +428,19 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                         .and_then(|j| j.arg(1))
                         .map(|v| parse_valign(v))
                         .unwrap_or(VAlign::Center);
-                    graphics.push(Graphic::Text {
-                        text,
-                        position,
-                        rotation,
-                        font_size,
-                        bold,
-                        italic,
-                        justify_h,
-                        justify_v,
+                    graphics.push(LibGraphic {
+                        unit,
+                        body_style,
+                        graphic: Graphic::Text {
+                            text,
+                            position,
+                            rotation,
+                            font_size,
+                            bold,
+                            italic,
+                            justify_h,
+                            justify_v,
+                        },
                     });
                 }
                 Some("text_box") => {
@@ -395,25 +460,39 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                         .and_then(|s| s.arg_f64(0))
                         .unwrap_or(1.27);
                     let bold = font
-                        .and_then(|f| f.find("bold"))
-                        .and_then(|b| b.first_arg())
-                        .map(|v| v == "yes")
+                        .map(|f| {
+                            f.find("bold")
+                                .and_then(|b| b.first_arg())
+                                .map(|v| v == "yes")
+                                .unwrap_or_else(|| {
+                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                })
+                        })
                         .unwrap_or(false);
                     let italic = font
-                        .and_then(|f| f.find("italic"))
-                        .and_then(|b| b.first_arg())
-                        .map(|v| v == "yes")
+                        .map(|f| {
+                            f.find("italic")
+                                .and_then(|b| b.first_arg())
+                                .map(|v| v == "yes")
+                                .unwrap_or_else(|| {
+                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                })
+                        })
                         .unwrap_or(false);
-                    graphics.push(Graphic::TextBox {
-                        text,
-                        position,
-                        rotation,
-                        size,
-                        font_size,
-                        bold,
-                        italic,
-                        width: parse_stroke_width(child),
-                        fill: parse_fill_type(child),
+                    graphics.push(LibGraphic {
+                        unit,
+                        body_style,
+                        graphic: Graphic::TextBox {
+                            text,
+                            position,
+                            rotation,
+                            size,
+                            font_size,
+                            bold,
+                            italic,
+                            width: parse_stroke_width(child),
+                            fill: parse_fill_type(child),
+                        },
                     });
                 }
                 _ => {}
@@ -449,16 +528,20 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                 .to_string();
             let number_visible = !number_node.map(is_text_hidden).unwrap_or(false);
 
-            pins.push(Pin {
-                pin_type,
-                shape,
-                position,
-                rotation,
-                length,
-                name,
-                number,
-                name_visible,
-                number_visible,
+            pins.push(LibPin {
+                unit,
+                body_style,
+                pin: Pin {
+                    pin_type,
+                    shape,
+                    position,
+                    rotation,
+                    length,
+                    name,
+                    number,
+                    name_visible,
+                    number_visible,
+                },
             });
         }
     }
@@ -590,10 +673,10 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .map(|v| v == "y" || v == "xy")
         .unwrap_or(false);
 
+    // (fields_autoplaced) with no args OR (fields_autoplaced yes) both mean true
     let fields_autoplaced = s
         .find("fields_autoplaced")
-        .and_then(|f| f.first_arg())
-        .map(|v| v == "yes")
+        .map(|f| f.first_arg().map(|v| v == "yes").unwrap_or(true))
         .unwrap_or(false);
 
     // KiCad 10 fields
@@ -831,6 +914,41 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
         });
     }
 
+    // Schematic-level rectangle elements (drawing annotations, not lib graphics)
+    for rect in root.find_all("rectangle") {
+        let start = rect
+            .find("start")
+            .map(|s| Point {
+                x: s.arg_f64(0).unwrap_or(0.0),
+                y: s.arg_f64(1).unwrap_or(0.0),
+            })
+            .unwrap_or(Point { x: 0.0, y: 0.0 });
+        let end = rect
+            .find("end")
+            .map(|e| Point {
+                x: e.arg_f64(0).unwrap_or(0.0),
+                y: e.arg_f64(1).unwrap_or(0.0),
+            })
+            .unwrap_or(Point { x: 0.0, y: 0.0 });
+        let fill = rect
+            .find("fill")
+            .and_then(|f| f.find("type"))
+            .and_then(|t| t.first_arg())
+            .map(|t| match t {
+                "outline" => FillType::Outline,
+                "background" => FillType::Background,
+                _ => FillType::None,
+            })
+            .unwrap_or(FillType::None);
+        drawings.push(SchDrawing::Rect {
+            uuid: parse_uuid(rect),
+            start,
+            end,
+            width: parse_stroke_width(rect),
+            fill,
+        });
+    }
+
     drawings
 }
 
@@ -991,39 +1109,6 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         })
         .collect();
 
-    let rectangles: Vec<SchRectangle> = root
-        .find_all("rectangle")
-        .iter()
-        .map(|r| {
-            let start = r
-                .find("start")
-                .map(|s| Point {
-                    x: s.arg_f64(0).unwrap_or(0.0),
-                    y: s.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let end = r
-                .find("end")
-                .map(|e| Point {
-                    x: e.arg_f64(0).unwrap_or(0.0),
-                    y: e.arg_f64(1).unwrap_or(0.0),
-                })
-                .unwrap_or(Point { x: 0.0, y: 0.0 });
-            let stroke_type = r
-                .find("stroke")
-                .and_then(|s| s.find("type"))
-                .and_then(|t| t.first_arg())
-                .unwrap_or("default")
-                .to_string();
-            SchRectangle {
-                uuid: parse_uuid(r),
-                start,
-                end,
-                stroke_type,
-            }
-        })
-        .collect();
-
     let no_erc_directives: Vec<NoConnect> = root
         .find_all("no_erc")
         .iter()
@@ -1048,7 +1133,6 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         child_sheets,
         no_connects,
         text_notes,
-        rectangles,
         buses,
         bus_entries,
         drawings,
