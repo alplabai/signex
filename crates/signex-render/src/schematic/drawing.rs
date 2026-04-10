@@ -1,10 +1,10 @@
 //! Schematic drawing primitives -- Line, Rect, Circle, Arc, Polyline,
-//! SchRectangle, and ChildSheet rendering.
+//! and ChildSheet rendering.
 
 use iced::widget::canvas::{self, path};
 use iced::Color;
 
-use signex_types::schematic::{ChildSheet, FillType, SchDrawing, SchRectangle};
+use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 
 use super::ScreenTransform;
 
@@ -186,33 +186,6 @@ pub fn draw_sch_drawing(
     }
 }
 
-/// Draw a SchRectangle (standalone rectangle on the schematic).
-pub fn draw_sch_rectangle(
-    frame: &mut canvas::Frame,
-    rect: &SchRectangle,
-    transform: &ScreenTransform,
-    color: Color,
-) {
-    let p1 = transform.to_screen_point(rect.start.x, rect.start.y);
-    let p2 = transform.to_screen_point(rect.end.x, rect.end.y);
-
-    let min_x = p1.x.min(p2.x);
-    let min_y = p1.y.min(p2.y);
-    let w = (p1.x - p2.x).abs();
-    let h = (p1.y - p2.y).abs();
-
-    let path = canvas::Path::rectangle(
-        iced::Point::new(min_x, min_y),
-        iced::Size::new(w, h),
-    );
-
-    let sw = (transform.scale * 0.15).max(0.5).min(3.0);
-    let stroke = canvas::Stroke::default()
-        .with_color(color)
-        .with_width(sw);
-    frame.stroke(&path, stroke);
-}
-
 /// Draw a hierarchical child sheet as a labeled rectangle.
 pub fn draw_child_sheet(
     frame: &mut canvas::Frame,
@@ -252,6 +225,7 @@ pub fn draw_child_sheet(
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
         color: body_color,
         size: iced::Pixels(font_size),
+        font: crate::IOSEVKA,
         ..canvas::Text::default()
     };
     frame.fill_text(text);
@@ -263,6 +237,7 @@ pub fn draw_child_sheet(
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
         color: Color { a: body_color.a * 0.7, ..body_color },
         size: iced::Pixels(small_font),
+        font: crate::IOSEVKA,
         ..canvas::Text::default()
     };
     frame.fill_text(file_text);
@@ -278,6 +253,7 @@ pub fn draw_child_sheet(
             position: iced::Point::new(pp.x + 4.0, pp.y),
             color: body_color,
             size: iced::Pixels(small_font),
+            font: crate::IOSEVKA,
             align_y: iced::alignment::Vertical::Center.into(),
             ..canvas::Text::default()
         };

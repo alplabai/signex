@@ -91,11 +91,6 @@ pub fn render_schematic(
         drawing::draw_sch_drawing(frame, d, transform, body_color);
     }
 
-    // Z=1b: Sheet rectangles
-    for r in &sheet.rectangles {
-        drawing::draw_sch_rectangle(frame, r, transform, body_color);
-    }
-
     // Z=2: Wires
     for w in &sheet.wires {
         wire::draw_wire(frame, w, transform, wire_color);
@@ -154,9 +149,9 @@ pub fn render_schematic(
                 pin_color,
             );
 
-            // Reference text
+            // Reference text — power symbols (#PWR refs) are always hidden
             if let Some(ref ref_text) = sym.ref_text {
-                if !ref_text.hidden {
+                if !ref_text.hidden && !sym.is_power {
                     text::draw_text_prop(
                         frame,
                         &sym.reference,
