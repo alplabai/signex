@@ -142,9 +142,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                             state.camera.pan(dx, dy);
                         }
                         state.last_pan_pos = Some(cursor_pos);
+                        // Panning changes camera offset → grid must redraw
+                        return Some(canvas::Action::publish(Message::CanvasEvent(
+                            CanvasEvent::CursorMoved,
+                        )));
                     }
 
-                    // Update cursor world position + zoom for status bar
+                    // Regular hover — update cursor position for status bar (no cache clear)
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
                     let zoom_pct = state.camera.zoom_percent();
                     return Some(canvas::Action::publish(Message::CanvasEvent(
