@@ -3,9 +3,9 @@
 //! Renders a LibSymbol's graphics + pins in a small preview box,
 //! auto-fitted to the available size.
 
-use iced::widget::canvas::{self, Cache, Frame, Geometry, Path, Stroke, Text};
+use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
-use signex_types::schematic::{Graphic, LibSymbol, Pin};
+use signex_types::schematic::{Graphic, LibSymbol};
 
 /// Canvas program that draws a LibSymbol preview.
 pub struct SymbolPreview {
@@ -36,7 +36,7 @@ impl SymbolPreview {
         };
 
         for g in &self.symbol.graphics {
-            match g {
+            match &g.graphic {
                 Graphic::Rectangle { start, end, .. } => {
                     expand(start.x, start.y);
                     expand(end.x, end.y);
@@ -58,11 +58,17 @@ impl SymbolPreview {
                 Graphic::Text { position, .. } => {
                     expand(position.x, position.y);
                 }
+                Graphic::Bezier { points, .. } => {
+                    for p in points {
+                        expand(p.x, p.y);
+                    }
+                }
                 Graphic::TextBox { .. } => {}
             }
         }
 
-        for pin in &self.symbol.pins {
+        for lib_pin in &self.symbol.pins {
+            let pin = &lib_pin.pin;
             expand(pin.position.x, pin.position.y);
             // Pin extends by length in the pin's direction
             let (dx, dy) = match pin.rotation as i32 {
@@ -131,7 +137,7 @@ impl canvas::Program<(), Theme> for SymbolPreview {
 
             // Draw graphics
             for g in &self.symbol.graphics {
-                match g {
+                match &g.graphic {
                     Graphic::Rectangle { start, end, .. } => {
                         let p1 = tx(start.x, start.y);
                         let p2 = tx(end.x, end.y);
@@ -181,12 +187,28 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                             Stroke::default().with_color(body_color).with_width(1.5),
                         );
                     }
+                    Graphic::Bezier { points, .. } => {
+                        if points.len() >= 2 {
+                            let path = Path::new(|b| {
+                                let p0 = tx(points[0].x, points[0].y);
+                                b.move_to(p0);
+                                for pt in &points[1..] {
+                                    b.line_to(tx(pt.x, pt.y));
+                                }
+                            });
+                            frame.stroke(
+                                &path,
+                                Stroke::default().with_color(body_color).with_width(1.5),
+                            );
+                        }
+                    }
                     Graphic::Text { .. } | Graphic::TextBox { .. } => {}
                 }
             }
 
             // Draw pins
-            for pin in &self.symbol.pins {
+            for lib_pin in &self.symbol.pins {
+                let pin = &lib_pin.pin;
                 let origin = tx(pin.position.x, pin.position.y);
                 let (dx, dy) = match pin.rotation as i32 {
                     0 => (pin.length * scale, 0.0),

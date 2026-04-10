@@ -504,11 +504,11 @@ impl Signex {
                             self.panel_ctx.selected_pins = sym
                                 .pins
                                 .iter()
-                                .map(|p| {
+                                .map(|lp| {
                                     (
-                                        p.number.clone(),
-                                        p.name.clone(),
-                                        format!("{:?}", p.pin_type),
+                                        lp.pin.number.clone(),
+                                        lp.pin.name.clone(),
+                                        format!("{:?}", lp.pin.pin_type),
                                     )
                                 })
                                 .collect();
