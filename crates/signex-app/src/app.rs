@@ -61,6 +61,7 @@ pub enum DragTarget {
     LeftPanel,
     RightPanel,
     BottomPanel,
+    ComponentsSplit,
 }
 
 #[derive(Debug, Clone)]
@@ -218,6 +219,7 @@ impl Signex {
                 selected_component: None,
                 selected_pins: vec![],
                 selected_lib_symbol: None,
+                components_split: 250.0,
                 project_tree: vec![],
             },
             left_width: 240.0,
@@ -298,21 +300,17 @@ impl Signex {
             _ => Message::Noop,
         });
 
-        // While dragging a panel handle, track mouse position globally
-        if self.dragging.is_some() {
-            let mouse_sub = iced::event::listen_with(|event, _status, _id| match event {
-                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Some(Message::DragMove(position.x, position.y))
-                }
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )) => Some(Message::DragEnd),
-                _ => None,
-            });
-            Subscription::batch([kbd, mouse_sub])
-        } else {
-            kbd
-        }
+        // Mouse events for drag-to-resize (always subscribed, filtered in update)
+        let mouse_sub = iced::event::listen().map(|event| match event {
+            iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                Message::DragMove(position.x, position.y)
+            }
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )) => Message::DragEnd,
+            _ => Message::Noop,
+        });
+        Subscription::batch([kbd, mouse_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -335,19 +333,21 @@ impl Signex {
                 self.canvas.clear_bg_cache();
             }
             Message::DragStart(target) => {
+                eprintln!("[drag] START {:?}", target);
                 self.dragging = Some(target);
                 self.drag_start_pos = None; // set on first move
                 self.drag_start_size = match target {
                     DragTarget::LeftPanel => self.left_width,
                     DragTarget::RightPanel => self.right_width,
                     DragTarget::BottomPanel => self.bottom_height,
+                    DragTarget::ComponentsSplit => self.panel_ctx.components_split,
                 };
             }
-            Message::DragMove(x, y) => {
+            Message::DragMove(x, y) if self.dragging.is_some() => {
                 if let Some(target) = self.dragging {
                     let pos = match target {
                         DragTarget::LeftPanel | DragTarget::RightPanel => x,
-                        DragTarget::BottomPanel => y,
+                        DragTarget::BottomPanel | DragTarget::ComponentsSplit => y,
                     };
                     if self.drag_start_pos.is_none() {
                         self.drag_start_pos = Some(pos);
@@ -367,6 +367,10 @@ impl Signex {
                                 self.bottom_height,
                                 (self.drag_start_size - delta).clamp(60.0, 400.0),
                             ),
+                            DragTarget::ComponentsSplit => (
+                                self.panel_ctx.components_split,
+                                (self.drag_start_size + delta).clamp(80.0, 600.0),
+                            ),
                         };
                         // Only re-render on meaningful change (reduces lag)
                         let new_val = new_val.round();
@@ -375,12 +379,16 @@ impl Signex {
                                 DragTarget::LeftPanel => self.left_width = new_val,
                                 DragTarget::RightPanel => self.right_width = new_val,
                                 DragTarget::BottomPanel => self.bottom_height = new_val,
+                                DragTarget::ComponentsSplit => {
+                                    self.panel_ctx.components_split = new_val
+                                }
                             }
                         }
                     }
                 }
             }
-            Message::DragEnd => {
+            Message::DragEnd if self.dragging.is_some() => {
+                eprintln!("[drag] END");
                 self.dragging = None;
                 self.drag_start_pos = None;
             }
@@ -479,6 +487,13 @@ impl Signex {
                                 Err(e) => eprintln!("Failed to read {}: {e}", path.display()),
                             }
                         }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::DragComponentsSplit,
+                    ) => {
+                        self.dragging = Some(DragTarget::ComponentsSplit);
+                        self.drag_start_pos = None;
+                        self.drag_start_size = self.panel_ctx.components_split;
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::SelectComponent(name),
@@ -640,6 +655,7 @@ impl Signex {
                 self.schematic = Some(*sheet);
                 self.canvas.clear_content_cache();
             }
+            Message::DragMove(_, _) | Message::DragEnd => {} // not dragging, ignore
             Message::Noop => {}
         }
         // Sync live settings to panel context for Properties panel
@@ -838,6 +854,7 @@ impl Signex {
             selected_component: self.panel_ctx.selected_component.clone(),
             selected_pins: self.panel_ctx.selected_pins.clone(),
             selected_lib_symbol: self.panel_ctx.selected_lib_symbol.clone(),
+            components_split: self.panel_ctx.components_split,
             project_tree: vec![], // built below
         };
         // Build persistent project tree (toggle state preserved until next project load)
@@ -918,10 +935,10 @@ impl Signex {
             .height(Length::Fill)
             .style(crate::styles::panel_region);
 
-        // Left resize handle (3px draggable border)
+        // Left resize handle
         let left_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
-                .width(3)
+                .width(5)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
@@ -958,7 +975,7 @@ impl Signex {
         // Right resize handle
         let right_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
-                .width(3)
+                .width(5)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
@@ -979,7 +996,7 @@ impl Signex {
         let bottom_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
-                .height(3)
+                .height(5)
                 .style(crate::styles::resize_handle),
         )
         .interaction(iced::mouse::Interaction::ResizingVertically)
