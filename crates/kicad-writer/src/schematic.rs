@@ -426,7 +426,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             wln!(
                 out,
                 "    (fill (type {}))",
-                if *fill { "outline" } else { "none" }
+                fill_type_str(*fill)
             );
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -440,12 +440,13 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
-        SchDrawing::Arc { uuid, start, mid, end, width } => {
+        SchDrawing::Arc { uuid, start, mid, end, width, fill } => {
             wln!(out, "  (arc");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (mid {} {})", fmt_f64(mid.x), fmt_f64(mid.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
             wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
@@ -622,6 +623,17 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
                 w!(out, " (italic yes)");
             }
             wln!(out, "))");
+            wln!(out, "        )");
+        }
+        Graphic::Bezier { points, width, fill } => {
+            wln!(out, "        (bezier");
+            wln!(out, "          (pts");
+            for p in points {
+                wln!(out, "            (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
+            }
+            wln!(out, "          )");
+            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
     }

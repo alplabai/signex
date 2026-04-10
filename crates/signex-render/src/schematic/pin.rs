@@ -9,7 +9,7 @@
 use iced::widget::canvas::{self, path};
 use iced::Color;
 
-use signex_types::schematic::{LibSymbol, Pin, Point, Symbol};
+use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
 
@@ -133,17 +133,25 @@ fn draw_pin(
     let p1 = transform.to_screen_point(wx1, wy1);
     let p2 = transform.to_screen_point(wx2, wy2);
 
-    // Draw pin line
-    let path = canvas::Path::new(|b: &mut path::Builder| {
-        b.move_to(p1);
-        b.line_to(p2);
-    });
-
     let stroke_width = (transform.scale * 0.15).max(0.5).min(2.5);
     let stroke = canvas::Stroke::default()
         .with_color(pin_color)
         .with_width(stroke_width);
-    frame.stroke(&path, stroke);
+
+    // INVERTED / INVERTED_CLOCK draw their own (shortened) line inside draw_pin_shape.
+    // All other shapes get the full pin line drawn here.
+    let shape_draws_own_line =
+        matches!(pin.shape, PinShape::Inverted | PinShape::InvertedClock);
+    if !shape_draws_own_line {
+        let path = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(p1);
+            b.line_to(p2);
+        });
+        frame.stroke(&path, stroke);
+    }
+
+    // Draw shape decorator at the connection end (p1).
+    draw_pin_shape(frame, p1, p2, pin.shape, stroke_width, transform, pin_color);
 
     // Small circle at the connection point (endpoint)
     let dot_radius = (transform.scale * 0.2).max(1.0).min(3.0);
@@ -214,5 +222,207 @@ fn draw_pin(
             ..canvas::Text::default()
         };
         frame.fill_text(text);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pin shape decorators (mirroring KiCad SCH_PAINTER pin shape logic)
+// ---------------------------------------------------------------------------
+
+/// Draw two connected segments A→B and B→C (KiCad `triLine`).
+fn tri_line(
+    frame: &mut canvas::Frame,
+    a: iced::Point,
+    b: iced::Point,
+    c: iced::Point,
+    stroke: canvas::Stroke,
+) {
+    let path = canvas::Path::new(|p| {
+        p.move_to(a);
+        p.line_to(b);
+        p.move_to(b);
+        p.line_to(c);
+    });
+    frame.stroke(&path, stroke);
+}
+
+/// Draw the pin shape decorator.
+///
+/// Coordinate mapping vs KiCad `SCH_PAINTER`:
+/// * `p1` = connection end (wire attaches here) = KiCad `pos = GetPosition()`
+/// * `p2` = body end (at symbol body boundary)  = KiCad `p0 = GetPinRoot()`
+/// * `bdx/bdy` = direction FROM body TOWARD connection = KiCad `dir`
+///
+/// All KiCad decorators are anchored at `p0` (body end) — so we anchor at
+/// `p2`.  For `Inverted` and `InvertedClock`, this function also draws the
+/// shortened pin line; `draw_pin` skips the full line for those two shapes.
+fn draw_pin_shape(
+    frame: &mut canvas::Frame,
+    p1: iced::Point,
+    p2: iced::Point,
+    shape: PinShape,
+    stroke_width: f32,
+    transform: &ScreenTransform,
+    color: Color,
+) {
+    if matches!(shape, PinShape::Line) {
+        return;
+    }
+
+    let dx = p2.x - p1.x;
+    let dy = p2.y - p1.y;
+    let len_px = (dx * dx + dy * dy).sqrt();
+    if len_px < 0.1 {
+        return;
+    }
+
+    // Unit direction from p1 (connection) toward p2 (body).
+    let sdx = dx / len_px;
+    let sdy = dy / len_px;
+
+    // KiCad "dir": from body (p2) toward connection (p1).
+    let bdx = -sdx;
+    let bdy = -sdy;
+
+    // Wing (perpendicular) direction for clock triangles.
+    // Horizontal pin: |bdx|≥|bdy| → wing = (0, 1).
+    // Vertical pin:   |bdy|>|bdx| → wing = (1, 0).
+    let wing_x = bdy.abs(); // = |sdy|
+    let wing_y = bdx.abs(); // = |sdx|
+
+    // Forward / low helpers for InputLow, ClockLow, OutputLow.
+    // KiCad uses absolute screen-space -Y (up) for horizontal, -X (left) for vertical.
+    let is_horiz = bdx.abs() >= bdy.abs();
+    let (fwd_x, fwd_y) = if is_horiz { (bdx, 0.0_f32) } else { (0.0_f32, bdy) };
+
+    // Decorator sizes in screen pixels.
+    let radius = transform.world_len(0.508).max(2.0) as f32;
+    let diam = radius * 2.0;
+    let clock_size = transform.world_len(0.762).max(2.5) as f32;
+
+    let stroke = canvas::Stroke::default()
+        .with_color(color)
+        .with_width(stroke_width);
+
+    let pt = |x: f32, y: f32| iced::Point::new(x, y);
+
+    match shape {
+        PinShape::Line => unreachable!(),
+
+        // ── INVERTED ─────────────────────────────────────────────────────────
+        // Open circle just outside body (toward connection), then shortened line.
+        // KiCad: DrawCircle(p0 + dir*radius, radius); DrawLine(p0+dir*diam, pos)
+        PinShape::Inverted => {
+            let cx = p2.x + bdx * radius;
+            let cy = p2.y + bdy * radius;
+            frame.stroke(&canvas::Path::circle(pt(cx, cy), radius), stroke);
+            let path = canvas::Path::new(|b| {
+                b.move_to(pt(p2.x + bdx * diam, p2.y + bdy * diam));
+                b.line_to(p1);
+            });
+            frame.stroke(&path, stroke);
+        }
+
+        // ── CLOCK ────────────────────────────────────────────────────────────
+        // Triangle at body end: ±perp wings, apex INTO the body.
+        // KiCad: triLine(p0±perp*cs, p0 - dir*cs); full line drawn by caller.
+        PinShape::Clock => {
+            tri_line(
+                frame,
+                pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
+                pt(p2.x + sdx * clock_size, p2.y + sdy * clock_size), // INTO body
+                pt(p2.x - wing_x * clock_size, p2.y - wing_y * clock_size),
+                stroke,
+            );
+        }
+
+        // ── INVERTED_CLOCK ───────────────────────────────────────────────────
+        // Clock triangle at body end + Inverted circle + shortened line.
+        PinShape::InvertedClock => {
+            tri_line(
+                frame,
+                pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
+                pt(p2.x + sdx * clock_size, p2.y + sdy * clock_size),
+                pt(p2.x - wing_x * clock_size, p2.y - wing_y * clock_size),
+                stroke,
+            );
+            let cx = p2.x + bdx * radius;
+            let cy = p2.y + bdy * radius;
+            frame.stroke(&canvas::Path::circle(pt(cx, cy), radius), stroke);
+            let path = canvas::Path::new(|b| {
+                b.move_to(pt(p2.x + bdx * diam, p2.y + bdy * diam));
+                b.line_to(p1);
+            });
+            frame.stroke(&path, stroke);
+        }
+
+        // ── INPUT_LOW ────────────────────────────────────────────────────────
+        // IEEE active-low input: L-shape anchored at body end.
+        // KiCad horiz: triLine(p0+(dir.x,0)*d, p0+(dir.x,-1)*d, p0)
+        // KiCad vert:  triLine(p0+(0,dir.y)*d, p0+(-1,dir.y)*d, p0)
+        PinShape::InputLow => {
+            let ax = p2.x + fwd_x * diam;
+            let ay = p2.y + fwd_y * diam;
+            let (bx, by) = if is_horiz {
+                (ax, ay - diam) // -Y = up on screen
+            } else {
+                (ax - diam, ay) // -X = left on screen
+            };
+            tri_line(frame, pt(ax, ay), pt(bx, by), p2, stroke);
+        }
+
+        // ── CLOCK_LOW / EDGE_CLOCK_HIGH ──────────────────────────────────────
+        // Clock triangle + InputLow L-shape (KiCad treats these identically).
+        PinShape::ClockLow | PinShape::EdgeClockHigh => {
+            tri_line(
+                frame,
+                pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
+                pt(p2.x + sdx * clock_size, p2.y + sdy * clock_size),
+                pt(p2.x - wing_x * clock_size, p2.y - wing_y * clock_size),
+                stroke,
+            );
+            let ax = p2.x + fwd_x * diam;
+            let ay = p2.y + fwd_y * diam;
+            let (bx, by) = if is_horiz {
+                (ax, ay - diam)
+            } else {
+                (ax - diam, ay)
+            };
+            tri_line(frame, pt(ax, ay), pt(bx, by), p2, stroke);
+        }
+
+        // ── OUTPUT_LOW ───────────────────────────────────────────────────────
+        // IEEE active-low output: diagonal "flag" line.
+        // KiCad horiz: line(p0 - (0,diam), p0 + dir.x*diam)
+        // KiCad vert:  line(p0 - (diam,0), p0 + dir.y*diam)
+        PinShape::OutputLow => {
+            let (start, end_pt) = if is_horiz {
+                (pt(p2.x, p2.y - diam), pt(p2.x + bdx * diam, p2.y))
+            } else {
+                (pt(p2.x - diam, p2.y), pt(p2.x, p2.y + bdy * diam))
+            };
+            let path = canvas::Path::new(|b| {
+                b.move_to(start);
+                b.line_to(end_pt);
+            });
+            frame.stroke(&path, stroke);
+        }
+
+        // ── NON_LOGIC ────────────────────────────────────────────────────────
+        // X cross at body end using two diagonal lines.
+        // KiCad: d1=(dir.x+dir.y, dir.y-dir.x), d2=(dir.x-dir.y, dir.x+dir.y)
+        PinShape::NonLogic => {
+            let d1x = bdx + bdy;
+            let d1y = bdy - bdx;
+            let d2x = bdx - bdy;
+            let d2y = bdx + bdy;
+            let path = canvas::Path::new(|b| {
+                b.move_to(pt(p2.x - d1x * radius, p2.y - d1y * radius));
+                b.line_to(pt(p2.x + d1x * radius, p2.y + d1y * radius));
+                b.move_to(pt(p2.x - d2x * radius, p2.y - d2y * radius));
+                b.line_to(pt(p2.x + d2x * radius, p2.y + d2y * radius));
+            });
+            frame.stroke(&path, stroke);
+        }
     }
 }

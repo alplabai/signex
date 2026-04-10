@@ -249,6 +249,15 @@ pub enum Graphic {
         #[serde(default)]
         fill: FillType,
     },
+    /// Cubic bezier: control points [p0, c1, c2, p3]
+    Bezier {
+        /// Exactly 4 control points: start, cp1, cp2, end
+        points: Vec<Point>,
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        fill: FillType,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +345,9 @@ pub struct Wire {
 pub struct Junction {
     pub uuid: Uuid,
     pub position: Point,
+    /// 0.0 means use the theme default size.
+    #[serde(default)]
+    pub diameter: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -369,6 +381,10 @@ pub struct TextNote {
     pub rotation: f64,
     #[serde(default)]
     pub font_size: f64,
+    #[serde(default)]
+    pub justify_h: HAlign,
+    #[serde(default)]
+    pub justify_v: VAlign,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -450,6 +466,8 @@ pub enum SchDrawing {
         end: Point,
         #[serde(default)]
         width: f64,
+        #[serde(default)]
+        fill: FillType,
     },
     Polyline {
         uuid: Uuid,
@@ -457,7 +475,7 @@ pub enum SchDrawing {
         #[serde(default)]
         width: f64,
         #[serde(default)]
-        fill: bool,
+        fill: FillType,
     },
 }
 

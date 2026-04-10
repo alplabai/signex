@@ -89,6 +89,7 @@ pub fn draw_sch_drawing(
             mid,
             end,
             width,
+            fill,
             ..
         } => {
             // Approximate arc with line segments via the three-point method
@@ -131,7 +132,15 @@ pub fn draw_sch_drawing(
                         let py = cy + r * a.sin();
                         b.line_to(transform.to_screen_point(px, py));
                     }
+                    if *fill != FillType::None {
+                        b.close();
+                    }
                 });
+
+                if *fill != FillType::None {
+                    let fill_color = Color { a: color.a * 0.15, ..color };
+                    frame.fill(&path, fill_color);
+                }
 
                 let sw = stroke_width(transform, *width);
                 let stroke = canvas::Stroke::default()
@@ -167,12 +176,12 @@ pub fn draw_sch_drawing(
                 for pt in &points[1..] {
                     b.line_to(transform.to_screen_point(pt.x, pt.y));
                 }
-                if *fill && points.len() > 2 {
+                if *fill != FillType::None && points.len() > 2 {
                     b.close();
                 }
             });
 
-            if *fill {
+            if *fill != FillType::None {
                 let fill_color = Color { a: color.a * 0.15, ..color };
                 frame.fill(&path, fill_color);
             }
