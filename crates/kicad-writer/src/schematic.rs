@@ -215,17 +215,6 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         write_text_note(&mut out, note);
     }
 
-    // Rectangles
-    for r in &sheet.rectangles {
-        wln!(out, "  (rectangle");
-        wln!(out, "    (start {} {})", fmt_f64(r.start.x), fmt_f64(r.start.y));
-        wln!(out, "    (end {} {})", fmt_f64(r.end.x), fmt_f64(r.end.y));
-        wln!(out, "    (stroke (width 0) (type {}))", escape(&r.stroke_type));
-        wln!(out, "    (fill (type none))");
-        wln!(out, "    (uuid \"{}\")", r.uuid);
-        wln!(out, "  )");
-    }
-
     // Drawing objects
     for d in &sheet.drawings {
         write_drawing(&mut out, d);
@@ -437,7 +426,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             wln!(
                 out,
                 "    (fill (type {}))",
-                if *fill { "outline" } else { "none" }
+                fill_type_str(*fill)
             );
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -451,12 +440,13 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
-        SchDrawing::Arc { uuid, start, mid, end, width } => {
+        SchDrawing::Arc { uuid, start, mid, end, width, fill } => {
             wln!(out, "  (arc");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (mid {} {})", fmt_f64(mid.x), fmt_f64(mid.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
             wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
@@ -534,15 +524,15 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     // Sub-symbol for graphics
     let base_name = lib.id.split(':').next_back().unwrap_or(&lib.id);
     wln!(out, "      (symbol \"{}_0_1\"", base_name);
-    for g in &lib.graphics {
-        write_lib_graphic(out, g);
+    for lg in &lib.graphics {
+        write_lib_graphic(out, &lg.graphic);
     }
     wln!(out, "      )");
 
     // Sub-symbol for pins
     wln!(out, "      (symbol \"{}_1_1\"", base_name);
-    for pin in &lib.pins {
-        write_lib_pin(out, pin);
+    for lp in &lib.pins {
+        write_lib_pin(out, &lp.pin);
     }
     wln!(out, "      )");
 
@@ -633,6 +623,17 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
                 w!(out, " (italic yes)");
             }
             wln!(out, "))");
+            wln!(out, "        )");
+        }
+        Graphic::Bezier { points, width, fill } => {
+            wln!(out, "        (bezier");
+            wln!(out, "          (pts");
+            for p in points {
+                wln!(out, "            (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
+            }
+            wln!(out, "          )");
+            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
     }
