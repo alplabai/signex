@@ -1,7 +1,6 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
-use iced::widget::{button, container, row, text};
-use iced::widget::space;
+use iced::widget::{button, container, row, space, text};
 use iced::{Element, Length};
 use signex_types::coord::Unit;
 
@@ -16,21 +15,27 @@ pub fn view<'a>(
     zoom: f64,
     unit: Unit,
     tool: &Tool,
+    grid_size_mm: f32,
 ) -> Element<'a, StatusBarMsg> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
         Unit::Mil => format!("X:{:.1} Y:{:.1}", x / 0.0254, y / 0.0254),
         Unit::Inch => format!("X:{:.4} Y:{:.4}", x / 25.4, y / 25.4),
-        Unit::Micrometer => format!("X:{:.0}µm Y:{:.0}µm", x * 1000.0, y * 1000.0),
+        Unit::Micrometer => format!("X:{:.0} Y:{:.0}", x * 1000.0, y * 1000.0),
     };
 
-    let grid_label = if grid_visible { "Grid" } else { "Grid OFF" };
+    let grid_text = if grid_visible {
+        format!("{grid_size_mm:.3}mm")
+    } else {
+        "Grid OFF".to_string()
+    };
+
     let snap_label = if snap_enabled { "Snap" } else { "Free" };
 
     let bar = row![
         text(coord_text).size(12),
         text(" | ").size(12),
-        button(text(grid_label).size(12))
+        button(text(grid_text).size(12))
             .padding([2, 6])
             .style(button::text)
             .on_press(StatusBarMsg::ToggleGrid),
@@ -57,6 +62,5 @@ pub fn view<'a>(
     container(bar)
         .width(Length::Fill)
         .padding([3, 8])
-        .style(container::bordered_box)
         .into()
 }
