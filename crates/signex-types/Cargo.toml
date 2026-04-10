@@ -1,0 +1,12 @@
+[package]
+name = "signex-types"
+description = "Domain types for Signex EDA — schematic, PCB, net, layer, theme"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,12 @@
+[package]
+name = "standard-writer"
+description = "Standard S-expression serializer — write .standard_sch, .standard_pcb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+
+[dev-dependencies]
+standard-parser = { workspace = true }
