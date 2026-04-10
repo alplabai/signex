@@ -41,10 +41,22 @@ impl PanelKind {
     }
 }
 
+/// Per-sheet info for the project tree.
+#[derive(Debug, Clone)]
+pub struct SheetInfo {
+    pub name: String,
+    pub filename: String,
+    pub sym_count: usize,
+    pub wire_count: usize,
+    pub label_count: usize,
+}
+
 /// Context passed to panels — owned data to avoid lifetime issues.
 pub struct PanelContext {
     pub project_name: Option<String>,
     pub project_file: Option<String>,
+    pub pcb_file: Option<String>,
+    pub sheets: Vec<SheetInfo>,
     pub sym_count: usize,
     pub wire_count: usize,
     pub label_count: usize,
@@ -121,33 +133,63 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if let Some(name) = &ctx.project_name {
-        // Build tree data
-        let mut sheets = vec![];
-        if let Some(file) = &ctx.project_file {
-            sheets.push(TreeNode::leaf(file.clone(), TreeIcon::Schematic));
+        // Build source documents from project sheets
+        let mut source_docs: Vec<TreeNode> = vec![];
+
+        if !ctx.sheets.is_empty() {
+            // We have full project data — show each sheet with stats
+            for sheet in &ctx.sheets {
+                let badge = format!("{}c {}w", sheet.sym_count, sheet.wire_count);
+                source_docs.push(
+                    TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic)
+                        .with_badge(badge),
+                );
+            }
+        } else if let Some(file) = &ctx.project_file {
+            // Fallback — just the opened file
+            source_docs.push(
+                TreeNode::leaf(file.clone(), TreeIcon::Schematic)
+                    .with_badge(format!("{}c {}w", ctx.sym_count, ctx.wire_count)),
+            );
         }
-        for cs in &ctx.child_sheets {
-            sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
+
+        // PCB file
+        if let Some(pcb) = &ctx.pcb_file {
+            source_docs.push(TreeNode::leaf(pcb.clone(), TreeIcon::Pcb));
         }
 
-        let roots = vec![TreeNode::branch(name.clone(), TreeIcon::Folder, sheets)];
+        // Libraries
+        let lib_count = if ctx.lib_symbol_count > 0 {
+            ctx.lib_symbol_count
+        } else {
+            // Fallback: count from sheet stats
+            ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
+        };
+        let lib_children = vec![
+            TreeNode::leaf(
+                format!("{} symbols loaded", lib_count),
+                TreeIcon::Component,
+            )
+            .with_badge(lib_count.to_string()),
+        ];
 
-        let tree = tree_view::tree_view(&roots, None, &ctx.tokens);
-        let stats = text(format!(
-            "{} sym  {} wires  {} labels",
-            ctx.sym_count, ctx.wire_count, ctx.label_count
-        ))
-        .size(9)
-        .color(theme_ext::text_secondary(&ctx.tokens));
+        let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
+        settings.expanded = false;
 
-        column![
-            tree.map(PanelMsg::Tree),
-            separator(&ctx.tokens),
-            container(stats).padding([2, 4]),
-        ]
-        .spacing(2)
-        .width(Length::Fill)
-        .into()
+        let roots = vec![TreeNode::branch(
+            name.clone(),
+            TreeIcon::Folder,
+            vec![
+                TreeNode::branch("Source Documents".to_string(), TreeIcon::Folder, source_docs),
+                TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
+                settings,
+            ],
+        )];
+
+        column![tree_view::tree_view(&roots, None, &ctx.tokens).map(PanelMsg::Tree)]
+            .spacing(0)
+            .width(Length::Fill)
+            .into()
     } else {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
