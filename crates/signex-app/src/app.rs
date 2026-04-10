@@ -60,6 +60,7 @@ pub struct Signex {
     pub grid_size_mm: f32,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
+    pub panel_ctx: crate::panels::PanelContext,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +131,14 @@ impl Signex {
             grid_size_mm,
             schematic: None,
             project_path: None,
+            panel_ctx: crate::panels::PanelContext {
+                project_name: None,
+                sym_count: 0,
+                wire_count: 0,
+                label_count: 0,
+                child_sheets: vec![],
+                has_schematic: false,
+            },
         };
         (app, Task::none())
     }
@@ -264,6 +273,7 @@ impl Signex {
                         self.canvas.schematic = Some(sheet);
                         self.canvas.clear_bg_cache();
                         self.canvas.clear_content_cache();
+                        self.refresh_panel_ctx();
                     }
                     Err(e) => {
                         eprintln!("Failed to parse schematic: {e}");
@@ -332,6 +342,21 @@ impl Signex {
         }
     }
 
+    fn refresh_panel_ctx(&mut self) {
+        self.panel_ctx = crate::panels::PanelContext {
+            project_name: self.project_path.as_ref().and_then(|p| {
+                p.file_stem().map(|s| s.to_string_lossy().to_string())
+            }),
+            sym_count: self.schematic.as_ref().map(|s| s.symbols.len()).unwrap_or(0),
+            wire_count: self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0),
+            label_count: self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0),
+            child_sheets: self.schematic.as_ref()
+                .map(|s| s.child_sheets.iter().map(|c| c.name.clone()).collect())
+                .unwrap_or_default(),
+            has_schematic: self.schematic.is_some(),
+        };
+    }
+
     fn update_canvas_theme(&mut self) {
         let colors = signex_types::theme::canvas_colors(self.theme_id);
         self.canvas.set_theme_colors(
@@ -349,7 +374,7 @@ impl Signex {
         let tabs = tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab);
 
         // Left panel
-        let left_panel = self.dock.view_region(PanelPosition::Left).map(Message::Dock);
+        let left_panel = self.dock.view_region(PanelPosition::Left, &self.panel_ctx).map(Message::Dock);
         let left = container(left_panel)
             .width(220)
             .height(Length::Fill);
@@ -360,7 +385,7 @@ impl Signex {
             .height(Length::Fill);
 
         // Right panel
-        let right_panel = self.dock.view_region(PanelPosition::Right).map(Message::Dock);
+        let right_panel = self.dock.view_region(PanelPosition::Right, &self.panel_ctx).map(Message::Dock);
         let right = container(right_panel)
             .width(220)
             .height(Length::Fill);
@@ -369,7 +394,7 @@ impl Signex {
         let center_row = row![left, canvas_widget, right];
 
         // Bottom panel
-        let bottom_panel = self.dock.view_region(PanelPosition::Bottom).map(Message::Dock);
+        let bottom_panel = self.dock.view_region(PanelPosition::Bottom, &self.panel_ctx).map(Message::Dock);
         let bottom = container(bottom_panel)
             .width(Length::Fill)
             .height(160);
