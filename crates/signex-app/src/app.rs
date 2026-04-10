@@ -177,7 +177,11 @@ impl Signex {
                     Message::Tool(ToolMessage::SelectTool(Tool::Select))
                 }
                 (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
-                    Message::CanvasEvent(CanvasEvent::CursorMoved) // triggers fit-all in update
+                    Message::CanvasEvent(CanvasEvent::FitAll)
+                }
+                // Shift+Ctrl+G — toggle grid visibility
+                (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
+                    Message::GridToggle
                 }
                 _ => Message::Noop,
             },
@@ -220,6 +224,15 @@ impl Signex {
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
                 // Zoom or pan changed — grid + schematic positions shifted, must redraw
+                self.canvas.clear_bg_cache();
+                self.canvas.clear_content_cache();
+            }
+            Message::CanvasEvent(CanvasEvent::FitAll) => {
+                // Fit-all is handled in the canvas state, but we can't access it
+                // from here. Instead, reset the canvas camera to default fit.
+                // A proper implementation would read canvas bounds, but for now
+                // we reset to a reasonable default that shows an A4 sheet.
+                self.canvas.fit_to_paper();
                 self.canvas.clear_bg_cache();
                 self.canvas.clear_content_cache();
             }
