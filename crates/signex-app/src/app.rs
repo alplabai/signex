@@ -1,10 +1,11 @@
 //! Main Iced application — Message enum, update loop, view tree.
 
-use iced::widget::{column, container, row, text};
-use iced::{Element, Length, Subscription, Task, Theme};
+use iced::widget::{canvas, column, container, row};
+use iced::{Element, Length, Rectangle, Subscription, Task, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
+use crate::canvas::{CanvasEvent, SchematicCanvas};
 use crate::dock::{DockArea, DockMessage, PanelPosition};
 use crate::menu_bar::{self, MenuMessage};
 use crate::panels::PanelKind;
@@ -21,6 +22,7 @@ pub enum Message {
     Tab(TabMessage),
     Dock(DockMessage),
     StatusBar(StatusBarMsg),
+    CanvasEvent(CanvasEvent),
     ThemeChanged(ThemeId),
     UnitCycled,
     GridToggle,
@@ -49,6 +51,8 @@ pub struct Signex {
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     pub current_tool: Tool,
+    pub canvas: SchematicCanvas,
+    pub grid_size_mm: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -91,12 +95,14 @@ impl std::fmt::Display for Tool {
 impl Signex {
     pub fn new() -> (Self, Task<Message>) {
         let mut dock = DockArea::new();
-        // Register default panels
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
         dock.add_panel(PanelPosition::Left, PanelKind::Components);
         dock.add_panel(PanelPosition::Right, PanelKind::Properties);
         dock.add_panel(PanelPosition::Bottom, PanelKind::Messages);
         dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
+
+        let sch_canvas = SchematicCanvas::new();
+        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
 
         let app = Self {
             theme_id: ThemeId::CatppuccinMocha,
@@ -113,6 +119,8 @@ impl Signex {
             }],
             active_tab: 0,
             current_tool: Tool::Select,
+            canvas: sch_canvas,
+            grid_size_mm,
         };
         (app, Task::none())
     }
@@ -134,43 +142,37 @@ impl Signex {
 
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
-        keyboard::listen().map(|event| {
-            match event {
-                keyboard::Event::KeyPressed { key, modifiers: m, .. } => {
-                    match (key.as_ref(), m) {
-                        // Ctrl+Q — cycle units
-                        (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
-                            Message::UnitCycled
-                        }
-                        // G — cycle grid
-                        (keyboard::Key::Character(c), m) if c == "g" && !m.command() && !m.shift() => {
-                            Message::GridCycle
-                        }
-                        // W — wire tool
-                        (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
-                            Message::Tool(ToolMessage::SelectTool(Tool::Wire))
-                        }
-                        // B — bus tool
-                        (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
-                            Message::Tool(ToolMessage::SelectTool(Tool::Bus))
-                        }
-                        // L — label tool
-                        (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
-                            Message::Tool(ToolMessage::SelectTool(Tool::Label))
-                        }
-                        // P — component placement
-                        (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
-                            Message::Tool(ToolMessage::SelectTool(Tool::Component))
-                        }
-                        // Escape — back to select
-                        (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                            Message::Tool(ToolMessage::SelectTool(Tool::Select))
-                        }
-                        _ => Message::Noop,
-                    }
+        keyboard::listen().map(|event| match event {
+            keyboard::Event::KeyPressed {
+                key, modifiers: m, ..
+            } => match (key.as_ref(), m) {
+                (keyboard::Key::Character(c), m) if c == "q" && m.command() => Message::UnitCycled,
+                (keyboard::Key::Character(c), m)
+                    if c == "g" && !m.command() && !m.shift() =>
+                {
+                    Message::GridCycle
+                }
+                (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Wire))
+                }
+                (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Bus))
+                }
+                (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Label))
+                }
+                (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Component))
+                }
+                (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Select))
+                }
+                (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
+                    Message::CanvasEvent(CanvasEvent::CursorMoved) // triggers fit-all in update
                 }
                 _ => Message::Noop,
-            }
+            },
+            _ => Message::Noop,
         })
     }
 
@@ -178,6 +180,7 @@ impl Signex {
         match message {
             Message::ThemeChanged(id) => {
                 self.theme_id = id;
+                self.update_canvas_theme();
             }
             Message::UnitCycled | Message::StatusBar(StatusBarMsg::CycleUnit) => {
                 self.unit = match self.unit {
@@ -189,12 +192,26 @@ impl Signex {
             }
             Message::GridToggle | Message::StatusBar(StatusBarMsg::ToggleGrid) => {
                 self.grid_visible = !self.grid_visible;
+                self.canvas.grid_visible = self.grid_visible;
+                self.canvas.clear_bg_cache();
             }
             Message::GridCycle => {
-                // Grid size cycling — will be implemented with canvas
+                // Cycle grid and clear cache so it redraws
+                self.canvas.clear_bg_cache();
             }
             Message::StatusBar(StatusBarMsg::ToggleSnap) => {
                 self.snap_enabled = !self.snap_enabled;
+            }
+            Message::CanvasEvent(CanvasEvent::CursorAt { x, y, zoom_pct }) => {
+                self.cursor_x = x as f64;
+                self.cursor_y = y as f64;
+                self.zoom = zoom_pct;
+                // Clear bg cache on every cursor move so crosshair + grid update
+                self.canvas.clear_bg_cache();
+            }
+            Message::CanvasEvent(CanvasEvent::CursorMoved) => {
+                // Zoom/pan changed — clear caches
+                self.canvas.clear_bg_cache();
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
@@ -217,6 +234,7 @@ impl Signex {
         match msg {
             MenuMessage::ThemeSelected(id) => {
                 self.theme_id = id;
+                self.update_canvas_theme();
             }
             MenuMessage::NewProject => {}
             MenuMessage::OpenProject => {}
@@ -248,6 +266,15 @@ impl Signex {
         }
     }
 
+    fn update_canvas_theme(&mut self) {
+        let colors = signex_types::theme::canvas_colors(self.theme_id);
+        self.canvas.set_theme_colors(
+            signex_render::colors::to_iced(&colors.background),
+            signex_render::colors::to_iced(&colors.grid),
+            signex_render::colors::to_iced(&colors.paper),
+        );
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let menu = menu_bar::view(self.theme_id).map(Message::Menu);
         let tools = toolbar::view(self.current_tool).map(Message::Tool);
@@ -257,35 +284,27 @@ impl Signex {
         let left_panel = self.dock.view_region(PanelPosition::Left).map(Message::Dock);
         let left = container(left_panel)
             .width(220)
-            .height(Length::Fill)
-            .style(container::bordered_box);
+            .height(Length::Fill);
 
-        // Center — canvas area (placeholder for now)
-        let canvas_area = container(
-            text("Canvas — Phase 2 (v0.3.0)").size(14),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .style(container::bordered_box);
+        // Center — live canvas
+        let canvas_widget = canvas(&self.canvas)
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         // Right panel
         let right_panel = self.dock.view_region(PanelPosition::Right).map(Message::Dock);
         let right = container(right_panel)
             .width(220)
-            .height(Length::Fill)
-            .style(container::bordered_box);
+            .height(Length::Fill);
 
         // Center row: left | canvas | right
-        let center_row = row![left, canvas_area, right];
+        let center_row = row![left, canvas_widget, right];
 
         // Bottom panel
         let bottom_panel = self.dock.view_region(PanelPosition::Bottom).map(Message::Dock);
         let bottom = container(bottom_panel)
             .width(Length::Fill)
-            .height(160)
-            .style(container::bordered_box);
+            .height(160);
 
         // Status bar
         let status = status_bar::view(
@@ -296,6 +315,7 @@ impl Signex {
             self.zoom,
             self.unit,
             &self.current_tool,
+            self.grid_size_mm,
         )
         .map(Message::StatusBar);
 
