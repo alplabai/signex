@@ -4,6 +4,7 @@ use iced::widget::{button, container, row, text, Row};
 use iced::{Element, Length};
 
 use crate::app::TabInfo;
+use crate::styles;
 
 #[derive(Debug, Clone)]
 pub enum TabMessage {
@@ -11,9 +12,8 @@ pub enum TabMessage {
     Close(usize),
 }
 
-/// Render the tab bar.
 pub fn view<'a>(tabs: &[TabInfo], active: usize) -> Element<'a, TabMessage> {
-    let mut bar = Row::new().spacing(1);
+    let mut bar = Row::new().spacing(0);
 
     for (i, tab) in tabs.iter().enumerate() {
         let label = if tab.dirty {
@@ -22,24 +22,29 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize) -> Element<'a, TabMessage> {
             tab.title.clone()
         };
 
+        let is_active = i == active;
         let tab_btn = button(
             row![
-                text(label).size(12),
-                button(text("x").size(10))
-                    .padding([1, 4])
+                text(label).size(11).color(if is_active {
+                    iced::Color::WHITE
+                } else {
+                    styles::TEXT_MUTED
+                }),
+                button(text("x").size(9).color(styles::TEXT_MUTED))
+                    .padding([0, 3])
                     .style(button::text)
                     .on_press(TabMessage::Close(i)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 10])
+        .padding([3, 10])
         .on_press(TabMessage::Select(i));
 
-        let tab_btn = if i == active {
+        let tab_btn = if is_active {
             tab_btn.style(button::primary)
         } else {
-            tab_btn.style(button::secondary)
+            tab_btn.style(button::text)
         };
 
         bar = bar.push(tab_btn);
@@ -47,7 +52,7 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize) -> Element<'a, TabMessage> {
 
     container(bar)
         .width(Length::Fill)
-        .padding([1, 8])
-        .style(container::bordered_box)
+        .padding([0, 6])
+        .style(styles::tab_bar)
         .into()
 }
