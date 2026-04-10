@@ -82,6 +82,14 @@ pub fn tab_bar(_theme: &Theme) -> container::Style {
     }
 }
 
+/// Resize handle between panels (thin draggable border)
+pub fn resize_handle(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(BORDER_COLOR.into()),
+        ..container::Style::default()
+    }
+}
+
 /// Panel content area (inside the dock)
 pub fn panel_content(_theme: &Theme) -> container::Style {
     container::Style {

@@ -31,6 +31,9 @@ pub enum Message {
     UnitCycled,
     GridToggle,
     GridCycle,
+    ResizeLeft(f32),
+    ResizeRight(f32),
+    ResizeBottom(f32),
     FileOpened(Option<PathBuf>),
     SchematicLoaded(Box<SchematicSheet>),
     Noop,
@@ -63,6 +66,9 @@ pub struct Signex {
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
     pub panel_ctx: crate::panels::PanelContext,
+    pub left_width: f32,
+    pub right_width: f32,
+    pub bottom_height: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +155,9 @@ impl Signex {
                 lib_symbol_count: 0,
                 tokens: signex_types::theme::theme_tokens(ThemeId::CatppuccinMocha),
             },
+            left_width: 240.0,
+            right_width: 220.0,
+            bottom_height: 120.0,
         };
         (app, Task::none())
     }
@@ -226,6 +235,15 @@ impl Signex {
                 self.grid_visible = !self.grid_visible;
                 self.canvas.grid_visible = self.grid_visible;
                 self.canvas.clear_bg_cache();
+            }
+            Message::ResizeLeft(w) => {
+                self.left_width = w.clamp(100.0, 500.0);
+            }
+            Message::ResizeRight(w) => {
+                self.right_width = w.clamp(100.0, 500.0);
+            }
+            Message::ResizeBottom(h) => {
+                self.bottom_height = h.clamp(60.0, 400.0);
             }
             Message::GridCycle => {
                 // Cycle grid and clear cache so it redraws
@@ -464,33 +482,60 @@ impl Signex {
         let tools = toolbar::view(self.current_tool).map(Message::Tool);
         let tabs = tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab);
 
-        // Left panel
+        // Left panel (resizable width)
         let left_panel = self.dock.view_region(PanelPosition::Left, &self.panel_ctx).map(Message::Dock);
         let left = container(left_panel)
-            .width(220)
+            .width(self.left_width)
             .height(Length::Fill)
             .style(crate::styles::panel_region);
+
+        // Left resize handle (3px draggable border)
+        let left_handle = iced::widget::mouse_area(
+            container(iced::widget::text(""))
+                .width(3)
+                .height(Length::Fill)
+                .style(crate::styles::resize_handle),
+        )
+        .interaction(iced::mouse::Interaction::ResizingHorizontally);
 
         // Center — live canvas
         let canvas_widget = canvas(&self.canvas)
             .width(Length::Fill)
             .height(Length::Fill);
 
-        // Right panel
+        // Right resize handle
+        let right_handle = iced::widget::mouse_area(
+            container(iced::widget::text(""))
+                .width(3)
+                .height(Length::Fill)
+                .style(crate::styles::resize_handle),
+        )
+        .interaction(iced::mouse::Interaction::ResizingHorizontally);
+
+        // Right panel (resizable width)
         let right_panel = self.dock.view_region(PanelPosition::Right, &self.panel_ctx).map(Message::Dock);
         let right = container(right_panel)
-            .width(220)
+            .width(self.right_width)
             .height(Length::Fill)
             .style(crate::styles::panel_region);
 
-        // Center row: left | canvas | right
-        let center_row = row![left, canvas_widget, right];
+        // Center row: left | handle | canvas | handle | right
+        let center_row = row![left, left_handle, canvas_widget, right_handle, right];
 
-        // Bottom panel
+        // Bottom resize handle
+        let bottom_handle = iced::widget::mouse_area(
+            container(iced::widget::text(""))
+                .width(Length::Fill)
+                .height(3)
+                .style(crate::styles::resize_handle),
+        )
+        .interaction(iced::mouse::Interaction::ResizingVertically);
+
+        // Bottom panel (resizable height)
         let bottom_panel = self.dock.view_region(PanelPosition::Bottom, &self.panel_ctx).map(Message::Dock);
         let bottom = container(bottom_panel)
             .width(Length::Fill)
-            .height(120)
+            .height(self.bottom_height)
             .style(crate::styles::panel_region);
 
         // Status bar
@@ -506,6 +551,6 @@ impl Signex {
         )
         .map(Message::StatusBar);
 
-        column![menu, tools, tabs, center_row, bottom, status].into()
+        column![menu, tools, tabs, center_row, bottom_handle, bottom, status].into()
     }
 }
