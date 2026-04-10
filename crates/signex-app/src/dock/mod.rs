@@ -8,6 +8,7 @@ use iced::widget::{button, column, container, row, text, Column};
 use iced::{Element, Length};
 
 use crate::panels::{self, PanelKind};
+use crate::styles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelPosition {
@@ -104,16 +105,23 @@ impl DockArea {
         }
 
         // Tab bar
-        let mut tab_row = row![].spacing(1);
+        let mut tab_row = row![].spacing(0);
         for (i, panel) in region.panels.iter().enumerate() {
             let label = panel.label();
-            let btn = button(text(label).size(11))
-                .padding([3, 8])
-                .on_press(DockMessage::SelectTab(position, i));
-            let btn = if i == region.active {
+            let is_active = i == region.active;
+            let btn = button(
+                text(label).size(10).color(if is_active {
+                    iced::Color::WHITE
+                } else {
+                    styles::TEXT_MUTED
+                }),
+            )
+            .padding([3, 8])
+            .on_press(DockMessage::SelectTab(position, i));
+            let btn = if is_active {
                 btn.style(button::primary)
             } else {
-                btn.style(button::secondary)
+                btn.style(button::text)
             };
             tab_row = tab_row.push(btn);
         }
