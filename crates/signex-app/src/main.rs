@@ -6,6 +6,7 @@
 mod app;
 mod canvas;
 mod dock;
+mod styles;
 mod menu_bar;
 mod panels;
 mod shortcuts;

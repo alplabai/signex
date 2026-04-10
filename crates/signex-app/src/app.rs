@@ -377,7 +377,8 @@ impl Signex {
         let left_panel = self.dock.view_region(PanelPosition::Left, &self.panel_ctx).map(Message::Dock);
         let left = container(left_panel)
             .width(220)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .style(crate::styles::panel_region);
 
         // Center — live canvas
         let canvas_widget = canvas(&self.canvas)
@@ -388,7 +389,8 @@ impl Signex {
         let right_panel = self.dock.view_region(PanelPosition::Right, &self.panel_ctx).map(Message::Dock);
         let right = container(right_panel)
             .width(220)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .style(crate::styles::panel_region);
 
         // Center row: left | canvas | right
         let center_row = row![left, canvas_widget, right];
@@ -397,7 +399,8 @@ impl Signex {
         let bottom_panel = self.dock.view_region(PanelPosition::Bottom, &self.panel_ctx).map(Message::Dock);
         let bottom = container(bottom_panel)
             .width(Length::Fill)
-            .height(160);
+            .height(160)
+            .style(crate::styles::panel_region);
 
         // Status bar
         let status = status_bar::view(
