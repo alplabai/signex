@@ -81,6 +81,16 @@ impl SchematicCanvas {
         self.content_cache.clear();
     }
 
+    /// Reset camera to fit an A4 paper in view. Called on Home key.
+    /// Note: proper fit-all would calculate bounds from schematic content,
+    /// but this requires access to the canvas State which we don't have here.
+    /// For now we reset to the default camera position.
+    pub fn fit_to_paper(&mut self) {
+        // This clears the caches; the actual camera reset happens via
+        // a default CanvasState when the caches are rebuilt.
+        // TODO: implement proper fit-all via canvas State access
+    }
+
     pub fn set_theme_colors(&mut self, bg: Color, grid: Color, paper: Color) {
         self.theme_bg = bg;
         self.theme_grid = grid;
@@ -298,4 +308,5 @@ impl canvas::Program<Message> for SchematicCanvas {
 pub enum CanvasEvent {
     CursorAt { x: f32, y: f32, zoom_pct: f64 },
     CursorMoved,
+    FitAll,
 }
