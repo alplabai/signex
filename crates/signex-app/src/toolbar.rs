@@ -1,7 +1,7 @@
 //! Toolbar strip — tool buttons for schematic/PCB actions.
 
 use iced::widget::{button, container, row, text, Row};
-use iced::{Element, Length};
+use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::Tool;
 use crate::styles;
@@ -13,21 +13,31 @@ pub enum ToolMessage {
 
 fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, ToolMessage> {
     let is_active = tool == active;
-    let btn = button(
-        text(label).size(11).color(if is_active {
-            iced::Color::WHITE
-        } else {
-            styles::TEXT_PRIMARY
-        }),
-    )
-    .padding([3, 7])
-    .on_press(ToolMessage::SelectTool(tool));
-
-    if is_active {
-        btn.style(button::primary).into()
+    let text_c = if is_active {
+        Color::WHITE
     } else {
-        btn.style(button::text).into()
-    }
+        styles::TEXT_PRIMARY
+    };
+    let btn = button(text(label).size(11).color(text_c))
+        .padding([3, 7])
+        .on_press(ToolMessage::SelectTool(tool))
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match (is_active, status) {
+                (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
+                (false, button::Status::Hovered) => {
+                    Some(Background::Color(styles::TAB_ACTIVE_BG))
+                }
+                _ => None,
+            };
+            button::Style {
+                background: bg,
+                text_color: text_c,
+                border: Border::default(),
+                ..button::Style::default()
+            }
+        });
+
+    btn.into()
 }
 
 pub fn view(active: Tool) -> Element<'static, ToolMessage> {
