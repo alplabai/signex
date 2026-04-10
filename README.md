@@ -1,0 +1,152 @@
+<p align="center">
+  <h1 align="center">Signex</h1>
+  <p align="center">AI-first electronics design automation</p>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#building">Building</a> &middot;
+  <a href="#roadmap">Roadmap</a> &middot;
+  <a href="#contributing">Contributing</a> &middot;
+  <a href="#license">License</a>
+</p>
+
+---
+
+Signex is a native Rust EDA tool targeting **Altium Designer feature parity** with an AI-first design philosophy. Built on [Iced](https://iced.rs) 0.14 (Elm architecture) with [wgpu](https://wgpu.rs) for GPU-accelerated rendering.
+
+**Two editions from one codebase:**
+- **Signex Community** (GPL-3.0, free) — full schematic + PCB editor, 3D viewer, simulation, plugins
+- **Signex Pro** (subscription) — adds Signal AI (Claude-powered design assistant) + live collaboration
+
+> **Status:** Early development. See [Roadmap](#roadmap) for current progress.
+
+## Features
+
+### Implemented (v0.2.0)
+
+- Workspace with 5 Rust crates
+- KiCad file format support (.kicad_sch, .kicad_pcb, .kicad_sym) — parse and write
+- Domain type system: schematic, PCB, net, layer, coordinate (nanometer precision)
+- 6 built-in themes: Catppuccin Mocha, VS Code Dark, Altium Dark, GitHub Dark, Solarized Light, Nord
+- Rich text markup parser (subscript, superscript, overbar)
+- Iced application shell with docking panel system
+- Altium-compatible keyboard shortcut framework
+
+### Planned
+
+- wgpu canvas with pan/zoom/grid (v0.3)
+- Full schematic rendering and editing (v0.4–v0.6)
+- ERC/DRC validation (v0.7)
+- PCB rendering and interactive routing (v0.9–v0.10)
+- Manufacturing output: Gerber, ODB++, STEP (v0.11)
+- 3D PCB viewer with PBR materials (v1.1)
+- SPICE + EM + thermal simulation (v1.4–v1.5)
+- Signal AI — Claude-powered design review (v1.7, Pro)
+- Live collaboration via Supabase (v2.1, Pro)
+
+## Architecture
+
+```
+signex-iced/
+├── crates/
+│   ├── signex-app/       # Main binary — Iced 0.14 application
+│   ├── signex-types/     # Domain types — NO rendering deps
+│   ├── signex-render/    # wgpu rendering (types → Canvas draw calls)
+│   ├── kicad-parser/     # S-expression parser (.kicad_sch/.kicad_pcb/.kicad_sym)
+│   └── kicad-writer/     # S-expression serializer (write KiCad format)
+├── Cargo.toml            # Workspace manifest
+└── CLAUDE.md             # AI agent instructions
+```
+
+### Design principles
+
+- **Types crate has zero rendering deps.** All rendering goes through `signex-render`.
+- **Elm architecture.** Iced's `Message → update → view` cycle. No interior mutability.
+- **Nanometer coordinates.** `i64` nanometers internally; convert at the parse/write boundary.
+- **KiCad compatibility first.** Open existing KiCad projects, save back losslessly.
+- **Canvas for schematic, Shader for PCB.** CPU tessellation is fine for schematics (<10K elements). PCB needs GPU instanced rendering (100K+ tracks/pads).
+
+## Building
+
+### Prerequisites
+
+- Rust 1.80+ (edition 2024)
+- A GPU that supports Vulkan, Metal, or DX12 (for wgpu)
+
+### Build
+
+```bash
+# Debug build
+cargo build --workspace
+
+# Release build
+cargo build --workspace --release
+
+# Run
+cargo run -p signex-app
+
+# Tests
+cargo test --workspace
+
+# Lint
+cargo clippy --workspace -- -D warnings
+```
+
+## Roadmap
+
+Development is organized into milestones tracked on [GitHub Milestones](../../milestones):
+
+| Version | Milestone | Status |
+|---|---|---|
+| v0.1.0 | Scaffold — Iced shell, panels, themes, status bar | Done |
+| v0.2.0 | Parser — KiCad format read/write, domain types | Done |
+| v0.3.0 | Canvas — wgpu pan/zoom/grid, camera system | Next |
+| v0.4.0 | Schematic Viewer — render KiCad schematics | |
+| v0.5.0 | Schematic Editor — select, move, wire, undo/redo | |
+| v0.6.0 | Full Editor — copy/paste, labels, components, bus | |
+| v0.7.0 | Validation — ERC 11 checks, annotation | |
+| v0.8.0 | Output — PDF, BOM, netlist, library editor | |
+| v0.9.0 | PCB Viewer — GPU rendering, layer compositing | |
+| v0.10.0 | PCB Editor — routing, DRC, copper pour | |
+| v0.11.0 | PCB Output — Gerber, ODB++, STEP | |
+| **v1.0.0** | **Community Release** | |
+| v1.1–v1.8 | 3D viewer, simulation, high-speed, AI, plugins | |
+| **v2.0.0** | **Pro Release** — AI + collaboration | |
+
+See [`docs/signex-iced-migration-plan.md`](https://github.com/alplabai/signex/blob/main/docs/signex-iced-migration-plan.md) in the signex repo for the full plan.
+
+## Contributing
+
+We welcome contributions! Here's how to get started:
+
+1. Check the [open issues](../../issues) or [milestones](../../milestones) for something to work on
+2. Fork the repo and create a feature branch
+3. Make your changes — ensure `cargo test` and `cargo clippy` pass
+4. Open a PR against `main`
+
+### Crate ownership
+
+Each workstream owns specific crates to minimize conflicts:
+
+| Crate | Focus |
+|---|---|
+| `signex-types` | Domain types — shared by all, PR review required for changes |
+| `kicad-parser` | File format parsing |
+| `kicad-writer` | File format serialization |
+| `signex-render` | Rendering logic (Canvas + Shader) |
+| `signex-app` | UI, panels, dialogs, interactions |
+
+### Code style
+
+- Run `cargo clippy --workspace -- -D warnings` before committing
+- Follow existing patterns in the codebase
+- Types go in `signex-types`, rendering in `signex-render`, UI in `signex-app`
+- Altium Designer UX is the reference for all interactions
+
+## License
+
+Signex Community Edition is licensed under [GPL-3.0-only](LICENSE).
+
+Copyright (C) 2026 [Alp Lab AI](https://github.com/alplabai)
