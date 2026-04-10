@@ -1,6 +1,4 @@
 //! Panel implementations — each panel is a function returning an Element.
-//!
-//! Panels are stubs in v0.1.0, populated with real content in later phases.
 
 use iced::widget::{column, container, scrollable, text};
 use iced::Element;
@@ -40,17 +38,28 @@ impl PanelKind {
     }
 }
 
-/// Render a panel's content. Stubs for v0.1.0.
-pub fn view_panel<'a, M: 'a>(kind: PanelKind) -> Element<'a, M> {
+/// Context passed to panels so they can display live state.
+/// Uses owned strings to avoid lifetime issues with the view tree.
+pub struct PanelContext {
+    pub project_name: Option<String>,
+    pub sym_count: usize,
+    pub wire_count: usize,
+    pub label_count: usize,
+    pub child_sheets: Vec<String>,
+    pub has_schematic: bool,
+}
+
+/// Render a panel's content with app context.
+pub fn view_panel<'a, M: 'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, M> {
     let content = match kind {
-        PanelKind::Projects => view_projects_stub(),
-        PanelKind::Components => view_stub("Component browser — 226 KiCad libraries\nSearch components here."),
+        PanelKind::Projects => view_projects(ctx),
+        PanelKind::Components => view_stub("Component browser\n226 KiCad libraries"),
         PanelKind::Navigator => view_stub("Navigator"),
-        PanelKind::Properties => view_stub("Properties (F11)\nSelect an object to see its properties."),
+        PanelKind::Properties => view_stub("Properties (F11)\nSelect an object to see\nits properties."),
         PanelKind::Filter => view_stub("Selection filter"),
-        PanelKind::Messages => view_stub("Messages — ERC violations will appear here."),
-        PanelKind::Signal => view_stub("Signal AI — Pro feature\nAI-assisted design review and chat."),
-        PanelKind::Drc => view_stub("DRC — Design rule check violations."),
+        PanelKind::Messages => view_messages(ctx),
+        PanelKind::Signal => view_stub("Signal AI (Pro)\nAI-assisted design review."),
+        PanelKind::Drc => view_stub("DRC violations"),
         PanelKind::LayerStack => view_stub("Layer Stack Manager"),
         PanelKind::NetClasses => view_stub("Net Classes"),
         PanelKind::Variants => view_stub("Design Variants"),
@@ -69,16 +78,40 @@ fn view_stub<'a, M: 'a>(description: &'a str) -> Element<'a, M> {
     .into()
 }
 
-fn view_projects_stub<'a, M: 'a>() -> Element<'a, M> {
-    container(
-        column![
-            text("Projects").size(13),
-            text("  No project open").size(12),
-            text("").size(8),
-            text("  File > Open Project to begin").size(11),
-        ]
-        .spacing(4)
-        .padding(4),
-    )
-    .into()
+fn view_projects<'a, M: 'a>(ctx: &'a PanelContext) -> Element<'a, M> {
+    let mut col = column![].spacing(2).padding(4);
+
+    if let Some(name) = &ctx.project_name {
+        col = col.push(text(format!("v {name}")).size(13));
+        col = col.push(text(format!("  {} symbols", ctx.sym_count)).size(11));
+        col = col.push(text(format!("  {} wires", ctx.wire_count)).size(11));
+        col = col.push(text(format!("  {} labels", ctx.label_count)).size(11));
+
+        if !ctx.child_sheets.is_empty() {
+            col = col.push(text("").size(4));
+            col = col.push(text("Child sheets:").size(12));
+            for cs in &ctx.child_sheets {
+                col = col.push(text(format!("  > {cs}")).size(11));
+            }
+        }
+    } else {
+        col = col.push(text("No project open").size(12));
+        col = col.push(text("").size(4));
+        col = col.push(text("File > Open Project").size(11));
+    }
+
+    container(col).into()
+}
+
+fn view_messages<'a, M: 'a>(ctx: &'a PanelContext) -> Element<'a, M> {
+    let mut col = column![].spacing(2).padding(4);
+
+    if ctx.has_schematic {
+        col = col.push(text("No violations.").size(12));
+        col = col.push(text("Run ERC to check (v0.7.0)").size(11));
+    } else {
+        col = col.push(text("Open a project first.").size(12));
+    }
+
+    container(col).into()
 }

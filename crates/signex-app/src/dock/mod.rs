@@ -88,7 +88,7 @@ impl DockArea {
         }
     }
 
-    pub fn view_region(&self, position: PanelPosition) -> Element<'_, DockMessage> {
+    pub fn view_region<'a>(&'a self, position: PanelPosition, ctx: &'a panels::PanelContext) -> Element<'a, DockMessage> {
         let region = match position {
             PanelPosition::Left => &self.left,
             PanelPosition::Right => &self.right,
@@ -133,7 +133,7 @@ impl DockArea {
 
         // Panel content
         let content = if let Some(panel) = region.panels.get(region.active) {
-            panels::view_panel(*panel)
+            panels::view_panel(*panel, ctx)
         } else {
             text("").into()
         };
