@@ -215,17 +215,6 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         write_text_note(&mut out, note);
     }
 
-    // Rectangles
-    for r in &sheet.rectangles {
-        wln!(out, "  (rectangle");
-        wln!(out, "    (start {} {})", fmt_f64(r.start.x), fmt_f64(r.start.y));
-        wln!(out, "    (end {} {})", fmt_f64(r.end.x), fmt_f64(r.end.y));
-        wln!(out, "    (stroke (width 0) (type {}))", escape(&r.stroke_type));
-        wln!(out, "    (fill (type none))");
-        wln!(out, "    (uuid \"{}\")", r.uuid);
-        wln!(out, "  )");
-    }
-
     // Drawing objects
     for d in &sheet.drawings {
         write_drawing(&mut out, d);
@@ -534,15 +523,15 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     // Sub-symbol for graphics
     let base_name = lib.id.split(':').next_back().unwrap_or(&lib.id);
     wln!(out, "      (symbol \"{}_0_1\"", base_name);
-    for g in &lib.graphics {
-        write_lib_graphic(out, g);
+    for lg in &lib.graphics {
+        write_lib_graphic(out, &lg.graphic);
     }
     wln!(out, "      )");
 
     // Sub-symbol for pins
     wln!(out, "      (symbol \"{}_1_1\"", base_name);
-    for pin in &lib.pins {
-        write_lib_pin(out, pin);
+    for lp in &lib.pins {
+        write_lib_pin(out, &lp.pin);
     }
     wln!(out, "      )");
 
