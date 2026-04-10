@@ -142,6 +142,7 @@ impl Signex {
                 has_schematic: false,
                 paper_size: "A4".to_string(),
                 lib_symbol_count: 0,
+                tokens: signex_types::theme::theme_tokens(ThemeId::CatppuccinMocha),
             },
         };
         (app, Task::none())
@@ -259,6 +260,12 @@ impl Signex {
                 self.handle_tab(msg);
             }
             Message::Dock(msg) => {
+                match &msg {
+                    crate::dock::DockMessage::Panel(_panel_msg) => {
+                        // Panel messages (tree clicks, etc.) — handle in future
+                    }
+                    _ => {}
+                }
                 self.dock.update(msg);
             }
             Message::FileOpened(Some(path)) => {
@@ -368,6 +375,7 @@ impl Signex {
             lib_symbol_count: self.schematic.as_ref()
                 .map(|s| s.lib_symbols.len())
                 .unwrap_or(0),
+            tokens: signex_types::theme::theme_tokens(self.theme_id),
         };
     }
 
