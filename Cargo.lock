@@ -2935,6 +2935,7 @@ dependencies = [
  "serde_json",
  "signex-render",
  "signex-types",
+ "signex-widgets",
  "uuid",
 ]
 
@@ -2954,6 +2955,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "signex-widgets"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "signex-types",
 ]
 
 [[package]]

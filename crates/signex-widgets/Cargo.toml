@@ -1,0 +1,10 @@
+[package]
+name = "signex-widgets"
+description = "Custom Iced widgets for Signex EDA — tree view, menus, data table, property grid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+iced = { workspace = true }
