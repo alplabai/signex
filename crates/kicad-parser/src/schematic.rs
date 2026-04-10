@@ -235,11 +235,18 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         })
         .unwrap_or(true);
 
-    // pin_names can have: (pin_names hide), (pin_names (offset X) hide), (pin_names (offset X))
+    // pin_names can have: (pin_names hide), (pin_names (offset X) hide), (pin_names (offset X)),
+    // (pin_names (hide yes)), (pin_names (hide))
     let pin_names_node = symbol_node.find("pin_names");
     let show_pin_names = pin_names_node
         .map(|pn| {
-            // Check if any child atom is "hide"
+            // atom form: (pin_names hide)
+            if pn.first_arg() == Some("hide") { return false; }
+            // list form: (pin_names (hide yes)) or (pin_names (hide))
+            if let Some(h) = pn.find("hide") {
+                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+            }
+            // child atom form: (pin_names (offset X) hide)
             !pn.children()
                 .iter()
                 .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
@@ -389,6 +396,31 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                             fill: parse_fill_type(child),
                         },
                     });
+                }
+                Some("bezier") => {
+                    // Cubic bezier: 4 control points in (pts (xy x y)...) form
+                    if let Some(pts) = child.find("pts") {
+                        let points: Vec<Point> = pts
+                            .find_all("xy")
+                            .iter()
+                            .map(|xy| Point {
+                                x: xy.arg_f64(0).unwrap_or(0.0),
+                                y: xy.arg_f64(1).unwrap_or(0.0),
+                            })
+                            .collect();
+                        // KiCad always has exactly 4 control points for a cubic bezier
+                        if points.len() == 4 {
+                            graphics.push(LibGraphic {
+                                unit,
+                                body_style,
+                                graphic: Graphic::Bezier {
+                                    points,
+                                    width: parse_stroke_width(child),
+                                    fill: parse_fill_type(child),
+                                },
+                            });
+                        }
+                    }
                 }
                 Some("text") => {
                     let text = child.first_arg().unwrap_or("").to_string();
@@ -813,8 +845,18 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
         .collect();
     ChildSheet {
         uuid: parse_uuid(s),
-        name: s.property("Sheetname").unwrap_or("Unnamed").to_string(),
-        filename: s.property("Sheetfile").unwrap_or("").to_string(),
+        // Modern KiCad: "Sheet name" / "Sheet file" (with space).
+        // Legacy fallback: "Sheetname" / "Sheetfile" (no space).
+        name: s
+            .property("Sheet name")
+            .or_else(|| s.property("Sheetname"))
+            .unwrap_or("Unnamed")
+            .to_string(),
+        filename: s
+            .property("Sheet file")
+            .or_else(|| s.property("Sheetfile"))
+            .unwrap_or("")
+            .to_string(),
         position,
         size,
         pins,
@@ -838,12 +880,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             })
             .unwrap_or_default();
         let width = parse_stroke_width(pl);
-        let fill = pl
-            .find("fill")
-            .and_then(|f| f.find("type"))
-            .and_then(|t| t.first_arg())
-            .map(|t| t != "none")
-            .unwrap_or(false);
+        let fill = parse_fill_type(pl);
         if pts.len() == 2 {
             drawings.push(SchDrawing::Line {
                 uuid: parse_uuid(pl),
@@ -889,6 +926,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             mid,
             end,
             width: parse_stroke_width(arc),
+            fill: parse_fill_type(arc),
         });
     }
 
@@ -1016,6 +1054,10 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .map(|j| Junction {
             uuid: parse_uuid(j),
             position: parse_at(j).0,
+            diameter: j
+                .find("diameter")
+                .and_then(|d| d.arg_f64(0))
+                .unwrap_or(0.0),
         })
         .collect();
 
@@ -1093,18 +1135,29 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .iter()
         .map(|t| {
             let (position, rotation) = parse_at(t);
-            let font_size = t
-                .find("effects")
+            let effects = t.find("effects");
+            let font_size = effects
                 .and_then(|e| e.find("font"))
                 .and_then(|f| f.find("size"))
                 .and_then(|s| s.arg_f64(0))
                 .unwrap_or(1.27);
+            let justify = effects.and_then(|e| e.find("justify"));
+            let justify_h = justify
+                .and_then(|j| j.first_arg())
+                .map(parse_halign)
+                .unwrap_or(HAlign::Left);
+            let justify_v = justify
+                .and_then(|j| j.arg(1))
+                .map(parse_valign)
+                .unwrap_or(VAlign::Center);
             TextNote {
                 uuid: parse_uuid(t),
                 text: t.first_arg().unwrap_or("").to_string(),
                 position,
                 rotation,
                 font_size,
+                justify_h,
+                justify_v,
             }
         })
         .collect();

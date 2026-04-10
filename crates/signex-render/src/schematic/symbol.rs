@@ -84,7 +84,14 @@ pub fn draw_symbol(
     body_fill_color: Color,
     _pin_color: Color,
 ) {
-    for lg in &lib.graphics {
+    // KiCad renders fills on a lower Z-layer than strokes.  In our single-pass
+    // canvas we replicate this by iterating the graphic list TWICE:
+    //   Pass 1 — background fills only      (like KiCad LAYER_DEVICE_BACKGROUND)
+    //   Pass 2 — outline fills + all strokes (like KiCad LAYER_DEVICE)
+    // This prevents body background fills from painting over stroked shapes
+    // that happen to reside in an earlier sub-symbol (e.g. Relay_SPDT_0_0 triangle).
+    for pass in 0u8..2 {
+        for lg in &lib.graphics {
         // unit 0 = common to all units; otherwise must match symbol's unit
         if lg.unit != 0 && lg.unit != sym.unit {
             continue;
@@ -93,6 +100,11 @@ pub fn draw_symbol(
         if lg.body_style != 0 && lg.body_style != 1 {
             continue;
         }
+        // Pass 0: only background-fill graphics.
+        // Pass 1: everything else (no-fill strokes + outline-fill strokes).
+        let is_bg = graphic_has_background_fill(&lg.graphic);
+        if pass == 0 && !is_bg { continue; }
+        if pass == 1 &&  is_bg { continue; }
         match &lg.graphic {
             Graphic::Polyline {
                 points,
@@ -187,8 +199,36 @@ pub fn draw_symbol(
             Graphic::TextBox { .. } => {
                 // TextBox rendering is a v0.5 item
             }
+            Graphic::Bezier {
+                points,
+                width,
+                fill,
+            } => {
+                draw_bezier(
+                    frame,
+                    sym,
+                    points,
+                    *width,
+                    *fill,
+                    transform,
+                    body_color,
+                    body_fill_color,
+                );
+            }
         }
-    }
+        } // end inner for lg
+    } // end for pass
+}
+
+// Returns true if a graphic's fill type is Background (needs pass-0 rendering).
+fn graphic_has_background_fill(g: &Graphic) -> bool {
+    matches!(
+        g,
+        Graphic::Rectangle { fill: FillType::Background, .. }
+            | Graphic::Polyline { fill: FillType::Background, .. }
+            | Graphic::Circle { fill: FillType::Background, .. }
+            | Graphic::Arc { fill: FillType::Background, .. }
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +393,11 @@ fn draw_arc(
                 let py = cy + r * a.sin();
                 b.line_to(transform.to_screen_point(px, py));
             }
+            // Close the chord for filled arcs (connects arc ends directly,
+            // not back through center — this is the correct KiCad behavior)
+            if fill != FillType::None {
+                b.close();
+            }
         });
 
         apply_fill(frame, &path, fill, body_color, body_fill_color);
@@ -403,6 +448,46 @@ fn draw_graphic_text(
         ..canvas::Text::default()
     };
     frame.fill_text(text);
+}
+
+fn draw_bezier(
+    frame: &mut canvas::Frame,
+    sym: &Symbol,
+    points: &[Point],
+    width: f64,
+    fill: FillType,
+    transform: &ScreenTransform,
+    body_color: Color,
+    body_fill_color: Color,
+) {
+    if points.len() != 4 {
+        return;
+    }
+
+    let (p0x, p0y) = instance_transform(sym, &points[0]);
+    let (c1x, c1y) = instance_transform(sym, &points[1]);
+    let (c2x, c2y) = instance_transform(sym, &points[2]);
+    let (p3x, p3y) = instance_transform(sym, &points[3]);
+
+    let p0 = transform.to_screen_point(p0x, p0y);
+    let c1 = transform.to_screen_point(c1x, c1y);
+    let c2 = transform.to_screen_point(c2x, c2y);
+    let p3 = transform.to_screen_point(p3x, p3y);
+
+    let path = canvas::Path::new(|b: &mut path::Builder| {
+        b.move_to(p0);
+        b.bezier_curve_to(c1, c2, p3);
+        if fill != FillType::None {
+            b.close();
+        }
+    });
+
+    apply_fill(frame, &path, fill, body_color, body_fill_color);
+
+    let stroke = canvas::Stroke::default()
+        .with_color(body_color)
+        .with_width(graphic_stroke_width(transform, width));
+    frame.stroke(&path, stroke);
 }
 
 // ---------------------------------------------------------------------------
