@@ -25,7 +25,7 @@ pub fn view(_current_theme: ThemeId) -> Element<'static, MenuMessage> {
     };
 
     let bar: Row<'static, MenuMessage> = row![
-        menu_btn("File").on_press(MenuMessage::NewProject),
+        menu_btn("File").on_press(MenuMessage::OpenProject),
         menu_btn("Edit").on_press(MenuMessage::Undo),
         menu_btn("View").on_press(MenuMessage::ZoomFit),
         menu_btn("Place"),
