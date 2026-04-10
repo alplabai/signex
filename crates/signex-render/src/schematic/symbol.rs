@@ -16,26 +16,27 @@ use super::ScreenTransform;
 /// Transform a local library-space point through the symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
 fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
-    let lx = local.x;
-    // KiCad library coords are Y-up (math), schematic coords are Y-down (screen).
-    // Flip Y at the boundary.
-    let ly = -local.y;
+    // Step 1: Flip Y — KiCad library coords are Y-up, schematic is Y-down.
+    let x = local.x;
+    let y = -local.y;
 
-    // Mirror (applied before rotation, KiCad convention)
-    let lx = if sym.mirror_x { -lx } else { lx };
-    let ly = if sym.mirror_y { -ly } else { ly };
-
-    // Rotation — standard CCW rotation. Since we already flipped Y,
-    // we're in Y-down space and the standard formula works directly
-    // with KiCad's stored rotation angle.
-    let rad = sym.rotation.to_radians();
+    // Step 2: Rotate by NEGATIVE angle.
+    // KiCad stores rotation as CCW in Y-up (math) space.
+    // After Y-flip we are in Y-down space, so the rotation direction reverses:
+    // CCW in Y-up == CW in Y-down == negative angle in standard math rotation.
+    let rad = -sym.rotation.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
 
-    let rx = lx * cos - ly * sin;
-    let ry = lx * sin + ly * cos;
+    // Step 3: Mirror applied AFTER rotation (KiCad convention).
+    //   (mirror x) = mirror about X-axis → flip Y component
+    //   (mirror y) = mirror about Y-axis → flip X component
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
 
-    // Translate to world position
+    // Step 4: Translate to world position.
     (rx + sym.position.x, ry + sym.position.y)
 }
 
@@ -72,7 +73,8 @@ fn apply_fill(
 // Main symbol drawing
 // ---------------------------------------------------------------------------
 
-/// Draw a symbol's library graphics at the symbol instance's position.
+/// Draw a symbol's library graphics at the symbol instance's position,
+/// filtering to only the matching unit and normal body style (body_style == 1).
 pub fn draw_symbol(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -82,8 +84,16 @@ pub fn draw_symbol(
     body_fill_color: Color,
     _pin_color: Color,
 ) {
-    for graphic in &lib.graphics {
-        match graphic {
+    for lg in &lib.graphics {
+        // unit 0 = common to all units; otherwise must match symbol's unit
+        if lg.unit != 0 && lg.unit != sym.unit {
+            continue;
+        }
+        // body_style 0 = common; 1 = normal (default). Skip De Morgan (body_style 2).
+        if lg.body_style != 0 && lg.body_style != 1 {
+            continue;
+        }
+        match &lg.graphic {
             Graphic::Polyline {
                 points,
                 width,
@@ -387,6 +397,7 @@ fn draw_graphic_text(
         position: sp,
         color,
         size: iced::Pixels(size),
+        font: crate::IOSEVKA,
         align_x: iced::alignment::Horizontal::Center.into(),
         align_y: iced::alignment::Vertical::Center.into(),
         ..canvas::Text::default()
