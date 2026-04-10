@@ -1,0 +1,13 @@
+[package]
+name = "kicad-parser"
+description = "KiCad S-expression parser — .kicad_sch, .kicad_pcb, .kicad_sym"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

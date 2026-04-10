@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/signex-app",
+    "crates/signex-types",
+    "crates/kicad-parser",
+    "crates/kicad-writer",
+    "crates/signex-render",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+repository = "https://github.com/alplabai/signex-iced"
+
+[workspace.dependencies]
+# UI framework
+iced = { version = "0.14", features = ["wgpu", "canvas", "advanced"] }
+iced_aw = { version = "0.13", default-features = false, features = ["tabs", "card"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Identity
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Internal crates
+signex-types = { path = "crates/signex-types" }
+kicad-parser = { path = "crates/kicad-parser" }
+kicad-writer = { path = "crates/kicad-writer" }
+signex-render = { path = "crates/signex-render" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

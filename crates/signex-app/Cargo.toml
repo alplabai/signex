@@ -1,0 +1,22 @@
+[package]
+name = "signex-app"
+description = "Signex EDA — main application binary (Iced 0.14 + wgpu)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "signex"
+path = "src/main.rs"
+
+[dependencies]
+signex-types = { workspace = true }
+kicad-parser = { workspace = true }
+kicad-writer = { workspace = true }
+signex-render = { workspace = true }
+iced = { workspace = true }
+# iced_aw = { workspace = true }  # Re-enable when tabs feature is used
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }

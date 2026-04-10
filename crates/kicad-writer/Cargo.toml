@@ -1,0 +1,12 @@
+[package]
+name = "kicad-writer"
+description = "KiCad S-expression serializer — write .kicad_sch, .kicad_pcb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+
+[dev-dependencies]
+kicad-parser = { workspace = true }
