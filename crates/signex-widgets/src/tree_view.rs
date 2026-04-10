@@ -26,20 +26,18 @@ pub enum TreeIcon {
 }
 
 impl TreeIcon {
-    /// Simple geometric characters that render on all platforms (no emoji).
-    fn render(self, expanded: bool) -> (&'static str, IconColor) {
+    /// Clean single-char icons that render on all platforms.
+    fn render(self, _expanded: bool) -> (&'static str, IconColor) {
         match self {
-            TreeIcon::Folder if expanded => ("[v]", IconColor::Yellow),
-            TreeIcon::Folder => ("[>]", IconColor::Yellow),
-            TreeIcon::FolderOpen => ("[v]", IconColor::Yellow),
-            TreeIcon::File => (" .", IconColor::Muted),
-            TreeIcon::Schematic => ("[S]", IconColor::Blue),
-            TreeIcon::Pcb => ("[P]", IconColor::Green),
-            TreeIcon::Library => ("[L]", IconColor::Purple),
-            TreeIcon::Component => (" *", IconColor::Cyan),
-            TreeIcon::Sheet => ("[H]", IconColor::Blue),
-            TreeIcon::Net => (" ~", IconColor::Green),
-            TreeIcon::Pin => (" -", IconColor::Muted),
+            TreeIcon::Folder | TreeIcon::FolderOpen => ("\u{25A0}", IconColor::Yellow), // ■
+            TreeIcon::File => ("\u{25AB}", IconColor::Muted),      // ▫
+            TreeIcon::Schematic => ("\u{25A3}", IconColor::Blue),   // ▣
+            TreeIcon::Pcb => ("\u{25A6}", IconColor::Green),        // ▦
+            TreeIcon::Library => ("\u{25C6}", IconColor::Purple),   // ◆
+            TreeIcon::Component => ("\u{25C8}", IconColor::Cyan),   // ◈
+            TreeIcon::Sheet => ("\u{25A1}", IconColor::Blue),       // □
+            TreeIcon::Net => ("\u{223F}", IconColor::Green),        // ∿
+            TreeIcon::Pin => ("\u{2022}", IconColor::Muted),        // •
         }
     }
 }
@@ -114,12 +112,12 @@ pub enum TreeMsg {
 // ─── View ─────────────────────────────────────────────────────
 
 const INDENT_PX: u32 = 14;
-const ROW_PADDING_V: u16 = 3;
-const ROW_PADDING_H: u16 = 6;
-const FONT_SIZE: f32 = 12.0;
-const ICON_SIZE: f32 = 12.0;
-const CHEVRON_SIZE: f32 = 10.0;
-const BADGE_SIZE: f32 = 10.0;
+const ROW_PADDING_V: u16 = 1;
+const ROW_PADDING_H: u16 = 4;
+const FONT_SIZE: f32 = 11.0;
+const ICON_SIZE: f32 = 11.0;
+const CHEVRON_SIZE: f32 = 9.0;
+const BADGE_SIZE: f32 = 9.0;
 
 pub fn tree_view<'a>(
     roots: &[TreeNode],
@@ -191,9 +189,12 @@ fn render_node<'a>(
             .width(22),
     );
 
-    // Label (fill remaining space, single line)
+    // Label (single line — wrapping disabled)
     row_content = row_content.push(
-        text(node.label.clone()).size(FONT_SIZE).color(text_color),
+        text(node.label.clone())
+            .size(FONT_SIZE)
+            .color(text_color)
+            .wrapping(iced::widget::text::Wrapping::None),
     );
 
     // Badge (right-aligned, muted)
