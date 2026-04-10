@@ -23,6 +23,8 @@ pub const TAB_ACTIVE_BG: Color = Color::from_rgb(0.18, 0.18, 0.20);
 pub const TEXT_PRIMARY: Color = Color::from_rgb(0.85, 0.85, 0.88);
 /// Secondary/muted text
 pub const TEXT_MUTED: Color = Color::from_rgb(0.55, 0.55, 0.60);
+/// Active tab indicator (white, matching Altium's neutral style)
+pub const ACCENT: Color = Color::from_rgb(0.85, 0.85, 0.88);
 
 // ─── Container styles ─────────────────────────────────────────
 
