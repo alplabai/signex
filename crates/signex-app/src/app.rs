@@ -17,7 +17,51 @@ use crate::status_bar;
 use crate::tab_bar::{self, TabMessage};
 use crate::toolbar::{self, ToolMessage};
 
+/// Find the KiCad symbol library directory.
+fn find_kicad_symbols_dir() -> Option<PathBuf> {
+    for ver in &["9.0", "8.0", "7.0"] {
+        let p = PathBuf::from(format!("C:/Program Files/KiCad/{ver}/share/kicad/symbols"));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// List .kicad_sym filenames in a directory.
+fn list_kicad_libraries(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .ok()
+        .map(|entries| {
+            let mut names: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .is_some_and(|ext| ext == "kicad_sym")
+                })
+                .map(|e| {
+                    e.path()
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string()
+                })
+                .collect();
+            names.sort();
+            names
+        })
+        .unwrap_or_default()
+}
+
 // ─── Message ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragTarget {
+    LeftPanel,
+    RightPanel,
+    BottomPanel,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -31,9 +75,9 @@ pub enum Message {
     UnitCycled,
     GridToggle,
     GridCycle,
-    ResizeLeft(f32),
-    ResizeRight(f32),
-    ResizeBottom(f32),
+    DragStart(DragTarget),
+    DragMove(f32, f32),
+    DragEnd,
     FileOpened(Option<PathBuf>),
     SchematicLoaded(Box<SchematicSheet>),
     Noop,
@@ -69,11 +113,19 @@ pub struct Signex {
     pub left_width: f32,
     pub right_width: f32,
     pub bottom_height: f32,
+    pub active_menu: Option<usize>,
+    pub kicad_lib_dir: Option<PathBuf>,
+    pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
+    pub dragging: Option<DragTarget>,
+    pub drag_start_pos: Option<f32>,
+    pub drag_start_size: f32,
 }
 
 #[derive(Debug, Clone)]
 pub struct TabInfo {
     pub title: String,
+    pub path: PathBuf,
+    pub schematic: Option<SchematicSheet>,
     pub dirty: bool,
 }
 
@@ -121,7 +173,7 @@ impl Signex {
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
 
         let app = Self {
-            theme_id: ThemeId::CatppuccinMocha,
+            theme_id: ThemeId::AltiumDark,
             unit: Unit::Mm,
             grid_visible: true,
             snap_enabled: true,
@@ -129,10 +181,7 @@ impl Signex {
             cursor_y: 0.0,
             zoom: 100.0,
             dock,
-            tabs: vec![TabInfo {
-                title: "Untitled".to_string(),
-                dirty: false,
-            }],
+            tabs: vec![],
             active_tab: 0,
             current_tool: Tool::Select,
             canvas: sch_canvas,
@@ -153,11 +202,33 @@ impl Signex {
                 has_schematic: false,
                 paper_size: "A4".to_string(),
                 lib_symbol_count: 0,
-                tokens: signex_types::theme::theme_tokens(ThemeId::CatppuccinMocha),
+                lib_symbol_names: vec![],
+                placed_symbols: vec![],
+                tokens: signex_types::theme::theme_tokens(ThemeId::AltiumDark),
+                unit: Unit::Mm,
+                grid_visible: true,
+                snap_enabled: true,
+                grid_size_mm: 2.54,
+                properties_tab: 0,
+                kicad_libraries: find_kicad_symbols_dir()
+                    .map(|d| list_kicad_libraries(&d))
+                    .unwrap_or_default(),
+                active_library: None,
+                library_symbols: vec![],
+                selected_component: None,
+                selected_pins: vec![],
+                selected_lib_symbol: None,
+                project_tree: vec![],
             },
             left_width: 240.0,
             right_width: 220.0,
             bottom_height: 120.0,
+            active_menu: None,
+            kicad_lib_dir: find_kicad_symbols_dir(),
+            loaded_lib: std::collections::HashMap::new(),
+            dragging: None,
+            drag_start_pos: None,
+            drag_start_size: 0.0,
         };
         (app, Task::none())
     }
@@ -170,7 +241,17 @@ impl Signex {
         match self.theme_id {
             ThemeId::CatppuccinMocha => Theme::CatppuccinMocha,
             ThemeId::VsCodeDark => Theme::Dark,
-            ThemeId::AltiumDark => Theme::Dark,
+            ThemeId::AltiumDark => Theme::custom(
+                "Altium Dark".to_string(),
+                iced::theme::Palette {
+                    background: iced::Color::from_rgb(0.18, 0.18, 0.19),
+                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
+                    primary: iced::Color::from_rgb(0.45, 0.45, 0.48),
+                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
+                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
+                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                },
+            ),
             ThemeId::GitHubDark => Theme::Dark,
             ThemeId::SolarizedLight => Theme::Light,
             ThemeId::Nord => Theme::Nord,
@@ -179,7 +260,8 @@ impl Signex {
 
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
-        keyboard::listen().map(|event| match event {
+
+        let kbd = keyboard::listen().map(|event| match event {
             keyboard::Event::KeyPressed {
                 key, modifiers: m, ..
             } => match (key.as_ref(), m) {
@@ -214,7 +296,23 @@ impl Signex {
                 _ => Message::Noop,
             },
             _ => Message::Noop,
-        })
+        });
+
+        // While dragging a panel handle, track mouse position globally
+        if self.dragging.is_some() {
+            let mouse_sub = iced::event::listen_with(|event, _status, _id| match event {
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Some(Message::DragMove(position.x, position.y))
+                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )) => Some(Message::DragEnd),
+                _ => None,
+            });
+            Subscription::batch([kbd, mouse_sub])
+        } else {
+            kbd
+        }
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -236,14 +334,55 @@ impl Signex {
                 self.canvas.grid_visible = self.grid_visible;
                 self.canvas.clear_bg_cache();
             }
-            Message::ResizeLeft(w) => {
-                self.left_width = w.clamp(100.0, 500.0);
+            Message::DragStart(target) => {
+                self.dragging = Some(target);
+                self.drag_start_pos = None; // set on first move
+                self.drag_start_size = match target {
+                    DragTarget::LeftPanel => self.left_width,
+                    DragTarget::RightPanel => self.right_width,
+                    DragTarget::BottomPanel => self.bottom_height,
+                };
             }
-            Message::ResizeRight(w) => {
-                self.right_width = w.clamp(100.0, 500.0);
+            Message::DragMove(x, y) => {
+                if let Some(target) = self.dragging {
+                    let pos = match target {
+                        DragTarget::LeftPanel | DragTarget::RightPanel => x,
+                        DragTarget::BottomPanel => y,
+                    };
+                    if self.drag_start_pos.is_none() {
+                        self.drag_start_pos = Some(pos);
+                    }
+                    if let Some(start) = self.drag_start_pos {
+                        let delta = pos - start;
+                        let (current, new_val) = match target {
+                            DragTarget::LeftPanel => (
+                                self.left_width,
+                                (self.drag_start_size + delta).clamp(100.0, 500.0),
+                            ),
+                            DragTarget::RightPanel => (
+                                self.right_width,
+                                (self.drag_start_size - delta).clamp(100.0, 500.0),
+                            ),
+                            DragTarget::BottomPanel => (
+                                self.bottom_height,
+                                (self.drag_start_size - delta).clamp(60.0, 400.0),
+                            ),
+                        };
+                        // Only re-render on meaningful change (reduces lag)
+                        let new_val = new_val.round();
+                        if (current - new_val).abs() >= 1.0 {
+                            match target {
+                                DragTarget::LeftPanel => self.left_width = new_val,
+                                DragTarget::RightPanel => self.right_width = new_val,
+                                DragTarget::BottomPanel => self.bottom_height = new_val,
+                            }
+                        }
+                    }
+                }
             }
-            Message::ResizeBottom(h) => {
-                self.bottom_height = h.clamp(60.0, 400.0);
+            Message::DragEnd => {
+                self.dragging = None;
+                self.drag_start_pos = None;
             }
             Message::GridCycle => {
                 // Cycle grid and clear cache so it redraws
@@ -275,6 +414,10 @@ impl Signex {
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
+                // Escape (which sends Select tool) also closes open menus
+                if tool == Tool::Select {
+                    self.active_menu = None;
+                }
             }
             Message::Menu(msg) => {
                 return self.handle_menu(msg);
@@ -283,9 +426,133 @@ impl Signex {
                 self.handle_tab(msg);
             }
             Message::Dock(msg) => {
+                use signex_widgets::tree_view::{get_node, TreeIcon, TreeMsg};
                 match &msg {
-                    crate::dock::DockMessage::Panel(_panel_msg) => {
-                        // Panel messages (tree clicks, etc.) — handle in future
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetUnit(unit),
+                    ) => {
+                        self.unit = *unit;
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleGrid,
+                    ) => {
+                        self.grid_visible = !self.grid_visible;
+                        self.canvas.grid_visible = self.grid_visible;
+                        self.canvas.clear_bg_cache();
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleSnap,
+                    ) => {
+                        self.snap_enabled = !self.snap_enabled;
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::PropertiesTab(idx),
+                    ) => {
+                        self.panel_ctx.properties_tab = *idx;
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SelectLibrary(name),
+                    ) => {
+                        let name = name.clone();
+                        if let Some(dir) = &self.kicad_lib_dir {
+                            let path = dir.join(format!("{name}.kicad_sym"));
+                            match std::fs::read_to_string(&path) {
+                                Ok(content) => {
+                                    match kicad_parser::parse_symbol_lib(&content) {
+                                        Ok(symbols) => {
+                                            let mut syms: Vec<(String, usize)> = symbols
+                                                .iter()
+                                                .map(|(id, lib)| (id.clone(), lib.pins.len()))
+                                                .collect();
+                                            syms.sort_by(|a, b| a.0.cmp(&b.0));
+                                            self.panel_ctx.library_symbols = syms;
+                                            self.panel_ctx.active_library = Some(name);
+                                            self.panel_ctx.selected_component = None;
+                                            self.panel_ctx.selected_pins.clear();
+                                            self.loaded_lib = symbols;
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Failed to parse library: {e}");
+                                        }
+                                    }
+                                }
+                                Err(e) => eprintln!("Failed to read {}: {e}", path.display()),
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SelectComponent(name),
+                    ) => {
+                        let name = name.clone();
+                        if let Some(sym) = self.loaded_lib.get(&name) {
+                            self.panel_ctx.selected_component = Some(name);
+                            self.panel_ctx.selected_pins = sym
+                                .pins
+                                .iter()
+                                .map(|p| {
+                                    (
+                                        p.number.clone(),
+                                        p.name.clone(),
+                                        format!("{:?}", p.pin_type),
+                                    )
+                                })
+                                .collect();
+                            self.panel_ctx.selected_lib_symbol = Some(sym.clone());
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::Tree(TreeMsg::Toggle(path)),
+                    ) => {
+                        let path = path.clone();
+                        signex_widgets::tree_view::toggle(
+                            &mut self.panel_ctx.project_tree,
+                            &path,
+                        );
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::Tree(TreeMsg::Select(path)),
+                    ) => {
+                        if let Some(node) =
+                            get_node(&self.panel_ctx.project_tree, path)
+                        {
+                            if matches!(
+                                node.icon,
+                                TreeIcon::Schematic | TreeIcon::Pcb
+                            ) {
+                                let filename = node.label.clone();
+                                if let Some(dir) = self
+                                    .project_path
+                                    .as_ref()
+                                    .and_then(|p| p.parent())
+                                {
+                                    let file_path = dir.join(&filename);
+                                    if file_path.exists()
+                                        && filename.ends_with(".kicad_sch")
+                                    {
+                                        // Already open? Switch to it
+                                        if let Some(idx) = self.tabs.iter().position(|t| t.path == file_path) {
+                                            self.active_tab = idx;
+                                            self.sync_active_tab();
+                                        } else {
+                                            // Open new tab
+                                            match kicad_parser::parse_schematic_file(&file_path) {
+                                                Ok(sheet) => {
+                                                    self.tabs.push(TabInfo {
+                                                        title: filename.replace(".kicad_sch", ""),
+                                                        path: file_path,
+                                                        schematic: Some(sheet),
+                                                        dirty: false,
+                                                    });
+                                                    self.active_tab = self.tabs.len() - 1;
+                                                    self.sync_active_tab();
+                                                }
+                                                Err(e) => eprintln!("Failed to parse {filename}: {e}"),
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -300,15 +567,20 @@ impl Signex {
                             Ok(proj) => {
                                 self.project_path = Some(path.clone());
                                 self.project_data = Some(proj.clone());
-                                if let Some(tab) = self.tabs.first_mut() {
-                                    tab.title = proj.name.clone();
-                                }
                                 // Load the root schematic
                                 if let Some(root_sch) = &proj.schematic_root {
                                     let dir = path.parent().unwrap_or(std::path::Path::new("."));
                                     let sch_path = dir.join(root_sch);
                                     match kicad_parser::parse_schematic_file(&sch_path) {
                                         Ok(sheet) => {
+                                            let title = root_sch.replace(".kicad_sch", "");
+                                            self.tabs.push(TabInfo {
+                                                title,
+                                                path: sch_path.clone(),
+                                                schematic: Some(sheet.clone()),
+                                                dirty: false,
+                                            });
+                                            self.active_tab = self.tabs.len() - 1;
                                             self.schematic = Some(sheet.clone());
                                             self.canvas.schematic = Some(sheet);
                                         }
@@ -339,10 +611,14 @@ impl Signex {
                                 }
                                 let title = path.file_stem()
                                     .map(|s| s.to_string_lossy().to_string())
-                                    .unwrap_or_else(|| "Untitled".to_string());
-                                if let Some(tab) = self.tabs.first_mut() {
-                                    tab.title = title;
-                                }
+                                    .unwrap_or_else(|| "Schematic".to_string());
+                                self.tabs.push(TabInfo {
+                                    title,
+                                    path: path.clone(),
+                                    schematic: Some(sheet.clone()),
+                                    dirty: false,
+                                });
+                                self.active_tab = self.tabs.len() - 1;
                                 self.schematic = Some(sheet.clone());
                                 self.canvas.schematic = Some(sheet);
                                 self.canvas.clear_bg_cache();
@@ -366,39 +642,115 @@ impl Signex {
             }
             Message::Noop => {}
         }
+        // Sync live settings to panel context for Properties panel
+        self.panel_ctx.unit = self.unit;
+        self.panel_ctx.grid_visible = self.grid_visible;
+        self.panel_ctx.snap_enabled = self.snap_enabled;
+        self.panel_ctx.grid_size_mm = self.grid_size_mm;
         Task::none()
     }
 
     fn handle_menu(&mut self, msg: MenuMessage) -> Task<Message> {
-        match msg {
+        // Close dropdown after any action (except menu-control and theme)
+        let should_close = !matches!(
+            msg,
+            MenuMessage::OpenMenu(_)
+                | MenuMessage::CloseMenus
+                | MenuMessage::HoverMenu(_)
+                | MenuMessage::ThemeSelected(_)
+        );
+
+        let task = match msg {
+            // ── Menu bar control ──
+            MenuMessage::OpenMenu(idx) => {
+                self.active_menu = if self.active_menu == Some(idx) {
+                    None
+                } else {
+                    Some(idx)
+                };
+                Task::none()
+            }
+            MenuMessage::CloseMenus => {
+                self.active_menu = None;
+                Task::none()
+            }
+            MenuMessage::HoverMenu(idx) => {
+                if self.active_menu.is_some() {
+                    self.active_menu = Some(idx);
+                }
+                Task::none()
+            }
+            // ── Theme ──
             MenuMessage::ThemeSelected(id) => {
                 self.theme_id = id;
                 self.update_canvas_theme();
+                Task::none()
             }
-            MenuMessage::NewProject => {}
-            MenuMessage::OpenProject => {
-                return Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open KiCad Schematic")
-                            .add_filter("KiCad Schematic", &["kicad_sch"])
-                            .add_filter("KiCad Project", &["kicad_pro"])
-                            .add_filter("All files", &["*"])
-                            .pick_file()
-                            .await
-                            .map(|f| f.path().to_path_buf())
-                    },
-                    Message::FileOpened,
-                );
-            }
-            MenuMessage::Save => {}
-            MenuMessage::Undo => {}
-            MenuMessage::Redo => {}
+            // ── File ──
+            MenuMessage::OpenProject => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Open KiCad Schematic")
+                        .add_filter("KiCad Schematic", &["kicad_sch"])
+                        .add_filter("KiCad Project", &["kicad_pro"])
+                        .add_filter("All files", &["*"])
+                        .pick_file()
+                        .await
+                        .map(|f| f.path().to_path_buf())
+                },
+                Message::FileOpened,
+            ),
+            // ── View ──
             MenuMessage::ZoomFit => {
-                self.zoom = 100.0;
+                self.canvas.fit_to_paper();
+                self.canvas.clear_bg_cache();
+                self.canvas.clear_content_cache();
+                Task::none()
             }
+            MenuMessage::ToggleGrid => {
+                self.grid_visible = !self.grid_visible;
+                self.canvas.grid_visible = self.grid_visible;
+                self.canvas.clear_bg_cache();
+                Task::none()
+            }
+            MenuMessage::CycleGrid => {
+                self.canvas.clear_bg_cache();
+                Task::none()
+            }
+            // ── Place ──
+            MenuMessage::PlaceWire => {
+                self.current_tool = Tool::Wire;
+                Task::none()
+            }
+            MenuMessage::PlaceBus => {
+                self.current_tool = Tool::Bus;
+                Task::none()
+            }
+            MenuMessage::PlaceLabel => {
+                self.current_tool = Tool::Label;
+                Task::none()
+            }
+            MenuMessage::PlaceComponent => {
+                self.current_tool = Tool::Component;
+                Task::none()
+            }
+            // ── Stubs (not yet implemented) ──
+            MenuMessage::NewProject
+            | MenuMessage::Save
+            | MenuMessage::SaveAs
+            | MenuMessage::Undo
+            | MenuMessage::Redo
+            | MenuMessage::ZoomIn
+            | MenuMessage::ZoomOut
+            | MenuMessage::Annotate
+            | MenuMessage::Erc
+            | MenuMessage::GenerateBom => Task::none(),
+        };
+
+        if should_close {
+            self.active_menu = None;
         }
-        Task::none()
+        task
     }
 
     fn handle_tab(&mut self, msg: TabMessage) {
@@ -406,14 +758,16 @@ impl Signex {
             TabMessage::Select(idx) => {
                 if idx < self.tabs.len() {
                     self.active_tab = idx;
+                    self.sync_active_tab();
                 }
             }
             TabMessage::Close(idx) => {
-                if self.tabs.len() > 1 && idx < self.tabs.len() {
+                if idx < self.tabs.len() {
                     self.tabs.remove(idx);
-                    if self.active_tab >= self.tabs.len() {
-                        self.active_tab = self.tabs.len() - 1;
+                    if self.active_tab >= self.tabs.len() && self.active_tab > 0 {
+                        self.active_tab -= 1;
                     }
+                    self.sync_active_tab();
                 }
             }
         }
@@ -462,8 +816,84 @@ impl Signex {
             lib_symbol_count: self.schematic.as_ref()
                 .map(|s| s.lib_symbols.len())
                 .unwrap_or(0),
+            lib_symbol_names: self.schematic.as_ref()
+                .map(|s| s.lib_symbols.iter().map(|(name, _)| name.clone()).collect())
+                .unwrap_or_default(),
+            placed_symbols: self.schematic.as_ref()
+                .map(|s| {
+                    s.symbols.iter().map(|sym| {
+                        (sym.reference.clone(), sym.value.clone(), sym.footprint.clone(), sym.lib_id.clone())
+                    }).collect()
+                })
+                .unwrap_or_default(),
             tokens: signex_types::theme::theme_tokens(self.theme_id),
+            unit: self.unit,
+            grid_visible: self.grid_visible,
+            snap_enabled: self.snap_enabled,
+            grid_size_mm: self.grid_size_mm,
+            properties_tab: self.panel_ctx.properties_tab,
+            kicad_libraries: self.panel_ctx.kicad_libraries.clone(),
+            active_library: self.panel_ctx.active_library.clone(),
+            library_symbols: self.panel_ctx.library_symbols.clone(),
+            selected_component: self.panel_ctx.selected_component.clone(),
+            selected_pins: self.panel_ctx.selected_pins.clone(),
+            selected_lib_symbol: self.panel_ctx.selected_lib_symbol.clone(),
+            project_tree: vec![], // built below
         };
+        // Build persistent project tree (toggle state preserved until next project load)
+        self.panel_ctx.project_tree = crate::panels::build_project_tree(&self.panel_ctx);
+    }
+
+    fn sync_active_tab(&mut self) {
+        if let Some(tab) = self.tabs.get(self.active_tab) {
+            self.schematic = tab.schematic.clone();
+            self.canvas.schematic = tab.schematic.clone();
+        } else {
+            self.schematic = None;
+            self.canvas.schematic = None;
+        }
+        self.canvas.clear_bg_cache();
+        self.canvas.clear_content_cache();
+
+        // Update panel stats from current schematic (preserve tree collapse state)
+        self.panel_ctx.has_schematic = self.schematic.is_some();
+        self.panel_ctx.sym_count =
+            self.schematic.as_ref().map(|s| s.symbols.len()).unwrap_or(0);
+        self.panel_ctx.wire_count =
+            self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0);
+        self.panel_ctx.label_count =
+            self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0);
+        self.panel_ctx.junction_count =
+            self.schematic.as_ref().map(|s| s.junctions.len()).unwrap_or(0);
+        self.panel_ctx.lib_symbol_count =
+            self.schematic.as_ref().map(|s| s.lib_symbols.len()).unwrap_or(0);
+        self.panel_ctx.lib_symbol_names = self
+            .schematic
+            .as_ref()
+            .map(|s| s.lib_symbols.iter().map(|(name, _)| name.clone()).collect())
+            .unwrap_or_default();
+        self.panel_ctx.placed_symbols = self
+            .schematic
+            .as_ref()
+            .map(|s| {
+                s.symbols
+                    .iter()
+                    .map(|sym| {
+                        (
+                            sym.reference.clone(),
+                            sym.value.clone(),
+                            sym.footprint.clone(),
+                            sym.lib_id.clone(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.panel_ctx.paper_size = self
+            .schematic
+            .as_ref()
+            .map(|s| s.paper_size.clone())
+            .unwrap_or_else(|| "A4".to_string());
     }
 
     fn update_canvas_theme(&mut self) {
@@ -478,9 +908,8 @@ impl Signex {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let menu = menu_bar::view(self.theme_id).map(Message::Menu);
+        let menu = menu_bar::view(self.theme_id, self.active_menu).map(Message::Menu);
         let tools = toolbar::view(self.current_tool).map(Message::Tool);
-        let tabs = tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab);
 
         // Left panel (resizable width)
         let left_panel = self.dock.view_region(PanelPosition::Left, &self.panel_ctx).map(Message::Dock);
@@ -491,26 +920,50 @@ impl Signex {
 
         // Left resize handle (3px draggable border)
         let left_handle = iced::widget::mouse_area(
-            container(iced::widget::text(""))
+            container(iced::widget::Space::new())
                 .width(3)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
-        .interaction(iced::mouse::Interaction::ResizingHorizontally);
+        .interaction(iced::mouse::Interaction::ResizingHorizontally)
+        .on_press(Message::DragStart(DragTarget::LeftPanel));
 
-        // Center — live canvas
-        let canvas_widget = canvas(&self.canvas)
+        // Center — canvas when a schematic is loaded, empty otherwise
+        let center: Element<'_, Message> = if self.schematic.is_some() {
+            canvas(&self.canvas)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            container(
+                column![
+                    iced::widget::text("No document open")
+                        .size(14)
+                        .color(crate::styles::TEXT_MUTED),
+                    iced::widget::text("Open a project with File > Open or Ctrl+O")
+                        .size(11)
+                        .color(crate::styles::TEXT_MUTED),
+                ]
+                .spacing(8)
+                .align_x(iced::Alignment::Center),
+            )
             .width(Length::Fill)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .style(crate::styles::panel_region)
+            .into()
+        };
 
         // Right resize handle
         let right_handle = iced::widget::mouse_area(
-            container(iced::widget::text(""))
+            container(iced::widget::Space::new())
                 .width(3)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
-        .interaction(iced::mouse::Interaction::ResizingHorizontally);
+        .interaction(iced::mouse::Interaction::ResizingHorizontally)
+        .on_press(Message::DragStart(DragTarget::RightPanel));
 
         // Right panel (resizable width)
         let right_panel = self.dock.view_region(PanelPosition::Right, &self.panel_ctx).map(Message::Dock);
@@ -519,17 +972,18 @@ impl Signex {
             .height(Length::Fill)
             .style(crate::styles::panel_region);
 
-        // Center row: left | handle | canvas | handle | right
-        let center_row = row![left, left_handle, canvas_widget, right_handle, right];
+        // Center row: left | handle | center | handle | right
+        let center_row = row![left, left_handle, center, right_handle, right];
 
         // Bottom resize handle
         let bottom_handle = iced::widget::mouse_area(
-            container(iced::widget::text(""))
+            container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(3)
                 .style(crate::styles::resize_handle),
         )
-        .interaction(iced::mouse::Interaction::ResizingVertically);
+        .interaction(iced::mouse::Interaction::ResizingVertically)
+        .on_press(Message::DragStart(DragTarget::BottomPanel));
 
         // Bottom panel (resizable height)
         let bottom_panel = self.dock.view_region(PanelPosition::Bottom, &self.panel_ctx).map(Message::Dock);
@@ -551,6 +1005,43 @@ impl Signex {
         )
         .map(Message::StatusBar);
 
-        column![menu, tools, tabs, center_row, bottom_handle, bottom, status].into()
+        let mut main = column![menu, tools];
+        if !self.tabs.is_empty() {
+            main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
+        }
+        let main = main
+            .push(center_row)
+            .push(bottom_handle)
+            .push(bottom)
+            .push(status);
+
+        // Overlay dropdown menu when active
+        if let Some(idx) = self.active_menu {
+            let x_offset = menu_bar::button_x_offset(idx);
+            let dropdown = menu_bar::view_dropdown(idx).map(Message::Menu);
+
+            iced::widget::Stack::new()
+                .push(main)
+                // Dismiss layer — covers area below menu bar, catches outside clicks
+                .push(
+                    column![
+                        iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
+                        iced::widget::mouse_area(
+                            container(iced::widget::Space::new())
+                                .width(Length::Fill)
+                                .height(Length::Fill),
+                        )
+                        .on_press(Message::Menu(menu_bar::MenuMessage::CloseMenus)),
+                    ],
+                )
+                // Dropdown positioned below menu bar, aligned to button
+                .push(column![
+                    iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
+                    row![iced::widget::Space::new().width(x_offset), dropdown,],
+                ])
+                .into()
+        } else {
+            main.into()
+        }
     }
 }
