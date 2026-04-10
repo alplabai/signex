@@ -87,6 +87,8 @@ pub struct PanelContext {
     pub selected_pins: Vec<(String, String, String)>,
     /// Full LibSymbol data for canvas preview.
     pub selected_lib_symbol: Option<signex_types::schematic::LibSymbol>,
+    /// Height in px for the Components list section (details gets the rest).
+    pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
 }
@@ -101,6 +103,7 @@ pub enum PanelMsg {
     PropertiesTab(usize),
     SelectLibrary(String),
     SelectComponent(String),
+    DragComponentsSplit,
 }
 
 /// Render a panel's content.
@@ -344,13 +347,34 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         detail_col = detail_col.push(Space::new().height(4.0));
         detail_col = detail_col.push(section_hdr("\u{25BC} Models", primary, border_c));
         if let Some(lib_sym) = &ctx.selected_lib_symbol {
+            // Symbol preview
             detail_col = detail_col.push(
                 container(
                     container(
                         signex_widgets::symbol_preview::symbol_preview(lib_sym.clone(), 120.0)
-                            .map(|_: ()| PanelMsg::ToggleGrid), // dummy map — preview emits no msgs
+                            .map(|_: ()| PanelMsg::ToggleGrid),
                     )
                     .width(Length::Fill)
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
+                        border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
+                        ..container::Style::default()
+                    }),
+                )
+                .padding([4, 8]),
+            );
+
+            // Footprint preview placeholder
+            detail_col = detail_col.push(
+                container(
+                    container(
+                        text("Footprint preview")
+                            .size(10)
+                            .color(muted)
+                            .align_x(iced::alignment::Horizontal::Center),
+                    )
+                    .width(Length::Fill)
+                    .padding([30, 8])
                     .style(move |_: &Theme| container::Style {
                         background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
                         border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
@@ -372,14 +396,25 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
     }
 
-    // Split view: list on top, details on bottom
+    // Split view: list (fixed height) | handle | details (fill)
     column![
         container(scrollable(list_col).width(Length::Fill))
-            .height(Length::FillPortion(1))
+            .height(ctx.components_split)
             .width(Length::Fill),
-        thin_sep(border_c),
+        // Drag handle
+        iced::widget::mouse_area(
+            container(Space::new())
+                .height(5.0)
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(border_c)),
+                    ..container::Style::default()
+                }),
+        )
+        .interaction(iced::mouse::Interaction::ResizingVertically)
+        .on_press(PanelMsg::DragComponentsSplit),
         container(scrollable(detail_col).width(Length::Fill))
-            .height(Length::FillPortion(1))
+            .height(Length::Fill)
             .width(Length::Fill),
     ]
     .spacing(0)
