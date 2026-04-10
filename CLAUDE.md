@@ -25,6 +25,24 @@ cargo clippy --workspace -- -D warnings  # Lint
 ## Rules
 
 - **Never add Claude as a commit author, co-author, or contributor.** No `Co-Authored-By` lines. No mentions in CONTRIBUTORS files. Claude is a tool, not a contributor.
+- **Never push directly to `main`.** All work goes through `dev` via feature branches and PRs.
+
+## Git Workflow
+
+```
+main                    # Protected. Stable releases only. Tagged vX.Y.Z.
+└── dev                 # Default branch. All feature branches merge here via PR.
+    ├── feature/...     # New features: feature/phase-3-canvas, feature/add-grid
+    ├── fix/...         # Bug fixes: fix/parser-unicode, fix/dock-collapse
+    └── hotfix/...      # Urgent fixes branched from main, merged to both main and dev
+```
+
+- `main` is protected — requires PR with 1 approval, no direct pushes, no force pushes.
+- `dev` is the integration branch. Feature/fix branches merge here via PR.
+- Feature branches: `feature/<description>` — create from dev, PR back to dev.
+- Bug fix branches: `fix/<description>` — create from dev, PR back to dev.
+- Hotfixes: `hotfix/<description>` — branch from main for critical production fixes, merge to both main and dev.
+- Every merge to main gets a version tag (e.g., `v0.3.0`).
 
 ## Conventions
 
