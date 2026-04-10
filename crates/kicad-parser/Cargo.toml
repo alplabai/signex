@@ -1,0 +1,13 @@
+[package]
+name = "standard-parser"
+description = "Standard S-expression parser — .standard_sch, .standard_pcb, .standard_sym"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

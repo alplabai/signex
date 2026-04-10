@@ -1,0 +1,10 @@
+[package]
+name = "signex-render"
+description = "wgpu rendering primitives for Signex — schematic and PCB drawing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types = { workspace = true }
+iced = { workspace = true }
