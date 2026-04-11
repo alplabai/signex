@@ -24,32 +24,55 @@ Signex is a native Rust EDA tool targeting **Altium Designer feature parity** wi
 
 ## Features
 
-### Implemented (v0.3.0)
+### v0.1–v0.3 — Foundation
 
-- Workspace with 5 Rust crates
+- Workspace with 6 Rust crates (`signex-app`, `signex-types`, `signex-render`, `signex-widgets`, `kicad-parser`, `kicad-writer`)
 - KiCad file format support (.kicad_sch, .kicad_pcb, .kicad_sym) — parse and write
+- Native Signex file formats (.snxsch, .snxpcb, .snxsym, .snxprj)
 - Domain type system: schematic, PCB, net, layer, coordinate (nanometer precision)
 - 6 built-in themes: Catppuccin Mocha, VS Code Dark, Altium Dark, GitHub Dark, Solarized Light, Nord
 - Rich text markup parser (subscript, superscript, overbar)
 - Iced application shell with docking panel system
 - Altium-compatible keyboard shortcut framework
 - wgpu canvas with pan/zoom/grid, camera system
+
+### v0.4 — Schematic Viewer
+
+- Click-to-select all element types (symbols, wires, buses, labels, junctions, sheets, text)
+- Altium-style selection overlay (cyan highlight + corner grips)
+- Properties panel shows selected element details (type, reference, value, position, rotation)
+- Fit-to-content on file load (auto-zoom to schematic bounds)
+- Components panel: KiCad 9.0 library browser (226 libs), split list/details, symbol preview canvas
+
+### v0.5 — Schematic Editor
+
+- Undo/redo system (command pattern, 100-step history)
+- Wire drawing tool (click to place segments, grid snap)
+- Bus drawing tool + label placement tool
+- Delete/rotate/mirror selected elements (Del, R, X, Y keys)
+- Dirty flag on tabs for modified documents
+
+### v0.6 — Full Editor (current)
+
+- Multi-select with Ctrl+click and Ctrl+A (select all)
+- Copy/paste with Ctrl+C/Ctrl+V (offset by 2 grid units, new UUIDs)
+- Save to .kicad_sch with Ctrl+S, Save As with .snxsch primary
 - Altium-style tree view with SVG chevrons, persistent collapse, clickable file tabs
 - 8-menu dropdown menu bar with Stack overlay
-- Properties panel: General/Parameters tabs, Selection Filter, Units, Grid/Snap, Page Options
-- Components panel: KiCad 9.0 library browser (226 libs), split list/details, symbol preview canvas
-- Dock system: Altium flat tabs with accent underline, drag-to-resize panels
-- Multi-tab schematic document support (open/close/switch)
-- Custom Altium Dark Iced palette (neutral gray chrome)
+- Dock system: flat tabs with accent underline, drag-to-resize panels
+- Multi-tab schematic document support with dirty-tab close protection
+- Deterministic file output (sorted HashMap keys in writer)
+- Path traversal protection for project file references
+- 78 clippy errors resolved, full CI green (clippy -D warnings + fmt + tests)
 
-### In Progress (v0.7.0 — Validation)
+### Next — v0.7 (Validation)
 
-- ERC (Electrical Rules Check) — 11 checks
+- ERC (Electrical Rules Check)
 - DRC (Design Rules Check)
-- Annotation
+- Annotation (auto-designator numbering)
 
 ### Planned
-- ERC/DRC validation (v0.7)
+- Output generation — PDF, BOM, netlist, library editor (v0.8)
 - PCB rendering and interactive routing (v0.9–v0.10)
 - Manufacturing output: Gerber, ODB++, STEP (v0.11)
 - 3D PCB viewer with PBR materials (v1.1)
@@ -65,6 +88,7 @@ signex-iced/
 │   ├── signex-app/       # Main binary — Iced 0.14 application
 │   ├── signex-types/     # Domain types — NO rendering deps
 │   ├── signex-render/    # wgpu rendering (types → Canvas draw calls)
+│   ├── signex-widgets/   # Reusable Iced widgets (tree view, icon button, status bar)
 │   ├── kicad-parser/     # S-expression parser (.kicad_sch/.kicad_pcb/.kicad_sym)
 │   └── kicad-writer/     # S-expression serializer (write KiCad format)
 ├── Cargo.toml            # Workspace manifest
@@ -160,6 +184,7 @@ Each workstream owns specific crates to minimize conflicts:
 | `kicad-parser` | File format parsing |
 | `kicad-writer` | File format serialization |
 | `signex-render` | Rendering logic (Canvas + Shader) |
+| `signex-widgets` | Reusable Iced widgets (tree view, icon button, status bar, symbol preview) |
 | `signex-app` | UI, panels, dialogs, interactions |
 
 ### Code style
