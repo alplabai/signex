@@ -5,8 +5,8 @@ use iced::{Element, Length};
 use signex_types::coord::Unit;
 
 use crate::app::{StatusBarMsg, Tool};
+use crate::styles;
 
-/// Render the status bar.
 pub fn view<'a>(
     x: f64,
     y: f64,
@@ -27,32 +27,36 @@ pub fn view<'a>(
     let grid_text = if grid_visible {
         format!("{grid_size_mm:.3}mm")
     } else {
-        "Grid OFF".to_string()
+        "OFF".to_string()
     };
 
     let snap_label = if snap_enabled { "Snap" } else { "Free" };
+    let sep = || text("|").size(10).color(styles::BORDER_COLOR);
+    let lbl = |s: String| text(s).size(11).color(styles::TEXT_PRIMARY);
+    let dim = |s: &'static str| text(s).size(11).color(styles::TEXT_MUTED);
 
     let bar = row![
-        text(coord_text).size(12),
-        text(" | ").size(12),
-        button(text(grid_text).size(12))
-            .padding([2, 6])
+        lbl(coord_text),
+        sep(),
+        dim("Grid:"),
+        button(text(grid_text).size(11).color(styles::TEXT_PRIMARY))
+            .padding([1, 4])
             .style(button::text)
             .on_press(StatusBarMsg::ToggleGrid),
-        text(" | ").size(12),
-        button(text(snap_label).size(12))
-            .padding([2, 6])
+        sep(),
+        button(text(snap_label).size(11).color(styles::TEXT_PRIMARY))
+            .padding([1, 4])
             .style(button::text)
             .on_press(StatusBarMsg::ToggleSnap),
-        text(" | ").size(12),
-        text("E-Snap").size(12),
-        text(" | ").size(12),
-        text(format!("{tool}")).size(12),
+        sep(),
+        dim("E-Snap"),
+        sep(),
+        lbl(format!("{tool}")),
         space::horizontal(),
-        text(format!("{zoom:.0}%")).size(12),
-        text(" | ").size(12),
-        button(text(format!("{unit}")).size(12))
-            .padding([2, 6])
+        lbl(format!("{zoom:.0}%")),
+        sep(),
+        button(text(format!("{unit}")).size(11).color(styles::TEXT_PRIMARY))
+            .padding([1, 4])
             .style(button::text)
             .on_press(StatusBarMsg::CycleUnit),
     ]
@@ -61,6 +65,7 @@ pub fn view<'a>(
 
     container(bar)
         .width(Length::Fill)
-        .padding([3, 8])
+        .padding([2, 8])
+        .style(styles::status_bar)
         .into()
 }

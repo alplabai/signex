@@ -6,6 +6,7 @@ members = [
     "crates/kicad-parser",
     "crates/kicad-writer",
     "crates/signex-render",
+    "crates/signex-widgets",
 ]
 
 [workspace.package]
@@ -16,7 +17,7 @@ repository = "https://github.com/alplabai/signex-iced"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.14", features = ["wgpu", "canvas", "advanced"] }
+iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg"] }
 iced_aw = { version = "0.13", default-features = false, features = ["tabs", "card"] }
 
 # Serialization
@@ -30,11 +31,15 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 anyhow = "1"
 
+# File dialogs
+rfd = "0.15"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
+signex-widgets = { path = "crates/signex-widgets" }
 
 [profile.release]
 lto = "thin"
