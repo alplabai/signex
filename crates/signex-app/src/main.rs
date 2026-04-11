@@ -2,6 +2,7 @@
 //!
 //! Entry point for the Iced 0.14 + wgpu application.
 
+mod active_bar;
 mod app;
 mod canvas;
 mod dock;

@@ -43,6 +43,9 @@ impl PanelKind {
     }
 }
 
+/// Track which sections are collapsed (by section name).
+pub type CollapsedSections = std::collections::HashSet<String>;
+
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone)]
 pub struct SheetInfo {
@@ -101,6 +104,8 @@ pub struct PanelContext {
     pub selection_info: Vec<(String, String)>,
     /// Component search filter text.
     pub component_filter: String,
+    /// Which sections are collapsed (by section name key).
+    pub collapsed_sections: CollapsedSections,
 }
 
 /// Panel-level message wrapping widget messages.
@@ -115,6 +120,8 @@ pub enum PanelMsg {
     SelectComponent(String),
     DragComponentsSplit,
     ComponentFilter(String),
+    /// Toggle a collapsible section (by section key).
+    ToggleSection(String),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
@@ -145,6 +152,76 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
+
+/// Collapsible section: clickable header with ▶/▼ chevron, hides content when collapsed.
+fn collapsible_section<'a>(
+    key: &str,
+    title: &str,
+    collapsed: &CollapsedSections,
+    header_color: Color,
+    border_c: Color,
+    content: impl FnOnce() -> Column<'a, PanelMsg>,
+) -> Column<'a, PanelMsg> {
+    let is_collapsed = collapsed.contains(key);
+    let chevron = if is_collapsed { "\u{25B6}" } else { "\u{25BC}" };
+    let key_owned = key.to_string();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Clickable header
+    col = col.push(
+        iced::widget::button(
+            container(
+                row![
+                    text(format!("{chevron}  {title}"))
+                        .size(10)
+                        .color(header_color),
+                ]
+                .spacing(4),
+            )
+            .padding([4, 8])
+            .width(Length::Fill),
+        )
+        .padding(0)
+        .width(Length::Fill)
+        .on_press(PanelMsg::ToggleSection(key_owned))
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => {
+                    Some(iced::Background::Color(Color::from_rgb(0.15, 0.15, 0.17)))
+                }
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                ..iced::widget::button::Style::default()
+            }
+        }),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // Content (only when expanded)
+    if !is_collapsed {
+        col = col.push(content());
+    }
+
+    col
+}
+
+/// Property key-value row (owned strings to avoid lifetime issues in closures).
+fn prop_kv_row<'a>(key: &str, value: &str, key_c: Color, val_c: Color) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text(key.to_string()).size(10).color(key_c).width(100),
+            text(value.to_string()).size(10).color(val_c),
+        ]
+        .spacing(4),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
+}
 
 fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     text(title.to_uppercase())
@@ -669,72 +746,86 @@ fn view_selected_element_properties<'a>(
     );
     col = col.push(thin_sep(border_c));
 
-    // ── General section ──
-    col = col.push(section_hdr("General", muted, border_c));
-
-    for (key, value) in &ctx.selection_info {
-        if key == "Type" {
-            continue;
-        } // already shown in header
-        col = col.push(
-            container(
-                row![
-                    text(key).size(10).color(muted).width(100),
-                    text(value).size(10).color(primary),
-                ]
-                .spacing(4),
-            )
-            .padding([4, 8])
-            .width(Length::Fill),
-        );
-    }
-
-    // ── Location section (for elements that have position) ──
-    let has_position = ctx.selection_info.iter().any(|(k, _)| k == "Position");
-    if has_position {
-        col = col.push(Space::new().height(4.0));
-        col = col.push(section_hdr("Location", muted, border_c));
-        for (key, value) in &ctx.selection_info {
-            if key == "Position"
-                || key == "Rotation"
-                || key == "Start"
-                || key == "End"
-                || key == "Length"
-            {
-                col = col.push(
-                    container(
-                        row![
-                            text(key).size(10).color(muted).width(100),
-                            text(value).size(10).color(primary),
-                        ]
-                        .spacing(4),
-                    )
-                    .padding([4, 8])
-                    .width(Length::Fill),
-                );
-            }
+    // ── General section (collapsible) ──
+    {
+        let info: Vec<(String, String)> = ctx
+            .selection_info
+            .iter()
+            .filter(|(k, _)| k != "Type" && k != "Position" && k != "Rotation" && k != "Start" && k != "End" && k != "Length" && k != "Mirror" && k != "Unit")
+            .cloned()
+            .collect();
+        if !ctx.collapsed_sections.contains("sel_general") {
+            col = col.push(collapsible_section(
+                "sel_general", "General", &ctx.collapsed_sections, muted, border_c,
+                || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    for (key, value) in &info {
+                        c = c.push(prop_kv_row(key, value, muted, primary));
+                    }
+                    c
+                },
+            ));
+        } else {
+            col = col.push(collapsible_section(
+                "sel_general", "General", &ctx.collapsed_sections, muted, border_c,
+                || Column::new().spacing(0).width(Length::Fill),
+            ));
         }
     }
 
-    // ── Graphical section (for symbols) ──
+    // ── Location section (collapsible, for elements that have position) ──
+    let has_position = ctx.selection_info.iter().any(|(k, _)| k == "Position" || k == "Start");
+    if has_position {
+        let loc_info: Vec<(String, String)> = ctx
+            .selection_info
+            .iter()
+            .filter(|(k, _)| k == "Position" || k == "Rotation" || k == "Start" || k == "End" || k == "Length")
+            .cloned()
+            .collect();
+        if !ctx.collapsed_sections.contains("sel_location") {
+            col = col.push(collapsible_section(
+                "sel_location", "Location", &ctx.collapsed_sections, muted, border_c,
+                || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    for (key, value) in &loc_info {
+                        c = c.push(prop_kv_row(key, value, muted, primary));
+                    }
+                    c
+                },
+            ));
+        } else {
+            col = col.push(collapsible_section(
+                "sel_location", "Location", &ctx.collapsed_sections, muted, border_c,
+                || Column::new().spacing(0).width(Length::Fill),
+            ));
+        }
+    }
+
+    // ── Graphical section (collapsible, for symbols) ──
     let has_mirror = ctx.selection_info.iter().any(|(k, _)| k == "Mirror");
     if has_mirror || elem_type == "Symbol" {
-        col = col.push(Space::new().height(4.0));
-        col = col.push(section_hdr("Graphical", muted, border_c));
-        for (key, value) in &ctx.selection_info {
-            if key == "Mirror" || key == "Unit" {
-                col = col.push(
-                    container(
-                        row![
-                            text(key).size(10).color(muted).width(100),
-                            text(value).size(10).color(primary),
-                        ]
-                        .spacing(4),
-                    )
-                    .padding([4, 8])
-                    .width(Length::Fill),
-                );
-            }
+        let gfx_info: Vec<(String, String)> = ctx
+            .selection_info
+            .iter()
+            .filter(|(k, _)| k == "Mirror" || k == "Unit")
+            .cloned()
+            .collect();
+        if !ctx.collapsed_sections.contains("sel_graphical") {
+            col = col.push(collapsible_section(
+                "sel_graphical", "Graphical", &ctx.collapsed_sections, muted, border_c,
+                || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    for (key, value) in &gfx_info {
+                        c = c.push(prop_kv_row(key, value, muted, primary));
+                    }
+                    c
+                },
+            ));
+        } else {
+            col = col.push(collapsible_section(
+                "sel_graphical", "Graphical", &ctx.collapsed_sections, muted, border_c,
+                || Column::new().spacing(0).width(Length::Fill),
+            ));
         }
     }
 
@@ -754,93 +845,134 @@ fn view_properties_general<'a>(
 ) -> Column<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Selection Filter
-    col = col.push(section_hdr("\u{25BC} Selection Filter", primary, border_c));
-    col = col.push(
-        container(
-            column![
-                row![tag_btn("Components"), tag_btn("Wires"), tag_btn("Buses"),].spacing(4.0),
-                row![
-                    tag_btn("Sheet Symbols"),
-                    tag_btn("Sheet Entries"),
-                    tag_btn("Net Labels"),
-                ]
-                .spacing(4.0),
-                row![
-                    tag_btn("Parameters"),
-                    tag_btn("Ports"),
-                    tag_btn("Power Ports"),
-                    tag_btn("Texts"),
-                ]
-                .spacing(4.0),
-                row![tag_btn("Drawing Objects"), tag_btn("Other"),].spacing(4.0),
-            ]
-            .spacing(4.0),
-        )
-        .padding([6, 8]),
-    );
+    // Selection Filter (collapsible)
+    col = col.push(collapsible_section(
+        "prop_sel_filter",
+        "Selection Filter",
+        &ctx.collapsed_sections,
+        primary,
+        border_c,
+        || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(
+                container(
+                    column![
+                        row![tag_btn("Components"), tag_btn("Wires"), tag_btn("Buses"),]
+                            .spacing(4.0),
+                        row![
+                            tag_btn("Sheet Symbols"),
+                            tag_btn("Sheet Entries"),
+                            tag_btn("Net Labels"),
+                        ]
+                        .spacing(4.0),
+                        row![
+                            tag_btn("Parameters"),
+                            tag_btn("Ports"),
+                            tag_btn("Power Ports"),
+                            tag_btn("Texts"),
+                        ]
+                        .spacing(4.0),
+                        row![tag_btn("Drawing Objects"), tag_btn("Other"),].spacing(4.0),
+                    ]
+                    .spacing(4.0),
+                )
+                .padding([6, 8]),
+            );
+            c
+        },
+    ));
 
-    // General
-    col = col.push(section_hdr("\u{25BC} General", primary, border_c));
-    col = col.push(form_label("Units", muted));
-    col = col.push(
-        container(
-            row![
-                seg_btn("mm", ctx.unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm)),
-                seg_btn("mils", ctx.unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil)),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([2, 8]),
-    );
-    col = col.push(form_input_row(
-        "Visible Grid",
-        &format!("{}mm", ctx.grid_size_mm),
-        muted,
-    ));
-    col = col.push(form_check_row(
-        "Snap Grid",
-        ctx.snap_enabled,
-        PanelMsg::ToggleSnap,
-        muted,
-    ));
-    col = col.push(form_check_row(
-        "Grid Visible",
-        ctx.grid_visible,
-        PanelMsg::ToggleGrid,
-        muted,
-    ));
-    col = col.push(form_input_row("Document Font", "Arial, 8", muted));
-    col = col.push(form_input_row("Sheet Color", "Black", muted));
+    // General (collapsible)
+    {
+        let unit = ctx.unit;
+        let grid_size_mm = ctx.grid_size_mm;
+        let snap_enabled = ctx.snap_enabled;
+        let grid_visible = ctx.grid_visible;
+        col = col.push(collapsible_section(
+            "prop_general",
+            "General",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_label("Units", muted));
+                c = c.push(
+                    container(
+                        row![
+                            seg_btn("mm", unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm)),
+                            seg_btn("mils", unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil)),
+                        ]
+                        .spacing(0.0)
+                        .width(Length::Fill),
+                    )
+                    .padding([2, 8]),
+                );
+                c = c.push(form_input_row(
+                    "Visible Grid",
+                    &format!("{}mm", grid_size_mm),
+                    muted,
+                ));
+                c = c.push(form_check_row(
+                    "Snap Grid",
+                    snap_enabled,
+                    PanelMsg::ToggleSnap,
+                    muted,
+                ));
+                c = c.push(form_check_row(
+                    "Grid Visible",
+                    grid_visible,
+                    PanelMsg::ToggleGrid,
+                    muted,
+                ));
+                c = c.push(form_input_row("Document Font", "Arial, 8", muted));
+                c = c.push(form_input_row("Sheet Color", "Black", muted));
+                c
+            },
+        ));
+    }
 
-    // Page Options
-    col = col.push(Space::new().height(2.0));
-    col = col.push(section_hdr("\u{25BC} Page Options", primary, border_c));
-    col = col.push(form_label("Formatting and Size", muted));
-    col = col.push(
-        container(
-            row![
-                seg_btn("Template", true, PanelMsg::Noop),
-                seg_btn("Standard", false, PanelMsg::Noop),
-                seg_btn("Custom", false, PanelMsg::Noop),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([2, 8]),
-    );
-    col = col.push(form_input_row("Paper", &ctx.paper_size, muted));
-    let dims = match ctx.paper_size.as_str() {
-        "A4" => "Width: 297mm  Height: 210mm",
-        "A3" => "Width: 420mm  Height: 297mm",
-        _ => "Width: 297mm  Height: 210mm",
-    };
-    col = col.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
-    col = col.push(form_label("Margin and Zones", muted));
-    col = col.push(form_input_row("Vertical", "1", muted));
-    col = col.push(form_input_row("Horizontal", "1", muted));
-    col = col.push(form_input_row("Origin", "Upper Left", muted));
+    // Page Options (collapsible)
+    {
+        let paper_size = ctx.paper_size.clone();
+        col = col.push(collapsible_section(
+            "prop_page_opts",
+            "Page Options",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_label("Formatting and Size", muted));
+                c = c.push(
+                    container(
+                        row![
+                            seg_btn("Template", true, PanelMsg::Noop),
+                            seg_btn("Standard", false, PanelMsg::Noop),
+                            seg_btn("Custom", false, PanelMsg::Noop),
+                        ]
+                        .spacing(0.0)
+                        .width(Length::Fill),
+                    )
+                    .padding([2, 8]),
+                );
+                c = c.push(form_input_row("Paper", &paper_size, muted));
+                let dims = match paper_size.as_str() {
+                    "A4" => "Width: 297mm  Height: 210mm",
+                    "A3" => "Width: 420mm  Height: 297mm",
+                    _ => "Width: 297mm  Height: 210mm",
+                };
+                c = c.push(
+                    container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]),
+                );
+                c = c.push(form_label("Margin and Zones", muted));
+                c = c.push(form_input_row("Vertical", "1", muted));
+                c = c.push(form_input_row("Horizontal", "1", muted));
+                c = c.push(form_input_row("Origin", "Upper Left", muted));
+                c
+            },
+        ));
+    }
 
     col
 }
