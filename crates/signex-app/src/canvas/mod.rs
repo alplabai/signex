@@ -372,6 +372,8 @@ pub enum CanvasEvent {
     CursorAt { x: f32, y: f32, zoom_pct: f64 },
     CursorMoved,
     FitAll,
-    /// Left-click at world coordinates — triggers hit-testing.
+    /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked { world_x: f64, world_y: f64 },
+    /// Double-click at world coordinates.
+    DoubleClicked { world_x: f64, world_y: f64 },
 }

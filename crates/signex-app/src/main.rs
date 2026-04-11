@@ -14,6 +14,7 @@ mod status_bar;
 mod tab_bar;
 mod toolbar;
 mod tree_view;
+mod undo;
 
 use app::Signex;
 
