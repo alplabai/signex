@@ -420,7 +420,11 @@ impl Signex {
     }
 
     pub fn title(&self) -> String {
-        "Signex".to_string()
+        if let Some(ref menu) = self.active_bar_menu {
+            format!("Signex — Active Bar: {:?}", menu)
+        } else {
+            "Signex".to_string()
+        }
     }
 
     pub fn theme(&self) -> Theme {
@@ -1401,11 +1405,8 @@ impl Signex {
                 use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
                 match msg {
                     ActiveBarMsg::ToggleMenu(menu) => {
-                        if self.active_bar_menu == Some(menu) {
-                            self.active_bar_menu = None;
-                        } else {
-                            self.active_bar_menu = Some(menu);
-                        }
+                        // Always open (clicking elsewhere closes via CloseMenus)
+                        self.active_bar_menu = Some(menu);
                     }
                     ActiveBarMsg::CloseMenus => {
                         self.active_bar_menu = None;
@@ -2132,51 +2133,7 @@ impl Signex {
                 .height(Length::Fill)
                 .into();
 
-            // Active Bar (Altium-style floating toolbar) — overlaid on canvas via Stack
-            let bar = crate::active_bar::view_bar(
-                self.active_bar_menu,
-                self.current_tool,
-                self.draw_mode,
-            )
-            .map(Message::ActiveBar);
-
-            let mut canvas_stack = iced::widget::Stack::new()
-                .push(canvas_widget);
-
-            // Active Bar dropdown overlay (dismiss + dropdown BELOW the bar layer)
-            if let Some(menu) = self.active_bar_menu {
-                let dropdown = crate::active_bar::view_dropdown(menu)
-                    .map(Message::ActiveBar);
-                let x_off = crate::active_bar::dropdown_x_offset(menu);
-                // Dismiss layer (below bar so it doesn't block bar clicks)
-                canvas_stack = canvas_stack.push(
-                    iced::widget::mouse_area(
-                        container(iced::widget::Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_press(Message::ActiveBar(
-                        crate::active_bar::ActiveBarMsg::CloseMenus,
-                    )),
-                );
-                // Dropdown positioned below active bar (~36px from top)
-                canvas_stack = canvas_stack.push(column![
-                    iced::widget::Space::new().height(36),
-                    row![iced::widget::Space::new().width(x_off), dropdown,],
-                ]);
-            }
-
-            // Active Bar always on top (so buttons remain clickable when dropdown is open)
-            canvas_stack = canvas_stack.push(
-                container(
-                    container(bar).center_x(Length::Shrink),
-                )
-                .width(Length::Fill)
-                .padding([6, 0])
-                .align_x(iced::alignment::Horizontal::Center),
-            );
-
-            canvas_stack.into()
+            canvas_widget
         } else {
             container(
                 column![
@@ -2221,7 +2178,31 @@ impl Signex {
             .style(crate::styles::panel_region);
 
         // Center row: left | handle | center | handle | right
-        let center_row = row![left, left_handle, center, right_handle, right];
+        let center_row_base = row![left, left_handle, center, right_handle, right];
+        // Active Bar floats ON the canvas (Altium-style)
+        let center_row: Element<'_, Message> = if self.schematic.is_some() {
+            let bar = crate::active_bar::view_bar(
+                self.active_bar_menu,
+                self.current_tool,
+                self.draw_mode,
+            )
+            .map(Message::ActiveBar);
+
+            let mut cs = iced::widget::Stack::new().push(center_row_base);
+
+            // Bar floats centered at top of canvas area
+            cs = cs.push(
+                container(
+                    container(bar).center_x(Length::Shrink),
+                )
+                .width(Length::Fill)
+                .padding([6, 0])
+                .align_x(iced::alignment::Horizontal::Center),
+            );
+            cs.into()
+        } else {
+            center_row_base.into()
+        };
 
         // Bottom resize handle (hidden when collapsed)
         let bottom_handle_h = if bottom_collapsed { 0 } else { 5 };
@@ -2262,17 +2243,19 @@ impl Signex {
         if !self.tabs.is_empty() {
             main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
         }
+        // Active Bar rendered as overlay on center_row (below)
         let main = main
             .push(center_row)
             .push(bottom_handle)
             .push(bottom)
             .push(status);
 
-        // Overlay: dropdown menus and context menus via Stack
+        // Overlay: dropdown menus, Active Bar dropdowns, and context menus via Stack
         let has_menu = self.active_menu.is_some();
         let has_context = self.context_menu.is_some();
+        let has_ab_menu = self.active_bar_menu.is_some();
 
-        if has_menu || has_context {
+        if has_menu || has_context || has_ab_menu {
             let mut stack = iced::widget::Stack::new().push(main);
 
             // Dropdown menu overlay
@@ -2295,6 +2278,45 @@ impl Signex {
                     iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
                     row![iced::widget::Space::new().width(x_offset), dropdown,],
                 ]);
+            }
+
+            // Active Bar dropdown overlay
+            if let Some(ab_menu) = self.active_bar_menu {
+                let dropdown = crate::active_bar::view_dropdown(ab_menu)
+                    .map(Message::ActiveBar);
+                let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
+                // Vertical: menu(24) + toolbar(28) + tabs(~28) + bar on canvas(~36)
+                let ab_y: f32 = 24.0 + 28.0
+                    + if self.tabs.is_empty() { 0.0 } else { 28.0 }
+                    + 36.0;
+                // Bar width must match view_bar layout
+                let bar_w: f32 = 314.0;
+
+                // Dismiss layer
+                stack = stack.push(
+                    iced::widget::mouse_area(
+                        container(iced::widget::Space::new())
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_press(Message::ActiveBar(
+                        crate::active_bar::ActiveBarMsg::CloseMenus,
+                    )),
+                );
+                // Dropdown centered like bar, x_off inside bar coordinate space
+                stack = stack.push(
+                    container(
+                        column![
+                            iced::widget::Space::new().height(ab_y),
+                            container(
+                                row![iced::widget::Space::new().width(x_off), dropdown,],
+                            )
+                            .width(bar_w),
+                        ],
+                    )
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center),
+                );
             }
 
             // Context menu overlay (right-click)
