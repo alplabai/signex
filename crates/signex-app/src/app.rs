@@ -93,6 +93,7 @@ pub enum Message {
     Copy,
     Paste,
     SaveFile,
+    SaveFileAs(PathBuf),
     CtrlClick { world_x: f64, world_y: f64 },
     Noop,
 }
@@ -739,7 +740,7 @@ impl Signex {
                                 {
                                     let file_path = dir.join(&filename);
                                     if file_path.exists()
-                                        && filename.ends_with(".kicad_sch")
+                                        && (filename.ends_with(".kicad_sch") || filename.ends_with(".snxsch"))
                                     {
                                         // Already open? Switch to it
                                         if let Some(idx) = self.tabs.iter().position(|t| t.path == file_path) {
@@ -773,7 +774,7 @@ impl Signex {
             Message::FileOpened(Some(path)) => {
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 match ext {
-                    "kicad_pro" => {
+                    "kicad_pro" | "snxprj" => {
                         // Parse project file — discovers all sheets
                         match kicad_parser::parse_project(&path) {
                             Ok(proj) => {
@@ -807,7 +808,7 @@ impl Signex {
                             Err(e) => eprintln!("Failed to parse project: {e}"),
                         }
                     }
-                    "kicad_sch" => {
+                    "kicad_sch" | "snxsch" => {
                         // Direct schematic open — also try to find the .kicad_pro
                         match kicad_parser::parse_schematic_file(&path) {
                             Ok(sheet) => {
@@ -1156,6 +1157,24 @@ impl Signex {
                     }
                 }
             }
+            Message::SaveFileAs(path) => {
+                if let Some(ref sheet) = self.schematic {
+                    let content = kicad_writer::write_schematic(sheet);
+                    match std::fs::write(&path, &content) {
+                        Ok(_) => {
+                            if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                                tab.path = path.clone();
+                                tab.title = path.file_stem()
+                                    .map(|s| s.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| "Schematic".to_string());
+                                tab.dirty = false;
+                            }
+                            eprintln!("[save-as] Wrote {}", path.display());
+                        }
+                        Err(e) => eprintln!("[save-as] Error: {e}"),
+                    }
+                }
+            }
             Message::CtrlClick { world_x, world_y } => {
                 return self.update(Message::CanvasEvent(CanvasEvent::CtrlClicked { world_x, world_y }));
             }
@@ -1214,9 +1233,12 @@ impl Signex {
             MenuMessage::OpenProject => Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("Open KiCad Schematic")
+                        .set_title("Open Project or Schematic")
+                        .add_filter("Signex Project", &["snxprj"])
+                        .add_filter("Signex Schematic", &["snxsch"])
                         .add_filter("KiCad Schematic", &["kicad_sch"])
                         .add_filter("KiCad Project", &["kicad_pro"])
+                        .add_filter("All Supported", &["snxprj", "snxsch", "kicad_sch", "kicad_pro"])
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await
@@ -1267,9 +1289,28 @@ impl Signex {
             MenuMessage::Save => {
                 return self.update(Message::SaveFile);
             }
+            MenuMessage::SaveAs => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Save Schematic As")
+                            .add_filter("Signex Schematic", &["snxsch"])
+                            .add_filter("KiCad Schematic", &["kicad_sch"])
+                            .save_file()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    |path| {
+                        if let Some(p) = path {
+                            Message::SaveFileAs(p)
+                        } else {
+                            Message::Noop
+                        }
+                    },
+                );
+            }
             // ── Stubs (not yet implemented) ──
             MenuMessage::NewProject
-            | MenuMessage::SaveAs
             | MenuMessage::ZoomIn
             | MenuMessage::ZoomOut
             | MenuMessage::Annotate

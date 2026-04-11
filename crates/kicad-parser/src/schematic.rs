@@ -1205,7 +1205,7 @@ pub fn parse_schematic_file(path: &Path) -> Result<SchematicSheet, ParseError> {
 // Project parser
 // ---------------------------------------------------------------------------
 
-/// Parse a `.kicad_pro` project file and discover all sheets.
+/// Parse a `.kicad_pro` or `.snxprj` project file and discover all sheets.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
@@ -1214,17 +1214,24 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         .unwrap_or("Untitled")
         .to_string();
 
-    let root_sch_name = format!("{}.kicad_sch", project_name);
-    let root_sch_path = dir.join(&root_sch_name);
-    let schematic_root = if root_sch_path.exists() {
-        Some(root_sch_name.clone())
+    // Look for schematic root: prefer .snxsch, fall back to .kicad_sch
+    let snx_sch_name = format!("{}.snxsch", project_name);
+    let kicad_sch_name = format!("{}.kicad_sch", project_name);
+    let schematic_root = if dir.join(&snx_sch_name).exists() {
+        Some(snx_sch_name)
+    } else if dir.join(&kicad_sch_name).exists() {
+        Some(kicad_sch_name)
     } else {
         None
     };
 
-    let pcb_name = format!("{}.kicad_pcb", project_name);
-    let pcb_file = if dir.join(&pcb_name).exists() {
-        Some(pcb_name)
+    // Look for PCB: prefer .snxpcb, fall back to .kicad_pcb
+    let snx_pcb_name = format!("{}.snxpcb", project_name);
+    let kicad_pcb_name = format!("{}.kicad_pcb", project_name);
+    let pcb_file = if dir.join(&snx_pcb_name).exists() {
+        Some(snx_pcb_name)
+    } else if dir.join(&kicad_pcb_name).exists() {
+        Some(kicad_pcb_name)
     } else {
         None
     };
