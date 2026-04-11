@@ -1,13 +1,13 @@
 //! Panel docking system — wraps PaneGrid regions with tabbed panels.
 //!
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
-//! Each region can hold multiple panels as tabs. Panels can be collapsed
-//! to a rail icon.
+//! Each region can hold multiple panels as tabs.
 
-use iced::widget::{button, column, container, row, text, Column};
-use iced::{Element, Length};
+use iced::widget::{button, column, container, row, text, Column, Space};
+use iced::{Background, Border, Color, Element, Length, Theme};
 
-use crate::panels::{self, PanelKind};
+use crate::panels::{self, PanelKind, PanelMsg};
+use crate::styles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelPosition {
@@ -20,6 +20,7 @@ pub enum PanelPosition {
 pub enum DockMessage {
     SelectTab(PanelPosition, usize),
     ToggleCollapse(PanelPosition),
+    Panel(PanelMsg),
 }
 
 struct DockRegion {
@@ -85,10 +86,15 @@ impl DockArea {
                 };
                 region.collapsed = !region.collapsed;
             }
+            DockMessage::Panel(_) => {}
         }
     }
 
-    pub fn view_region(&self, position: PanelPosition) -> Element<'_, DockMessage> {
+    pub fn view_region<'a>(
+        &'a self,
+        position: PanelPosition,
+        ctx: &'a panels::PanelContext,
+    ) -> Element<'a, DockMessage> {
         let region = match position {
             PanelPosition::Left => &self.left,
             PanelPosition::Right => &self.right,
@@ -103,43 +109,98 @@ impl DockArea {
             return self.view_rail(position, region);
         }
 
-        // Tab bar
-        let mut tab_row = row![].spacing(1);
+        // ── Altium-style flat tabs with accent underline ──
+        let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
+
         for (i, panel) in region.panels.iter().enumerate() {
             let label = panel.label();
-            let btn = button(text(label).size(11))
-                .padding([3, 8])
-                .on_press(DockMessage::SelectTab(position, i));
-            let btn = if i == region.active {
-                btn.style(button::primary)
+            let is_active = i == region.active;
+
+            let text_c = if is_active {
+                styles::TEXT_PRIMARY
             } else {
-                btn.style(button::secondary)
+                styles::TEXT_MUTED
             };
+            let line_c = if is_active {
+                styles::ACCENT
+            } else {
+                Color::TRANSPARENT
+            };
+
+            // Button content: text + accent underline, with tab border
+            let label_el = container(text(label).size(11).color(text_c))
+                .padding([5, 10]);
+            let underline = container(Space::new())
+                .height(2.0)
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(line_c)),
+                    ..container::Style::default()
+                });
+
+            let border_c = styles::BORDER_SUBTLE;
+            let btn = button(column![label_el, underline].spacing(0))
+                .padding(0)
+                .on_press(DockMessage::SelectTab(position, i))
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match (is_active, status) {
+                        // Active tab keeps highlighted background
+                        (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
+                        (false, button::Status::Hovered) => {
+                            Some(Background::Color(styles::TAB_ACTIVE_BG))
+                        }
+                        _ => None,
+                    };
+                    button::Style {
+                        background: bg,
+                        border: Border {
+                            width: 1.0,
+                            radius: 0.0.into(),
+                            color: border_c,
+                        },
+                        ..button::Style::default()
+                    }
+                });
+
             tab_row = tab_row.push(btn);
         }
 
-        // Collapse button
+        // Collapse button (minimal)
         let collapse_label = match position {
-            PanelPosition::Left => "«",
-            PanelPosition::Right => "»",
-            PanelPosition::Bottom => "v",
+            PanelPosition::Left => "\u{00AB}",  // «
+            PanelPosition::Right => "\u{00BB}", // »
+            PanelPosition::Bottom => "\u{2304}", // ⌄
         };
         tab_row = tab_row.push(
-            button(text(collapse_label).size(11))
-                .padding([3, 6])
+            button(text(collapse_label).size(10).color(styles::TEXT_MUTED))
+                .padding([5, 6])
                 .style(button::text)
                 .on_press(DockMessage::ToggleCollapse(position)),
         );
 
         // Panel content
-        let content = if let Some(panel) = region.panels.get(region.active) {
-            panels::view_panel(*panel)
-        } else {
-            text("").into()
-        };
+        let content: Element<'_, DockMessage> =
+            if let Some(panel) = region.panels.get(region.active) {
+                panels::view_panel(*panel, ctx).map(DockMessage::Panel)
+            } else {
+                text("").into()
+            };
 
         column![
-            container(tab_row).width(Length::Fill).padding([2, 4]),
+            // Tab bar with bottom separator
+            container(tab_row)
+                .width(Length::Fill)
+                .padding([0, 4])
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(styles::TOOLBAR_BG)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 0.0.into(),
+                        color: styles::BORDER_SUBTLE,
+                    },
+                    ..container::Style::default()
+                }),
+            // Panel content
             container(content)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -148,14 +209,18 @@ impl DockArea {
         .into()
     }
 
-    fn view_rail(&self, position: PanelPosition, region: &DockRegion) -> Element<'_, DockMessage> {
+    fn view_rail(
+        &self,
+        position: PanelPosition,
+        region: &DockRegion,
+    ) -> Element<'_, DockMessage> {
         let expand_label = match position {
-            PanelPosition::Left => "»",
-            PanelPosition::Right => "«",
+            PanelPosition::Left => "\u{00BB}",  // »
+            PanelPosition::Right => "\u{00AB}", // «
             PanelPosition::Bottom => "^",
         };
 
-        let mut rail: Column<DockMessage> = Column::new().spacing(2).width(28);
+        let mut rail: Column<DockMessage> = Column::new().spacing(2.0).width(28);
 
         rail = rail.push(
             button(text(expand_label).size(11))

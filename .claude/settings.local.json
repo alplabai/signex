@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "mcp__plugin_everything-claude-code_github__get_file_contents"
+    ]
+  }
+}
