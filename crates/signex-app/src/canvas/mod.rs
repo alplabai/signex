@@ -26,6 +26,8 @@ pub struct CanvasState {
     pub grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
+    /// Whether actual pan movement occurred (to distinguish click from drag).
+    pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
     /// Pending fit target — consumed on next update.
@@ -61,6 +63,8 @@ pub struct SchematicCanvas {
     pub drawing_mode: bool,
     /// Current tool name for preview display.
     pub tool_preview: Option<String>,
+    /// Current draw mode for wire preview constraint (90°, 45°, free).
+    pub draw_mode: crate::app::DrawMode,
 }
 
 impl SchematicCanvas {
@@ -82,6 +86,7 @@ impl SchematicCanvas {
             wire_preview: Vec::new(),
             drawing_mode: false,
             tool_preview: None,
+            draw_mode: crate::app::DrawMode::Ortho90,
         }
     }
 
@@ -190,21 +195,38 @@ impl canvas::Program<Message> for SchematicCanvas {
             | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
                 if let Some(pos) = cursor.position_in(bounds) {
                     state.panning = true;
+                    state.pan_moved = false;
                     state.last_pan_pos = Some(pos);
                 }
                 Some(canvas::Action::capture())
             }
 
-            // ── Right-click release → stop pan + cancel drawing ──
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right))
-            | Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                let was_panning = state.panning;
+            // ── Right-click release → stop pan, context menu or cancel drawing ──
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
+                let did_pan = state.pan_moved;
+                state.panning = false;
+                state.pan_moved = false;
+                state.last_pan_pos = None;
+                if !did_pan {
+                    if self.drawing_mode {
+                        // Right-click cancels wire drawing (Altium behavior)
+                        return Some(canvas::Action::publish(Message::CancelDrawing));
+                    }
+                    // Show context menu at screen position
+                    if let Some(cursor_pos) = cursor.position_in(bounds) {
+                        let screen_x = bounds.x + cursor_pos.x;
+                        let screen_y = bounds.y + cursor_pos.y;
+                        return Some(canvas::Action::publish(Message::ShowContextMenu(
+                            screen_x, screen_y,
+                        )));
+                    }
+                }
+                Some(canvas::Action::capture())
+            }
+            // ── Middle-click release → stop pan ──
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
                 state.panning = false;
                 state.last_pan_pos = None;
-                // Right-click cancels wire drawing (Altium behavior)
-                if self.drawing_mode && !was_panning {
-                    return Some(canvas::Action::publish(Message::CancelDrawing));
-                }
                 Some(canvas::Action::capture())
             }
 
@@ -216,6 +238,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                         if let Some(last) = state.last_pan_pos {
                             let dx = cursor_pos.x - last.x;
                             let dy = cursor_pos.y - last.y;
+                            if dx.abs() > 2.0 || dy.abs() > 2.0 {
+                                state.pan_moved = true;
+                            }
                             state.camera.pan(dx, dy);
                         }
                         state.last_pan_pos = Some(cursor_pos);
@@ -373,20 +398,68 @@ impl canvas::Program<Message> for SchematicCanvas {
                         frame.stroke(&seg, preview_stroke);
                     }
 
-                    // Rubber-band from last point to cursor
+                    // Rubber-band from last point to cursor (constrained by draw mode)
                     if let Some(last) = self.wire_preview.last() {
-                        let last_screen = state.camera.world_to_screen(
-                            iced::Point::new(last.x as f32, last.y as f32),
-                            bounds,
+                        let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let start = signex_types::schematic::Point::new(last.x, last.y);
+                        let end = signex_types::schematic::Point::new(
+                            cursor_world.x as f64,
+                            cursor_world.y as f64,
                         );
-                        let rubber = canvas::Path::line(last_screen, cursor_pos);
                         let rubber_stroke = canvas::Stroke::default()
-                            .with_color(Color {
-                                a: 0.6,
-                                ..wire_color_iced
-                            })
+                            .with_color(Color { a: 0.6, ..wire_color_iced })
                             .with_width(1.0);
-                        frame.stroke(&rubber, rubber_stroke);
+
+                        // Compute constrained segments based on draw mode
+                        let segments = match self.draw_mode {
+                            crate::app::DrawMode::FreeAngle => {
+                                vec![(start, end)]
+                            }
+                            crate::app::DrawMode::Ortho90 => {
+                                let dx = end.x - start.x;
+                                let dy = end.y - start.y;
+                                if dx.abs() < 0.01 || dy.abs() < 0.01 {
+                                    vec![(start, end)]
+                                } else {
+                                    let corner = signex_types::schematic::Point::new(end.x, start.y);
+                                    vec![(start, corner), (corner, end)]
+                                }
+                            }
+                            crate::app::DrawMode::Angle45 => {
+                                let dx = end.x - start.x;
+                                let dy = end.y - start.y;
+                                let adx = dx.abs();
+                                let ady = dy.abs();
+                                if adx < 0.01 || ady < 0.01 {
+                                    vec![(start, end)]
+                                } else if (adx - ady).abs() < adx * 0.4 {
+                                    let d = adx.min(ady);
+                                    let sx = if dx > 0.0 { 1.0 } else { -1.0 };
+                                    let sy = if dy > 0.0 { 1.0 } else { -1.0 };
+                                    let diag_end = signex_types::schematic::Point::new(
+                                        start.x + d * sx, start.y + d * sy,
+                                    );
+                                    if adx > ady {
+                                        vec![(start, diag_end), (diag_end, signex_types::schematic::Point::new(end.x, diag_end.y))]
+                                    } else {
+                                        vec![(start, diag_end), (diag_end, signex_types::schematic::Point::new(diag_end.x, end.y))]
+                                    }
+                                } else {
+                                    let corner = signex_types::schematic::Point::new(end.x, start.y);
+                                    vec![(start, corner), (corner, end)]
+                                }
+                            }
+                        };
+
+                        for (p1, p2) in &segments {
+                            let s1 = state.camera.world_to_screen(
+                                iced::Point::new(p1.x as f32, p1.y as f32), bounds,
+                            );
+                            let s2 = state.camera.world_to_screen(
+                                iced::Point::new(p2.x as f32, p2.y as f32), bounds,
+                            );
+                            frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
+                        }
                     }
                 }
 

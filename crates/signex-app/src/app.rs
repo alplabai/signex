@@ -95,7 +95,34 @@ pub enum Message {
     SaveFileAs(PathBuf),
     CycleDrawMode,
     CancelDrawing,
+    // Active Bar
+    ActiveBar(crate::active_bar::ActiveBarMsg),
+    // Context menu
+    ShowContextMenu(f32, f32),
+    CloseContextMenu,
+    ContextAction(ContextAction),
     Noop,
+}
+
+/// Actions available in the right-click context menu.
+#[derive(Debug, Clone)]
+pub enum ContextAction {
+    Copy,
+    Paste,
+    Delete,
+    SelectAll,
+    ZoomFit,
+    RotateSelected,
+    MirrorX,
+    MirrorY,
+}
+
+/// State for the floating context menu.
+#[derive(Debug, Clone)]
+pub struct ContextMenuState {
+    /// Screen position to render the menu at.
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +175,12 @@ pub struct Signex {
     pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
     pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
     pub draw_mode: DrawMode,
+    /// Context menu state (shown on right-click).
+    pub context_menu: Option<ContextMenuState>,
+    /// Last known global mouse position (for context menu positioning).
+    pub last_mouse_pos: (f32, f32),
+    /// Active Bar open dropdown menu.
+    pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -357,6 +390,7 @@ impl Signex {
                 selection_count: 0,
                 selection_info: vec![],
                 component_filter: String::new(),
+                collapsed_sections: std::collections::HashSet::new(),
             },
             left_width: 240.0,
             right_width: 220.0,
@@ -378,6 +412,9 @@ impl Signex {
             clipboard_no_connects: Vec::new(),
             clipboard_text_notes: Vec::new(),
             draw_mode: DrawMode::default(),
+            context_menu: None,
+            last_mouse_pos: (0.0, 0.0),
+            active_bar_menu: None,
         };
         (app, Task::none())
     }
@@ -477,13 +514,17 @@ impl Signex {
             _ => Message::Noop,
         });
 
-        // Mouse events for drag-to-resize (always subscribed, filtered in update)
+        // Mouse events for drag-to-resize and global position tracking
         let mouse_sub = iced::event::listen().map(|event| match event {
             iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                 Message::DragMove(position.x, position.y)
             }
             iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                 Message::DragEnd
+            }
+            // Any click dismisses context menu
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
+                Message::CloseContextMenu
             }
             _ => Message::Noop,
         });
@@ -521,7 +562,9 @@ impl Signex {
                     DragTarget::ComponentsSplit => self.panel_ctx.components_split,
                 };
             }
-            Message::DragMove(x, y) if self.dragging.is_some() => {
+            Message::DragMove(x, y) => {
+                // Always track global mouse position (for context menu positioning)
+                self.last_mouse_pos = (x, y);
                 if let Some(target) = self.dragging {
                     let pos = match target {
                         DragTarget::LeftPanel | DragTarget::RightPanel => x,
@@ -603,8 +646,8 @@ impl Signex {
                             self.wire_points.push(pt);
                             self.canvas.wire_preview = self.wire_points.clone();
                             self.canvas.drawing_mode = true;
-                            self.canvas.tool_preview =
-                                Some(format!("Draw Wire [{}]", self.draw_mode.label()));
+                            self.canvas.draw_mode = self.draw_mode;
+                            self.canvas.tool_preview = None;
                         } else if let Some(&start) = self.wire_points.last() {
                             // Apply draw mode constraints
                             let segments = constrain_segments(start, pt, self.draw_mode);
@@ -636,8 +679,8 @@ impl Signex {
                             self.wire_points.push(pt);
                             self.canvas.wire_preview = self.wire_points.clone();
                             self.canvas.drawing_mode = true;
-                            self.canvas.tool_preview =
-                                Some(format!("Draw Bus [{}]", self.draw_mode.label()));
+                            self.canvas.draw_mode = self.draw_mode;
+                            self.canvas.tool_preview = None;
                         } else if let Some(&start) = self.wire_points.last() {
                             let segments = constrain_segments(start, pt, self.draw_mode);
                             for seg in &segments {
@@ -706,18 +749,7 @@ impl Signex {
             }
             Message::CycleDrawMode => {
                 self.draw_mode = self.draw_mode.next();
-                // Update tool preview to show current mode
-                if self.wire_drawing || matches!(self.current_tool, Tool::Wire | Tool::Bus) {
-                    self.canvas.tool_preview = Some(format!(
-                        "{} [{}]",
-                        if self.current_tool == Tool::Bus {
-                            "Draw Bus"
-                        } else {
-                            "Draw Wire"
-                        },
-                        self.draw_mode.label()
-                    ));
-                }
+                self.canvas.draw_mode = self.draw_mode;
             }
             Message::CancelDrawing => {
                 // Right-click cancels wire/bus drawing (Altium behavior)
@@ -826,6 +858,14 @@ impl Signex {
                     )) => {
                         self.panel_ctx.component_filter = filter.clone();
                     }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleSection(
+                        key,
+                    )) => {
+                        let key = key.clone();
+                        if !self.panel_ctx.collapsed_sections.remove(&key) {
+                            self.panel_ctx.collapsed_sections.insert(key);
+                        }
+                    }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::DragComponentsSplit,
                     ) => {
@@ -911,40 +951,7 @@ impl Signex {
                             Ok(proj) => {
                                 self.project_path = Some(path.clone());
                                 self.project_data = Some(proj.clone());
-                                // Load the root schematic
-                                if let Some(root_sch) = &proj.schematic_root {
-                                    let dir = path.parent().unwrap_or(std::path::Path::new("."));
-                                    let sch_path = dir.join(root_sch);
-                                    // Path traversal guard: ensure resolved path stays within project dir
-                                    if let (Ok(canonical_sch), Ok(canonical_dir)) =
-                                        (sch_path.canonicalize(), dir.canonicalize())
-                                        && !canonical_sch.starts_with(&canonical_dir)
-                                    {
-                                        eprintln!(
-                                            "[security] Path traversal blocked: {}",
-                                            sch_path.display()
-                                        );
-                                        return Task::none();
-                                    }
-                                    match kicad_parser::parse_schematic_file(&sch_path) {
-                                        Ok(sheet) => {
-                                            let title = root_sch.replace(".kicad_sch", "");
-                                            self.tabs.push(TabInfo {
-                                                title,
-                                                path: sch_path.clone(),
-                                                schematic: Some(sheet.clone()),
-                                                dirty: false,
-                                            });
-                                            self.active_tab = self.tabs.len() - 1;
-                                            self.schematic = Some(sheet.clone());
-                                            self.canvas.schematic = Some(sheet);
-                                            self.canvas.fit_to_paper();
-                                        }
-                                        Err(e) => eprintln!("Failed to parse root schematic: {e}"),
-                                    }
-                                }
-                                self.canvas.clear_bg_cache();
-                                self.canvas.clear_content_cache();
+                                // Don't auto-load any schematic — user clicks in project tree to open
                                 self.refresh_panel_ctx();
                             }
                             Err(e) => eprintln!("Failed to parse project: {e}"),
@@ -1389,8 +1396,90 @@ impl Signex {
                 self.canvas.clear_content_cache();
                 self.commit_schematic();
             }
+            // Active Bar
+            Message::ActiveBar(msg) => {
+                use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
+                match msg {
+                    ActiveBarMsg::ToggleMenu(menu) => {
+                        if self.active_bar_menu == Some(menu) {
+                            self.active_bar_menu = None;
+                        } else {
+                            self.active_bar_menu = Some(menu);
+                        }
+                    }
+                    ActiveBarMsg::CloseMenus => {
+                        self.active_bar_menu = None;
+                    }
+                    ActiveBarMsg::Action(action) => {
+                        self.active_bar_menu = None;
+                        match action {
+                            ActiveBarAction::ToolSelect => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+                            }
+                            ActiveBarAction::DrawWire => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
+                            }
+                            ActiveBarAction::DrawBus => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus)));
+                            }
+                            ActiveBarAction::PlaceNetLabel => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                            }
+                            ActiveBarAction::PlaceComponent => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
+                            }
+                            ActiveBarAction::PlaceTextString => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                            }
+                            ActiveBarAction::DrawLine => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
+                            }
+                            ActiveBarAction::DrawRectangle => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+                            }
+                            ActiveBarAction::DrawFullCircle => {
+                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
+                            }
+                            ActiveBarAction::RotateSelection => {
+                                return self.update(Message::RotateSelected);
+                            }
+                            ActiveBarAction::FlipSelectedX => {
+                                return self.update(Message::MirrorSelectedX);
+                            }
+                            ActiveBarAction::FlipSelectedY => {
+                                return self.update(Message::MirrorSelectedY);
+                            }
+                            // Not yet implemented — no-op
+                            _ => {}
+                        }
+                    }
+                }
+                return Task::none();
+            }
+            // Context menu actions
+            Message::ShowContextMenu(x, y) => {
+                self.context_menu = Some(ContextMenuState { x, y });
+                return Task::none();
+            }
+            Message::CloseContextMenu => {
+                self.context_menu = None;
+                return Task::none();
+            }
+            Message::ContextAction(action) => {
+                self.context_menu = None;
+                match action {
+                    ContextAction::Copy => return self.update(Message::Copy),
+                    ContextAction::Paste => return self.update(Message::Paste),
+                    ContextAction::Delete => return self.update(Message::DeleteSelected),
+                    ContextAction::SelectAll => return self.update(Message::SelectAll),
+                    ContextAction::ZoomFit => return self.update(Message::CanvasEvent(CanvasEvent::FitAll)),
+                    ContextAction::RotateSelected => return self.update(Message::RotateSelected),
+                    ContextAction::MirrorX => return self.update(Message::MirrorSelectedX),
+                    ContextAction::MirrorY => return self.update(Message::MirrorSelectedY),
+                }
+            }
             // Idle events — return early to avoid triggering panel sync/re-render
-            Message::DragMove(_, _) | Message::DragEnd | Message::Noop => {
+            Message::DragEnd | Message::Noop => {
                 return Task::none();
             }
         }
@@ -1674,6 +1763,7 @@ impl Signex {
             selection_count: self.panel_ctx.selection_count,
             selection_info: self.panel_ctx.selection_info.clone(),
             component_filter: self.panel_ctx.component_filter.clone(),
+            collapsed_sections: self.panel_ctx.collapsed_sections.clone(),
         };
         // Build persistent project tree (toggle state preserved until next project load)
         self.panel_ctx.project_tree = crate::panels::build_project_tree(&self.panel_ctx);
@@ -1937,24 +2027,98 @@ impl Signex {
         self.canvas.clear_content_cache();
     }
 
+    /// Right-click context menu with actions based on current state.
+    fn view_context_menu(&self) -> Element<'_, Message> {
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
+
+        if !self.canvas.selected.is_empty() {
+            // Selection context
+            items.push(self.ctx_menu_item("Copy          Ctrl+C", ContextAction::Copy));
+            items.push(self.ctx_menu_item("Paste         Ctrl+V", ContextAction::Paste));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item("Delete        Del", ContextAction::Delete));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item("Rotate        Space", ContextAction::RotateSelected));
+            items.push(self.ctx_menu_item("Mirror X      X", ContextAction::MirrorX));
+            items.push(self.ctx_menu_item("Mirror Y      Y", ContextAction::MirrorY));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item("Select All    Ctrl+A", ContextAction::SelectAll));
+        } else {
+            // Empty canvas context
+            items.push(self.ctx_menu_item("Paste         Ctrl+V", ContextAction::Paste));
+            items.push(self.ctx_menu_item("Select All    Ctrl+A", ContextAction::SelectAll));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item("Zoom Fit      Home", ContextAction::ZoomFit));
+        }
+
+        container(column(items).spacing(0).width(160))
+            .padding([4, 0])
+            .style(crate::styles::context_menu)
+            .into()
+    }
+
+    fn ctx_menu_item<'a>(&self, label: &str, action: ContextAction) -> Element<'a, Message> {
+        iced::widget::button(
+            iced::widget::text(label.to_string())
+                .size(11)
+                .color(crate::styles::TEXT_PRIMARY),
+        )
+        .padding([4, 12])
+        .width(Length::Fill)
+        .on_press(Message::ContextAction(action))
+        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                    iced::Color::from_rgb(0.22, 0.22, 0.26),
+                )),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: iced::Border::default(),
+                text_color: crate::styles::TEXT_PRIMARY,
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    }
+
+    fn ctx_menu_sep<'a>(&self) -> Element<'a, Message> {
+        container(iced::widget::Space::new())
+            .width(Length::Fill)
+            .height(1)
+            .style(|_: &iced::Theme| container::Style {
+                background: Some(crate::styles::BORDER_SUBTLE.into()),
+                ..container::Style::default()
+            })
+            .into()
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let menu = menu_bar::view(self.theme_id, self.active_menu).map(Message::Menu);
         let tools = toolbar::view(self.current_tool).map(Message::Tool);
 
-        // Left panel (resizable width)
+        // Collapse states (needed before building panels and handles)
+        let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
+        let right_collapsed = self.dock.is_collapsed(PanelPosition::Right);
+        let bottom_collapsed = self.dock.is_collapsed(PanelPosition::Bottom);
+
+        // Left panel (resizable width, collapsible)
         let left_panel = self
             .dock
             .view_region(PanelPosition::Left, &self.panel_ctx)
             .map(Message::Dock);
+        let left_w = if left_collapsed { 28.0 } else { self.left_width };
         let left = container(left_panel)
-            .width(self.left_width)
+            .width(left_w)
             .height(Length::Fill)
             .style(crate::styles::panel_region);
 
-        // Left resize handle
+        // Left resize handle (hidden when collapsed)
+        let left_handle_w = if left_collapsed { 0 } else { 5 };
         let left_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
-                .width(5)
+                .width(left_handle_w)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
@@ -1963,10 +2127,56 @@ impl Signex {
 
         // Center — canvas when a schematic is loaded, empty otherwise
         let center: Element<'_, Message> = if self.schematic.is_some() {
-            canvas(&self.canvas)
+            let canvas_widget: Element<'_, Message> = canvas(&self.canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
+                .into();
+
+            // Active Bar (Altium-style floating toolbar) — overlaid on canvas via Stack
+            let bar = crate::active_bar::view_bar(
+                self.active_bar_menu,
+                self.current_tool,
+                self.draw_mode,
+            )
+            .map(Message::ActiveBar);
+
+            let mut canvas_stack = iced::widget::Stack::new()
+                .push(canvas_widget);
+
+            // Active Bar dropdown overlay (dismiss + dropdown BELOW the bar layer)
+            if let Some(menu) = self.active_bar_menu {
+                let dropdown = crate::active_bar::view_dropdown(menu)
+                    .map(Message::ActiveBar);
+                let x_off = crate::active_bar::dropdown_x_offset(menu);
+                // Dismiss layer (below bar so it doesn't block bar clicks)
+                canvas_stack = canvas_stack.push(
+                    iced::widget::mouse_area(
+                        container(iced::widget::Space::new())
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_press(Message::ActiveBar(
+                        crate::active_bar::ActiveBarMsg::CloseMenus,
+                    )),
+                );
+                // Dropdown positioned below active bar (~36px from top)
+                canvas_stack = canvas_stack.push(column![
+                    iced::widget::Space::new().height(36),
+                    row![iced::widget::Space::new().width(x_off), dropdown,],
+                ]);
+            }
+
+            // Active Bar always on top (so buttons remain clickable when dropdown is open)
+            canvas_stack = canvas_stack.push(
+                container(
+                    container(bar).center_x(Length::Shrink),
+                )
+                .width(Length::Fill)
+                .padding([6, 0])
+                .align_x(iced::alignment::Horizontal::Center),
+            );
+
+            canvas_stack.into()
         } else {
             container(
                 column![
@@ -1988,47 +2198,51 @@ impl Signex {
             .into()
         };
 
-        // Right resize handle
+        // Right resize handle (hidden when collapsed)
+        let right_handle_w = if right_collapsed { 0 } else { 5 };
         let right_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
-                .width(5)
+                .width(right_handle_w)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle),
         )
         .interaction(iced::mouse::Interaction::ResizingHorizontally)
         .on_press(Message::DragStart(DragTarget::RightPanel));
 
-        // Right panel (resizable width)
+        // Right panel (resizable width, collapsible)
         let right_panel = self
             .dock
             .view_region(PanelPosition::Right, &self.panel_ctx)
             .map(Message::Dock);
+        let right_w = if right_collapsed { 28.0 } else { self.right_width };
         let right = container(right_panel)
-            .width(self.right_width)
+            .width(right_w)
             .height(Length::Fill)
             .style(crate::styles::panel_region);
 
         // Center row: left | handle | center | handle | right
         let center_row = row![left, left_handle, center, right_handle, right];
 
-        // Bottom resize handle
+        // Bottom resize handle (hidden when collapsed)
+        let bottom_handle_h = if bottom_collapsed { 0 } else { 5 };
         let bottom_handle = iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
-                .height(5)
+                .height(bottom_handle_h)
                 .style(crate::styles::resize_handle),
         )
         .interaction(iced::mouse::Interaction::ResizingVertically)
         .on_press(Message::DragStart(DragTarget::BottomPanel));
 
-        // Bottom panel (resizable height)
+        // Bottom panel (resizable height, collapsible)
         let bottom_panel = self
             .dock
             .view_region(PanelPosition::Bottom, &self.panel_ctx)
             .map(Message::Dock);
+        let bottom_h = if bottom_collapsed { 28.0 } else { self.bottom_height };
         let bottom = container(bottom_panel)
             .width(Length::Fill)
-            .height(self.bottom_height)
+            .height(bottom_h)
             .style(crate::styles::panel_region);
 
         // Status bar
@@ -2054,15 +2268,20 @@ impl Signex {
             .push(bottom)
             .push(status);
 
-        // Overlay dropdown menu when active
-        if let Some(idx) = self.active_menu {
-            let x_offset = menu_bar::button_x_offset(idx);
-            let dropdown = menu_bar::view_dropdown(idx).map(Message::Menu);
+        // Overlay: dropdown menus and context menus via Stack
+        let has_menu = self.active_menu.is_some();
+        let has_context = self.context_menu.is_some();
 
-            iced::widget::Stack::new()
-                .push(main)
-                // Dismiss layer — covers area below menu bar, catches outside clicks
-                .push(column![
+        if has_menu || has_context {
+            let mut stack = iced::widget::Stack::new().push(main);
+
+            // Dropdown menu overlay
+            if let Some(idx) = self.active_menu {
+                let x_offset = menu_bar::button_x_offset(idx);
+                let dropdown = menu_bar::view_dropdown(idx).map(Message::Menu);
+
+                // Dismiss layer
+                stack = stack.push(column![
                     iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
                     iced::widget::mouse_area(
                         container(iced::widget::Space::new())
@@ -2070,13 +2289,34 @@ impl Signex {
                             .height(Length::Fill),
                     )
                     .on_press(Message::Menu(menu_bar::MenuMessage::CloseMenus)),
-                ])
-                // Dropdown positioned below menu bar, aligned to button
-                .push(column![
+                ]);
+                // Dropdown positioned below menu bar
+                stack = stack.push(column![
                     iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
                     row![iced::widget::Space::new().width(x_offset), dropdown,],
-                ])
-                .into()
+                ]);
+            }
+
+            // Context menu overlay (right-click)
+            if let Some(ref ctx_menu) = self.context_menu {
+                let menu = self.view_context_menu();
+                // Dismiss layer
+                stack = stack.push(
+                    iced::widget::mouse_area(
+                        container(iced::widget::Space::new())
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_press(Message::CloseContextMenu),
+                );
+                // Menu positioned at click point
+                stack = stack.push(column![
+                    iced::widget::Space::new().height(ctx_menu.y),
+                    row![iced::widget::Space::new().width(ctx_menu.x), menu,],
+                ]);
+            }
+
+            stack.into()
         } else {
             main.into()
         }

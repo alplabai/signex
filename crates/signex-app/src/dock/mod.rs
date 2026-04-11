@@ -92,6 +92,15 @@ impl DockArea {
         }
     }
 
+    /// Check if a dock region is collapsed.
+    pub fn is_collapsed(&self, position: PanelPosition) -> bool {
+        match position {
+            PanelPosition::Left => self.left.collapsed,
+            PanelPosition::Right => self.right.collapsed,
+            PanelPosition::Bottom => self.bottom.collapsed,
+        }
+    }
+
     pub fn view_region<'a>(
         &'a self,
         position: PanelPosition,
@@ -211,31 +220,114 @@ impl DockArea {
     }
 
     fn view_rail(&self, position: PanelPosition, region: &DockRegion) -> Element<'_, DockMessage> {
-        let expand_label = match position {
-            PanelPosition::Left => "\u{00BB}",  // »
-            PanelPosition::Right => "\u{00AB}", // «
-            PanelPosition::Bottom => "^",
-        };
+        // Altium-style collapsed panel: vertical tabs with full panel names
+        // Each tab is a button with the panel name, stacked vertically
+        let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
 
-        let mut rail: Column<DockMessage> = Column::new().spacing(2.0).width(28);
+        if is_vertical {
+            let mut rail: Column<DockMessage> = Column::new().spacing(2.0);
 
-        rail = rail.push(
-            button(text(expand_label).size(11))
-                .padding([3, 6])
-                .style(button::text)
-                .on_press(DockMessage::ToggleCollapse(position)),
-        );
+            for (i, panel) in region.panels.iter().enumerate() {
+                let label = panel.label();
+                let is_active = i == region.active;
+                let text_c = if is_active {
+                    styles::TEXT_PRIMARY
+                } else {
+                    styles::TEXT_MUTED
+                };
+                let border_c = styles::BORDER_COLOR;
 
-        for (i, panel) in region.panels.iter().enumerate() {
-            let first_char = panel.label().chars().next().unwrap_or('?').to_string();
-            rail = rail.push(
-                button(text(first_char).size(11))
-                    .padding([3, 6])
-                    .style(button::text)
-                    .on_press(DockMessage::SelectTab(position, i)),
-            );
+                // Vertical text: one char per line to simulate rotation
+                let vertical: String = label.chars().map(|c| format!("{c}\n")).collect();
+                let vertical = vertical.trim_end().to_string();
+
+                rail = rail.push(
+                    button(
+                        container(
+                            text(vertical)
+                                .size(10)
+                                .color(text_c)
+                                .align_x(iced::alignment::Horizontal::Center)
+                                .line_height(iced::widget::text::LineHeight::Absolute(
+                                    iced::Pixels(11.0),
+                                )),
+                        )
+                        .width(22)
+                        .padding([6, 2])
+                        .align_x(iced::alignment::Horizontal::Center),
+                    )
+                    .padding(0)
+                    .on_press(DockMessage::SelectTab(position, i))
+                    .style(move |_: &Theme, status: button::Status| {
+                        let bg = match (is_active, status) {
+                            (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
+                            (false, button::Status::Hovered) => {
+                                Some(Background::Color(styles::TAB_ACTIVE_BG))
+                            }
+                            _ => None,
+                        };
+                        button::Style {
+                            background: bg,
+                            border: Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_c,
+                            },
+                            ..button::Style::default()
+                        }
+                    }),
+                );
+            }
+
+            container(rail)
+                .width(28)
+                .height(Length::Fill)
+                .padding([4, 2])
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(styles::PANEL_BG)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 0.0.into(),
+                        color: styles::BORDER_SUBTLE,
+                    },
+                    ..container::Style::default()
+                })
+                .into()
+        } else {
+            // Bottom panel collapsed: horizontal thin strip with tab labels
+            let mut rail = row![].spacing(2.0);
+
+            for (i, panel) in region.panels.iter().enumerate() {
+                let label = panel.label();
+                let is_active = i == region.active;
+                let text_c = if is_active {
+                    styles::TEXT_PRIMARY
+                } else {
+                    styles::TEXT_MUTED
+                };
+
+                rail = rail.push(
+                    button(text(label).size(10).color(text_c))
+                        .padding([2, 8])
+                        .on_press(DockMessage::SelectTab(position, i))
+                        .style(button::text),
+                );
+            }
+
+            container(rail)
+                .width(Length::Fill)
+                .height(28)
+                .padding([2, 4])
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(styles::PANEL_BG)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 0.0.into(),
+                        color: styles::BORDER_SUBTLE,
+                    },
+                    ..container::Style::default()
+                })
+                .into()
         }
-
-        container(rail).width(28).height(Length::Fill).into()
     }
 }
