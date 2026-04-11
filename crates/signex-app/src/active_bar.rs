@@ -59,22 +59,57 @@ const DD_POLYGON: &[u8] = include_bytes!("../assets/icons/dropdown/polygon.svg")
 const DD_BEZIER: &[u8] = include_bytes!("../assets/icons/dropdown/bezier.svg");
 const DD_HARNESS: &[u8] = include_bytes!("../assets/icons/dropdown/harness.svg");
 const DD_HARNESS_CONN: &[u8] = include_bytes!("../assets/icons/dropdown/harness_conn.svg");
+// Align icons
+const DD_ALIGN_LEFT: &[u8] = include_bytes!("../assets/icons/dropdown/align_left.svg");
+const DD_ALIGN_RIGHT: &[u8] = include_bytes!("../assets/icons/dropdown/align_right.svg");
+const DD_ALIGN_HCENTER: &[u8] = include_bytes!("../assets/icons/dropdown/align_hcenter.svg");
+const DD_DIST_HORIZ: &[u8] = include_bytes!("../assets/icons/dropdown/dist_horiz.svg");
+const DD_ALIGN_TOP: &[u8] = include_bytes!("../assets/icons/dropdown/align_top.svg");
+const DD_ALIGN_BOTTOM: &[u8] = include_bytes!("../assets/icons/dropdown/align_bottom.svg");
+const DD_ALIGN_VCENTER: &[u8] = include_bytes!("../assets/icons/dropdown/align_vcenter.svg");
+const DD_DIST_VERT: &[u8] = include_bytes!("../assets/icons/dropdown/dist_vert.svg");
+const DD_ALIGN_GRID: &[u8] = include_bytes!("../assets/icons/dropdown/align_grid.svg");
+// Move/transform icons
+const DD_DRAG: &[u8] = include_bytes!("../assets/icons/dropdown/drag.svg");
+const DD_MOVE_SEL: &[u8] = include_bytes!("../assets/icons/dropdown/move_sel.svg");
+const DD_MOVE_XY: &[u8] = include_bytes!("../assets/icons/dropdown/move_xy.svg");
+const DD_ROTATE: &[u8] = include_bytes!("../assets/icons/dropdown/rotate.svg");
+const DD_ROTATE_CW: &[u8] = include_bytes!("../assets/icons/dropdown/rotate_cw.svg");
+const DD_BRING_FRONT: &[u8] = include_bytes!("../assets/icons/dropdown/bring_front.svg");
+const DD_SEND_BACK: &[u8] = include_bytes!("../assets/icons/dropdown/send_back.svg");
+const DD_FLIP_X: &[u8] = include_bytes!("../assets/icons/dropdown/flip_x.svg");
+const DD_FLIP_Y: &[u8] = include_bytes!("../assets/icons/dropdown/flip_y.svg");
+// Power extras
+const DD_PWR_PLUS12: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_plus12.svg");
+const DD_PWR_PLUS5: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_plus5.svg");
+const DD_PWR_MINUS5: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_minus5.svg");
+const DD_PWR_WAVE: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_wave.svg");
+const DD_PWR_SIG_GND: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_signal_gnd.svg");
+// Sheet symbol icons
+const DD_SHEET_SYM: &[u8] = include_bytes!("../assets/icons/dropdown/sheet_symbol.svg");
+const DD_SHEET_ENTRY: &[u8] = include_bytes!("../assets/icons/dropdown/sheet_entry.svg");
+const DD_DEVICE_SHEET: &[u8] = include_bytes!("../assets/icons/dropdown/device_sheet.svg");
+const DD_REUSE_BLOCK: &[u8] = include_bytes!("../assets/icons/dropdown/reuse_block.svg");
+// Misc
+const DD_GRAPHIC: &[u8] = include_bytes!("../assets/icons/dropdown/graphic.svg");
 
 // ─── Messages ────────────────────────────────────────────────
 
 /// Which Active Bar dropdown menu is open (by button index).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveBarMenu {
-    Filter,     // 0
-    Select,     // 1 (move/transform)
-    Align,      // 2
-    Wiring,     // 3
-    Power,      // 4
-    Harness,    // 5
-    Port,       // 6
-    Directives, // 7
-    TextTools,  // 8
-    Shapes,     // 9
+    Filter,
+    SelectMode,  // Lasso, Inside Area, etc.
+    Select,      // Move/transform
+    Align,
+    Wiring,
+    Power,
+    Harness,
+    SheetSymbol, // Sheet Symbol, Sheet Entry, Device Sheet Symbol
+    Port,
+    Directives,
+    TextTools,
+    Shapes,
     NetColor,   // 10
 }
 
@@ -88,16 +123,35 @@ pub enum ActiveBarMsg {
 /// All actions available from Active Bar buttons and dropdown items.
 #[derive(Debug, Clone)]
 pub enum ActiveBarAction {
-    // Selection/Move
+    // Selection modes
     ToolSelect,
+    LassoSelect,
+    InsideArea,
+    OutsideArea,
+    TouchingRectangle,
+    TouchingLine,
+    SelectAll,
+    SelectConnection,
+    ToggleSelection,
+    // Move/Transform
     Drag,
     MoveSelection,
+    MoveSelectionXY,
+    DragSelection,
+    MoveToFront,
     RotateSelection,
     RotateSelectionCW,
     FlipSelectedX,
     FlipSelectedY,
     BringToFront,
     SendToBack,
+    BringToFrontOf,
+    SendToBackOf,
+    // Sheet symbols
+    PlaceSheetSymbol,
+    PlaceSheetEntry,
+    PlaceDeviceSheetSymbol,
+    PlaceReuseBlock,
     // Align
     AlignLeft,
     AlignRight,
@@ -214,11 +268,11 @@ pub fn view_bar(
         None));
     items.push(sep());
 
-    // 3. Select — left: select tool, right: select modes
+    // 3. Select — left: select tool, right: selection mode dropdown
     items.push(ab_icon_btn(ICON_SELECT,
         current_tool == crate::app::Tool::Select,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select))));
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode))));
     // 4. Move — left: move, right: move/transform dropdown
     items.push(ab_icon_btn(ICON_MOVE, false,
         ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
@@ -244,7 +298,11 @@ pub fn view_bar(
     items.push(ab_icon_btn(ICON_HARNESS, false,
         ActiveBarMsg::Action(ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness))));
-    // 9. Port — left: place port, right: port dropdown
+    // 9. Sheet Symbol — left: place sheet symbol, right: sheet symbol dropdown
+    items.push(ab_icon_btn(ICON_SHEETSYM, false,
+        ActiveBarMsg::Action(ActiveBarAction::PlaceSheetSymbol),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol))));
+    // 10. Port — left: place port, right: port dropdown
     items.push(ab_icon_btn(ICON_PORT, false,
         ActiveBarMsg::Action(ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port))));
@@ -342,32 +400,47 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
             dd_item("Drawing Objects", ActiveBarAction::ToolSelect),
             dd_item("Other", ActiveBarAction::ToolSelect),
         ],
+        ActiveBarMenu::SelectMode => vec![
+            dd_item("Lasso Select", ActiveBarAction::LassoSelect),
+            dd_item("Inside Area", ActiveBarAction::InsideArea),
+            dd_item("Outside Area", ActiveBarAction::OutsideArea),
+            dd_item("Touching Rectangle", ActiveBarAction::TouchingRectangle),
+            dd_item("Touching Line", ActiveBarAction::TouchingLine),
+            dd_item("All", ActiveBarAction::SelectAll),
+            dd_item("Connection", ActiveBarAction::SelectConnection),
+            dd_sep(),
+            dd_item("Toggle Selection", ActiveBarAction::ToggleSelection),
+        ],
         ActiveBarMenu::Select => vec![
-            dd_item("Drag", ActiveBarAction::Drag),
-            dd_item("Move", ActiveBarAction::MoveSelection),
-            dd_item("Move Selection", ActiveBarAction::MoveSelection),
+            dd_item_svg(DD_DRAG, "Drag", ActiveBarAction::Drag),
+            dd_item_svg(DD_DRAG, "Move", ActiveBarAction::MoveSelection),
+            dd_item_svg(DD_MOVE_SEL, "Move Selection", ActiveBarAction::MoveSelection),
+            dd_item_svg(DD_MOVE_XY, "Move Selection by X, Y...", ActiveBarAction::MoveSelectionXY),
+            dd_item_svg(DD_DRAG, "Drag Selection", ActiveBarAction::DragSelection),
+            dd_item("Move To Front", ActiveBarAction::MoveToFront),
+            dd_item_svg(DD_ROTATE, "Rotate Selection", ActiveBarAction::RotateSelection),
+            dd_item_svg(DD_ROTATE_CW, "Rotate Selection Clockwise", ActiveBarAction::RotateSelectionCW),
             dd_sep(),
-            dd_item("Rotate Selection", ActiveBarAction::RotateSelection),
-            dd_item("Rotate Selection Clockwise", ActiveBarAction::RotateSelectionCW),
+            dd_item_svg(DD_BRING_FRONT, "Bring To Front", ActiveBarAction::BringToFront),
+            dd_item_svg(DD_SEND_BACK, "Send To Back", ActiveBarAction::SendToBack),
+            dd_item_svg(DD_BRING_FRONT, "Bring To Front Of", ActiveBarAction::BringToFrontOf),
+            dd_item_svg(DD_SEND_BACK, "Send To Back Of", ActiveBarAction::SendToBackOf),
             dd_sep(),
-            dd_item("Bring To Front", ActiveBarAction::BringToFront),
-            dd_item("Send To Back", ActiveBarAction::SendToBack),
-            dd_sep(),
-            dd_item("Flip Selected Sheet Symbols Along X", ActiveBarAction::FlipSelectedX),
-            dd_item("Flip Selected Sheet Symbols Along Y", ActiveBarAction::FlipSelectedY),
+            dd_item_svg(DD_FLIP_X, "Flip Selected Sheet Symbols Along X", ActiveBarAction::FlipSelectedX),
+            dd_item_svg(DD_FLIP_Y, "Flip Selected Sheet Symbols Along Y", ActiveBarAction::FlipSelectedY),
         ],
         ActiveBarMenu::Align => vec![
-            dd_item("Align Left", ActiveBarAction::AlignLeft),
-            dd_item("Align Right", ActiveBarAction::AlignRight),
-            dd_item("Align Horizontal Centers", ActiveBarAction::AlignHorizontalCenters),
-            dd_item("Distribute Horizontally", ActiveBarAction::DistributeHorizontally),
+            dd_item_svg(DD_ALIGN_LEFT, "Align Left", ActiveBarAction::AlignLeft),
+            dd_item_svg(DD_ALIGN_RIGHT, "Align Right", ActiveBarAction::AlignRight),
+            dd_item_svg(DD_ALIGN_HCENTER, "Align Horizontal Centers", ActiveBarAction::AlignHorizontalCenters),
+            dd_item_svg(DD_DIST_HORIZ, "Distribute Horizontally", ActiveBarAction::DistributeHorizontally),
             dd_sep(),
-            dd_item("Align Top", ActiveBarAction::AlignTop),
-            dd_item("Align Bottom", ActiveBarAction::AlignBottom),
-            dd_item("Align Vertical Centers", ActiveBarAction::AlignVerticalCenters),
-            dd_item("Distribute Vertically", ActiveBarAction::DistributeVertically),
+            dd_item_svg(DD_ALIGN_TOP, "Align Top", ActiveBarAction::AlignTop),
+            dd_item_svg(DD_ALIGN_BOTTOM, "Align Bottom", ActiveBarAction::AlignBottom),
+            dd_item_svg(DD_ALIGN_VCENTER, "Align Vertical Centers", ActiveBarAction::AlignVerticalCenters),
+            dd_item_svg(DD_DIST_VERT, "Distribute Vertically", ActiveBarAction::DistributeVertically),
             dd_sep(),
-            dd_item("Align To Grid", ActiveBarAction::AlignToGrid),
+            dd_item_svg(DD_ALIGN_GRID, "Align To Grid", ActiveBarAction::AlignToGrid),
         ],
         ActiveBarMenu::Wiring => vec![
             dd_item_svg(DD_WIRE, "Wire", ActiveBarAction::DrawWire),
@@ -378,22 +451,28 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
         ActiveBarMenu::Power => vec![
             dd_item_svg(DD_GND, "Place GND power port", ActiveBarAction::PlacePowerGND),
             dd_item_svg(DD_VCC, "Place VCC power port", ActiveBarAction::PlacePowerVCC),
-            dd_item_svg(DD_PWR_ARROW, "Place +12 power port", ActiveBarAction::PlacePowerPlus12),
-            dd_item_svg(DD_PWR_ARROW, "Place +5 power port", ActiveBarAction::PlacePowerPlus5),
-            dd_item_svg(DD_PWR_ARROW, "Place -5 power port", ActiveBarAction::PlacePowerMinus5),
+            dd_item_svg(DD_PWR_PLUS12, "Place +12 power port", ActiveBarAction::PlacePowerPlus12),
+            dd_item_svg(DD_PWR_PLUS5, "Place +5 power port", ActiveBarAction::PlacePowerPlus5),
+            dd_item_svg(DD_PWR_MINUS5, "Place -5 power port", ActiveBarAction::PlacePowerMinus5),
             dd_sep(),
             dd_item_svg(DD_PWR_ARROW, "Place Arrow style power port", ActiveBarAction::PlacePowerArrow),
-            dd_item_svg(DD_PWR_BAR, "Place Wave style power port", ActiveBarAction::PlacePowerWave),
+            dd_item_svg(DD_PWR_WAVE, "Place Wave style power port", ActiveBarAction::PlacePowerWave),
             dd_item_svg(DD_PWR_BAR, "Place Bar style power port", ActiveBarAction::PlacePowerBar),
             dd_item_svg(DD_PWR_CIRCLE, "Place Circle style power port", ActiveBarAction::PlacePowerCircle),
             dd_sep(),
-            dd_item_svg(DD_GND, "Place Signal Ground power port", ActiveBarAction::PlacePowerSignalGND),
+            dd_item_svg(DD_PWR_SIG_GND, "Place Signal Ground power port", ActiveBarAction::PlacePowerSignalGND),
             dd_item_svg(DD_PWR_EARTH, "Place Earth power port", ActiveBarAction::PlacePowerEarth),
         ],
         ActiveBarMenu::Harness => vec![
             dd_item_svg(DD_HARNESS, "Signal Harness", ActiveBarAction::PlaceSignalHarness),
             dd_item_svg(DD_HARNESS_CONN, "Harness Connector", ActiveBarAction::PlaceHarnessConnector),
             dd_item_svg(DD_HARNESS, "Harness Entry", ActiveBarAction::PlaceHarnessEntry),
+        ],
+        ActiveBarMenu::SheetSymbol => vec![
+            dd_item_svg(DD_SHEET_SYM, "Sheet Symbol", ActiveBarAction::PlaceSheetSymbol),
+            dd_item_svg(DD_SHEET_ENTRY, "Sheet Entry", ActiveBarAction::PlaceSheetEntry),
+            dd_item_svg(DD_DEVICE_SHEET, "Device Sheet Symbol", ActiveBarAction::PlaceDeviceSheetSymbol),
+            dd_item_svg(DD_REUSE_BLOCK, "Reuse Block...", ActiveBarAction::PlaceReuseBlock),
         ],
         ActiveBarMenu::Port => vec![
             dd_item_svg(DD_PORT, "Port", ActiveBarAction::PlacePort),
@@ -423,7 +502,7 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
             dd_item_svg(DD_POLYGON, "Polygon", ActiveBarAction::DrawPolygon),
             dd_item_svg(DD_BEZIER, "Bezier", ActiveBarAction::DrawBezier),
             dd_sep(),
-            dd_item("Graphic...", ActiveBarAction::PlaceGraphic),
+            dd_item_svg(DD_GRAPHIC, "Graphic...", ActiveBarAction::PlaceGraphic),
         ],
         ActiveBarMenu::NetColor => {
             let color_item = |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
@@ -467,8 +546,7 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
         }
     };
 
-    container(column(items).spacing(0))
-        .width(Length::Shrink)
+    container(column(items).spacing(0).width(220))
         .padding([6, 0])
         .style(|_: &Theme| container::Style {
             background: Some(Color::from_rgb(0.11, 0.12, 0.15).into()),
@@ -493,23 +571,25 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
     // Each icon = 22px mouse_area + 1px spacing = 23px per button
     // Separator = 1px + 1px spacing = 2px
     // Bar padding = [3, 4] → 4px left padding
-    // Layout: [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Port][Dir] | [Text][Shapes][NetColor]
-    //  btn:     0      1  s    2      3      4    s   5      6    s    7      8      9    s  10     11     12
-    let btn = 23.0_f32; // button width + spacing
-    let s = 2.0_f32;    // separator width + spacing
-    let pad = 4.0_f32;  // left padding of bar container
+    // Layout: [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
+    //  btn:     0      1  s    2      3      4    s   5      6    s    7      8     9    10    s  11     12     13
+    let btn = 23.0_f32;
+    let s = 2.0_f32;
+    let pad = 4.0_f32;
     let px = pad + match menu {
-        ActiveBarMenu::Filter => 0.0,                          // btn 0
-        ActiveBarMenu::Select => 2.0 * btn + s,                // btn 2
-        ActiveBarMenu::Align => 4.0 * btn + s,                 // btn 4
-        ActiveBarMenu::Wiring => 5.0 * btn + 2.0 * s,          // btn 5
-        ActiveBarMenu::Power => 6.0 * btn + 2.0 * s,           // btn 6
-        ActiveBarMenu::Harness => 7.0 * btn + 3.0 * s,         // btn 7
-        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,            // btn 8
-        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,      // btn 9
-        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,      // btn 10
-        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,         // btn 11
-        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,       // btn 12
+        ActiveBarMenu::Filter => 0.0,
+        ActiveBarMenu::SelectMode => 2.0 * btn + s,
+        ActiveBarMenu::Select => 3.0 * btn + s,
+        ActiveBarMenu::Align => 4.0 * btn + s,
+        ActiveBarMenu::Wiring => 5.0 * btn + 2.0 * s,
+        ActiveBarMenu::Power => 6.0 * btn + 2.0 * s,
+        ActiveBarMenu::Harness => 7.0 * btn + 3.0 * s,
+        ActiveBarMenu::SheetSymbol => 8.0 * btn + 3.0 * s,
+        ActiveBarMenu::Port => 9.0 * btn + 3.0 * s,
+        ActiveBarMenu::Directives => 10.0 * btn + 3.0 * s,
+        ActiveBarMenu::TextTools => 11.0 * btn + 4.0 * s,
+        ActiveBarMenu::Shapes => 12.0 * btn + 4.0 * s,
+        ActiveBarMenu::NetColor => 13.0 * btn + 4.0 * s,
     };
     px
 }

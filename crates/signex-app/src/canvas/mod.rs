@@ -190,9 +190,33 @@ impl canvas::Program<Message> for SchematicCanvas {
                 None
             }
 
-            // ── Right-click press → start pan ──
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-            | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
+            // ── Right-click press → start pan or Active Bar dropdown ──
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                if let Some(pos) = cursor.position_in(bounds) {
+                    // Active Bar zone: top ~40px, centered
+                    if pos.y < 40.0 {
+                        // Calculate which Active Bar button was right-clicked
+                        let bar_width: f32 = 338.0;
+                        let bar_x = (bounds.width - bar_width) / 2.0;
+                        let rel_x = pos.x - bar_x;
+                        if rel_x >= 0.0 && rel_x < bar_width {
+                            if let Some(menu) = active_bar_hit(rel_x) {
+                                return Some(canvas::Action::publish(
+                                    Message::ActiveBar(
+                                        crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                    state.panning = true;
+                    state.pan_moved = false;
+                    state.last_pan_pos = Some(pos);
+                }
+                Some(canvas::Action::capture())
+            }
+            // ── Middle-click press → start pan ──
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
                 if let Some(pos) = cursor.position_in(bounds) {
                     state.panning = true;
                     state.pan_moved = false;
@@ -494,6 +518,59 @@ impl canvas::Program<Message> for SchematicCanvas {
             mouse::Interaction::default()
         }
     }
+}
+
+// ─── Active Bar hit detection for right-click ────────────────
+
+/// Map a relative x position within the Active Bar to a dropdown menu.
+/// Returns None for buttons without dropdowns (Select, Add Component).
+fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
+    use crate::active_bar::ActiveBarMenu;
+    // Each btn=23px (22+1spacing), sep=2px (1+1spacing), pad=4px
+    // [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
+    //   0     23  48   50    73    96     121  123   146   171  173    196   219   242   267  269   292    315
+    let x = x - 4.0;
+    let b = 23; // button width
+    let s = 2;  // separator
+    let xi = x as i32;
+    if xi < 0 { return None; }
+    // btn 0: Filter
+    if xi < b { return Some(ActiveBarMenu::Filter); }
+    // btn 1: Add Component (no dropdown)
+    if xi < 2 * b { return None; }
+    // sep
+    let off = 2 * b + s;
+    // btn 2: Select
+    if xi >= off && xi < off + b { return Some(ActiveBarMenu::SelectMode); }
+    // btn 3: Move
+    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Select); }
+    // btn 4: Align
+    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::Align); }
+    // sep
+    let off = off + 3 * b + s;
+    // btn 5: Wire
+    if xi >= off && xi < off + b { return Some(ActiveBarMenu::Wiring); }
+    // btn 6: Power
+    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Power); }
+    // sep
+    let off = off + 2 * b + s;
+    // btn 7: Harness
+    if xi >= off && xi < off + b { return Some(ActiveBarMenu::Harness); }
+    // btn 8: Sheet Symbol
+    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::SheetSymbol); }
+    // btn 9: Port
+    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::Port); }
+    // btn 10: Directives
+    if xi >= off + 3 * b && xi < off + 4 * b { return Some(ActiveBarMenu::Directives); }
+    // sep
+    let off = off + 4 * b + s;
+    // btn 11: Text
+    if xi >= off && xi < off + b { return Some(ActiveBarMenu::TextTools); }
+    // btn 12: Shapes
+    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Shapes); }
+    // btn 13: Net Color
+    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::NetColor); }
+    None
 }
 
 // ─── Canvas events sent to the app ────────────────────────────
