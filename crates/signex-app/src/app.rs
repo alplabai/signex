@@ -81,6 +81,13 @@ pub enum Message {
     DragEnd,
     FileOpened(Option<PathBuf>),
     SchematicLoaded(Box<SchematicSheet>),
+    // v0.5: Editing operations
+    DeleteSelected,
+    Undo,
+    Redo,
+    RotateSelected,
+    MirrorSelectedX,
+    MirrorSelectedY,
     Noop,
 }
 
@@ -120,6 +127,11 @@ pub struct Signex {
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
+    // v0.5: Undo/Redo
+    pub undo_stack: crate::undo::UndoStack,
+    // v0.5: Wire drawing state
+    pub wire_points: Vec<signex_types::schematic::Point>,
+    pub wire_drawing: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +246,9 @@ impl Signex {
             dragging: None,
             drag_start_pos: None,
             drag_start_size: 0.0,
+            undo_stack: crate::undo::UndoStack::new(100),
+            wire_points: Vec::new(),
+            wire_drawing: false,
         };
         (app, Task::none())
     }
@@ -293,6 +308,31 @@ impl Signex {
                 }
                 (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                     Message::CanvasEvent(CanvasEvent::FitAll)
+                }
+                // Delete selected
+                (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
+                    Message::DeleteSelected
+                }
+                // Undo/Redo
+                (keyboard::Key::Character(c), m) if c == "z" && m.command() && !m.shift() => {
+                    Message::Undo
+                }
+                (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
+                    Message::Redo
+                }
+                (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
+                    Message::Redo
+                }
+                // Rotate selected symbol
+                (keyboard::Key::Character(c), m) if c == "r" && !m.command() => {
+                    Message::RotateSelected
+                }
+                // Mirror selected symbol
+                (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
+                    Message::MirrorSelectedX
+                }
+                (keyboard::Key::Character(c), m) if c == "y" && !m.command() && m.shift() => {
+                    Message::MirrorSelectedY
                 }
                 // Shift+Ctrl+G — toggle grid visibility
                 (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
@@ -410,13 +450,108 @@ impl Signex {
                 // Grid only needs redraw on zoom/pan/grid-change.
             }
             Message::CanvasEvent(CanvasEvent::Clicked { world_x, world_y }) => {
-                // Hit-test the schematic at the clicked position
-                if let Some(ref sheet) = self.schematic {
-                    let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
-                    self.canvas.selected = hit.into_iter().collect();
-                    self.canvas.clear_overlay_cache();
-                    // Update panel context with selection info
-                    self.update_selection_info();
+                // Snap to grid if enabled
+                let (wx, wy) = if self.snap_enabled {
+                    let gs = self.grid_size_mm as f64;
+                    ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
+                } else {
+                    (world_x, world_y)
+                };
+
+                match self.current_tool {
+                    Tool::Wire => {
+                        // Wire drawing: click adds a point
+                        let pt = signex_types::schematic::Point::new(wx, wy);
+                        if !self.wire_drawing {
+                            self.wire_drawing = true;
+                            self.wire_points.clear();
+                            self.wire_points.push(pt);
+                        } else {
+                            self.wire_points.push(pt);
+                            // Create wire segment from previous to current point
+                            if self.wire_points.len() >= 2 {
+                                let n = self.wire_points.len();
+                                let start = self.wire_points[n - 2];
+                                let end = self.wire_points[n - 1];
+                                let wire = signex_types::schematic::Wire {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end,
+                                };
+                                if let Some(ref mut sheet) = self.schematic {
+                                    let cmd = crate::undo::EditCommand::AddWire(wire);
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                }
+                            }
+                        }
+                    }
+                    Tool::Bus => {
+                        let pt = signex_types::schematic::Point::new(wx, wy);
+                        if !self.wire_drawing {
+                            self.wire_drawing = true;
+                            self.wire_points.clear();
+                            self.wire_points.push(pt);
+                        } else {
+                            self.wire_points.push(pt);
+                            if self.wire_points.len() >= 2 {
+                                let n = self.wire_points.len();
+                                let start = self.wire_points[n - 2];
+                                let end = self.wire_points[n - 1];
+                                let bus = signex_types::schematic::Bus {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end,
+                                };
+                                if let Some(ref mut sheet) = self.schematic {
+                                    let cmd = crate::undo::EditCommand::AddBus(bus);
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                }
+                            }
+                        }
+                    }
+                    Tool::Label => {
+                        // Place a net label
+                        let label = signex_types::schematic::Label {
+                            uuid: uuid::Uuid::new_v4(),
+                            text: "NET".to_string(),
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            rotation: 0.0,
+                            label_type: signex_types::schematic::LabelType::Net,
+                            shape: String::new(),
+                            font_size: 1.27,
+                            justify: signex_types::schematic::HAlign::Left,
+                        };
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = crate::undo::EditCommand::AddLabel(label);
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                        }
+                        self.current_tool = Tool::Select;
+                    }
+                    _ => {
+                        // Selection mode: hit-test
+                        if let Some(ref sheet) = self.schematic {
+                            let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
+                            self.canvas.selected = hit.into_iter().collect();
+                            self.canvas.clear_overlay_cache();
+                            self.update_selection_info();
+                        }
+                    }
+                }
+            }
+            Message::CanvasEvent(CanvasEvent::DoubleClicked { .. }) => {
+                // Finish wire drawing on double-click
+                if self.wire_drawing {
+                    self.wire_drawing = false;
+                    self.wire_points.clear();
                 }
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
@@ -438,9 +573,13 @@ impl Signex {
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
-                // Escape (which sends Select tool) also closes open menus
+                // Escape: close menus and cancel wire drawing
                 if tool == Tool::Select {
                     self.active_menu = None;
+                    if self.wire_drawing {
+                        self.wire_drawing = false;
+                        self.wire_points.clear();
+                    }
                 }
             }
             Message::Menu(msg) => {
@@ -674,6 +813,156 @@ impl Signex {
             Message::FileOpened(None) => {
                 // User cancelled file dialog
             }
+            Message::DeleteSelected => {
+                if !self.canvas.selected.is_empty() {
+                    if let Some(ref mut sheet) = self.schematic {
+                        let mut cmds = Vec::new();
+                        for item in &self.canvas.selected {
+                            use signex_types::schematic::SelectedKind;
+                            match item.kind {
+                                SelectedKind::Wire => {
+                                    if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveWire(w.clone()));
+                                    }
+                                }
+                                SelectedKind::Bus => {
+                                    if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveBus(b.clone()));
+                                    }
+                                }
+                                SelectedKind::Label => {
+                                    if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveLabel(l.clone()));
+                                    }
+                                }
+                                SelectedKind::Junction => {
+                                    if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveJunction(j.clone()));
+                                    }
+                                }
+                                SelectedKind::NoConnect => {
+                                    if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveNoConnect(nc.clone()));
+                                    }
+                                }
+                                SelectedKind::Symbol => {
+                                    if let Some(s) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveSymbol(s.clone()));
+                                    }
+                                }
+                                SelectedKind::TextNote => {
+                                    if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveTextNote(tn.clone()));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if !cmds.is_empty() {
+                            let batch = crate::undo::EditCommand::Batch(cmds);
+                            self.undo_stack.execute(sheet, batch);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.selected.clear();
+                            self.canvas.clear_content_cache();
+                            self.canvas.clear_overlay_cache();
+                            self.mark_dirty();
+                            self.update_selection_info();
+                        }
+                    }
+                }
+            }
+            Message::Undo => {
+                if let Some(ref mut sheet) = self.schematic {
+                    if self.undo_stack.undo(sheet) {
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.selected.clear();
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                        self.mark_dirty();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::Redo => {
+                if let Some(ref mut sheet) = self.schematic {
+                    if self.undo_stack.redo(sheet) {
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.selected.clear();
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                        self.mark_dirty();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::RotateSelected => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let old_rotation = sym.rotation;
+                                let new_rotation = (old_rotation + 90.0) % 360.0;
+                                let cmd = crate::undo::EditCommand::RotateSymbol {
+                                    uuid: item.uuid,
+                                    old_rotation,
+                                    new_rotation,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                                self.update_selection_info();
+                            }
+                        }
+                    }
+                }
+            }
+            Message::MirrorSelectedX => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid: item.uuid,
+                                    axis: crate::undo::MirrorAxis::X,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                            }
+                        }
+                    }
+                }
+            }
+            Message::MirrorSelectedY => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid: item.uuid,
+                                    axis: crate::undo::MirrorAxis::Y,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                            }
+                        }
+                    }
+                }
+            }
             Message::SchematicLoaded(sheet) => {
                 self.schematic = Some(*sheet);
                 self.canvas.clear_content_cache();
@@ -773,12 +1062,16 @@ impl Signex {
                 self.current_tool = Tool::Component;
                 Task::none()
             }
+            MenuMessage::Undo => {
+                return self.update(Message::Undo);
+            }
+            MenuMessage::Redo => {
+                return self.update(Message::Redo);
+            }
             // ── Stubs (not yet implemented) ──
             MenuMessage::NewProject
             | MenuMessage::Save
             | MenuMessage::SaveAs
-            | MenuMessage::Undo
-            | MenuMessage::Redo
             | MenuMessage::ZoomIn
             | MenuMessage::ZoomOut
             | MenuMessage::Annotate
@@ -937,6 +1230,12 @@ impl Signex {
             .as_ref()
             .map(|s| s.paper_size.clone())
             .unwrap_or_else(|| "A4".to_string());
+    }
+
+    fn mark_dirty(&mut self) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.dirty = true;
+        }
     }
 
     fn update_selection_info(&mut self) {
