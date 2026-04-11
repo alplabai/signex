@@ -23,6 +23,10 @@ const ICON_DIRECTIVES: &[u8] = include_bytes!("../assets/icons/directives.svg");
 const ICON_TEXT: &[u8] = include_bytes!("../assets/icons/text.svg");
 const ICON_SHAPES: &[u8] = include_bytes!("../assets/icons/shapes.svg");
 const ICON_NETCOLOR: &[u8] = include_bytes!("../assets/icons/netcolor.svg");
+const ICON_ADDPART: &[u8] = include_bytes!("../assets/icons/addpart.svg");
+const ICON_NOCONNECT: &[u8] = include_bytes!("../assets/icons/noconnect.svg");
+const ICON_COMPONENT: &[u8] = include_bytes!("../assets/icons/component.svg");
+const ICON_SHEETSYM: &[u8] = include_bytes!("../assets/icons/sheetsym.svg");
 
 // ─── Messages ────────────────────────────────────────────────
 
@@ -131,6 +135,32 @@ pub enum ActiveBarAction {
     PlaceComponent,
 }
 
+// ─── View: Active Bar + Dropdown ─────────────────────────────
+
+/// Render the Active Bar with an optional dropdown below it, aligned in one container.
+pub fn view_bar_with_dropdown(
+    open_menu: Option<ActiveBarMenu>,
+    current_tool: crate::app::Tool,
+    draw_mode: crate::app::DrawMode,
+) -> Element<'static, ActiveBarMsg> {
+    let bar = view_bar(open_menu, current_tool, draw_mode);
+
+    if let Some(menu) = open_menu {
+        let dropdown = view_dropdown(menu);
+        let x_off = dropdown_x_offset(menu);
+
+        // Bar on top, dropdown below with horizontal offset to align under the button
+        column![
+            bar,
+            row![Space::new().width(x_off), dropdown,].spacing(0),
+        ]
+        .spacing(2)
+        .into()
+    } else {
+        bar
+    }
+}
+
 // ─── View: Active Bar ────────────────────────────────────────
 
 /// Render the Active Bar (the floating toolbar strip).
@@ -141,91 +171,60 @@ pub fn view_bar(
 ) -> Element<'static, ActiveBarMsg> {
     let mut items: Vec<Element<'_, ActiveBarMsg>> = Vec::new();
 
-    // 1. Filter
-    items.push(ab_icon_btn(
-        ICON_FILTER,
-        open_menu == Some(ActiveBarMenu::Filter),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
-    ));
+    // 1. Filter — click opens filter dropdown
+    items.push(ab_icon_btn(ICON_FILTER, open_menu == Some(ActiveBarMenu::Filter),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)));
+    // 2. Add Component (+)
+    items.push(ab_icon_btn(ICON_ADDPART,
+        current_tool == crate::app::Tool::Component,
+        ActiveBarMsg::Action(ActiveBarAction::PlaceComponent)));
     items.push(sep());
 
-    // 2. Select (cursor)
-    items.push(ab_icon_btn(
-        ICON_SELECT,
-        current_tool == crate::app::Tool::Select && open_menu != Some(ActiveBarMenu::Select),
-        ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-    ));
-    // 3. Move/Transform
-    items.push(ab_icon_btn(
-        ICON_MOVE,
-        open_menu == Some(ActiveBarMenu::Select),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select),
-    ));
-    // 4. Align
-    items.push(ab_icon_btn(
-        ICON_ALIGN,
-        open_menu == Some(ActiveBarMenu::Align),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align),
-    ));
+    // 3. Select
+    items.push(ab_icon_btn(ICON_SELECT,
+        current_tool == crate::app::Tool::Select,
+        ActiveBarMsg::Action(ActiveBarAction::ToolSelect)));
+    // 4. Move/Transform — click opens dropdown
+    items.push(ab_icon_btn(ICON_MOVE, open_menu == Some(ActiveBarMenu::Select),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)));
+    // 5. Align — click opens dropdown
+    items.push(ab_icon_btn(ICON_ALIGN, open_menu == Some(ActiveBarMenu::Align),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)));
     items.push(sep());
 
-    // 5. Wiring
-    items.push(ab_icon_btn(
-        ICON_WIRE,
-        current_tool == crate::app::Tool::Wire
-            || current_tool == crate::app::Tool::Bus
+    // 6. Wiring — click opens dropdown
+    items.push(ab_icon_btn(ICON_WIRE,
+        current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus
             || open_menu == Some(ActiveBarMenu::Wiring),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring),
-    ));
-    // 6. Power
-    items.push(ab_icon_btn(
-        ICON_POWER,
-        open_menu == Some(ActiveBarMenu::Power),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power),
-    ));
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)));
+    // 7. Power — click opens dropdown
+    items.push(ab_icon_btn(ICON_POWER, open_menu == Some(ActiveBarMenu::Power),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)));
     items.push(sep());
 
-    // 7. Harness
-    items.push(ab_icon_btn(
-        ICON_HARNESS,
-        open_menu == Some(ActiveBarMenu::Harness),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness),
-    ));
-    // 8. Port
-    items.push(ab_icon_btn(
-        ICON_PORT,
-        open_menu == Some(ActiveBarMenu::Port),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port),
-    ));
-    // 9. Directives
-    items.push(ab_icon_btn(
-        ICON_DIRECTIVES,
-        open_menu == Some(ActiveBarMenu::Directives),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives),
-    ));
+    // 8. Harness — click opens dropdown
+    items.push(ab_icon_btn(ICON_HARNESS, open_menu == Some(ActiveBarMenu::Harness),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)));
+    // 9. Port — click opens dropdown
+    items.push(ab_icon_btn(ICON_PORT, open_menu == Some(ActiveBarMenu::Port),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)));
+    // 10. Directives — click opens dropdown
+    items.push(ab_icon_btn(ICON_DIRECTIVES, open_menu == Some(ActiveBarMenu::Directives),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)));
     items.push(sep());
 
-    // 10. Text
-    items.push(ab_icon_btn(
-        ICON_TEXT,
+    // 11. Text — click opens dropdown
+    items.push(ab_icon_btn(ICON_TEXT,
         current_tool == crate::app::Tool::Text || open_menu == Some(ActiveBarMenu::TextTools),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools),
-    ));
-    // 11. Shapes
-    items.push(ab_icon_btn(
-        ICON_SHAPES,
-        matches!(
-            current_tool,
-            crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle
-        ) || open_menu == Some(ActiveBarMenu::Shapes),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes),
-    ));
-    // 12. Net Color
-    items.push(ab_icon_btn(
-        ICON_NETCOLOR,
-        open_menu == Some(ActiveBarMenu::NetColor),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor),
-    ));
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)));
+    // 12. Shapes — click opens dropdown
+    items.push(ab_icon_btn(ICON_SHAPES,
+        matches!(current_tool, crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle)
+            || open_menu == Some(ActiveBarMenu::Shapes),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)));
+    // 13. Net Color — click opens dropdown
+    items.push(ab_icon_btn(ICON_NETCOLOR, open_menu == Some(ActiveBarMenu::NetColor),
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)));
 
     // Draw mode indicator
     if matches!(
@@ -425,7 +424,7 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
         }
     };
 
-    container(column(items).spacing(0).width(Length::Shrink))
+    container(column(items).spacing(0).width(220))
         .padding([4, 0])
         .style(|_: &Theme| container::Style {
             background: Some(Color::from_rgb(0.14, 0.14, 0.16).into()),
@@ -446,62 +445,71 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
-/// Each icon button is ~26px wide, plus 1px spacing, plus separators.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Button widths: icon=26px, sep=1px+margins, spacing=1px
-    // Group: [Filter] | [Select][Move][Align] | [Wire][Power] | [Harness][Port][Dir] | [Text][Shapes][NetColor]
-    let idx = match menu {
-        ActiveBarMenu::Filter => 0,
-        ActiveBarMenu::Select => 2,   // after filter + sep
-        ActiveBarMenu::Align => 4,    // select + move + align
-        ActiveBarMenu::Wiring => 6,   // after align + sep
-        ActiveBarMenu::Power => 7,
-        ActiveBarMenu::Harness => 9,  // after power + sep
-        ActiveBarMenu::Port => 10,
-        ActiveBarMenu::Directives => 11,
-        ActiveBarMenu::TextTools => 13, // after dir + sep
-        ActiveBarMenu::Shapes => 14,
-        ActiveBarMenu::NetColor => 15,
+    // Each icon = 22px mouse_area + 1px spacing = 23px per button
+    // Separator = 1px + 1px spacing = 2px
+    // Bar padding = [3, 4] → 4px left padding
+    // Layout: [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Port][Dir] | [Text][Shapes][NetColor]
+    //  btn:     0      1  s    2      3      4    s   5      6    s    7      8      9    s  10     11     12
+    let btn = 23.0_f32; // button width + spacing
+    let s = 2.0_f32;    // separator width + spacing
+    let pad = 4.0_f32;  // left padding of bar container
+    let px = pad + match menu {
+        ActiveBarMenu::Filter => 0.0,                          // btn 0
+        ActiveBarMenu::Select => 2.0 * btn + s,                // btn 2
+        ActiveBarMenu::Align => 4.0 * btn + s,                 // btn 4
+        ActiveBarMenu::Wiring => 5.0 * btn + 2.0 * s,          // btn 5
+        ActiveBarMenu::Power => 6.0 * btn + 2.0 * s,           // btn 6
+        ActiveBarMenu::Harness => 7.0 * btn + 3.0 * s,         // btn 7
+        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,            // btn 8
+        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,      // btn 9
+        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,      // btn 10
+        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,         // btn 11
+        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,       // btn 12
     };
-    idx as f32 * 27.0
+    px
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
 
+/// Active Bar button: click opens dropdown or activates tool.
+/// Uses SVG icon with an opaque background to ensure clickability.
 fn ab_icon_btn(
     icon_bytes: &'static [u8],
     active: bool,
     msg: ActiveBarMsg,
 ) -> Element<'static, ActiveBarMsg> {
     let handle = svg::Handle::from_memory(icon_bytes);
-    button(
-        container(svg(handle).width(16).height(16))
-            .width(22)
-            .height(22)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
+
+    // Use mouse_area wrapping the icon for guaranteed click detection
+    let icon_widget = container(
+        svg(handle).width(16).height(16),
     )
-    .padding(2)
-    .on_press(msg)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match (active, status) {
-            (true, _) => Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
-            (false, button::Status::Hovered) => {
-                Some(Background::Color(Color::from_rgb(0.20, 0.21, 0.27)))
-            }
-            _ => None,
+    .width(22)
+    .height(22)
+    .align_x(iced::alignment::Horizontal::Center)
+    .align_y(iced::alignment::Vertical::Center)
+    .style(move |_: &Theme| {
+        let bg = if active {
+            Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30)))
+        } else {
+            Some(Background::Color(Color::TRANSPARENT))
         };
-        button::Style {
+        container::Style {
             background: bg,
             border: Border {
                 width: 0.0,
                 radius: 3.0.into(),
                 color: Color::TRANSPARENT,
             },
-            ..button::Style::default()
+            ..container::Style::default()
         }
-    })
-    .into()
+    });
+
+    iced::widget::mouse_area(icon_widget)
+        .on_press(msg)
+        .interaction(iced::mouse::Interaction::Pointer)
+        .into()
 }
 
 fn sep() -> Element<'static, ActiveBarMsg> {
