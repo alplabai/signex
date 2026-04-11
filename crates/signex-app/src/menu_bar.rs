@@ -3,7 +3,7 @@
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
 //! Dropdowns appear below the clicked button using Stack overlay in app.rs.
 
-use iced::widget::{button, container, text, Column, Row};
+use iced::widget::{Column, Row, button, container, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
@@ -12,6 +12,7 @@ use crate::styles;
 // ─── Messages ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum MenuMessage {
     // Menu bar control
     OpenMenu(usize),
@@ -186,21 +187,16 @@ fn menu_entries(idx: usize) -> Vec<Entry> {
 // ─── View: Menu Bar Row ───────────────────────────────────────
 
 pub fn view(current_theme: ThemeId, active_menu: Option<usize>) -> Element<'static, MenuMessage> {
-    let mut bar: Row<'static, MenuMessage> = Row::new()
-        .spacing(1.0)
-        .align_y(iced::Alignment::Center);
+    let mut bar: Row<'static, MenuMessage> =
+        Row::new().spacing(1.0).align_y(iced::Alignment::Center);
 
     for (i, label) in MENU_LABELS.iter().enumerate() {
         let is_active = active_menu == Some(i);
-        let btn = button(
-            text(*label)
-                .size(12)
-                .color(if is_active {
-                    Color::WHITE
-                } else {
-                    styles::TEXT_PRIMARY
-                }),
-        )
+        let btn = button(text(*label).size(12).color(if is_active {
+            Color::WHITE
+        } else {
+            styles::TEXT_PRIMARY
+        }))
         .padding([3, 10])
         .on_press(MenuMessage::OpenMenu(i));
 
@@ -211,8 +207,7 @@ pub fn view(current_theme: ThemeId, active_menu: Option<usize>) -> Element<'stat
         };
 
         // Hover: when a menu is already open, hovering switches menus
-        let area =
-            iced::widget::mouse_area(btn).on_enter(MenuMessage::HoverMenu(i));
+        let area = iced::widget::mouse_area(btn).on_enter(MenuMessage::HoverMenu(i));
         bar = bar.push(area);
     }
 
@@ -266,9 +261,7 @@ pub fn view(current_theme: ThemeId, active_menu: Option<usize>) -> Element<'stat
 pub fn view_dropdown(menu_idx: usize) -> Element<'static, MenuMessage> {
     let entries = menu_entries(menu_idx);
 
-    let mut col: Column<'static, MenuMessage> = Column::new()
-        .spacing(2.0)
-        .width(DROPDOWN_WIDTH as f32);
+    let mut col: Column<'static, MenuMessage> = Column::new().spacing(2.0).width(DROPDOWN_WIDTH);
 
     for entry in &entries {
         match entry {
@@ -285,10 +278,7 @@ pub fn view_dropdown(menu_idx: usize) -> Element<'static, MenuMessage> {
         }
     }
 
-    container(col)
-        .padding([4, 2])
-        .style(dropdown_style)
-        .into()
+    container(col).padding([4, 2]).style(dropdown_style).into()
 }
 
 // ─── Private helpers ──────────────────────────────────────────
@@ -311,7 +301,7 @@ fn view_menu_item(
         .width(Length::Fill);
 
     r = r.push(
-        text(label.to_string())
+        text(label.to_owned())
             .size(12)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
@@ -320,7 +310,7 @@ fn view_menu_item(
     if let Some(sc) = shortcut {
         r = r.push(iced::widget::space::horizontal());
         r = r.push(
-            text(sc.to_string())
+            text(sc.to_owned())
                 .size(11)
                 .color(styles::TEXT_MUTED)
                 .wrapping(iced::widget::text::Wrapping::None),
@@ -328,10 +318,8 @@ fn view_menu_item(
     }
 
     let hover_bg = styles::TAB_ACTIVE_BG;
-    let btn = button(r)
-        .padding([4, 12])
-        .width(Length::Fill)
-        .style(move |_theme: &Theme, status: button::Status| {
+    let btn = button(r).padding([4, 12]).width(Length::Fill).style(
+        move |_theme: &Theme, status: button::Status| {
             let bg = if enabled {
                 match status {
                     button::Status::Hovered | button::Status::Pressed => {
@@ -351,7 +339,8 @@ fn view_menu_item(
                 },
                 ..button::Style::default()
             }
-        });
+        },
+    );
 
     if let Some(m) = msg {
         btn.on_press(m).into()

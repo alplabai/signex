@@ -3,7 +3,7 @@
 //! Supports text, key-value labels, and on/off indicators. Sections can be
 //! clickable. All colors from `ThemeTokens`.
 
-use iced::widget::{button, container, row, space, text, Row};
+use iced::widget::{Row, button, container, row, space, text};
 use iced::{Border, Element, Length};
 use signex_types::theme::ThemeTokens;
 

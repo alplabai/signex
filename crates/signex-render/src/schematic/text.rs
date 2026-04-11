@@ -1,7 +1,7 @@
 //! Text rendering -- TextNote and TextProp (reference / value fields).
 
-use iced::widget::canvas;
 use iced::Color;
+use iced::widget::canvas;
 
 use signex_types::schematic::{HAlign, TextNote, TextProp, VAlign};
 
@@ -42,7 +42,7 @@ pub fn draw_text_note(
         size: iced::Pixels(screen_font),
         font: crate::IOSEVKA,
         align_x: h_align.into(),
-        align_y: v_align.into(),
+        align_y: v_align,
         ..canvas::Text::default()
     };
 
@@ -91,7 +91,7 @@ pub fn draw_text_prop(
         size: iced::Pixels(screen_font),
         font: crate::IOSEVKA,
         align_x: h_align.into(),
-        align_y: v_align.into(),
+        align_y: v_align,
         ..canvas::Text::default()
     };
 

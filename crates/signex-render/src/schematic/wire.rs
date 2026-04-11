@@ -1,7 +1,7 @@
 //! Wire, bus, and bus-entry rendering.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path};
 
 use signex_types::schematic::{Bus, BusEntry, Wire};
 
@@ -18,7 +18,7 @@ pub fn draw_wire(
     let p2 = transform.to_screen_point(wire.end.x, wire.end.y);
 
     let line = canvas::Path::line(p1, p2);
-    let width = (transform.scale * 0.25).max(1.0).min(4.0);
+    let width = (transform.scale * 0.25).clamp(1.0, 4.0);
     let stroke = canvas::Stroke::default()
         .with_color(color)
         .with_width(width);
@@ -26,18 +26,13 @@ pub fn draw_wire(
 }
 
 /// Draw a bus as a thicker line from start to end.
-pub fn draw_bus(
-    frame: &mut canvas::Frame,
-    bus: &Bus,
-    transform: &ScreenTransform,
-    color: Color,
-) {
+pub fn draw_bus(frame: &mut canvas::Frame, bus: &Bus, transform: &ScreenTransform, color: Color) {
     let p1 = transform.to_screen_point(bus.start.x, bus.start.y);
     let p2 = transform.to_screen_point(bus.end.x, bus.end.y);
 
     let line = canvas::Path::line(p1, p2);
     // Buses are drawn thicker than wires
-    let width = (transform.scale * 0.5).max(2.0).min(6.0);
+    let width = (transform.scale * 0.5).clamp(2.0, 6.0);
     let stroke = canvas::Stroke::default()
         .with_color(color)
         .with_width(width);
@@ -62,7 +57,7 @@ pub fn draw_bus_entry(
         b.line_to(p2);
     });
 
-    let width = (transform.scale * 0.25).max(1.0).min(4.0);
+    let width = (transform.scale * 0.25).clamp(1.0, 4.0);
     let stroke = canvas::Stroke::default()
         .with_color(color)
         .with_width(width);

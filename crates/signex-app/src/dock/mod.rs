@@ -3,7 +3,7 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
-use iced::widget::{button, column, container, row, text, Column, Space};
+use iced::widget::{Column, Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::panels::{self, PanelKind, PanelMsg};
@@ -86,6 +86,8 @@ impl DockArea {
                 };
                 region.collapsed = !region.collapsed;
             }
+            // Panel messages are handled by app.rs before reaching here.
+            // DockArea only handles tab/collapse; panel logic stays in Signex::update().
             DockMessage::Panel(_) => {}
         }
     }
@@ -128,8 +130,7 @@ impl DockArea {
             };
 
             // Button content: text + accent underline, with tab border
-            let label_el = container(text(label).size(11).color(text_c))
-                .padding([5, 10]);
+            let label_el = container(text(label).size(11).color(text_c)).padding([5, 10]);
             let underline = container(Space::new())
                 .height(2.0)
                 .width(Length::Fill)
@@ -167,8 +168,8 @@ impl DockArea {
 
         // Collapse button (minimal)
         let collapse_label = match position {
-            PanelPosition::Left => "\u{00AB}",  // «
-            PanelPosition::Right => "\u{00BB}", // »
+            PanelPosition::Left => "\u{00AB}",   // «
+            PanelPosition::Right => "\u{00BB}",  // »
             PanelPosition::Bottom => "\u{2304}", // ⌄
         };
         tab_row = tab_row.push(
@@ -209,11 +210,7 @@ impl DockArea {
         .into()
     }
 
-    fn view_rail(
-        &self,
-        position: PanelPosition,
-        region: &DockRegion,
-    ) -> Element<'_, DockMessage> {
+    fn view_rail(&self, position: PanelPosition, region: &DockRegion) -> Element<'_, DockMessage> {
         let expand_label = match position {
             PanelPosition::Left => "\u{00BB}",  // »
             PanelPosition::Right => "\u{00AB}", // «
@@ -230,12 +227,7 @@ impl DockArea {
         );
 
         for (i, panel) in region.panels.iter().enumerate() {
-            let first_char = panel
-                .label()
-                .chars()
-                .next()
-                .unwrap_or('?')
-                .to_string();
+            let first_char = panel.label().chars().next().unwrap_or('?').to_string();
             rail = rail.push(
                 button(text(first_char).size(11))
                     .padding([3, 6])
