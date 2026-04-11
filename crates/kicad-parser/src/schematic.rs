@@ -1205,7 +1205,7 @@ pub fn parse_schematic_file(path: &Path) -> Result<SchematicSheet, ParseError> {
 // Project parser
 // ---------------------------------------------------------------------------
 
-/// Parse a `.standard_pro` project file and discover all sheets.
+/// Parse a `.standard_pro` or `.snxprj` project file and discover all sheets.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
@@ -1214,17 +1214,24 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         .unwrap_or("Untitled")
         .to_string();
 
-    let root_sch_name = format!("{}.standard_sch", project_name);
-    let root_sch_path = dir.join(&root_sch_name);
-    let schematic_root = if root_sch_path.exists() {
-        Some(root_sch_name.clone())
+    // Look for schematic root: prefer .snxsch, fall back to .standard_sch
+    let snx_sch_name = format!("{}.snxsch", project_name);
+    let standard_sch_name = format!("{}.standard_sch", project_name);
+    let schematic_root = if dir.join(&snx_sch_name).exists() {
+        Some(snx_sch_name)
+    } else if dir.join(&standard_sch_name).exists() {
+        Some(standard_sch_name)
     } else {
         None
     };
 
-    let pcb_name = format!("{}.standard_pcb", project_name);
-    let pcb_file = if dir.join(&pcb_name).exists() {
-        Some(pcb_name)
+    // Look for PCB: prefer .snxpcb, fall back to .standard_pcb
+    let snx_pcb_name = format!("{}.snxpcb", project_name);
+    let standard_pcb_name = format!("{}.standard_pcb", project_name);
+    let pcb_file = if dir.join(&snx_pcb_name).exists() {
+        Some(snx_pcb_name)
+    } else if dir.join(&standard_pcb_name).exists() {
+        Some(standard_pcb_name)
     } else {
         None
     };
