@@ -93,6 +93,8 @@ pub enum Message {
     Paste,
     SaveFile,
     SaveFileAs(PathBuf),
+    CycleDrawMode,
+    CancelDrawing,
     Noop,
 }
 
@@ -145,6 +147,37 @@ pub struct Signex {
     pub clipboard_junctions: Vec<signex_types::schematic::Junction>,
     pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
     pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
+    pub draw_mode: DrawMode,
+}
+
+/// Wire/bus drawing mode (Altium: cycle with Shift+Space).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DrawMode {
+    /// Horizontal then vertical (90° corners, Altium default).
+    #[default]
+    Ortho90,
+    /// 45-degree angles allowed.
+    Angle45,
+    /// Free angle — straight line from last point to cursor.
+    FreeAngle,
+}
+
+impl DrawMode {
+    pub fn next(self) -> Self {
+        match self {
+            DrawMode::Ortho90 => DrawMode::Angle45,
+            DrawMode::Angle45 => DrawMode::FreeAngle,
+            DrawMode::FreeAngle => DrawMode::Ortho90,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DrawMode::Ortho90 => "90°",
+            DrawMode::Angle45 => "45°",
+            DrawMode::FreeAngle => "Any",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -180,6 +213,78 @@ impl std::fmt::Display for Tool {
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
+        }
+    }
+}
+
+// ─── Draw mode constraint ────────────────────────────────────
+
+/// Given a start and end point, produce wire segments constrained by the draw mode.
+/// - Ortho90: horizontal then vertical (two segments forming a 90° corner)
+/// - Angle45: snap to nearest 45° angle (may produce one or two segments)
+/// - FreeAngle: single straight segment
+fn constrain_segments(
+    start: signex_types::schematic::Point,
+    end: signex_types::schematic::Point,
+    mode: DrawMode,
+) -> Vec<(
+    signex_types::schematic::Point,
+    signex_types::schematic::Point,
+)> {
+    use signex_types::schematic::Point;
+
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+
+    if dx.abs() < 0.01 && dy.abs() < 0.01 {
+        return vec![];
+    }
+
+    match mode {
+        DrawMode::FreeAngle => {
+            vec![(start, end)]
+        }
+        DrawMode::Ortho90 => {
+            // Horizontal first, then vertical (like Altium default)
+            if dx.abs() < 0.01 {
+                // Pure vertical
+                vec![(start, end)]
+            } else if dy.abs() < 0.01 {
+                // Pure horizontal
+                vec![(start, end)]
+            } else {
+                let corner = Point::new(end.x, start.y);
+                vec![(start, corner), (corner, end)]
+            }
+        }
+        DrawMode::Angle45 => {
+            // Snap to nearest 45° increment
+            let adx = dx.abs();
+            let ady = dy.abs();
+            if adx < 0.01 || ady < 0.01 {
+                // Already axis-aligned
+                vec![(start, end)]
+            } else if (adx - ady).abs() < adx * 0.4 {
+                // Close to 45° — make it exactly 45°
+                let d = adx.min(ady);
+                let sx = if dx > 0.0 { 1.0 } else { -1.0 };
+                let sy = if dy > 0.0 { 1.0 } else { -1.0 };
+                let diag_end = Point::new(start.x + d * sx, start.y + d * sy);
+                if (adx - ady).abs() < 0.01 {
+                    // Exactly 45°
+                    vec![(start, diag_end)]
+                } else if adx > ady {
+                    // Diagonal then horizontal
+                    vec![(start, diag_end), (diag_end, Point::new(end.x, diag_end.y))]
+                } else {
+                    // Diagonal then vertical
+                    vec![(start, diag_end), (diag_end, Point::new(diag_end.x, end.y))]
+                }
+            } else {
+                // Mostly axis-aligned — use ortho
+                let corner = Point::new(end.x, start.y);
+                vec![(start, corner), (corner, end)]
+            }
         }
     }
 }
@@ -272,6 +377,7 @@ impl Signex {
             clipboard_junctions: Vec::new(),
             clipboard_no_connects: Vec::new(),
             clipboard_text_notes: Vec::new(),
+            draw_mode: DrawMode::default(),
         };
         (app, Task::none())
     }
@@ -340,16 +446,19 @@ impl Signex {
                 (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
                     Message::Redo
                 }
-                // Rotate selected symbol
-                (keyboard::Key::Character(c), m) if c == "r" && !m.command() => {
-                    Message::RotateSelected
+                // Shift+Space: cycle draw mode (90° → 45° → Free)
+                (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
+                    Message::CycleDrawMode
                 }
-                // Mirror selected symbol
+                // Space: rotate selected symbol (Altium convention)
+                (keyboard::Key::Named(keyboard::key::Named::Space), _) => Message::RotateSelected,
+                // Mirror: X = flip horizontal (mirror about Y-axis), Y = flip vertical (mirror about X-axis)
+                // Matches Altium Designer shortcuts
                 (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                    Message::MirrorSelectedX
+                    Message::MirrorSelectedY // X key = horizontal flip = mirror Y-axis
                 }
-                (keyboard::Key::Character(c), m) if c == "y" && !m.command() && m.shift() => {
-                    Message::MirrorSelectedY
+                (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
+                    Message::MirrorSelectedX // Y key = vertical flip = mirror X-axis
                 }
                 // Ctrl+S save
                 (keyboard::Key::Character(c), m) if c == "s" && m.command() => Message::SaveFile,
@@ -487,23 +596,23 @@ impl Signex {
 
                 match self.current_tool {
                     Tool::Wire => {
-                        // Wire drawing: click adds a point
                         let pt = signex_types::schematic::Point::new(wx, wy);
                         if !self.wire_drawing {
                             self.wire_drawing = true;
                             self.wire_points.clear();
                             self.wire_points.push(pt);
-                        } else {
-                            self.wire_points.push(pt);
-                            // Create wire segment from previous to current point
-                            if self.wire_points.len() >= 2 {
-                                let n = self.wire_points.len();
-                                let start = self.wire_points[n - 2];
-                                let end = self.wire_points[n - 1];
+                            self.canvas.wire_preview = self.wire_points.clone();
+                            self.canvas.drawing_mode = true;
+                            self.canvas.tool_preview =
+                                Some(format!("Draw Wire [{}]", self.draw_mode.label()));
+                        } else if let Some(&start) = self.wire_points.last() {
+                            // Apply draw mode constraints
+                            let segments = constrain_segments(start, pt, self.draw_mode);
+                            for seg in &segments {
                                 let wire = signex_types::schematic::Wire {
                                     uuid: uuid::Uuid::new_v4(),
-                                    start,
-                                    end,
+                                    start: seg.0,
+                                    end: seg.1,
                                 };
                                 if let Some(ref mut sheet) = self.schematic {
                                     let cmd = crate::undo::EditCommand::AddWire(wire);
@@ -514,6 +623,9 @@ impl Signex {
                                     self.commit_schematic();
                                 }
                             }
+                            let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                            self.wire_points = vec![end_pt];
+                            self.canvas.wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Bus => {
@@ -522,16 +634,17 @@ impl Signex {
                             self.wire_drawing = true;
                             self.wire_points.clear();
                             self.wire_points.push(pt);
-                        } else {
-                            self.wire_points.push(pt);
-                            if self.wire_points.len() >= 2 {
-                                let n = self.wire_points.len();
-                                let start = self.wire_points[n - 2];
-                                let end = self.wire_points[n - 1];
+                            self.canvas.wire_preview = self.wire_points.clone();
+                            self.canvas.drawing_mode = true;
+                            self.canvas.tool_preview =
+                                Some(format!("Draw Bus [{}]", self.draw_mode.label()));
+                        } else if let Some(&start) = self.wire_points.last() {
+                            let segments = constrain_segments(start, pt, self.draw_mode);
+                            for seg in &segments {
                                 let bus = signex_types::schematic::Bus {
                                     uuid: uuid::Uuid::new_v4(),
-                                    start,
-                                    end,
+                                    start: seg.0,
+                                    end: seg.1,
                                 };
                                 if let Some(ref mut sheet) = self.schematic {
                                     let cmd = crate::undo::EditCommand::AddBus(bus);
@@ -542,6 +655,9 @@ impl Signex {
                                     self.commit_schematic();
                                 }
                             }
+                            let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                            self.wire_points = vec![end_pt];
+                            self.canvas.wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Label => {
@@ -584,6 +700,34 @@ impl Signex {
                 if self.wire_drawing {
                     self.wire_drawing = false;
                     self.wire_points.clear();
+                    self.canvas.wire_preview.clear();
+                    self.canvas.drawing_mode = false;
+                }
+            }
+            Message::CycleDrawMode => {
+                self.draw_mode = self.draw_mode.next();
+                // Update tool preview to show current mode
+                if self.wire_drawing || matches!(self.current_tool, Tool::Wire | Tool::Bus) {
+                    self.canvas.tool_preview = Some(format!(
+                        "{} [{}]",
+                        if self.current_tool == Tool::Bus {
+                            "Draw Bus"
+                        } else {
+                            "Draw Wire"
+                        },
+                        self.draw_mode.label()
+                    ));
+                }
+            }
+            Message::CancelDrawing => {
+                // Right-click cancels wire/bus drawing (Altium behavior)
+                if self.wire_drawing {
+                    self.wire_drawing = false;
+                    self.wire_points.clear();
+                    self.canvas.wire_preview.clear();
+                    self.canvas.drawing_mode = false;
+                    self.current_tool = Tool::Select;
+                    self.canvas.tool_preview = None;
                 }
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
@@ -605,12 +749,22 @@ impl Signex {
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
+                // Set tool preview text for placement modes
+                self.canvas.tool_preview = match tool {
+                    Tool::Label => Some("NET".into()),
+                    Tool::Component => Some("Place Component".into()),
+                    Tool::Wire => Some("Draw Wire".into()),
+                    Tool::Bus => Some("Draw Bus".into()),
+                    _ => None,
+                };
                 // Escape: close menus and cancel wire drawing
                 if tool == Tool::Select {
                     self.active_menu = None;
                     if self.wire_drawing {
                         self.wire_drawing = false;
                         self.wire_points.clear();
+                        self.canvas.wire_preview.clear();
+                        self.canvas.drawing_mode = false;
                     }
                 }
             }
