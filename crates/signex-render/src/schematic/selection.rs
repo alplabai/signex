@@ -7,20 +7,20 @@ use signex_types::schematic::*;
 
 use super::ScreenTransform;
 
-/// Selection highlight color (Altium-style cyan).
+/// Selection outline color (Altium-style — thin outline, no fill).
 const SEL_COLOR: Color = Color {
     r: 0.2,
-    g: 0.75,
-    b: 1.0,
-    a: 0.8,
+    g: 0.85,
+    b: 0.2,
+    a: 0.9,
 };
 
-/// Selection fill color (translucent).
+/// Selection fill — transparent (Altium uses outline only, no filled background).
 const SEL_FILL: Color = Color {
-    r: 0.2,
-    g: 0.75,
-    b: 1.0,
-    a: 0.1,
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 0.0,
 };
 
 /// Draw selection highlights for all selected items.
@@ -143,7 +143,7 @@ fn draw_symbol_selection(
     if !has { return; }
 
     // Transform lib corners through symbol transform to get screen-space box
-    let margin = 1.5;
+    let margin = 0.5; // Tight box like Altium
     let corners_lib = [
         (min_x - margin, min_y - margin),
         (max_x + margin, min_y - margin),
@@ -168,17 +168,18 @@ fn draw_symbol_selection(
         b.close();
     });
 
-    frame.fill(&path, SEL_FILL);
+    // Altium-style: thin outline only, no fill, no corner grips
     frame.stroke(
         &path,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.5),
+        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.0),
     );
 
-    // Corner grips
+    // Small corner dots (Altium shows small squares at corners)
+    let dot_sz = 2.0;
     for c in &corners_screen {
         let grip = canvas::Path::rectangle(
-            iced::Point::new(c.x - 3.0, c.y - 3.0),
-            iced::Size::new(6.0, 6.0),
+            iced::Point::new(c.x - dot_sz, c.y - dot_sz),
+            iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
         );
         frame.fill(&grip, SEL_COLOR);
     }
@@ -258,18 +259,19 @@ fn draw_rect_highlight(frame: &mut canvas::Frame, aabb: &Aabb, transform: &Scree
     let h = br.y - tl.y;
     if w.abs() < 1.0 || h.abs() < 1.0 { return; }
 
+    // Altium-style: thin outline only, no fill
     let rect = canvas::Path::rectangle(tl, iced::Size::new(w, h));
-    frame.fill(&rect, SEL_FILL);
     frame.stroke(
         &rect,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.5),
+        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.0),
     );
 
-    // Corner grips
+    // Small corner dots
+    let dot_sz = 2.0;
     for p in &[tl, iced::Point::new(br.x, tl.y), br, iced::Point::new(tl.x, br.y)] {
         let grip = canvas::Path::rectangle(
-            iced::Point::new(p.x - 3.0, p.y - 3.0),
-            iced::Size::new(6.0, 6.0),
+            iced::Point::new(p.x - dot_sz, p.y - dot_sz),
+            iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
         );
         frame.fill(&grip, SEL_COLOR);
     }
