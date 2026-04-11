@@ -1,15 +1,15 @@
-# Gerçek Dünya Sembol Örnekleri — Annotated
-> KiCad 9 format (.kicad_sym) — resmi kütüphane kalıplarına birebir uygun
+# Real-World Symbol Examples — Annotated
+> KiCad 9 format (.kicad_sym) — resmi library kalıplarına birebir uygun
 
 ---
 
-## 1. Pasif: Direnç (Device:R)
+## 1. Passive: Resistor (Device:R)
 
 ```scheme
 (symbol "R"
   (pin_numbers hide)                          ; pin numaraları gizli (2-pin basit)
   (pin_names
-    (offset 0)                                ; pin adı offset = 0 (üst üste)
+    (offset 0)                                ; pin name offset = 0 (üst üste)
     hide                                      ; pin adları gizli
   )
   (in_bom yes)
@@ -35,12 +35,12 @@
   (symbol "R_0_1")                            ; unit 0, stil 1 — boş (ortak grafik yok)
 
   (symbol "R_1_1"                             ; unit 1, stil 1 — asıl çizim
-    ; IEC dikdörtgen gövde
+    ; IEC rectangle gövde
     (rectangle
       (start -1.016 -2.54)
       (end 1.016 2.54)
       (stroke (width 0.254) (type default))
-      (fill (type none))                      ; ayrık bileşen → doldurma YOK
+      (fill (type none))                      ; ayrık bwithşen -> no fill YOK
     )
     ; Pin 1 — üst (at Y=3.81, 270° yani aşağıya bakan, uzunluk 1.27)
     (pin passive line
@@ -58,15 +58,15 @@
 )
 ```
 
-**Dikkat:**
-- `~` pin adı → görünmez isim (IEC notasyonu)
-- `pin_numbers hide` + `pin_names hide` → 2-pin bileşenlerde standart
-- `fill (type none)` → ayrık bileşen kuralı (S3.3)
-- Pin uzunluğu: 1.27 mm (50 mil) — kısa pin istisnası (S4.1)
+**Note:**
+- `~` pin name -> invisible name (IEC notation)
+- `pin_numbers hide` + `pin_names hide` -> 2-pin bwithşenlerde standart
+- `fill (type none)` -> ayrık bwithşen rule (S3.3)
+- Pin length: 1.27 mm (50 mil) — short pin exception (S4.1)
 
 ---
 
-## 2. Aktif IC: Op-Amp — Tek Birim (Amplifier_Operational:LM358)
+## 2. Active IC: Op-Amp — Single Unit (Amplifier_Operational:LM358)
 
 ```scheme
 (symbol "LM358"
@@ -86,18 +86,18 @@
 
   ; UNIT A — ilk op-amp
   (symbol "LM358_1_1"
-    ; Üçgen gövde (op-amp standart şekli)
+    ; Triangle body (standard op-amp shape)
     (polyline
       (pts (xy -3.81 5.08) (xy -3.81 -5.08) (xy 3.81 0) (xy -3.81 5.08))
       (stroke (width 0.254) (type default))
-      (fill (type background))               ; IC → arka plan dolgusu
+      (fill (type background))               ; IC -> arka plan dolgusu
     )
-    ; IN+ giriş
+    ; IN+ input
     (pin input line (at -6.35 2.54 0) (length 2.54)
       (name "IN+" (effects (font (size 1.27 1.27))))
       (number "3" (effects (font (size 1.27 1.27))))
     )
-    ; IN- giriş
+    ; IN- input
     (pin input line (at -6.35 -2.54 0) (length 2.54)
       (name "IN-" (effects (font (size 1.27 1.27))))
       (number "2" (effects (font (size 1.27 1.27))))
@@ -107,19 +107,19 @@
       (name "OUT" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
     )
-    ; VCC — güç, gizli pin
+    ; VCC — power, hidden pin
     (pin power_in line (at 0 7.62 270) (length 2.54) hide
       (name "V+" (effects (font (size 1.27 1.27))))
       (number "8" (effects (font (size 1.27 1.27))))
     )
-    ; GND — güç, gizli pin
+    ; GND — power, hidden pin
     (pin power_in line (at 0 -7.62 90) (length 2.54) hide
       (name "V-" (effects (font (size 1.27 1.27))))
       (number "4" (effects (font (size 1.27 1.27))))
     )
   )
 
-  ; UNIT B — ikinci op-amp (aynı package)
+  ; UNIT B — second op-amp (same package)
   (symbol "LM358_2_1"
     (polyline
       (pts (xy -3.81 5.08) (xy -3.81 -5.08) (xy 3.81 0) (xy -3.81 5.08))
@@ -138,7 +138,7 @@
       (name "OUT" (effects (font (size 1.27 1.27))))
       (number "7" (effects (font (size 1.27 1.27))))
     )
-    ; Güç pinleri unit 0'da değil, A ile aynı hidden pinler burada da var
+    ; Power pins unit 0'da not, A with aynı hidden pinler burada da var
     (pin power_in line (at 0 7.62 270) (length 2.54) hide
       (name "V+" (effects (font (size 1.27 1.27))))
       (number "8" (effects (font (size 1.27 1.27))))
@@ -153,7 +153,7 @@
 
 ---
 
-## 3. Power Sembol: GND (power:GND)
+## 3. Power Symbol: GND (power:GND)
 
 ```scheme
 (symbol "GND"
@@ -172,19 +172,19 @@
     (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 
   (symbol "GND_0_1"
-    ; Üçgen (ters)
+    ; Triangle (inverted)
     (polyline
       (pts (xy 0 0) (xy 1.27 -1.27) (xy -1.27 -1.27) (xy 0 0))
       (stroke (width 0) (type default))
       (fill (type none))
     )
-    ; Dikey çizgi
+    ; Vertical line
     (polyline
       (pts (xy 0 0) (xy 0 -1.27))
       (stroke (width 0) (type default))
       (fill (type none))
     )
-    ; KiCad 8+ → görünür pin
+    ; KiCad 8+ -> visible pin
     (pin power_in line (at 0 0 270) (length 0)
       (name "~" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
@@ -195,7 +195,7 @@
 
 ---
 
-## 4. Çok Pinli IC: STM32 Tarzı MCU (parçalı gösterim)
+## 4. Multi-Pin IC: STM32-style MCU (partial display)
 
 ```scheme
 (symbol "STM32F103C8Tx"
@@ -209,7 +209,7 @@
   (property "ki_fp_filters" "LQFP*48*" (id 4) ... hide)
 
   (symbol "STM32F103C8Tx_1_1"
-    ; Gövde dikdörtgeni
+    ; Body rectangle
     (rectangle (start -12.7 -25.4) (end 12.7 25.4)
       (stroke (width 0.254) (type default))
       (fill (type background))
@@ -249,28 +249,28 @@
 
 ---
 
-## 5. Aktif Düşük Pin İsimleri
+## 5. Aktif Düşük Pin Nameleri
 
 ```scheme
-; DOĞRU — tilde+süslü parantez (KiCad 6+):
-(name "~{CS}"    ...)    ; → CS üstünde çizgi
-(name "~{OE}"    ...)    ; → OE üstünde çizgi
-(name "~{RESET}" ...)    ; → RESET üstünde çizgi
-(name "~{WR}"    ...)    ; → WR üstünde çizgi
+; CORRECT — tilde+curly braces (KiCad 6+):
+(name "~{CS}"    ...)    ; -> CS overbar above
+(name "~{OE}"    ...)    ; -> OE overbar above
+(name "~{RESET}" ...)    ; -> RESET overbar above
+(name "~{WR}"    ...)    ; -> WR overbar above
 
-; YANLIŞ (eski format, artık desteklenmez):
+; WRONG (old format, no longer supported):
 (name "/CS"  ...)
 (name "!OE"  ...)
 ```
 
 ---
 
-## 6. Pin Yığma (Stacking) Örneği
+## 6. Pin Stacking Örneği
 
-Aynı bileşende birden fazla GND pini var — hepsi aynı konuma yerleştirilir:
+Aynı bwithşende multiple GND pini var — all placed at the same position:
 
 ```scheme
-; Tüm GND pinleri aynı (at 0 -5.08 90) konumuna yığılır
+; All GND pins at same (at 0 -5.08 90) position are stacked
 (pin power_in line (at 0 -5.08 90) (length 2.54)
   (name "GND" (effects (font (size 1.27 1.27))))
   (number "3" (effects (font (size 1.27 1.27))))
@@ -287,23 +287,23 @@ Aynı bileşende birden fazla GND pini var — hepsi aynı konuma yerleştirilir
 
 ---
 
-## 7. Genişletilmiş (Extends) Sembol
+## 7. Genişletilmiş (Extends) Symbol
 
-Mevcut sembolden türetme — yalnızca property değişir, grafik aynı:
+Deriving from existing symbol — only properties change, graphics are the same:
 
 ```scheme
 (symbol "LM358A"
-  (extends "LM358")                           ; LM358'den türetilmiş
+  (extends "LM358")                           ; LM358'den derived
   (property "Reference" "U" (id 0) ...)
-  (property "Value" "LM358A" (id 1) ...)     ; sadece değer değişti
+  (property "Value" "LM358A" (id 1) ...)     ; only value changed
   (property "Datasheet" "https://..." (id 3) ...)
-  ; grafik, pin ve diğer tüm özellikler parent'tan miras alınır
+  ; graphics, pins and all other properties are inherited from parent
 )
 ```
 
 ---
 
-## 8. Kristal Sembolü (Device:Crystal)
+## 8. Kristal Symbolü (Device:Crystal)
 
 ```scheme
 (symbol "Crystal"
@@ -312,14 +312,14 @@ Mevcut sembolden türetme — yalnızca property değişir, grafik aynı:
   (in_bom yes) (on_board yes)
   ...
   (symbol "Crystal_1_1"
-    ; Çizgiler (kristal sembolü şekli)
-    (polyline (pts (xy 0 -1.778) (xy 0 1.778))     ; dikey çizgi
+    ; Lineler (kristal sembolü şekli)
+    (polyline (pts (xy 0 -1.778) (xy 0 1.778))     ; vertical line
       (stroke (width 0.508) (type default)) (fill (type none)))
-    (rectangle (start -0.762 -0.889) (end 0.762 0.889)  ; dikdörtgen
+    (rectangle (start -0.762 -0.889) (end 0.762 0.889)  ; rectangle
       (stroke (width 0.254) (type default)) (fill (type background)))
-    (polyline (pts (xy -1.778 -0.889) (xy -1.778 0.889)) ; sol plaka
+    (polyline (pts (xy -1.778 -0.889) (xy -1.778 0.889)) ; left plate
       (stroke (width 0.508) (type default)) (fill (type none)))
-    (polyline (pts (xy 1.778 -0.889) (xy 1.778 0.889))   ; sağ plaka
+    (polyline (pts (xy 1.778 -0.889) (xy 1.778 0.889))   ; right plate
       (stroke (width 0.508) (type default)) (fill (type none)))
 
     (pin passive line (at -3.81 0 0) (length 2.032)
@@ -336,20 +336,20 @@ Mevcut sembolden türetme — yalnızca property değişir, grafik aynı:
 
 ---
 
-## 9. Hızlı Koordinat Referansı
+## 9. Quick Coordinate Reference
 
-Pin yönleri (angle):
+Pin directions (angle):
 ```
-0°   → pin sola bakan  (bağlantı noktası solda) → IC sol kenarı için
-90°  → pin aşağı bakan (bağlantı noktası altta) → IC alt kenarı için
-180° → pin sağa bakan  (bağlantı noktası sağda) → IC sağ kenarı için
-270° → pin yukarı bakan (bağlantı noktası üstte) → IC üst kenarı için
+0°   -> pin facing left (connection point on left) -> for IC left edge
+90°  -> pin facing down (connection point at bottom) -> for IC bottom edge
+180° -> pin facing right (connection point on right) -> for IC right edge
+270° -> pin facing up (connection point at top) -> for IC top edge
 ```
 
-Tipik IC pin konumları (pin uzunluğu 2.54 mm ile):
+Typeik IC pin konumları (pin uzunluğu 2.54 mm with):
 ```python
-# Sol kenar: x = -BOX_W - 2.54, angle = 0
-# Sağ kenar: x = +BOX_W + 2.54, angle = 180
-# Üst kenar: y = +BOX_H + 2.54, angle = 270
-# Alt kenar: y = -BOX_H - 2.54, angle = 90
+# Left edge: x = -BOX_W - 2.54, angle = 0
+# Right edge: x = +BOX_W + 2.54, angle = 180
+# Top edge: y = +BOX_H + 2.54, angle = 270
+# Bottom edge: y = -BOX_H - 2.54, angle = 90
 ```
