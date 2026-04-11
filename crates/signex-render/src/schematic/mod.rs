@@ -5,9 +5,11 @@
 //! a `ScreenTransform`, and colors, then draw onto the frame.
 
 pub mod drawing;
+pub mod hit_test;
 pub mod junction;
 pub mod label;
 pub mod pin;
+pub mod selection;
 pub mod symbol;
 pub mod text;
 pub mod wire;

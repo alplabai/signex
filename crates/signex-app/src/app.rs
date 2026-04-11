@@ -221,6 +221,9 @@ impl Signex {
                 selected_lib_symbol: None,
                 components_split: 250.0,
                 project_tree: vec![],
+                selection_count: 0,
+                selection_info: vec![],
+                component_filter: String::new(),
             },
             left_width: 240.0,
             right_width: 220.0,
@@ -406,10 +409,23 @@ impl Signex {
                 // Don't clear bg cache here — crosshair is in the overlay (uncached) layer.
                 // Grid only needs redraw on zoom/pan/grid-change.
             }
+            Message::CanvasEvent(CanvasEvent::Clicked { world_x, world_y }) => {
+                // Hit-test the schematic at the clicked position
+                if let Some(ref sheet) = self.schematic {
+                    let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
+                    self.canvas.selected = hit.into_iter().collect();
+                    self.canvas.clear_overlay_cache();
+                    // Update panel context with selection info
+                    self.update_selection_info();
+                }
+            }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
                 // Zoom or pan changed — grid + schematic positions shifted, must redraw
                 self.canvas.clear_bg_cache();
                 self.canvas.clear_content_cache();
+                self.canvas.clear_overlay_cache();
+                // Clear pending fit after it's been applied
+                self.canvas.pending_fit = None;
             }
             Message::CanvasEvent(CanvasEvent::FitAll) => {
                 // Fit-all is handled in the canvas state, but we can't access it
@@ -487,6 +503,11 @@ impl Signex {
                                 Err(e) => eprintln!("Failed to read {}: {e}", path.display()),
                             }
                         }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ComponentFilter(filter),
+                    ) => {
+                        self.panel_ctx.component_filter = filter.clone();
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::DragComponentsSplit,
@@ -598,6 +619,7 @@ impl Signex {
                                             self.active_tab = self.tabs.len() - 1;
                                             self.schematic = Some(sheet.clone());
                                             self.canvas.schematic = Some(sheet);
+                                            self.canvas.fit_to_paper();
                                         }
                                         Err(e) => eprintln!("Failed to parse root schematic: {e}"),
                                     }
@@ -636,6 +658,7 @@ impl Signex {
                                 self.active_tab = self.tabs.len() - 1;
                                 self.schematic = Some(sheet.clone());
                                 self.canvas.schematic = Some(sheet);
+                                self.canvas.fit_to_paper();
                                 self.canvas.clear_bg_cache();
                                 self.canvas.clear_content_cache();
                                 self.refresh_panel_ctx();
@@ -856,6 +879,9 @@ impl Signex {
             selected_lib_symbol: self.panel_ctx.selected_lib_symbol.clone(),
             components_split: self.panel_ctx.components_split,
             project_tree: vec![], // built below
+            selection_count: self.panel_ctx.selection_count,
+            selection_info: self.panel_ctx.selection_info.clone(),
+            component_filter: self.panel_ctx.component_filter.clone(),
         };
         // Build persistent project tree (toggle state preserved until next project load)
         self.panel_ctx.project_tree = crate::panels::build_project_tree(&self.panel_ctx);
@@ -911,6 +937,100 @@ impl Signex {
             .as_ref()
             .map(|s| s.paper_size.clone())
             .unwrap_or_else(|| "A4".to_string());
+    }
+
+    fn update_selection_info(&mut self) {
+        use signex_types::schematic::SelectedKind;
+
+        let selected = &self.canvas.selected;
+        self.panel_ctx.selection_count = selected.len();
+        self.panel_ctx.selection_info.clear();
+
+        if selected.len() != 1 {
+            if !selected.is_empty() {
+                self.panel_ctx.selection_info.push((
+                    "Selected".into(),
+                    format!("{} items", selected.len()),
+                ));
+            }
+            return;
+        }
+
+        let item = &selected[0];
+        if let Some(ref sheet) = self.schematic {
+            match item.kind {
+                SelectedKind::Symbol => {
+                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "Symbol".into()));
+                        self.panel_ctx.selection_info.push(("Reference".into(), sym.reference.clone()));
+                        self.panel_ctx.selection_info.push(("Value".into(), sym.value.clone()));
+                        self.panel_ctx.selection_info.push(("Library ID".into(), sym.lib_id.clone()));
+                        self.panel_ctx.selection_info.push(("Footprint".into(), sym.footprint.clone()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2} mm", sym.position.x, sym.position.y)));
+                        self.panel_ctx.selection_info.push(("Rotation".into(), format!("{:.0}\u{00b0}", sym.rotation)));
+                        if sym.mirror_x { self.panel_ctx.selection_info.push(("Mirror".into(), "X".into())); }
+                        if sym.mirror_y { self.panel_ctx.selection_info.push(("Mirror".into(), "Y".into())); }
+                        if sym.unit > 1 { self.panel_ctx.selection_info.push(("Unit".into(), format!("{}", sym.unit))); }
+                    }
+                }
+                SelectedKind::Wire => {
+                    if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                        let dx = w.end.x - w.start.x;
+                        let dy = w.end.y - w.start.y;
+                        let len = (dx * dx + dy * dy).sqrt();
+                        self.panel_ctx.selection_info.push(("Type".into(), "Wire".into()));
+                        self.panel_ctx.selection_info.push(("Start".into(), format!("{:.2}, {:.2}", w.start.x, w.start.y)));
+                        self.panel_ctx.selection_info.push(("End".into(), format!("{:.2}, {:.2}", w.end.x, w.end.y)));
+                        self.panel_ctx.selection_info.push(("Length".into(), format!("{:.2} mm", len)));
+                    }
+                }
+                SelectedKind::Label => {
+                    if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), format!("{:?} Label", l.label_type)));
+                        self.panel_ctx.selection_info.push(("Net Name".into(), l.text.clone()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2}", l.position.x, l.position.y)));
+                    }
+                }
+                SelectedKind::Junction => {
+                    if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "Junction".into()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2}", j.position.x, j.position.y)));
+                    }
+                }
+                SelectedKind::NoConnect => {
+                    if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "No Connect".into()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2}", nc.position.x, nc.position.y)));
+                    }
+                }
+                SelectedKind::TextNote => {
+                    if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "Text Note".into()));
+                        self.panel_ctx.selection_info.push(("Text".into(), tn.text.clone()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2}", tn.position.x, tn.position.y)));
+                    }
+                }
+                SelectedKind::ChildSheet => {
+                    if let Some(cs) = sheet.child_sheets.iter().find(|c| c.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "Hierarchical Sheet".into()));
+                        self.panel_ctx.selection_info.push(("Name".into(), cs.name.clone()));
+                        self.panel_ctx.selection_info.push(("File".into(), cs.filename.clone()));
+                        self.panel_ctx.selection_info.push(("Position".into(), format!("{:.2}, {:.2}", cs.position.x, cs.position.y)));
+                        self.panel_ctx.selection_info.push(("Size".into(), format!("{:.1} x {:.1} mm", cs.size.0, cs.size.1)));
+                    }
+                }
+                SelectedKind::Bus => {
+                    if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
+                        self.panel_ctx.selection_info.push(("Type".into(), "Bus".into()));
+                        self.panel_ctx.selection_info.push(("Start".into(), format!("{:.2}, {:.2}", b.start.x, b.start.y)));
+                        self.panel_ctx.selection_info.push(("End".into(), format!("{:.2}, {:.2}", b.end.x, b.end.y)));
+                    }
+                }
+                SelectedKind::BusEntry | SelectedKind::Drawing => {
+                    self.panel_ctx.selection_info.push(("Type".into(), format!("{:?}", item.kind)));
+                }
+            }
+        }
     }
 
     fn update_canvas_theme(&mut self) {
