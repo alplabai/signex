@@ -55,6 +55,12 @@ pub struct SchematicCanvas {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Wire-in-progress points for rubber-band preview.
+    pub wire_preview: Vec<signex_types::schematic::Point>,
+    /// Whether currently in wire/bus drawing mode.
+    pub drawing_mode: bool,
+    /// Current tool name for preview display.
+    pub tool_preview: Option<String>,
 }
 
 impl SchematicCanvas {
@@ -73,6 +79,9 @@ impl SchematicCanvas {
             schematic: None,
             selected: Vec::new(),
             pending_fit: std::cell::Cell::new(None),
+            wire_preview: Vec::new(),
+            drawing_mode: false,
+            tool_preview: None,
         }
     }
 
@@ -186,11 +195,16 @@ impl canvas::Program<Message> for SchematicCanvas {
                 Some(canvas::Action::capture())
             }
 
-            // ── Right-click release → stop pan ──
+            // ── Right-click release → stop pan + cancel drawing ──
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right))
             | Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
+                let was_panning = state.panning;
                 state.panning = false;
                 state.last_pan_pos = None;
+                // Right-click cancels wire drawing (Altium behavior)
+                if self.drawing_mode && !was_panning {
+                    return Some(canvas::Action::publish(Message::CancelDrawing));
+                }
                 Some(canvas::Action::capture())
             }
 
@@ -336,6 +350,56 @@ impl canvas::Program<Message> for SchematicCanvas {
                     .with_width(0.5);
                 frame.stroke(&h_line, stroke);
                 frame.stroke(&v_line, stroke);
+
+                // Wire-in-progress rubber-band preview
+                if self.drawing_mode && !self.wire_preview.is_empty() {
+                    let wire_color = self.canvas_colors.wire;
+                    let wire_color_iced = signex_render::colors::to_iced(&wire_color);
+                    let preview_stroke = canvas::Stroke::default()
+                        .with_color(wire_color_iced)
+                        .with_width(1.5);
+
+                    // Draw placed segments
+                    for pair in self.wire_preview.windows(2) {
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(pair[0].x as f32, pair[0].y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(pair[1].x as f32, pair[1].y as f32),
+                            bounds,
+                        );
+                        let seg = canvas::Path::line(p1, p2);
+                        frame.stroke(&seg, preview_stroke);
+                    }
+
+                    // Rubber-band from last point to cursor
+                    if let Some(last) = self.wire_preview.last() {
+                        let last_screen = state.camera.world_to_screen(
+                            iced::Point::new(last.x as f32, last.y as f32),
+                            bounds,
+                        );
+                        let rubber = canvas::Path::line(last_screen, cursor_pos);
+                        let rubber_stroke = canvas::Stroke::default()
+                            .with_color(Color {
+                                a: 0.6,
+                                ..wire_color_iced
+                            })
+                            .with_width(1.0);
+                        frame.stroke(&rubber, rubber_stroke);
+                    }
+                }
+
+                // Tool preview text at cursor (for Label, Component placement)
+                if let Some(ref label) = self.tool_preview {
+                    frame.fill_text(canvas::Text {
+                        content: label.clone(),
+                        position: iced::Point::new(cursor_pos.x + 12.0, cursor_pos.y - 12.0),
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.7),
+                        size: iced::Pixels(11.0),
+                        ..canvas::Text::default()
+                    });
+                }
             }
 
             frame.into_geometry()

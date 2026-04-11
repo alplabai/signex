@@ -560,9 +560,51 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .into();
     }
 
+    // ── Context-aware: if something is selected, show element properties (Altium style) ──
+    if ctx.selection_count == 1 && !ctx.selection_info.is_empty() {
+        return view_selected_element_properties(ctx, muted, primary, border_c);
+    }
+    if ctx.selection_count > 1 {
+        let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+        col = col.push(
+            container(text("Multi-Selection").size(11).color(primary))
+                .padding([6, 8])
+                .width(Length::Fill),
+        );
+        col = col.push(thin_sep(border_c));
+        col = col.push(
+            container(
+                text(format!("{} objects selected", ctx.selection_count))
+                    .size(10)
+                    .color(muted),
+            )
+            .padding([4, 8]),
+        );
+        for (key, value) in &ctx.selection_info {
+            col = col.push(
+                container(
+                    row![
+                        text(key)
+                            .size(10)
+                            .color(muted)
+                            .width(Length::FillPortion(2)),
+                        text(value)
+                            .size(10)
+                            .color(primary)
+                            .width(Length::FillPortion(3)),
+                    ]
+                    .spacing(4),
+                )
+                .padding([3, 8])
+                .width(Length::Fill),
+            );
+        }
+        return scrollable(col).width(Length::Fill).into();
+    }
+
+    // ── Nothing selected: show Document Options (Altium default) ──
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // ── Header ──
     col = col.push(
         container(text("Document Options").size(11).color(primary))
             .padding([6, 8])
@@ -590,53 +632,116 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(view_properties_parameters(muted, primary, border_c));
     }
 
-    // ── Selection Info ──
+    // ── Status: Nothing selected ──
     col = col.push(Space::new().height(8.0));
     col = col.push(thin_sep(border_c));
-    if ctx.selection_count == 0 {
-        col = col.push(
-            container(text("Nothing selected").size(10).color(muted))
-                .padding([6, 8])
-                .width(Length::Fill),
-        );
-    } else {
+    col = col.push(
+        container(text("Nothing selected").size(10).color(muted))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+
+    scrollable(col).width(Length::Fill).into()
+}
+
+/// Altium-style context-aware properties for a single selected element.
+fn view_selected_element_properties<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Determine element type from selection_info
+    let elem_type = ctx
+        .selection_info
+        .iter()
+        .find(|(k, _)| k == "Type")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("Object");
+
+    // ── Header: element type (like Altium's "Component" header) ──
+    col = col.push(
+        container(text(elem_type.to_owned()).size(11).color(primary))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // ── General section ──
+    col = col.push(section_hdr("General", muted, border_c));
+
+    for (key, value) in &ctx.selection_info {
+        if key == "Type" {
+            continue;
+        } // already shown in header
         col = col.push(
             container(
-                text(if ctx.selection_count == 1 {
-                    "Selection"
-                } else {
-                    "Multi-Selection"
-                })
-                .size(11)
-                .color(primary),
+                row![
+                    text(key).size(10).color(muted).width(100),
+                    text(value).size(10).color(primary),
+                ]
+                .spacing(4),
             )
-            .padding([6, 8])
-            .width(Length::Fill)
-            .style(move |_theme: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba8(50, 50, 55, 1.0))),
-                ..Default::default()
-            }),
+            .padding([4, 8])
+            .width(Length::Fill),
         );
+    }
+
+    // ── Location section (for elements that have position) ──
+    let has_position = ctx.selection_info.iter().any(|(k, _)| k == "Position");
+    if has_position {
+        col = col.push(Space::new().height(4.0));
+        col = col.push(section_hdr("Location", muted, border_c));
         for (key, value) in &ctx.selection_info {
-            col = col.push(
-                container(
-                    row![
-                        text(key)
-                            .size(10)
-                            .color(muted)
-                            .width(Length::FillPortion(2)),
-                        text(value)
-                            .size(10)
-                            .color(primary)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .spacing(4),
-                )
-                .padding([3, 8])
-                .width(Length::Fill),
-            );
+            if key == "Position"
+                || key == "Rotation"
+                || key == "Start"
+                || key == "End"
+                || key == "Length"
+            {
+                col = col.push(
+                    container(
+                        row![
+                            text(key).size(10).color(muted).width(100),
+                            text(value).size(10).color(primary),
+                        ]
+                        .spacing(4),
+                    )
+                    .padding([4, 8])
+                    .width(Length::Fill),
+                );
+            }
         }
     }
+
+    // ── Graphical section (for symbols) ──
+    let has_mirror = ctx.selection_info.iter().any(|(k, _)| k == "Mirror");
+    if has_mirror || elem_type == "Symbol" {
+        col = col.push(Space::new().height(4.0));
+        col = col.push(section_hdr("Graphical", muted, border_c));
+        for (key, value) in &ctx.selection_info {
+            if key == "Mirror" || key == "Unit" {
+                col = col.push(
+                    container(
+                        row![
+                            text(key).size(10).color(muted).width(100),
+                            text(value).size(10).color(primary),
+                        ]
+                        .spacing(4),
+                    )
+                    .padding([4, 8])
+                    .width(Length::Fill),
+                );
+            }
+        }
+    }
+
+    // ── Status bar ──
+    col = col.push(Space::new().height(8.0));
+    col = col.push(thin_sep(border_c));
+    col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
 
     scrollable(col).width(Length::Fill).into()
 }
