@@ -786,13 +786,8 @@ impl Signex {
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
                 // Set tool preview text for placement modes
-                self.canvas.tool_preview = match tool {
-                    Tool::Label => Some("NET".into()),
-                    Tool::Component => Some("Place Component".into()),
-                    Tool::Wire => Some("Draw Wire".into()),
-                    Tool::Bus => Some("Draw Bus".into()),
-                    _ => None,
-                };
+                // No cursor text — Active Bar shows the active tool
+                self.canvas.tool_preview = None;
                 // Escape: close menus and cancel wire drawing
                 if tool == Tool::Select {
                     self.active_menu = None;

@@ -28,6 +28,38 @@ const ICON_NOCONNECT: &[u8] = include_bytes!("../assets/icons/noconnect.svg");
 const ICON_COMPONENT: &[u8] = include_bytes!("../assets/icons/component.svg");
 const ICON_SHEETSYM: &[u8] = include_bytes!("../assets/icons/sheetsym.svg");
 
+// ─── Inline SVG icons for dropdown items ─────────────────────
+
+const DD_WIRE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"><path d="M4 12h8v-8"/></svg>"##;
+const DD_BUS: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"><path d="M4 12h16"/></svg>"##;
+const DD_BUS_ENTRY: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"><path d="M6 18l12-12"/></svg>"##;
+const DD_NET_LABEL: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>"##;
+const DD_GND: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v8"/><path d="M6 12h12"/><path d="M8 15h8"/><path d="M10 18h4"/></svg>"##;
+const DD_VCC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 20v-8"/><path d="M6 12h12"/></svg>"##;
+const DD_PWR_ARROW: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"><path d="M12 20v-14"/><path d="M7 10l5-5 5 5"/></svg>"##;
+const DD_PWR_BAR: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 20v-8"/><path d="M6 12h12"/></svg>"##;
+const DD_PWR_CIRCLE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M12 12v8"/></svg>"##;
+const DD_PWR_EARTH: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"><path d="M12 4v8"/><path d="M4 12h16"/><path d="M6 16h12"/><path d="M9 20h6"/></svg>"##;
+const DD_PORT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M4 7h11l5 5-5 5H4V7z"/><line x1="4" y1="12" x2="1" y2="12"/></svg>"##;
+const DD_OFF_SHEET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M3 7h8l5 5-5 5H3V7z"/><path d="M16 12h5"/><path d="M18 9l3 3-3 3"/></svg>"##;
+const DD_PARAM_SET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1" fill="#ef4444"/></svg>"##;
+const DD_NO_ERC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>"##;
+const DD_DIFF_PAIR: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"><path d="M4 8h16"/><path d="M4 16h16"/></svg>"##;
+const DD_BLANKET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/></svg>"##;
+const DD_TEXT_STRING: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>"##;
+const DD_TEXT_FRAME: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M7 8h10"/><path d="M7 12h7"/></svg>"##;
+const DD_NOTE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M3 3h18v14l-4 4H3V3z"/><path d="M14 17v4"/><path d="M14 17h4"/></svg>"##;
+const DD_ARC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M4 20A16 16 0 0120 4"/></svg>"##;
+const DD_CIRCLE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>"##;
+const DD_ELLIPSE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="6"/></svg>"##;
+const DD_LINE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 20L20 4"/></svg>"##;
+const DD_RECT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="5" width="18" height="14"/></svg>"##;
+const DD_ROUND_RECT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="4"/></svg>"##;
+const DD_POLYGON: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M12 3l9 7-3 11H6L3 10z"/></svg>"##;
+const DD_BEZIER: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 20C4 10 20 14 20 4"/></svg>"##;
+const DD_HARNESS: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 8h6l4 4h6"/><path d="M4 16h6l4-4"/></svg>"##;
+const DD_HARNESS_CONN: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="1"/><path d="M10 8h4"/><path d="M10 12h4"/><path d="M10 16h4"/></svg>"##;
+
 // ─── Messages ────────────────────────────────────────────────
 
 /// Which Active Bar dropdown menu is open (by button index).
@@ -171,60 +203,71 @@ pub fn view_bar(
 ) -> Element<'static, ActiveBarMsg> {
     let mut items: Vec<Element<'_, ActiveBarMsg>> = Vec::new();
 
-    // 1. Filter — click opens filter dropdown
-    items.push(ab_icon_btn(ICON_FILTER, open_menu == Some(ActiveBarMenu::Filter),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)));
-    // 2. Add Component (+)
+    // 1. Filter — left: toggle, right: filter dropdown
+    items.push(ab_icon_btn(ICON_FILTER, false,
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter))));
+    // 2. Add Component (+) — left: place component
     items.push(ab_icon_btn(ICON_ADDPART,
         current_tool == crate::app::Tool::Component,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceComponent)));
+        ActiveBarMsg::Action(ActiveBarAction::PlaceComponent),
+        None));
     items.push(sep());
 
-    // 3. Select
+    // 3. Select — left: select tool, right: select modes
     items.push(ab_icon_btn(ICON_SELECT,
         current_tool == crate::app::Tool::Select,
-        ActiveBarMsg::Action(ActiveBarAction::ToolSelect)));
-    // 4. Move/Transform — click opens dropdown
-    items.push(ab_icon_btn(ICON_MOVE, open_menu == Some(ActiveBarMenu::Select),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)));
-    // 5. Align — click opens dropdown
-    items.push(ab_icon_btn(ICON_ALIGN, open_menu == Some(ActiveBarMenu::Align),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)));
+        ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select))));
+    // 4. Move — left: move, right: move/transform dropdown
+    items.push(ab_icon_btn(ICON_MOVE, false,
+        ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select))));
+    // 5. Align — left: align to grid, right: align dropdown
+    items.push(ab_icon_btn(ICON_ALIGN, false,
+        ActiveBarMsg::Action(ActiveBarAction::AlignToGrid),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align))));
     items.push(sep());
 
-    // 6. Wiring — click opens dropdown
+    // 6. Wire — left: draw wire, right: wiring dropdown
     items.push(ab_icon_btn(ICON_WIRE,
-        current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus
-            || open_menu == Some(ActiveBarMenu::Wiring),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)));
-    // 7. Power — click opens dropdown
-    items.push(ab_icon_btn(ICON_POWER, open_menu == Some(ActiveBarMenu::Power),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)));
+        current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
+        ActiveBarMsg::Action(ActiveBarAction::DrawWire),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring))));
+    // 7. Power — left: place GND, right: power dropdown
+    items.push(ab_icon_btn(ICON_POWER, false,
+        ActiveBarMsg::Action(ActiveBarAction::PlacePowerGND),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power))));
     items.push(sep());
 
-    // 8. Harness — click opens dropdown
-    items.push(ab_icon_btn(ICON_HARNESS, open_menu == Some(ActiveBarMenu::Harness),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)));
-    // 9. Port — click opens dropdown
-    items.push(ab_icon_btn(ICON_PORT, open_menu == Some(ActiveBarMenu::Port),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)));
-    // 10. Directives — click opens dropdown
-    items.push(ab_icon_btn(ICON_DIRECTIVES, open_menu == Some(ActiveBarMenu::Directives),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)));
+    // 8. Harness — left: signal harness, right: harness dropdown
+    items.push(ab_icon_btn(ICON_HARNESS, false,
+        ActiveBarMsg::Action(ActiveBarAction::PlaceSignalHarness),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness))));
+    // 9. Port — left: place port, right: port dropdown
+    items.push(ab_icon_btn(ICON_PORT, false,
+        ActiveBarMsg::Action(ActiveBarAction::PlacePort),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port))));
+    // 10. Directives — left: parameter set, right: directives dropdown
+    items.push(ab_icon_btn(ICON_DIRECTIVES, false,
+        ActiveBarMsg::Action(ActiveBarAction::PlaceParameterSet),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives))));
     items.push(sep());
 
-    // 11. Text — click opens dropdown
+    // 11. Text — left: place text, right: text dropdown
     items.push(ab_icon_btn(ICON_TEXT,
-        current_tool == crate::app::Tool::Text || open_menu == Some(ActiveBarMenu::TextTools),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)));
-    // 12. Shapes — click opens dropdown
+        current_tool == crate::app::Tool::Text,
+        ActiveBarMsg::Action(ActiveBarAction::PlaceTextString),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools))));
+    // 12. Shapes — left: draw line, right: shapes dropdown
     items.push(ab_icon_btn(ICON_SHAPES,
-        matches!(current_tool, crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle)
-            || open_menu == Some(ActiveBarMenu::Shapes),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)));
-    // 13. Net Color — click opens dropdown
-    items.push(ab_icon_btn(ICON_NETCOLOR, open_menu == Some(ActiveBarMenu::NetColor),
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)));
+        matches!(current_tool, crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle),
+        ActiveBarMsg::Action(ActiveBarAction::DrawLine),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes))));
+    // 13. Net Color — left: no-op, right: color dropdown
+    items.push(ab_icon_btn(ICON_NETCOLOR, false,
+        ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor))));
 
     // Draw mode indicator
     if matches!(
@@ -327,58 +370,58 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
             dd_item("Align To Grid", ActiveBarAction::AlignToGrid),
         ],
         ActiveBarMenu::Wiring => vec![
-            dd_item("Wire", ActiveBarAction::DrawWire),
-            dd_item("Bus", ActiveBarAction::DrawBus),
-            dd_item("Bus Entry", ActiveBarAction::PlaceBusEntry),
-            dd_item("Net Label", ActiveBarAction::PlaceNetLabel),
+            dd_item_svg(DD_WIRE, "Wire", ActiveBarAction::DrawWire),
+            dd_item_svg(DD_BUS, "Bus", ActiveBarAction::DrawBus),
+            dd_item_svg(DD_BUS_ENTRY, "Bus Entry", ActiveBarAction::PlaceBusEntry),
+            dd_item_svg(DD_NET_LABEL, "Net Label", ActiveBarAction::PlaceNetLabel),
         ],
         ActiveBarMenu::Power => vec![
-            dd_item("Place GND power port", ActiveBarAction::PlacePowerGND),
-            dd_item("Place VCC power port", ActiveBarAction::PlacePowerVCC),
-            dd_item("Place +12 power port", ActiveBarAction::PlacePowerPlus12),
-            dd_item("Place +5 power port", ActiveBarAction::PlacePowerPlus5),
-            dd_item("Place -5 power port", ActiveBarAction::PlacePowerMinus5),
+            dd_item_svg(DD_GND, "Place GND power port", ActiveBarAction::PlacePowerGND),
+            dd_item_svg(DD_VCC, "Place VCC power port", ActiveBarAction::PlacePowerVCC),
+            dd_item_svg(DD_PWR_ARROW, "Place +12 power port", ActiveBarAction::PlacePowerPlus12),
+            dd_item_svg(DD_PWR_ARROW, "Place +5 power port", ActiveBarAction::PlacePowerPlus5),
+            dd_item_svg(DD_PWR_ARROW, "Place -5 power port", ActiveBarAction::PlacePowerMinus5),
             dd_sep(),
-            dd_item("Place Arrow style power port", ActiveBarAction::PlacePowerArrow),
-            dd_item("Place Wave style power port", ActiveBarAction::PlacePowerWave),
-            dd_item("Place Bar style power port", ActiveBarAction::PlacePowerBar),
-            dd_item("Place Circle style power port", ActiveBarAction::PlacePowerCircle),
+            dd_item_svg(DD_PWR_ARROW, "Place Arrow style power port", ActiveBarAction::PlacePowerArrow),
+            dd_item_svg(DD_PWR_BAR, "Place Wave style power port", ActiveBarAction::PlacePowerWave),
+            dd_item_svg(DD_PWR_BAR, "Place Bar style power port", ActiveBarAction::PlacePowerBar),
+            dd_item_svg(DD_PWR_CIRCLE, "Place Circle style power port", ActiveBarAction::PlacePowerCircle),
             dd_sep(),
-            dd_item("Place Signal Ground power port", ActiveBarAction::PlacePowerSignalGND),
-            dd_item("Place Earth power port", ActiveBarAction::PlacePowerEarth),
+            dd_item_svg(DD_GND, "Place Signal Ground power port", ActiveBarAction::PlacePowerSignalGND),
+            dd_item_svg(DD_PWR_EARTH, "Place Earth power port", ActiveBarAction::PlacePowerEarth),
         ],
         ActiveBarMenu::Harness => vec![
-            dd_item("Signal Harness", ActiveBarAction::PlaceSignalHarness),
-            dd_item("Harness Connector", ActiveBarAction::PlaceHarnessConnector),
-            dd_item("Harness Entry", ActiveBarAction::PlaceHarnessEntry),
+            dd_item_svg(DD_HARNESS, "Signal Harness", ActiveBarAction::PlaceSignalHarness),
+            dd_item_svg(DD_HARNESS_CONN, "Harness Connector", ActiveBarAction::PlaceHarnessConnector),
+            dd_item_svg(DD_HARNESS, "Harness Entry", ActiveBarAction::PlaceHarnessEntry),
         ],
         ActiveBarMenu::Port => vec![
-            dd_item("Port", ActiveBarAction::PlacePort),
-            dd_item("Off Sheet Connector", ActiveBarAction::PlaceOffSheetConnector),
+            dd_item_svg(DD_PORT, "Port", ActiveBarAction::PlacePort),
+            dd_item_svg(DD_OFF_SHEET, "Off Sheet Connector", ActiveBarAction::PlaceOffSheetConnector),
         ],
         ActiveBarMenu::Directives => vec![
-            dd_item("Parameter Set", ActiveBarAction::PlaceParameterSet),
-            dd_item("Generic No ERC", ActiveBarAction::PlaceNoERC),
-            dd_item("Differential Pair", ActiveBarAction::PlaceDiffPair),
-            dd_item("Blanket", ActiveBarAction::PlaceBlanket),
-            dd_item("Compile Mask", ActiveBarAction::PlaceCompileMask),
+            dd_item_svg(DD_PARAM_SET, "Parameter Set", ActiveBarAction::PlaceParameterSet),
+            dd_item_svg(DD_NO_ERC, "Generic No ERC", ActiveBarAction::PlaceNoERC),
+            dd_item_svg(DD_DIFF_PAIR, "Differential Pair", ActiveBarAction::PlaceDiffPair),
+            dd_item_svg(DD_BLANKET, "Blanket", ActiveBarAction::PlaceBlanket),
+            dd_item_svg(DD_BLANKET, "Compile Mask", ActiveBarAction::PlaceCompileMask),
         ],
         ActiveBarMenu::TextTools => vec![
-            dd_item("Text String", ActiveBarAction::PlaceTextString),
-            dd_item("Text Frame", ActiveBarAction::PlaceTextFrame),
-            dd_item("Note", ActiveBarAction::PlaceNote),
+            dd_item_svg(DD_TEXT_STRING, "Text String", ActiveBarAction::PlaceTextString),
+            dd_item_svg(DD_TEXT_FRAME, "Text Frame", ActiveBarAction::PlaceTextFrame),
+            dd_item_svg(DD_NOTE, "Note", ActiveBarAction::PlaceNote),
         ],
         ActiveBarMenu::Shapes => vec![
-            dd_item("Arc", ActiveBarAction::DrawArc),
-            dd_item("Full Circle", ActiveBarAction::DrawFullCircle),
-            dd_item("Elliptical Arc", ActiveBarAction::DrawEllipticalArc),
-            dd_item("Ellipse", ActiveBarAction::DrawEllipse),
+            dd_item_svg(DD_ARC, "Arc", ActiveBarAction::DrawArc),
+            dd_item_svg(DD_CIRCLE, "Full Circle", ActiveBarAction::DrawFullCircle),
+            dd_item_svg(DD_ARC, "Elliptical Arc", ActiveBarAction::DrawEllipticalArc),
+            dd_item_svg(DD_ELLIPSE, "Ellipse", ActiveBarAction::DrawEllipse),
             dd_sep(),
-            dd_item("Line", ActiveBarAction::DrawLine),
-            dd_item("Rectangle", ActiveBarAction::DrawRectangle),
-            dd_item("Round Rectangle", ActiveBarAction::DrawRoundRectangle),
-            dd_item("Polygon", ActiveBarAction::DrawPolygon),
-            dd_item("Bezier", ActiveBarAction::DrawBezier),
+            dd_item_svg(DD_LINE, "Line", ActiveBarAction::DrawLine),
+            dd_item_svg(DD_RECT, "Rectangle", ActiveBarAction::DrawRectangle),
+            dd_item_svg(DD_ROUND_RECT, "Round Rectangle", ActiveBarAction::DrawRoundRectangle),
+            dd_item_svg(DD_POLYGON, "Polygon", ActiveBarAction::DrawPolygon),
+            dd_item_svg(DD_BEZIER, "Bezier", ActiveBarAction::DrawBezier),
             dd_sep(),
             dd_item("Graphic...", ActiveBarAction::PlaceGraphic),
         ],
@@ -424,20 +467,21 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
         }
     };
 
-    container(column(items).spacing(0).width(220))
-        .padding([4, 0])
+    container(column(items).spacing(0))
+        .width(Length::Shrink)
+        .padding([6, 0])
         .style(|_: &Theme| container::Style {
-            background: Some(Color::from_rgb(0.14, 0.14, 0.16).into()),
+            background: Some(Color::from_rgb(0.11, 0.12, 0.15).into()),
             text_color: Some(styles::TEXT_PRIMARY),
             border: Border {
                 width: 1.0,
-                radius: 4.0.into(),
-                color: Color::from_rgb(0.24, 0.25, 0.33),
+                radius: 6.0.into(),
+                color: Color::from_rgb(0.20, 0.21, 0.27),
             },
             shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
-                offset: iced::Vector::new(2.0, 3.0),
-                blur_radius: 8.0,
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                offset: iced::Vector::new(0.0, 4.0),
+                blur_radius: 12.0,
             },
             ..container::Style::default()
         })
@@ -472,16 +516,15 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-/// Active Bar button: click opens dropdown or activates tool.
-/// Uses SVG icon with an opaque background to ensure clickability.
+/// Active Bar button: left-click activates tool, right-click opens dropdown.
 fn ab_icon_btn(
     icon_bytes: &'static [u8],
     active: bool,
-    msg: ActiveBarMsg,
+    left_click: ActiveBarMsg,
+    right_click: Option<ActiveBarMsg>,
 ) -> Element<'static, ActiveBarMsg> {
     let handle = svg::Handle::from_memory(icon_bytes);
 
-    // Use mouse_area wrapping the icon for guaranteed click detection
     let icon_widget = container(
         svg(handle).width(16).height(16),
     )
@@ -506,10 +549,15 @@ fn ab_icon_btn(
         }
     });
 
-    iced::widget::mouse_area(icon_widget)
-        .on_press(msg)
-        .interaction(iced::mouse::Interaction::Pointer)
-        .into()
+    let mut area = iced::widget::mouse_area(icon_widget)
+        .on_press(left_click)
+        .interaction(iced::mouse::Interaction::Pointer);
+
+    if let Some(rc) = right_click {
+        area = area.on_right_press(rc);
+    }
+
+    area.into()
 }
 
 fn sep() -> Element<'static, ActiveBarMsg> {
@@ -523,33 +571,70 @@ fn sep() -> Element<'static, ActiveBarMsg> {
         .into()
 }
 
+/// Dropdown item with optional inline SVG icon (Altium-style).
 fn dd_item(label: &str, action: ActiveBarAction) -> Element<'static, ActiveBarMsg> {
-    button(
-        text(label.to_string())
-            .size(11)
-            .color(styles::TEXT_PRIMARY),
-    )
-    .padding([4, 12])
-    .width(Length::Fill)
-    .on_press(ActiveBarMsg::Action(action))
-    .style(dd_btn_style)
-    .into()
+    dd_item_icon(None, label, styles::TEXT_PRIMARY, action)
+}
+
+/// Dropdown item with colored icon SVG bytes.
+fn dd_item_svg(
+    icon: &'static [u8],
+    label: &str,
+    action: ActiveBarAction,
+) -> Element<'static, ActiveBarMsg> {
+    dd_item_icon(Some(icon), label, styles::TEXT_PRIMARY, action)
+}
+
+fn dd_item_icon(
+    icon: Option<&'static [u8]>,
+    label: &str,
+    text_c: Color,
+    action: ActiveBarAction,
+) -> Element<'static, ActiveBarMsg> {
+    let mut r = iced::widget::Row::new()
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+    if let Some(icon_bytes) = icon {
+        let handle = svg::Handle::from_memory(icon_bytes);
+        r = r.push(
+            svg(handle).width(14).height(14),
+        );
+    } else {
+        // Empty space placeholder to keep alignment
+        r = r.push(Space::new().width(14).height(14));
+    }
+
+    r = r.push(
+        text(label.to_string()).size(12).color(text_c),
+    );
+
+    button(r)
+        .padding([5, 12])
+        .width(Length::Fill)
+        .on_press(ActiveBarMsg::Action(action))
+        .style(dd_btn_style)
+        .into()
 }
 
 fn dd_sep() -> Element<'static, ActiveBarMsg> {
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(|_: &Theme| container::Style {
-            background: Some(Color::from_rgb(0.24, 0.25, 0.33).into()),
-            ..container::Style::default()
-        })
-        .into()
+    container(
+        container(Space::new())
+            .width(Length::Fill)
+            .height(1)
+            .style(|_: &Theme| container::Style {
+                background: Some(Color::from_rgb(0.24, 0.25, 0.33).into()),
+                ..container::Style::default()
+            }),
+    )
+    .padding([3, 8])
+    .width(Length::Fill)
+    .into()
 }
 
 fn dd_btn_style(_theme: &Theme, status: button::Status) -> button::Style {
     let bg = match status {
-        button::Status::Hovered => Some(Background::Color(Color::from_rgb(0.22, 0.22, 0.26))),
+        button::Status::Hovered => Some(Background::Color(Color::from_rgb(0.20, 0.22, 0.30))),
         _ => None,
     };
     button::Style {
