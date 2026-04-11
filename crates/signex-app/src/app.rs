@@ -2301,13 +2301,18 @@ impl Signex {
                         crate::active_bar::ActiveBarMsg::CloseMenus,
                     )),
                 );
-                // Dropdown centered like bar, x_off inside bar coordinate space
+                // Dropdown — aligned under the clicked button
+                // Bar width: 14 btns × 23px + 4 seps × 2px + 8px padding = 338px
+                let bar_w: f32 = 338.0;
                 stack = stack.push(
                     container(
                         column![
                             iced::widget::Space::new().height(ab_y),
                             container(
-                                row![iced::widget::Space::new().width(x_off), dropdown,],
+                                row![
+                                    iced::widget::Space::new().width(x_off),
+                                    dropdown,
+                                ],
                             )
                             .width(bar_w),
                         ],
