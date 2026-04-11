@@ -91,6 +91,13 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    // Selection info for Properties panel
+    /// How many items are currently selected.
+    pub selection_count: usize,
+    /// Description of the selected item (for single selection).
+    pub selection_info: Vec<(String, String)>,
+    /// Component search filter text.
+    pub component_filter: String,
 }
 
 /// Panel-level message wrapping widget messages.
@@ -104,6 +111,7 @@ pub enum PanelMsg {
     SelectLibrary(String),
     SelectComponent(String),
     DragComponentsSplit,
+    ComponentFilter(String),
 }
 
 /// Render a panel's content.
@@ -270,6 +278,17 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .padding([4, 8]),
     );
 
+    // Search filter input
+    list_col = list_col.push(
+        container(
+            iced::widget::text_input("Search components...", &ctx.component_filter)
+                .on_input(PanelMsg::ComponentFilter)
+                .size(11)
+                .width(Length::Fill),
+        )
+        .padding([4, 8]),
+    );
+
     list_col = list_col.push(thin_sep(border_c));
     list_col = list_col.push(
         container(
@@ -284,17 +303,26 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     );
     list_col = list_col.push(thin_sep(border_c));
 
-    if ctx.library_symbols.is_empty() {
+    // Filter the symbol list
+    let filter = ctx.component_filter.to_ascii_lowercase();
+    let filtered_symbols: Vec<&(String, usize)> = if filter.is_empty() {
+        ctx.library_symbols.iter().collect()
+    } else {
+        ctx.library_symbols.iter().filter(|(name, _)| name.to_ascii_lowercase().contains(&filter)).collect()
+    };
+
+    if filtered_symbols.is_empty() {
+        let msg = if ctx.active_library.is_some() {
+            if filter.is_empty() { "Loading..." } else { "No matches" }
+        } else {
+            "Select a library above"
+        };
         list_col = list_col.push(
-            container(
-                text(if ctx.active_library.is_some() { "Loading..." } else { "Select a library above" })
-                    .size(10).color(muted),
-            )
-            .padding([8, 8]),
+            container(text(msg).size(10).color(muted)).padding([8, 8]),
         );
     } else {
         let sel = &ctx.selected_component;
-        for (name, pins) in &ctx.library_symbols {
+        for &(name, pins) in &filtered_symbols {
             let is_sel = sel.as_deref() == Some(name.as_str());
             let row_bg = if is_sel { theme_ext::selection_color(&ctx.tokens) } else { Color::TRANSPARENT };
             let name_c = if is_sel { Color::WHITE } else { primary };
@@ -326,7 +354,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     list_col = list_col.push(
-        container(text(format!("Results: {}", ctx.library_symbols.len())).size(10).color(muted))
+        container(text(format!("Results: {}", filtered_symbols.len())).size(10).color(muted))
             .padding([4, 8]),
     );
 
@@ -496,13 +524,43 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(view_properties_parameters(muted, primary, border_c));
     }
 
-    // ── Footer ──
-    col = col.push(Space::new().height(12.0));
-    col = col.push(
-        container(text("Nothing selected").size(10).color(muted))
+    // ── Selection Info ──
+    col = col.push(Space::new().height(8.0));
+    col = col.push(thin_sep(border_c));
+    if ctx.selection_count == 0 {
+        col = col.push(
+            container(text("Nothing selected").size(10).color(muted))
+                .padding([6, 8])
+                .width(Length::Fill),
+        );
+    } else {
+        col = col.push(
+            container(
+                text(if ctx.selection_count == 1 { "Selection" } else { "Multi-Selection" })
+                    .size(11)
+                    .color(primary),
+            )
             .padding([6, 8])
-            .width(Length::Fill),
-    );
+            .width(Length::Fill)
+            .style(move |_theme: &Theme| container::Style {
+                background: Some(Background::Color(Color::from_rgba8(50, 50, 55, 1.0))),
+                ..Default::default()
+            }),
+        );
+        for (key, value) in &ctx.selection_info {
+            col = col.push(
+                container(
+                    row![
+                        text(key).size(10).color(muted).width(Length::FillPortion(2)),
+                        text(value).size(10).color(primary).width(Length::FillPortion(3)),
+                    ]
+                    .spacing(4),
+                )
+                .padding([3, 8])
+                .width(Length::Fill),
+            );
+        }
+    }
 
     scrollable(col).width(Length::Fill).into()
 }

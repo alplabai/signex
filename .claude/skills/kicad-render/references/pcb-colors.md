@@ -1,20 +1,20 @@
-# PCB Renk Sistemi
+# PCB Color System
 
-> Kaynak: `common/settings/builtin_color_themes.h` — KiCad kaynak kodu, Nisan 2026
-> Doğrudan `s_defaultTheme` ve `s_classicTheme` map'lerinden alındı.
+> Source: `common/settings/builtin_color_themes.h` — KiCad source code, April 2026
+> Taken directly from the `s_defaultTheme` ve `s_classicTheme` map'lerinden maps.
 
 ---
 
-## Default tema (modern dark — CSS renkleri)
+## Default theme (modern dark — CSS colors)
 
 ```python
-# builtin_color_themes.h::s_defaultTheme — CSS_COLOR(r,g,b,a) formatından dönüştürüldü
+# builtin_color_themes.h::s_defaultTheme — CSS_COLOR(r,g,b,a) format
 
 PCB_THEME_DEFAULT = {
-    # Arka plan
+    # Background
     'LAYER_PCB_BACKGROUND': 'rgba(0,16,35,1)',
 
-    # Bakır katmanlar
+    # Copper katmanlar
     'F.Cu':    'rgba(200,52,52,1)',
     'In1.Cu':  'rgba(127,200,127,1)',
     'In2.Cu':  'rgba(206,125,44,1)',
@@ -36,7 +36,7 @@ PCB_THEME_DEFAULT = {
     'In18.Cu': 'rgba(91,195,235,1)',
     'In19.Cu': 'rgba(247,111,142,1)',
     'In20.Cu': 'rgba(167,165,198,1)',
-    # In21..In30: döngüsel, aynı 7-renk seti
+    # In21..In30: cyclic, same 7-color seti
     'B.Cu':    'rgba(77,127,196,1)',
 
     # Teknik katmanlar
@@ -49,7 +49,7 @@ PCB_THEME_DEFAULT = {
     'B.Mask':  'rgba(2,255,238,0.4)',
     'F.Mask':  'rgba(216,100,255,0.4)',
 
-    # Kullanıcı katmanları
+    # User layers
     'Dwgs.User': 'rgba(194,194,194,1)',
     'Cmts.User': 'rgba(89,148,220,1)',
     'Eco1.User': 'rgba(180,219,210,1)',
@@ -75,13 +75,13 @@ PCB_THEME_DEFAULT = {
     'LAYER_CURSOR':          'rgba(255,255,255,1)',
 }
 
-# Arka plan rengi kısa yol
+# Background rengi short yol
 PCB_BACKGROUND = PCB_THEME_DEFAULT['LAYER_PCB_BACKGROUND']
 ```
 
 ---
 
-## Classic tema (beyaz arka plan)
+## Classic theme (white background)
 
 ```python
 # builtin_color_themes.h::s_classicTheme
@@ -119,15 +119,15 @@ PCB_THEME_CLASSIC = {
 
 ---
 
-## PCB_RENDER_SETTINGS::GetColor() — renk öncelik hiyerarşisi
+## PCB_RENDER_SETTINGS::GetColor() — color priority hierarchy
 
 ```python
 def get_pcb_render_color(item, layer, settings, is_selected=False, is_highlighted=False):
     """
-    PCB_PAINTER::PCB_RENDER_SETTINGS::GetColor() mantığı:
+    PCB_PAINTER::PCB_RENDER_SETTINGS::GetColor() logic:
     1. Highlighted net → HIGHLIGHT rengi
     2. High contrast mod (aktif olmayan layer dim)
-    3. Net-specific renk override
+    3. Net-specific color override
     4. Layer rengi
     """
     base_color = settings['layer_colors'].get(layer, '#FFFFFF')
@@ -137,13 +137,13 @@ def get_pcb_render_color(item, layer, settings, is_selected=False, is_highlighte
     if net_name and net_name in settings.get('net_colors', {}):
         base_color = settings['net_colors'][net_name]
 
-    # High contrast: aktif layer değilse dim
+    # High contrast: aktif layer if not dim
     if settings.get('high_contrast'):
         active = settings.get('active_layer')
         if layer != active and not is_highlighted:
             base_color = dim_color(base_color, settings.get('hi_contrast_factor', 0.3))
 
-    # Seçim
+    # Selection
     if is_selected:
         base_color = mix_color(base_color, settings.get('selection_color', '#4AB8FF'), 0.4)
 
@@ -157,7 +157,7 @@ def dim_color(hex_color, factor=0.3):
 
 
 def mix_color(base, overlay, alpha):
-    """İki rengi karıştır."""
+    """Blend two colors."""
     b = parse_rgba(base); o = parse_rgba(overlay)
     r = int(b[0]*(1-alpha) + o[0]*alpha)
     g = int(b[1]*(1-alpha) + o[1]*alpha)
@@ -166,7 +166,7 @@ def mix_color(base, overlay, alpha):
 
 
 def parse_rgba(color_str):
-    """rgba(r,g,b,a) veya #RRGGBB string → (r,g,b,a) tuple."""
+    """rgba(r,g,b,a) or #RRGGBB string → (r,g,b,a) tuple."""
     import re
     if color_str.startswith('rgba'):
         m = re.match(r'rgba\((\d+),(\d+),(\d+),([\d.]+)\)', color_str)
@@ -179,12 +179,12 @@ def parse_rgba(color_str):
 
 
 def load_layer_colors(theme='default'):
-    """Tema seçimine göre layer renkleri döndür."""
+    """Tema selectionine per layer colorleri returns."""
     if theme == 'classic':
         colors = dict(PCB_THEME_CLASSIC)
     else:
         colors = dict(PCB_THEME_DEFAULT)
-    # Eksik layer'lar için fallback
+    # Eksik layer'lar for fallback
     for layer in COPPER_LAYERS:
         if layer not in colors:
             idx = COPPER_LAYERS.index(layer) % 7
@@ -192,7 +192,7 @@ def load_layer_colors(theme='default'):
     return colors
 
 
-# builtin_color_themes.h::s_copperColors (döngüsel iç bakır renkleri)
+# builtin_color_themes.h::s_copperColors (cyclic inner copper colorleri)
 COPPER_LOOPING_COLORS = [
     'rgba(237,124,51,1)',
     'rgba(91,195,235,1)',
@@ -206,28 +206,28 @@ COPPER_LOOPING_COLORS = [
 
 ---
 
-## Opacity (şeffaflık) ayarları
+## Opacity (transparency) settings
 
-`PCB_RENDER_SETTINGS` opacity değerleri:
+`PCB_RENDER_SETTINGS` opacity values:
 
 ```python
-# Varsayılan opacity değerleri
+# Default opacity values
 TRACK_OPACITY = 1.0
 VIA_OPACITY   = 1.0
 PAD_OPACITY   = 1.0
-ZONE_OPACITY  = 0.6    # Zone fill biraz şeffaf görünür daha iyi
+ZONE_OPACITY  = 0.6    # Zone fill biraz transparent visible daha iyi
 SILKSCREEN_OPACITY = 1.0
 
-# Mask katmanları: genellikle alpha < 1 zaten builtin_color_themes.h'da
+# Mask layers: genellikle alpha < 1 already builtin_color_themes.h'da
 # F.Mask: rgba(216,100,255,0.4) — %40 opak
 # B.Mask: rgba(2,255,238,0.4)   — %40 opak
 ```
 
 ---
 
-## Tema JSON formatı (kullanıcı temaları)
+## Theme JSON format (user themes)
 
-KiCad `~/.config/kicad/9.0/colors/*.json` tema dosya formatı:
+KiCad `~/.config/kicad/9.0/colors/*.json` tema file format:
 
 ```json
 {
@@ -249,18 +249,18 @@ KiCad `~/.config/kicad/9.0/colors/*.json` tema dosya formatı:
 }
 ```
 
-> **Not:** Tema JSON'daki key'ler nokta yerine alt çizgi kullanır: `F_Cu` not `F.Cu`.
-> Parse sırasında `layer_name.replace('.','_')` ile dönüştür.
+> **Not:** Tema JSON'daki key'ler nokta yerine alt line uses: `F_Cu` not `F.Cu`.
+> Parse ordernda `layer_name.replace('.','_')` ile convert.
 
 ```python
 def parse_theme_json(json_data):
-    """KiCad tema JSON'unu layer_colors dict'e çevir."""
+    """KiCad tema JSON'unu layer_colors dict'e convert."""
     pcb = json_data.get('pcb', {})
     colors = {}
     for key, value in pcb.items():
-        # Alt çizgi → nokta: F_Cu → F.Cu
+        # Alt line → nokta: F_Cu → F.Cu
         layer = key.replace('_', '.', 1)
-        # Özel GAL layer'lar için mapping
+        # Special GAL layer'lar for mapping
         GAL_MAP = {
             'via.holes':        'LAYER_VIA_HOLES',
             'via.holewalls':    'LAYER_VIA_HOLEWALLS',

@@ -1,23 +1,23 @@
-# PCB Layer Sistemi
+# PCB Layer System
 
-> Kaynak: `include/layer_ids.h`, `pcbnew/pcb_draw_panel_gal.cpp` (GAL_LAYER_ORDER)
-> KiCad kaynak kodu, Nisan 2026
+> Source: `include/layer_ids.h`, `pcbnew/pcb_draw_panel_gal.cpp` (GAL_LAYER_ORDER)
+> KiCad source code, April 2026
 
 ---
 
-## PCB_LAYER_ID enum — fiziksel katmanlar
+## PCB_LAYER_ID enum — physical layers
 
 ```python
-# include/layer_ids.h'deki değerler
+# include/layer_ids.h values
 PCB_LAYER_IDS = {
-    # Bakır katmanlar
+    # Copper katmanlar
     'F.Cu':    0,    # F_Cu
     'In1.Cu':  1,    # In1_Cu
     'In2.Cu':  2,    # In2_Cu
-    # ... In3..In29 arası
+    # ... In3..In29 range
     'In30.Cu': 31,   # In30_Cu
-    'B.Cu':    31,   # B_Cu (aynı numara değil, B_Cu = 31)
-    # Not: Gerçek B_Cu değeri = PCB_LAYER_IDS["B.Cu"] için aşağıya bak
+    'B.Cu':    31,   # B_Cu (same numara not, B_Cu = 31)
+    # Not: Actual B_Cu value = PCB_LAYER_IDS["B.Cu"] for downya bak
 
     # Teknik katmanlar
     'B.Adhes':   32,
@@ -29,7 +29,7 @@ PCB_LAYER_IDS = {
     'B.Mask':    38,
     'F.Mask':    39,
 
-    # Kullanıcı katmanları
+    # User layers
     'Dwgs.User': 40,
     'Cmts.User': 41,
     'Eco1.User': 42,
@@ -41,22 +41,22 @@ PCB_LAYER_IDS = {
     'B.Fab':     48,
     'F.Fab':     49,
 
-    # User katmanları (KiCad 7+)
+    # User layers (KiCad 7+)
     'User.1':  50, 'User.2':  51, 'User.3':  52, 'User.4':  53,
     'User.5':  54, 'User.6':  55, 'User.7':  56, 'User.8':  57,
     'User.9':  58, 'User.10': 59, 'User.11': 60, 'User.12': 61,
     # ... User.13..User.45
 }
 
-# Gerçek KiCad C++ değerleri (include/layer_ids.h):
-# F_Cu = 0, B_Cu = 2 (copper layer sayısı bağımlı — 2 katmanlı board için B_Cu=1)
-# Pratik: string ismi kullan, ID dönüşümüne gerek yok
+# Actual KiCad C++ values (include/layer_ids.h):
+# F_Cu = 0, B_Cu = 2 (copper layer count dependent — 2 layer board for B_Cu=1)
+# Pratik: string ismi kullan, ID conversionne gerek yok
 ```
 
-### Canonical layer isimleri (S-expr'de kullanılan)
+### Canonical layer names (used in S-expr)
 
 ```python
-# Renderer'da kullan — bu string'ler S-expr'de geçer
+# Renderer'da kullan — bu string'ler S-expr'de passer
 COPPER_LAYERS = ['F.Cu', 'In1.Cu', 'In2.Cu', 'In3.Cu', 'In4.Cu',
                  'In5.Cu', 'In6.Cu', 'In7.Cu', 'In8.Cu', 'In9.Cu',
                  'In10.Cu','In11.Cu','In12.Cu','In13.Cu','In14.Cu',
@@ -88,13 +88,13 @@ def is_back_layer(layer_name):
 
 ---
 
-## GAL Virtual Layer'lar
+## GAL Virtual Layers
 
-GAL layer'lar fiziksel PCB katmanları değil, render z-order için virtual katmanlardır.
-`pcbnew/pcb_draw_panel_gal.cpp` `GAL_LAYER_ORDER` listesini tanımlar.
+GAL layer'lar fiziksel PCB layers not, render z-order for virtual layers for render z-order.
+`pcbnew/pcb_draw_panel_gal.cpp` `GAL_LAYER_ORDER` listesini defines.
 
 ```python
-# include/layer_ids.h — GAL_LAYER_ID enum (özet)
+# include/layer_ids.h — GAL_LAYER_ID enum (summary)
 GAL_LAYERS = {
     'LAYER_VIAS':            230,   # via'lar
     'LAYER_VIA_HOLES':       231,
@@ -121,23 +121,23 @@ GAL_LAYERS = {
 
 ---
 
-## Render Z-order (alt → üst)
+## Render Z-order (bottom → top)
 
-`pcbnew/pcb_draw_panel_gal.cpp::GAL_LAYER_ORDER` listesinden türetildi.
-Daha küçük z-order = altta çizilir.
+`pcbnew/pcb_draw_panel_gal.cpp::GAL_LAYER_ORDER` listesinden derived.
+Daha small z-order = altta are drawn.
 
 ```python
-# Layer render sırası (alt → üst)
-# S-expr renderer için bunu takip et:
+# Layer render order (alt → top)
+# S-expr renderer for bunu takip et:
 
 PCB_RENDER_ORDER = [
-    # 1. PCB arka plan
+    # 1. PCB background
     'LAYER_PCB_BACKGROUND',
 
-    # 2. Bakır pour (zone filled_polygon) — alt bakır önce
+    # 2. Copper pour (zone filled_polygon) — alt copper first
     'B.Cu_zone', 'In30.Cu_zone', '...', 'In1.Cu_zone', 'F.Cu_zone',
 
-    # 3. Bakır track'lar + arc'lar (segment, arc) — iç → dış
+    # 3. Copper track'lar + arc'lar (segment, arc) — inner → outer
     'B.Cu', 'In30.Cu', '...', 'In1.Cu', 'F.Cu',
 
     # 4. Teknik katmanlar
@@ -147,14 +147,14 @@ PCB_RENDER_ORDER = [
     'B.Adhes',  'F.Adhes',
     'B.Fab',    'F.Fab',
 
-    # 5. Courtyard + tasarım
+    # 5. Courtyard + design
     'B.CrtYd',  'F.CrtYd',
     'Dwgs.User','Cmts.User','Eco1.User','Eco2.User',
 
-    # 6. Kart kenarı
+    # 6. Kart edge
     'Edge.Cuts', 'Margin',
 
-    # 7. Via'lar (bakırın üstünde görünsün)
+    # 7. Vias (should appear above copper)
     'LAYER_VIAS',
     'LAYER_VIA_HOLEWALLS',
     'LAYER_VIA_HOLES',
@@ -169,10 +169,10 @@ PCB_RENDER_ORDER = [
     'LAYER_VIA_NETNAMES',
     'LAYER_PAD_NETNAMES',
 
-    # 10. Drawing sheet (başlık bloğu)
+    # 10. Drawing sheet (title block)
     'LAYER_DRAWINGSHEET',
 
-    # 11. DRC + seçim efektleri (en üstte)
+    # 11. DRC + selection efektleri (en top)
     'LAYER_DRC_ERROR', 'LAYER_DRC_WARNING',
     'LAYER_SELECT_OVERLAY',
     'LAYER_SELECTION_SHADOWS',
@@ -181,12 +181,12 @@ PCB_RENDER_ORDER = [
 
 ---
 
-## Layer görünürlük yönetimi
+## Layer visibility management
 
-Minimal renderer için hangi layer'ların görünür olduğunu kontrol et:
+Minimal renderer for hangi layersn visible  kontrol et:
 
 ```python
-# Önizleme için varsayılan görünür layer'lar
+# Preview for default visible layer'lar
 DEFAULT_VISIBLE_LAYERS = {
     'F.Cu', 'B.Cu',
     'F.SilkS', 'B.SilkS',
@@ -197,29 +197,29 @@ DEFAULT_VISIBLE_LAYERS = {
     'Dwgs.User',
 }
 
-# Basit PCB önizleme (thumbnail) için minimum set:
+# Basit PCB preview (thumbnail) for minimum set:
 THUMBNAIL_LAYERS = {'F.Cu', 'B.Cu', 'F.SilkS', 'Edge.Cuts'}
 
 def render_board(ctx, board, scale,
                  visible_layers=DEFAULT_VISIBLE_LAYERS,
                  active_layer='F.Cu'):
     """
-    board: parse edilmiş .kicad_pcb model
-    Render sırası: zone → track/arc → via → footprint → text
+    board: parse flattened .kicad_pcb model
+    Render order: zone → track/arc → via → footprint → text
     """
     layer_colors = load_layer_colors()   # pcb-colors.md'den
 
-    # Arka plan
+    # Background
     ctx.fillStyle = PCB_BACKGROUND
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
-    # 1. Zone'lar (copper pour) — her layer için
+    # 1. Zone'lar (copper pour) — her layer for
     for layer in [l for l in PCB_RENDER_ORDER if l in visible_layers]:
         for zone in board.get('zones', []):
             if zone.get('layer') == layer:
                 render_zone(ctx, zone, layer_colors[layer], scale)
 
-    # 2. Grafik ögeleri (gr_*)
+    # 2. Graphic elements (gr_*)
     for item in board.get('graphics', []):
         layer = item.get('layer', '')
         if layer in visible_layers:
@@ -246,14 +246,14 @@ def render_board(ctx, board, scale,
 
 ---
 
-## Layer mask (LSET) — wildcard kullanımı
+## Layer mask (LSET) — wildcard usage
 
-S-expr `pad` token'ında `layers "*.Cu"` gibi wildcard olabilir:
+S-expr `pad` tokennda `layers "*.Cu"` gibi wildcard can be:
 
 ```python
 def expand_layer_mask(mask, board_copper_count=2):
     """
-    "*.Cu"      → tüm copper layer'lar
+    "*.Cu"      → all copper layer'lar
     "F&B.Cu"    → F.Cu + B.Cu
     "F.Cu B.Cu" → F.Cu + B.Cu
     """

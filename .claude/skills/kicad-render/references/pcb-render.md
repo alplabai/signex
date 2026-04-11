@@ -1,22 +1,22 @@
-# PCB Render — Primitifler, Footprint, PADSTACK
+# PCB Render — Primitives, Footprint, PADSTACK
 
-> Kaynak: `pcbnew/pcb_painter.cpp`, `pcbnew/pad.cpp`, `pcbnew/pcb_track.cpp`,
-> `pcbnew/zone.cpp`, `common/eda_shape.cpp` — KiCad kaynak kodu, Nisan 2026
+> Source: `pcbnew/pcb_painter.cpp`, `pcbnew/pad.cpp`, `pcbnew/pcb_track.cpp`,
+> `pcbnew/zone.cpp`, `common/eda_shape.cpp` — KiCad source code, April 2026
 
 ---
 
 ## PCB_PAINTER::Draw() dispatcher
 
-KiCad `pcb_painter.cpp::Draw()` item tipine göre dispatch eder.
-Her item tipi için render metodları:
+KiCad `pcb_painter.cpp::Draw()` dispatches by item type.
+Render methods for each item type:
 
-| C++ sınıfı | Token / tip | Draw metodu |
+| C++ class | Token / type | Draw method |
 |-----------|------------|------------|
 | `PCB_TRACK` | `segment` | `draw(PCB_TRACK*, layer)` — `DrawSegment()` |
-| `PCB_ARC` | `arc` (track) | `draw(PCB_ARC*, layer)` — arc hesapla + DrawArc |
+| `PCB_ARC` | `arc` (track) | `draw(PCB_ARC*, layer)` — calculate arc + DrawArc |
 | `PCB_VIA` | `via` | `draw(PCB_VIA*, layer)` — via + hole |
-| `FOOTPRINT` | `footprint` | `draw(FOOTPRINT*, layer)` — her child item |
-| `PAD` | `pad` | `draw(PAD*, layer)` — PADSTACK'e göre şekil |
+| `FOOTPRINT` | `footprint` | `draw(FOOTPRINT*, layer)` — each child item |
+| `PAD` | `pad` | `draw(PAD*, layer)` — PADSTACK'e per shape |
 | `PCB_SHAPE` | `gr_*`, `fp_*` | `draw(PCB_SHAPE*, layer)` — EDA_SHAPE dispatch |
 | `ZONE` | `zone` | `draw(ZONE*, layer)` — filled_polygon |
 | `PCB_TEXT` | `gr_text`, `fp_text` | `draw(PCB_TEXT*, layer)` |
@@ -25,16 +25,16 @@ Her item tipi için render metodları:
 
 ---
 
-## Koordinat sistemi
+## Coordinate system
 
-**PCB: Y ekseni AŞAĞI pozitif** — Canvas Y ile aynı, çevirme gerekmez.
+**PCB: Y axis DOWN positive** — same as Canvas Y, no flipping needed.
 
 ```python
 def pcb_to_px(mm_x, mm_y, scale, origin_x, origin_y):
     return (mm_x - origin_x) * scale, (mm_y - origin_y) * scale
 
 def bounding_box(items):
-    """Tüm item'lardan bounding box hesapla."""
+    """All item'lardan bounding box hesapla."""
     xs, ys = [], []
     for item in items:
         for key in ('start','end','center','at'):
@@ -51,8 +51,8 @@ def bounding_box(items):
 
 ## PCB_TRACK (segment) — PCB_PAINTER::draw(PCB_TRACK*)
 
-`PCB_TRACK` C++ sınıfı varsayılan 0.2mm genişlik kullanır.
-Canvas'ta `round` lineCap ile çizilir (KiCad GAL DrawSegment).
+`PCB_TRACK` C++ class default 0.2mm width uses.
+Canvas'ta `round` lineCap ile are drawn (KiCad GAL DrawSegment).
 
 ```python
 def render_segment(ctx, seg, layer_color, scale):
@@ -65,7 +65,7 @@ def render_segment(ctx, seg, layer_color, scale):
     ctx.moveTo(x1*scale, y1*scale)
     ctx.lineTo(x2*scale, y2*scale)
     ctx.strokeStyle = layer_color
-    ctx.lineWidth   = max(w, 0.5)   # minimum 0.5px görünürlük
+    ctx.lineWidth   = max(w, 0.5)   # minimum 0.5px visibility
     ctx.lineCap     = 'round'
     ctx.lineJoin    = 'round'
     ctx.stroke()
@@ -76,7 +76,7 @@ def render_segment(ctx, seg, layer_color, scale):
 ## PCB_ARC (arc track) — PCB_PAINTER::draw(PCB_ARC*)
 
 Arc track: `(arc (start X Y)(mid X Y)(end X Y)(width W)(layer L))`.
-KiCad GAL `DrawArc()` merkez+r+açı kullanır.
+KiCad GAL `DrawArc()` center+r+angle uses.
 
 ```python
 def render_arc_track(ctx, item, layer_color, scale):
@@ -90,7 +90,7 @@ def render_arc_track(ctx, item, layer_color, scale):
         (e[0]*scale, e[1]*scale)
     )
     if not center:
-        # Fallback: düz çizgi
+        # Fallback: straight line
         return render_segment(ctx, {'start':s,'end':e,'width':item.get('width',0.2)}, layer_color, scale)
 
     t1, t2, ccw = arc_sweep(center,
@@ -110,13 +110,13 @@ def render_arc_track(ctx, item, layer_color, scale):
 
 ## PCB_VIA — PCB_PAINTER::draw(PCB_VIA*, layer)
 
-Via türleri: `through`, `blind_buried`, `micro`.
-KiCad `draw(PCB_VIA*)` iki daire çizer: dış halka (bakır) + iç delik.
+Via types: `through`, `blind_buried`, `micro`.
+KiCad `draw(PCB_VIA*)` draws two circles: outer ring (copper) + inner hole.
 
-Özel layer'lar: `LAYER_VIA_HOLES` (delik rengi), `LAYER_VIA_HOLEWALLS` (duvar rengi).
+Special layer'lar: `LAYER_VIA_HOLES` (hole color), `LAYER_VIA_HOLEWALLS` (wall color).
 
 ```python
-# Varsayılan tema renkleri (builtin_color_themes.h'dan):
+# Default tema colorleri (builtin_color_themes.h'dan):
 VIA_HOLE_COLOR    = 'rgb(227,183,46,1)'   # LAYER_VIA_HOLES
 VIA_HOLEWALLS     = 'rgb(236,236,236,1)'  # LAYER_VIA_HOLEWALLS
 PLATED_HOLE_COLOR = 'rgb(194,194,0,1)'    # LAYER_PAD_PLATEDHOLES
@@ -124,8 +124,8 @@ NPTHOLE_COLOR     = 'rgb(26,196,210,1)'   # LAYER_NON_PLATEDHOLES
 
 def render_via(ctx, via, layer_colors, scale):
     """
-    via token: at, size (dış çap), drill (delik çapı),
-               layers ["F.Cu","B.Cu"] veya via_type
+    via token: at, size (outer diameter), drill (hole diameter),
+               layers ["F.Cu","B.Cu"] or via_type
     """
     x, y    = via['at'][0]*scale, via['at'][1]*scale
     size    = via.get('size', 1.6)
@@ -133,9 +133,9 @@ def render_via(ctx, via, layer_colors, scale):
 
     outer_r  = size  / 2 * scale
     drill_r  = drill / 2 * scale
-    wall_r   = drill_r + 0.1 * scale   # holewalls ince ring
+    wall_r   = drill_r + 0.1 * scale   # holewalls thin ring
 
-    # 1. Bakır halka (aktif layer rengi veya via rengi)
+    # 1. Copper ring (active layer color or via color)
     via_layer = via.get('layers', ['F.Cu', 'B.Cu'])
     color = layer_colors.get(via_layer[0], VIA_HOLE_COLOR)
     ctx.beginPath()
@@ -143,14 +143,14 @@ def render_via(ctx, via, layer_colors, scale):
     ctx.fillStyle = color
     ctx.fill()
 
-    # 2. Holewalls ring (ince, via_holewalls rengi)
+    # 2. Holewalls ring (thin, via_holewalls rengi)
     ctx.beginPath()
     ctx.arc(x, y, wall_r, 0, 2*math.pi)
     ctx.strokeStyle = VIA_HOLEWALLS
     ctx.lineWidth   = (outer_r - drill_r) * 0.3
     ctx.stroke()
 
-    # 3. Delik
+    # 3. Hole
     ctx.beginPath()
     ctx.arc(x, y, drill_r, 0, 2*math.pi)
     ctx.fillStyle = VIA_HOLE_COLOR
@@ -159,10 +159,10 @@ def render_via(ctx, via, layer_colors, scale):
 
 ---
 
-## PCB_SHAPE (EDA_SHAPE) — gr_* ve fp_* grafikleri
+## PCB_SHAPE (EDA_SHAPE) — gr_* and fp_* graphics
 
-`EDA_SHAPE` sınıfı `SHAPE_T` enum'ı ile tip tutar.
-`pcb_painter.cpp::draw(PCB_SHAPE*)` → `getLineWidth()` + `getFillColor()` + GAL çağrısı.
+`EDA_SHAPE` class `SHAPE_T` enum stores type.
+`pcb_painter.cpp::draw(PCB_SHAPE*)` → `getLineWidth()` + `getFillColor()` + GAL call.
 
 ```python
 def render_pcb_shape(ctx, shape, layer_color, scale):
@@ -230,7 +230,7 @@ def render_pcb_shape(ctx, shape, layer_color, scale):
         ctx.stroke()
 
     elif t in ('bezier', 'fp_curve'):
-        pts = shape['pts']  # 4 kontrol noktası
+        pts = shape['pts']  # 4 control points
         p0,p1,p2,p3 = [(p[0]*scale,p[1]*scale) for p in pts]
         ctx.beginPath()
         ctx.moveTo(*p0)
@@ -239,24 +239,24 @@ def render_pcb_shape(ctx, shape, layer_color, scale):
 
 
 def get_stroke_width(shape):
-    """stroke.width veya width token'ından genişlik al."""
+    """stroke.width or width token get width."""
     stroke = shape.get('stroke', {})
     w = stroke.get('width', shape.get('width', 0.1524))
-    return max(w, 0.0)   # negatif olamaz
+    return max(w, 0.0)   # cannot be negative
 ```
 
 ---
 
 ## PAD — PCB_PAINTER::draw(PAD*, layer)
 
-### PADSTACK mimarisi (KiCad 9+)
+### PADSTACK architecture (KiCad 9+)
 
 `PAD` → `PADSTACK` → `COPPER_LAYER_PROPS` per-layer geometry.
-`PADSTACK::Mode`: `NORMAL` (tek şekil), `FRONT_INNER_BACK` (3 şekil), `CUSTOM` (her layer ayrı).
+`PADSTACK::Mode`: `NORMAL` (single shape), `FRONT_INNER_BACK` (3 shapes), `CUSTOM` (each layer separate).
 
-Basit render için sadece `shape` + `size` + `angle` + `drill` kullan.
+For simple rendering, just use `shape` + `size` + `angle` + `drill` kullan.
 
-### Pad şekilleri
+### Pad shapes
 
 ```python
 def render_pad(ctx, pad, layer_color, scale):
@@ -293,10 +293,10 @@ def render_pad(ctx, pad, layer_color, scale):
         ctx.fill()
 
     elif shape == 'trapezoid':
-        # delta parametresi: (delta_x, delta_y)
+        # delta parameter: (delta_x, delta_y)
         delta = pad.get('rect_delta', [0, 0])
         dx, dy = delta[0]*scale/2, delta[1]*scale/2
-        # köşe koordinatları
+        # corner coordinates
         pts = [(-w/2+dy, -h/2+dx), (w/2-dy, -h/2-dx),
                ( w/2+dy,  h/2-dx), (-w/2-dy,  h/2+dx)]
         ctx.beginPath()
@@ -305,12 +305,12 @@ def render_pad(ctx, pad, layer_color, scale):
         ctx.closePath(); ctx.fill()
 
     elif shape == 'custom':
-        # primitives token'ı kullan
+        # primitives token kullan
         for prim in pad.get('primitives', []):
-            render_pcb_shape(ctx, prim, layer_color, 1.0)  # scale=1, zaten dönüştürülmüş
-            # TODO: Bu koordinatlar pad local'inde — transform gerekebilir
+            render_pcb_shape(ctx, prim, layer_color, 1.0)  # scale=1, already transformed
+            # TODO: Bu koordinatlar pad local'inde — transform may be needed
 
-    # Drill deliği (plated veya non-plated)
+    # Drill hole (plated or non-plated)
     drill = pad.get('drill')
     if drill:
         _draw_drill(ctx, drill, pad.get('type',''), scale)
@@ -319,7 +319,7 @@ def render_pad(ctx, pad, layer_color, scale):
 
 
 def _draw_oval(ctx, w, h):
-    """Oval pad: iki yarım daire + iki düz kenar."""
+    """Oval pad: two semicircles + two straight edges."""
     if w >= h:
         r = h / 2
         ctx.beginPath()
@@ -337,7 +337,7 @@ def _draw_oval(ctx, w, h):
 
 
 def _draw_rounded_rect(ctx, x, y, w, h, r):
-    """Köşe yarıçaplı dikdörtgen."""
+    """Rectangle with corner radius."""
     r = min(r, w/2, h/2)
     ctx.beginPath()
     ctx.moveTo(x+r, y)
@@ -353,7 +353,7 @@ def _draw_rounded_rect(ctx, x, y, w, h, r):
 
 
 def _draw_drill(ctx, drill, pad_type, scale):
-    """Drill deliği — plated veya non-plated."""
+    """Drill hole — plated or non-plated."""
     if isinstance(drill, dict):
         diameter = drill.get('diameter', drill.get('size', 0))
         oval     = drill.get('oval', False)
@@ -378,22 +378,22 @@ def _draw_drill(ctx, drill, pad_type, scale):
 
 ## ZONE / copper pour — PCB_PAINTER::draw(ZONE*, layer)
 
-`ZONE` C++ sınıfı `m_FilledPolysList` ile per-layer dolgu saklar.
+`ZONE` C++ class `m_FilledPolysList` ile stores per-layer fill.
 S-expr'de: `zone → filled_polygon → pts`.
 
 ```python
 def render_zone(ctx, zone, layer_color, scale):
     """
-    zone token: layer, filled_polygon veya polygon (outline)
+    zone token: layer, filled_polygon or polygon (outline)
     PCB_PAINTER: ZONE_DISPLAY_MODE_FILLED (default) → filled_polygon kullan
     """
     filled_list = zone.get('filled_polygons', [])
 
     if filled_list:
-        # filled_polygon token'larını çiz
+        # filled_polygon draw tokens
         for filled in filled_list:
             if filled.get('layer') != zone.get('layer'):
-                continue   # sadece hedef layer
+                continue   # target layer only
             pts = filled['pts']
             ctx.beginPath()
             ctx.moveTo(pts[0][0]*scale, pts[0][1]*scale)
@@ -403,7 +403,7 @@ def render_zone(ctx, zone, layer_color, scale):
             ctx.fillStyle = layer_color
             ctx.fill()
     else:
-        # filled_polygon yoksa sadece outline çiz
+        # no filled_polygon, draw outline only
         pts = zone.get('polygon', {}).get('pts', [])
         if pts:
             ctx.beginPath()
@@ -420,26 +420,26 @@ def render_zone(ctx, zone, layer_color, scale):
 
 ## Footprint — draw(FOOTPRINT*, layer)
 
-`FOOTPRINT` sınıfı child items koleksiyonu tutar:
-`m_pads` (PAD listesi), `m_drawings` (PCB_SHAPE listesi), `m_fields` (PCB_TEXT).
+`FOOTPRINT` class holds a collection of child items:
+`m_pads` (PAD list), `m_drawings` (PCB_SHAPE list), `m_fields` (PCB_TEXT).
 
 ```python
 def render_footprint(ctx, fp, layer_colors, active_layers, scale):
     """
-    fp token: at, layer (birincil), footprint (lib_id)
-    İçerik: fp_line, fp_arc, fp_circle, fp_text, pad tokenları
+    fp token: at, layer (primary), footprint (lib_id)
+    Contents: fp_line, fp_arc, fp_circle, fp_text, pad tokens
     """
     at_x = fp['at'][0]
     at_y = fp['at'][1]
     angle = fp['at'][2] if len(fp['at']) > 2 else 0
     fp_layer = fp.get('layer', 'F.Cu')
 
-    # Footprint koordinat sistemi: at konumu + rotation
+    # Footprint coordinate system: at position + rotation
     ctx.save()
     ctx.translate(at_x*scale, at_y*scale)
     ctx.rotate(math.radians(angle))
 
-    # Grafik ögeleri (fp_line, fp_arc, fp_circle, fp_rect, fp_poly)
+    # Graphic elements (fp_line, fp_arc, fp_circle, fp_rect, fp_poly)
     for drawing in fp.get('graphics', []):
         layer = drawing.get('layer', fp_layer)
         if layer not in active_layers:
@@ -447,16 +447,16 @@ def render_footprint(ctx, fp, layer_colors, active_layers, scale):
         color = layer_colors.get(layer, '#FFFFFF')
         render_pcb_shape(ctx, drawing, color, scale)
 
-    # Metinler (fp_text: reference, value, user)
+    # Textler (fp_text: reference, value, user)
     for text in fp.get('texts', []):
         layer = text.get('layer', 'F.SilkS')
         if layer in active_layers and not text.get('hide'):
             color = layer_colors.get(layer, '#FFFFFF')
             render_pcb_text(ctx, text, color, scale)
 
-    ctx.restore()   # ← footprint transform kapatılıyor
+    ctx.restore()   # ← closing footprint transform
 
-    # Pad'ler: GLOBAL koordinatlarda çizilir (footprint transform sonrası hesaplanmış)
+    # Pad'ler: drawn in GLOBAL coordinates (calculated after footprint transform)
     for pad in fp.get('pads', []):
         layer = determine_pad_layer(pad, fp_layer)
         if layer in active_layers:
@@ -464,34 +464,34 @@ def render_footprint(ctx, fp, layer_colors, active_layers, scale):
             render_pad(ctx, apply_footprint_transform(pad, at_x, at_y, angle), color, scale)
 ```
 
-> ⚠️ **Kritik:** KiCad pad koordinatları footprint local'indedir.
-> S-expr parse sonrası `at` değerleri footprint `at` + rotation ile globalleştirilmeli,
-> VEYA footprint transform'un içinde çizilmeli.
+> ⚠️ **Critical:** KiCad pad coordinates are in footprint local space'.
+> S-expr parse after `at` values must be globalized with footprint `at` + rotation,
+> VEYA footprint transform'un drawn inside the transform.
 
 ---
 
-## Kritik tuzaklar (kaynak koddan)
+## Critical pitfalls (from source code)
 
-1. **Segment vs Arc track:** S-expr'de `(arc ...)` kopper arc track'tır,
-   `(gr_arc ...)` grafik arc'tır. İkisi de aynı `start/mid/end` formatını kullanır.
+1. **Segment vs Arc track:** S-expr'de `(arc ...)` kopper arc is a copper arc track,
+   `(gr_arc ...)` grafik is a graphic arc. Both use the de same `start/mid/end` format. uses.
 
-2. **Via layer filtreleme:** Via `LAYER_VIAS` (GAL virtual layer) üzerinde çizilir,
-   `F.Cu` veya `B.Cu` üzerinde değil. Render sırasında via'yı PCB layer değil
+2. **Via layer filterme:** Via `LAYER_VIAS` (GAL virtual layer) on are drawn,
+   `F.Cu` or `B.Cu` on not. Render ordernda vias as PCB layer not
    GAL layer olarak ele al.
 
-3. **PAD oval drill:** Oval drill hem `diameter` hem slot width içerir:
-   `(drill oval DIAMETER SLOT_WIDTH)`. `oval=True` ise eliptik delik çiz.
+3. **PAD oval drill:** Oval drill hem `diameter` hem slot width contains:
+   `(drill oval DIAMETER SLOT_WIDTH)`. `oval=True` ise eliptik delik draw.
 
-4. **PADSTACK:** KiCad 9+ ile pad şekli layer'a göre farklılaşabilir.
-   `padstack.mode == 'front_inner_back'` ise `F.Cu`, inner ve `B.Cu` için
-   ayrı `size`/`shape` değerleri olabilir. Basit render için normal mod yeterli.
+4. **PADSTACK:** KiCad 9+ ile pad shape layer'a per vary.
+   `padstack.mode == 'front_inner_back'` ise `F.Cu`, inner ve `B.Cu` for
+   separate `size`/`shape` values can be. Basit render for normal mod sufficient.
 
 5. **Footprint mirroring (B side):** `(layer B.Cu)` olan footprint'ler
-   X ekseninde aynılanmış demektir. `ctx.scale(-1, 1)` uygula. Tüm child item
-   layer'ları da `F.*` → `B.*` ve tersine çevrilir.
+   X ekseninde mirrored demektir. `ctx.scale(-1, 1)` apply. All child item
+   layers da `F.*` → `B.*` ve tersine flipped.
 
-6. **gr_text angle:** PCB metin açısı derece cinsinden ama yön şematikten farklı.
-   PCB Y aşağı pozitif, dolayısıyla `ctx.rotate(math.radians(angle))` direkt çalışır.
+6. **gr_text angle:** PCB metin angle derece cinsinden ama direction schematicten different.
+   PCB Y down positive, therefore `ctx.rotate(math.radians(angle))` directly works.
 
-7. **Thermal relief:** Zone fill'de pad çevresindeki thermal relief boşlukları
-   `filled_polygon` içine zaten dahil edilmiş. Ayrıca hesaplaman gerekmez.
+7. **Thermal relief:** Zone fill'de pad around thermal relief gaps
+   `filled_polygon` in already dahil included. Additionally, hesaplaman gerekmez.

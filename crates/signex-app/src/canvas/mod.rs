@@ -28,6 +28,8 @@ pub struct CanvasState {
     panning: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
+    /// Pending fit target — consumed on next update.
+    pub pending_fit: Option<Rectangle>,
 }
 
 impl Default for CanvasState {
@@ -37,6 +39,7 @@ impl Default for CanvasState {
             grid: GridState::default(),
             panning: false,
             last_pan_pos: None,
+            pending_fit: None,
         }
     }
 }
@@ -48,6 +51,7 @@ impl Default for CanvasState {
 pub struct SchematicCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
+    pub overlay_cache: canvas::Cache,
     pub grid_visible: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
@@ -56,6 +60,10 @@ pub struct SchematicCanvas {
     /// Reference to the currently loaded schematic (if any).
     /// Set by the app when a file is opened.
     pub schematic: Option<signex_types::schematic::SchematicSheet>,
+    /// Currently selected items — drives selection overlay rendering.
+    pub selected: Vec<signex_types::schematic::SelectedItem>,
+    /// Pending fit target to transfer to CanvasState.
+    pub pending_fit: Option<Rectangle>,
 }
 
 impl SchematicCanvas {
@@ -64,13 +72,20 @@ impl SchematicCanvas {
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
+            overlay_cache: canvas::Cache::default(),
             grid_visible: true,
             theme_bg: Color::from_rgb8(0x1a, 0x1b, 0x2e),
             theme_grid: Color::from_rgb8(0x2d, 0x30, 0x60),
             theme_paper: Color::from_rgb8(0x1e, 0x20, 0x35),
             canvas_colors: default_colors,
             schematic: None,
+            selected: Vec::new(),
+            pending_fit: None,
         }
+    }
+
+    pub fn clear_overlay_cache(&mut self) {
+        self.overlay_cache.clear();
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -81,14 +96,16 @@ impl SchematicCanvas {
         self.content_cache.clear();
     }
 
-    /// Reset camera to fit an A4 paper in view. Called on Home key.
-    /// Note: proper fit-all would calculate bounds from schematic content,
-    /// but this requires access to the canvas State which we don't have here.
-    /// For now we reset to the default camera position.
+    /// Fit the camera to show the schematic content.
     pub fn fit_to_paper(&mut self) {
-        // This clears the caches; the actual camera reset happens via
-        // a default CanvasState when the caches are rebuilt.
-        // TODO: implement proper fit-all via canvas State access
+        if let Some(ref sheet) = self.schematic {
+            if let Some(bounds) = sheet.content_bounds() {
+                self.pending_fit = Some(Rectangle::new(
+                    iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
+                    iced::Size::new(bounds.width() as f32, bounds.height() as f32),
+                ));
+            }
+        }
     }
 
     pub fn set_theme_colors(&mut self, bg: Color, grid: Color, paper: Color) {
@@ -109,6 +126,19 @@ impl canvas::Program<Message> for SchematicCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // Transfer pending fit from SchematicCanvas to CanvasState
+        if let Some(target) = self.pending_fit {
+            state.pending_fit = Some(target);
+        }
+
+        // Apply pending fit-to-content
+        if let Some(target) = state.pending_fit.take() {
+            state.camera.fit_rect(target, bounds);
+            return Some(canvas::Action::publish(Message::CanvasEvent(
+                CanvasEvent::CursorMoved,
+            )));
+        }
+
         match event {
             // ── Mouse scroll → zoom ──
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
@@ -126,6 +156,20 @@ impl canvas::Program<Message> for SchematicCanvas {
                         ))
                         .and_capture(),
                     );
+                }
+                None
+            }
+
+            // ── Left-click → select ──
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if let Some(cursor_pos) = cursor.position_in(bounds) {
+                    let world = state.camera.screen_to_world(cursor_pos, bounds);
+                    return Some(canvas::Action::publish(Message::CanvasEvent(
+                        CanvasEvent::Clicked {
+                            world_x: world.x as f64,
+                            world_y: world.y as f64,
+                        },
+                    )));
                 }
                 None
             }
@@ -187,7 +231,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut layers = Vec::with_capacity(3);
+        let mut layers = Vec::with_capacity(4);
 
         // Layer 1: background (grid + paper)
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
@@ -259,12 +303,31 @@ impl canvas::Program<Message> for SchematicCanvas {
         });
         layers.push(content);
 
-        // Layer 3: overlay (cursor crosshair)
+        // Layer 3: selection overlay (cached, cleared on selection change)
+        if !self.selected.is_empty() {
+            if let Some(ref sheet) = self.schematic {
+                let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
+                    let transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    signex_render::schematic::selection::draw_selection_overlay(
+                        frame,
+                        sheet,
+                        &self.selected,
+                        &transform,
+                    );
+                });
+                layers.push(sel_overlay);
+            }
+        }
+
+        // Layer 4: overlay (cursor crosshair — redrawn every frame)
         let overlay = {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
 
             if let Some(cursor_pos) = cursor.position_in(bounds) {
-                // Crosshair
                 let crosshair_color = Color::from_rgba8(255, 255, 255, 0.3);
                 let h_line = canvas::Path::line(
                     iced::Point::new(0.0, cursor_pos.y),
@@ -309,4 +372,6 @@ pub enum CanvasEvent {
     CursorAt { x: f32, y: f32, zoom_pct: f64 },
     CursorMoved,
     FitAll,
+    /// Left-click at world coordinates — triggers hit-testing.
+    Clicked { world_x: f64, world_y: f64 },
 }

@@ -1,46 +1,46 @@
-# Şematik Sembol Render — TRANSFORM, Flatten, Pin
+# Schematic Symbol Render — TRANSFORM, Flatten, Pin
 
-> Kaynak: `eeschema/sch_symbol.cpp`, `sch_painter.cpp`, `sch_pin.cpp`, `lib_symbol.cpp`
-> (KiCad kaynak kodu, Nisan 2026)
+> Source: `eeschema/sch_symbol.cpp`, `sch_painter.cpp`, `sch_pin.cpp`, `lib_symbol.cpp`
+> (KiCad source code, April 2026)
 
 ---
 
-## Temel mimari (KiCad kaynak kodundan)
+## Core architecture (from KiCad source code)
 
 ```
-LIB_SYMBOL  ──── grafik tanımı (polyline, arc, circle, rectangle, pin)
-     │            lib koordinatlarında, origin'de
+LIB_SYMBOL  ──── graphic definition (polyline, arc, circle, rectangle, pin)
+     │            in lib coordinates, at origin'de
      │ flatten()
 SCH_SYMBOL  ──── instance: at(x,y), m_transform, m_unit, m_bodyStyle
-     │            m_libSymbol = flatten edilmiş kopya
+     │            m_libSymbol = flattened copy
      │
-SCH_PIN     ──── instance pin, LIB_PIN'e referans,
-                  pozisyon m_transform ile dönüştürülmüş
+SCH_PIN     ──── instance pin, references LIB_PIN'e ,
+                  position transformed via m_transform
 ```
 
-**Kritik:** `SCH_SYMBOL::m_libSymbol` flatten edilmiş bir `LIB_SYMBOL`'dür.
-Şematik dosyası `lib_symbols` bölümünde bu flatten edilmiş kopyayı saklar.
-`extends` keyword ile kalıtım alan semboller için `Flatten()` çağrısı gerekir.
+**Critical:** `SCH_SYMBOL::m_libSymbol` a flattened `LIB_SYMBOL`.
+The schematic file `lib_symbols` section this flattened copy stores.
+`extends` for symbols inheriting via the keyword, `Flatten()` call is required.
 
 ---
 
-## TRANSFORM matrix — KiCad'ın integer matrisi
+## TRANSFORM matrix — KiCad's integer matrix
 
-KiCad C++ kodu `TRANSFORM` sınıfını kullanır:
+KiCad C++ kodu `TRANSFORM` class:
 
 ```cpp
 struct TRANSFORM {
-    int x1, x2;  // sütun 1
-    int y1, y2;  // sütun 2
-    // Uygulama: x' = x1*x + x2*y,  y' = y1*x + y2*y
+    int x1, x2;  // column 1
+    int y1, y2;  // column 2
+    // Application: x' = x1*x + x2*y,  y' = y1*x + y2*y
 };
 ```
 
-Değerler yalnızca `{-1, 0, 1}` — izometrik dönüşüm.
+Values are only `{-1, 0, 1}` — isometric transformation.
 
-### Standart dönüşüm tablosu
+### Standard transformation table
 
-| Durum | x1 | x2 | y1 | y2 | S-expr `at` açısı |
+| Case | x1 | x2 | y1 | y2 | S-expr `at` angle |
 |-------|----|----|----|----|-------------------|
 | Normal (0°) | 1 | 0 | 0 | -1 | 0 |
 | 90° CCW | 0 | 1 | 1 | 0 | 90 |
@@ -49,14 +49,14 @@ Değerler yalnızca `{-1, 0, 1}` — izometrik dönüşüm.
 | Mirror X | -1 | 0 | 0 | -1 | 0 + mirror x |
 | Mirror Y | 1 | 0 | 0 | 1 | 0 + mirror y |
 
-**Neden y2=-1 normal durumda?** Şematik Y yukarı pozitif, canvas Y aşağı pozitif.
-Normal transform zaten Y'yi çevirir — dolayısıyla `sch_to_px` ile çakışmamak için
-lib koordinatlarını transform'dan geçirirken Y çevirme **yapma**.
+**Why y2=-1 in the normal case?** Schematic Y is up positive, canvas Y is down positive.
+The normal transform already flips Y' — therefore `sch_to_px` to avoid conflict with
+when passing lib coordinates through the transform,'do **not** flip Y.
 
-### Python TRANSFORM uygulaması
+### Python TRANSFORM implementation
 
 ```python
-# S-expr'den TRANSFORM oluştur
+# S-expr'den TRANSFORM build
 TRANSFORMS = {
     (0,   False, False): (1, 0, 0, -1),
     (90,  False, False): (0, 1, 1,  0),
@@ -66,37 +66,37 @@ TRANSFORMS = {
     (0,   False, True ): (1, 0, 0,  1),   # mirror y
     (90,  True,  False): (0,-1, 1,  0),
     (90,  False, True ): (0, 1,-1,  0),
-    # ... vb. (kombinasyonlar için rotate sonra mirror uygula)
+    # ... etc. (kombinasyonlar for rotate sonra mirror apply)
 }
 
 def make_transform(angle_deg, mirror_x=False, mirror_y=False):
-    """Açı ve mirror'dan TRANSFORM (x1,x2,y1,y2) döndür."""
+    """Angle ve mirror'dan TRANSFORM (x1,x2,y1,y2) returns."""
     a = math.radians(angle_deg)
     cos_a, sin_a = round(math.cos(a)), round(math.sin(a))
     x1, x2 = cos_a, -sin_a
     y1, y2 = sin_a,  cos_a
-    if mirror_x: x1, x2 = -x1, -x2   # X ekseninde ayna
-    if mirror_y: y1, y2 = -y1, -y2   # Y ekseninde ayna
+    if mirror_x: x1, x2 = -x1, -x2   # X ekseninde mirror
+    if mirror_y: y1, y2 = -y1, -y2   # Y ekseninde mirror
     return (x1, x2, y1, y2)
 
 def transform_point(x1,x2,y1,y2, lx, ly):
-    """Lib koordinatını instance koordinatına çevir."""
+    """Lib coordinate to instance coordinate convert."""
     return x1*lx + x2*ly, y1*lx + y2*ly
 ```
 
 ---
 
-## LIB_SYMBOL::Flatten — kalıtım çözümleme
+## LIB_SYMBOL::Flatten — inheritance resolution
 
-`extends` keyword ile parent sembolden kalıtım alan semboller flatten edilmelidir.
-KiCad C++ `LIB_SYMBOL::Flatten()` parent'ın drawing item'larını kopyalar.
+`extends` keyword ile parent symbolden inheritance alan symboller flatten must be flattened.
+KiCad C++ `LIB_SYMBOL::Flatten()` parent's drawing items copies.
 
 ```python
 def flatten_lib_symbol(sym, lib_symbols):
     """
-    sym: parse edilmiş sembol node'u
-    lib_symbols: tüm lib_symbols dict'i {id: node}
-    Döner: flatten edilmiş çizim item listesi
+    sym: parse flattened symbol node'u
+    lib_symbols: all lib_symbols dict'i {id: node}
+    Returns: flattened drawing item listesi
     """
     items = list(sym.get('drawing', []))
     parent_id = sym.get('extends')
@@ -104,7 +104,7 @@ def flatten_lib_symbol(sym, lib_symbols):
         parent = lib_symbols.get(parent_id)
         if not parent:
             break
-        # parent'ın çizim item'larını ekle (pinler dahil)
+        # parent's drawing items ekle (pinler dahil)
         items = list(parent.get('drawing', [])) + items
         parent_id = parent.get('extends')
     return items
@@ -112,26 +112,26 @@ def flatten_lib_symbol(sym, lib_symbols):
 
 ---
 
-## Unit ve Body Style filtreleme
+## Unit and Body Style filtering
 
-KiCad C++ `SCH_PAINTER`: `m_unit` ve `m_bodyStyle` değerleriyle eşleşen
-alt-semboller çizilir.
+KiCad C++ `SCH_PAINTER`: `m_unit` ve `m_bodyStyle` values matching
+alt-symboller are drawn.
 
-Alt-sembol isimlendirme: `"PARENT_UNIT_STYLE"`
-- `UNIT=0` → tüm unitlerde ortak
+Alt-symbol naming: `"PARENT_UNIT_STYLE"`
+- `UNIT=0` → all unitlerde common
 - `STYLE=1` → normal, `STYLE=2` → De Morgan
 
 ```python
 def filter_units(lib_sym_items, unit, body_style=1):
     """
-    lib_sym içindeki child symbol token'larından
-    unit ve body_style eşleşen primitifleri döndür.
+    lib_sym in child symbol tokens
+    unit ve body_style matching primitives returns.
     """
     result = []
     for child in lib_sym_items:
         if child['type'] != 'symbol':
             continue
-        name   = child['id']          # ör: "Device_R_1_1"
+        name   = child['id']          # e.g.: "Device_R_1_1"
         parts  = name.rsplit('_', 2)
         if len(parts) == 3:
             try:
@@ -139,7 +139,7 @@ def filter_units(lib_sym_items, unit, body_style=1):
                 child_style = int(parts[2])
             except ValueError:
                 continue
-            # unit=0 → her yerde geç; style=0 → her iki style'da geç
+            # unit=0 → her yerde pass; style=0 → her iki style'da pass
             if child_unit not in (0, unit):
                 continue
             if child_style not in (0, body_style):
@@ -150,19 +150,19 @@ def filter_units(lib_sym_items, unit, body_style=1):
 
 ---
 
-## Sembol render — tam akış
+## Symbol render — full flow
 
 ```python
 def render_symbol(ctx, instance, lib_symbols, scale):
-    lib_id  = instance['lib_id']           # ör: "Device:R"
+    lib_id  = instance['lib_id']           # e.g.: "Device:R"
     lib_sym = lib_symbols.get(lib_id)
     if not lib_sym:
-        return                             # lib bulunamadı
+        return                             # lib not found
 
     at_x    = instance['at'][0]
     at_y    = instance['at'][1]
     angle   = instance['at'][2] if len(instance['at']) > 2 else 0
-    mirror  = instance.get('mirror')       # 'x', 'y', veya None
+    mirror  = instance.get('mirror')       # 'x', 'y', or None
     unit    = instance.get('unit', 1)
 
     # TRANSFORM
@@ -170,18 +170,18 @@ def render_symbol(ctx, instance, lib_symbols, scale):
     my = mirror == 'y'
     tx = make_transform(angle, mx, my)     # (x1,x2,y1,y2)
 
-    # Flatten ve unit filtrele
+    # Flatten ve unit filter
     all_items  = flatten_lib_symbol(lib_sym, lib_symbols)
     draw_items = filter_units(all_items, unit)
 
     ctx.save()
     ctx.translate(at_x*scale, -at_y*scale)
 
-    # Lib primitifleri çiz
+    # Lib primitives draw
     for prim in draw_items:
         render_lib_primitive(ctx, prim, tx, scale)
 
-    # Property metinlerini (reference, value) çiz
+    # Property metinlerini (reference, value) draw
     for prop in instance.get('properties', []):
         if not prop.get('hide') and prop['key'] in ('Reference','Value'):
             render_field_text(ctx, prop, tx, scale)
@@ -190,13 +190,13 @@ def render_symbol(ctx, instance, lib_symbols, scale):
 
 
 def render_lib_primitive(ctx, prim, tx, scale):
-    """tx = (x1,x2,y1,y2) TRANSFORM tuple'ı."""
+    """tx = (x1,x2,y1,y2) TRANSFORM tuple."""
     t = prim['type']
     x1,x2,y1,y2 = tx
 
-    def tp(lx, ly):  # transform + Y çevirme (canvas Y aşağı)
+    def tp(lx, ly):  # transform + Y convertme (canvas Y down)
         nx, ny = transform_point(x1,x2,y1,y2, lx, ly)
-        return nx*scale, -ny*scale   # lib'de Y yukarı, ekrana Y çevir
+        return nx*scale, -ny*scale   # lib'de Y up, ekrana Y convert
 
     if t == 'polyline':
         pts = prim['pts']
@@ -207,7 +207,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
 
     elif t == 'rectangle':
         s  = prim['start'];  e = prim['end']
-        # 4 köşeyi transform'dan geçir
+        # 4 corneryi transform'dan passir
         corners = [tp(s[0],s[1]), tp(e[0],s[1]),
                    tp(e[0],e[1]), tp(s[0],e[1])]
         ctx.beginPath()
@@ -219,7 +219,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
     elif t == 'circle':
         cx,cy  = prim['center']
         radius = prim['radius']
-        # Merkezi transform'dan geçir; radius scale ile büyür
+        # Merkezi transform'dan passir; radius scale ile scales
         px, py = tp(cx, cy)
         ctx.beginPath()
         ctx.arc(px, py, radius*scale, 0, 2*math.pi)
@@ -227,7 +227,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
 
     elif t == 'arc':
         s = prim['start']; m = prim['mid']; e = prim['end']
-        # Transform'dan geç, sonra arc hesapla
+        # Transform'dan pass, sonra calculate arc
         ps = tp(s[0],s[1]); pm = tp(m[0],m[1]); pe = tp(e[0],e[1])
         center, r = arc_center_radius(ps, pm, pe)
         if center:
@@ -243,7 +243,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
 
 
 def apply_stroke_fill(ctx, prim, scale):
-    """Stroke ve fill uygula."""
+    """Stroke ve fill apply."""
     w     = prim.get('stroke',{}).get('width', DEFAULT_LINE_WIDTH)
     fill  = prim.get('fill',{}).get('type', 'none')
     ctx.lineWidth   = max(w, DEFAULT_LINE_WIDTH) * scale
@@ -259,22 +259,22 @@ def apply_stroke_fill(ctx, prim, scale):
 
 ---
 
-## Pin render — kaynak kodundan
+## Pin render — from source code
 
-KiCad `sch_painter.cpp::draw(const SCH_PIN*)` — `PIN_LAYOUT_CACHE` kullanır.
+KiCad `sch_painter.cpp::draw(const SCH_PIN*)` — `PIN_LAYOUT_CACHE` uses.
 
 ```python
 def render_pin(ctx, pin, tp, scale):
     """
-    pin: lib_symbol içindeki pin token'ı
-    tp: transform fonksiyonu (lx,ly) → (px,py)
+    pin: lib_symbol in pin token
+    tp: transform function (lx,ly) → (px,py)
     """
     at        = pin['at']              # [x, y, angle]
     length    = pin.get('length', 2.54)
     graphic   = pin['graphic_style']   # line, inverted, clock, ...
     elec_type = pin['elec_type']       # input, output, passive, ...
 
-    # Pin kök ve uç
+    # Pin root ve tip
     lx, ly    = at[0], at[1]
     angle_rad = math.radians(at[2])
     ex_lib    = lx + length * math.cos(angle_rad)
@@ -283,7 +283,7 @@ def render_pin(ctx, pin, tp, scale):
     px, py = tp(lx, ly)
     ex, ey = tp(ex_lib, ey_lib)
 
-    # Gövde çizgisi
+    # Body line
     ctx.beginPath()
     ctx.moveTo(px, py)
     ctx.lineTo(ex, ey)
@@ -293,10 +293,10 @@ def render_pin(ctx, pin, tp, scale):
     ctx.stroke()
 
     # Endpoint marker (grafik stil)
-    BUBBLE_R = 0.397 * scale           # inverted daire yarıçapı
+    BUBBLE_R = 0.397 * scale           # inverted daire radius
 
     if graphic == 'inverted' or graphic == 'inverted_clock':
-        # Küçük daire, pin ucunun ötesinde
+        # Small daire, pin ucunun beyond
         dx = math.cos(angle_rad) * 0.397
         dy = math.sin(angle_rad) * 0.397
         bx, by = tp(ex_lib + dx, ey_lib + dy)
@@ -307,7 +307,7 @@ def render_pin(ctx, pin, tp, scale):
         ctx.stroke()
 
     if graphic in ('clock', 'inverted_clock', 'clock_low', 'edge_clock_high'):
-        # Üçgen: pin ucunda, gövde yönüne dik
+        # Triangle: pin ucunda, body perpendicular to direction dik
         perp = angle_rad + math.pi/2
         CLOCK_SIZE = 0.794 * scale
         tx1, ty1 = tp(ex_lib, ey_lib + 0.794)
@@ -322,7 +322,7 @@ def render_pin(ctx, pin, tp, scale):
         ctx.stroke()
 
     if graphic in ('input_low', 'output_low', 'clock_low'):
-        # Ters L şekli (active low bar)
+        # Inverted L shape (active low bar)
         L = 0.794 * scale
         ctx.beginPath()
         ctx.moveTo(ex, ey)
@@ -332,12 +332,12 @@ def render_pin(ctx, pin, tp, scale):
         ctx.lineWidth   = 0.15 * scale
         ctx.stroke()
 
-    # Dangling indicator (pin bağlı değilse küçük kare)
-    # Bağlantı kontrolü yapılıyorsa ekle
+    # Dangling indicator (pin connected if not small square)
+    # Connection checking is performed ekle
     # if pin.get('dangling'):
     #     ctx.strokeRect(px-3, py-3, 6, 6)
 
-    # Pin adı ve numarası
+    # Pin name ve number
     name_eff = pin.get('name_effects', {})
     num_eff  = pin.get('number_effects', {})
     if not name_eff.get('hide'):
@@ -347,15 +347,15 @@ def render_pin(ctx, pin, tp, scale):
 
 
 def _render_pin_label(ctx, text, px, py, ex, ey, role, scale):
-    """Pin adı veya numarasını uygun konuma yaz."""
+    """Pin name or number uygun konuma yaz."""
     if not text or text == '~':
         return
     SIZE = 1.0 * scale
     ctx.font        = f"{SIZE}px KiCad Font, monospace"
     ctx.fillStyle   = PIN_COLOR
     ctx.textBaseline = 'middle'
-    # İsim: gövdenin iç tarafı (uç noktanın ötesi)
-    # Numara: gövdenin orta noktası
+    # Name: bodynin inner side (tip point beyond)
+    # Number: bodynin orta point
     mid_x = (px + ex) / 2
     mid_y = (py + ey) / 2
     offset = 2
@@ -369,27 +369,27 @@ def _render_pin_label(ctx, text, px, py, ex, ey, role, scale):
 
 ---
 
-## Kritik tuzaklar (kaynak koddan çıkarıldı)
+## Critical pitfalls (extracted from source code)
 
-1. **TRANSFORM Y çevirme:** Lib koordinatları Y yukarı pozitif. `tp()` fonksiyonu
-   hem transform uygular hem `-ny` ile canvas Y'ye çevirir. Bunu iki kez yapma.
+1. **TRANSFORM Y convertme:** Lib coordinates Y up positive. `tp()` function
+   hem transform applyr hem `-ny` ile canvas Y'ye convertir. Bunu iki kez yapma.
 
-2. **unit=0 ortak grafikler:** Alt-sembol ismi `_0_` içeriyorsa tüm unit'lerde
-   çizilir. `filter_units` fonksiyonunda `child_unit == 0` kontrolü zorunlu.
+2. **unit=0 common grafikler:** Alt-symbol ismi `_0_`contains , all units.
+   are drawn. `filter_units` functionnda `child_unit == 0` checking mandatory.
 
-3. **LIB_SYMBOL::Flatten:** `extends` ile kalıtım alan sembollerde parent'ın
-   çizim item'ları **önce** gelmeli (child üstüne çizilir). Özellikle `Device:C`
-   gibi semboller başka bir base sembolden extend eder.
+3. **LIB_SYMBOL::Flatten:** `extends` ile inheritance alan symbollerde parent's
+   drawing items **first** gelmeli (child under the child) are drawn). Speciallikle `Device:C`
+   gibi symboller another bir base symbolden extend eder.
 
-4. **Pin açıları tam derece:** Lib pin `at[2]` tam derece (90, 180, 270, 0).
-   Sembol instance `at[2]` de tam derece. `round(angle/90)*90` ile snaple.
+4. **Pin angles tam derece:** Lib pin `at[2]` tam derece (90, 180, 270, 0).
+   Symbol instance `at[2]` de tam derece. `round(angle/90)*90` ile snaple.
 
-5. **De Morgan (bodyStyle=2):** Mantık kapılarında alternatif sembol şekli.
-   `_X_2` alt-sembolü. Basit render için `body_style=1` yeterli.
+5. **De Morgan (bodyStyle=2):** Logic gates alternatif symbol shape.
+   `_X_2` sub-symbol. Basit render for `body_style=1` sufficient.
 
-6. **PIN_LAYOUT_CACHE:** KiCad C++ pahalı text extent hesaplarını cache'ler.
-   Python'da `ctx.measureText()` ile approximation yeterli; her pin için
-   ayrıca cache tutmana gerek yok.
+6. **PIN_LAYOUT_CACHE:** KiCad C++ expensive text extent calculations cache'ler.
+   Python'da `ctx.measureText()` ile approximation sufficient; her pin for
+   separateca cache tutmana gerek yok.
 
-7. **Sembol fields (Reference, Value):** `at` koordinatları GLOBAL koordinattır —
-   instance `at`'e göre offset DEĞİL. Direkt sch_to_px ile çevir.
+7. **Symbol fields (Reference, Value):** `at` coordinates GLOBAL coordinates —
+   instance `at`'e per offset NOT. Direkt sch_to_px ile convert.

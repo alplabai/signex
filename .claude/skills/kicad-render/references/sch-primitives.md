@@ -1,10 +1,10 @@
-# Şematik Primitifler — wire, bus, junction, label, sheet
+# Schematic Primitives — wire, bus, junction, label, sheet
 
-> Kaynak: `eeschema/sch_painter.cpp`, `sch_label.cpp`, `sch_label.h`
+> Source: `eeschema/sch_painter.cpp`, `sch_label.cpp`, `sch_label.h`
 
 ---
 
-## Wire ve Bus
+## Wire and Bus
 
 ```python
 # wire: (pts (xy X1 Y1)(xy X2 Y2))
@@ -18,7 +18,7 @@ def render_wire(ctx, item, scale):
     ctx.lineCap     = 'round'
     ctx.stroke()
 
-# bus: tamamen aynı, sadece daha kalın + farklı renk
+# bus: tamamen same, sadece daha thick + different color
 def render_bus(ctx, item, scale):
     p = item['pts']
     ctx.beginPath()
@@ -34,13 +34,13 @@ def render_bus(ctx, item, scale):
 
 ## Bus Entry
 
-Bus_entry: `at(X,Y)` → `(at.x + size.w, at.y + size.h)` köşegeni.
-`size` bir delta'dır, negatif olabilir (eğim yönünü belirler).
+Bus_entry: `at(X,Y)` → `(at.x + size.w, at.y + size.h)` cornergeni.
+`size` bir is a delta, negative can be (determines slope direction belirler).
 
 ```python
 def render_bus_entry(ctx, item, scale):
     x, y = item['at']
-    sw, sh = item['size']                   # delta, negatif olabilir
+    sw, sh = item['size']                   # delta, negative can be
     ctx.beginPath()
     ctx.moveTo( x*scale,       -y*scale)
     ctx.lineTo((x+sw)*scale,  -(y+sh)*scale)
@@ -53,14 +53,14 @@ def render_bus_entry(ctx, item, scale):
 
 ## Junction
 
-Dolgu daire. `diameter=0` → varsayılan (~1mm).
+Filled daire. `diameter=0` → default (~1mm).
 
 ```python
 def render_junction(ctx, item, scale):
     x, y = item['at']
     d    = item.get('diameter', 0)
     r    = (d/2 if d > 0 else DEFAULT_JUNCTION_RADIUS) * scale
-    # renk overridi veya tema rengi
+    # color overridi or tema rengi
     color = item.get('color') or JUNCTION_COLOR   # '#15BD6F'
     ctx.beginPath()
     ctx.arc(x*scale, -y*scale, r, 0, 2*math.pi)
@@ -72,7 +72,7 @@ def render_junction(ctx, item, scale):
 
 ## No Connect
 
-X işareti: merkezden ±`NO_CONNECT_SIZE` (≈1mm) iki çapraz çizgi.
+X mark: merkezden ±`NO_CONNECT_SIZE` (≈1mm) iki diagonal lines.
 
 ```python
 NO_CONNECT_SIZE = 1.0   # mm
@@ -91,7 +91,7 @@ def render_no_connect(ctx, item, scale):
 
 ---
 
-## Polyline (grafik çizgi)
+## Polyline (graphic line)
 
 ```python
 def render_polyline(ctx, item, scale):
@@ -106,7 +106,7 @@ def render_polyline(ctx, item, scale):
         ctx.fillStyle = NOTES_COLOR if fill == 'outline' else SCH_BACKGROUND
         ctx.fill()
     w = item.get('stroke',{}).get('width', DEFAULT_LINE_WIDTH)
-    ctx.strokeStyle = NOTES_COLOR        # '#FFFFFF' veya tema
+    ctx.strokeStyle = NOTES_COLOR        # '#FFFFFF' or tema
     ctx.lineWidth   = max(w, DEFAULT_LINE_WIDTH) * scale
     ctx.stroke()
 ```
@@ -142,9 +142,9 @@ def render_text(ctx, item, scale):
 
 ## Local Label
 
-Local label: metin + `at` noktasından küçük bağlantı noktası.
-KiCad kaynak: `sch_painter.cpp` → `draw(const SCH_LABEL*)`.
-Bağlantı noktası metnin sol-alt köşesidir.
+Local label: metin + `at` pointndan small connection point.
+KiCad kmirrork: `sch_painter.cpp` → `draw(const SCH_LABEL*)`.
+Connection point of text sol-alt cornersidir.
 
 ```python
 def render_label(ctx, item, scale):
@@ -155,7 +155,7 @@ def render_label(ctx, item, scale):
     ctx.translate(x*scale, -y*scale)
     ctx.rotate(-math.radians(angle))
 
-    # Metin
+    # Text
     effects = item.get('effects', {})
     size_h  = effects.get('font',{}).get('size',[1.27,1.27])[0]
     ctx.font        = f"{size_h*scale}px KiCad Font, monospace"
@@ -164,7 +164,7 @@ def render_label(ctx, item, scale):
     ctx.textBaseline = 'bottom'
     ctx.fillText(item['label'], 0, 0)
 
-    # Bağlantı noktası işareti (küçük kare veya nokta — opsiyonel)
+    # Connection point mark (small square or nokta — opsiyonel)
     ctx.fillStyle = WIRE_COLOR
     ctx.fillRect(-2, -2, 4, 4)
 
@@ -175,36 +175,36 @@ def render_label(ctx, item, scale):
 
 ## Global Label ve Hierarchical Label
 
-KiCad kaynak: `sch_label.cpp::GetSchematicTextOffset`, `sch_painter.cpp`.
-`SPIN_STYLE` yönü belirler: RIGHT=0, UP=1, LEFT=2, DOWN=3 (angle/90).
+KiCad kmirrork: `sch_label.cpp::GetSchematicTextOffset`, `sch_painter.cpp`.
+`SPIN_STYLE` direction belirler: RIGHT=0, UP=1, LEFT=2, DOWN=3 (angle/90).
 
-### Shape poligonları
+### Shape polygons
 
-`shape` değerine göre farklı poligon çerçevesi çizilir.
-`tw` = metin piksel genişliği (mm cinsinden), `h` = margin (≈1.27mm).
+`shape` value per different poligon frame are drawn.
+`tw` = metin piksel width (mm cinsinden), `h` = margin (≈1.27mm).
 
 ```python
 def label_polygon(shape, tw_mm, h=1.27):
     """
     shape: 'input'|'output'|'bidirectional'|'tri_state'|'passive'
-    Döndürülen pts: (x,y) listesi, origin bağlantı noktası.
-    Tüm ölçüler mm cinsinden; render sırasında scale ile çarp.
+    Returned pts: (x,y) listesi, origin connection point.
+    All dimensions mm cinsinden; render ordernda scale ile multiply by scale.
     """
-    w = tw_mm + h          # toplam genişlik
+    w = tw_mm + h          # toplam width
     if shape == 'input':
-        # Sol ok ucu içe bakan
+        # Sol ok ucu inward bakan
         return [(0,0), (h,-h), (w+h,-h), (w+h,h), (h,h)]
     elif shape == 'output':
-        # Sağ ok ucu dışa bakan
+        # Right ok ucu outward bakan
         return [(0,0), (0,-h), (w,-h), (w+h,0), (w,h), (0,h)]
     elif shape == 'bidirectional':
         # Her iki tarafta ok
         return [(0,0), (h,-h), (w,-h), (w+h,0), (w,h), (h,h)]
     elif shape == 'tri_state':
-        # bidirectional ile aynı şekil
+        # bidirectional ile same shape
         return label_polygon('bidirectional', tw_mm, h)
     else:  # passive
-        # Düz dikdörtgen
+        # Plain rectangle
         return [(0,-h), (w+h,-h), (w+h,h), (0,h)]
 ```
 
@@ -216,7 +216,7 @@ def render_global_label(ctx, item, scale):
     effects = item.get('effects', {})
     size_h  = effects.get('font',{}).get('size',[1.27,1.27])[0]
 
-    # Metin genişliğini tahmin et (karakter başı ~0.6 × height)
+    # Text width tahmin et (karakter per character ~0.6 × height)
     text      = item['label']
     tw_mm     = len(text) * size_h * 0.6
     pts_mm    = label_polygon(shape, tw_mm)
@@ -225,7 +225,7 @@ def render_global_label(ctx, item, scale):
     ctx.translate(x*scale, -y*scale)
     ctx.rotate(-math.radians(angle))
 
-    # Çerçeve
+    # Frame
     ctx.beginPath()
     ctx.moveTo(pts_mm[0][0]*scale, -pts_mm[0][1]*scale)
     for p in pts_mm[1:]:
@@ -235,7 +235,7 @@ def render_global_label(ctx, item, scale):
     ctx.lineWidth   = 0.15 * scale
     ctx.stroke()
 
-    # Metin (çerçeve içinde, margin kadar içeride)
+    # Text (frame forde, margin kadar indented)
     margin = 1.27 * scale
     ctx.font        = f"{size_h*scale}px KiCad Font, monospace"
     ctx.fillStyle   = GLOBAL_LABEL_COLOR
@@ -245,7 +245,7 @@ def render_global_label(ctx, item, scale):
 
     ctx.restore()
 
-# Hierarchical label: aynı mantık, farklı renk + biraz farklı şekil
+# Hierarchical label: same logic, different color + biraz different shape
 def render_hier_label(ctx, item, scale):
     item = dict(item)
     item['label'] = item.get('label', item.get('text',''))
@@ -256,23 +256,23 @@ def render_hier_label(ctx, item, scale):
 
 ## Sheet (hierarchical)
 
-Sheet kutusu: `at(X,Y)`, `size(W,H)`, pin'ler kenarlarda.
+Sheet box: `at(X,Y)`, `size(W,H)`, pin'ler kenarlarda.
 
 ```python
 def render_sheet(ctx, item, scale):
     x, y  = item['at']
     w, h  = item['size']
 
-    # Arka plan dolgusu (opsiyonel)
-    ctx.fillStyle   = SHEET_BG_COLOR     # '#1A1A28' veya şeffaf
+    # Background dolgusu (opsiyonel)
+    ctx.fillStyle   = SHEET_BG_COLOR     # '#1A1A28' or transparent
     ctx.fillRect(x*scale, -(y+h)*scale, w*scale, h*scale)
 
-    # Kenar
+    # Border
     ctx.strokeStyle = SHEET_COLOR        # '#5E76C5'
     ctx.lineWidth   = 0.15 * scale
     ctx.strokeRect(x*scale, -(y+h)*scale, w*scale, h*scale)
 
-    # İsim (üstte, dışarıda) ve dosya (altta, dışarıda)
+    # Name (top, outside) ve file (altta, outside)
     for prop in item.get('properties', []):
         if prop['key'] == 'Sheet name':
             draw_label_text(ctx, prop['value'], x, y, scale, 'top')
@@ -284,7 +284,7 @@ def render_sheet(ctx, item, scale):
         render_sheet_pin(ctx, pin, scale)
 
 def render_sheet_pin(ctx, pin, scale):
-    """Sheet pin: kenar üzerinde, ok şekli."""
+    """Sheet pin: kenar on, ok shape."""
     px, py  = pin['at'][:2]
     angle   = pin['at'][2] if len(pin['at']) > 2 else 0
     shape   = pin.get('shape', 'input')
@@ -294,15 +294,15 @@ def render_sheet_pin(ctx, pin, scale):
     ctx.translate(px*scale, -py*scale)
     ctx.rotate(-math.radians(angle))
 
-    # Küçük ok poligonu (pin ucu)
-    H = 1.0 * scale   # pin yüksekliği
+    # Small ok poligonu (pin ucu)
+    H = 1.0 * scale   # pin height
     ctx.beginPath()
     ctx.moveTo(0, 0)
     ctx.lineTo(-H*2, -H); ctx.lineTo(-H*2, H); ctx.closePath()
     ctx.fillStyle   = SHEET_PIN_COLOR    # '#5E76C5'
     ctx.fill()
 
-    # Pin adı
+    # Pin name
     size_h = pin.get('effects',{}).get('font',{}).get('size',[1.27,1.27])[0]
     ctx.font        = f"{size_h*scale}px KiCad Font, monospace"
     ctx.fillStyle   = SHEET_PIN_COLOR
@@ -315,13 +315,13 @@ def render_sheet_pin(ctx, pin, scale):
 
 ---
 
-## Tam şematik render sırası
+## Full schematic render order
 
-KiCad `sch_painter.cpp` layer sırasından türetildi:
+KiCad `sch_painter.cpp` layer orderndan derived:
 
 ```python
 def render_schematic(ctx, sch, scale):
-    # 0. Arka plan
+    # 0. Background
     ctx.fillStyle = SCH_BACKGROUND
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
@@ -334,12 +334,12 @@ def render_schematic(ctx, sch, scale):
     for item in sch.get('polylines', []):  render_polyline(ctx, item, scale)
     for item in sch.get('texts', []):      render_text(ctx, item, scale)
 
-    # 3. Semboller — gövde + pin'ler (LAYER_DEVICE + LAYER_PIN)
+    # 3. Symboller — body + pin'ler (LAYER_DEVICE + LAYER_PIN)
     lib = sch.get('lib_symbols', {})
     for item in sch.get('symbols', []):
         render_symbol(ctx, item, lib, scale)
 
-    # 4. Junction + no_connect (LAYER_JUNCTION / en üstte)
+    # 4. Junction + no_connect (LAYER_JUNCTION / en top)
     for item in sch.get('junctions', []):  render_junction(ctx, item, scale)
     for item in sch.get('no_connects', []): render_no_connect(ctx, item, scale)
 
@@ -348,6 +348,6 @@ def render_schematic(ctx, sch, scale):
     for item in sch.get('global_labels', []): render_global_label(ctx, item, scale)
     for item in sch.get('hier_labels', []):   render_hier_label(ctx, item, scale)
 
-    # 6. Sheet kutuları (LAYER_HIERLABEL — en son)
+    # 6. Sheet boxes (LAYER_HIERLABEL — en son)
     for item in sch.get('sheets', []):     render_sheet(ctx, item, scale)
 ```
