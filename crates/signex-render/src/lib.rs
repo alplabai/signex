@@ -4,8 +4,8 @@
 //! domain objects to Iced Canvas draw calls. No Iced Application logic here —
 //! just pure rendering functions.
 
-pub mod schematic;
 pub mod colors;
+pub mod schematic;
 
 /// The schematic canvas font. Loaded as a binary asset in `main.rs` and
 /// available by name once the application starts.

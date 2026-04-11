@@ -71,6 +71,7 @@ pub fn status_bar(_theme: &Theme) -> container::Style {
 }
 
 /// Tab bar background
+#[allow(dead_code)]
 pub fn tab_bar(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(TOOLBAR_BG.into()),
@@ -93,6 +94,7 @@ pub fn resize_handle(_theme: &Theme) -> container::Style {
 }
 
 /// Panel content area (inside the dock)
+#[allow(dead_code)]
 pub fn panel_content(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(PANEL_BG.into()),

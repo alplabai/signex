@@ -222,13 +222,19 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         .find("pin_numbers")
         .map(|pn| {
             // atom form: (pin_numbers hide)
-            if pn.first_arg() == Some("hide") { return false; }
+            if pn.first_arg() == Some("hide") {
+                return false;
+            }
             // list form: (pin_numbers (hide yes)) or (pin_numbers (hide))
             if let Some(h) = pn.find("hide") {
-                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+                return !h.first_arg().map(|v| v == "yes").unwrap_or(true);
             }
             // child atom form: (pin_numbers ... hide ...)
-            if pn.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "hide")) {
+            if pn
+                .children()
+                .iter()
+                .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+            {
                 return false;
             }
             true
@@ -241,10 +247,12 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let show_pin_names = pin_names_node
         .map(|pn| {
             // atom form: (pin_names hide)
-            if pn.first_arg() == Some("hide") { return false; }
+            if pn.first_arg() == Some("hide") {
+                return false;
+            }
             // list form: (pin_names (hide yes)) or (pin_names (hide))
             if let Some(h) = pn.find("hide") {
-                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+                return !h.first_arg().map(|v| v == "yes").unwrap_or(true);
             }
             // child atom form: (pin_names (offset X) hide)
             !pn.children()
@@ -437,7 +445,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -447,7 +457,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -497,7 +509,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -507,7 +521,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -532,13 +548,8 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         }
 
         // Parse pins
-        for pin in sub
-            .children()
-            .iter()
-            .filter(|c| c.keyword() == Some("pin"))
-        {
-            let pin_type =
-                parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
+        for pin in sub.children().iter().filter(|c| c.keyword() == Some("pin")) {
+            let pin_type = parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
             let shape = parse_pin_shape(pin.arg(1).unwrap_or("line"));
             let (position, rotation) = parse_at(pin);
             let length = pin
@@ -1035,6 +1046,10 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         }
     }
 
+    // find_all() only searches direct children of `root` (one level deep), so
+    // it will not descend into lib_symbols sub-symbols.  The `lib_id` filter
+    // is an additional guard: instance symbols always carry a `lib_id` child
+    // whereas lib-definition sub-symbols (e.g. "Device:R_0_1") never do.
     let symbols: Vec<Symbol> = root
         .find_all("symbol")
         .iter()
@@ -1054,10 +1069,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .map(|j| Junction {
             uuid: parse_uuid(j),
             position: parse_at(j).0,
-            diameter: j
-                .find("diameter")
-                .and_then(|d| d.arg_f64(0))
-                .unwrap_or(0.0),
+            diameter: j.find("diameter").and_then(|d| d.arg_f64(0)).unwrap_or(0.0),
         })
         .collect();
 
@@ -1359,7 +1371,7 @@ fn collect_sheets(
         });
 
         for child in child_filenames {
-            // Prevent path traversal via crafted sheet filenames
+            // Prevent path traversal via crafted sheet filenames.
             let child_path = std::path::Path::new(&child);
             let has_traversal = child_path.components().any(|c| {
                 matches!(
@@ -1373,14 +1385,20 @@ fn collect_sheets(
                 continue;
             }
             let joined = dir.join(&child);
-            if joined.exists() {
-                if let Ok(canonical) = joined.canonicalize() {
-                    if let Ok(canonical_dir) = dir.canonicalize() {
-                        if !canonical.starts_with(&canonical_dir) {
-                            continue;
-                        }
+            // Always try to canonicalize rather than checking exists() first:
+            // the exists()+canonicalize() pattern is a TOCTOU race.  If the
+            // file doesn't exist, canonicalize() will return an error and we
+            // simply skip the path; if it does exist we verify it stays within
+            // the project directory before queueing it.
+            if let Ok(canonical) = joined.canonicalize() {
+                if let Ok(canonical_dir) = dir.canonicalize() {
+                    if !canonical.starts_with(&canonical_dir) {
+                        continue;
                     }
                 }
+            } else {
+                // File does not exist (or is otherwise inaccessible) — skip.
+                continue;
             }
             queue.push((child, depth + 1));
         }

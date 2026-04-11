@@ -14,8 +14,8 @@ pub mod symbol;
 pub mod text;
 pub mod wire;
 
-use iced::widget::canvas;
 use iced::Rectangle;
+use iced::widget::canvas;
 
 use signex_types::schematic::{LabelType, SchematicSheet};
 use signex_types::theme::CanvasColors;
@@ -61,6 +61,73 @@ impl ScreenTransform {
         let (sx, sy) = self.world_to_screen(x, y);
         iced::Point::new(sx, sy)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Shared geometry helpers (used by symbol, drawing, hit_test)
+// ---------------------------------------------------------------------------
+
+/// Compute the circumscribed circle center and radius from three points.
+/// Returns `None` if the points are collinear.
+pub(super) fn circle_from_three_points(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+) -> Option<(f64, f64, f64)> {
+    let d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+    if d.abs() < 1e-10 {
+        return None;
+    }
+    let ux = ((x1 * x1 + y1 * y1) * (y2 - y3)
+        + (x2 * x2 + y2 * y2) * (y3 - y1)
+        + (x3 * x3 + y3 * y3) * (y1 - y2))
+        / d;
+    let uy = ((x1 * x1 + y1 * y1) * (x3 - x2)
+        + (x2 * x2 + y2 * y2) * (x1 - x3)
+        + (x3 * x3 + y3 * y3) * (x2 - x1))
+        / d;
+    let r = ((x1 - ux).powi(2) + (y1 - uy).powi(2)).sqrt();
+    Some((ux, uy, r))
+}
+
+/// Check if `mid_angle` lies between `start_angle` and `end_angle` when
+/// going counter-clockwise from start to end.
+pub(super) fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
+    let tau = std::f64::consts::TAU;
+    let normalize = |a: f64| ((a % tau) + tau) % tau;
+    let s = normalize(start);
+    let m = normalize(mid);
+    let e = normalize(end);
+    if s <= e {
+        s <= m && m <= e
+    } else {
+        m >= s || m <= e
+    }
+}
+
+/// Transform a local library-space point through a symbol instance's
+/// position, rotation, and mirror state, returning a world-space point.
+pub(super) fn instance_transform(
+    sym: &signex_types::schematic::Symbol,
+    local: &signex_types::schematic::Point,
+) -> (f64, f64) {
+    // Step 1: Flip Y — KiCad library coords are Y-up, schematic is Y-down.
+    let x = local.x;
+    let y = -local.y;
+    // Step 2: Rotate by NEGATIVE angle.
+    let rad = -sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
+    // Step 3: Mirror applied AFTER rotation (KiCad convention).
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
+    // Step 4: Translate to world position.
+    (rx + sym.position.x, ry + sym.position.y)
 }
 
 // ---------------------------------------------------------------------------
@@ -143,38 +210,21 @@ pub fn render_schematic(
             );
 
             // Pins
-            pin::draw_symbol_pins(
-                frame,
-                sym,
-                lib_sym,
-                transform,
-                pin_color,
-            );
+            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_color);
 
             // Reference text — power symbols (#PWR refs) are always hidden
-            if let Some(ref ref_text) = sym.ref_text {
-                if !ref_text.hidden && !sym.is_power {
-                    text::draw_text_prop(
-                        frame,
-                        &sym.reference,
-                        ref_text,
-                        transform,
-                        reference_color,
-                    );
-                }
+            if let Some(ref ref_text) = sym.ref_text
+                && !ref_text.hidden
+                && !sym.is_power
+            {
+                text::draw_text_prop(frame, &sym.reference, ref_text, transform, reference_color);
             }
 
             // Value text
-            if let Some(ref val_text) = sym.val_text {
-                if !val_text.hidden {
-                    text::draw_text_prop(
-                        frame,
-                        &sym.value,
-                        val_text,
-                        transform,
-                        value_color,
-                    );
-                }
+            if let Some(ref val_text) = sym.val_text
+                && !val_text.hidden
+            {
+                text::draw_text_prop(frame, &sym.value, val_text, transform, value_color);
             }
         }
     }

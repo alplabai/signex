@@ -1,6 +1,6 @@
 //! Toolbar strip — tool buttons for schematic/PCB actions.
 
-use iced::widget::{button, container, row, text, Row};
+use iced::widget::{Row, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::Tool;
@@ -24,9 +24,7 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
         .style(move |_: &Theme, status: button::Status| {
             let bg = match (is_active, status) {
                 (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
-                (false, button::Status::Hovered) => {
-                    Some(Background::Color(styles::TAB_ACTIVE_BG))
-                }
+                (false, button::Status::Hovered) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
                 _ => None,
             };
             button::Style {

@@ -1,6 +1,6 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
-use iced::widget::{button, container, row, text, Row};
+use iced::widget::{Row, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::TabInfo;
@@ -34,9 +34,9 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize) -> Element<'a, TabMessage> {
             .padding([0, 4])
             .style(|_: &Theme, status: button::Status| {
                 let bg = match status {
-                    button::Status::Hovered => Some(Background::Color(
-                        Color::from_rgb(0.35, 0.35, 0.38),
-                    )),
+                    button::Status::Hovered => {
+                        Some(Background::Color(Color::from_rgb(0.35, 0.35, 0.38)))
+                    }
                     _ => None,
                 };
                 button::Style {
@@ -51,21 +51,16 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize) -> Element<'a, TabMessage> {
             .on_press(TabMessage::Close(i));
 
         let tab_btn = button(
-            row![
-                text(label).size(11).color(text_c),
-                close_btn,
-            ]
-            .spacing(8.0)
-            .align_y(iced::Alignment::Center),
+            row![text(label).size(11).color(text_c), close_btn,]
+                .spacing(8.0)
+                .align_y(iced::Alignment::Center),
         )
         .padding([4, 10])
         .on_press(TabMessage::Select(i))
         .style(move |_: &Theme, status: button::Status| {
             let bg = match (is_active, status) {
                 (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
-                (false, button::Status::Hovered) => {
-                    Some(Background::Color(styles::TAB_ACTIVE_BG))
-                }
+                (false, button::Status::Hovered) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
                 _ => None,
             };
             button::Style {

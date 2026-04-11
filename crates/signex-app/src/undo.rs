@@ -34,6 +34,7 @@ pub enum EditCommand {
     RemoveTextNote(TextNote),
 
     /// Move element(s) by a delta offset.
+    #[allow(dead_code)]
     MoveElements {
         items: Vec<SelectedItem>,
         dx: f64,
@@ -51,7 +52,9 @@ pub enum EditCommand {
     MirrorSymbol {
         uuid: Uuid,
         axis: MirrorAxis,
+        #[allow(dead_code)]
         old_mirror_x: bool,
+        #[allow(dead_code)]
         old_mirror_y: bool,
     },
 
@@ -90,7 +93,9 @@ pub fn apply(sheet: &mut SchematicSheet, cmd: &EditCommand) {
             }
         }
 
-        EditCommand::RotateSymbol { uuid, new_rotation, .. } => {
+        EditCommand::RotateSymbol {
+            uuid, new_rotation, ..
+        } => {
             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
                 sym.rotation = *new_rotation;
             }
@@ -138,7 +143,9 @@ pub fn undo(sheet: &mut SchematicSheet, cmd: &EditCommand) {
             }
         }
 
-        EditCommand::RotateSymbol { uuid, old_rotation, .. } => {
+        EditCommand::RotateSymbol {
+            uuid, old_rotation, ..
+        } => {
             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
                 sym.rotation = *old_rotation;
             }
@@ -284,10 +291,12 @@ impl UndoStack {
         true
     }
 
+    #[allow(dead_code)]
     pub fn can_undo(&self) -> bool {
         self.position > 0
     }
 
+    #[allow(dead_code)]
     pub fn can_redo(&self) -> bool {
         self.position < self.history.len()
     }
