@@ -493,13 +493,13 @@ impl Signex {
                 }
                 // Space: rotate selected symbol (Altium convention)
                 (keyboard::Key::Named(keyboard::key::Named::Space), _) => Message::RotateSelected,
-                // Mirror: X = flip horizontal (mirror about Y-axis), Y = flip vertical (mirror about X-axis)
-                // Matches Altium Designer shortcuts
+                // Mirror: X key = horizontal flip (left-right) = KiCad mirror_y
+                //         Y key = vertical flip (top-bottom) = KiCad mirror_x
                 (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                    Message::MirrorSelectedY // X key = horizontal flip = mirror Y-axis
+                    Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
                 }
                 (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                    Message::MirrorSelectedX // Y key = vertical flip = mirror X-axis
+                    Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
                 }
                 // Ctrl+S save
                 (keyboard::Key::Character(c), m) if c == "s" && m.command() => Message::SaveFile,
@@ -1473,8 +1473,8 @@ impl Signex {
                     ContextAction::SelectAll => return self.update(Message::SelectAll),
                     ContextAction::ZoomFit => return self.update(Message::CanvasEvent(CanvasEvent::FitAll)),
                     ContextAction::RotateSelected => return self.update(Message::RotateSelected),
-                    ContextAction::MirrorX => return self.update(Message::MirrorSelectedX),
-                    ContextAction::MirrorY => return self.update(Message::MirrorSelectedY),
+                    ContextAction::MirrorX => return self.update(Message::MirrorSelectedY), // X = horizontal flip = mirror_y
+                    ContextAction::MirrorY => return self.update(Message::MirrorSelectedX), // Y = vertical flip = mirror_x
                 }
             }
             // Idle events — return early to avoid triggering panel sync/re-render
@@ -2176,31 +2176,7 @@ impl Signex {
             .style(crate::styles::panel_region);
 
         // Center row: left | handle | center | handle | right
-        let center_row_base = row![left, left_handle, center, right_handle, right];
-        // Active Bar floats ON the canvas (Altium-style)
-        let center_row: Element<'_, Message> = if self.schematic.is_some() {
-            let bar = crate::active_bar::view_bar(
-                self.active_bar_menu,
-                self.current_tool,
-                self.draw_mode,
-            )
-            .map(Message::ActiveBar);
-
-            let mut cs = iced::widget::Stack::new().push(center_row_base);
-
-            // Bar floats centered at top of canvas area
-            cs = cs.push(
-                container(
-                    container(bar).center_x(Length::Shrink),
-                )
-                .width(Length::Fill)
-                .padding([6, 0])
-                .align_x(iced::alignment::Horizontal::Center),
-            );
-            cs.into()
-        } else {
-            center_row_base.into()
-        };
+        let center_row = row![left, left_handle, center, right_handle, right];
 
         // Bottom resize handle (hidden when collapsed)
         let bottom_handle_h = if bottom_collapsed { 0 } else { 5 };
@@ -2241,7 +2217,25 @@ impl Signex {
         if !self.tabs.is_empty() {
             main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
         }
-        // Active Bar rendered as overlay on center_row (below)
+        // Active Bar (centered above canvas)
+        if self.schematic.is_some() {
+            let bar = crate::active_bar::view_bar(
+                self.active_bar_menu,
+                self.current_tool,
+                self.draw_mode,
+            )
+            .map(Message::ActiveBar);
+            main = main.push(
+                container(bar)
+                    .width(Length::Fill)
+                    .padding([3, 0])
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .style(|_: &iced::Theme| container::Style {
+                        background: Some(iced::Color::from_rgb(0.09, 0.09, 0.10).into()),
+                        ..container::Style::default()
+                    }),
+            );
+        }
         let main = main
             .push(center_row)
             .push(bottom_handle)

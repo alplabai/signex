@@ -546,7 +546,7 @@ pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
         }
     };
 
-    container(column(items).spacing(0).width(220))
+    container(column(items).spacing(0))
         .padding([6, 0])
         .style(|_: &Theme| container::Style {
             background: Some(Color::from_rgb(0.11, 0.12, 0.15).into()),
@@ -596,7 +596,11 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
+// Small 45° chevron SVG for dropdown indicator (bottom-right corner)
+const CHEVRON_45: &[u8] = include_bytes!("../assets/icons/chevron_45.svg");
+
 /// Active Bar button: left-click activates tool, right-click opens dropdown.
+/// Shows a small 45° chevron at bottom-right if button has a dropdown.
 fn ab_icon_btn(
     icon_bytes: &'static [u8],
     active: bool,
@@ -604,34 +608,58 @@ fn ab_icon_btn(
     right_click: Option<ActiveBarMsg>,
 ) -> Element<'static, ActiveBarMsg> {
     let handle = svg::Handle::from_memory(icon_bytes);
+    let has_dropdown = right_click.is_some();
 
-    let icon_widget = container(
-        svg(handle).width(16).height(16),
-    )
-    .width(22)
-    .height(22)
-    .align_x(iced::alignment::Horizontal::Center)
-    .align_y(iced::alignment::Vertical::Center)
-    .style(move |_: &Theme| {
-        let bg = if active {
-            Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30)))
-        } else {
-            Some(Background::Color(Color::TRANSPARENT))
-        };
-        container::Style {
-            background: bg,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                color: Color::TRANSPARENT,
-            },
-            ..container::Style::default()
-        }
-    });
+    // Icon with optional chevron indicator
+    let icon_content: Element<'static, ActiveBarMsg> = if has_dropdown {
+        let chevron = svg(svg::Handle::from_memory(CHEVRON_45))
+            .width(6)
+            .height(6);
+        iced::widget::Stack::new()
+            .push(
+                container(svg(handle).width(16).height(16))
+                    .width(22)
+                    .height(22)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center),
+            )
+            .push(
+                container(chevron)
+                    .width(22)
+                    .height(22)
+                    .align_x(iced::alignment::Horizontal::Right)
+                    .align_y(iced::alignment::Vertical::Bottom),
+            )
+            .into()
+    } else {
+        container(svg(handle).width(16).height(16))
+            .width(22)
+            .height(22)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    };
+
+    let icon_widget = container(icon_content)
+        .style(move |_: &Theme| {
+            let bg = if active {
+                Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30)))
+            } else {
+                Some(Background::Color(Color::TRANSPARENT))
+            };
+            container::Style {
+                background: bg,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    color: Color::TRANSPARENT,
+                },
+                ..container::Style::default()
+            }
+        });
 
     let mut area = iced::widget::mouse_area(icon_widget)
-        .on_press(left_click)
-        .interaction(iced::mouse::Interaction::Pointer);
+        .on_press(left_click);
 
     if let Some(rc) = right_click {
         area = area.on_right_press(rc);
@@ -681,17 +709,18 @@ fn dd_item_icon(
             svg(handle).width(14).height(14),
         );
     } else {
-        // Empty space placeholder to keep alignment
         r = r.push(Space::new().width(14).height(14));
     }
 
     r = r.push(
-        text(label.to_string()).size(12).color(text_c),
+        text(label.to_string())
+            .size(12)
+            .color(text_c)
+            .wrapping(iced::widget::text::Wrapping::None),
     );
 
     button(r)
         .padding([5, 12])
-        .width(Length::Fill)
         .on_press(ActiveBarMsg::Action(action))
         .style(dd_btn_style)
         .into()
