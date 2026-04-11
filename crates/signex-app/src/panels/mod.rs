@@ -1,7 +1,8 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::widget::{Column, Row, Space, column, container, row, scrollable, text};
+use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use std::sync::OnceLock;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -153,7 +154,20 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-/// Collapsible section: clickable header with ▶/▼ chevron, hides content when collapsed.
+// SVG chevrons (same as tree_view for consistency)
+const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
+const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
+
+fn chevron_right() -> svg::Handle {
+    static H: OnceLock<svg::Handle> = OnceLock::new();
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT)).clone()
+}
+fn chevron_down() -> svg::Handle {
+    static H: OnceLock<svg::Handle> = OnceLock::new();
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN)).clone()
+}
+
+/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
 fn collapsible_section<'a>(
     key: &str,
     title: &str,
@@ -163,21 +177,26 @@ fn collapsible_section<'a>(
     content: impl FnOnce() -> Column<'a, PanelMsg>,
 ) -> Column<'a, PanelMsg> {
     let is_collapsed = collapsed.contains(key);
-    let chevron = if is_collapsed { "\u{25B6}" } else { "\u{25BC}" };
+    let chevron_handle = if is_collapsed { chevron_right() } else { chevron_down() };
     let key_owned = key.to_string();
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Clickable header
+    // Clickable header with SVG chevron
     col = col.push(
         iced::widget::button(
             container(
                 row![
-                    text(format!("{chevron}  {title}"))
-                        .size(10)
-                        .color(header_color),
+                    svg(chevron_handle)
+                        .width(10)
+                        .height(10)
+                        .style(move |_: &Theme, _| iced::widget::svg::Style {
+                            color: Some(header_color),
+                        }),
+                    text(title.to_string()).size(10).color(header_color),
                 ]
-                .spacing(4),
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
             )
             .padding([4, 8])
             .width(Length::Fill),
