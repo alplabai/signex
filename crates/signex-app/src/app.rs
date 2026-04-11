@@ -81,6 +81,15 @@ pub enum Message {
     DragEnd,
     FileOpened(Option<PathBuf>),
     SchematicLoaded(Box<SchematicSheet>),
+    // v0.5: Editing operations
+    DeleteSelected,
+    Undo,
+    Redo,
+    RotateSelected,
+    MirrorSelectedX,
+    MirrorSelectedY,
+    CycleDrawMode,
+    CancelDrawing,
     Noop,
 }
 
@@ -120,6 +129,42 @@ pub struct Signex {
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
+    // v0.5: Undo/Redo
+    pub undo_stack: crate::undo::UndoStack,
+    // v0.5: Wire drawing state
+    pub wire_points: Vec<signex_types::schematic::Point>,
+    pub wire_drawing: bool,
+    pub draw_mode: DrawMode,
+}
+
+/// Wire/bus drawing mode (Altium: cycle with Shift+Space).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DrawMode {
+    /// Horizontal then vertical (90° corners, Altium default).
+    #[default]
+    Ortho90,
+    /// 45-degree angles allowed.
+    Angle45,
+    /// Free angle — straight line from last point to cursor.
+    FreeAngle,
+}
+
+impl DrawMode {
+    pub fn next(self) -> Self {
+        match self {
+            DrawMode::Ortho90 => DrawMode::Angle45,
+            DrawMode::Angle45 => DrawMode::FreeAngle,
+            DrawMode::FreeAngle => DrawMode::Ortho90,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DrawMode::Ortho90 => "90°",
+            DrawMode::Angle45 => "45°",
+            DrawMode::FreeAngle => "Any",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -155,6 +200,75 @@ impl std::fmt::Display for Tool {
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
+        }
+    }
+}
+
+// ─── Draw mode constraint ────────────────────────────────────
+
+/// Given a start and end point, produce wire segments constrained by the draw mode.
+/// - Ortho90: horizontal then vertical (two segments forming a 90° corner)
+/// - Angle45: snap to nearest 45° angle (may produce one or two segments)
+/// - FreeAngle: single straight segment
+fn constrain_segments(
+    start: signex_types::schematic::Point,
+    end: signex_types::schematic::Point,
+    mode: DrawMode,
+) -> Vec<(signex_types::schematic::Point, signex_types::schematic::Point)> {
+    use signex_types::schematic::Point;
+
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+
+    if dx.abs() < 0.01 && dy.abs() < 0.01 {
+        return vec![];
+    }
+
+    match mode {
+        DrawMode::FreeAngle => {
+            vec![(start, end)]
+        }
+        DrawMode::Ortho90 => {
+            // Horizontal first, then vertical (like Altium default)
+            if dx.abs() < 0.01 {
+                // Pure vertical
+                vec![(start, end)]
+            } else if dy.abs() < 0.01 {
+                // Pure horizontal
+                vec![(start, end)]
+            } else {
+                let corner = Point::new(end.x, start.y);
+                vec![(start, corner), (corner, end)]
+            }
+        }
+        DrawMode::Angle45 => {
+            // Snap to nearest 45° increment
+            let adx = dx.abs();
+            let ady = dy.abs();
+            if adx < 0.01 || ady < 0.01 {
+                // Already axis-aligned
+                vec![(start, end)]
+            } else if (adx - ady).abs() < adx * 0.4 {
+                // Close to 45° — make it exactly 45°
+                let d = adx.min(ady);
+                let sx = if dx > 0.0 { 1.0 } else { -1.0 };
+                let sy = if dy > 0.0 { 1.0 } else { -1.0 };
+                let diag_end = Point::new(start.x + d * sx, start.y + d * sy);
+                if (adx - ady).abs() < 0.01 {
+                    // Exactly 45°
+                    vec![(start, diag_end)]
+                } else if adx > ady {
+                    // Diagonal then horizontal
+                    vec![(start, diag_end), (diag_end, Point::new(end.x, diag_end.y))]
+                } else {
+                    // Diagonal then vertical
+                    vec![(start, diag_end), (diag_end, Point::new(diag_end.x, end.y))]
+                }
+            } else {
+                // Mostly axis-aligned — use ortho
+                let corner = Point::new(end.x, start.y);
+                vec![(start, corner), (corner, end)]
+            }
         }
     }
 }
@@ -234,6 +348,10 @@ impl Signex {
             dragging: None,
             drag_start_pos: None,
             drag_start_size: 0.0,
+            undo_stack: crate::undo::UndoStack::new(100),
+            wire_points: Vec::new(),
+            wire_drawing: false,
+            draw_mode: DrawMode::default(),
         };
         (app, Task::none())
     }
@@ -293,6 +411,36 @@ impl Signex {
                 }
                 (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                     Message::CanvasEvent(CanvasEvent::FitAll)
+                }
+                // Delete selected
+                (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
+                    Message::DeleteSelected
+                }
+                // Undo/Redo
+                (keyboard::Key::Character(c), m) if c == "z" && m.command() && !m.shift() => {
+                    Message::Undo
+                }
+                (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
+                    Message::Redo
+                }
+                (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
+                    Message::Redo
+                }
+                // Shift+Space: cycle draw mode (90° → 45° → Free)
+                (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
+                    Message::CycleDrawMode
+                }
+                // Space: rotate selected symbol (Altium convention)
+                (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
+                    Message::RotateSelected
+                }
+                // Mirror: X = flip horizontal (mirror about Y-axis), Y = flip vertical (mirror about X-axis)
+                // Matches Altium Designer shortcuts
+                (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
+                    Message::MirrorSelectedY  // X key = horizontal flip = mirror Y-axis
+                }
+                (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
+                    Message::MirrorSelectedX  // Y key = vertical flip = mirror X-axis
                 }
                 // Shift+Ctrl+G — toggle grid visibility
                 (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
@@ -410,13 +558,137 @@ impl Signex {
                 // Grid only needs redraw on zoom/pan/grid-change.
             }
             Message::CanvasEvent(CanvasEvent::Clicked { world_x, world_y }) => {
-                // Hit-test the schematic at the clicked position
-                if let Some(ref sheet) = self.schematic {
-                    let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
-                    self.canvas.selected = hit.into_iter().collect();
-                    self.canvas.clear_overlay_cache();
-                    // Update panel context with selection info
-                    self.update_selection_info();
+                // Snap to grid if enabled
+                let (wx, wy) = if self.snap_enabled {
+                    let gs = self.grid_size_mm as f64;
+                    ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
+                } else {
+                    (world_x, world_y)
+                };
+
+                match self.current_tool {
+                    Tool::Wire => {
+                        let pt = signex_types::schematic::Point::new(wx, wy);
+                        if !self.wire_drawing {
+                            self.wire_drawing = true;
+                            self.wire_points.clear();
+                            self.wire_points.push(pt);
+                            self.canvas.wire_preview = self.wire_points.clone();
+                            self.canvas.drawing_mode = true;
+                            self.canvas.tool_preview = Some(format!("Draw Wire [{}]", self.draw_mode.label()));
+                        } else if let Some(&start) = self.wire_points.last() {
+                            // Apply draw mode constraints
+                            let segments = constrain_segments(start, pt, self.draw_mode);
+                            for seg in &segments {
+                                let wire = signex_types::schematic::Wire {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start: seg.0,
+                                    end: seg.1,
+                                };
+                                if let Some(ref mut sheet) = self.schematic {
+                                    let cmd = crate::undo::EditCommand::AddWire(wire);
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                }
+                            }
+                            let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                            self.wire_points = vec![end_pt];
+                            self.canvas.wire_preview = vec![end_pt];
+                        }
+                    }
+                    Tool::Bus => {
+                        let pt = signex_types::schematic::Point::new(wx, wy);
+                        if !self.wire_drawing {
+                            self.wire_drawing = true;
+                            self.wire_points.clear();
+                            self.wire_points.push(pt);
+                            self.canvas.wire_preview = self.wire_points.clone();
+                            self.canvas.drawing_mode = true;
+                            self.canvas.tool_preview = Some(format!("Draw Bus [{}]", self.draw_mode.label()));
+                        } else if let Some(&start) = self.wire_points.last() {
+                            let segments = constrain_segments(start, pt, self.draw_mode);
+                            for seg in &segments {
+                                let bus = signex_types::schematic::Bus {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start: seg.0,
+                                    end: seg.1,
+                                };
+                                if let Some(ref mut sheet) = self.schematic {
+                                    let cmd = crate::undo::EditCommand::AddBus(bus);
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                }
+                            }
+                            let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                            self.wire_points = vec![end_pt];
+                            self.canvas.wire_preview = vec![end_pt];
+                        }
+                    }
+                    Tool::Label => {
+                        // Place a net label
+                        let label = signex_types::schematic::Label {
+                            uuid: uuid::Uuid::new_v4(),
+                            text: "NET".to_string(),
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            rotation: 0.0,
+                            label_type: signex_types::schematic::LabelType::Net,
+                            shape: String::new(),
+                            font_size: 1.27,
+                            justify: signex_types::schematic::HAlign::Left,
+                        };
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = crate::undo::EditCommand::AddLabel(label);
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                        }
+                        self.current_tool = Tool::Select;
+                    }
+                    _ => {
+                        // Selection mode: hit-test
+                        if let Some(ref sheet) = self.schematic {
+                            let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
+                            self.canvas.selected = hit.into_iter().collect();
+                            self.canvas.clear_overlay_cache();
+                            self.update_selection_info();
+                        }
+                    }
+                }
+            }
+            Message::CanvasEvent(CanvasEvent::DoubleClicked { .. }) => {
+                // Finish wire drawing on double-click
+                if self.wire_drawing {
+                    self.wire_drawing = false;
+                    self.wire_points.clear();
+                    self.canvas.wire_preview.clear();
+                    self.canvas.drawing_mode = false;
+                }
+            }
+            Message::CycleDrawMode => {
+                self.draw_mode = self.draw_mode.next();
+                // Update tool preview to show current mode
+                if self.wire_drawing || matches!(self.current_tool, Tool::Wire | Tool::Bus) {
+                    self.canvas.tool_preview = Some(format!(
+                        "{} [{}]",
+                        if self.current_tool == Tool::Bus { "Draw Bus" } else { "Draw Wire" },
+                        self.draw_mode.label()
+                    ));
+                }
+            }
+            Message::CancelDrawing => {
+                // Right-click cancels wire/bus drawing (Altium behavior)
+                if self.wire_drawing {
+                    self.wire_drawing = false;
+                    self.wire_points.clear();
+                    self.canvas.wire_preview.clear();
+                    self.canvas.drawing_mode = false;
+                    self.current_tool = Tool::Select;
+                    self.canvas.tool_preview = None;
                 }
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
@@ -438,9 +710,23 @@ impl Signex {
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
-                // Escape (which sends Select tool) also closes open menus
+                // Set tool preview text for placement modes
+                self.canvas.tool_preview = match tool {
+                    Tool::Label => Some("NET".into()),
+                    Tool::Component => Some("Place Component".into()),
+                    Tool::Wire => Some("Draw Wire".into()),
+                    Tool::Bus => Some("Draw Bus".into()),
+                    _ => None,
+                };
+                // Escape: close menus and cancel wire drawing
                 if tool == Tool::Select {
                     self.active_menu = None;
+                    if self.wire_drawing {
+                        self.wire_drawing = false;
+                        self.wire_points.clear();
+                        self.canvas.wire_preview.clear();
+                        self.canvas.drawing_mode = false;
+                    }
                 }
             }
             Message::Menu(msg) => {
@@ -603,29 +889,8 @@ impl Signex {
                             Ok(proj) => {
                                 self.project_path = Some(path.clone());
                                 self.project_data = Some(proj.clone());
-                                // Load the root schematic
-                                if let Some(root_sch) = &proj.schematic_root {
-                                    let dir = path.parent().unwrap_or(std::path::Path::new("."));
-                                    let sch_path = dir.join(root_sch);
-                                    match kicad_parser::parse_schematic_file(&sch_path) {
-                                        Ok(sheet) => {
-                                            let title = root_sch.replace(".kicad_sch", "");
-                                            self.tabs.push(TabInfo {
-                                                title,
-                                                path: sch_path.clone(),
-                                                schematic: Some(sheet.clone()),
-                                                dirty: false,
-                                            });
-                                            self.active_tab = self.tabs.len() - 1;
-                                            self.schematic = Some(sheet.clone());
-                                            self.canvas.schematic = Some(sheet);
-                                            self.canvas.fit_to_paper();
-                                        }
-                                        Err(e) => eprintln!("Failed to parse root schematic: {e}"),
-                                    }
-                                }
-                                self.canvas.clear_bg_cache();
-                                self.canvas.clear_content_cache();
+                                // Don't auto-open schematic — user clicks on project tree to open sheets
+                                // (Altium behavior: project load shows tree only)
                                 self.refresh_panel_ctx();
                             }
                             Err(e) => eprintln!("Failed to parse project: {e}"),
@@ -673,6 +938,156 @@ impl Signex {
             }
             Message::FileOpened(None) => {
                 // User cancelled file dialog
+            }
+            Message::DeleteSelected => {
+                if !self.canvas.selected.is_empty() {
+                    if let Some(ref mut sheet) = self.schematic {
+                        let mut cmds = Vec::new();
+                        for item in &self.canvas.selected {
+                            use signex_types::schematic::SelectedKind;
+                            match item.kind {
+                                SelectedKind::Wire => {
+                                    if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveWire(w.clone()));
+                                    }
+                                }
+                                SelectedKind::Bus => {
+                                    if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveBus(b.clone()));
+                                    }
+                                }
+                                SelectedKind::Label => {
+                                    if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveLabel(l.clone()));
+                                    }
+                                }
+                                SelectedKind::Junction => {
+                                    if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveJunction(j.clone()));
+                                    }
+                                }
+                                SelectedKind::NoConnect => {
+                                    if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveNoConnect(nc.clone()));
+                                    }
+                                }
+                                SelectedKind::Symbol => {
+                                    if let Some(s) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveSymbol(s.clone()));
+                                    }
+                                }
+                                SelectedKind::TextNote => {
+                                    if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                                        cmds.push(crate::undo::EditCommand::RemoveTextNote(tn.clone()));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if !cmds.is_empty() {
+                            let batch = crate::undo::EditCommand::Batch(cmds);
+                            self.undo_stack.execute(sheet, batch);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.selected.clear();
+                            self.canvas.clear_content_cache();
+                            self.canvas.clear_overlay_cache();
+                            self.mark_dirty();
+                            self.update_selection_info();
+                        }
+                    }
+                }
+            }
+            Message::Undo => {
+                if let Some(ref mut sheet) = self.schematic {
+                    if self.undo_stack.undo(sheet) {
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.selected.clear();
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                        self.mark_dirty();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::Redo => {
+                if let Some(ref mut sheet) = self.schematic {
+                    if self.undo_stack.redo(sheet) {
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.selected.clear();
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                        self.mark_dirty();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::RotateSelected => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let old_rotation = sym.rotation;
+                                let new_rotation = (old_rotation + 90.0) % 360.0;
+                                let cmd = crate::undo::EditCommand::RotateSymbol {
+                                    uuid: item.uuid,
+                                    old_rotation,
+                                    new_rotation,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                                self.update_selection_info();
+                            }
+                        }
+                    }
+                }
+            }
+            Message::MirrorSelectedX => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid: item.uuid,
+                                    axis: crate::undo::MirrorAxis::X,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                            }
+                        }
+                    }
+                }
+            }
+            Message::MirrorSelectedY => {
+                if self.canvas.selected.len() == 1 {
+                    let item = self.canvas.selected[0];
+                    if item.kind == signex_types::schematic::SelectedKind::Symbol {
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid: item.uuid,
+                                    axis: crate::undo::MirrorAxis::Y,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                            }
+                        }
+                    }
+                }
             }
             Message::SchematicLoaded(sheet) => {
                 self.schematic = Some(*sheet);
@@ -773,12 +1188,16 @@ impl Signex {
                 self.current_tool = Tool::Component;
                 Task::none()
             }
+            MenuMessage::Undo => {
+                return self.update(Message::Undo);
+            }
+            MenuMessage::Redo => {
+                return self.update(Message::Redo);
+            }
             // ── Stubs (not yet implemented) ──
             MenuMessage::NewProject
             | MenuMessage::Save
             | MenuMessage::SaveAs
-            | MenuMessage::Undo
-            | MenuMessage::Redo
             | MenuMessage::ZoomIn
             | MenuMessage::ZoomOut
             | MenuMessage::Annotate
@@ -937,6 +1356,12 @@ impl Signex {
             .as_ref()
             .map(|s| s.paper_size.clone())
             .unwrap_or_else(|| "A4".to_string());
+    }
+
+    fn mark_dirty(&mut self) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.dirty = true;
+        }
     }
 
     fn update_selection_info(&mut self) {
