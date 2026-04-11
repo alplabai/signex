@@ -1400,8 +1400,8 @@ impl Signex {
                 use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
                 match msg {
                     ActiveBarMsg::ToggleMenu(menu) => {
-                        // Always open (clicking elsewhere closes via CloseMenus)
                         self.active_bar_menu = Some(menu);
+                        self.context_menu = None; // close context menu when AB opens
                     }
                     ActiveBarMsg::CloseMenus => {
                         self.active_bar_menu = None;
@@ -1454,7 +1454,10 @@ impl Signex {
             }
             // Context menu actions
             Message::ShowContextMenu(x, y) => {
-                self.context_menu = Some(ContextMenuState { x, y });
+                // Don't show context menu if Active Bar dropdown is open
+                if self.active_bar_menu.is_none() {
+                    self.context_menu = Some(ContextMenuState { x, y });
+                }
                 return Task::none();
             }
             Message::CloseContextMenu => {
