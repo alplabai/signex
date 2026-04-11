@@ -28,37 +28,37 @@ const ICON_NOCONNECT: &[u8] = include_bytes!("../assets/icons/noconnect.svg");
 const ICON_COMPONENT: &[u8] = include_bytes!("../assets/icons/component.svg");
 const ICON_SHEETSYM: &[u8] = include_bytes!("../assets/icons/sheetsym.svg");
 
-// ─── Inline SVG icons for dropdown items ─────────────────────
+// ─── Dropdown item SVG icons (editable files in assets/icons/dropdown/) ──
 
-const DD_WIRE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"><path d="M4 12h8v-8"/></svg>"##;
-const DD_BUS: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"><path d="M4 12h16"/></svg>"##;
-const DD_BUS_ENTRY: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"><path d="M6 18l12-12"/></svg>"##;
-const DD_NET_LABEL: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><path d="M4 7h11l5 5-5 5H4V7z"/></svg>"##;
-const DD_GND: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v8"/><path d="M6 12h12"/><path d="M8 15h8"/><path d="M10 18h4"/></svg>"##;
-const DD_VCC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 20v-8"/><path d="M6 12h12"/></svg>"##;
-const DD_PWR_ARROW: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"><path d="M12 20v-14"/><path d="M7 10l5-5 5 5"/></svg>"##;
-const DD_PWR_BAR: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M12 20v-8"/><path d="M6 12h12"/></svg>"##;
-const DD_PWR_CIRCLE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M12 12v8"/></svg>"##;
-const DD_PWR_EARTH: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"><path d="M12 4v8"/><path d="M4 12h16"/><path d="M6 16h12"/><path d="M9 20h6"/></svg>"##;
-const DD_PORT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M4 7h11l5 5-5 5H4V7z"/><line x1="4" y1="12" x2="1" y2="12"/></svg>"##;
-const DD_OFF_SHEET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M3 7h8l5 5-5 5H3V7z"/><path d="M16 12h5"/><path d="M18 9l3 3-3 3"/></svg>"##;
-const DD_PARAM_SET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1" fill="#ef4444"/></svg>"##;
-const DD_NO_ERC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>"##;
-const DD_DIFF_PAIR: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"><path d="M4 8h16"/><path d="M4 16h16"/></svg>"##;
-const DD_BLANKET: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/></svg>"##;
-const DD_TEXT_STRING: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>"##;
-const DD_TEXT_FRAME: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M7 8h10"/><path d="M7 12h7"/></svg>"##;
-const DD_NOTE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M3 3h18v14l-4 4H3V3z"/><path d="M14 17v4"/><path d="M14 17h4"/></svg>"##;
-const DD_ARC: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M4 20A16 16 0 0120 4"/></svg>"##;
-const DD_CIRCLE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>"##;
-const DD_ELLIPSE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="6"/></svg>"##;
-const DD_LINE: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 20L20 4"/></svg>"##;
-const DD_RECT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="5" width="18" height="14"/></svg>"##;
-const DD_ROUND_RECT: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="4"/></svg>"##;
-const DD_POLYGON: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><path d="M12 3l9 7-3 11H6L3 10z"/></svg>"##;
-const DD_BEZIER: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 20C4 10 20 14 20 4"/></svg>"##;
-const DD_HARNESS: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2" stroke-linecap="round"><path d="M4 8h6l4 4h6"/><path d="M4 16h6l4-4"/></svg>"##;
-const DD_HARNESS_CONN: &[u8] = br##"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8cad0" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="1"/><path d="M10 8h4"/><path d="M10 12h4"/><path d="M10 16h4"/></svg>"##;
+const DD_WIRE: &[u8] = include_bytes!("../assets/icons/dropdown/wire.svg");
+const DD_BUS: &[u8] = include_bytes!("../assets/icons/dropdown/bus.svg");
+const DD_BUS_ENTRY: &[u8] = include_bytes!("../assets/icons/dropdown/bus_entry.svg");
+const DD_NET_LABEL: &[u8] = include_bytes!("../assets/icons/dropdown/net_label.svg");
+const DD_GND: &[u8] = include_bytes!("../assets/icons/dropdown/gnd.svg");
+const DD_VCC: &[u8] = include_bytes!("../assets/icons/dropdown/vcc.svg");
+const DD_PWR_ARROW: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_arrow.svg");
+const DD_PWR_BAR: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_bar.svg");
+const DD_PWR_CIRCLE: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_circle.svg");
+const DD_PWR_EARTH: &[u8] = include_bytes!("../assets/icons/dropdown/pwr_earth.svg");
+const DD_PORT: &[u8] = include_bytes!("../assets/icons/dropdown/port.svg");
+const DD_OFF_SHEET: &[u8] = include_bytes!("../assets/icons/dropdown/off_sheet.svg");
+const DD_PARAM_SET: &[u8] = include_bytes!("../assets/icons/dropdown/param_set.svg");
+const DD_NO_ERC: &[u8] = include_bytes!("../assets/icons/dropdown/no_erc.svg");
+const DD_DIFF_PAIR: &[u8] = include_bytes!("../assets/icons/dropdown/diff_pair.svg");
+const DD_BLANKET: &[u8] = include_bytes!("../assets/icons/dropdown/blanket.svg");
+const DD_TEXT_STRING: &[u8] = include_bytes!("../assets/icons/dropdown/text_string.svg");
+const DD_TEXT_FRAME: &[u8] = include_bytes!("../assets/icons/dropdown/text_frame.svg");
+const DD_NOTE: &[u8] = include_bytes!("../assets/icons/dropdown/note.svg");
+const DD_ARC: &[u8] = include_bytes!("../assets/icons/dropdown/arc.svg");
+const DD_CIRCLE: &[u8] = include_bytes!("../assets/icons/dropdown/circle.svg");
+const DD_ELLIPSE: &[u8] = include_bytes!("../assets/icons/dropdown/ellipse.svg");
+const DD_LINE: &[u8] = include_bytes!("../assets/icons/dropdown/line.svg");
+const DD_RECT: &[u8] = include_bytes!("../assets/icons/dropdown/rect.svg");
+const DD_ROUND_RECT: &[u8] = include_bytes!("../assets/icons/dropdown/round_rect.svg");
+const DD_POLYGON: &[u8] = include_bytes!("../assets/icons/dropdown/polygon.svg");
+const DD_BEZIER: &[u8] = include_bytes!("../assets/icons/dropdown/bezier.svg");
+const DD_HARNESS: &[u8] = include_bytes!("../assets/icons/dropdown/harness.svg");
+const DD_HARNESS_CONN: &[u8] = include_bytes!("../assets/icons/dropdown/harness_conn.svg");
 
 // ─── Messages ────────────────────────────────────────────────
 
