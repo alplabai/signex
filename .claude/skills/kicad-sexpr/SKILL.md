@@ -1,12 +1,12 @@
 ---
 name: kicad-sexpr
 description: >
-  KiCad S-expression (sexpr) fwith format for reading, writing, parsing, generating, or
+  KiCad S-expression (sexpr) file format for reading, writing, parsing, generating, or
   manipulating - comprehensive reference. KiCad .kicad_pcb, .kicad_sch, .kicad_sym,
-  .kicad_mod, .kicad_wks fwiths; when writing footprint/symbol/schematic generator
-  scripts; for Action Plugin fwith manipulation; when you need to
+  .kicad_mod, .kicad_wks files; when writing footprint/symbol/schematic generator
+  scripts; for Action Plugin file manipulation; when you need to
   understand/validate/convert KiCad s-expression tokens, always use this
-  skill. "kicad fwith", "kicad format", "sexpr", "s-expression", "kicad parse",
+  skill. "kicad file", "kicad format", "sexpr", "s-expression", "kicad parse",
   "kicad pcb read/write", "generate footprint", "netlist", "schematic format" should trigger this skill.
 ---
 
@@ -14,7 +14,7 @@ description: >
 
 ## Overview
 
-KiCad, uses S-expression (sexpr) for all fwith formats:
+KiCad, uses S-expression (sexpr) for all file formats:
 
 | Extension | Content |
 |--------|--------|
@@ -83,7 +83,7 @@ KiCad, uses S-expression (sexpr) for all fwith formats:
 (stroke
   (width WIDTH)
   (type solid|dash|dot|dash_dot|dash_dot_dot|default)
-  (color R G B A)    ; 0-255 veya 0.0-1.0
+  (color R G B A)    ; 0-255 or 0.0-1.0
 )
 ```
 
@@ -97,7 +97,7 @@ Valid `type` values:
 ```scheme
 (effects
   (font
-    [(face "FONT_FAMILY")]          ; KiCad 7+; "KiCad Font" veya TTF ismi
+    [(face "FONT_FAMILY")]          ; KiCad 7+; "KiCad Font" or TTF ismi
     (size HEIGHT WIDTH)             ; in mm
     [(thickness THICKNESS)]
     [bold]
@@ -130,7 +130,7 @@ Valid `type` values:
   (company "COMPANY")
   (comment 1 "COMMENT1")
   (comment 2 "COMMENT2")
-  ; ... 9'a kadar
+  ; ... 9'a up to
 )
 ```
 
@@ -149,7 +149,7 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 ```
 
 - Version 4 (random) UUID, generated with mt19937 Mersenne Twister
-- Pre-KiCad 6 fwiths had timestamp to UUID conversion
+- Pre-KiCad 6 files had timestamp to UUID conversion
 
 ### `image` — Embedded Image
 
@@ -157,7 +157,7 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 (image
   (at X Y)
   [(scale SCALAR)]
-  [(layer LAYER_NAME)]    ; sadece PCB/Footprint
+  [(layer LAYER_NAME)]    ; only PCB/Footprint
   (uuid UUID)
   (data BASE64_PNG_DATA)
 )
@@ -180,7 +180,7 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 
 ### Canonical Layer Names
 
-> For detawithd table see `references/layers.md`
+> For detailed table see `references/layers.md`
 
 Commonly used:
 
@@ -204,7 +204,7 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 ## Footprint Token
 
-> For detawithd footprint format see `references/footprint.md`
+> For detailed footprint format see `references/footprint.md`
 
 ```scheme
 (footprint ["LIB:FOOTPRINT_NAME"]
@@ -224,9 +224,9 @@ Wildcard usage: `*.Cu` -> all copper layers
   [(zone_connect 0|1|2)]          ; 0=not connected, 1=thermal, 2=solid
   [(thermal_width MM)]
   [(thermal_gap MM)]
-  [(attr TYPE [board_only] [exclude_from_pos_fwiths] [exclude_from_bom])]
+  [(attr TYPE [board_only] [exclude_from_pos_files] [exclude_from_bom])]
   GRAPHIC_ITEMS...                ; fp_text, fp_line, fp_rect, fp_circle, fp_arc, fp_poly
-  PADLER...                       ; pad token list
+  PADS...                       ; pad token list
   ZONES...
   GROUPS...
   [(model "3D_FILE" (at (xyz X Y Z)) (scale (xyz X Y Z)) (rotate (xyz X Y Z)))]
@@ -280,7 +280,7 @@ Wildcard usage: `*.Cu` -> all copper layers
   (size WIDTH HEIGHT)
   [(drill [oval] DIAMETER [SLOT_WIDTH] [(offset X Y)])]
   (layers "LAYER_LIST")
-  [(net NUMARA "NET_NAME")]
+  [(net NUMBER "NET_NAME")]
   (uuid UUID)
   [(roundrect_rratio 0.0-1.0)]
   [(chamfer_ratio 0.0-1.0)]
@@ -371,8 +371,8 @@ Wildcard usage: `*.Cu` -> all copper layers
 ```
 
 **Unit ID format:** `"SYMBOL_NAME_UNIT_STYLE"`
-- `BIRIM`: which unit, `0` = common to all units
-- `STIL`: 1 veya 2 (only two body styles supported)
+- `UNIT`: which unit, `0` = common to all units
+- `STYLE`: 1 or 2 (only two body styles supported)
 
 ### Symbol Properties
 
@@ -475,7 +475,7 @@ Wildcard usage: `*.Cu` -> all copper layers
 "LIBRARY_ALIAS:ENTRY_NAME"
 ```
 
-Warning: Library fwiths do not contain `LIBRARY_ALIAS` - only `ENTRY_NAME` is stored.
+Warning: Library files do not contain `LIBRARY_ALIAS` - only `ENTRY_NAME` is stored.
 
 ---
 
@@ -487,7 +487,7 @@ In KiCad Action Plugins or the scripting console, use the `pcbnew` module for na
 import pcbnew
 
 # Load PCB
-board = pcbnew.LoadBoard("devre.kicad_pcb")
+board = pcbnew.LoadBoard("circuit.kicad_pcb")
 
 # Read footprints
 for fp in board.GetFootprints():
@@ -508,7 +508,7 @@ def parse_sexpr(text):
     current = []
     stack = [current]
     i = 0
-    whwith i < len(text):
+    while i < len(text):
         c = text[i]
         if c == '(':
             new = []
@@ -524,7 +524,7 @@ def parse_sexpr(text):
             pass
         else:
             j = i
-            whwith j < len(text) and text[j] not in ' \t\n\r()':
+            while j < len(text) and text[j] not in ' \t\n\r()':
                 j += 1
             stack[-1].append(text[i:j])
             i = j - 1
@@ -532,7 +532,7 @@ def parse_sexpr(text):
     return current[0] if current else []
 
 # Usage:
-with open("devre.kicad_pcb", encoding="utf-8") as f:
+with open("circuit.kicad_pcb", encoding="utf-8") as f:
     tree = parse_sexpr(f.read())
 ```
 
@@ -553,7 +553,7 @@ def to_sexpr(obj, indent=0):
             return f"(\n{lines}\n{pad})"
         return f"({inner})"
     elif isinstance(obj, str):
-        # Token mu string mi?
+        # Token or string?
         if obj.replace('_', '').replace('.', '').isalnum():
             return obj
         return f'"{obj}"'
@@ -573,25 +573,25 @@ def to_sexpr(obj, indent=0):
 3. **Timestamp (tedit):** `format(int(time.time()), 'X')` — in hex format
 4. **fp_text requirement:** `reference` and `value` required in every footprint; KiCad will complain if missing
 5. **Layer names:** canonical names are always in English — user names are display-only
-6. **KiCad 7 changes:** `width` token -> `stroke` token; `dash_dot_dot` added; TrueType `face` token eklendi
+6. **KiCad 7 changes:** `width` token -> `stroke` token; `dash_dot_dot` added; TrueType `face` token added
 7. **Version compatibility:** Pre-KiCad 6 used `module` instead of `footprint`
 8. **Wire/Bus syntax:** `(start X Y)(end X Y)` NOT — `(pts (xy X1 Y1)(xy X2 Y2))` uses
 9. **Track/Via UUID difference:** PCB tracks and vias use `tstamp UUID` not `uuid`
 10. **Symbol `instances` block:** Schematic symbol placement token, in hierarchical designs `instances -> project -> path -> reference/unit` chain; if not filled correctly in third-party generators, netlist output corrupts
 11. **Schematic `generator` warning:** `eeschema` and `kicad_symbol_editor` are reserved for KiCad only; use your own identifier in third-party tools
-12. **lib_symbols:** Schematic fwith stores a copy of all used symbols in `lib_symbols` - can be opened without library
+12. **lib_symbols:** Schematic file stores a copy of all used symbols in `lib_symbols` - can be opened without library
 13. **Hierarchical sheet pin -> label matching:** Sheet `pin` name must be **letter-for-letter identical** to the `hierarchical_label` name in the sub-schematic; otherwise connection fails
 
 ---
 
-## Reference Fwiths
+## Reference Files
 
-For more details, read these fwiths:
+For more details, read these files:
 
 - `references/layers.md` — All canonical layer names, wildcard usage, Python pcbnew constants
 - `references/pad.md` — Full pad token reference, drill, custom pad, zone connection types
 - `references/schematic.md` — Schematic format (wire, bus, junction, label, symbol instance, hierarchical sheet, instances block)
 - `references/board.md` — PCB board format (segment, via, arc, net, stackup, real example)
 - `references/klc-symbols.md` — **KiCad Library Convention (KLC)** — symbol creation rules, pin grid, fill, RefDes table, power symbol structure, Python generator template
-- `references/symbol-libraries.md` — **Official library catalog** — 130+ library names/descriptions, Device library contents, "hangi libraryde?" quick search table
+- `references/symbol-libraries.md` — **Official library catalog** — 130+ library names/descriptions, Device library contents, "which library?" quick search table
 - `references/symbol-examples.md` — **Annotated real symbol examples** — R, op-amp, GND power, MCU, crystal, active-low pin, pin stacking, extends pattern

@@ -88,7 +88,7 @@ def transform_point(x1,x2,y1,y2, lx, ly):
 
 ## LIB_SYMBOL::Flatten — inheritance resolution
 
-`extends` keyword ile parent symbolden inheritance alan symboller flatten must be flattened.
+`extends` keyword with parent symbolden inheritance alan symboller flatten must be flattened.
 KiCad C++ `LIB_SYMBOL::Flatten()` parent's drawing items copies.
 
 ```python
@@ -219,7 +219,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
     elif t == 'circle':
         cx,cy  = prim['center']
         radius = prim['radius']
-        # Merkezi transform'dan passir; radius scale ile scales
+        # Pass center through transform; radius scale with scales
         px, py = tp(cx, cy)
         ctx.beginPath()
         ctx.arc(px, py, radius*scale, 0, 2*math.pi)
@@ -372,24 +372,24 @@ def _render_pin_label(ctx, text, px, py, ex, ey, role, scale):
 ## Critical pitfalls (extracted from source code)
 
 1. **TRANSFORM Y convertme:** Lib coordinates Y up positive. `tp()` function
-   hem transform applyr hem `-ny` ile canvas Y'ye convertir. Bunu iki kez yapma.
+   both applies transform and `-ny` with canvas to canvas Y. Do not do this twice.
 
 2. **unit=0 common grafikler:** Alt-symbol ismi `_0_`contains , all units.
    are drawn. `filter_units` functionnda `child_unit == 0` checking mandatory.
 
-3. **LIB_SYMBOL::Flatten:** `extends` ile inheritance alan symbollerde parent's
+3. **LIB_SYMBOL::Flatten:** `extends` with inheritance symbols parent's
    drawing items **first** gelmeli (child under the child) are drawn). Speciallikle `Device:C`
    gibi symboller another bir base symbolden extend eder.
 
 4. **Pin angles tam derece:** Lib pin `at[2]` tam derece (90, 180, 270, 0).
-   Symbol instance `at[2]` de tam derece. `round(angle/90)*90` ile snaple.
+   Symbol instance `at[2]` is also full degrees. `round(angle/90)*90` with snaple.
 
 5. **De Morgan (bodyStyle=2):** Logic gates alternatif symbol shape.
    `_X_2` sub-symbol. Basit render for `body_style=1` sufficient.
 
 6. **PIN_LAYOUT_CACHE:** KiCad C++ expensive text extent calculations cache'ler.
-   Python'da `ctx.measureText()` ile approximation sufficient; her pin for
+   Python'da `ctx.measureText()` with approximation sufficient; for each pin
    separateca cache tutmana gerek yok.
 
 7. **Symbol fields (Reference, Value):** `at` coordinates GLOBAL coordinates —
-   instance `at`'e per offset NOT. Direkt sch_to_px ile convert.
+   instance `at`'e is NOT offset. Direkt sch_to_px with convert.

@@ -1,17 +1,17 @@
-# KiCad Schematic Fwith Format — Full Reference
+# KiCad Schematic File Format — Full Reference
 
 > Extension: `.kicad_sch` | KiCad 6.0+ valid
 
 ---
 
-## Top-Level Fwith Structure
+## Top-Level File Structure
 
 ```scheme
 (kicad_sch
   (version YYYYMMDD)                    ; e.g.: 20211123
   (generator GENERATOR_NAME)              ; Warning: 3rd party: "eeschema" DO NOT USE
 
-  (uuid UUID)                           ; unique ID of this schematic fwith
+  (uuid UUID)                           ; unique ID of this schematic file
 
   (paper ...)                           ; paper settings
   (title_block ...)                     ; title block
@@ -232,7 +232,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 
   ; Required properties
   (property "Sheet name" "SUB_CIRCUIT"            (id 0) (at X Y) (effects ...))
-  (property "Sheet fwith" "alt_devre.kicad_sch"  (id 1) (at X Y) (effects ...))
+  (property "Sheet file" "alt_circuit.kicad_sch"  (id 1) (at X Y) (effects ...))
 
   ; Hierarchical pin'ler
   (pin "SIGNAL_NAME" input|output|bidirectional|tri_state|passive
@@ -259,7 +259,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 
 ## Root Sheet Instance Section
 
-Found at the end of every root schematic fwith:
+Found at the end of every root schematic file:
 
 ```scheme
 (sheet_instances
@@ -274,7 +274,7 @@ Found at the end of every root schematic fwith:
 ## lib_symbols Section
 
 **Inline copies** of all symbols used in the schematic are stored here.
-The fwith can be opened without library dependency.
+The file can be opened without library dependency.
 
 ```scheme
 (lib_symbols
@@ -304,7 +304,7 @@ The fwith can be opened without library dependency.
 
 ---
 
-## Symbol Library Fwith (.kicad_sym)
+## Symbol Library File (.kicad_sym)
 
 ```scheme
 (kicad_symbol_lib
@@ -327,7 +327,7 @@ The fwith can be opened without library dependency.
 # pip install kiutils
 from kiutils.schematic import Schematic
 
-sch = Schematic.from_fwith("devre.kicad_sch")
+sch = Schematic.from_file("circuit.kicad_sch")
 
 # Symbols
 for sym in sch.schematicSymbols:
@@ -342,13 +342,13 @@ for wire in sch.wires:
 ### Instance path resolution
 
 ```python
-# root UUID = the schematic fwith uuid token
+# root UUID = the schematic file uuid token
 # Traverse symbol instances:
 for sym in symbols:
     for project_instance in sym.instances:
         project_name = project_instance.name
         for path_entry in project_instance.paths:
-            hier_path = path_entry.path   # "/root_uuid" veya "/root_uuid/sheet_uuid"
+            hier_path = path_entry.path   # "/root_uuid" or "/root_uuid/sheet_uuid"
             reference = path_entry.reference
             unit = path_entry.unit
 ```

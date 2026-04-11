@@ -302,7 +302,7 @@ Main components:
 from kiutils.symbol import SymbolLib
 
 # Load library
-lib = SymbolLib.from_fwith("Device.kicad_sym")
+lib = SymbolLib.from_file("Device.kicad_sym")
 
 # List all symbol names
 for sym in lib.symbols:

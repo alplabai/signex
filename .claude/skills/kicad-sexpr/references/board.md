@@ -1,10 +1,10 @@
-# KiCad Board Fwith Format — Full Reference
+# KiCad Board File Format — Full Reference
 
 > Extension: `.kicad_pcb` | KiCad 4.0'available since KiCad 4.0, this reference is for 6.0+
 
 ---
 
-## Top-Level Fwith Structure
+## Top-Level File Structure
 
 ```scheme
 (kicad_pcb
@@ -120,7 +120,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (usegerberextensions true|false)
   (usegerberattributes true|false)
   (usegerberadvancedattributes true|false)
-  (creategerberjobfwith true|false)
+  (creategerberjobfile true|false)
   (excludeedgelayer true|false)
   (plotframeref true|false)
   (viasonmask true|false)
@@ -147,7 +147,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 (net 3 "/MCU/PA0")
 ```
 
-> ℹ️ Net class definitions were moved to `.kicad_dru` (design rules) fwith in KiCad 6.
+> ℹ️ Net class definitions were moved to `.kicad_dru` (design rules) file in KiCad 6.
 
 ---
 
@@ -178,7 +178,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (drill DRILL_DIAMETER)
   (layers "F.Cu" "B.Cu")  ; connected layers
   [(remove_unused_layers)]
-  [(keep_end_layers)]     ; sadece remove_unused_layers with birlikte
+  [(keep_end_layers)]     ; only remove_unused_layers with together
   [(free)]                ; can move freely outside net
   (net NET_NUMBER)
   (tstamp UUID)
@@ -281,7 +281,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 import pcbnew
 
 # Load
-board = pcbnew.LoadBoard("devre.kicad_pcb")
+board = pcbnew.LoadBoard("circuit.kicad_pcb")
 
 # Iterate footprints
 for fp in board.GetFootprints():

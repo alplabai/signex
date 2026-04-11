@@ -16,7 +16,7 @@ Render methods for each item type:
 | `PCB_ARC` | `arc` (track) | `draw(PCB_ARC*, layer)` — calculate arc + DrawArc |
 | `PCB_VIA` | `via` | `draw(PCB_VIA*, layer)` — via + hole |
 | `FOOTPRINT` | `footprint` | `draw(FOOTPRINT*, layer)` — each child item |
-| `PAD` | `pad` | `draw(PAD*, layer)` — PADSTACK'e per shape |
+| `PAD` | `pad` | `draw(PAD*, layer)` — PADSTACK is NOT shape |
 | `PCB_SHAPE` | `gr_*`, `fp_*` | `draw(PCB_SHAPE*, layer)` — EDA_SHAPE dispatch |
 | `ZONE` | `zone` | `draw(ZONE*, layer)` — filled_polygon |
 | `PCB_TEXT` | `gr_text`, `fp_text` | `draw(PCB_TEXT*, layer)` |
@@ -52,7 +52,7 @@ def bounding_box(items):
 ## PCB_TRACK (segment) — PCB_PAINTER::draw(PCB_TRACK*)
 
 `PCB_TRACK` C++ class default 0.2mm width uses.
-Canvas'ta `round` lineCap ile are drawn (KiCad GAL DrawSegment).
+Canvas'ta `round` lineCap with are drawn (KiCad GAL DrawSegment).
 
 ```python
 def render_segment(ctx, seg, layer_color, scale):
@@ -378,7 +378,7 @@ def _draw_drill(ctx, drill, pad_type, scale):
 
 ## ZONE / copper pour — PCB_PAINTER::draw(ZONE*, layer)
 
-`ZONE` C++ class `m_FilledPolysList` ile stores per-layer fill.
+`ZONE` C++ class `m_FilledPolysList` with stores per-layer fill.
 S-expr'de: `zone → filled_polygon → pts`.
 
 ```python
@@ -476,13 +476,13 @@ def render_footprint(ctx, fp, layer_colors, active_layers, scale):
    `(gr_arc ...)` grafik is a graphic arc. Both use the de same `start/mid/end` format. uses.
 
 2. **Via layer filterme:** Via `LAYER_VIAS` (GAL virtual layer) on are drawn,
-   `F.Cu` or `B.Cu` on not. Render ordernda vias as PCB layer not
+   `F.Cu` or `B.Cu` on not. Render during vias as PCB layer not
    GAL layer olarak ele al.
 
 3. **PAD oval drill:** Oval drill hem `diameter` hem slot width contains:
    `(drill oval DIAMETER SLOT_WIDTH)`. `oval=True` ise eliptik delik draw.
 
-4. **PADSTACK:** KiCad 9+ ile pad shape layer'a per vary.
+4. **PADSTACK:** KiCad 9+ with pad shape layer'a can vary per.
    `padstack.mode == 'front_inner_back'` ise `F.Cu`, inner ve `B.Cu` for
    separate `size`/`shape` values can be. Basit render for normal mod sufficient.
 
