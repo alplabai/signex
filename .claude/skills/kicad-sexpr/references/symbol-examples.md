@@ -1,5 +1,5 @@
 # Real-World Symbol Examples — Annotated
-> KiCad 9 format (.kicad_sym) — resmi library kalıplarına birebir uygun
+> KiCad 9 format (.kicad_sym) — matching official library patterns exactly
 
 ---
 
@@ -7,16 +7,16 @@
 
 ```scheme
 (symbol "R"
-  (pin_numbers hide)                          ; pin numaraları gizli (2-pin basit)
+  (pin_numbers hide)                          ; pin numbers hidden (simple 2-pin)
   (pin_names
-    (offset 0)                                ; pin name offset = 0 (üst üste)
-    hide                                      ; pin adları gizli
+    (offset 0)                                ; pin name offset = 0 (overlapping)
+    hide                                      ; pin names hidden
   )
   (in_bom yes)
   (on_board yes)
 
   (property "Reference" "R" (id 0)
-    (at 1.524 0 90)                           ; 90° döndürülmüş, sağda
+    (at 1.524 0 90)                           ; 90 deg rotated, on the right
     (effects (font (size 1.27 1.27))))
   (property "Value" "R" (id 1)
     (at -1.524 0 90)
@@ -32,23 +32,23 @@
   (property "ki_fp_filters" "R_*" (id 6)
     (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 
-  (symbol "R_0_1")                            ; unit 0, stil 1 — boş (ortak grafik yok)
+  (symbol "R_0_1")                            ; unit 0, style 1 - empty (no common graphics)
 
-  (symbol "R_1_1"                             ; unit 1, stil 1 — asıl çizim
-    ; IEC rectangle gövde
+  (symbol "R_1_1"                             ; unit 1, style 1 - actual drawing
+    ; IEC rectangle body
     (rectangle
       (start -1.016 -2.54)
       (end 1.016 2.54)
       (stroke (width 0.254) (type default))
-      (fill (type none))                      ; ayrık bwithşen -> no fill YOK
+      (fill (type none))                      ; discrete component -> no fill
     )
-    ; Pin 1 — üst (at Y=3.81, 270° yani aşağıya bakan, uzunluk 1.27)
+    ; Pin 1 - top (at Y=3.81, 270 deg = facing down, length 1.27)
     (pin passive line
-      (at 0 3.81 270) (length 1.27)           ; 270° = aşağı yönlü bağlantı
+      (at 0 3.81 270) (length 1.27)           ; 270 deg = downward connection
       (name "~" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
     )
-    ; Pin 2 — alt (at Y=-3.81, 90° yani yukarıya bakan)
+    ; Pin 2 - bottom (at Y=-3.81, 90 deg = facing up)
     (pin passive line
       (at 0 -3.81 90) (length 1.27)
       (name "~" (effects (font (size 1.27 1.27))))
@@ -60,8 +60,8 @@
 
 **Note:**
 - `~` pin name -> invisible name (IEC notation)
-- `pin_numbers hide` + `pin_names hide` -> 2-pin bwithşenlerde standart
-- `fill (type none)` -> ayrık bwithşen rule (S3.3)
+- `pin_numbers hide` + `pin_names hide` -> standard for 2-pin components
+- `fill (type none)` -> discrete component rule (S3.3)
 - Pin length: 1.27 mm (50 mil) — short pin exception (S4.1)
 
 ---
@@ -102,7 +102,7 @@
       (name "IN-" (effects (font (size 1.27 1.27))))
       (number "2" (effects (font (size 1.27 1.27))))
     )
-    ; OUT çıkış
+    ; OUT output
     (pin output line (at 6.35 0 180) (length 2.54)
       (name "OUT" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
@@ -138,7 +138,7 @@
       (name "OUT" (effects (font (size 1.27 1.27))))
       (number "7" (effects (font (size 1.27 1.27))))
     )
-    ; Power pins unit 0'da not, A with aynı hidden pinler burada da var
+    ; Power pins not in unit 0, same hidden pins as A are here too
     (pin power_in line (at 0 7.62 270) (length 2.54) hide
       (name "V+" (effects (font (size 1.27 1.27))))
       (number "8" (effects (font (size 1.27 1.27))))
@@ -214,7 +214,7 @@
       (stroke (width 0.254) (type default))
       (fill (type background))
     )
-    ; GÜÇPINLERI
+    ; POWER PINS
     (pin power_in line (at -17.78 22.86 0) (length 5.08)
       (name "VDD" (effects (font (size 1.27 1.27))))
       (number "24" (effects (font (size 1.27 1.27))))
@@ -242,14 +242,14 @@
       (name "BOOT0" (effects (font (size 1.27 1.27))))
       (number "44" (effects (font (size 1.27 1.27))))
     )
-    ; ... diğer pinler
+    ; ... other pins
   )
 )
 ```
 
 ---
 
-## 5. Aktif Düşük Pin Nameleri
+## 5. Active-Low Pin Names
 
 ```scheme
 ; CORRECT — tilde+curly braces (KiCad 6+):
@@ -265,9 +265,9 @@
 
 ---
 
-## 6. Pin Stacking Örneği
+## 6. Pin Stacking Example
 
-Aynı bwithşende multiple GND pini var — all placed at the same position:
+Same component has multiple GND pins — all placed at the same position:
 
 ```scheme
 ; All GND pins at same (at 0 -5.08 90) position are stacked
@@ -287,7 +287,7 @@ Aynı bwithşende multiple GND pini var — all placed at the same position:
 
 ---
 
-## 7. Genişletilmiş (Extends) Symbol
+## 7. Extended (Extends) Symbol
 
 Deriving from existing symbol — only properties change, graphics are the same:
 
@@ -303,7 +303,7 @@ Deriving from existing symbol — only properties change, graphics are the same:
 
 ---
 
-## 8. Kristal Symbolü (Device:Crystal)
+## 8. Crystal Symbol (Device:Crystal)
 
 ```scheme
 (symbol "Crystal"
@@ -312,7 +312,7 @@ Deriving from existing symbol — only properties change, graphics are the same:
   (in_bom yes) (on_board yes)
   ...
   (symbol "Crystal_1_1"
-    ; Lineler (kristal sembolü şekli)
+    ; Lines (crystal symbol shape)
     (polyline (pts (xy 0 -1.778) (xy 0 1.778))     ; vertical line
       (stroke (width 0.508) (type default)) (fill (type none)))
     (rectangle (start -0.762 -0.889) (end 0.762 0.889)  ; rectangle
@@ -346,7 +346,7 @@ Pin directions (angle):
 270° -> pin facing up (connection point at top) -> for IC top edge
 ```
 
-Typeik IC pin konumları (pin uzunluğu 2.54 mm with):
+Typical IC pin positions (with 2.54 mm pin length):
 ```python
 # Left edge: x = -BOX_W - 2.54, angle = 0
 # Right edge: x = +BOX_W + 2.54, angle = 180

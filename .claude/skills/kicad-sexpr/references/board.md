@@ -161,7 +161,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (layer LAYER)
   [(locked)]
   (net NET_NUMBER)
-  (tstamp UUID)           ; Warning: `uuid` not, `tstamp` kullanılır
+  (tstamp UUID)           ; Warning: uses `tstamp`, not `uuid`
 )
 ```
 

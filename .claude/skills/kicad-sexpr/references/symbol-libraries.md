@@ -1,8 +1,8 @@
 # Official KiCad Symbol Library Catalog
-> Source: https://kicad.github.io/symbols/ | KiCad 9 with güncellendi (kicad-symbols master)
+> Source: https://kicad.github.io/symbols/ | KiCad 9 updated with (kicad-symbols master)
 
-Her library için: **library adı**, kısa description, symbol count.
-Library dosya adı: `<İSİM>.kicad_sym`
+For each library: **library name**, short description, symbol count.
+Library filename: `<NAME>.kicad_sym`
 Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 ---
@@ -11,10 +11,10 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 | Library | Description | # |
 |-----------|----------|---|
-| `4xxx` | 4000 serisi CMOS mantık | 48 |
+| `4xxx` | 4000 series CMOS logic | 48 |
 | `4xxx_IEEE` | 4000 serisi IEEE sembolleri | 99 |
-| `74xGxx` | 74xGxx mantık | 163 |
-| `74xx` | 74xx TTL/CMOS mantık | 235 |
+| `74xGxx` | 74xGxx logic | 163 |
+| `74xx` | 74xx TTL/CMOS logic | 235 |
 | `74xx_IEEE` | 74xx IEEE sembolleri | 185 |
 
 ## Microprocessor and MCU
@@ -41,7 +41,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `MCU_Microchip_SAME` | SAME serisi | 16 |
 | `MCU_Microchip_SAML` | SAML serisi | 20 |
 | `MCU_Microchip_SAMV` | SAMV serisi | 3 |
-| `MCU_Module` | Arduino, Raspberry Pi, breakout modüller | 50 |
+| `MCU_Module` | Arduino, Raspberry Pi, breakout modules | 50 |
 | `MCU_Nordic` | nRF51, nRF52 | 7 |
 | `MCU_NXP_Kinetis` | NXP Kinetis | 155 |
 | `MCU_NXP_LPC` | NXP LPC | 105 |
@@ -65,7 +65,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 | Library | Description | # |
 |-----------|----------|---|
-| `CPU` | Çeşitli CPU | 6 |
+| `CPU` | Various CPUs | 6 |
 | `CPU_NXP_68000` | Motorola/NXP 68000 | 5 |
 | `CPU_PowerPC` | PowerPC | 1 |
 | `DSP_AnalogDevices` | ADI DSP | 5 |
@@ -101,12 +101,12 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 | Library | Description | # |
 |-----------|----------|---|
-| `Battery_Management` | Battery yönetim IC | 120 |
+| `Battery_Management` | Battery management IC | 120 |
 | `Converter_ACDC` | AC/DC converters | 137 |
 | `Converter_DCDC` | DC/DC converters | 538 |
 | `power` | Power symbols (GND, VCC, PWR_FLAG…) | ~50 |
 | `Regulator_Linear` | Linear regulators (LM78xx, LDO…) | — |
-| `Regulator_Switching` | Keylamalı regulatorler | — |
+| `Regulator_Switching` | Switching regulators | — |
 
 ## Discrete Semiconductors
 
@@ -136,7 +136,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `Interface_LineDriver` | RS-232, RS-485 line driver | 16 |
 | `Interface_Optical` | IR receiver/transmitter | 42 |
 | `Interface_UART` | UART IC | 133 |
-| `Interface_USB` | USB kontrolcü, PHY, hub | 95 |
+| `Interface_USB` | USB controller, PHY, hub | 95 |
 | `Isolator` | Optocoupler, digital isolation | 315 |
 | `Isolator_Analog` | Analog isolation | 7 |
 
@@ -189,7 +189,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `Driver_FET` | MOSFET / gate driver | 194 |
 | `Driver_LED` | LED drivers | 78 |
 | `Driver_Motor` | Motor driver IC | 65 |
-| `Driver_Relay` | Relay sürücüleri | 5 |
+| `Driver_Relay` | Relay drivers | 5 |
 | `Driver_TEC` | Peltier drivers | 2 |
 
 ## Display
@@ -212,7 +212,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `Jumper` | Solder jumper | 9 |
 | `Logic_LevelTranslator` | Level translators | 34 |
 | `Logic_Programmable` | Programmable logic | 6 |
-| `Mechanical` | Mekanik bwithşenler | — |
+| `Mechanical` | Mechanical components | — |
 | `Oscillator` | Oscillators | — |
 | `Switch` | Keylar | — |
 | `Timer` | Timers (555, etc.) | — |
@@ -221,12 +221,12 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 ---
 
-## Device Librarysi — Temel Bwithşenler
+## Device Library - Basic Components
 
-`Device` librarysi en sık kullanılan librarydir (564 sembol).
-Başlıca bwithşenler:
+`Device` library is the most commonly used library (564 symbols).
+Main components:
 
-### Passive Bwithşenler
+### Passive Components
 | Symbol | Description | RefDes |
 |--------|----------|--------|
 | `R` | Resistor (IEC) | R |
@@ -258,7 +258,7 @@ Başlıca bwithşenler:
 | `Q_PMOS_GSD` | P-MOSFET | Q |
 | `Q_NMOS_NMOS_GSD` | Dual N-MOSFET | Q |
 
-### Mekanik / Other
+### Mechanical / Other
 | Symbol | Description | RefDes |
 |--------|----------|--------|
 | `Crystal` | 2-pin crystal | Y |
@@ -272,7 +272,7 @@ Başlıca bwithşenler:
 
 ---
 
-## Hızlı Arama: Hangi Libraryde?
+## Quick Search: Which Library?
 
 | Looking for | Library |
 |----------|-----------|
@@ -301,7 +301,7 @@ Başlıca bwithşenler:
 ```python
 from kiutils.symbol import SymbolLib
 
-# Library yükle
+# Load library
 lib = SymbolLib.from_fwith("Device.kicad_sym")
 
 # List all symbol names
@@ -315,7 +315,7 @@ for unit in r.units:
         print(f"  Pin {pin.number}: {pin.name} ({pin.electricalType})")
 ```
 
-## Python: Library İsmi Normalizasyonu
+## Python: Library Name Normalization
 
 ```python
 def normalize_lib_id(raw_id: str) -> tuple[str, str]:
@@ -326,5 +326,5 @@ def normalize_lib_id(raw_id: str) -> tuple[str, str]:
     parts = raw_id.split(":", 1)
     if len(parts) == 2:
         return parts[0], parts[1]
-    return "", raw_id  # sadece sembol adı (library dosyası içinde)
+    return "", raw_id  # symbol name only (inside library file)
 ```

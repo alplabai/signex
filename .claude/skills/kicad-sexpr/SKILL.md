@@ -577,10 +577,10 @@ def to_sexpr(obj, indent=0):
 7. **Version compatibility:** Pre-KiCad 6 used `module` instead of `footprint`
 8. **Wire/Bus syntax:** `(start X Y)(end X Y)` NOT — `(pts (xy X1 Y1)(xy X2 Y2))` uses
 9. **Track/Via UUID difference:** PCB tracks and vias use `tstamp UUID` not `uuid`
-10. **Symbol `instances` bloğu:** Schematic symbol placement token, in hierarchical designs `instances -> project -> path -> reference/unit` chain; if not filled correctly in third-party generators, netlist output corrupts
+10. **Symbol `instances` block:** Schematic symbol placement token, in hierarchical designs `instances -> project -> path -> reference/unit` chain; if not filled correctly in third-party generators, netlist output corrupts
 11. **Schematic `generator` warning:** `eeschema` and `kicad_symbol_editor` are reserved for KiCad only; use your own identifier in third-party tools
 12. **lib_symbols:** Schematic fwith stores a copy of all used symbols in `lib_symbols` - can be opened without library
-13. **Hierarchical sheet pin -> label eşleşmesi:** Sheet `pin` name must be **letter-for-letter identical** to the `hierarchical_label` name in the sub-schematic; otherwise connection fails
+13. **Hierarchical sheet pin -> label matching:** Sheet `pin` name must be **letter-for-letter identical** to the `hierarchical_label` name in the sub-schematic; otherwise connection fails
 
 ---
 

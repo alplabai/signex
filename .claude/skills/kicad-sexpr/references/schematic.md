@@ -54,7 +54,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 "/00000000-0000-0000-0000-00004b3a13a4/00000000-0000-0000-0000-00004b617b88"
 ```
 
-- **First UUID** must always be the root sheet UUID (root `.kicad_sch` dosyasının UUID'si)
+- **First UUID** must always be the root sheet UUID (UUID of the root `.kicad_sch` file)
 
 ---
 
@@ -111,7 +111,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: `(start)(end)` not — wire/bus **`pts` + `xy`** çifti uses.
+> Warning: `(start)(end)` not — wire/bus **`pts` + `xy`** pairs.
 
 ---
 
@@ -160,7 +160,7 @@ is formed by joining the UUIDs of related sheets with `/`:
   (at X Y [ANGLE])
   (effects ...)
   (uuid UUID)
-  ÖZELLIKLER...        ; (property ...) tokens - including inter-sheet ref
+  PROPERTIES...        ; (property ...) tokens - including inter-sheet ref
 )
 ```
 
@@ -252,8 +252,8 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: Sheet `pin` adı, ilişkili `.kicad_sch` dosyasındaki
-> `hierarchical_label` adıyla **birebir aynı** must be.
+> Warning: Sheet `pin` name in the associated `.kicad_sch` file
+> must be **exactly identical** to the `hierarchical_label` name.
 
 ---
 
@@ -273,7 +273,7 @@ Found at the end of every root schematic fwith:
 
 ## lib_symbols Section
 
-Schematicde kullanılan tüm sembollerin **inline kopyası** burada is stored.
+**Inline copies** of all symbols used in the schematic are stored here.
 The fwith can be opened without library dependency.
 
 ```scheme
@@ -343,7 +343,7 @@ for wire in sch.wires:
 
 ```python
 # root UUID = the schematic fwith uuid token
-# Symbol instance'larını iterate:
+# Traverse symbol instances:
 for sym in symbols:
     for project_instance in sym.instances:
         project_name = project_instance.name
