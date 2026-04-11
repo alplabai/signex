@@ -1,0 +1,285 @@
+//! Hit-testing for schematic elements -- determines what the user clicked.
+//!
+//! All functions operate in world coordinates (mm). The app layer converts
+//! the screen click position to world coords before calling these.
+
+use signex_types::schematic::*;
+
+/// Threshold distance in mm for considering a click "on" a thin element.
+const HIT_TOLERANCE: f64 = 1.5;
+
+/// Find the topmost element at the given world position.
+/// Elements are tested in reverse z-order (top first) so the first hit wins.
+pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem> {
+    // Labels (topmost in z-order)
+    for lbl in &sheet.labels {
+        if hit_label(lbl, wx, wy) {
+            return Some(SelectedItem::new(lbl.uuid, SelectedKind::Label));
+        }
+    }
+
+    // Junctions
+    for j in &sheet.junctions {
+        if hit_junction(j, wx, wy) {
+            return Some(SelectedItem::new(j.uuid, SelectedKind::Junction));
+        }
+    }
+
+    // No-connects
+    for nc in &sheet.no_connects {
+        if hit_no_connect(nc, wx, wy) {
+            return Some(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
+        }
+    }
+
+    // Text notes
+    for tn in &sheet.text_notes {
+        if hit_text_note(tn, wx, wy) {
+            return Some(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
+        }
+    }
+
+    // Child sheets
+    for cs in &sheet.child_sheets {
+        if hit_child_sheet(cs, wx, wy) {
+            return Some(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
+        }
+    }
+
+    // Symbols
+    for sym in &sheet.symbols {
+        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
+            if hit_symbol(sym, lib_sym, wx, wy) {
+                return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+            }
+        }
+    }
+
+    // Wires
+    for w in &sheet.wires {
+        if hit_wire(w, wx, wy) {
+            return Some(SelectedItem::new(w.uuid, SelectedKind::Wire));
+        }
+    }
+
+    // Buses
+    for b in &sheet.buses {
+        if hit_bus(b, wx, wy) {
+            return Some(SelectedItem::new(b.uuid, SelectedKind::Bus));
+        }
+    }
+
+    // Bus entries
+    for be in &sheet.bus_entries {
+        if hit_bus_entry(be, wx, wy) {
+            return Some(SelectedItem::new(be.uuid, SelectedKind::BusEntry));
+        }
+    }
+
+    None
+}
+
+/// Find all elements within a rectangular region (rubber-band selection).
+pub fn hit_test_rect(sheet: &SchematicSheet, rect: &Aabb) -> Vec<SelectedItem> {
+    let mut result = Vec::new();
+
+    for sym in &sheet.symbols {
+        if rect.contains(sym.position.x, sym.position.y) {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+        }
+    }
+    for w in &sheet.wires {
+        if rect.contains(w.start.x, w.start.y) && rect.contains(w.end.x, w.end.y) {
+            result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
+        }
+    }
+    for b in &sheet.buses {
+        if rect.contains(b.start.x, b.start.y) && rect.contains(b.end.x, b.end.y) {
+            result.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
+        }
+    }
+    for j in &sheet.junctions {
+        if rect.contains(j.position.x, j.position.y) {
+            result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
+        }
+    }
+    for nc in &sheet.no_connects {
+        if rect.contains(nc.position.x, nc.position.y) {
+            result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
+        }
+    }
+    for lbl in &sheet.labels {
+        if rect.contains(lbl.position.x, lbl.position.y) {
+            result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
+        }
+    }
+    for tn in &sheet.text_notes {
+        if rect.contains(tn.position.x, tn.position.y) {
+            result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
+        }
+    }
+    for cs in &sheet.child_sheets {
+        let cx = cs.position.x + cs.size.0 / 2.0;
+        let cy = cs.position.y + cs.size.1 / 2.0;
+        if rect.contains(cx, cy) {
+            result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
+        }
+    }
+
+    result
+}
+
+fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {
+    point_to_segment_dist(wx, wy, w.start.x, w.start.y, w.end.x, w.end.y) < HIT_TOLERANCE
+}
+
+fn hit_bus(b: &Bus, wx: f64, wy: f64) -> bool {
+    point_to_segment_dist(wx, wy, b.start.x, b.start.y, b.end.x, b.end.y) < HIT_TOLERANCE * 1.5
+}
+
+fn hit_bus_entry(be: &BusEntry, wx: f64, wy: f64) -> bool {
+    let ex = be.position.x + be.size.0;
+    let ey = be.position.y + be.size.1;
+    point_to_segment_dist(wx, wy, be.position.x, be.position.y, ex, ey) < HIT_TOLERANCE
+}
+
+fn hit_junction(j: &Junction, wx: f64, wy: f64) -> bool {
+    let r = if j.diameter > 0.0 { j.diameter / 2.0 } else { 0.5 };
+    let dx = wx - j.position.x;
+    let dy = wy - j.position.y;
+    (dx * dx + dy * dy).sqrt() < r + HIT_TOLERANCE
+}
+
+fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
+    let dx = (wx - nc.position.x).abs();
+    let dy = (wy - nc.position.y).abs();
+    dx < HIT_TOLERANCE * 1.5 && dy < HIT_TOLERANCE * 1.5
+}
+
+fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
+    let text_width = lbl.text.len() as f64 * lbl.font_size.max(1.27) * 0.7;
+    let text_height = lbl.font_size.max(1.27) * 1.5;
+    let aabb = Aabb::new(
+        lbl.position.x,
+        lbl.position.y - text_height,
+        lbl.position.x + text_width,
+        lbl.position.y + text_height * 0.5,
+    )
+    .expand(0.5);
+    aabb.contains(wx, wy)
+}
+
+fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
+    let text_width = tn.text.len() as f64 * tn.font_size.max(1.27) * 0.7;
+    let text_height = tn.font_size.max(1.27) * 1.5;
+    let aabb = Aabb::new(
+        tn.position.x,
+        tn.position.y - text_height,
+        tn.position.x + text_width,
+        tn.position.y + text_height * 0.5,
+    )
+    .expand(0.5);
+    aabb.contains(wx, wy)
+}
+
+fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
+    Aabb::new(
+        cs.position.x,
+        cs.position.y,
+        cs.position.x + cs.size.0,
+        cs.position.y + cs.size.1,
+    )
+    .contains(wx, wy)
+}
+
+fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
+    let mut min_x = f64::MAX;
+    let mut min_y = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut max_y = f64::MIN;
+    let mut has_points = false;
+
+    for lg in &lib_sym.graphics {
+        if lg.unit != 0 && lg.unit != sym.unit {
+            continue;
+        }
+        if lg.body_style != 0 && lg.body_style != 1 {
+            continue;
+        }
+        match &lg.graphic {
+            Graphic::Rectangle { start, end, .. } => {
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
+                has_points = true;
+            }
+            Graphic::Polyline { points, .. } => {
+                for p in points {
+                    ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.x, p.y);
+                    has_points = true;
+                }
+            }
+            Graphic::Circle { center, radius, .. } => {
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x - radius, center.y - radius);
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x + radius, center.y + radius);
+                has_points = true;
+            }
+            Graphic::Arc { start, mid, end, .. } => {
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
+                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
+                has_points = true;
+            }
+            _ => {}
+        }
+    }
+
+    for lp in &lib_sym.pins {
+        if lp.unit != 0 && lp.unit != sym.unit {
+            continue;
+        }
+        let p = &lp.pin;
+        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.position.x, p.position.y);
+        let angle_rad = p.rotation.to_radians();
+        let end_x = p.position.x + p.length * angle_rad.cos();
+        let end_y = p.position.y + p.length * angle_rad.sin();
+        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end_x, end_y);
+        has_points = true;
+    }
+
+    if !has_points {
+        let aabb = Aabb::new(sym.position.x - 5.0, sym.position.y - 5.0, sym.position.x + 5.0, sym.position.y + 5.0);
+        return aabb.contains(wx, wy);
+    }
+
+    // Transform click into lib-local space
+    let (lx, ly) = world_to_lib_space(sym, wx, wy);
+    Aabb::new(min_x, min_y, max_x, max_y).expand(1.0).contains(lx, ly)
+}
+
+/// Transform a world point into symbol library-local coordinate space.
+fn world_to_lib_space(sym: &Symbol, wx: f64, wy: f64) -> (f64, f64) {
+    let mut lx = wx - sym.position.x;
+    let mut ly = wy - sym.position.y;
+
+    if sym.mirror_x {
+        ly = -ly;
+    }
+    if sym.mirror_y {
+        lx = -lx;
+    }
+
+    let angle = -sym.rotation.to_radians();
+    let cos_a = angle.cos();
+    let sin_a = angle.sin();
+    let rx = lx * cos_a - ly * sin_a;
+    let ry = lx * sin_a + ly * cos_a;
+
+    (rx, -ry)
+}
+
+fn ext(min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64, x: f64, y: f64) {
+    *min_x = min_x.min(x);
+    *min_y = min_y.min(y);
+    *max_x = max_x.max(x);
+    *max_y = max_y.max(y);
+}

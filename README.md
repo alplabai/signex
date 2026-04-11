@@ -24,7 +24,7 @@ Signex is a native Rust EDA tool targeting **Altium Designer feature parity** wi
 
 ## Features
 
-### Implemented (v0.2.0)
+### Implemented (v0.3.0)
 
 - Workspace with 5 Rust crates
 - KiCad file format support (.kicad_sch, .kicad_pcb, .kicad_sym) — parse and write
@@ -33,11 +33,27 @@ Signex is a native Rust EDA tool targeting **Altium Designer feature parity** wi
 - Rich text markup parser (subscript, superscript, overbar)
 - Iced application shell with docking panel system
 - Altium-compatible keyboard shortcut framework
+- wgpu canvas with pan/zoom/grid, camera system
+- Altium-style tree view with SVG chevrons, persistent collapse, clickable file tabs
+- 8-menu dropdown menu bar with Stack overlay
+- Properties panel: General/Parameters tabs, Selection Filter, Units, Grid/Snap, Page Options
+- Components panel: KiCad 9.0 library browser (226 libs), split list/details, symbol preview canvas
+- Dock system: Altium flat tabs with accent underline, drag-to-resize panels
+- Multi-tab schematic document support (open/close/switch)
+- Custom Altium Dark Iced palette (neutral gray chrome)
+
+### In Progress (v0.4.0 — Schematic Viewer)
+
+- Full schematic rendering from KiCad files
+- Collapsible section headers in panels
+- Footprint parser and preview
+- Component search/filter
+- Component drag-to-place from library
 
 ### Planned
 
-- wgpu canvas with pan/zoom/grid (v0.3)
-- Full schematic rendering and editing (v0.4–v0.6)
+- Schematic editing: select, move, wire, undo/redo (v0.5)
+- Full editor: copy/paste, labels, components, bus (v0.6)
 - ERC/DRC validation (v0.7)
 - PCB rendering and interactive routing (v0.9–v0.10)
 - Manufacturing output: Gerber, ODB++, STEP (v0.11)
@@ -102,8 +118,8 @@ Development is organized into milestones tracked on [GitHub Milestones](../../mi
 |---|---|---|
 | v0.1.0 | Scaffold — Iced shell, panels, themes, status bar | Done |
 | v0.2.0 | Parser — KiCad format read/write, domain types | Done |
-| v0.3.0 | Canvas — wgpu pan/zoom/grid, camera system | Next |
-| v0.4.0 | Schematic Viewer — render KiCad schematics | |
+| v0.3.0 | Canvas — wgpu pan/zoom/grid, Altium-style widgets | Done |
+| v0.4.0 | Schematic Viewer — render KiCad schematics | In Progress |
 | v0.5.0 | Schematic Editor — select, move, wire, undo/redo | |
 | v0.6.0 | Full Editor — copy/paste, labels, components, bus | |
 | v0.7.0 | Validation — ERC 11 checks, annotation | |
