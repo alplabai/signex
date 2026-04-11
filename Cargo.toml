@@ -17,7 +17,7 @@ repository = "https://github.com/alplabai/signex-iced"
 
 [workspace.dependencies]
 # UI framework
-iced = { path = "C:/Users/caner/Documents/GitHub/iced", features = ["wgpu", "canvas", "advanced", "svg"] }
+iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg"] }
 iced_aw = { version = "0.13", default-features = false, features = ["tabs", "card"] }
 
 # Serialization
