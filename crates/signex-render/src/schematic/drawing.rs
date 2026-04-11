@@ -1,8 +1,8 @@
 //! Schematic drawing primitives -- Line, Rect, Circle, Arc, Polyline,
 //! and ChildSheet rendering.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path};
 
 use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 
@@ -23,9 +23,7 @@ pub fn draw_sch_drawing(
             let p2 = transform.to_screen_point(end.x, end.y);
             let line = canvas::Path::line(p1, p2);
             let w = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(color)
-                .with_width(w);
+            let stroke = canvas::Stroke::default().with_color(color).with_width(w);
             frame.stroke(&line, stroke);
         }
 
@@ -44,20 +42,19 @@ pub fn draw_sch_drawing(
             let w = (p1.x - p2.x).abs();
             let h = (p1.y - p2.y).abs();
 
-            let rect = canvas::Path::rectangle(
-                iced::Point::new(min_x, min_y),
-                iced::Size::new(w, h),
-            );
+            let rect =
+                canvas::Path::rectangle(iced::Point::new(min_x, min_y), iced::Size::new(w, h));
 
             if *fill != FillType::None {
-                let fill_color = Color { a: color.a * 0.15, ..color };
+                let fill_color = Color {
+                    a: color.a * 0.15,
+                    ..color
+                };
                 frame.fill(&rect, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(color)
-                .with_width(sw);
+            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
             frame.stroke(&rect, stroke);
         }
 
@@ -73,14 +70,15 @@ pub fn draw_sch_drawing(
             let circle = canvas::Path::circle(c, r);
 
             if *fill != FillType::None {
-                let fill_color = Color { a: color.a * 0.15, ..color };
+                let fill_color = Color {
+                    a: color.a * 0.15,
+                    ..color
+                };
                 frame.fill(&circle, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(color)
-                .with_width(sw);
+            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
             frame.stroke(&circle, stroke);
         }
 
@@ -138,14 +136,15 @@ pub fn draw_sch_drawing(
                 });
 
                 if *fill != FillType::None {
-                    let fill_color = Color { a: color.a * 0.15, ..color };
+                    let fill_color = Color {
+                        a: color.a * 0.15,
+                        ..color
+                    };
                     frame.fill(&path, fill_color);
                 }
 
                 let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default()
-                    .with_color(color)
-                    .with_width(sw);
+                let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
                 frame.stroke(&path, stroke);
             } else {
                 // Degenerate -- just draw a line
@@ -153,9 +152,7 @@ pub fn draw_sch_drawing(
                 let p2 = transform.to_screen_point(ex, ey);
                 let line = canvas::Path::line(p1, p2);
                 let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default()
-                    .with_color(color)
-                    .with_width(sw);
+                let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
                 frame.stroke(&line, stroke);
             }
         }
@@ -182,14 +179,15 @@ pub fn draw_sch_drawing(
             });
 
             if *fill != FillType::None {
-                let fill_color = Color { a: color.a * 0.15, ..color };
+                let fill_color = Color {
+                    a: color.a * 0.15,
+                    ..color
+                };
                 frame.fill(&path, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(color)
-                .with_width(sw);
+            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
             frame.stroke(&path, stroke);
         }
     }
@@ -221,7 +219,7 @@ pub fn draw_child_sheet(
     frame.fill(&rect, body_fill_color);
 
     // Border
-    let sw = (transform.scale * 0.2).max(1.0).min(3.0);
+    let sw = (transform.scale * 0.2).clamp(1.0, 3.0);
     let stroke = canvas::Stroke::default()
         .with_color(body_color)
         .with_width(sw);
@@ -244,7 +242,10 @@ pub fn draw_child_sheet(
     let file_text = canvas::Text {
         content: child.filename.clone(),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
-        color: Color { a: body_color.a * 0.7, ..body_color },
+        color: Color {
+            a: body_color.a * 0.7,
+            ..body_color
+        },
         size: iced::Pixels(small_font),
         font: crate::IOSEVKA,
         ..canvas::Text::default()
@@ -263,7 +264,7 @@ pub fn draw_child_sheet(
             color: body_color,
             size: iced::Pixels(small_font),
             font: crate::IOSEVKA,
-            align_y: iced::alignment::Vertical::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };
         frame.fill_text(pin_text);
@@ -280,39 +281,8 @@ fn stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
     } else {
         transform.scale * 0.15
     };
-    w.max(0.5).min(4.0)
+    w.clamp(0.5, 4.0)
 }
 
-fn circle_from_three_points(
-    x1: f64, y1: f64,
-    x2: f64, y2: f64,
-    x3: f64, y3: f64,
-) -> Option<(f64, f64, f64)> {
-    let d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
-    if d.abs() < 1e-10 {
-        return None;
-    }
-    let ux = ((x1 * x1 + y1 * y1) * (y2 - y3)
-        + (x2 * x2 + y2 * y2) * (y3 - y1)
-        + (x3 * x3 + y3 * y3) * (y1 - y2))
-        / d;
-    let uy = ((x1 * x1 + y1 * y1) * (x3 - x2)
-        + (x2 * x2 + y2 * y2) * (x1 - x3)
-        + (x3 * x3 + y3 * y3) * (x2 - x1))
-        / d;
-    let r = ((x1 - ux).powi(2) + (y1 - uy).powi(2)).sqrt();
-    Some((ux, uy, r))
-}
-
-fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
-    let tau = std::f64::consts::TAU;
-    let normalize = |a: f64| ((a % tau) + tau) % tau;
-    let s = normalize(start);
-    let m = normalize(mid);
-    let e = normalize(end);
-    if s <= e {
-        s <= m && m <= e
-    } else {
-        m >= s || m <= e
-    }
-}
+// Geometry helpers — delegated to shared implementations in mod.rs
+use super::{circle_from_three_points, is_angle_between_ccw};

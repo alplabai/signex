@@ -48,10 +48,10 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
 
     // Symbols
     for sym in &sheet.symbols {
-        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-            if hit_symbol(sym, lib_sym, wx, wy) {
-                return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
-            }
+        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
+            && hit_symbol(sym, lib_sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
         }
     }
 
@@ -144,7 +144,11 @@ fn hit_bus_entry(be: &BusEntry, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_junction(j: &Junction, wx: f64, wy: f64) -> bool {
-    let r = if j.diameter > 0.0 { j.diameter / 2.0 } else { 0.5 };
+    let r = if j.diameter > 0.0 {
+        j.diameter / 2.0
+    } else {
+        0.5
+    };
     let dx = wx - j.position.x;
     let dy = wy - j.position.y;
     (dx * dx + dy * dy).sqrt() < r + HIT_TOLERANCE
@@ -157,7 +161,7 @@ fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
-    let text_width = lbl.text.len() as f64 * lbl.font_size.max(1.27) * 0.7;
+    let text_width = lbl.text.chars().count() as f64 * lbl.font_size.max(1.27) * 0.7;
     let text_height = lbl.font_size.max(1.27) * 1.5;
     let aabb = Aabb::new(
         lbl.position.x,
@@ -170,7 +174,7 @@ fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
-    let text_width = tn.text.len() as f64 * tn.font_size.max(1.27) * 0.7;
+    let text_width = tn.text.chars().count() as f64 * tn.font_size.max(1.27) * 0.7;
     let text_height = tn.font_size.max(1.27) * 1.5;
     let aabb = Aabb::new(
         tn.position.x,
@@ -208,7 +212,9 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
         }
         match &lg.graphic {
             Graphic::Rectangle { start, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_points = true;
             }
@@ -219,12 +225,30 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                 }
             }
             Graphic::Circle { center, radius, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x - radius, center.y - radius);
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x + radius, center.y + radius);
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x - radius,
+                    center.y - radius,
+                );
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x + radius,
+                    center.y + radius,
+                );
                 has_points = true;
             }
-            Graphic::Arc { start, mid, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_points = true;
@@ -238,7 +262,14 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
             continue;
         }
         let p = &lp.pin;
-        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.position.x, p.position.y);
+        ext(
+            &mut min_x,
+            &mut min_y,
+            &mut max_x,
+            &mut max_y,
+            p.position.x,
+            p.position.y,
+        );
         let angle_rad = p.rotation.to_radians();
         let end_x = p.position.x + p.length * angle_rad.cos();
         let end_y = p.position.y + p.length * angle_rad.sin();
@@ -247,33 +278,47 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
     }
 
     if !has_points {
-        let aabb = Aabb::new(sym.position.x - 5.0, sym.position.y - 5.0, sym.position.x + 5.0, sym.position.y + 5.0);
+        let aabb = Aabb::new(
+            sym.position.x - 5.0,
+            sym.position.y - 5.0,
+            sym.position.x + 5.0,
+            sym.position.y + 5.0,
+        );
         return aabb.contains(wx, wy);
     }
 
     // Transform click into lib-local space
     let (lx, ly) = world_to_lib_space(sym, wx, wy);
-    Aabb::new(min_x, min_y, max_x, max_y).expand(1.0).contains(lx, ly)
+    Aabb::new(min_x, min_y, max_x, max_y)
+        .expand(1.0)
+        .contains(lx, ly)
 }
 
 /// Transform a world point into symbol library-local coordinate space.
+/// Exact inverse of `instance_transform` in symbol.rs:
+///   forward:  Y-flip → rotate(-θ) → mirror → translate
+///   inverse:  un-translate → un-mirror → rotate(+θ) → un-Y-flip
 fn world_to_lib_space(sym: &Symbol, wx: f64, wy: f64) -> (f64, f64) {
-    let mut lx = wx - sym.position.x;
-    let mut ly = wy - sym.position.y;
+    // Step 1: Un-translate
+    let mut dx = wx - sym.position.x;
+    let mut dy = wy - sym.position.y;
 
-    if sym.mirror_x {
-        ly = -ly;
-    }
+    // Step 2: Un-mirror (mirrors are self-inverse, applied in reverse order)
     if sym.mirror_y {
-        lx = -lx;
+        dx = -dx;
+    }
+    if sym.mirror_x {
+        dy = -dy;
     }
 
-    let angle = -sym.rotation.to_radians();
-    let cos_a = angle.cos();
-    let sin_a = angle.sin();
-    let rx = lx * cos_a - ly * sin_a;
-    let ry = lx * sin_a + ly * cos_a;
+    // Step 3: Rotate by +θ (inverse of rotate by -θ)
+    let rad = sym.rotation.to_radians();
+    let cos_a = rad.cos();
+    let sin_a = rad.sin();
+    let rx = dx * cos_a - dy * sin_a;
+    let ry = dx * sin_a + dy * cos_a;
 
+    // Step 4: Un-Y-flip
     (rx, -ry)
 }
 

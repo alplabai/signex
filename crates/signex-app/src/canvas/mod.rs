@@ -8,9 +8,9 @@
 mod camera;
 pub mod grid;
 
+use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
-use iced::event::Event;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
@@ -20,7 +20,7 @@ use crate::app::Message;
 
 // ─── Canvas State (per-canvas mutable state) ──────────────────
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CanvasState {
     pub camera: Camera,
     pub grid: GridState,
@@ -32,19 +32,6 @@ pub struct CanvasState {
     pub pending_fit: Option<Rectangle>,
     /// Whether Ctrl is currently held (for multi-select).
     pub ctrl_held: bool,
-}
-
-impl Default for CanvasState {
-    fn default() -> Self {
-        Self {
-            camera: Camera::default(),
-            grid: GridState::default(),
-            panning: false,
-            last_pan_pos: None,
-            pending_fit: None,
-            ctrl_held: false,
-        }
-    }
 }
 
 // ─── SchematicCanvas (the Program) ────────────────────────────
@@ -66,12 +53,14 @@ pub struct SchematicCanvas {
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
     /// Pending fit target to transfer to CanvasState.
-    pub pending_fit: Option<Rectangle>,
+    /// Uses Cell so canvas::Program::update (&self) can consume it.
+    pub pending_fit: std::cell::Cell<Option<Rectangle>>,
 }
 
 impl SchematicCanvas {
     pub fn new() -> Self {
-        let default_colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+        let default_colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
@@ -83,7 +72,7 @@ impl SchematicCanvas {
             canvas_colors: default_colors,
             schematic: None,
             selected: Vec::new(),
-            pending_fit: None,
+            pending_fit: std::cell::Cell::new(None),
         }
     }
 
@@ -101,13 +90,13 @@ impl SchematicCanvas {
 
     /// Fit the camera to show the schematic content.
     pub fn fit_to_paper(&mut self) {
-        if let Some(ref sheet) = self.schematic {
-            if let Some(bounds) = sheet.content_bounds() {
-                self.pending_fit = Some(Rectangle::new(
-                    iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
-                    iced::Size::new(bounds.width() as f32, bounds.height() as f32),
-                ));
-            }
+        if let Some(ref sheet) = self.schematic
+            && let Some(bounds) = sheet.content_bounds()
+        {
+            self.pending_fit.set(Some(Rectangle::new(
+                iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
+                iced::Size::new(bounds.width() as f32, bounds.height() as f32),
+            )));
         }
     }
 
@@ -129,8 +118,8 @@ impl canvas::Program<Message> for SchematicCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        // Transfer pending fit from SchematicCanvas to CanvasState
-        if let Some(target) = self.pending_fit {
+        // Transfer pending fit from SchematicCanvas to CanvasState (consumes it)
+        if let Some(target) = self.pending_fit.take() {
             state.pending_fit = Some(target);
         }
 
@@ -154,10 +143,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.camera.zoom_at(cursor_pos, scroll_y, bounds);
                     // Grid + content need redraw on zoom
                     return Some(
-                        canvas::Action::publish(Message::CanvasEvent(
-                            CanvasEvent::CursorMoved,
-                        ))
-                        .and_capture(),
+                        canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
+                            .and_capture(),
                     );
                 }
                 None
@@ -228,7 +215,11 @@ impl canvas::Program<Message> for SchematicCanvas {
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
                     let zoom_pct = state.camera.zoom_percent();
                     return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::CursorAt { x: world.x, y: world.y, zoom_pct },
+                        CanvasEvent::CursorAt {
+                            x: world.x,
+                            y: world.y,
+                            zoom_pct,
+                        },
                     )));
                 }
                 None
@@ -251,21 +242,15 @@ impl canvas::Program<Message> for SchematicCanvas {
         // Layer 1: background (grid + paper)
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             // Fill background
-            frame.fill_rectangle(
-                iced::Point::ORIGIN,
-                bounds.size(),
-                self.theme_bg,
-            );
+            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
             // Draw paper rectangle (A4 landscape: 297x210mm)
-            let paper_tl = state.camera.world_to_screen(
-                iced::Point::new(0.0, 0.0),
-                bounds,
-            );
-            let paper_br = state.camera.world_to_screen(
-                iced::Point::new(297.0, 210.0),
-                bounds,
-            );
+            let paper_tl = state
+                .camera
+                .world_to_screen(iced::Point::new(0.0, 0.0), bounds);
+            let paper_br = state
+                .camera
+                .world_to_screen(iced::Point::new(297.0, 210.0), bounds);
             let paper_w = paper_br.x - paper_tl.x;
             let paper_h = paper_br.y - paper_tl.y;
 
@@ -288,13 +273,7 @@ impl canvas::Program<Message> for SchematicCanvas {
 
             // Draw grid
             if self.grid_visible {
-                grid::draw_grid(
-                    frame,
-                    &state.camera,
-                    &state.grid,
-                    bounds,
-                    self.theme_grid,
-                );
+                grid::draw_grid(frame, &state.camera, &state.grid, bounds, self.theme_grid);
             }
         });
         layers.push(bg);
@@ -319,23 +298,23 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(content);
 
         // Layer 3: selection overlay (cached, cleared on selection change)
-        if !self.selected.is_empty() {
-            if let Some(ref sheet) = self.schematic {
-                let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
-                    let transform = signex_render::schematic::ScreenTransform {
-                        offset_x: state.camera.offset.x,
-                        offset_y: state.camera.offset.y,
-                        scale: state.camera.scale,
-                    };
-                    signex_render::schematic::selection::draw_selection_overlay(
-                        frame,
-                        sheet,
-                        &self.selected,
-                        &transform,
-                    );
-                });
-                layers.push(sel_overlay);
-            }
+        if !self.selected.is_empty()
+            && let Some(ref sheet) = self.schematic
+        {
+            let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
+                let transform = signex_render::schematic::ScreenTransform {
+                    offset_x: state.camera.offset.x,
+                    offset_y: state.camera.offset.y,
+                    scale: state.camera.scale,
+                };
+                signex_render::schematic::selection::draw_selection_overlay(
+                    frame,
+                    sheet,
+                    &self.selected,
+                    &transform,
+                );
+            });
+            layers.push(sel_overlay);
         }
 
         // Layer 4: overlay (cursor crosshair — redrawn every frame)
@@ -384,13 +363,27 @@ impl canvas::Program<Message> for SchematicCanvas {
 
 #[derive(Debug, Clone)]
 pub enum CanvasEvent {
-    CursorAt { x: f32, y: f32, zoom_pct: f64 },
+    CursorAt {
+        x: f32,
+        y: f32,
+        zoom_pct: f64,
+    },
     CursorMoved,
     FitAll,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
-    Clicked { world_x: f64, world_y: f64 },
+    Clicked {
+        world_x: f64,
+        world_y: f64,
+    },
     /// Ctrl+Left-click for multi-select.
-    CtrlClicked { world_x: f64, world_y: f64 },
+    CtrlClicked {
+        world_x: f64,
+        world_y: f64,
+    },
     /// Double-click at world coordinates.
-    DoubleClicked { world_x: f64, world_y: f64 },
+    #[allow(dead_code)]
+    DoubleClicked {
+        world_x: f64,
+        world_y: f64,
+    },
 }

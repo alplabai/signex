@@ -7,6 +7,7 @@ use signex_types::coord::Unit;
 use crate::app::{StatusBarMsg, Tool};
 use crate::styles;
 
+#[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     x: f64,
     y: f64,

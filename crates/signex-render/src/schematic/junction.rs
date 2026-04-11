@@ -1,7 +1,7 @@
 //! Junction and no-connect marker rendering.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path};
 
 use signex_types::schematic::{Junction, NoConnect};
 
@@ -50,7 +50,7 @@ pub fn draw_no_connect(
         b.line_to(p2b);
     });
 
-    let width = (transform.scale * 0.25).max(1.0).min(3.0);
+    let width = (transform.scale * 0.25).clamp(1.0, 3.0);
     let stroke = canvas::Stroke::default()
         .with_color(color)
         .with_width(width);

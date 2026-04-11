@@ -1,7 +1,7 @@
 //! Grid renderer — dot grid with configurable spacing, visibility, snap.
 
-use iced::{Color, Point, Size};
 use iced::widget::canvas;
+use iced::{Color, Point};
 
 use super::camera::Camera;
 
@@ -14,6 +14,7 @@ pub struct GridState {
     /// Index into GRID_SIZES_MM.
     pub size_index: usize,
     /// Whether snap-to-grid is enabled.
+    #[allow(dead_code)]
     pub snap: bool,
 }
 
@@ -33,11 +34,13 @@ impl GridState {
     }
 
     /// Cycle to next grid size (wraps around).
+    #[allow(dead_code)]
     pub fn cycle_forward(&mut self) {
         self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
     }
 
     /// Cycle to previous grid size (wraps around).
+    #[allow(dead_code)]
     pub fn cycle_backward(&mut self) {
         if self.size_index == 0 {
             self.size_index = GRID_SIZES_MM.len() - 1;
@@ -47,15 +50,13 @@ impl GridState {
     }
 
     /// Snap a world-space coordinate to the nearest grid point.
+    #[allow(dead_code)]
     pub fn snap_world(&self, world: Point) -> Point {
         if !self.snap {
             return world;
         }
         let g = self.size_mm();
-        Point::new(
-            (world.x / g).round() * g,
-            (world.y / g).round() * g,
-        )
+        Point::new((world.x / g).round() * g, (world.y / g).round() * g)
     }
 }
 
@@ -81,14 +82,14 @@ pub fn draw_grid(
     } else {
         1.0
     };
-    let dot_color = Color { a: color.a * alpha, ..color };
+    let dot_color = Color {
+        a: color.a * alpha,
+        ..color
+    };
 
     // Find world-space bounds of the visible area
     let tl = camera.screen_to_world(Point::new(0.0, 0.0), bounds);
-    let br = camera.screen_to_world(
-        Point::new(bounds.width, bounds.height),
-        bounds,
-    );
+    let br = camera.screen_to_world(Point::new(bounds.width, bounds.height), bounds);
 
     // Snap to grid boundaries
     let start_x = (tl.x / grid_mm).floor() * grid_mm;
@@ -104,7 +105,7 @@ pub fn draw_grid(
     }
 
     // Dot size scales with zoom but has a minimum
-    let dot_radius = (camera.scale * 0.3).max(0.5).min(2.0);
+    let dot_radius = (camera.scale * 0.3).clamp(0.5, 2.0);
 
     let mut wy = start_y;
     while wy <= end_y {
@@ -131,7 +132,10 @@ pub fn draw_grid(
     let major_mm = grid_mm * 5.0;
     let major_screen = major_mm * camera.scale;
     if major_screen >= 30.0 {
-        let major_color = Color { a: dot_color.a * 0.4, ..dot_color };
+        let major_color = Color {
+            a: dot_color.a * 0.4,
+            ..dot_color
+        };
         let stroke = canvas::Stroke::default()
             .with_color(major_color)
             .with_width(0.5);
@@ -141,10 +145,7 @@ pub fn draw_grid(
         while mx <= end_x {
             let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
             if sx >= 0.0 && sx <= bounds.width {
-                let line = canvas::Path::line(
-                    Point::new(sx, 0.0),
-                    Point::new(sx, bounds.height),
-                );
+                let line = canvas::Path::line(Point::new(sx, 0.0), Point::new(sx, bounds.height));
                 frame.stroke(&line, stroke);
             }
             mx += major_mm;
@@ -155,10 +156,7 @@ pub fn draw_grid(
         while my <= end_y {
             let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
             if sy >= 0.0 && sy <= bounds.height {
-                let line = canvas::Path::line(
-                    Point::new(0.0, sy),
-                    Point::new(bounds.width, sy),
-                );
+                let line = canvas::Path::line(Point::new(0.0, sy), Point::new(bounds.width, sy));
                 frame.stroke(&line, stroke);
             }
             my += major_mm;

@@ -29,18 +29,9 @@ fn parse_point(node: &SExpr) -> Point {
 
 fn parse_at(node: &SExpr) -> (Point, f64) {
     if let Some(at) = node.find("at") {
-        let x = at
-            .arg(0)
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0);
-        let y = at
-            .arg(1)
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0);
-        let rot = at
-            .arg(2)
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0);
+        let x = at.arg(0).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+        let y = at.arg(1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+        let rot = at.arg(2).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
         (Point { x, y }, rot)
     } else {
         (Point { x: 0.0, y: 0.0 }, 0.0)
@@ -93,9 +84,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
     let root = sexpr::parse(content)?;
 
     if root.keyword() != Some("kicad_pcb") {
-        return Err(ParseError::InvalidSExpr(
-            "Not a KiCad PCB file".to_string(),
-        ));
+        return Err(ParseError::InvalidSExpr("Not a KiCad PCB file".to_string()));
     }
 
     let version = root
@@ -195,10 +184,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
     // Board outline (from Edge.Cuts lines)
     let mut outline_points = Vec::new();
     for gr in root.find_all("gr_line") {
-        let layer = gr
-            .find("layer")
-            .and_then(|l| l.first_arg())
-            .unwrap_or("");
+        let layer = gr.find("layer").and_then(|l| l.first_arg()).unwrap_or("");
         if layer == "Edge.Cuts" {
             if let (Some(start), Some(end)) = (gr.find("start"), gr.find("end")) {
                 let s = parse_point(start);
@@ -350,9 +336,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
 
             // Thermal -- under connect_pads node in KiCad format
             let connect = z.find("connect_pads");
-            let thermal_relief = connect
-                .and_then(|c| c.find("thermal_gap"))
-                .is_some();
+            let thermal_relief = connect.and_then(|c| c.find("thermal_gap")).is_some();
             let thermal_gap = connect
                 .and_then(|c| c.find("thermal_gap"))
                 .and_then(|t| t.first_arg()?.parse().ok())
@@ -854,10 +838,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
                     .and_then(|f| f.find("size"))
                     .and_then(|s| s.first_arg()?.parse().ok())
                     .unwrap_or(1.0);
-                let hidden = prop
-                    .find("effects")
-                    .and_then(|e| e.find("hide"))
-                    .is_some();
+                let hidden = prop.find("effects").and_then(|e| e.find("hide")).is_some();
                 if hidden {
                     continue;
                 }

@@ -8,8 +8,8 @@
 //! Hier:        Pentagon (flag) shape.
 //! Power:       Rendered via LibSymbol in symbol pass — skip here.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path};
 
 use signex_types::schematic::{HAlign, Label, LabelType};
 
@@ -21,7 +21,11 @@ pub fn draw_label(
     transform: &ScreenTransform,
     color: Color,
 ) {
-    let font_size_mm = if label.font_size > 0.0 { label.font_size } else { 1.27 };
+    let font_size_mm = if label.font_size > 0.0 {
+        label.font_size
+    } else {
+        1.27
+    };
     let screen_font = transform.world_len(font_size_mm).max(6.0);
 
     match label.label_type {
@@ -72,7 +76,7 @@ fn draw_net_label(
                 size: iced::Pixels(screen_font),
                 font: crate::IOSEVKA,
                 align_x: h_align.into(),
-                align_y: iced::alignment::Vertical::Bottom.into(),
+                align_y: iced::alignment::Vertical::Bottom,
                 ..canvas::Text::default()
             });
         });
@@ -84,7 +88,7 @@ fn draw_net_label(
             size: iced::Pixels(screen_font),
             font: crate::IOSEVKA,
             align_x: h_align.into(),
-            align_y: iced::alignment::Vertical::Bottom.into(),
+            align_y: iced::alignment::Vertical::Bottom,
             ..canvas::Text::default()
         });
     }
@@ -107,7 +111,7 @@ fn draw_global_label(
     let text_w = label.text.len() as f64 * fs * 0.6;
     let lx = label.position.x;
     let ly = label.position.y;
-    let sw = (transform.scale * 0.15).max(0.5).min(2.0);
+    let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
 
     if rot == 0 || rot == 180 {
         let conn_right = rot == 0;
@@ -119,36 +123,65 @@ fn draw_global_label(
 
         let pts: Vec<(f64, f64)> = match shape {
             "input" => vec![
-                (lx, ly), (bsx, ly - h/2.0), (bex, ly - h/2.0),
-                (bex, ly + h/2.0), (bsx, ly + h/2.0),
+                (lx, ly),
+                (bsx, ly - h / 2.0),
+                (bex, ly - h / 2.0),
+                (bex, ly + h / 2.0),
+                (bsx, ly + h / 2.0),
             ],
             "output" => vec![
-                (lx, ly), (bsx, ly - h/2.0), (bex, ly - h/2.0),
-                (tip, ly), (bex, ly + h/2.0), (bsx, ly + h/2.0),
+                (lx, ly),
+                (bsx, ly - h / 2.0),
+                (bex, ly - h / 2.0),
+                (tip, ly),
+                (bex, ly + h / 2.0),
+                (bsx, ly + h / 2.0),
             ],
             "bidirectional" | "tri_state" => vec![
-                (lx, ly), (bsx, ly - h/2.0), (bex, ly - h/2.0),
-                (tip, ly), (bex, ly + h/2.0), (bsx, ly + h/2.0),
+                (lx, ly),
+                (bsx, ly - h / 2.0),
+                (bex, ly - h / 2.0),
+                (tip, ly),
+                (bex, ly + h / 2.0),
+                (bsx, ly + h / 2.0),
             ],
             _ => {
-                let x1 = lx.min(bex); let x2 = lx.max(bex);
-                vec![(x1, ly-h/2.0),(x2, ly-h/2.0),(x2, ly+h/2.0),(x1, ly+h/2.0)]
+                let x1 = lx.min(bex);
+                let x2 = lx.max(bex);
+                vec![
+                    (x1, ly - h / 2.0),
+                    (x2, ly - h / 2.0),
+                    (x2, ly + h / 2.0),
+                    (x1, ly + h / 2.0),
+                ]
             }
         };
         draw_shape_closed(frame, &pts, transform, color, sw);
 
         let tx = lx + dir * (arrow_w + pad);
         let sp = transform.to_screen_point(tx, ly);
-        let ha = if conn_right { iced::alignment::Horizontal::Left } else { iced::alignment::Horizontal::Right };
+        let ha = if conn_right {
+            iced::alignment::Horizontal::Left
+        } else {
+            iced::alignment::Horizontal::Right
+        };
         frame.fill_text(canvas::Text {
-            content: label.text.clone(), position: sp, color,
-            size: iced::Pixels(screen_font), font: crate::IOSEVKA,
-            align_x: ha.into(), align_y: iced::alignment::Vertical::Center.into(),
+            content: label.text.clone(),
+            position: sp,
+            color,
+            size: iced::Pixels(screen_font),
+            font: crate::IOSEVKA,
+            align_x: ha.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         });
     } else {
         let (sx, sy) = transform.world_to_screen(lx, ly);
-        let ra = if rot == 90 { -std::f32::consts::FRAC_PI_2 } else { std::f32::consts::FRAC_PI_2 };
+        let ra = if rot == 90 {
+            -std::f32::consts::FRAC_PI_2
+        } else {
+            std::f32::consts::FRAC_PI_2
+        };
         let s_h = transform.world_len(h);
         let s_arr = transform.world_len(arrow_w);
         let s_body = transform.world_len(text_w + pad * 2.0);
@@ -159,36 +192,56 @@ fn draw_global_label(
             f.rotate(ra);
             let pts_s: Vec<iced::Point> = match shape {
                 "input" => vec![
-                    iced::Point::new(0.0,0.0), iced::Point::new(s_arr,-s_h/2.0),
-                    iced::Point::new(s_arr+s_body,-s_h/2.0), iced::Point::new(s_arr+s_body,s_h/2.0),
-                    iced::Point::new(s_arr,s_h/2.0),
+                    iced::Point::new(0.0, 0.0),
+                    iced::Point::new(s_arr, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, s_h / 2.0),
+                    iced::Point::new(s_arr, s_h / 2.0),
                 ],
                 "output" => vec![
-                    iced::Point::new(0.0,0.0), iced::Point::new(s_arr,-s_h/2.0),
-                    iced::Point::new(s_arr+s_body,-s_h/2.0), iced::Point::new(s_tip,0.0),
-                    iced::Point::new(s_arr+s_body,s_h/2.0), iced::Point::new(s_arr,s_h/2.0),
+                    iced::Point::new(0.0, 0.0),
+                    iced::Point::new(s_arr, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                    iced::Point::new(s_tip, 0.0),
+                    iced::Point::new(s_arr + s_body, s_h / 2.0),
+                    iced::Point::new(s_arr, s_h / 2.0),
                 ],
                 "bidirectional" | "tri_state" => vec![
-                    iced::Point::new(0.0,0.0), iced::Point::new(s_arr,-s_h/2.0),
-                    iced::Point::new(s_arr+s_body,-s_h/2.0), iced::Point::new(s_tip,0.0),
-                    iced::Point::new(s_arr+s_body,s_h/2.0), iced::Point::new(s_arr,s_h/2.0),
+                    iced::Point::new(0.0, 0.0),
+                    iced::Point::new(s_arr, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                    iced::Point::new(s_tip, 0.0),
+                    iced::Point::new(s_arr + s_body, s_h / 2.0),
+                    iced::Point::new(s_arr, s_h / 2.0),
                 ],
                 _ => vec![
-                    iced::Point::new(0.0,-s_h/2.0), iced::Point::new(s_arr+s_body,-s_h/2.0),
-                    iced::Point::new(s_arr+s_body,s_h/2.0), iced::Point::new(0.0,s_h/2.0),
+                    iced::Point::new(0.0, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                    iced::Point::new(s_arr + s_body, s_h / 2.0),
+                    iced::Point::new(0.0, s_h / 2.0),
                 ],
             };
             let pth = canvas::Path::new(|b: &mut path::Builder| {
                 b.move_to(pts_s[0]);
-                for &p in &pts_s[1..] { b.line_to(p); }
+                for &p in &pts_s[1..] {
+                    b.line_to(p);
+                }
                 b.close();
             });
-            f.stroke(&pth, canvas::Stroke::default().with_color(color).with_width((transform.scale*0.15).max(0.5).min(2.0)));
+            f.stroke(
+                &pth,
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width((transform.scale * 0.15).clamp(0.5, 2.0)),
+            );
             f.fill_text(canvas::Text {
-                content: label.text.clone(), position: iced::Point::new(s_arr+s_pad, 0.0),
-                color, size: iced::Pixels(screen_font), font: crate::IOSEVKA,
+                content: label.text.clone(),
+                position: iced::Point::new(s_arr + s_pad, 0.0),
+                color,
+                size: iced::Pixels(screen_font),
+                font: crate::IOSEVKA,
                 align_x: iced::alignment::Horizontal::Left.into(),
-                align_y: iced::alignment::Vertical::Center.into(),
+                align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
         });
@@ -211,39 +264,53 @@ fn draw_hier_label(
     let text_w = label.text.len() as f64 * fs * 0.6;
     let lx = label.position.x;
     let ly = label.position.y;
-    let sw = (transform.scale * 0.15).max(0.5).min(2.0);
+    let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
 
     if rot == 0 || rot == 180 {
         let conn_right = rot == 0;
         let dir: f64 = if conn_right { 1.0 } else { -1.0 };
         let pts: Vec<(f64, f64)> = if conn_right {
             vec![
-                (lx, ly), (lx+arrow_w, ly-h/2.0),
-                (lx+arrow_w+text_w+pad*2.0, ly-h/2.0),
-                (lx+arrow_w+text_w+pad*2.0, ly+h/2.0),
-                (lx+arrow_w, ly+h/2.0),
+                (lx, ly),
+                (lx + arrow_w, ly - h / 2.0),
+                (lx + arrow_w + text_w + pad * 2.0, ly - h / 2.0),
+                (lx + arrow_w + text_w + pad * 2.0, ly + h / 2.0),
+                (lx + arrow_w, ly + h / 2.0),
             ]
         } else {
             vec![
-                (lx, ly), (lx-arrow_w, ly-h/2.0),
-                (lx-arrow_w-text_w-pad*2.0, ly-h/2.0),
-                (lx-arrow_w-text_w-pad*2.0, ly+h/2.0),
-                (lx-arrow_w, ly+h/2.0),
+                (lx, ly),
+                (lx - arrow_w, ly - h / 2.0),
+                (lx - arrow_w - text_w - pad * 2.0, ly - h / 2.0),
+                (lx - arrow_w - text_w - pad * 2.0, ly + h / 2.0),
+                (lx - arrow_w, ly + h / 2.0),
             ]
         };
         draw_shape_closed(frame, &pts, transform, color, sw);
         let tx = lx + dir * (arrow_w + pad);
         let sp = transform.to_screen_point(tx, ly);
-        let ha = if conn_right { iced::alignment::Horizontal::Left } else { iced::alignment::Horizontal::Right };
+        let ha = if conn_right {
+            iced::alignment::Horizontal::Left
+        } else {
+            iced::alignment::Horizontal::Right
+        };
         frame.fill_text(canvas::Text {
-            content: label.text.clone(), position: sp, color,
-            size: iced::Pixels(screen_font), font: crate::IOSEVKA,
-            align_x: ha.into(), align_y: iced::alignment::Vertical::Center.into(),
+            content: label.text.clone(),
+            position: sp,
+            color,
+            size: iced::Pixels(screen_font),
+            font: crate::IOSEVKA,
+            align_x: ha.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         });
     } else {
         let (sx, sy) = transform.world_to_screen(lx, ly);
-        let ra = if rot == 90 { -std::f32::consts::FRAC_PI_2 } else { std::f32::consts::FRAC_PI_2 };
+        let ra = if rot == 90 {
+            -std::f32::consts::FRAC_PI_2
+        } else {
+            std::f32::consts::FRAC_PI_2
+        };
         let s_h = transform.world_len(h);
         let s_arr = transform.world_len(arrow_w);
         let s_body = transform.world_len(text_w + pad * 2.0);
@@ -251,22 +318,34 @@ fn draw_hier_label(
         frame.with_save(|f| {
             f.translate(iced::Vector::new(sx, sy));
             f.rotate(ra);
-            let pts_s = vec![
-                iced::Point::new(0.0,0.0), iced::Point::new(s_arr,-s_h/2.0),
-                iced::Point::new(s_arr+s_body,-s_h/2.0), iced::Point::new(s_arr+s_body,s_h/2.0),
-                iced::Point::new(s_arr,s_h/2.0),
+            let pts_s = [
+                iced::Point::new(0.0, 0.0),
+                iced::Point::new(s_arr, -s_h / 2.0),
+                iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                iced::Point::new(s_arr + s_body, s_h / 2.0),
+                iced::Point::new(s_arr, s_h / 2.0),
             ];
             let pth = canvas::Path::new(|b: &mut path::Builder| {
                 b.move_to(pts_s[0]);
-                for &p in &pts_s[1..] { b.line_to(p); }
+                for &p in &pts_s[1..] {
+                    b.line_to(p);
+                }
                 b.close();
             });
-            f.stroke(&pth, canvas::Stroke::default().with_color(color).with_width((transform.scale*0.15).max(0.5).min(2.0)));
+            f.stroke(
+                &pth,
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width((transform.scale * 0.15).clamp(0.5, 2.0)),
+            );
             f.fill_text(canvas::Text {
-                content: label.text.clone(), position: iced::Point::new(s_arr+s_pad, 0.0),
-                color, size: iced::Pixels(screen_font), font: crate::IOSEVKA,
+                content: label.text.clone(),
+                position: iced::Point::new(s_arr + s_pad, 0.0),
+                color,
+                size: iced::Pixels(screen_font),
+                font: crate::IOSEVKA,
                 align_x: iced::alignment::Horizontal::Left.into(),
-                align_y: iced::alignment::Vertical::Center.into(),
+                align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
         });
@@ -280,17 +359,26 @@ fn draw_shape_closed(
     color: Color,
     stroke_width: f32,
 ) {
-    if pts.is_empty() { return; }
+    if pts.is_empty() {
+        return;
+    }
     let pth = canvas::Path::new(|b: &mut path::Builder| {
         let first = transform.to_screen_point(pts[0].0, pts[0].1);
         b.move_to(first);
-        for &(px, py) in &pts[1..] { b.line_to(transform.to_screen_point(px, py)); }
+        for &(px, py) in &pts[1..] {
+            b.line_to(transform.to_screen_point(px, py));
+        }
         b.close();
     });
-    frame.stroke(&pth, canvas::Stroke::default().with_color(color).with_width(stroke_width));
+    frame.stroke(
+        &pth,
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(stroke_width),
+    );
 }
 
 fn normalize_rotation(deg: f64) -> i32 {
-    let r = (deg as i32) % 360;
+    let r = (deg.round() as i32) % 360;
     if r < 0 { r + 360 } else { r }
 }

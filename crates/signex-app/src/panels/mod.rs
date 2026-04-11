@@ -1,6 +1,6 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::widget::{column, container, row, scrollable, text, Column, Row, Space};
+use iced::widget::{Column, Row, Space, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -8,6 +8,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum PanelKind {
     Projects,
     Components,
@@ -45,10 +46,12 @@ impl PanelKind {
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone)]
 pub struct SheetInfo {
+    #[allow(dead_code)]
     pub name: String,
     pub filename: String,
     pub sym_count: usize,
     pub wire_count: usize,
+    #[allow(dead_code)]
     pub label_count: usize,
 }
 
@@ -112,6 +115,8 @@ pub enum PanelMsg {
     SelectComponent(String),
     DragComponentsSplit,
     ComponentFilter(String),
+    /// No-op placeholder for unimplemented UI controls.
+    Noop,
 }
 
 /// Render a panel's content.
@@ -122,7 +127,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
     }
 
     let content = match kind {
-        PanelKind::Components => unreachable!(),
+        PanelKind::Components => return view_components(ctx),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
@@ -147,17 +152,10 @@ fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a
         .color(theme_ext::text_secondary(tokens))
 }
 
-fn prop_row<'a>(key: impl ToString, value: impl ToString, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
-    row![
-        text(key.to_string()).size(10).color(theme_ext::text_secondary(tokens)).width(70),
-        text(value.to_string()).size(10).color(theme_ext::text_primary(tokens)),
-    ]
-    .spacing(4)
-    .into()
-}
-
 fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    text("─".repeat(30)).size(4).color(theme_ext::border_color(tokens))
+    // Use a cached static string instead of allocating on every render
+    const SEP: &str = "──────────────────────────────";
+    text(SEP).size(4).color(theme_ext::border_color(tokens))
 }
 
 fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, PanelMsg> {
@@ -165,7 +163,9 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
         column![
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
-            text(desc.to_string()).size(10).color(theme_ext::text_secondary(&ctx.tokens)),
+            text(desc.to_string())
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
         .spacing(4)
         .padding(6),
@@ -190,8 +190,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         for sheet in &ctx.sheets {
             let badge = format!("{}c {}w", sheet.sym_count, sheet.wire_count);
             source_docs.push(
-                TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic)
-                    .with_badge(badge),
+                TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic).with_badge(badge),
             );
         }
     } else if let Some(file) = &ctx.project_file {
@@ -213,11 +212,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
     let lib_children = vec![
-        TreeNode::leaf(
-            format!("{} symbols loaded", lib_count),
-            TreeIcon::Component,
-        )
-        .with_badge(lib_count.to_string()),
+        TreeNode::leaf(format!("{} symbols loaded", lib_count), TreeIcon::Component)
+            .with_badge(lib_count.to_string()),
     ];
 
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
@@ -227,7 +223,11 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         name.clone(),
         TreeIcon::Folder,
         vec![
-            TreeNode::branch("Source Documents".to_string(), TreeIcon::Folder, source_docs),
+            TreeNode::branch(
+                "Source Documents".to_string(),
+                TreeIcon::Folder,
+                source_docs,
+            ),
             TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
             settings,
         ],
@@ -293,8 +293,14 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     list_col = list_col.push(
         container(
             row![
-                text("Name").size(10).color(muted).width(Length::FillPortion(4)),
-                text("Pins").size(10).color(muted).width(Length::FillPortion(1)),
+                text("Name")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(4)),
+                text("Pins")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(1)),
             ]
             .spacing(4.0),
         )
@@ -308,54 +314,83 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let filtered_symbols: Vec<&(String, usize)> = if filter.is_empty() {
         ctx.library_symbols.iter().collect()
     } else {
-        ctx.library_symbols.iter().filter(|(name, _)| name.to_ascii_lowercase().contains(&filter)).collect()
+        ctx.library_symbols
+            .iter()
+            .filter(|(name, _)| name.to_ascii_lowercase().contains(&filter))
+            .collect()
     };
 
     if filtered_symbols.is_empty() {
         let msg = if ctx.active_library.is_some() {
-            if filter.is_empty() { "Loading..." } else { "No matches" }
+            if filter.is_empty() {
+                "Loading..."
+            } else {
+                "No matches"
+            }
         } else {
             "Select a library above"
         };
-        list_col = list_col.push(
-            container(text(msg).size(10).color(muted)).padding([8, 8]),
-        );
+        list_col = list_col.push(container(text(msg).size(10).color(muted)).padding([8, 8]));
     } else {
         let sel = &ctx.selected_component;
         for &(name, pins) in &filtered_symbols {
             let is_sel = sel.as_deref() == Some(name.as_str());
-            let row_bg = if is_sel { theme_ext::selection_color(&ctx.tokens) } else { Color::TRANSPARENT };
+            let row_bg = if is_sel {
+                theme_ext::selection_color(&ctx.tokens)
+            } else {
+                Color::TRANSPARENT
+            };
             let name_c = if is_sel { Color::WHITE } else { primary };
             let n = name.clone();
-            list_col = list_col.push(column![
-                iced::widget::button(
-                    row![
-                        text(name.clone()).size(10).color(name_c)
-                            .width(Length::FillPortion(4))
-                            .wrapping(iced::widget::text::Wrapping::None),
-                        text(pins.to_string()).size(10).color(muted)
-                            .width(Length::FillPortion(1)),
-                    ].spacing(4.0),
-                )
-                .padding([3, 8]).width(Length::Fill)
-                .on_press(PanelMsg::SelectComponent(n))
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
-                    let bg = match (is_sel, status) {
-                        (true, _) => Some(Background::Color(row_bg)),
-                        (false, iced::widget::button::Status::Hovered) =>
-                            Some(Background::Color(Color::from_rgb(0.20, 0.20, 0.23))),
-                        _ => None,
-                    };
-                    iced::widget::button::Style { background: bg, border: Border::default(), ..iced::widget::button::Style::default() }
-                }),
-                thin_sep(border_c),
-            ].spacing(0));
+            list_col = list_col.push(
+                column![
+                    iced::widget::button(
+                        row![
+                            text(name.clone())
+                                .size(10)
+                                .color(name_c)
+                                .width(Length::FillPortion(4))
+                                .wrapping(iced::widget::text::Wrapping::None),
+                            text(pins.to_string())
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(1)),
+                        ]
+                        .spacing(4.0),
+                    )
+                    .padding([3, 8])
+                    .width(Length::Fill)
+                    .on_press(PanelMsg::SelectComponent(n))
+                    .style(
+                        move |_: &Theme, status: iced::widget::button::Status| {
+                            let bg = match (is_sel, status) {
+                                (true, _) => Some(Background::Color(row_bg)),
+                                (false, iced::widget::button::Status::Hovered) => {
+                                    Some(Background::Color(Color::from_rgb(0.20, 0.20, 0.23)))
+                                }
+                                _ => None,
+                            };
+                            iced::widget::button::Style {
+                                background: bg,
+                                border: Border::default(),
+                                ..iced::widget::button::Style::default()
+                            }
+                        }
+                    ),
+                    thin_sep(border_c),
+                ]
+                .spacing(0),
+            );
         }
     }
 
     list_col = list_col.push(
-        container(text(format!("Results: {}", filtered_symbols.len())).size(10).color(muted))
-            .padding([4, 8]),
+        container(
+            text(format!("Results: {}", filtered_symbols.len()))
+                .size(10)
+                .color(muted),
+        )
+        .padding([4, 8]),
     );
 
     // ── BOTTOM: Details panel (scrollable) ──
@@ -363,13 +398,23 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     if let Some(comp_name) = &ctx.selected_component {
         detail_col = detail_col.push(section_hdr(
-            &format!("\u{25BC} Details  {comp_name}"), primary, border_c,
+            &format!("\u{25BC} Details  {comp_name}"),
+            primary,
+            border_c,
         ));
-        let pin_count = ctx.library_symbols.iter()
-            .find(|(n, _)| n == comp_name).map(|(_, p)| *p).unwrap_or(0);
+        let pin_count = ctx
+            .library_symbols
+            .iter()
+            .find(|(n, _)| n == comp_name)
+            .map(|(_, p)| *p)
+            .unwrap_or(0);
         detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted));
         detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted));
-        detail_col = detail_col.push(form_input_row("Library", ctx.active_library.as_deref().unwrap_or(""), muted));
+        detail_col = detail_col.push(form_input_row(
+            "Library",
+            ctx.active_library.as_deref().unwrap_or(""),
+            muted,
+        ));
 
         // Symbol preview canvas
         detail_col = detail_col.push(Space::new().height(4.0));
@@ -385,7 +430,11 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .width(Length::Fill)
                     .style(move |_: &Theme| container::Style {
                         background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
-                        border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
                         ..container::Style::default()
                     }),
                 )
@@ -405,7 +454,11 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .padding([30, 8])
                     .style(move |_: &Theme| container::Style {
                         background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
-                        border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
                         ..container::Style::default()
                     }),
                 )
@@ -415,12 +468,17 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
         for section in &["References", "Part Choices", "Where Used"] {
             detail_col = detail_col.push(Space::new().height(2.0));
-            detail_col = detail_col.push(section_hdr(&format!("\u{25BC} {section}"), primary, border_c));
+            detail_col = detail_col.push(section_hdr(
+                &format!("\u{25BC} {section}"),
+                primary,
+                border_c,
+            ));
         }
     } else {
         detail_col = detail_col.push(
             container(text("Select a component").size(10).color(muted))
-                .padding([12, 8]).width(Length::Fill),
+                .padding([12, 8])
+                .width(Length::Fill),
         );
     }
 
@@ -462,9 +520,17 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
         }
         let roots = vec![TreeNode::branch(name.clone(), TreeIcon::Schematic, sheets)];
-        col = col.push(TreeView::new(&roots, &ctx.tokens).view().map(PanelMsg::Tree));
+        col = col.push(
+            TreeView::new(&roots, &ctx.tokens)
+                .view()
+                .map(PanelMsg::Tree),
+        );
     } else {
-        col = col.push(text("No project").size(10).color(theme_ext::text_secondary(&ctx.tokens)));
+        col = col.push(
+            text("No project")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
     }
     container(col).width(Length::Fill).into()
 }
@@ -536,9 +602,13 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     } else {
         col = col.push(
             container(
-                text(if ctx.selection_count == 1 { "Selection" } else { "Multi-Selection" })
-                    .size(11)
-                    .color(primary),
+                text(if ctx.selection_count == 1 {
+                    "Selection"
+                } else {
+                    "Multi-Selection"
+                })
+                .size(11)
+                .color(primary),
             )
             .padding([6, 8])
             .width(Length::Fill)
@@ -551,8 +621,14 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             col = col.push(
                 container(
                     row![
-                        text(key).size(10).color(muted).width(Length::FillPortion(2)),
-                        text(value).size(10).color(primary).width(Length::FillPortion(3)),
+                        text(key)
+                            .size(10)
+                            .color(muted)
+                            .width(Length::FillPortion(2)),
+                        text(value)
+                            .size(10)
+                            .color(primary)
+                            .width(Length::FillPortion(3)),
                     ]
                     .spacing(4),
                 )
@@ -613,9 +689,23 @@ fn view_properties_general<'a>(
         )
         .padding([2, 8]),
     );
-    col = col.push(form_input_row("Visible Grid", &format!("{}mm", ctx.grid_size_mm), muted));
-    col = col.push(form_check_row("Snap Grid", ctx.snap_enabled, PanelMsg::ToggleSnap, muted));
-    col = col.push(form_check_row("Grid Visible", ctx.grid_visible, PanelMsg::ToggleGrid, muted));
+    col = col.push(form_input_row(
+        "Visible Grid",
+        &format!("{}mm", ctx.grid_size_mm),
+        muted,
+    ));
+    col = col.push(form_check_row(
+        "Snap Grid",
+        ctx.snap_enabled,
+        PanelMsg::ToggleSnap,
+        muted,
+    ));
+    col = col.push(form_check_row(
+        "Grid Visible",
+        ctx.grid_visible,
+        PanelMsg::ToggleGrid,
+        muted,
+    ));
     col = col.push(form_input_row("Document Font", "Arial, 8", muted));
     col = col.push(form_input_row("Sheet Color", "Black", muted));
 
@@ -626,9 +716,9 @@ fn view_properties_general<'a>(
     col = col.push(
         container(
             row![
-                seg_btn("Template", true, PanelMsg::ToggleGrid),
-                seg_btn("Standard", false, PanelMsg::ToggleGrid),
-                seg_btn("Custom", false, PanelMsg::ToggleGrid),
+                seg_btn("Template", true, PanelMsg::Noop),
+                seg_btn("Standard", false, PanelMsg::Noop),
+                seg_btn("Custom", false, PanelMsg::Noop),
             ]
             .spacing(0.0)
             .width(Length::Fill),
@@ -678,8 +768,14 @@ fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                text("Name").size(10).color(muted).width(Length::FillPortion(3)),
-                text("Value").size(10).color(muted).width(Length::FillPortion(2)),
+                text("Name")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(3)),
+                text("Value")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
             ]
             .spacing(4.0),
         )
@@ -843,6 +939,7 @@ fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Elemen
 }
 
 /// Form row: label | custom widget.
+#[allow(dead_code)]
 fn form_label_row<'a>(
     label: &str,
     control: Row<'a, PanelMsg>,
@@ -885,11 +982,7 @@ fn form_check_row<'a>(
                 .spacing(4),
             text(if checked { "On" } else { "Off" })
                 .size(11)
-                .color(if checked {
-                    Color::WHITE
-                } else {
-                    label_c
-                }),
+                .color(if checked { Color::WHITE } else { label_c }),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
@@ -978,10 +1071,22 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(separator(&ctx.tokens));
 
     if ctx.has_schematic {
-        col = col.push(text("No violations").size(10).color(theme_ext::success_color(&ctx.tokens)));
-        col = col.push(text("Run ERC to check").size(9).color(theme_ext::text_secondary(&ctx.tokens)));
+        col = col.push(
+            text("No violations")
+                .size(10)
+                .color(theme_ext::success_color(&ctx.tokens)),
+        );
+        col = col.push(
+            text("Run ERC to check")
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
     } else {
-        col = col.push(text("Open a project first").size(10).color(theme_ext::text_secondary(&ctx.tokens)));
+        col = col.push(
+            text("Open a project first")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
     }
 
     container(col).width(Length::Fill).into()

@@ -11,8 +11,8 @@ pub mod tree_view;
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────
 
-use iced::widget::{Column, Row};
 use iced::Element;
+use iced::widget::{Column, Row};
 
 /// Conditional push — append an element only when a condition is true.
 ///
@@ -25,20 +25,12 @@ pub trait PushIf<'a, M> {
 
 impl<'a, M: 'a> PushIf<'a, M> for Column<'a, M> {
     fn push_if<E: Into<Element<'a, M>>>(self, cond: bool, f: impl FnOnce() -> E) -> Self {
-        if cond {
-            self.push(f())
-        } else {
-            self
-        }
+        if cond { self.push(f()) } else { self }
     }
 }
 
 impl<'a, M: 'a> PushIf<'a, M> for Row<'a, M> {
     fn push_if<E: Into<Element<'a, M>>>(self, cond: bool, f: impl FnOnce() -> E) -> Self {
-        if cond {
-            self.push(f())
-        } else {
-            self
-        }
+        if cond { self.push(f()) } else { self }
     }
 }
