@@ -30,6 +30,8 @@ pub struct CanvasState {
     last_pan_pos: Option<iced::Point>,
     /// Pending fit target — consumed on next update.
     pub pending_fit: Option<Rectangle>,
+    /// Whether Ctrl is currently held (for multi-select).
+    pub ctrl_held: bool,
 }
 
 impl Default for CanvasState {
@@ -40,6 +42,7 @@ impl Default for CanvasState {
             panning: false,
             last_pan_pos: None,
             pending_fit: None,
+            ctrl_held: false,
         }
     }
 }
@@ -160,17 +163,29 @@ impl canvas::Program<Message> for SchematicCanvas {
                 None
             }
 
-            // ── Left-click → select ──
+            // ── Left-click → select or tool action ──
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
-                    return Some(canvas::Action::publish(Message::CanvasEvent(
+                    let evt = if state.ctrl_held {
+                        CanvasEvent::CtrlClicked {
+                            world_x: world.x as f64,
+                            world_y: world.y as f64,
+                        }
+                    } else {
                         CanvasEvent::Clicked {
                             world_x: world.x as f64,
                             world_y: world.y as f64,
-                        },
-                    )));
+                        }
+                    };
+                    return Some(canvas::Action::publish(Message::CanvasEvent(evt)));
                 }
+                None
+            }
+
+            // ── Keyboard events for Ctrl detection ──
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
+                state.ctrl_held = mods.command();
                 None
             }
 
@@ -374,6 +389,8 @@ pub enum CanvasEvent {
     FitAll,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked { world_x: f64, world_y: f64 },
+    /// Ctrl+Left-click for multi-select.
+    CtrlClicked { world_x: f64, world_y: f64 },
     /// Double-click at world coordinates.
     DoubleClicked { world_x: f64, world_y: f64 },
 }
