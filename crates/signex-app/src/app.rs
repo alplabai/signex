@@ -88,6 +88,12 @@ pub enum Message {
     RotateSelected,
     MirrorSelectedX,
     MirrorSelectedY,
+    // v0.6: Full editor operations
+    SelectAll,
+    Copy,
+    Paste,
+    SaveFile,
+    CtrlClick { world_x: f64, world_y: f64 },
     Noop,
 }
 
@@ -132,6 +138,14 @@ pub struct Signex {
     // v0.5: Wire drawing state
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    // v0.6: Clipboard
+    pub clipboard_wires: Vec<signex_types::schematic::Wire>,
+    pub clipboard_buses: Vec<signex_types::schematic::Bus>,
+    pub clipboard_labels: Vec<signex_types::schematic::Label>,
+    pub clipboard_symbols: Vec<signex_types::schematic::Symbol>,
+    pub clipboard_junctions: Vec<signex_types::schematic::Junction>,
+    pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
+    pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
 }
 
 #[derive(Debug, Clone)]
@@ -249,6 +263,13 @@ impl Signex {
             undo_stack: crate::undo::UndoStack::new(100),
             wire_points: Vec::new(),
             wire_drawing: false,
+            clipboard_wires: Vec::new(),
+            clipboard_buses: Vec::new(),
+            clipboard_labels: Vec::new(),
+            clipboard_symbols: Vec::new(),
+            clipboard_junctions: Vec::new(),
+            clipboard_no_connects: Vec::new(),
+            clipboard_text_notes: Vec::new(),
         };
         (app, Task::none())
     }
@@ -333,6 +354,22 @@ impl Signex {
                 }
                 (keyboard::Key::Character(c), m) if c == "y" && !m.command() && m.shift() => {
                     Message::MirrorSelectedY
+                }
+                // Ctrl+S save
+                (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
+                    Message::SaveFile
+                }
+                // Ctrl+A select all
+                (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
+                    Message::SelectAll
+                }
+                // Ctrl+C copy
+                (keyboard::Key::Character(c), m) if c == "c" && m.command() => {
+                    Message::Copy
+                }
+                // Ctrl+V paste
+                (keyboard::Key::Character(c), m) if c == "v" && m.command() => {
+                    Message::Paste
                 }
                 // Shift+Ctrl+G — toggle grid visibility
                 (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
@@ -963,6 +1000,165 @@ impl Signex {
                     }
                 }
             }
+            Message::CanvasEvent(CanvasEvent::CtrlClicked { world_x, world_y }) => {
+                // Ctrl+click: toggle selection (multi-select)
+                if let Some(ref sheet) = self.schematic {
+                    if let Some(hit) = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y) {
+                        if let Some(pos) = self.canvas.selected.iter().position(|s| s.uuid == hit.uuid) {
+                            self.canvas.selected.remove(pos);
+                        } else {
+                            self.canvas.selected.push(hit);
+                        }
+                        self.canvas.clear_overlay_cache();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::SelectAll => {
+                if let Some(ref sheet) = self.schematic {
+                    use signex_types::schematic::{SelectedItem, SelectedKind};
+                    let mut all = Vec::new();
+                    for s in &sheet.symbols { all.push(SelectedItem::new(s.uuid, SelectedKind::Symbol)); }
+                    for w in &sheet.wires { all.push(SelectedItem::new(w.uuid, SelectedKind::Wire)); }
+                    for b in &sheet.buses { all.push(SelectedItem::new(b.uuid, SelectedKind::Bus)); }
+                    for l in &sheet.labels { all.push(SelectedItem::new(l.uuid, SelectedKind::Label)); }
+                    for j in &sheet.junctions { all.push(SelectedItem::new(j.uuid, SelectedKind::Junction)); }
+                    for nc in &sheet.no_connects { all.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect)); }
+                    for tn in &sheet.text_notes { all.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote)); }
+                    for cs in &sheet.child_sheets { all.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet)); }
+                    self.canvas.selected = all;
+                    self.canvas.clear_overlay_cache();
+                    self.update_selection_info();
+                }
+            }
+            Message::Copy => {
+                if let Some(ref sheet) = self.schematic {
+                    self.clipboard_wires.clear();
+                    self.clipboard_buses.clear();
+                    self.clipboard_labels.clear();
+                    self.clipboard_symbols.clear();
+                    self.clipboard_junctions.clear();
+                    self.clipboard_no_connects.clear();
+                    self.clipboard_text_notes.clear();
+                    for item in &self.canvas.selected {
+                        use signex_types::schematic::SelectedKind;
+                        match item.kind {
+                            SelectedKind::Wire => {
+                                if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                                    self.clipboard_wires.push(w.clone());
+                                }
+                            }
+                            SelectedKind::Bus => {
+                                if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
+                                    self.clipboard_buses.push(b.clone());
+                                }
+                            }
+                            SelectedKind::Label => {
+                                if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
+                                    self.clipboard_labels.push(l.clone());
+                                }
+                            }
+                            SelectedKind::Symbol => {
+                                if let Some(s) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                                    self.clipboard_symbols.push(s.clone());
+                                }
+                            }
+                            SelectedKind::Junction => {
+                                if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
+                                    self.clipboard_junctions.push(j.clone());
+                                }
+                            }
+                            SelectedKind::NoConnect => {
+                                if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
+                                    self.clipboard_no_connects.push(nc.clone());
+                                }
+                            }
+                            SelectedKind::TextNote => {
+                                if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                                    self.clipboard_text_notes.push(tn.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Message::Paste => {
+                if let Some(ref mut sheet) = self.schematic {
+                    let offset = 5.08; // Paste offset in mm (2 grid units)
+                    let mut cmds = Vec::new();
+                    for w in &self.clipboard_wires {
+                        let mut nw = w.clone();
+                        nw.uuid = uuid::Uuid::new_v4();
+                        nw.start.x += offset; nw.start.y += offset;
+                        nw.end.x += offset; nw.end.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddWire(nw));
+                    }
+                    for b in &self.clipboard_buses {
+                        let mut nb = b.clone();
+                        nb.uuid = uuid::Uuid::new_v4();
+                        nb.start.x += offset; nb.start.y += offset;
+                        nb.end.x += offset; nb.end.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddBus(nb));
+                    }
+                    for l in &self.clipboard_labels {
+                        let mut nl = l.clone();
+                        nl.uuid = uuid::Uuid::new_v4();
+                        nl.position.x += offset; nl.position.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddLabel(nl));
+                    }
+                    for s in &self.clipboard_symbols {
+                        let mut ns = s.clone();
+                        ns.uuid = uuid::Uuid::new_v4();
+                        ns.position.x += offset; ns.position.y += offset;
+                        if let Some(ref mut rt) = ns.ref_text { rt.position.x += offset; rt.position.y += offset; }
+                        if let Some(ref mut vt) = ns.val_text { vt.position.x += offset; vt.position.y += offset; }
+                        cmds.push(crate::undo::EditCommand::AddSymbol(ns));
+                    }
+                    for j in &self.clipboard_junctions {
+                        let mut nj = j.clone();
+                        nj.uuid = uuid::Uuid::new_v4();
+                        nj.position.x += offset; nj.position.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddJunction(nj));
+                    }
+                    for nc in &self.clipboard_no_connects {
+                        let mut nnc = nc.clone();
+                        nnc.uuid = uuid::Uuid::new_v4();
+                        nnc.position.x += offset; nnc.position.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddNoConnect(nnc));
+                    }
+                    for tn in &self.clipboard_text_notes {
+                        let mut ntn = tn.clone();
+                        ntn.uuid = uuid::Uuid::new_v4();
+                        ntn.position.x += offset; ntn.position.y += offset;
+                        cmds.push(crate::undo::EditCommand::AddTextNote(ntn));
+                    }
+                    if !cmds.is_empty() {
+                        let batch = crate::undo::EditCommand::Batch(cmds);
+                        self.undo_stack.execute(sheet, batch);
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.clear_content_cache();
+                        self.mark_dirty();
+                    }
+                }
+            }
+            Message::SaveFile => {
+                if let Some(ref sheet) = self.schematic {
+                    if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                        let content = kicad_writer::write_schematic(sheet);
+                        match std::fs::write(&tab.path, &content) {
+                            Ok(_) => {
+                                tab.dirty = false;
+                                eprintln!("[save] Wrote {}", tab.path.display());
+                            }
+                            Err(e) => eprintln!("[save] Error: {e}"),
+                        }
+                    }
+                }
+            }
+            Message::CtrlClick { world_x, world_y } => {
+                return self.update(Message::CanvasEvent(CanvasEvent::CtrlClicked { world_x, world_y }));
+            }
             Message::SchematicLoaded(sheet) => {
                 self.schematic = Some(*sheet);
                 self.canvas.clear_content_cache();
@@ -1068,9 +1264,11 @@ impl Signex {
             MenuMessage::Redo => {
                 return self.update(Message::Redo);
             }
+            MenuMessage::Save => {
+                return self.update(Message::SaveFile);
+            }
             // ── Stubs (not yet implemented) ──
             MenuMessage::NewProject
-            | MenuMessage::Save
             | MenuMessage::SaveAs
             | MenuMessage::ZoomIn
             | MenuMessage::ZoomOut
