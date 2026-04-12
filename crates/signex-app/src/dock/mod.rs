@@ -3,23 +3,38 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
+use std::sync::LazyLock;
+
 use iced::widget::{Column, Space, button, canvas, column, container, row, svg, text};
-use iced::{Background, Border, Color, Element, Length, Rectangle, Renderer, Theme};
+use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
 
-// SVG icons for dock buttons
-const ICON_CLOSE: &[u8] = include_bytes!("../../assets/icons/close.svg");
-const ICON_COLLAPSE_LEFT: &[u8] = include_bytes!("../../assets/icons/collapse_left.svg");
-const ICON_COLLAPSE_RIGHT: &[u8] = include_bytes!("../../assets/icons/collapse_right.svg");
-const ICON_COLLAPSE_DOWN: &[u8] = include_bytes!("../../assets/icons/collapse_down.svg");
-const ICON_EXPAND_LEFT: &[u8] = include_bytes!("../../assets/icons/expand_left.svg");
-const ICON_EXPAND_RIGHT: &[u8] = include_bytes!("../../assets/icons/expand_right.svg");
-const ICON_UNDOCK: &[u8] = include_bytes!("../../assets/icons/undock.svg");
+// ─── SVG handles (created once via LazyLock, cloned cheaply) ──
 
-fn svg_icon(bytes: &'static [u8]) -> iced::widget::Svg<'static> {
-    svg(svg::Handle::from_memory(bytes)).width(10).height(10)
+static H_CLOSE: LazyLock<svg::Handle> =
+    LazyLock::new(|| svg::Handle::from_memory(include_bytes!("../../assets/icons/close.svg")));
+static H_COLLAPSE_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_left.svg"))
+});
+static H_COLLAPSE_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_right.svg"))
+});
+static H_COLLAPSE_DOWN: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_down.svg"))
+});
+static H_EXPAND_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_left.svg"))
+});
+static H_EXPAND_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_right.svg"))
+});
+static H_UNDOCK: LazyLock<svg::Handle> =
+    LazyLock::new(|| svg::Handle::from_memory(include_bytes!("../../assets/icons/undock.svg")));
+
+fn svg_icon(handle: &LazyLock<svg::Handle>) -> iced::widget::Svg<'static> {
+    svg((*handle).clone()).width(10).height(10)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,42 +244,19 @@ impl DockArea {
             let line_c = if is_active {
                 styles::ACCENT
             } else {
-                Color::TRANSPARENT
+                iced::Color::TRANSPARENT
             };
 
-            // Button content: text + accent underline, with tab border
             let label_el = container(text(label).size(11).color(text_c)).padding([5, 10]);
             let underline = container(Space::new())
                 .height(2.0)
                 .width(Length::Fill)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(line_c)),
-                    ..container::Style::default()
-                });
+                .style(styles::tab_underline(line_c));
 
-            let border_c = styles::BORDER_SUBTLE;
             let btn = button(column![label_el, underline].spacing(0))
                 .padding(0)
                 .on_press(DockMessage::SelectTab(position, i))
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match (is_active, status) {
-                        // Active tab keeps highlighted background
-                        (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
-                        (false, button::Status::Hovered) => {
-                            Some(Background::Color(styles::TAB_ACTIVE_BG))
-                        }
-                        _ => None,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border {
-                            width: 1.0,
-                            radius: 0.0.into(),
-                            color: border_c,
-                        },
-                        ..button::Style::default()
-                    }
-                });
+                .style(styles::dock_tab(is_active));
 
             tab_row = tab_row.push(btn);
         }
@@ -274,9 +266,9 @@ impl DockArea {
 
         // Collapse button (SVG icon)
         let collapse_icon = match position {
-            PanelPosition::Left => svg_icon(ICON_COLLAPSE_LEFT),
-            PanelPosition::Right => svg_icon(ICON_COLLAPSE_RIGHT),
-            PanelPosition::Bottom => svg_icon(ICON_COLLAPSE_DOWN),
+            PanelPosition::Left => svg_icon(&H_COLLAPSE_LEFT),
+            PanelPosition::Right => svg_icon(&H_COLLAPSE_RIGHT),
+            PanelPosition::Bottom => svg_icon(&H_COLLAPSE_DOWN),
         };
         tab_row = tab_row.push(
             button(collapse_icon)
@@ -287,7 +279,7 @@ impl DockArea {
 
         // Undock button (float panel)
         tab_row = tab_row.push(
-            button(svg_icon(ICON_UNDOCK))
+            button(svg_icon(&H_UNDOCK))
                 .padding([5, 4])
                 .style(button::text)
                 .on_press(DockMessage::UndockPanel(position, region.active)),
@@ -295,7 +287,7 @@ impl DockArea {
 
         // Close button (X) for active panel
         tab_row = tab_row.push(
-            button(svg_icon(ICON_CLOSE))
+            button(svg_icon(&H_CLOSE))
                 .padding([5, 4])
                 .style(button::text)
                 .on_press(DockMessage::ClosePanel(position, region.active)),
@@ -310,20 +302,10 @@ impl DockArea {
             };
 
         column![
-            // Tab bar with bottom separator
             container(tab_row)
                 .width(Length::Fill)
                 .padding([0, 4])
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(styles::TOOLBAR_BG)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 0.0.into(),
-                        color: styles::BORDER_SUBTLE,
-                    },
-                    ..container::Style::default()
-                }),
-            // Panel content
+                .style(styles::tab_bar_strip),
             container(content)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -342,9 +324,9 @@ impl DockArea {
 
             // Expand button with SVG arrow
             let expand_icon = match position {
-                PanelPosition::Left => svg_icon(ICON_EXPAND_LEFT),
-                PanelPosition::Right => svg_icon(ICON_EXPAND_RIGHT),
-                _ => svg_icon(ICON_EXPAND_LEFT),
+                PanelPosition::Left => svg_icon(&H_EXPAND_LEFT),
+                PanelPosition::Right => svg_icon(&H_EXPAND_RIGHT),
+                _ => svg_icon(&H_EXPAND_LEFT),
             };
             rail = rail.push(
                 button(expand_icon)
@@ -356,7 +338,6 @@ impl DockArea {
             for (i, panel) in region.panels.iter().enumerate() {
                 let label = panel.label().to_string();
                 let is_active = i == region.active;
-                let border_c = styles::BORDER_COLOR;
                 let text_c = if is_active {
                     styles::TEXT_PRIMARY
                 } else {
@@ -377,24 +358,7 @@ impl DockArea {
                     )
                     .padding(0)
                     .on_press(DockMessage::SelectTab(position, i))
-                    .style(move |_: &Theme, status: button::Status| {
-                        let bg = match (is_active, status) {
-                            (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
-                            (false, button::Status::Hovered) => {
-                                Some(Background::Color(styles::TAB_ACTIVE_BG))
-                            }
-                            _ => None,
-                        };
-                        button::Style {
-                            background: bg,
-                            border: Border {
-                                width: 1.0,
-                                radius: 3.0.into(),
-                                color: border_c,
-                            },
-                            ..button::Style::default()
-                        }
-                    }),
+                    .style(styles::rail_tab(is_active)),
                 );
             }
 
@@ -402,15 +366,7 @@ impl DockArea {
                 .width(28)
                 .height(Length::Fill)
                 .padding([4, 2])
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(styles::PANEL_BG)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 0.0.into(),
-                        color: styles::BORDER_SUBTLE,
-                    },
-                    ..container::Style::default()
-                })
+                .style(styles::collapsed_rail)
                 .into()
         } else {
             // Bottom panel collapsed: horizontal thin strip with tab labels
@@ -437,15 +393,7 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(28)
                 .padding([2, 4])
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(styles::PANEL_BG)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 0.0.into(),
-                        color: styles::BORDER_SUBTLE,
-                    },
-                    ..container::Style::default()
-                })
+                .style(styles::collapsed_rail)
                 .into()
         }
     }
@@ -463,22 +411,17 @@ impl DockArea {
         // Title bar with drag handle + dock/close buttons
         let title_bar = container(
             row![
-                // Drag handle area — use mouse_area for drag
                 iced::widget::mouse_area(
-                    container(
-                        text(label).size(11).color(styles::TEXT_PRIMARY),
-                    )
-                    .padding([4, 8])
-                    .width(Length::Fill),
+                    container(text(label).size(11).color(styles::TEXT_PRIMARY))
+                        .padding([4, 8])
+                        .width(Length::Fill),
                 )
                 .on_press(DockMessage::StartDragFloating(idx)),
-                // Dock button (re-dock to panel area)
-                button(svg_icon(ICON_UNDOCK))
+                button(svg_icon(&H_UNDOCK))
                     .padding([4, 4])
                     .style(button::text)
                     .on_press(DockMessage::DockFloating(idx)),
-                // Close (same as dock for now)
-                button(svg_icon(ICON_CLOSE))
+                button(svg_icon(&H_CLOSE))
                     .padding([4, 4])
                     .style(button::text)
                     .on_press(DockMessage::DockFloating(idx)),
@@ -487,47 +430,21 @@ impl DockArea {
             .align_y(iced::Alignment::Center),
         )
         .width(fp.width)
-        .style(|_: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgb(0.14, 0.14, 0.16))),
-            border: Border {
-                width: 1.0,
-                radius: 6.0.into(),
-                color: Color::from_rgb(0.24, 0.25, 0.33),
-            },
-            ..container::Style::default()
-        });
+        .style(styles::floating_title_bar);
 
-        // Panel content
         let content = panels::view_panel(kind, ctx).map(DockMessage::Panel);
 
         let panel_widget = container(
             column![
                 title_bar,
-                container(
-                    iced::widget::scrollable(content).width(Length::Fill),
-                )
-                .width(fp.width)
-                .height(fp.height)
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(styles::PANEL_BG)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 6.0.into(),
-                        color: Color::from_rgb(0.24, 0.25, 0.33),
-                    },
-                    ..container::Style::default()
-                }),
+                container(iced::widget::scrollable(content).width(Length::Fill))
+                    .width(fp.width)
+                    .height(fp.height)
+                    .style(styles::floating_panel_body),
             ]
             .spacing(0),
         )
-        .style(|_: &Theme| container::Style {
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: iced::Vector::new(0.0, 4.0),
-                blur_radius: 12.0,
-            },
-            ..container::Style::default()
-        });
+        .style(styles::floating_panel_shadow);
 
         Some(panel_widget.into())
     }

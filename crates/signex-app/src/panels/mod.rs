@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use iced_aw::NumberInput;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -139,12 +140,31 @@ pub struct PanelContext {
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
+    /// UUID of the single selected item (for property editing).
+    pub selected_uuid: Option<uuid::Uuid>,
+    /// Kind of the single selected item.
+    pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
+    /// Pre-placement configuration (shown when Tab pressed during placement tool).
+    pub pre_placement: Option<PrePlacementData>,
+}
+
+/// Pre-placement configuration data — shown in Properties panel when Tab pressed.
+#[derive(Debug, Clone)]
+pub struct PrePlacementData {
+    /// Which tool is being configured.
+    pub tool_name: String,
+    /// Net label / text note text.
+    pub label_text: String,
+    /// Component designator override.
+    pub designator: String,
+    /// Rotation (degrees).
+    pub rotation: f64,
 }
 
 /// Panel-level message wrapping widget messages.
@@ -161,6 +181,38 @@ pub enum PanelMsg {
     ComponentFilter(String),
     /// Toggle a collapsible section (by section key).
     ToggleSection(String),
+    /// Edit a symbol's designator (committed on submit).
+    EditSymbolDesignator(uuid::Uuid, String),
+    /// Edit a symbol's value (committed on submit).
+    EditSymbolValue(uuid::Uuid, String),
+    /// Edit a symbol's footprint (committed on submit).
+    EditSymbolFootprint(uuid::Uuid, String),
+    /// Toggle a symbol's mirror_x.
+    ToggleSymbolMirrorX(uuid::Uuid),
+    /// Toggle a symbol's mirror_y.
+    ToggleSymbolMirrorY(uuid::Uuid),
+    /// Toggle a symbol's locked state.
+    ToggleSymbolLocked(uuid::Uuid),
+    /// Toggle a symbol's DNP state.
+    ToggleSymbolDnp(uuid::Uuid),
+    /// Edit a label's text (committed on submit).
+    EditLabelText(uuid::Uuid, String),
+    /// Edit a text note's text (committed on submit).
+    EditTextNoteText(uuid::Uuid, String),
+    /// Pre-placement: update label/text field.
+    SetPrePlacementText(String),
+    /// Pre-placement: update designator field.
+    SetPrePlacementDesignator(String),
+    /// Pre-placement: update rotation.
+    SetPrePlacementRotation(f64),
+    /// Pre-placement: confirm and close.
+    ConfirmPrePlacement,
+    /// Set grid size (mm).
+    SetGridSize(f32),
+    /// Set page margin vertical zones.
+    SetMarginVertical(u32),
+    /// Set page margin horizontal zones.
+    SetMarginHorizontal(u32),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
@@ -707,6 +759,11 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .into();
     }
 
+    // ── Pre-placement properties (TAB pressed during tool) ──
+    if let Some(ref pp) = ctx.pre_placement {
+        return view_pre_placement(pp, muted, primary, border_c);
+    }
+
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
     if ctx.selection_count == 1 && !ctx.selection_info.is_empty() {
         return view_selected_element_properties(ctx, muted, primary, border_c);
@@ -792,6 +849,7 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 }
 
 /// Altium-style context-aware properties for a single selected element.
+/// Shows EDITABLE fields for symbols, labels, and text notes.
 fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
@@ -800,7 +858,6 @@ fn view_selected_element_properties<'a>(
 ) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Determine element type from selection_info
     let elem_type = ctx
         .selection_info
         .iter()
@@ -808,7 +865,9 @@ fn view_selected_element_properties<'a>(
         .map(|(_, v)| v.as_str())
         .unwrap_or("Object");
 
-    // ── Header: element type (like Altium's "Component" header) ──
+    let uuid = ctx.selected_uuid;
+
+    // ── Header ──
     col = col.push(
         container(text(elem_type.to_owned()).size(11).color(primary))
             .padding([6, 8])
@@ -816,27 +875,142 @@ fn view_selected_element_properties<'a>(
     );
     col = col.push(thin_sep(border_c));
 
-    // ── General section (collapsible) ──
-    {
-        let info: Vec<(String, String)> = ctx
-            .selection_info
-            .iter()
-            .filter(|(k, _)| {
-                k != "Type"
-                    && k != "Position"
-                    && k != "Rotation"
-                    && k != "Start"
-                    && k != "End"
-                    && k != "Length"
-                    && k != "Mirror"
-                    && k != "Unit"
-            })
-            .cloned()
-            .collect();
-        if !ctx.collapsed_sections.contains("sel_general") {
+    // ── Editable properties based on element type ──
+    match elem_type {
+        "Symbol" => {
+            let get = |key: &str| -> String {
+                ctx.selection_info
+                    .iter()
+                    .find(|(k, _)| k == key)
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_default()
+            };
+            let reference = get("Reference");
+            let value = get("Value");
+            let footprint = get("Footprint");
+            let lib_id = get("Library ID");
+            let position = get("Position");
+            let rotation = get("Rotation");
+            let has_mirror_x = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "X");
+            let has_mirror_y = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "Y");
+
+            if let Some(id) = uuid {
+                // General section — editable
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Designator", &reference, muted,
+                            move |s| PanelMsg::EditSymbolDesignator(id, s)));
+                        c = c.push(form_edit_row("Value", &value, muted,
+                            move |s| PanelMsg::EditSymbolValue(id, s)));
+                        c = c.push(form_edit_row("Footprint", &footprint, muted,
+                            move |s| PanelMsg::EditSymbolFootprint(id, s)));
+                        c = c.push(form_input_row("Library ID", &lib_id, muted));
+                        c
+                    },
+                ));
+
+                // Location section — read-only for now
+                col = col.push(collapsible_section(
+                    "sel_location",
+                    "Location",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_input_row("Position", &position, muted));
+                        c = c.push(form_input_row("Rotation", &rotation, muted));
+                        c
+                    },
+                ));
+
+                // Graphical section — checkboxes
+                col = col.push(collapsible_section(
+                    "sel_graphical",
+                    "Graphical",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_check_row("Mirror X", has_mirror_x,
+                            PanelMsg::ToggleSymbolMirrorX(id), muted));
+                        c = c.push(form_check_row("Mirror Y", has_mirror_y,
+                            PanelMsg::ToggleSymbolMirrorY(id), muted));
+                        c = c.push(form_check_row("Locked", false,
+                            PanelMsg::ToggleSymbolLocked(id), muted));
+                        c = c.push(form_check_row("DNP", false,
+                            PanelMsg::ToggleSymbolDnp(id), muted));
+                        c
+                    },
+                ));
+            }
+        }
+        "Label" | "Global Label" | "Hierarchical Label" => {
+            let label_text = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Text")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+            let position = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Position")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+
+            if let Some(id) = uuid {
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Text", &label_text, muted,
+                            move |s| PanelMsg::EditLabelText(id, s)));
+                        c = c.push(form_input_row("Position", &position, muted));
+                        c
+                    },
+                ));
+            }
+        }
+        "Text Note" => {
+            let note_text = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Text")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+
+            if let Some(id) = uuid {
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Text", &note_text, muted,
+                            move |s| PanelMsg::EditTextNoteText(id, s)));
+                        c
+                    },
+                ));
+            }
+        }
+        _ => {
+            // Generic read-only properties for other types
+            let info: Vec<(String, String)> = ctx.selection_info
+                .iter()
+                .filter(|(k, _)| k != "Type")
+                .cloned()
+                .collect();
             col = col.push(collapsible_section(
                 "sel_general",
-                "General",
+                "Properties",
                 &ctx.collapsed_sections,
                 muted,
                 border_c,
@@ -848,92 +1022,6 @@ fn view_selected_element_properties<'a>(
                     c
                 },
             ));
-        } else {
-            col = col.push(collapsible_section(
-                "sel_general",
-                "General",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || Column::new().spacing(0).width(Length::Fill),
-            ));
-        }
-    }
-
-    // ── Location section (collapsible, for elements that have position) ──
-    let has_position = ctx
-        .selection_info
-        .iter()
-        .any(|(k, _)| k == "Position" || k == "Start");
-    if has_position {
-        let loc_info: Vec<(String, String)> = ctx
-            .selection_info
-            .iter()
-            .filter(|(k, _)| {
-                k == "Position" || k == "Rotation" || k == "Start" || k == "End" || k == "Length"
-            })
-            .cloned()
-            .collect();
-        if !ctx.collapsed_sections.contains("sel_location") {
-            col = col.push(collapsible_section(
-                "sel_location",
-                "Location",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    for (key, value) in &loc_info {
-                        c = c.push(prop_kv_row(key, value, muted, primary));
-                    }
-                    c
-                },
-            ));
-        } else {
-            col = col.push(collapsible_section(
-                "sel_location",
-                "Location",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || Column::new().spacing(0).width(Length::Fill),
-            ));
-        }
-    }
-
-    // ── Graphical section (collapsible, for symbols) ──
-    let has_mirror = ctx.selection_info.iter().any(|(k, _)| k == "Mirror");
-    if has_mirror || elem_type == "Symbol" {
-        let gfx_info: Vec<(String, String)> = ctx
-            .selection_info
-            .iter()
-            .filter(|(k, _)| k == "Mirror" || k == "Unit")
-            .cloned()
-            .collect();
-        if !ctx.collapsed_sections.contains("sel_graphical") {
-            col = col.push(collapsible_section(
-                "sel_graphical",
-                "Graphical",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    for (key, value) in &gfx_info {
-                        c = c.push(prop_kv_row(key, value, muted, primary));
-                    }
-                    c
-                },
-            ));
-        } else {
-            col = col.push(collapsible_section(
-                "sel_graphical",
-                "Graphical",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || Column::new().spacing(0).width(Length::Fill),
-            ));
         }
     }
 
@@ -943,6 +1031,95 @@ fn view_selected_element_properties<'a>(
     col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
 
     scrollable(col).width(Length::Fill).into()
+}
+
+/// Pre-placement properties — shown when TAB pressed during a placement tool.
+fn view_pre_placement<'a>(
+    pp: &PrePlacementData,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let label_text = pp.label_text.clone();
+    let designator = pp.designator.clone();
+    let rotation = pp.rotation;
+    let tool_name = pp.tool_name.clone();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Header
+    col = col.push(
+        container(
+            row![
+                text(format!("{} Properties", tool_name))
+                    .size(12)
+                    .color(primary),
+                Space::new().width(Length::Fill),
+                iced::widget::button(text("OK").size(10).color(Color::WHITE))
+                    .padding([2, 10])
+                    .on_press(PanelMsg::ConfirmPrePlacement)
+                    .style(iced::widget::button::primary),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 8])
+        .width(Length::Fill),
+    );
+
+    // Separator
+    col = col.push(
+        container(Space::new())
+            .height(1)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            }),
+    );
+
+    // Fields based on tool type
+    col = col.push(
+        container(
+            column![
+                // Text / Net Name field
+                container(
+                    row![
+                        text("Text / Name").size(11).color(muted).width(LABEL_W),
+                        iced::widget::text_input("Enter text...", &label_text)
+                            .on_input(PanelMsg::SetPrePlacementText)
+                            .size(11)
+                            .padding(4)
+                            .width(Length::Fill),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([4, 8]),
+                // Designator field
+                container(
+                    row![
+                        text("Designator").size(11).color(muted).width(LABEL_W),
+                        iced::widget::text_input("e.g. R1, U1", &designator)
+                            .on_input(PanelMsg::SetPrePlacementDesignator)
+                            .size(11)
+                            .padding(4)
+                            .width(Length::Fill),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([4, 8]),
+                // Rotation
+                form_input_row("Rotation", &format!("{rotation:.0}°"), muted),
+            ]
+            .spacing(0),
+        )
+        .width(Length::Fill),
+    );
+
+    container(scrollable(col).width(Length::Fill))
+        .width(Length::Fill)
+        .into()
 }
 
 fn view_properties_general<'a>(
@@ -1016,9 +1193,12 @@ fn view_properties_general<'a>(
                     )
                     .padding([2, 8]),
                 );
-                c = c.push(form_input_row(
+                c = c.push(form_number_row(
                     "Visible Grid",
-                    &format!("{}mm", grid_size_mm),
+                    grid_size_mm,
+                    0.01..=25.4,
+                    0.01,
+                    PanelMsg::SetGridSize,
                     muted,
                 ));
                 c = c.push(form_check_row(
@@ -1072,8 +1252,22 @@ fn view_properties_general<'a>(
                 };
                 c = c.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
                 c = c.push(form_label("Margin and Zones", muted));
-                c = c.push(form_input_row("Vertical", "1", muted));
-                c = c.push(form_input_row("Horizontal", "1", muted));
+                c = c.push(form_number_row(
+                    "Vertical",
+                    1_u32,
+                    0..=10,
+                    1,
+                    PanelMsg::SetMarginVertical,
+                    muted,
+                ));
+                c = c.push(form_number_row(
+                    "Horizontal",
+                    1_u32,
+                    0..=10,
+                    1,
+                    PanelMsg::SetMarginHorizontal,
+                    muted,
+                ));
                 c = c.push(form_input_row("Origin", "Upper Left", muted));
                 c
             },
@@ -1326,6 +1520,73 @@ fn form_check_row<'a>(
             text(if checked { "On" } else { "Off" })
                 .size(11)
                 .color(if checked { Color::WHITE } else { label_c }),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | NumberInput (iced_aw) with step/bounds.
+fn form_number_row<'a, T>(
+    label: &str,
+    value: T,
+    bounds: impl std::ops::RangeBounds<T> + 'a,
+    step: T,
+    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: num_traits::Num
+        + num_traits::NumAssignOps
+        + PartialOrd
+        + std::fmt::Display
+        + std::str::FromStr
+        + Clone
+        + num_traits::Bounded
+        + 'static,
+{
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(LABEL_W)
+                .wrapping(iced::widget::text::Wrapping::None),
+            NumberInput::new(&value, bounds, on_change)
+                .step(step)
+                .width(Length::Fill)
+                .padding(4),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | editable text_input that emits a PanelMsg on input.
+fn form_edit_row<'a>(
+    label: &str,
+    value: &str,
+    label_c: Color,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(LABEL_W)
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::text_input("", value)
+                .on_input(on_input)
+                .size(11)
+                .padding(4)
+                .width(Length::Fill),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
