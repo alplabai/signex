@@ -3,11 +3,24 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
-use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::widget::{Column, Space, button, column, container, row, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use std::sync::OnceLock;
 
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
+
+// SVG icons for dock buttons
+const ICON_CLOSE: &[u8] = include_bytes!("../../assets/icons/close.svg");
+const ICON_COLLAPSE_LEFT: &[u8] = include_bytes!("../../assets/icons/collapse_left.svg");
+const ICON_COLLAPSE_RIGHT: &[u8] = include_bytes!("../../assets/icons/collapse_right.svg");
+const ICON_COLLAPSE_DOWN: &[u8] = include_bytes!("../../assets/icons/collapse_down.svg");
+const ICON_EXPAND_LEFT: &[u8] = include_bytes!("../../assets/icons/expand_left.svg");
+const ICON_EXPAND_RIGHT: &[u8] = include_bytes!("../../assets/icons/expand_right.svg");
+
+fn svg_icon(bytes: &'static [u8]) -> iced::widget::Svg {
+    svg(svg::Handle::from_memory(bytes)).width(10).height(10)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelPosition {
@@ -20,6 +33,7 @@ pub enum PanelPosition {
 pub enum DockMessage {
     SelectTab(PanelPosition, usize),
     ToggleCollapse(PanelPosition),
+    ClosePanel(PanelPosition, usize),
     Panel(PanelMsg),
 }
 
@@ -86,8 +100,20 @@ impl DockArea {
                 };
                 region.collapsed = !region.collapsed;
             }
+            DockMessage::ClosePanel(pos, idx) => {
+                let region = match pos {
+                    PanelPosition::Left => &mut self.left,
+                    PanelPosition::Right => &mut self.right,
+                    PanelPosition::Bottom => &mut self.bottom,
+                };
+                if idx < region.panels.len() {
+                    region.panels.remove(idx);
+                    if region.active >= region.panels.len() && region.active > 0 {
+                        region.active -= 1;
+                    }
+                }
+            }
             // Panel messages are handled by app.rs before reaching here.
-            // DockArea only handles tab/collapse; panel logic stays in Signex::update().
             DockMessage::Panel(_) => {}
         }
     }
@@ -175,17 +201,28 @@ impl DockArea {
             tab_row = tab_row.push(btn);
         }
 
-        // Collapse button (minimal)
-        let collapse_label = match position {
-            PanelPosition::Left => "\u{00AB}",   // «
-            PanelPosition::Right => "\u{00BB}",  // »
-            PanelPosition::Bottom => "\u{2304}", // ⌄
+        // Spacer to push buttons right
+        tab_row = tab_row.push(Space::new().width(Length::Fill));
+
+        // Collapse button (SVG icon)
+        let collapse_icon = match position {
+            PanelPosition::Left => svg_icon(ICON_COLLAPSE_LEFT),
+            PanelPosition::Right => svg_icon(ICON_COLLAPSE_RIGHT),
+            PanelPosition::Bottom => svg_icon(ICON_COLLAPSE_DOWN),
         };
         tab_row = tab_row.push(
-            button(text(collapse_label).size(10).color(styles::TEXT_MUTED))
-                .padding([5, 6])
+            button(collapse_icon)
+                .padding([5, 4])
                 .style(button::text)
                 .on_press(DockMessage::ToggleCollapse(position)),
+        );
+
+        // Close button (X) for active panel
+        tab_row = tab_row.push(
+            button(svg_icon(ICON_CLOSE))
+                .padding([5, 4])
+                .style(button::text)
+                .on_press(DockMessage::ClosePanel(position, region.active)),
         );
 
         // Panel content
@@ -226,6 +263,19 @@ impl DockArea {
 
         if is_vertical {
             let mut rail: Column<DockMessage> = Column::new().spacing(2.0);
+
+            // Expand button with SVG arrow
+            let expand_icon = match position {
+                PanelPosition::Left => svg_icon(ICON_EXPAND_LEFT),
+                PanelPosition::Right => svg_icon(ICON_EXPAND_RIGHT),
+                _ => svg_icon(ICON_EXPAND_LEFT),
+            };
+            rail = rail.push(
+                button(expand_icon)
+                    .padding([4, 6])
+                    .style(button::text)
+                    .on_press(DockMessage::ToggleCollapse(position)),
+            );
 
             for (i, panel) in region.panels.iter().enumerate() {
                 let label = panel.label();
