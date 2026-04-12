@@ -3,8 +3,8 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
-use iced::widget::{Column, Space, button, column, container, row, svg, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{Column, Space, button, canvas, column, container, row, svg, text};
+use iced::{Background, Border, Color, Element, Length, Rectangle, Renderer, Theme};
 
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
@@ -354,33 +354,26 @@ impl DockArea {
             );
 
             for (i, panel) in region.panels.iter().enumerate() {
-                let label = panel.label();
+                let label = panel.label().to_string();
                 let is_active = i == region.active;
+                let border_c = styles::BORDER_COLOR;
                 let text_c = if is_active {
                     styles::TEXT_PRIMARY
                 } else {
                     styles::TEXT_MUTED
                 };
-                let border_c = styles::BORDER_COLOR;
 
-                // Vertical text: one char per line to simulate rotation
-                let vertical: String = label.chars().map(|c| format!("{c}\n")).collect();
-                let vertical = vertical.trim_end().to_string();
+                // Rotated text via canvas (Altium-style sideways tabs)
+                let tab_h = (label.len() as f32 * 7.5 + 16.0).max(60.0);
 
                 rail = rail.push(
                     button(
-                        container(
-                            text(vertical)
-                                .size(10)
-                                .color(text_c)
-                                .align_x(iced::alignment::Horizontal::Center)
-                                .line_height(iced::widget::text::LineHeight::Absolute(
-                                    iced::Pixels(11.0),
-                                )),
-                        )
-                        .width(22)
-                        .padding([6, 2])
-                        .align_x(iced::alignment::Horizontal::Center),
+                        canvas(RotatedLabel {
+                            label,
+                            color: text_c,
+                        })
+                        .width(24)
+                        .height(tab_h),
                     )
                     .padding(0)
                     .on_press(DockMessage::SelectTab(position, i))
@@ -537,5 +530,39 @@ impl DockArea {
         });
 
         Some(panel_widget.into())
+    }
+}
+
+/// Canvas program that draws rotated text (90° CW) for collapsed panel tabs.
+struct RotatedLabel {
+    label: String,
+    color: Color,
+}
+
+impl canvas::Program<DockMessage> for RotatedLabel {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        // Rotate 90° clockwise: translate to center, rotate, draw text
+        let cx = bounds.width / 2.0;
+        let cy = bounds.height / 2.0;
+        frame.translate(iced::Vector::new(cx, cy));
+        frame.rotate(std::f32::consts::FRAC_PI_2); // 90° CW
+        frame.fill_text(canvas::Text {
+            content: self.label.clone(),
+            position: iced::Point::new(-cy + 8.0, -5.0),
+            color: self.color,
+            size: iced::Pixels(11.0),
+            ..canvas::Text::default()
+        });
+        vec![frame.into_geometry()]
     }
 }
