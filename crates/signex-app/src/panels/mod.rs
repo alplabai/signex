@@ -2,11 +2,11 @@
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use std::sync::OnceLock;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -205,11 +205,13 @@ const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" widt
 
 fn chevron_right() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT)).clone()
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
+        .clone()
 }
 fn chevron_down() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN)).clone()
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
+        .clone()
 }
 
 /// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
@@ -222,7 +224,11 @@ fn collapsible_section<'a>(
     content: impl FnOnce() -> Column<'a, PanelMsg>,
 ) -> Column<'a, PanelMsg> {
     let is_collapsed = collapsed.contains(key);
-    let chevron_handle = if is_collapsed { chevron_right() } else { chevron_down() };
+    let chevron_handle = if is_collapsed {
+        chevron_right()
+    } else {
+        chevron_down()
+    };
     let key_owned = key.to_string();
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -815,12 +821,25 @@ fn view_selected_element_properties<'a>(
         let info: Vec<(String, String)> = ctx
             .selection_info
             .iter()
-            .filter(|(k, _)| k != "Type" && k != "Position" && k != "Rotation" && k != "Start" && k != "End" && k != "Length" && k != "Mirror" && k != "Unit")
+            .filter(|(k, _)| {
+                k != "Type"
+                    && k != "Position"
+                    && k != "Rotation"
+                    && k != "Start"
+                    && k != "End"
+                    && k != "Length"
+                    && k != "Mirror"
+                    && k != "Unit"
+            })
             .cloned()
             .collect();
         if !ctx.collapsed_sections.contains("sel_general") {
             col = col.push(collapsible_section(
-                "sel_general", "General", &ctx.collapsed_sections, muted, border_c,
+                "sel_general",
+                "General",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     for (key, value) in &info {
@@ -831,24 +850,37 @@ fn view_selected_element_properties<'a>(
             ));
         } else {
             col = col.push(collapsible_section(
-                "sel_general", "General", &ctx.collapsed_sections, muted, border_c,
+                "sel_general",
+                "General",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || Column::new().spacing(0).width(Length::Fill),
             ));
         }
     }
 
     // ── Location section (collapsible, for elements that have position) ──
-    let has_position = ctx.selection_info.iter().any(|(k, _)| k == "Position" || k == "Start");
+    let has_position = ctx
+        .selection_info
+        .iter()
+        .any(|(k, _)| k == "Position" || k == "Start");
     if has_position {
         let loc_info: Vec<(String, String)> = ctx
             .selection_info
             .iter()
-            .filter(|(k, _)| k == "Position" || k == "Rotation" || k == "Start" || k == "End" || k == "Length")
+            .filter(|(k, _)| {
+                k == "Position" || k == "Rotation" || k == "Start" || k == "End" || k == "Length"
+            })
             .cloned()
             .collect();
         if !ctx.collapsed_sections.contains("sel_location") {
             col = col.push(collapsible_section(
-                "sel_location", "Location", &ctx.collapsed_sections, muted, border_c,
+                "sel_location",
+                "Location",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     for (key, value) in &loc_info {
@@ -859,7 +891,11 @@ fn view_selected_element_properties<'a>(
             ));
         } else {
             col = col.push(collapsible_section(
-                "sel_location", "Location", &ctx.collapsed_sections, muted, border_c,
+                "sel_location",
+                "Location",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || Column::new().spacing(0).width(Length::Fill),
             ));
         }
@@ -876,7 +912,11 @@ fn view_selected_element_properties<'a>(
             .collect();
         if !ctx.collapsed_sections.contains("sel_graphical") {
             col = col.push(collapsible_section(
-                "sel_graphical", "Graphical", &ctx.collapsed_sections, muted, border_c,
+                "sel_graphical",
+                "Graphical",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     for (key, value) in &gfx_info {
@@ -887,7 +927,11 @@ fn view_selected_element_properties<'a>(
             ));
         } else {
             col = col.push(collapsible_section(
-                "sel_graphical", "Graphical", &ctx.collapsed_sections, muted, border_c,
+                "sel_graphical",
+                "Graphical",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
                 || Column::new().spacing(0).width(Length::Fill),
             ));
         }
@@ -1026,9 +1070,7 @@ fn view_properties_general<'a>(
                     "A3" => "Width: 420mm  Height: 297mm",
                     _ => "Width: 297mm  Height: 210mm",
                 };
-                c = c.push(
-                    container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]),
-                );
+                c = c.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
                 c = c.push(form_label("Margin and Zones", muted));
                 c = c.push(form_input_row("Vertical", "1", muted));
                 c = c.push(form_input_row("Horizontal", "1", muted));
