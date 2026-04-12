@@ -1696,6 +1696,26 @@ impl Signex {
                             ActiveBarAction::SelectAll => {
                                 return self.update(Message::SelectAll);
                             }
+                            // Port placement (Global Label)
+                            ActiveBarAction::PlacePort => {
+                                self.current_tool = Tool::Label;
+                                // Place as global label on next click
+                            }
+                            ActiveBarAction::PlaceOffSheetConnector => {
+                                self.current_tool = Tool::Label;
+                            }
+                            // Bus Entry placement
+                            ActiveBarAction::PlaceBusEntry => {
+                                self.current_tool = Tool::Component;
+                                self.pending_power = None; // clear power mode
+                            }
+                            // Sheet Symbol placement
+                            ActiveBarAction::PlaceSheetSymbol
+                            | ActiveBarAction::PlaceSheetEntry
+                            | ActiveBarAction::PlaceDeviceSheetSymbol
+                            | ActiveBarAction::PlaceReuseBlock => {
+                                // TODO: implement sheet symbol placement tool
+                            }
                             // Not yet implemented — no-op
                             _ => {}
                         }

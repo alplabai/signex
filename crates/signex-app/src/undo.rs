@@ -23,6 +23,10 @@ pub enum EditCommand {
     AddNoConnect(NoConnect),
     /// Add a text note.
     AddTextNote(TextNote),
+    /// Add a bus entry.
+    AddBusEntry(BusEntry),
+    /// Add a child sheet (hierarchical sheet symbol).
+    AddChildSheet(ChildSheet),
 
     /// Remove element by UUID and kind, storing the removed element for undo.
     RemoveWire(Wire),
@@ -32,6 +36,8 @@ pub enum EditCommand {
     RemoveSymbol(Symbol),
     RemoveNoConnect(NoConnect),
     RemoveTextNote(TextNote),
+    RemoveBusEntry(BusEntry),
+    RemoveChildSheet(ChildSheet),
 
     /// Move element(s) by a delta offset.
     #[allow(dead_code)]
@@ -78,6 +84,8 @@ pub fn apply(sheet: &mut SchematicSheet, cmd: &EditCommand) {
         EditCommand::AddSymbol(s) => sheet.symbols.push(s.clone()),
         EditCommand::AddNoConnect(nc) => sheet.no_connects.push(nc.clone()),
         EditCommand::AddTextNote(tn) => sheet.text_notes.push(tn.clone()),
+        EditCommand::AddBusEntry(be) => sheet.bus_entries.push(be.clone()),
+        EditCommand::AddChildSheet(cs) => sheet.child_sheets.push(cs.clone()),
 
         EditCommand::RemoveWire(w) => sheet.wires.retain(|x| x.uuid != w.uuid),
         EditCommand::RemoveBus(b) => sheet.buses.retain(|x| x.uuid != b.uuid),
@@ -86,6 +94,8 @@ pub fn apply(sheet: &mut SchematicSheet, cmd: &EditCommand) {
         EditCommand::RemoveSymbol(s) => sheet.symbols.retain(|x| x.uuid != s.uuid),
         EditCommand::RemoveNoConnect(nc) => sheet.no_connects.retain(|x| x.uuid != nc.uuid),
         EditCommand::RemoveTextNote(tn) => sheet.text_notes.retain(|x| x.uuid != tn.uuid),
+        EditCommand::RemoveBusEntry(be) => sheet.bus_entries.retain(|x| x.uuid != be.uuid),
+        EditCommand::RemoveChildSheet(cs) => sheet.child_sheets.retain(|x| x.uuid != cs.uuid),
 
         EditCommand::MoveElements { items, dx, dy } => {
             for item in items {
@@ -128,6 +138,8 @@ pub fn undo(sheet: &mut SchematicSheet, cmd: &EditCommand) {
         EditCommand::AddSymbol(s) => sheet.symbols.retain(|x| x.uuid != s.uuid),
         EditCommand::AddNoConnect(nc) => sheet.no_connects.retain(|x| x.uuid != nc.uuid),
         EditCommand::AddTextNote(tn) => sheet.text_notes.retain(|x| x.uuid != tn.uuid),
+        EditCommand::AddBusEntry(be) => sheet.bus_entries.retain(|x| x.uuid != be.uuid),
+        EditCommand::AddChildSheet(cs) => sheet.child_sheets.retain(|x| x.uuid != cs.uuid),
 
         EditCommand::RemoveWire(w) => sheet.wires.push(w.clone()),
         EditCommand::RemoveBus(b) => sheet.buses.push(b.clone()),
@@ -136,6 +148,8 @@ pub fn undo(sheet: &mut SchematicSheet, cmd: &EditCommand) {
         EditCommand::RemoveSymbol(s) => sheet.symbols.push(s.clone()),
         EditCommand::RemoveNoConnect(nc) => sheet.no_connects.push(nc.clone()),
         EditCommand::RemoveTextNote(tn) => sheet.text_notes.push(tn.clone()),
+        EditCommand::RemoveBusEntry(be) => sheet.bus_entries.push(be.clone()),
+        EditCommand::RemoveChildSheet(cs) => sheet.child_sheets.push(cs.clone()),
 
         EditCommand::MoveElements { items, dx, dy } => {
             for item in items {
