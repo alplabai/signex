@@ -266,72 +266,72 @@ pub fn view_bar(
     // 1. Filter — left: toggle, right: filter dropdown
     items.push(ab_icon_btn(ICON_FILTER, false,
         ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter))));
-    // 2. Add Component (+) — left: place component
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)),
+        "Selection Filter"));
     items.push(ab_icon_btn(ICON_ADDPART,
         current_tool == crate::app::Tool::Component,
         ActiveBarMsg::Action(ActiveBarAction::PlaceComponent),
-        None));
+        None, "Place Component"));
     items.push(sep());
 
-    // 3. Select — left: select tool, right: selection mode dropdown
     items.push(ab_icon_btn(ICON_SELECT,
         current_tool == crate::app::Tool::Select,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode))));
-    // 4. Move — left: move, right: move/transform dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode)),
+        "Select"));
     items.push(ab_icon_btn(ICON_MOVE, false,
         ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select))));
-    // 5. Align — left: align to grid, right: align dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
+        "Move / Transform"));
     items.push(ab_icon_btn(ICON_ALIGN, false,
         ActiveBarMsg::Action(ActiveBarAction::AlignToGrid),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align))));
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
+        "Align"));
     items.push(sep());
 
-    // 6. Wire — left: draw wire, right: wiring dropdown
     items.push(ab_icon_btn(ICON_WIRE,
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
         last("wiring", ActiveBarAction::DrawWire),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring))));
-    // 7. Power — left: last-used power, right: power dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
+        "Wiring"));
     items.push(ab_icon_btn(ICON_POWER, false,
         last("power", ActiveBarAction::PlacePowerGND),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power))));
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
+        "Power Port"));
     items.push(sep());
 
-    // 8. Harness — left: signal harness, right: harness dropdown
     items.push(ab_icon_btn(ICON_HARNESS, false,
         last("harness", ActiveBarAction::PlaceSignalHarness),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness))));
-    // 9. Sheet Symbol — left: place sheet symbol, right: sheet symbol dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
+        "Harness"));
     items.push(ab_icon_btn(ICON_SHEETSYM, false,
         last("sheet", ActiveBarAction::PlaceSheetSymbol),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol))));
-    // 10. Port — left: place port, right: port dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
+        "Sheet Symbol"));
     items.push(ab_icon_btn(ICON_PORT, false,
         last("port", ActiveBarAction::PlacePort),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port))));
-    // 10. Directives — left: parameter set, right: directives dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
+        "Port / Connector"));
     items.push(ab_icon_btn(ICON_DIRECTIVES, false,
         ActiveBarMsg::Action(ActiveBarAction::PlaceParameterSet),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives))));
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
+        "Directives"));
     items.push(sep());
 
-    // 11. Text — left: place text, right: text dropdown
     items.push(ab_icon_btn(ICON_TEXT,
         current_tool == crate::app::Tool::Text,
         last("text", ActiveBarAction::PlaceTextString),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools))));
-    // 12. Shapes — left: last-used shape, right: shapes dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
+        "Text"));
     items.push(ab_icon_btn(ICON_SHAPES,
         matches!(current_tool, crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle),
         last("shapes", ActiveBarAction::DrawLine),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes))));
-    // 13. Net Color — left: no-op, right: color dropdown
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)),
+        "Drawing Tools"));
     items.push(ab_icon_btn(ICON_NETCOLOR, false,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor))));
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)),
+        "Net Color"));
 
     // Draw mode indicator
     if matches!(
@@ -612,6 +612,7 @@ fn ab_icon_btn(
     active: bool,
     left_click: ActiveBarMsg,
     right_click: Option<ActiveBarMsg>,
+    tooltip_text: &'static str,
 ) -> Element<'static, ActiveBarMsg> {
     let handle = svg::Handle::from_memory(icon_bytes);
     let has_dropdown = right_click.is_some();
@@ -671,7 +672,23 @@ fn ab_icon_btn(
         area = area.on_right_press(rc);
     }
 
-    area.into()
+    let tip = container(
+        text(tooltip_text).size(11).color(styles::TEXT_PRIMARY),
+    )
+    .padding([4, 8])
+    .style(|_: &Theme| container::Style {
+        background: Some(Color::from_rgb(0.14, 0.14, 0.18).into()),
+        border: Border {
+            width: 1.0,
+            radius: 4.0.into(),
+            color: Color::from_rgb(0.24, 0.25, 0.30),
+        },
+        ..container::Style::default()
+    });
+
+    iced::widget::tooltip(area, tip, iced::widget::tooltip::Position::Bottom)
+        .gap(4)
+        .into()
 }
 
 fn sep() -> Element<'static, ActiveBarMsg> {
