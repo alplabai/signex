@@ -38,6 +38,20 @@ pub struct CanvasState {
     select_drag_start: Option<(f64, f64)>,
     /// Drag-to-select: current end position in world coordinates.
     select_drag_end: Option<(f64, f64)>,
+    // ─── Drag-to-move state ───
+    /// True when the initial left-click landed on an already-selected item.
+    click_on_selected: bool,
+    /// World position where the move-drag started.
+    move_origin: Option<(f64, f64)>,
+    /// True once the threshold is exceeded and we're actively moving.
+    move_dragging: bool,
+    /// Current world position during a move-drag (for preview offset).
+    move_current: Option<(f64, f64)>,
+    // ─── Double-click detection ───
+    /// Timestamp of last left-click (for double-click detection).
+    last_click_time: Option<std::time::Instant>,
+    /// World position of last left-click.
+    last_click_world: Option<(f64, f64)>,
 }
 
 // ─── SchematicCanvas (the Program) ────────────────────────────
@@ -48,6 +62,8 @@ pub struct SchematicCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
     pub overlay_cache: canvas::Cache,
+    /// Camera state when content_cache was last built — used to compute offset delta.
+    pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     pub grid_visible: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
@@ -79,6 +95,7 @@ impl SchematicCanvas {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
+            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             grid_visible: true,
             theme_bg: Color::from_rgb8(0x1a, 0x1b, 0x2e),
             theme_grid: Color::from_rgb8(0x2d, 0x30, 0x60),
@@ -168,36 +185,125 @@ impl canvas::Program<Message> for SchematicCanvas {
                 None
             }
 
-            // ── Left-click → select, tool action, or start drag-select ──
+            // ── Left-click → select, tool action, start drag-select, or start drag-move ──
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
-                    // Start potential drag-to-select
-                    state.select_drag_start = Some((world.x as f64, world.y as f64));
+                    let wx = world.x as f64;
+                    let wy = world.y as f64;
+
+                    // Double-click detection (300ms, 3mm threshold)
+                    let now = std::time::Instant::now();
+                    if let (Some(last_time), Some(last_pos)) =
+                        (state.last_click_time, state.last_click_world)
+                    {
+                        let dt = now.duration_since(last_time);
+                        let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
+                        if dt.as_millis() < 300 && dist < 3.0 {
+                            state.last_click_time = None;
+                            state.last_click_world = None;
+                            state.select_drag_start = None;
+                            state.click_on_selected = false;
+                            return Some(canvas::Action::publish(Message::CanvasEvent(
+                                CanvasEvent::DoubleClicked {
+                                    world_x: wx,
+                                    world_y: wy,
+                                },
+                            )));
+                        }
+                    }
+                    state.last_click_time = Some(now);
+                    state.last_click_world = Some((wx, wy));
+
+                    // Check: did we click on an already-selected item?
+                    // If yes, prepare for drag-to-move (defer the Clicked event).
+                    let on_selected = if !self.drawing_mode && !self.selected.is_empty() {
+                        if let Some(ref sheet) = self.schematic {
+                            if let Some(hit) =
+                                signex_render::schematic::hit_test::hit_test(sheet, wx, wy)
+                            {
+                                self.selected.iter().any(|s| s.uuid == hit.uuid)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if on_selected && !state.ctrl_held {
+                        // Defer click — prepare for potential drag-to-move
+                        state.click_on_selected = true;
+                        state.move_origin = Some((wx, wy));
+                        state.move_dragging = false;
+                        state.move_current = None;
+                        state.select_drag_start = None;
+                        return Some(canvas::Action::capture());
+                    }
+
+                    // Normal click — publish immediately, start potential box-select
+                    state.click_on_selected = false;
+                    state.move_origin = None;
+                    state.move_dragging = false;
+                    state.select_drag_start = Some((wx, wy));
                     state.select_drag_end = None;
                     let evt = if state.ctrl_held {
                         CanvasEvent::CtrlClicked {
-                            world_x: world.x as f64,
-                            world_y: world.y as f64,
+                            world_x: wx,
+                            world_y: wy,
                         }
                     } else {
                         CanvasEvent::Clicked {
-                            world_x: world.x as f64,
-                            world_y: world.y as f64,
+                            world_x: wx,
+                            world_y: wy,
                         }
                     };
                     return Some(canvas::Action::publish(Message::CanvasEvent(evt)));
                 }
                 None
             }
-            // ── Left-click release → finish drag-select ──
+            // ── Left-click release → finish drag-select, drag-move, or deferred click ──
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                // Case 1: Drag-to-move in progress → commit the move
+                if state.move_dragging {
+                    if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
+                        let dx = current.0 - origin.0;
+                        let dy = current.1 - origin.1;
+                        state.move_dragging = false;
+                        state.move_origin = None;
+                        state.move_current = None;
+                        state.click_on_selected = false;
+                        if dx.abs() > 0.01 || dy.abs() > 0.01 {
+                            return Some(canvas::Action::publish(Message::CanvasEvent(
+                                CanvasEvent::MoveSelected { dx, dy },
+                            )));
+                        }
+                    }
+                    return None;
+                }
+
+                // Case 2: Click was on selected item but didn't drag → deferred click
+                if state.click_on_selected {
+                    state.click_on_selected = false;
+                    if let Some(origin) = state.move_origin.take() {
+                        return Some(canvas::Action::publish(Message::CanvasEvent(
+                            CanvasEvent::Clicked {
+                                world_x: origin.0,
+                                world_y: origin.1,
+                            },
+                        )));
+                    }
+                    return None;
+                }
+
+                // Case 3: Box-select drag
                 if let (Some(start), Some(end)) =
                     (state.select_drag_start.take(), state.select_drag_end.take())
                 {
                     let dx = (end.0 - start.0).abs();
                     let dy = (end.1 - start.1).abs();
-                    // Only trigger box select if dragged more than 2mm
                     if dx > 2.0 || dy > 2.0 {
                         return Some(canvas::Action::publish(Message::CanvasEvent(
                             CanvasEvent::BoxSelect {
@@ -298,14 +404,33 @@ impl canvas::Program<Message> for SchematicCanvas {
                             state.camera.pan(dx, dy);
                         }
                         state.last_pan_pos = Some(cursor_pos);
-                        // Panning changes camera offset → grid must redraw
-                        return Some(canvas::Action::publish(Message::CanvasEvent(
-                            CanvasEvent::CursorMoved,
-                        )));
+                        return Some(
+                            canvas::Action::publish(Message::CanvasEvent(
+                                CanvasEvent::CursorMoved,
+                            ))
+                            .and_capture(),
+                        );
+                    }
+
+                    // Track drag-to-move (selected items)
+                    if state.click_on_selected {
+                        let world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let wx = world.x as f64;
+                        let wy = world.y as f64;
+                        if let Some(origin) = state.move_origin {
+                            let dist = ((wx - origin.0).powi(2) + (wy - origin.1).powi(2)).sqrt();
+                            if dist > 1.0 {
+                                // Exceeded threshold — switch to move mode
+                                state.move_dragging = true;
+                            }
+                        }
+                        if state.move_dragging {
+                            state.move_current = Some((wx, wy));
+                        }
                     }
 
                     // Track drag-to-select
-                    if state.select_drag_start.is_some() {
+                    if state.select_drag_start.is_some() && !state.click_on_selected {
                         let world = state.camera.screen_to_world(cursor_pos, bounds);
                         state.select_drag_end = Some((world.x as f64, world.y as f64));
                     }
@@ -378,7 +503,18 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(bg);
 
         // Layer 2: content (schematic elements)
+        // Content is rendered with the CURRENT camera and cached. On pan/zoom, the
+        // cache is NOT cleared — we only clear it when schematic data changes.
+        // This means during active pan the content uses stale camera, but the grid
+        // (bg) and overlay always redraw. Content re-renders when pan/zoom stops
+        // via the CursorMoved handler clearing bg_cache which triggers a full redraw.
         let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
+            // Store camera state for this cache generation
+            self.content_cache_camera.set((
+                state.camera.offset.x,
+                state.camera.offset.y,
+                state.camera.scale,
+            ));
             if let Some(ref sheet) = self.schematic {
                 let transform = signex_render::schematic::ScreenTransform {
                     offset_x: state.camera.offset.x,
@@ -396,7 +532,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         });
         layers.push(content);
 
-        // Layer 3: selection overlay (cached, cleared on selection change)
+        // Layer 3: selection overlay — always uses live camera (redrawn each frame)
         if !self.selected.is_empty()
             && let Some(ref sheet) = self.schematic
         {
@@ -559,6 +695,57 @@ impl canvas::Program<Message> for SchematicCanvas {
                 }
             }
 
+            // Drag-to-move preview: show translucent outlines at offset
+            if state.move_dragging {
+                if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
+                    let dx = (current.0 - origin.0) as f32;
+                    let dy = (current.1 - origin.1) as f32;
+                    let move_color = Color::from_rgba(0.3, 0.7, 1.0, 0.5);
+                    let move_stroke = canvas::Stroke::default()
+                        .with_color(move_color)
+                        .with_width(1.5);
+                    if let Some(ref sheet) = self.schematic {
+                        for sel in &self.selected {
+                            // Draw a simple marker at the moved position
+                            let pos = match sel.kind {
+                                signex_types::schematic::SelectedKind::Symbol => sheet
+                                    .symbols
+                                    .iter()
+                                    .find(|s| s.uuid == sel.uuid)
+                                    .map(|s| (s.position.x as f32, s.position.y as f32)),
+                                signex_types::schematic::SelectedKind::Wire => sheet
+                                    .wires
+                                    .iter()
+                                    .find(|w| w.uuid == sel.uuid)
+                                    .map(|w| {
+                                        (
+                                            ((w.start.x + w.end.x) / 2.0) as f32,
+                                            ((w.start.y + w.end.y) / 2.0) as f32,
+                                        )
+                                    }),
+                                signex_types::schematic::SelectedKind::Label => sheet
+                                    .labels
+                                    .iter()
+                                    .find(|l| l.uuid == sel.uuid)
+                                    .map(|l| (l.position.x as f32, l.position.y as f32)),
+                                _ => None,
+                            };
+                            if let Some((px, py)) = pos {
+                                let screen = state.camera.world_to_screen(
+                                    iced::Point::new(px + dx, py + dy),
+                                    bounds,
+                                );
+                                let rect = canvas::Path::rectangle(
+                                    iced::Point::new(screen.x - 6.0, screen.y - 6.0),
+                                    iced::Size::new(12.0, 12.0),
+                                );
+                                frame.stroke(&rect, move_stroke);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Drag-to-select rectangle
             if let (Some(start), Some(end)) = (state.select_drag_start, state.select_drag_end) {
                 let s1 = state
@@ -605,6 +792,8 @@ impl canvas::Program<Message> for SchematicCanvas {
     ) -> mouse::Interaction {
         if state.panning {
             mouse::Interaction::Grabbing
+        } else if state.move_dragging {
+            mouse::Interaction::Move
         } else {
             mouse::Interaction::default()
         }
@@ -727,5 +916,10 @@ pub enum CanvasEvent {
         y1: f64,
         x2: f64,
         y2: f64,
+    },
+    /// Drag-move completed — move all selected items by delta (world coords).
+    MoveSelected {
+        dx: f64,
+        dy: f64,
     },
 }

@@ -64,8 +64,38 @@ pub enum EditCommand {
         old_mirror_y: bool,
     },
 
+    /// Update a symbol's string field (designator, value, footprint).
+    UpdateSymbolField {
+        uuid: Uuid,
+        field: SymbolField,
+        old_value: String,
+        new_value: String,
+    },
+
+    /// Update a label's text.
+    UpdateLabelText {
+        uuid: Uuid,
+        old_text: String,
+        new_text: String,
+    },
+
+    /// Update a text note's text.
+    UpdateTextNoteText {
+        uuid: Uuid,
+        old_text: String,
+        new_text: String,
+    },
+
     /// Batch of commands (for compound operations).
     Batch(Vec<EditCommand>),
+}
+
+/// Which symbol field is being updated.
+#[derive(Debug, Clone)]
+pub enum SymbolField {
+    Designator,
+    Value,
+    Footprint,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -120,6 +150,37 @@ pub fn apply(sheet: &mut SchematicSheet, cmd: &EditCommand) {
             }
         }
 
+        EditCommand::UpdateSymbolField {
+            uuid,
+            field,
+            new_value,
+            ..
+        } => {
+            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
+                match field {
+                    SymbolField::Designator => sym.reference = new_value.clone(),
+                    SymbolField::Value => sym.value = new_value.clone(),
+                    SymbolField::Footprint => sym.footprint = new_value.clone(),
+                }
+            }
+        }
+
+        EditCommand::UpdateLabelText {
+            uuid, new_text, ..
+        } => {
+            if let Some(lbl) = sheet.labels.iter_mut().find(|l| l.uuid == *uuid) {
+                lbl.text = new_text.clone();
+            }
+        }
+
+        EditCommand::UpdateTextNoteText {
+            uuid, new_text, ..
+        } => {
+            if let Some(tn) = sheet.text_notes.iter_mut().find(|t| t.uuid == *uuid) {
+                tn.text = new_text.clone();
+            }
+        }
+
         EditCommand::Batch(cmds) => {
             for c in cmds {
                 apply(sheet, c);
@@ -171,6 +232,37 @@ pub fn undo(sheet: &mut SchematicSheet, cmd: &EditCommand) {
                     MirrorAxis::X => sym.mirror_x = !sym.mirror_x,
                     MirrorAxis::Y => sym.mirror_y = !sym.mirror_y,
                 }
+            }
+        }
+
+        EditCommand::UpdateSymbolField {
+            uuid,
+            field,
+            old_value,
+            ..
+        } => {
+            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
+                match field {
+                    SymbolField::Designator => sym.reference = old_value.clone(),
+                    SymbolField::Value => sym.value = old_value.clone(),
+                    SymbolField::Footprint => sym.footprint = old_value.clone(),
+                }
+            }
+        }
+
+        EditCommand::UpdateLabelText {
+            uuid, old_text, ..
+        } => {
+            if let Some(lbl) = sheet.labels.iter_mut().find(|l| l.uuid == *uuid) {
+                lbl.text = old_text.clone();
+            }
+        }
+
+        EditCommand::UpdateTextNoteText {
+            uuid, old_text, ..
+        } => {
+            if let Some(tn) = sheet.text_notes.iter_mut().find(|t| t.uuid == *uuid) {
+                tn.text = old_text.clone();
             }
         }
 
