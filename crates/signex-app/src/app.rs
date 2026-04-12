@@ -183,6 +183,8 @@ pub struct Signex {
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     /// Last-used tool per Active Bar group (Altium behavior: left-click re-activates).
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
+    /// Pending power port placement (net name, lib_id).
+    pub pending_power: Option<(String, String)>,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -418,6 +420,7 @@ impl Signex {
             last_mouse_pos: (0.0, 0.0),
             active_bar_menu: None,
             last_tool: std::collections::HashMap::new(),
+            pending_power: None,
         };
         (app, Task::none())
     }
@@ -732,6 +735,49 @@ impl Signex {
                         }
                         self.current_tool = Tool::Select;
                     }
+                    Tool::Component if self.pending_power.is_some() => {
+                        // Place power port symbol
+                        if let Some((net_name, lib_id)) = self.pending_power.clone() {
+                            let sym = signex_types::schematic::Symbol {
+                                uuid: uuid::Uuid::new_v4(),
+                                lib_id,
+                                reference: "#PWR?".to_string(),
+                                value: net_name.clone(),
+                                footprint: String::new(),
+                                position: signex_types::schematic::Point::new(wx, wy),
+                                rotation: 0.0,
+                                mirror_x: false,
+                                mirror_y: false,
+                                unit: 1,
+                                is_power: true,
+                                ref_text: None,
+                                val_text: Some(signex_types::schematic::TextProp {
+                                    position: signex_types::schematic::Point::new(wx, wy - 1.27),
+                                    rotation: 0.0,
+                                    font_size: 1.27,
+                                    justify_h: signex_types::schematic::HAlign::Center,
+                                    justify_v: signex_types::schematic::VAlign::default(),
+                                    hidden: false,
+                                }),
+                                fields_autoplaced: true,
+                                dnp: false,
+                                in_bom: false,
+                                on_board: true,
+                                exclude_from_sim: false,
+                                locked: false,
+                                fields: std::collections::HashMap::new(),
+                            };
+                            if let Some(ref mut sheet) = self.schematic {
+                                let cmd = crate::undo::EditCommand::AddSymbol(sym);
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.mark_dirty();
+                                self.commit_schematic();
+                            }
+                        }
+                        // Stay in power placement mode for continuous placement
+                    }
                     _ => {
                         // Selection mode: hit-test
                         if let Some(ref sheet) = self.schematic {
@@ -866,6 +912,7 @@ impl Signex {
                 // Escape: close menus and cancel wire drawing
                 if tool == Tool::Select {
                     self.active_menu = None;
+                    self.pending_power = None;
                     if self.wire_drawing {
                         self.wire_drawing = false;
                         self.wire_points.clear();
@@ -1554,6 +1601,50 @@ impl Signex {
                             ActiveBarAction::FlipSelectedY => {
                                 return self.update(Message::MirrorSelectedY);
                             }
+                            // Power port placement
+                            ActiveBarAction::PlacePowerGND => {
+                                self.pending_power = Some(("GND".into(), "power:GND".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerVCC => {
+                                self.pending_power = Some(("VCC".into(), "power:VCC".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerPlus12 => {
+                                self.pending_power = Some(("+12V".into(), "power:+12V".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerPlus5 => {
+                                self.pending_power = Some(("+5V".into(), "power:+5V".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerMinus5 => {
+                                self.pending_power = Some(("-5V".into(), "power:-5V".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerArrow
+                            | ActiveBarAction::PlacePowerWave
+                            | ActiveBarAction::PlacePowerBar
+                            | ActiveBarAction::PlacePowerCircle => {
+                                self.pending_power = Some(("PWR".into(), "power:PWR_FLAG".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerSignalGND => {
+                                self.pending_power = Some(("GNDREF".into(), "power:GNDREF".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
+                            ActiveBarAction::PlacePowerEarth => {
+                                self.pending_power = Some(("Earth".into(), "power:Earth".into()));
+                                self.current_tool = Tool::Component;
+                                self.canvas.tool_preview = None;
+                            }
                             // Alignment operations
                             ActiveBarAction::AlignLeft
                             | ActiveBarAction::AlignRight
@@ -2233,31 +2324,104 @@ impl Signex {
     /// Right-click context menu with actions based on current state.
     fn view_context_menu(&self) -> Element<'_, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::new();
+        // Common items (both empty and selection context)
+        items.push(self.ctx_menu_item_disabled("Find Similar Objects..."));
+        items.push(self.ctx_menu_item_disabled("Find Text...                    Ctrl+F"));
+        items.push(self.ctx_menu_item_disabled("Clear Filter                  Shift+C"));
+        items.push(self.ctx_menu_sep());
+        items.push(self.ctx_menu_item_disabled("Place                              \u{25B6}"));
+        items.push(self.ctx_menu_item_disabled("Part Actions                       \u{25B6}"));
+        items.push(self.ctx_menu_item_disabled("Sheet Actions                      \u{25B6}"));
 
         if !self.canvas.selected.is_empty() {
-            // Selection context
-            items.push(self.ctx_menu_item("Copy          Ctrl+C", ContextAction::Copy));
-            items.push(self.ctx_menu_item("Paste         Ctrl+V", ContextAction::Paste));
-            items.push(self.ctx_menu_sep());
-            items.push(self.ctx_menu_item("Delete        Del", ContextAction::Delete));
-            items.push(self.ctx_menu_sep());
-            items.push(self.ctx_menu_item("Rotate        Space", ContextAction::RotateSelected));
-            items.push(self.ctx_menu_item("Mirror X      X", ContextAction::MirrorX));
-            items.push(self.ctx_menu_item("Mirror Y      Y", ContextAction::MirrorY));
-            items.push(self.ctx_menu_sep());
-            items.push(self.ctx_menu_item("Select All    Ctrl+A", ContextAction::SelectAll));
-        } else {
-            // Empty canvas context
-            items.push(self.ctx_menu_item("Paste         Ctrl+V", ContextAction::Paste));
-            items.push(self.ctx_menu_item("Select All    Ctrl+A", ContextAction::SelectAll));
-            items.push(self.ctx_menu_sep());
-            items.push(self.ctx_menu_item("Zoom Fit      Home", ContextAction::ZoomFit));
+            items.push(self.ctx_menu_item_disabled("References                         \u{25B6}"));
+            items.push(self.ctx_menu_item_disabled("Align                              \u{25B6}"));
+            items.push(self.ctx_menu_item_disabled("Unions                             \u{25B6}"));
+            items.push(self.ctx_menu_item_disabled("Snippets                           \u{25B6}"));
         }
 
-        container(column(items).spacing(0).width(160))
+        items.push(self.ctx_menu_item_disabled("Cross Probe"));
+        items.push(self.ctx_menu_sep());
+
+        // Edit operations
+        items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Delete));
+        items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
+        items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
+        items.push(self.ctx_menu_sep());
+
+        if !self.canvas.selected.is_empty() {
+            items.push(self.ctx_menu_item_kb("Rotate", "Space", ContextAction::RotateSelected));
+            items.push(self.ctx_menu_item_kb("Mirror X", "X", ContextAction::MirrorX));
+            items.push(self.ctx_menu_item_kb("Mirror Y", "Y", ContextAction::MirrorY));
+            items.push(self.ctx_menu_item_kb("Delete", "Del", ContextAction::Delete));
+            items.push(self.ctx_menu_sep());
+        }
+
+        items.push(self.ctx_menu_item_disabled("Comment..."));
+        items.push(self.ctx_menu_item_disabled("Pin Mapping..."));
+        items.push(self.ctx_menu_item_disabled("Project Options..."));
+        items.push(self.ctx_menu_item_disabled("Preferences..."));
+
+        if !self.canvas.selected.is_empty() {
+            items.push(self.ctx_menu_item_disabled("Supplier Links..."));
+            items.push(self.ctx_menu_item_disabled("Properties..."));
+        }
+
+        container(column(items).spacing(0))
             .padding([4, 0])
             .style(crate::styles::context_menu)
             .into()
+    }
+
+    /// Context menu item with keyboard shortcut on the right.
+    fn ctx_menu_item_kb<'a>(
+        &self,
+        label: &str,
+        shortcut: &str,
+        action: ContextAction,
+    ) -> Element<'a, Message> {
+        iced::widget::button(
+            iced::widget::row![
+                iced::widget::text(label.to_string())
+                    .size(11)
+                    .color(crate::styles::TEXT_PRIMARY),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(shortcut.to_string())
+                    .size(10)
+                    .color(crate::styles::TEXT_MUTED),
+            ]
+            .spacing(12)
+            .width(220),
+        )
+        .padding([4, 12])
+        .on_press(Message::ContextAction(action))
+        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                    iced::Color::from_rgb(0.22, 0.22, 0.26),
+                )),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: iced::Border::default(),
+                text_color: crate::styles::TEXT_PRIMARY,
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    }
+
+    /// Disabled/placeholder context menu item (no action).
+    fn ctx_menu_item_disabled<'a>(&self, label: &str) -> Element<'a, Message> {
+        container(
+            iced::widget::text(label.to_string())
+                .size(11)
+                .color(crate::styles::TEXT_MUTED),
+        )
+        .padding([4, 12])
+        .width(220)
+        .into()
     }
 
     fn ctx_menu_item<'a>(&self, label: &str, action: ContextAction) -> Element<'a, Message> {
