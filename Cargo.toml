@@ -18,7 +18,11 @@ repository = "https://github.com/alplabai/signex-iced"
 [workspace.dependencies]
 # UI framework
 iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg"] }
-iced_aw = { version = "0.13", default-features = false, features = ["tabs", "card"] }
+iced_aw = { version = "0.13", default-features = false, features = [
+    "tabs", "tab_bar", "card", "context_menu", "number_input",
+    "color_picker", "menu", "drop_down", "selection_list",
+    "wrap", "spinner", "sidebar", "labeled_frame", "badge",
+] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
