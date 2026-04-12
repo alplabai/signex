@@ -228,8 +228,9 @@ pub fn view_bar_with_dropdown(
     open_menu: Option<ActiveBarMenu>,
     current_tool: crate::app::Tool,
     draw_mode: crate::app::DrawMode,
+    last_tool: &std::collections::HashMap<String, ActiveBarAction>,
 ) -> Element<'static, ActiveBarMsg> {
-    let bar = view_bar(open_menu, current_tool, draw_mode);
+    let bar = view_bar(open_menu, current_tool, draw_mode, last_tool);
 
     if let Some(menu) = open_menu {
         let dropdown = view_dropdown(menu);
@@ -254,7 +255,12 @@ pub fn view_bar(
     open_menu: Option<ActiveBarMenu>,
     current_tool: crate::app::Tool,
     draw_mode: crate::app::DrawMode,
+    last_tool: &std::collections::HashMap<String, ActiveBarAction>,
 ) -> Element<'static, ActiveBarMsg> {
+    // Helper: get last-used action for a group, or use default
+    let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
+        ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
+    };
     let mut items: Vec<Element<'_, ActiveBarMsg>> = Vec::new();
 
     // 1. Filter — left: toggle, right: filter dropdown
@@ -286,25 +292,25 @@ pub fn view_bar(
     // 6. Wire — left: draw wire, right: wiring dropdown
     items.push(ab_icon_btn(ICON_WIRE,
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
-        ActiveBarMsg::Action(ActiveBarAction::DrawWire),
+        last("wiring", ActiveBarAction::DrawWire),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring))));
-    // 7. Power — left: place GND, right: power dropdown
+    // 7. Power — left: last-used power, right: power dropdown
     items.push(ab_icon_btn(ICON_POWER, false,
-        ActiveBarMsg::Action(ActiveBarAction::PlacePowerGND),
+        last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power))));
     items.push(sep());
 
     // 8. Harness — left: signal harness, right: harness dropdown
     items.push(ab_icon_btn(ICON_HARNESS, false,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceSignalHarness),
+        last("harness", ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness))));
     // 9. Sheet Symbol — left: place sheet symbol, right: sheet symbol dropdown
     items.push(ab_icon_btn(ICON_SHEETSYM, false,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceSheetSymbol),
+        last("sheet", ActiveBarAction::PlaceSheetSymbol),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol))));
     // 10. Port — left: place port, right: port dropdown
     items.push(ab_icon_btn(ICON_PORT, false,
-        ActiveBarMsg::Action(ActiveBarAction::PlacePort),
+        last("port", ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port))));
     // 10. Directives — left: parameter set, right: directives dropdown
     items.push(ab_icon_btn(ICON_DIRECTIVES, false,
@@ -315,12 +321,12 @@ pub fn view_bar(
     // 11. Text — left: place text, right: text dropdown
     items.push(ab_icon_btn(ICON_TEXT,
         current_tool == crate::app::Tool::Text,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceTextString),
+        last("text", ActiveBarAction::PlaceTextString),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools))));
-    // 12. Shapes — left: draw line, right: shapes dropdown
+    // 12. Shapes — left: last-used shape, right: shapes dropdown
     items.push(ab_icon_btn(ICON_SHAPES,
         matches!(current_tool, crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle),
-        ActiveBarMsg::Action(ActiveBarAction::DrawLine),
+        last("shapes", ActiveBarAction::DrawLine),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes))));
     // 13. Net Color — left: no-op, right: color dropdown
     items.push(ab_icon_btn(ICON_NETCOLOR, false,
