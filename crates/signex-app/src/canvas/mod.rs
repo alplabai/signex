@@ -34,6 +34,10 @@ pub struct CanvasState {
     pub pending_fit: Option<Rectangle>,
     /// Whether Ctrl is currently held (for multi-select).
     pub ctrl_held: bool,
+    /// Drag-to-select: start position in world coordinates.
+    select_drag_start: Option<(f64, f64)>,
+    /// Drag-to-select: current end position in world coordinates.
+    select_drag_end: Option<(f64, f64)>,
 }
 
 // ─── SchematicCanvas (the Program) ────────────────────────────
@@ -164,10 +168,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                 None
             }
 
-            // ── Left-click → select or tool action ──
+            // ── Left-click → select, tool action, or start drag-select ──
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
+                    // Start potential drag-to-select
+                    state.select_drag_start = Some((world.x as f64, world.y as f64));
+                    state.select_drag_end = None;
                     let evt = if state.ctrl_held {
                         CanvasEvent::CtrlClicked {
                             world_x: world.x as f64,
@@ -180,6 +187,27 @@ impl canvas::Program<Message> for SchematicCanvas {
                         }
                     };
                     return Some(canvas::Action::publish(Message::CanvasEvent(evt)));
+                }
+                None
+            }
+            // ── Left-click release → finish drag-select ──
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                if let (Some(start), Some(end)) = (state.select_drag_start.take(), state.select_drag_end.take()) {
+                    let dx = (end.0 - start.0).abs();
+                    let dy = (end.1 - start.1).abs();
+                    // Only trigger box select if dragged more than 2mm
+                    if dx > 2.0 || dy > 2.0 {
+                        return Some(canvas::Action::publish(Message::CanvasEvent(
+                            CanvasEvent::BoxSelect {
+                                x1: start.0.min(end.0),
+                                y1: start.1.min(end.1),
+                                x2: start.0.max(end.0),
+                                y2: start.1.max(end.1),
+                            },
+                        )));
+                    }
+                } else {
+                    state.select_drag_start = None;
                 }
                 None
             }
@@ -274,7 +302,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                         )));
                     }
 
-                    // Regular hover — update cursor position for status bar (no cache clear)
+                    // Track drag-to-select
+                    if state.select_drag_start.is_some() {
+                        let world = state.camera.screen_to_world(cursor_pos, bounds);
+                        state.select_drag_end = Some((world.x as f64, world.y as f64));
+                    }
+
+                    // Regular hover — update cursor position for status bar
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
                     let zoom_pct = state.camera.zoom_percent();
                     return Some(canvas::Action::publish(Message::CanvasEvent(
@@ -499,6 +533,39 @@ impl canvas::Program<Message> for SchematicCanvas {
                 }
             }
 
+            // Drag-to-select rectangle
+            if let (Some(start), Some(end)) = (state.select_drag_start, state.select_drag_end) {
+                let s1 = state.camera.world_to_screen(
+                    iced::Point::new(start.0 as f32, start.1 as f32), bounds,
+                );
+                let s2 = state.camera.world_to_screen(
+                    iced::Point::new(end.0 as f32, end.1 as f32), bounds,
+                );
+                let x = s1.x.min(s2.x);
+                let y = s1.y.min(s2.y);
+                let w = (s2.x - s1.x).abs();
+                let h = (s2.y - s1.y).abs();
+                if w > 2.0 || h > 2.0 {
+                    // Fill (semi-transparent blue)
+                    frame.fill_rectangle(
+                        iced::Point::new(x, y),
+                        iced::Size::new(w, h),
+                        Color::from_rgba(0.2, 0.4, 0.8, 0.15),
+                    );
+                    // Border (dashed blue)
+                    let rect_path = canvas::Path::rectangle(
+                        iced::Point::new(x, y),
+                        iced::Size::new(w, h),
+                    );
+                    frame.stroke(
+                        &rect_path,
+                        canvas::Stroke::default()
+                            .with_color(Color::from_rgba(0.3, 0.5, 1.0, 0.7))
+                            .with_width(1.0),
+                    );
+                }
+            }
+
             frame.into_geometry()
         };
         layers.push(overlay);
@@ -599,5 +666,12 @@ pub enum CanvasEvent {
     DoubleClicked {
         world_x: f64,
         world_y: f64,
+    },
+    /// Box selection — select all items within the rectangle (world coords).
+    BoxSelect {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
     },
 }

@@ -181,6 +181,8 @@ pub struct Signex {
     pub last_mouse_pos: (f32, f32),
     /// Active Bar open dropdown menu.
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
+    /// Last-used tool per Active Bar group (Altium behavior: left-click re-activates).
+    pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -415,6 +417,7 @@ impl Signex {
             context_menu: None,
             last_mouse_pos: (0.0, 0.0),
             active_bar_menu: None,
+            last_tool: std::collections::HashMap::new(),
         };
         (app, Task::none())
     }
@@ -749,6 +752,78 @@ impl Signex {
                     self.wire_points.clear();
                     self.canvas.wire_preview.clear();
                     self.canvas.drawing_mode = false;
+                }
+            }
+            Message::CanvasEvent(CanvasEvent::BoxSelect { x1, y1, x2, y2 }) => {
+                // Select all items within the rectangle
+                if let Some(ref sheet) = self.schematic {
+                    use signex_types::schematic::{SelectedItem, SelectedKind};
+                    let mut selected = Vec::new();
+                    // Check symbols
+                    for s in &sheet.symbols {
+                        let px = s.position.x;
+                        let py = s.position.y;
+                        if px >= x1 && px <= x2 && py >= y1 && py <= y2 {
+                            selected.push(SelectedItem::new(s.uuid, SelectedKind::Symbol));
+                        }
+                    }
+                    // Check wires
+                    for w in &sheet.wires {
+                        let in_box = |p: &signex_types::schematic::Point| {
+                            p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2
+                        };
+                        if in_box(&w.start) || in_box(&w.end) {
+                            selected.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
+                        }
+                    }
+                    // Check buses
+                    for b in &sheet.buses {
+                        let in_box = |p: &signex_types::schematic::Point| {
+                            p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2
+                        };
+                        if in_box(&b.start) || in_box(&b.end) {
+                            selected.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
+                        }
+                    }
+                    // Check labels
+                    for l in &sheet.labels {
+                        if l.position.x >= x1 && l.position.x <= x2
+                            && l.position.y >= y1 && l.position.y <= y2
+                        {
+                            selected.push(SelectedItem::new(l.uuid, SelectedKind::Label));
+                        }
+                    }
+                    // Check junctions
+                    for j in &sheet.junctions {
+                        if j.position.x >= x1 && j.position.x <= x2
+                            && j.position.y >= y1 && j.position.y <= y2
+                        {
+                            selected.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
+                        }
+                    }
+                    // Check no-connects
+                    for nc in &sheet.no_connects {
+                        if nc.position.x >= x1 && nc.position.x <= x2
+                            && nc.position.y >= y1 && nc.position.y <= y2
+                        {
+                            selected.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
+                        }
+                    }
+                    // Check text notes
+                    for tn in &sheet.text_notes {
+                        if tn.position.x >= x1 && tn.position.x <= x2
+                            && tn.position.y >= y1 && tn.position.y <= y2
+                        {
+                            selected.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
+                        }
+                    }
+                    if !selected.is_empty() {
+                        self.canvas.selected = selected;
+                    } else {
+                        self.canvas.selected = selected;
+                    }
+                    self.canvas.clear_overlay_cache();
+                    self.update_selection_info();
                 }
             }
             Message::CycleDrawMode => {
@@ -1408,6 +1483,40 @@ impl Signex {
                     }
                     ActiveBarMsg::Action(action) => {
                         self.active_bar_menu = None;
+                        // Store last-used tool per group
+                        let group = match &action {
+                            ActiveBarAction::DrawWire | ActiveBarAction::DrawBus
+                            | ActiveBarAction::PlaceBusEntry | ActiveBarAction::PlaceNetLabel
+                                => Some("wiring"),
+                            ActiveBarAction::PlacePowerGND | ActiveBarAction::PlacePowerVCC
+                            | ActiveBarAction::PlacePowerPlus12 | ActiveBarAction::PlacePowerPlus5
+                            | ActiveBarAction::PlacePowerMinus5 | ActiveBarAction::PlacePowerArrow
+                            | ActiveBarAction::PlacePowerWave | ActiveBarAction::PlacePowerBar
+                            | ActiveBarAction::PlacePowerCircle | ActiveBarAction::PlacePowerSignalGND
+                            | ActiveBarAction::PlacePowerEarth
+                                => Some("power"),
+                            ActiveBarAction::PlaceTextString | ActiveBarAction::PlaceTextFrame
+                            | ActiveBarAction::PlaceNote
+                                => Some("text"),
+                            ActiveBarAction::DrawArc | ActiveBarAction::DrawFullCircle
+                            | ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse
+                            | ActiveBarAction::DrawLine | ActiveBarAction::DrawRectangle
+                            | ActiveBarAction::DrawRoundRectangle | ActiveBarAction::DrawPolygon
+                            | ActiveBarAction::DrawBezier | ActiveBarAction::PlaceGraphic
+                                => Some("shapes"),
+                            ActiveBarAction::PlaceSignalHarness | ActiveBarAction::PlaceHarnessConnector
+                            | ActiveBarAction::PlaceHarnessEntry
+                                => Some("harness"),
+                            ActiveBarAction::PlacePort | ActiveBarAction::PlaceOffSheetConnector
+                                => Some("port"),
+                            ActiveBarAction::PlaceSheetSymbol | ActiveBarAction::PlaceSheetEntry
+                            | ActiveBarAction::PlaceDeviceSheetSymbol | ActiveBarAction::PlaceReuseBlock
+                                => Some("sheet"),
+                            _ => None,
+                        };
+                        if let Some(g) = group {
+                            self.last_tool.insert(g.to_string(), action.clone());
+                        }
                         match action {
                             ActiveBarAction::ToolSelect => {
                                 return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
@@ -1444,6 +1553,21 @@ impl Signex {
                             }
                             ActiveBarAction::FlipSelectedY => {
                                 return self.update(Message::MirrorSelectedY);
+                            }
+                            // Alignment operations
+                            ActiveBarAction::AlignLeft
+                            | ActiveBarAction::AlignRight
+                            | ActiveBarAction::AlignTop
+                            | ActiveBarAction::AlignBottom
+                            | ActiveBarAction::AlignHorizontalCenters
+                            | ActiveBarAction::AlignVerticalCenters
+                            | ActiveBarAction::DistributeHorizontally
+                            | ActiveBarAction::DistributeVertically
+                            | ActiveBarAction::AlignToGrid => {
+                                self.align_selected(&action);
+                            }
+                            ActiveBarAction::SelectAll => {
+                                return self.update(Message::SelectAll);
                             }
                             // Not yet implemented — no-op
                             _ => {}
@@ -1825,6 +1949,86 @@ impl Signex {
             .as_ref()
             .map(|s| s.paper_size.clone())
             .unwrap_or_else(|| "A4".to_string());
+    }
+
+    /// Align selected symbols based on the alignment action.
+    fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
+        use crate::active_bar::ActiveBarAction;
+        if self.canvas.selected.len() < 2 && !matches!(action, ActiveBarAction::AlignToGrid) {
+            return;
+        }
+        let Some(ref mut sheet) = self.schematic else { return };
+        let selected_uuids: Vec<uuid::Uuid> = self.canvas.selected.iter().map(|s| s.uuid).collect();
+
+        // Gather positions of selected symbols
+        let positions: Vec<(uuid::Uuid, f64, f64)> = sheet
+            .symbols
+            .iter()
+            .filter(|s| selected_uuids.contains(&s.uuid))
+            .map(|s| (s.uuid, s.position.x, s.position.y))
+            .collect();
+
+        if positions.is_empty() { return; }
+
+        let min_x = positions.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+        let max_x = positions.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+        let min_y = positions.iter().map(|p| p.2).fold(f64::INFINITY, f64::min);
+        let max_y = positions.iter().map(|p| p.2).fold(f64::NEG_INFINITY, f64::max);
+        let center_x = (min_x + max_x) / 2.0;
+        let center_y = (min_y + max_y) / 2.0;
+        let gs = self.grid_size_mm as f64;
+
+        for sym in &mut sheet.symbols {
+            if !selected_uuids.contains(&sym.uuid) { continue; }
+            match action {
+                ActiveBarAction::AlignLeft => sym.position.x = min_x,
+                ActiveBarAction::AlignRight => sym.position.x = max_x,
+                ActiveBarAction::AlignTop => sym.position.y = min_y,
+                ActiveBarAction::AlignBottom => sym.position.y = max_y,
+                ActiveBarAction::AlignHorizontalCenters => sym.position.x = center_x,
+                ActiveBarAction::AlignVerticalCenters => sym.position.y = center_y,
+                ActiveBarAction::AlignToGrid => {
+                    sym.position.x = (sym.position.x / gs).round() * gs;
+                    sym.position.y = (sym.position.y / gs).round() * gs;
+                }
+                _ => {}
+            }
+        }
+
+        // Distribute evenly
+        if matches!(action, ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically) {
+            let mut sorted = positions.clone();
+            let n = sorted.len();
+            if n > 2 {
+                match action {
+                    ActiveBarAction::DistributeHorizontally => {
+                        sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                        let step = (max_x - min_x) / (n - 1) as f64;
+                        for (i, (uuid, _, _)) in sorted.iter().enumerate() {
+                            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
+                                sym.position.x = min_x + step * i as f64;
+                            }
+                        }
+                    }
+                    ActiveBarAction::DistributeVertically => {
+                        sorted.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+                        let step = (max_y - min_y) / (n - 1) as f64;
+                        for (i, (uuid, _, _)) in sorted.iter().enumerate() {
+                            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
+                                sym.position.y = min_y + step * i as f64;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        self.canvas.schematic = Some(sheet.clone());
+        self.canvas.clear_content_cache();
+        self.canvas.clear_overlay_cache();
+        self.mark_dirty();
+        self.commit_schematic();
     }
 
     fn mark_dirty(&mut self) {
@@ -2223,6 +2427,7 @@ impl Signex {
                 self.active_bar_menu,
                 self.current_tool,
                 self.draw_mode,
+                &self.last_tool,
             )
             .map(Message::ActiveBar);
             main = main.push(
