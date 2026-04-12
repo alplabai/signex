@@ -2527,7 +2527,6 @@ impl Signex {
 
     pub fn view(&self) -> Element<'_, Message> {
         let menu = menu_bar::view(self.theme_id, self.active_menu).map(Message::Menu);
-        let tools = toolbar::view(self.current_tool).map(Message::Tool);
 
         // Collapse states (needed before building panels and handles)
         let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
@@ -2657,7 +2656,7 @@ impl Signex {
         )
         .map(Message::StatusBar);
 
-        let mut main = column![menu, tools];
+        let mut main = column![menu];
         if !self.tabs.is_empty() {
             main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
         }
