@@ -5,7 +5,6 @@
 
 use iced::widget::{Column, Space, button, column, container, row, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use std::sync::OnceLock;
 
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
@@ -18,7 +17,7 @@ const ICON_COLLAPSE_DOWN: &[u8] = include_bytes!("../../assets/icons/collapse_do
 const ICON_EXPAND_LEFT: &[u8] = include_bytes!("../../assets/icons/expand_left.svg");
 const ICON_EXPAND_RIGHT: &[u8] = include_bytes!("../../assets/icons/expand_right.svg");
 
-fn svg_icon(bytes: &'static [u8]) -> iced::widget::Svg {
+fn svg_icon(bytes: &'static [u8]) -> iced::widget::Svg<'static> {
     svg(svg::Handle::from_memory(bytes)).width(10).height(10)
 }
 
@@ -76,6 +75,9 @@ impl DockArea {
             PanelPosition::Right => &mut self.right,
             PanelPosition::Bottom => &mut self.bottom,
         };
+        if region.panels.contains(&kind) {
+            return;
+        }
         region.panels.push(kind);
     }
 

@@ -123,21 +123,3 @@ pub fn context_menu(_theme: &Theme) -> container::Style {
     }
 }
 
-/// Action bar (Altium Active Bar — floating toolbar centered on canvas)
-pub fn action_bar(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgb(0.165, 0.176, 0.239).into()), // #2a2d3d
-        text_color: Some(TEXT_PRIMARY),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: Color::from_rgb(0.24, 0.25, 0.33), // #3d4054
-        },
-        shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-            offset: iced::Vector::new(0.0, 2.0),
-            blur_radius: 8.0,
-        },
-        ..container::Style::default()
-    }
-}
