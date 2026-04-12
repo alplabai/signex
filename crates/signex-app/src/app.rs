@@ -95,6 +95,9 @@ pub enum Message {
     SaveFileAs(PathBuf),
     CycleDrawMode,
     CancelDrawing,
+    // Panel list
+    TogglePanelList,
+    OpenPanel(crate::panels::PanelKind),
     // Active Bar
     ActiveBar(crate::active_bar::ActiveBarMsg),
     // Context menu
@@ -130,6 +133,7 @@ pub enum StatusBarMsg {
     CycleUnit,
     ToggleGrid,
     ToggleSnap,
+    TogglePanelList,
 }
 
 // ─── App State ────────────────────────────────────────────────
@@ -185,6 +189,8 @@ pub struct Signex {
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     /// Pending power port placement (net name, lib_id).
     pub pending_power: Option<(String, String)>,
+    /// Panel list popup visible.
+    pub panel_list_open: bool,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -421,6 +427,7 @@ impl Signex {
             active_bar_menu: None,
             last_tool: std::collections::HashMap::new(),
             pending_power: None,
+            panel_list_open: false,
         };
         (app, Task::none())
     }
@@ -630,6 +637,9 @@ impl Signex {
             }
             Message::StatusBar(StatusBarMsg::ToggleSnap) => {
                 self.snap_enabled = !self.snap_enabled;
+            }
+            Message::StatusBar(StatusBarMsg::TogglePanelList) => {
+                self.panel_list_open = !self.panel_list_open;
             }
             Message::CanvasEvent(CanvasEvent::CursorAt { x, y, zoom_pct }) => {
                 self.cursor_x = x as f64;
@@ -1516,6 +1526,17 @@ impl Signex {
                 self.canvas.schematic = self.schematic.clone();
                 self.canvas.clear_content_cache();
                 self.commit_schematic();
+            }
+            // Panel list
+            Message::TogglePanelList => {
+                self.panel_list_open = !self.panel_list_open;
+                return Task::none();
+            }
+            Message::OpenPanel(kind) => {
+                self.panel_list_open = false;
+                // Add to right panel dock by default
+                self.dock.add_panel(crate::dock::PanelPosition::Right, kind);
+                return Task::none();
             }
             // Active Bar
             Message::ActiveBar(msg) => {
@@ -2616,7 +2637,7 @@ impl Signex {
         let has_context = self.context_menu.is_some();
         let has_ab_menu = self.active_bar_menu.is_some();
 
-        if has_menu || has_context || has_ab_menu {
+        if has_menu || has_context || has_ab_menu || self.panel_list_open {
             let mut stack = iced::widget::Stack::new().push(main);
 
             // Dropdown menu overlay
@@ -2702,6 +2723,65 @@ impl Signex {
                     iced::widget::Space::new().height(ctx_menu.y),
                     row![iced::widget::Space::new().width(ctx_menu.x), menu,],
                 ]);
+            }
+
+            // Panel list popup (bottom-right)
+            if self.panel_list_open {
+                // Dismiss layer
+                stack = stack.push(
+                    iced::widget::mouse_area(
+                        container(iced::widget::Space::new())
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_press(Message::TogglePanelList),
+                );
+                // Panel list popup at bottom-right
+                let mut panel_items: Vec<Element<'_, Message>> = Vec::new();
+                for &kind in crate::panels::ALL_PANELS {
+                    panel_items.push(
+                        iced::widget::button(
+                            iced::widget::text(kind.label().to_string())
+                                .size(11)
+                                .color(crate::styles::TEXT_PRIMARY),
+                        )
+                        .padding([4, 12])
+                        .width(Length::Fill)
+                        .on_press(Message::OpenPanel(kind))
+                        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
+                            let bg = match status {
+                                iced::widget::button::Status::Hovered => {
+                                    Some(iced::Background::Color(iced::Color::from_rgb(0.20, 0.22, 0.30)))
+                                }
+                                _ => None,
+                            };
+                            iced::widget::button::Style {
+                                background: bg,
+                                border: iced::Border::default(),
+                                text_color: crate::styles::TEXT_PRIMARY,
+                                ..iced::widget::button::Style::default()
+                            }
+                        })
+                        .into(),
+                    );
+                }
+                let popup = container(
+                    iced::widget::scrollable(column(panel_items).spacing(0).width(180))
+                        .height(300),
+                )
+                .padding([6, 0])
+                .style(crate::styles::context_menu);
+
+                stack = stack.push(
+                    container(
+                        container(popup)
+                            .align_x(iced::alignment::Horizontal::Right)
+                            .align_y(iced::alignment::Vertical::Bottom)
+                            .padding([15, 10]),
+                    )
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+                );
             }
 
             stack.into()

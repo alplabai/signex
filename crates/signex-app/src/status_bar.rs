@@ -60,6 +60,11 @@ pub fn view<'a>(
             .padding([1, 4])
             .style(button::text)
             .on_press(StatusBarMsg::CycleUnit),
+        sep(),
+        button(text("Panels").size(11).color(styles::TEXT_PRIMARY))
+            .padding([1, 6])
+            .style(button::text)
+            .on_press(StatusBarMsg::TogglePanelList),
     ]
     .spacing(4)
     .align_y(iced::Alignment::Center);
