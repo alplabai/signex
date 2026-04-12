@@ -614,12 +614,27 @@ impl Signex {
                         }
                     }
                 }
+                // Move floating panels that are being dragged
+                for fp in &mut self.dock.floating {
+                    if fp.dragging {
+                        let (old_x, old_y) = self.last_mouse_pos;
+                        fp.x = x - fp.width / 2.0;
+                        fp.y = y - 15.0; // offset so title bar is under cursor
+                        let _ = (old_x, old_y); // suppress unused
+                    }
+                }
             }
             Message::DragEnd if self.dragging.is_some() => {
                 #[cfg(debug_assertions)]
                 eprintln!("[drag] END");
                 self.dragging = None;
                 self.drag_start_pos = None;
+            }
+            Message::DragEnd => {
+                // Stop floating panel drags
+                for fp in &mut self.dock.floating {
+                    fp.dragging = false;
+                }
             }
             Message::GridCycle => {
                 // Cycle grid and clear cache so it redraws
@@ -1751,7 +1766,7 @@ impl Signex {
                 }
             }
             // Idle events — return early to avoid triggering panel sync/re-render
-            Message::DragEnd | Message::Noop => {
+            Message::Noop => {
                 return Task::none();
             }
         }
@@ -2676,7 +2691,8 @@ impl Signex {
         let has_context = self.context_menu.is_some();
         let has_ab_menu = self.active_bar_menu.is_some();
 
-        if has_menu || has_context || has_ab_menu || self.panel_list_open {
+        let has_floating = !self.dock.floating.is_empty();
+        if has_menu || has_context || has_ab_menu || self.panel_list_open || has_floating {
             let mut stack = iced::widget::Stack::new().push(main);
 
             // Dropdown menu overlay
@@ -2808,6 +2824,20 @@ impl Signex {
                     .width(Length::Fill)
                     .height(Length::Fill),
                 );
+            }
+
+            // Floating panels
+            for i in 0..self.dock.floating.len() {
+                if let Some(panel_widget) = self.dock.view_floating_panel(i, &self.panel_ctx) {
+                    let fp = &self.dock.floating[i];
+                    stack = stack.push(column![
+                        iced::widget::Space::new().height(fp.y),
+                        row![
+                            iced::widget::Space::new().width(fp.x),
+                            panel_widget.map(Message::Dock),
+                        ],
+                    ]);
+                }
             }
 
             stack.into()
