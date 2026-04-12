@@ -395,22 +395,87 @@ pub fn view_bar(
 /// Render the dropdown menu for the given Active Bar button.
 pub fn view_dropdown(menu: ActiveBarMenu) -> Element<'static, ActiveBarMsg> {
     let items: Vec<Element<'_, ActiveBarMsg>> = match menu {
-        ActiveBarMenu::Filter => vec![
-            dd_item("All - On", ActiveBarAction::ToolSelect),
-            dd_sep(),
-            dd_item("Components", ActiveBarAction::ToolSelect),
-            dd_item("Wires", ActiveBarAction::ToolSelect),
-            dd_item("Buses", ActiveBarAction::ToolSelect),
-            dd_item("Sheet Symbols", ActiveBarAction::ToolSelect),
-            dd_item("Sheet Entries", ActiveBarAction::ToolSelect),
-            dd_item("Net Labels", ActiveBarAction::ToolSelect),
-            dd_item("Parameters", ActiveBarAction::ToolSelect),
-            dd_item("Ports", ActiveBarAction::ToolSelect),
-            dd_item("Power Ports", ActiveBarAction::ToolSelect),
-            dd_item("Texts", ActiveBarAction::ToolSelect),
-            dd_item("Drawing Objects", ActiveBarAction::ToolSelect),
-            dd_item("Other", ActiveBarAction::ToolSelect),
-        ],
+        ActiveBarMenu::Filter => {
+            // Altium-style tag buttons for selection filter
+            let tag = |label: &str| -> Element<'static, ActiveBarMsg> {
+                button(
+                    text(label.to_string())
+                        .size(11)
+                        .color(styles::TEXT_PRIMARY),
+                )
+                .padding([4, 10])
+                .on_press(ActiveBarMsg::Action(ActiveBarAction::ToolSelect))
+                .style(|_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered => {
+                            Background::Color(Color::from_rgb(0.25, 0.27, 0.35))
+                        }
+                        _ => Background::Color(Color::from_rgb(0.18, 0.20, 0.27)),
+                    };
+                    button::Style {
+                        background: Some(bg),
+                        border: Border {
+                            width: 1.0,
+                            radius: 12.0.into(),
+                            color: Color::from_rgb(0.30, 0.32, 0.40),
+                        },
+                        text_color: styles::TEXT_PRIMARY,
+                        ..button::Style::default()
+                    }
+                })
+                .into()
+            };
+            // Return tag grid as a single element wrapped in vec
+            let filter_content: Element<'static, ActiveBarMsg> = column![
+                container(
+                    button(
+                        text("All - On".to_string())
+                            .size(11)
+                            .color(styles::TEXT_PRIMARY),
+                    )
+                    .padding([4, 12])
+                    .on_press(ActiveBarMsg::Action(ActiveBarAction::ToolSelect))
+                    .style(button::text),
+                )
+                .padding([4, 8]),
+                container(
+                    column![
+                        row![
+                            tag("Components"),
+                            tag("Wires"),
+                            tag("Buses"),
+                        ]
+                        .spacing(4),
+                        row![
+                            tag("Sheet Symbols"),
+                            tag("Sheet Entries"),
+                        ]
+                        .spacing(4),
+                        row![
+                            tag("Net Labels"),
+                            tag("Parameters"),
+                            tag("Ports"),
+                        ]
+                        .spacing(4),
+                        row![
+                            tag("Power Ports"),
+                            tag("Texts"),
+                        ]
+                        .spacing(4),
+                        row![
+                            tag("Drawing Objects"),
+                            tag("Other"),
+                        ]
+                        .spacing(4),
+                    ]
+                    .spacing(4),
+                )
+                .padding([4, 8]),
+            ]
+            .spacing(2)
+            .into();
+            vec![filter_content]
+        }
         ActiveBarMenu::SelectMode => vec![
             dd_item("Lasso Select", ActiveBarAction::LassoSelect),
             dd_item("Inside Area", ActiveBarAction::InsideArea),
