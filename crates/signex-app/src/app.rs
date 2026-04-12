@@ -109,6 +109,7 @@ pub enum Message {
 
 /// Actions available in the right-click context menu.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // variants used in match arms, constructed via dropdown actions
 pub enum ContextAction {
     Copy,
     Paste,
@@ -214,13 +215,6 @@ impl DrawMode {
         }
     }
 
-    pub fn label(self) -> &'static str {
-        match self {
-            DrawMode::Ortho90 => "90°",
-            DrawMode::Angle45 => "45°",
-            DrawMode::FreeAngle => "Any",
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -433,11 +427,7 @@ impl Signex {
     }
 
     pub fn title(&self) -> String {
-        if let Some(ref menu) = self.active_bar_menu {
-            format!("Signex — Active Bar: {:?}", menu)
-        } else {
-            "Signex".to_string()
-        }
+        "Signex".to_string()
     }
 
     pub fn theme(&self) -> Theme {
@@ -639,7 +629,7 @@ impl Signex {
                 self.snap_enabled = !self.snap_enabled;
             }
             Message::StatusBar(StatusBarMsg::TogglePanelList) => {
-                self.panel_list_open = !self.panel_list_open;
+                return self.update(Message::TogglePanelList);
             }
             Message::CanvasEvent(CanvasEvent::CursorAt { x, y, zoom_pct }) => {
                 self.cursor_x = x as f64;
@@ -747,10 +737,10 @@ impl Signex {
                     }
                     Tool::Component if self.pending_power.is_some() => {
                         // Place power port symbol
-                        if let Some((net_name, lib_id)) = self.pending_power.clone() {
+                        if let Some((ref net_name, ref lib_id)) = self.pending_power {
                             let sym = signex_types::schematic::Symbol {
                                 uuid: uuid::Uuid::new_v4(),
-                                lib_id,
+                                lib_id: lib_id.clone(),
                                 reference: "#PWR?".to_string(),
                                 value: net_name.clone(),
                                 footprint: String::new(),
@@ -843,41 +833,45 @@ impl Signex {
                     }
                     // Check labels
                     for l in &sheet.labels {
-                        if l.position.x >= x1 && l.position.x <= x2
-                            && l.position.y >= y1 && l.position.y <= y2
+                        if l.position.x >= x1
+                            && l.position.x <= x2
+                            && l.position.y >= y1
+                            && l.position.y <= y2
                         {
                             selected.push(SelectedItem::new(l.uuid, SelectedKind::Label));
                         }
                     }
                     // Check junctions
                     for j in &sheet.junctions {
-                        if j.position.x >= x1 && j.position.x <= x2
-                            && j.position.y >= y1 && j.position.y <= y2
+                        if j.position.x >= x1
+                            && j.position.x <= x2
+                            && j.position.y >= y1
+                            && j.position.y <= y2
                         {
                             selected.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
                         }
                     }
                     // Check no-connects
                     for nc in &sheet.no_connects {
-                        if nc.position.x >= x1 && nc.position.x <= x2
-                            && nc.position.y >= y1 && nc.position.y <= y2
+                        if nc.position.x >= x1
+                            && nc.position.x <= x2
+                            && nc.position.y >= y1
+                            && nc.position.y <= y2
                         {
                             selected.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
                         }
                     }
                     // Check text notes
                     for tn in &sheet.text_notes {
-                        if tn.position.x >= x1 && tn.position.x <= x2
-                            && tn.position.y >= y1 && tn.position.y <= y2
+                        if tn.position.x >= x1
+                            && tn.position.x <= x2
+                            && tn.position.y >= y1
+                            && tn.position.y <= y2
                         {
                             selected.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
                         }
                     }
-                    if !selected.is_empty() {
-                        self.canvas.selected = selected;
-                    } else {
-                        self.canvas.selected = selected;
-                    }
+                    self.canvas.selected = selected;
                     self.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
@@ -1553,33 +1547,43 @@ impl Signex {
                         self.active_bar_menu = None;
                         // Store last-used tool per group
                         let group = match &action {
-                            ActiveBarAction::DrawWire | ActiveBarAction::DrawBus
-                            | ActiveBarAction::PlaceBusEntry | ActiveBarAction::PlaceNetLabel
-                                => Some("wiring"),
-                            ActiveBarAction::PlacePowerGND | ActiveBarAction::PlacePowerVCC
-                            | ActiveBarAction::PlacePowerPlus12 | ActiveBarAction::PlacePowerPlus5
-                            | ActiveBarAction::PlacePowerMinus5 | ActiveBarAction::PlacePowerArrow
-                            | ActiveBarAction::PlacePowerWave | ActiveBarAction::PlacePowerBar
-                            | ActiveBarAction::PlacePowerCircle | ActiveBarAction::PlacePowerSignalGND
-                            | ActiveBarAction::PlacePowerEarth
-                                => Some("power"),
-                            ActiveBarAction::PlaceTextString | ActiveBarAction::PlaceTextFrame
-                            | ActiveBarAction::PlaceNote
-                                => Some("text"),
-                            ActiveBarAction::DrawArc | ActiveBarAction::DrawFullCircle
-                            | ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse
-                            | ActiveBarAction::DrawLine | ActiveBarAction::DrawRectangle
-                            | ActiveBarAction::DrawRoundRectangle | ActiveBarAction::DrawPolygon
-                            | ActiveBarAction::DrawBezier | ActiveBarAction::PlaceGraphic
-                                => Some("shapes"),
-                            ActiveBarAction::PlaceSignalHarness | ActiveBarAction::PlaceHarnessConnector
-                            | ActiveBarAction::PlaceHarnessEntry
-                                => Some("harness"),
-                            ActiveBarAction::PlacePort | ActiveBarAction::PlaceOffSheetConnector
-                                => Some("port"),
-                            ActiveBarAction::PlaceSheetSymbol | ActiveBarAction::PlaceSheetEntry
-                            | ActiveBarAction::PlaceDeviceSheetSymbol | ActiveBarAction::PlaceReuseBlock
-                                => Some("sheet"),
+                            ActiveBarAction::DrawWire
+                            | ActiveBarAction::DrawBus
+                            | ActiveBarAction::PlaceBusEntry
+                            | ActiveBarAction::PlaceNetLabel => Some("wiring"),
+                            ActiveBarAction::PlacePowerGND
+                            | ActiveBarAction::PlacePowerVCC
+                            | ActiveBarAction::PlacePowerPlus12
+                            | ActiveBarAction::PlacePowerPlus5
+                            | ActiveBarAction::PlacePowerMinus5
+                            | ActiveBarAction::PlacePowerArrow
+                            | ActiveBarAction::PlacePowerWave
+                            | ActiveBarAction::PlacePowerBar
+                            | ActiveBarAction::PlacePowerCircle
+                            | ActiveBarAction::PlacePowerSignalGND
+                            | ActiveBarAction::PlacePowerEarth => Some("power"),
+                            ActiveBarAction::PlaceTextString
+                            | ActiveBarAction::PlaceTextFrame
+                            | ActiveBarAction::PlaceNote => Some("text"),
+                            ActiveBarAction::DrawArc
+                            | ActiveBarAction::DrawFullCircle
+                            | ActiveBarAction::DrawEllipticalArc
+                            | ActiveBarAction::DrawEllipse
+                            | ActiveBarAction::DrawLine
+                            | ActiveBarAction::DrawRectangle
+                            | ActiveBarAction::DrawRoundRectangle
+                            | ActiveBarAction::DrawPolygon
+                            | ActiveBarAction::DrawBezier
+                            | ActiveBarAction::PlaceGraphic => Some("shapes"),
+                            ActiveBarAction::PlaceSignalHarness
+                            | ActiveBarAction::PlaceHarnessConnector
+                            | ActiveBarAction::PlaceHarnessEntry => Some("harness"),
+                            ActiveBarAction::PlacePort
+                            | ActiveBarAction::PlaceOffSheetConnector => Some("port"),
+                            ActiveBarAction::PlaceSheetSymbol
+                            | ActiveBarAction::PlaceSheetEntry
+                            | ActiveBarAction::PlaceDeviceSheetSymbol
+                            | ActiveBarAction::PlaceReuseBlock => Some("sheet"),
                             _ => None,
                         };
                         if let Some(g) = group {
@@ -1587,31 +1591,42 @@ impl Signex {
                         }
                         match action {
                             ActiveBarAction::ToolSelect => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
                             }
                             ActiveBarAction::DrawWire => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
                             }
                             ActiveBarAction::DrawBus => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Bus)));
                             }
                             ActiveBarAction::PlaceNetLabel => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                             }
                             ActiveBarAction::PlaceComponent => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
+                                return self.update(Message::Tool(ToolMessage::SelectTool(
+                                    Tool::Component,
+                                )));
                             }
                             ActiveBarAction::PlaceTextString => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
                             }
                             ActiveBarAction::DrawLine => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
                             }
                             ActiveBarAction::DrawRectangle => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+                                return self.update(Message::Tool(ToolMessage::SelectTool(
+                                    Tool::Rectangle,
+                                )));
                             }
                             ActiveBarAction::DrawFullCircle => {
-                                return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
+                                return self
+                                    .update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
                             }
                             ActiveBarAction::RotateSelection => {
                                 return self.update(Message::RotateSelected);
@@ -1707,7 +1722,9 @@ impl Signex {
                     ContextAction::Paste => return self.update(Message::Paste),
                     ContextAction::Delete => return self.update(Message::DeleteSelected),
                     ContextAction::SelectAll => return self.update(Message::SelectAll),
-                    ContextAction::ZoomFit => return self.update(Message::CanvasEvent(CanvasEvent::FitAll)),
+                    ContextAction::ZoomFit => {
+                        return self.update(Message::CanvasEvent(CanvasEvent::FitAll));
+                    }
                     ContextAction::RotateSelected => return self.update(Message::RotateSelected),
                     ContextAction::MirrorX => return self.update(Message::MirrorSelectedY), // X = horizontal flip = mirror_y
                     ContextAction::MirrorY => return self.update(Message::MirrorSelectedX), // Y = vertical flip = mirror_x
@@ -2069,7 +2086,9 @@ impl Signex {
         if self.canvas.selected.len() < 2 && !matches!(action, ActiveBarAction::AlignToGrid) {
             return;
         }
-        let Some(ref mut sheet) = self.schematic else { return };
+        let Some(ref mut sheet) = self.schematic else {
+            return;
+        };
         let selected_uuids: Vec<uuid::Uuid> = self.canvas.selected.iter().map(|s| s.uuid).collect();
 
         // Gather positions of selected symbols
@@ -2080,18 +2099,28 @@ impl Signex {
             .map(|s| (s.uuid, s.position.x, s.position.y))
             .collect();
 
-        if positions.is_empty() { return; }
+        if positions.is_empty() {
+            return;
+        }
 
         let min_x = positions.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
-        let max_x = positions.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+        let max_x = positions
+            .iter()
+            .map(|p| p.1)
+            .fold(f64::NEG_INFINITY, f64::max);
         let min_y = positions.iter().map(|p| p.2).fold(f64::INFINITY, f64::min);
-        let max_y = positions.iter().map(|p| p.2).fold(f64::NEG_INFINITY, f64::max);
+        let max_y = positions
+            .iter()
+            .map(|p| p.2)
+            .fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
         let gs = self.grid_size_mm as f64;
 
         for sym in &mut sheet.symbols {
-            if !selected_uuids.contains(&sym.uuid) { continue; }
+            if !selected_uuids.contains(&sym.uuid) {
+                continue;
+            }
             match action {
                 ActiveBarAction::AlignLeft => sym.position.x = min_x,
                 ActiveBarAction::AlignRight => sym.position.x = max_x,
@@ -2108,13 +2137,16 @@ impl Signex {
         }
 
         // Distribute evenly
-        if matches!(action, ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically) {
+        if matches!(
+            action,
+            ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically
+        ) {
             let mut sorted = positions.clone();
             let n = sorted.len();
             if n > 2 {
                 match action {
                     ActiveBarAction::DistributeHorizontally => {
-                        sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                        sorted.sort_by(|a, b| a.1.total_cmp(&b.1));
                         let step = (max_x - min_x) / (n - 1) as f64;
                         for (i, (uuid, _, _)) in sorted.iter().enumerate() {
                             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
@@ -2123,7 +2155,7 @@ impl Signex {
                         }
                     }
                     ActiveBarAction::DistributeVertically => {
-                        sorted.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+                        sorted.sort_by(|a, b| a.2.total_cmp(&b.2));
                         let step = (max_y - min_y) / (n - 1) as f64;
                         for (i, (uuid, _, _)) in sorted.iter().enumerate() {
                             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
@@ -2343,8 +2375,9 @@ impl Signex {
     }
 
     /// Right-click context menu with actions based on current state.
+    #[allow(clippy::vec_init_then_push)] // conditional items require push
     fn view_context_menu(&self) -> Element<'_, Message> {
-        let mut items: Vec<Element<'_, Message>> = Vec::new();
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
         // Common items (both empty and selection context)
         items.push(self.ctx_menu_item_disabled("Find Similar Objects..."));
         items.push(self.ctx_menu_item_disabled("Find Text...                    Ctrl+F"));
@@ -2365,6 +2398,7 @@ impl Signex {
         items.push(self.ctx_menu_sep());
 
         // Edit operations
+        // TODO: implement proper Cut (copy+delete)
         items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Delete));
         items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
         items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
@@ -2445,32 +2479,6 @@ impl Signex {
         .into()
     }
 
-    fn ctx_menu_item<'a>(&self, label: &str, action: ContextAction) -> Element<'a, Message> {
-        iced::widget::button(
-            iced::widget::text(label.to_string())
-                .size(11)
-                .color(crate::styles::TEXT_PRIMARY),
-        )
-        .padding([4, 12])
-        .width(Length::Fill)
-        .on_press(Message::ContextAction(action))
-        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgb(0.22, 0.22, 0.26),
-                )),
-                _ => None,
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: iced::Border::default(),
-                text_color: crate::styles::TEXT_PRIMARY,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    }
-
     fn ctx_menu_sep<'a>(&self) -> Element<'a, Message> {
         container(iced::widget::Space::new())
             .width(Length::Fill)
@@ -2496,7 +2504,11 @@ impl Signex {
             .dock
             .view_region(PanelPosition::Left, &self.panel_ctx)
             .map(Message::Dock);
-        let left_w = if left_collapsed { 28.0 } else { self.left_width };
+        let left_w = if left_collapsed {
+            28.0
+        } else {
+            self.left_width
+        };
         let left = container(left_panel)
             .width(left_w)
             .height(Length::Fill)
@@ -2558,7 +2570,11 @@ impl Signex {
             .dock
             .view_region(PanelPosition::Right, &self.panel_ctx)
             .map(Message::Dock);
-        let right_w = if right_collapsed { 28.0 } else { self.right_width };
+        let right_w = if right_collapsed {
+            28.0
+        } else {
+            self.right_width
+        };
         let right = container(right_panel)
             .width(right_w)
             .height(Length::Fill)
@@ -2583,7 +2599,11 @@ impl Signex {
             .dock
             .view_region(PanelPosition::Bottom, &self.panel_ctx)
             .map(Message::Dock);
-        let bottom_h = if bottom_collapsed { 28.0 } else { self.bottom_height };
+        let bottom_h = if bottom_collapsed {
+            28.0
+        } else {
+            self.bottom_height
+        };
         let bottom = container(bottom_panel)
             .width(Length::Fill)
             .height(bottom_h)
@@ -2609,7 +2629,6 @@ impl Signex {
         // Active Bar (centered above canvas)
         if self.schematic.is_some() {
             let bar = crate::active_bar::view_bar(
-                self.active_bar_menu,
                 self.current_tool,
                 self.draw_mode,
                 &self.last_tool,
@@ -2664,16 +2683,10 @@ impl Signex {
 
             // Active Bar dropdown overlay
             if let Some(ab_menu) = self.active_bar_menu {
-                let dropdown = crate::active_bar::view_dropdown(ab_menu)
-                    .map(Message::ActiveBar);
+                let dropdown = crate::active_bar::view_dropdown(ab_menu).map(Message::ActiveBar);
                 let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
                 // Vertical: menu(24) + toolbar(28) + tabs(~28) + bar on canvas(~36)
-                let ab_y: f32 = 24.0 + 28.0
-                    + if self.tabs.is_empty() { 0.0 } else { 28.0 }
-                    + 36.0;
-                // Bar width must match view_bar layout
-                let bar_w: f32 = 314.0;
-
+                let ab_y: f32 = 24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
                 // Dismiss layer
                 stack = stack.push(
                     iced::widget::mouse_area(
@@ -2686,21 +2699,13 @@ impl Signex {
                     )),
                 );
                 // Dropdown — aligned under the clicked button
-                // Bar width: 14 btns × 23px + 4 seps × 2px + 8px padding = 338px
-                let bar_w: f32 = 338.0;
+                let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
                 stack = stack.push(
-                    container(
-                        column![
-                            iced::widget::Space::new().height(ab_y),
-                            container(
-                                row![
-                                    iced::widget::Space::new().width(x_off),
-                                    dropdown,
-                                ],
-                            )
+                    container(column![
+                        iced::widget::Space::new().height(ab_y),
+                        container(row![iced::widget::Space::new().width(x_off), dropdown,],)
                             .width(bar_w),
-                        ],
-                    )
+                    ])
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
                 );
@@ -2751,7 +2756,9 @@ impl Signex {
                         .style(|_: &iced::Theme, status: iced::widget::button::Status| {
                             let bg = match status {
                                 iced::widget::button::Status::Hovered => {
-                                    Some(iced::Background::Color(iced::Color::from_rgb(0.20, 0.22, 0.30)))
+                                    Some(iced::Background::Color(iced::Color::from_rgb(
+                                        0.20, 0.22, 0.30,
+                                    )))
                                 }
                                 _ => None,
                             };
@@ -2766,8 +2773,7 @@ impl Signex {
                     );
                 }
                 let popup = container(
-                    iced::widget::scrollable(column(panel_items).spacing(0).width(180))
-                        .height(300),
+                    iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
                 )
                 .padding([6, 0])
                 .style(crate::styles::context_menu);

@@ -192,7 +192,9 @@ impl canvas::Program<Message> for SchematicCanvas {
             }
             // ── Left-click release → finish drag-select ──
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                if let (Some(start), Some(end)) = (state.select_drag_start.take(), state.select_drag_end.take()) {
+                if let (Some(start), Some(end)) =
+                    (state.select_drag_start.take(), state.select_drag_end.take())
+                {
                     let dx = (end.0 - start.0).abs();
                     let dy = (end.1 - start.1).abs();
                     // Only trigger box select if dragged more than 2mm
@@ -224,18 +226,18 @@ impl canvas::Program<Message> for SchematicCanvas {
                     // Active Bar zone: top ~40px, centered
                     if pos.y < 40.0 {
                         // Calculate which Active Bar button was right-clicked
-                        let bar_width: f32 = 338.0;
+                        let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
                         let bar_x = (bounds.width - bar_width) / 2.0;
                         let rel_x = pos.x - bar_x;
-                        if rel_x >= 0.0 && rel_x < bar_width {
-                            if let Some(menu) = active_bar_hit(rel_x) {
-                                return Some(canvas::Action::publish(
-                                    Message::ActiveBar(
-                                        crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
-                                    ),
-                                ));
-                            }
+                        if rel_x >= 0.0 && rel_x < bar_width
+                            && let Some(menu) = active_bar_hit(rel_x)
+                        {
+                            return Some(canvas::Action::publish(Message::ActiveBar(
+                                crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
+                            )));
                         }
+                        // Prevent panning when right-clicking in the Active Bar zone
+                        return Some(canvas::Action::capture());
                     }
                     state.panning = true;
                     state.pan_moved = false;
@@ -465,7 +467,10 @@ impl canvas::Program<Message> for SchematicCanvas {
                             cursor_world.y as f64,
                         );
                         let rubber_stroke = canvas::Stroke::default()
-                            .with_color(Color { a: 0.6, ..wire_color_iced })
+                            .with_color(Color {
+                                a: 0.6,
+                                ..wire_color_iced
+                            })
                             .with_width(1.0);
 
                         // Compute constrained segments based on draw mode
@@ -479,7 +484,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                                 if dx.abs() < 0.01 || dy.abs() < 0.01 {
                                     vec![(start, end)]
                                 } else {
-                                    let corner = signex_types::schematic::Point::new(end.x, start.y);
+                                    let corner =
+                                        signex_types::schematic::Point::new(end.x, start.y);
                                     vec![(start, corner), (corner, end)]
                                 }
                             }
@@ -495,15 +501,33 @@ impl canvas::Program<Message> for SchematicCanvas {
                                     let sx = if dx > 0.0 { 1.0 } else { -1.0 };
                                     let sy = if dy > 0.0 { 1.0 } else { -1.0 };
                                     let diag_end = signex_types::schematic::Point::new(
-                                        start.x + d * sx, start.y + d * sy,
+                                        start.x + d * sx,
+                                        start.y + d * sy,
                                     );
                                     if adx > ady {
-                                        vec![(start, diag_end), (diag_end, signex_types::schematic::Point::new(end.x, diag_end.y))]
+                                        vec![
+                                            (start, diag_end),
+                                            (
+                                                diag_end,
+                                                signex_types::schematic::Point::new(
+                                                    end.x, diag_end.y,
+                                                ),
+                                            ),
+                                        ]
                                     } else {
-                                        vec![(start, diag_end), (diag_end, signex_types::schematic::Point::new(diag_end.x, end.y))]
+                                        vec![
+                                            (start, diag_end),
+                                            (
+                                                diag_end,
+                                                signex_types::schematic::Point::new(
+                                                    diag_end.x, end.y,
+                                                ),
+                                            ),
+                                        ]
                                     }
                                 } else {
-                                    let corner = signex_types::schematic::Point::new(end.x, start.y);
+                                    let corner =
+                                        signex_types::schematic::Point::new(end.x, start.y);
                                     vec![(start, corner), (corner, end)]
                                 }
                             }
@@ -511,10 +535,12 @@ impl canvas::Program<Message> for SchematicCanvas {
 
                         for (p1, p2) in &segments {
                             let s1 = state.camera.world_to_screen(
-                                iced::Point::new(p1.x as f32, p1.y as f32), bounds,
+                                iced::Point::new(p1.x as f32, p1.y as f32),
+                                bounds,
                             );
                             let s2 = state.camera.world_to_screen(
-                                iced::Point::new(p2.x as f32, p2.y as f32), bounds,
+                                iced::Point::new(p2.x as f32, p2.y as f32),
+                                bounds,
                             );
                             frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
                         }
@@ -535,12 +561,12 @@ impl canvas::Program<Message> for SchematicCanvas {
 
             // Drag-to-select rectangle
             if let (Some(start), Some(end)) = (state.select_drag_start, state.select_drag_end) {
-                let s1 = state.camera.world_to_screen(
-                    iced::Point::new(start.0 as f32, start.1 as f32), bounds,
-                );
-                let s2 = state.camera.world_to_screen(
-                    iced::Point::new(end.0 as f32, end.1 as f32), bounds,
-                );
+                let s1 = state
+                    .camera
+                    .world_to_screen(iced::Point::new(start.0 as f32, start.1 as f32), bounds);
+                let s2 = state
+                    .camera
+                    .world_to_screen(iced::Point::new(end.0 as f32, end.1 as f32), bounds);
                 let x = s1.x.min(s2.x);
                 let y = s1.y.min(s2.y);
                 let w = (s2.x - s1.x).abs();
@@ -553,10 +579,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                         Color::from_rgba(0.2, 0.4, 0.8, 0.15),
                     );
                     // Border (dashed blue)
-                    let rect_path = canvas::Path::rectangle(
-                        iced::Point::new(x, y),
-                        iced::Size::new(w, h),
-                    );
+                    let rect_path =
+                        canvas::Path::rectangle(iced::Point::new(x, y), iced::Size::new(w, h));
                     frame.stroke(
                         &rect_path,
                         canvas::Stroke::default()
@@ -598,45 +622,75 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     //   0     23  48   50    73    96     121  123   146   171  173    196   219   242   267  269   292    315
     let x = x - 4.0;
     let b = 23; // button width
-    let s = 2;  // separator
+    let s = 2; // separator
     let xi = x as i32;
-    if xi < 0 { return None; }
+    if xi < 0 {
+        return None;
+    }
     // btn 0: Filter
-    if xi < b { return Some(ActiveBarMenu::Filter); }
+    if xi < b {
+        return Some(ActiveBarMenu::Filter);
+    }
     // btn 1: Add Component (no dropdown)
-    if xi < 2 * b { return None; }
+    if xi < 2 * b {
+        return None;
+    }
     // sep
     let off = 2 * b + s;
     // btn 2: Select
-    if xi >= off && xi < off + b { return Some(ActiveBarMenu::SelectMode); }
+    if xi >= off && xi < off + b {
+        return Some(ActiveBarMenu::SelectMode);
+    }
     // btn 3: Move
-    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Select); }
+    if xi >= off + b && xi < off + 2 * b {
+        return Some(ActiveBarMenu::Select);
+    }
     // btn 4: Align
-    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::Align); }
+    if xi >= off + 2 * b && xi < off + 3 * b {
+        return Some(ActiveBarMenu::Align);
+    }
     // sep
     let off = off + 3 * b + s;
     // btn 5: Wire
-    if xi >= off && xi < off + b { return Some(ActiveBarMenu::Wiring); }
+    if xi >= off && xi < off + b {
+        return Some(ActiveBarMenu::Wiring);
+    }
     // btn 6: Power
-    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Power); }
+    if xi >= off + b && xi < off + 2 * b {
+        return Some(ActiveBarMenu::Power);
+    }
     // sep
     let off = off + 2 * b + s;
     // btn 7: Harness
-    if xi >= off && xi < off + b { return Some(ActiveBarMenu::Harness); }
+    if xi >= off && xi < off + b {
+        return Some(ActiveBarMenu::Harness);
+    }
     // btn 8: Sheet Symbol
-    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::SheetSymbol); }
+    if xi >= off + b && xi < off + 2 * b {
+        return Some(ActiveBarMenu::SheetSymbol);
+    }
     // btn 9: Port
-    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::Port); }
+    if xi >= off + 2 * b && xi < off + 3 * b {
+        return Some(ActiveBarMenu::Port);
+    }
     // btn 10: Directives
-    if xi >= off + 3 * b && xi < off + 4 * b { return Some(ActiveBarMenu::Directives); }
+    if xi >= off + 3 * b && xi < off + 4 * b {
+        return Some(ActiveBarMenu::Directives);
+    }
     // sep
     let off = off + 4 * b + s;
     // btn 11: Text
-    if xi >= off && xi < off + b { return Some(ActiveBarMenu::TextTools); }
+    if xi >= off && xi < off + b {
+        return Some(ActiveBarMenu::TextTools);
+    }
     // btn 12: Shapes
-    if xi >= off + b && xi < off + 2 * b { return Some(ActiveBarMenu::Shapes); }
+    if xi >= off + b && xi < off + 2 * b {
+        return Some(ActiveBarMenu::Shapes);
+    }
     // btn 13: Net Color
-    if xi >= off + 2 * b && xi < off + 3 * b { return Some(ActiveBarMenu::NetColor); }
+    if xi >= off + 2 * b && xi < off + 3 * b {
+        return Some(ActiveBarMenu::NetColor);
+    }
     None
 }
 
