@@ -23,7 +23,38 @@ pub enum PanelKind {
     NetClasses,
     Variants,
     OutputJobs,
+    // Additional Altium schematic panels
+    SchFilter,
+    SchList,
+    ActiveBom,
+    Favorites,
+    Snippets,
+    Todo,
+    Wiki,
 }
+
+/// All available panel kinds for the panel list button.
+pub const ALL_PANELS: &[PanelKind] = &[
+    PanelKind::Projects,
+    PanelKind::Components,
+    PanelKind::Navigator,
+    PanelKind::Properties,
+    PanelKind::Filter,
+    PanelKind::SchFilter,
+    PanelKind::SchList,
+    PanelKind::Messages,
+    PanelKind::Signal,
+    PanelKind::Drc,
+    PanelKind::ActiveBom,
+    PanelKind::Favorites,
+    PanelKind::Snippets,
+    PanelKind::LayerStack,
+    PanelKind::NetClasses,
+    PanelKind::Variants,
+    PanelKind::OutputJobs,
+    PanelKind::Todo,
+    PanelKind::Wiki,
+];
 
 impl PanelKind {
     pub fn label(self) -> &'static str {
@@ -39,6 +70,13 @@ impl PanelKind {
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
+            PanelKind::SchFilter => "SCH Filter",
+            PanelKind::SchList => "SCH List",
+            PanelKind::ActiveBom => "ActiveBOM",
+            PanelKind::Favorites => "Favorites",
+            PanelKind::Snippets => "Snippets",
+            PanelKind::Todo => "To-Do",
+            PanelKind::Wiki => "Wiki",
             PanelKind::OutputJobs => "Output Jobs",
         }
     }
@@ -147,6 +185,13 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
+        PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
+        PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
+        PanelKind::ActiveBom => view_stub("ActiveBOM", "Bill of Materials management", ctx),
+        PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
+        PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
+        PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
+        PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
     };
 
     scrollable(content).width(Length::Fill).into()
