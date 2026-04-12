@@ -15,7 +15,7 @@ use crate::menu_bar::{self, MenuMessage};
 use crate::panels::PanelKind;
 use crate::status_bar;
 use crate::tab_bar::{self, TabMessage};
-use crate::toolbar::{self, ToolMessage};
+use crate::toolbar::ToolMessage;
 
 /// Find the KiCad symbol library directory.
 fn find_kicad_symbols_dir() -> Option<PathBuf> {
@@ -90,6 +90,7 @@ pub enum Message {
     // v0.6: Full editor operations
     SelectAll,
     Copy,
+    Cut,
     Paste,
     SaveFile,
     SaveFileAs(PathBuf),
@@ -100,6 +101,13 @@ pub enum Message {
     OpenPanel(crate::panels::PanelKind),
     // Active Bar
     ActiveBar(crate::active_bar::ActiveBarMsg),
+    /// TAB pressed during placement — open pre-placement properties.
+    PrePlacementTab,
+    /// In-place text editing: text changed.
+    TextEditChanged(String),
+    /// In-place text editing: submit (Enter).
+    TextEditSubmit,
+    /// In-place text editing: cancel (Escape handled by tool switch).
     // Context menu
     ShowContextMenu(f32, f32),
     CloseContextMenu,
@@ -112,6 +120,7 @@ pub enum Message {
 #[allow(dead_code)] // variants used in match arms, constructed via dropdown actions
 pub enum ContextAction {
     Copy,
+    Cut,
     Paste,
     Delete,
     SelectAll,
@@ -119,6 +128,22 @@ pub enum ContextAction {
     RotateSelected,
     MirrorX,
     MirrorY,
+}
+
+/// State for in-place text editing overlay.
+#[derive(Debug, Clone)]
+pub struct TextEditState {
+    /// UUID of the element being edited.
+    pub uuid: uuid::Uuid,
+    /// Element kind (Label, TextNote, Symbol).
+    pub kind: signex_types::schematic::SelectedKind,
+    /// Current editing text.
+    pub text: String,
+    /// Original text (for undo).
+    pub original_text: String,
+    /// Screen position for the text_input overlay.
+    pub screen_x: f32,
+    pub screen_y: f32,
 }
 
 /// State for the floating context menu.
@@ -160,7 +185,7 @@ pub struct Signex {
     pub left_width: f32,
     pub right_width: f32,
     pub bottom_height: f32,
-    pub active_menu: Option<usize>,
+    // active_menu removed — iced_aw MenuBar handles its own overlay state
     pub kicad_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     pub dragging: Option<DragTarget>,
@@ -180,6 +205,8 @@ pub struct Signex {
     pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
     pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
     pub draw_mode: DrawMode,
+    /// In-place text editing state (double-click on label/text note).
+    pub editing_text: Option<TextEditState>,
     /// Context menu state (shown on right-click).
     pub context_menu: Option<ContextMenuState>,
     /// Last known global mouse position (for context menu positioning).
@@ -233,6 +260,8 @@ pub enum Tool {
     Label,
     Component,
     Text,
+    NoConnect,
+    BusEntry,
     Line,
     Rectangle,
     Circle,
@@ -247,6 +276,8 @@ impl std::fmt::Display for Tool {
             Tool::Label => write!(f, "Place Label"),
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
+            Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
@@ -392,14 +423,17 @@ impl Signex {
                 components_split: 250.0,
                 project_tree: vec![],
                 selection_count: 0,
+                selected_uuid: None,
+                selected_kind: None,
                 selection_info: vec![],
                 component_filter: String::new(),
                 collapsed_sections: std::collections::HashSet::new(),
+                pre_placement: None,
             },
             left_width: 240.0,
             right_width: 220.0,
             bottom_height: 120.0,
-            active_menu: None,
+            // active_menu removed — iced_aw MenuBar manages overlay state
             kicad_lib_dir,
             loaded_lib: std::collections::HashMap::new(),
             dragging: None,
@@ -416,6 +450,7 @@ impl Signex {
             clipboard_no_connects: Vec::new(),
             clipboard_text_notes: Vec::new(),
             draw_mode: DrawMode::default(),
+            editing_text: None,
             context_menu: None,
             last_mouse_pos: (0.0, 0.0),
             active_bar_menu: None,
@@ -508,13 +543,18 @@ impl Signex {
                 (keyboard::Key::Character(c), m) if c == "s" && m.command() => Message::SaveFile,
                 // Ctrl+A select all
                 (keyboard::Key::Character(c), m) if c == "a" && m.command() => Message::SelectAll,
-                // Ctrl+C copy
+                // Ctrl+C copy, Ctrl+X cut
                 (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,
+                (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
                 // Ctrl+V paste
                 (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
                 // Shift+Ctrl+G — toggle grid visibility
                 (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
                     Message::GridToggle
+                }
+                // Tab — pre-placement properties (only during active tool)
+                (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
+                    Message::PrePlacementTab
                 }
                 _ => Message::Noop,
             },
@@ -729,10 +769,16 @@ impl Signex {
                         }
                     }
                     Tool::Label => {
-                        // Place a net label
+                        // Place a net label — use pre-placement text if set
+                        let label_text = self
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| pp.label_text.clone())
+                            .unwrap_or_else(|| "NET".to_string());
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
-                            text: "NET".to_string(),
+                            text: label_text,
                             position: signex_types::schematic::Point::new(wx, wy),
                             rotation: 0.0,
                             label_type: signex_types::schematic::LabelType::Net,
@@ -793,6 +839,63 @@ impl Signex {
                         }
                         // Stay in power placement mode for continuous placement
                     }
+                    Tool::NoConnect => {
+                        let nc = signex_types::schematic::NoConnect {
+                            uuid: uuid::Uuid::new_v4(),
+                            position: signex_types::schematic::Point::new(wx, wy),
+                        };
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = crate::undo::EditCommand::AddNoConnect(nc);
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                            self.commit_schematic();
+                        }
+                        // Stay in NoConnect mode for continuous placement
+                    }
+                    Tool::BusEntry => {
+                        let be = signex_types::schematic::BusEntry {
+                            uuid: uuid::Uuid::new_v4(),
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            size: (2.54, 2.54),
+                        };
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = crate::undo::EditCommand::AddBusEntry(be);
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                            self.commit_schematic();
+                        }
+                        // Stay in BusEntry mode for continuous placement
+                    }
+                    Tool::Text => {
+                        let note_text = self
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| pp.label_text.clone())
+                            .unwrap_or_else(|| "Text".to_string());
+                        let tn = signex_types::schematic::TextNote {
+                            uuid: uuid::Uuid::new_v4(),
+                            text: note_text,
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            rotation: 0.0,
+                            font_size: 1.27,
+                            justify_h: signex_types::schematic::HAlign::Left,
+                            justify_v: signex_types::schematic::VAlign::default(),
+                        };
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = crate::undo::EditCommand::AddTextNote(tn);
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                            self.commit_schematic();
+                        }
+                        self.current_tool = Tool::Select;
+                    }
                     _ => {
                         // Selection mode: hit-test
                         if let Some(ref sheet) = self.schematic {
@@ -806,13 +909,106 @@ impl Signex {
                     }
                 }
             }
-            Message::CanvasEvent(CanvasEvent::DoubleClicked { .. }) => {
+            Message::CanvasEvent(CanvasEvent::MoveSelected { dx, dy }) => {
+                // Snap delta to grid
+                let (dx, dy) = if self.snap_enabled {
+                    let gs = self.grid_size_mm as f64;
+                    ((dx / gs).round() * gs, (dy / gs).round() * gs)
+                } else {
+                    (dx, dy)
+                };
+                if (dx.abs() > 0.001 || dy.abs() > 0.001) && !self.canvas.selected.is_empty() {
+                    if let Some(ref mut sheet) = self.schematic {
+                        let cmd = crate::undo::EditCommand::MoveElements {
+                            items: self.canvas.selected.clone(),
+                            dx,
+                            dy,
+                        };
+                        self.undo_stack.execute(sheet, cmd);
+                        self.canvas.schematic = Some(sheet.clone());
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                        self.mark_dirty();
+                        self.commit_schematic();
+                        self.update_selection_info();
+                    }
+                }
+            }
+            Message::TextEditChanged(text) => {
+                if let Some(ref mut state) = self.editing_text {
+                    state.text = text;
+                }
+            }
+            Message::TextEditSubmit => {
+                if let Some(state) = self.editing_text.take() {
+                    if state.text != state.original_text {
+                        if let Some(ref mut sheet) = self.schematic {
+                            let cmd = match state.kind {
+                                signex_types::schematic::SelectedKind::Label => {
+                                    crate::undo::EditCommand::UpdateLabelText {
+                                        uuid: state.uuid,
+                                        old_text: state.original_text,
+                                        new_text: state.text,
+                                    }
+                                }
+                                signex_types::schematic::SelectedKind::TextNote => {
+                                    crate::undo::EditCommand::UpdateTextNoteText {
+                                        uuid: state.uuid,
+                                        old_text: state.original_text,
+                                        new_text: state.text,
+                                    }
+                                }
+                                _ => return Task::none(),
+                            };
+                            self.undo_stack.execute(sheet, cmd);
+                            self.canvas.schematic = Some(sheet.clone());
+                            self.canvas.clear_content_cache();
+                            self.mark_dirty();
+                            self.commit_schematic();
+                            self.update_selection_info();
+                        }
+                    }
+                }
+            }
+            Message::CanvasEvent(CanvasEvent::DoubleClicked { world_x, world_y }) => {
                 // Finish wire drawing on double-click
                 if self.wire_drawing {
                     self.wire_drawing = false;
                     self.wire_points.clear();
                     self.canvas.wire_preview.clear();
                     self.canvas.drawing_mode = false;
+                } else if let Some(ref sheet) = self.schematic {
+                    // In-place text editing: check if double-clicked on a label or text note
+                    use signex_types::schematic::SelectedKind;
+                    if let Some(hit) =
+                        signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y)
+                    {
+                        let edit_info = match hit.kind {
+                            SelectedKind::Label => sheet
+                                .labels
+                                .iter()
+                                .find(|l| l.uuid == hit.uuid)
+                                .map(|l| (l.text.clone(), SelectedKind::Label)),
+                            SelectedKind::TextNote => sheet
+                                .text_notes
+                                .iter()
+                                .find(|t| t.uuid == hit.uuid)
+                                .map(|t| (t.text.clone(), SelectedKind::TextNote)),
+                            _ => None,
+                        };
+                        if let Some((text, kind)) = edit_info {
+                            // Convert world coords to approximate screen position
+                            // (status bar shows cursor position, close enough)
+                            self.editing_text = Some(TextEditState {
+                                uuid: hit.uuid,
+                                kind,
+                                original_text: text.clone(),
+                                text,
+                                screen_x: self.last_mouse_pos.0,
+                                screen_y: self.last_mouse_pos.1,
+                            });
+                        }
+                    }
                 }
             }
             Message::CanvasEvent(CanvasEvent::BoxSelect { x1, y1, x2, y2 }) => {
@@ -891,6 +1087,34 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
+            Message::PrePlacementTab => {
+                // Only activate during placement tools (not Select)
+                if self.current_tool != Tool::Select {
+                    let tool_name = format!("{}", self.current_tool);
+                    let label_text = self
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.label_text.clone())
+                        .unwrap_or_else(|| "NET".to_string());
+                    let designator = self
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.designator.clone())
+                        .unwrap_or_default();
+                    self.panel_ctx.pre_placement =
+                        Some(crate::panels::PrePlacementData {
+                            tool_name,
+                            label_text,
+                            designator,
+                            rotation: 0.0,
+                        });
+                    // Ensure Properties panel is visible in the right dock
+                    self.dock
+                        .add_panel(PanelPosition::Right, crate::panels::PanelKind::Properties);
+                }
+            }
             Message::CycleDrawMode => {
                 self.draw_mode = self.draw_mode.next();
                 self.canvas.draw_mode = self.draw_mode;
@@ -907,7 +1131,9 @@ impl Signex {
                 }
             }
             Message::CanvasEvent(CanvasEvent::CursorMoved) => {
-                // Zoom or pan changed — grid + schematic positions shifted, must redraw
+                // Pan/zoom changed — grid needs pixel-perfect redraw, content + selection
+                // re-render with updated camera. Content cache is cleared here so it
+                // picks up the new camera transform on next draw.
                 self.canvas.clear_bg_cache();
                 self.canvas.clear_content_cache();
                 self.canvas.clear_overlay_cache();
@@ -928,10 +1154,11 @@ impl Signex {
                 // Set tool preview text for placement modes
                 // No cursor text — Active Bar shows the active tool
                 self.canvas.tool_preview = None;
-                // Escape: close menus and cancel wire drawing
+                // Escape: cancel wire drawing, pending placements, pre-placement, text editing
                 if tool == Tool::Select {
-                    self.active_menu = None;
                     self.pending_power = None;
+                    self.panel_ctx.pre_placement = None;
+                    self.editing_text = None;
                     if self.wire_drawing {
                         self.wire_drawing = false;
                         self.wire_points.clear();
@@ -1005,6 +1232,215 @@ impl Signex {
                         if !self.panel_ctx.collapsed_sections.remove(&key) {
                             self.panel_ctx.collapsed_sections.insert(key);
                         }
+                    }
+                    // ── Property editing messages ──
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::EditSymbolDesignator(uuid, new_val),
+                    ) => {
+                        let uuid = *uuid;
+                        let new_val = new_val.clone();
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
+                                let old_val = sym.reference.clone();
+                                if old_val != new_val {
+                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
+                                        uuid,
+                                        field: crate::undo::SymbolField::Designator,
+                                        old_value: old_val,
+                                        new_value: new_val,
+                                    };
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                    self.commit_schematic();
+                                }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::EditSymbolValue(uuid, new_val),
+                    ) => {
+                        let uuid = *uuid;
+                        let new_val = new_val.clone();
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
+                                let old_val = sym.value.clone();
+                                if old_val != new_val {
+                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
+                                        uuid,
+                                        field: crate::undo::SymbolField::Value,
+                                        old_value: old_val,
+                                        new_value: new_val,
+                                    };
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                    self.commit_schematic();
+                                }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::EditSymbolFootprint(uuid, new_val),
+                    ) => {
+                        let uuid = *uuid;
+                        let new_val = new_val.clone();
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
+                                let old_val = sym.footprint.clone();
+                                if old_val != new_val {
+                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
+                                        uuid,
+                                        field: crate::undo::SymbolField::Footprint,
+                                        old_value: old_val,
+                                        new_value: new_val,
+                                    };
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                    self.commit_schematic();
+                                }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleSymbolMirrorX(uuid),
+                    ) => {
+                        let uuid = *uuid;
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid,
+                                    axis: crate::undo::MirrorAxis::X,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                                self.commit_schematic();
+                                self.update_selection_info();
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleSymbolMirrorY(uuid),
+                    ) => {
+                        let uuid = *uuid;
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
+                                let cmd = crate::undo::EditCommand::MirrorSymbol {
+                                    uuid,
+                                    axis: crate::undo::MirrorAxis::Y,
+                                    old_mirror_x: sym.mirror_x,
+                                    old_mirror_y: sym.mirror_y,
+                                };
+                                self.undo_stack.execute(sheet, cmd);
+                                self.canvas.schematic = Some(sheet.clone());
+                                self.canvas.clear_content_cache();
+                                self.canvas.clear_overlay_cache();
+                                self.mark_dirty();
+                                self.commit_schematic();
+                                self.update_selection_info();
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleSymbolLocked(_)
+                        | crate::panels::PanelMsg::ToggleSymbolDnp(_),
+                    ) => {
+                        // TODO: implement locked/DNP toggling
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::EditLabelText(uuid, new_text),
+                    ) => {
+                        let uuid = *uuid;
+                        let new_text = new_text.clone();
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(lbl) = sheet.labels.iter().find(|l| l.uuid == uuid) {
+                                let old_text = lbl.text.clone();
+                                if old_text != new_text {
+                                    let cmd = crate::undo::EditCommand::UpdateLabelText {
+                                        uuid,
+                                        old_text,
+                                        new_text,
+                                    };
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                    self.commit_schematic();
+                                }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::EditTextNoteText(uuid, new_text),
+                    ) => {
+                        let uuid = *uuid;
+                        let new_text = new_text.clone();
+                        if let Some(ref mut sheet) = self.schematic {
+                            if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == uuid) {
+                                let old_text = tn.text.clone();
+                                if old_text != new_text {
+                                    let cmd = crate::undo::EditCommand::UpdateTextNoteText {
+                                        uuid,
+                                        old_text,
+                                        new_text,
+                                    };
+                                    self.undo_stack.execute(sheet, cmd);
+                                    self.canvas.schematic = Some(sheet.clone());
+                                    self.canvas.clear_content_cache();
+                                    self.mark_dirty();
+                                    self.commit_schematic();
+                                }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetPrePlacementText(text),
+                    ) => {
+                        if let Some(ref mut pp) = self.panel_ctx.pre_placement {
+                            pp.label_text = text.clone();
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetPrePlacementDesignator(text),
+                    ) => {
+                        if let Some(ref mut pp) = self.panel_ctx.pre_placement {
+                            pp.designator = text.clone();
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetPrePlacementRotation(rot),
+                    ) => {
+                        if let Some(ref mut pp) = self.panel_ctx.pre_placement {
+                            pp.rotation = *rot;
+                        }
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ConfirmPrePlacement,
+                    ) => {
+                        // Close pre-placement — values are read when placing
+                        self.panel_ctx.pre_placement = None;
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetGridSize(
+                        size,
+                    )) => {
+                        self.grid_size_mm = *size;
+                        self.panel_ctx.grid_size_mm = *size;
+                        self.canvas.clear_bg_cache();
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetMarginVertical(_)
+                        | crate::panels::PanelMsg::SetMarginHorizontal(_),
+                    ) => {
+                        // Margins stored in schematic — handle when editable
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::DragComponentsSplit,
@@ -1354,6 +1790,11 @@ impl Signex {
                     self.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
+            }
+            Message::Cut => {
+                // Copy to clipboard, then delete selected
+                let _ = self.update(Message::Copy);
+                return self.update(Message::DeleteSelected);
             }
             Message::Copy => {
                 if let Some(ref sheet) = self.schematic {
@@ -1754,6 +2195,7 @@ impl Signex {
                 self.context_menu = None;
                 match action {
                     ContextAction::Copy => return self.update(Message::Copy),
+                    ContextAction::Cut => return self.update(Message::Cut),
                     ContextAction::Paste => return self.update(Message::Paste),
                     ContextAction::Delete => return self.update(Message::DeleteSelected),
                     ContextAction::SelectAll => return self.update(Message::SelectAll),
@@ -1779,35 +2221,8 @@ impl Signex {
     }
 
     fn handle_menu(&mut self, msg: MenuMessage) -> Task<Message> {
-        // Close dropdown after any action (except menu-control and theme)
-        let should_close = !matches!(
-            msg,
-            MenuMessage::OpenMenu(_)
-                | MenuMessage::CloseMenus
-                | MenuMessage::HoverMenu(_)
-                | MenuMessage::ThemeSelected(_)
-        );
-
+        // iced_aw MenuBar manages open/close/hover state — no manual control needed
         let task = match msg {
-            // ── Menu bar control ──
-            MenuMessage::OpenMenu(idx) => {
-                self.active_menu = if self.active_menu == Some(idx) {
-                    None
-                } else {
-                    Some(idx)
-                };
-                Task::none()
-            }
-            MenuMessage::CloseMenus => {
-                self.active_menu = None;
-                Task::none()
-            }
-            MenuMessage::HoverMenu(idx) => {
-                if self.active_menu.is_some() {
-                    self.active_menu = Some(idx);
-                }
-                Task::none()
-            }
             // ── Theme ──
             MenuMessage::ThemeSelected(id) => {
                 self.theme_id = id;
@@ -1906,9 +2321,6 @@ impl Signex {
             | MenuMessage::GenerateBom => Task::none(),
         };
 
-        if should_close {
-            self.active_menu = None;
-        }
         task
     }
 
@@ -2048,9 +2460,12 @@ impl Signex {
             components_split: self.panel_ctx.components_split,
             project_tree: vec![], // built below
             selection_count: self.panel_ctx.selection_count,
+            selected_uuid: self.panel_ctx.selected_uuid,
+            selected_kind: self.panel_ctx.selected_kind,
             selection_info: self.panel_ctx.selection_info.clone(),
             component_filter: self.panel_ctx.component_filter.clone(),
             collapsed_sections: self.panel_ctx.collapsed_sections.clone(),
+            pre_placement: self.panel_ctx.pre_placement.clone(),
         };
         // Build persistent project tree (toggle state preserved until next project load)
         self.panel_ctx.project_tree = crate::panels::build_project_tree(&self.panel_ctx);
@@ -2118,96 +2533,131 @@ impl Signex {
     /// Align selected symbols based on the alignment action.
     fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
+        use signex_types::schematic::SelectedKind;
+
         if self.canvas.selected.len() < 2 && !matches!(action, ActiveBarAction::AlignToGrid) {
             return;
         }
-        let Some(ref mut sheet) = self.schematic else {
+        let Some(ref sheet) = self.schematic else {
             return;
         };
-        let selected_uuids: Vec<uuid::Uuid> = self.canvas.selected.iter().map(|s| s.uuid).collect();
 
-        // Gather positions of selected symbols
-        let positions: Vec<(uuid::Uuid, f64, f64)> = sheet
-            .symbols
-            .iter()
-            .filter(|s| selected_uuids.contains(&s.uuid))
-            .map(|s| (s.uuid, s.position.x, s.position.y))
-            .collect();
+        // Gather positions of ALL selected items (not just symbols)
+        let mut positions: Vec<(uuid::Uuid, SelectedKind, f64, f64)> = Vec::new();
+        for sel in &self.canvas.selected {
+            let pos = match sel.kind {
+                SelectedKind::Symbol => sheet.symbols.iter().find(|s| s.uuid == sel.uuid)
+                    .map(|s| (s.position.x, s.position.y)),
+                SelectedKind::Label => sheet.labels.iter().find(|l| l.uuid == sel.uuid)
+                    .map(|l| (l.position.x, l.position.y)),
+                SelectedKind::Junction => sheet.junctions.iter().find(|j| j.uuid == sel.uuid)
+                    .map(|j| (j.position.x, j.position.y)),
+                SelectedKind::NoConnect => sheet.no_connects.iter().find(|n| n.uuid == sel.uuid)
+                    .map(|n| (n.position.x, n.position.y)),
+                SelectedKind::TextNote => sheet.text_notes.iter().find(|t| t.uuid == sel.uuid)
+                    .map(|t| (t.position.x, t.position.y)),
+                SelectedKind::Wire => sheet.wires.iter().find(|w| w.uuid == sel.uuid)
+                    .map(|w| ((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
+                SelectedKind::Bus => sheet.buses.iter().find(|b| b.uuid == sel.uuid)
+                    .map(|b| ((b.start.x + b.end.x) / 2.0, (b.start.y + b.end.y) / 2.0)),
+                _ => None,
+            };
+            if let Some((x, y)) = pos {
+                positions.push((sel.uuid, sel.kind, x, y));
+            }
+        }
 
         if positions.is_empty() {
             return;
         }
 
-        let min_x = positions.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
-        let max_x = positions
-            .iter()
-            .map(|p| p.1)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = positions.iter().map(|p| p.2).fold(f64::INFINITY, f64::min);
-        let max_y = positions
-            .iter()
-            .map(|p| p.2)
-            .fold(f64::NEG_INFINITY, f64::max);
+        let min_x = positions.iter().map(|p| p.2).fold(f64::INFINITY, f64::min);
+        let max_x = positions.iter().map(|p| p.2).fold(f64::NEG_INFINITY, f64::max);
+        let min_y = positions.iter().map(|p| p.3).fold(f64::INFINITY, f64::min);
+        let max_y = positions.iter().map(|p| p.3).fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
         let gs = self.grid_size_mm as f64;
 
-        for sym in &mut sheet.symbols {
-            if !selected_uuids.contains(&sym.uuid) {
-                continue;
-            }
-            match action {
-                ActiveBarAction::AlignLeft => sym.position.x = min_x,
-                ActiveBarAction::AlignRight => sym.position.x = max_x,
-                ActiveBarAction::AlignTop => sym.position.y = min_y,
-                ActiveBarAction::AlignBottom => sym.position.y = max_y,
-                ActiveBarAction::AlignHorizontalCenters => sym.position.x = center_x,
-                ActiveBarAction::AlignVerticalCenters => sym.position.y = center_y,
+        // Compute move delta for each item and create batch undo command
+        let mut move_cmds = Vec::new();
+        for &(uuid, kind, x, y) in &positions {
+            let (target_x, target_y) = match action {
+                ActiveBarAction::AlignLeft => (min_x, y),
+                ActiveBarAction::AlignRight => (max_x, y),
+                ActiveBarAction::AlignTop => (x, min_y),
+                ActiveBarAction::AlignBottom => (x, max_y),
+                ActiveBarAction::AlignHorizontalCenters => (center_x, y),
+                ActiveBarAction::AlignVerticalCenters => (x, center_y),
                 ActiveBarAction::AlignToGrid => {
-                    sym.position.x = (sym.position.x / gs).round() * gs;
-                    sym.position.y = (sym.position.y / gs).round() * gs;
+                    ((x / gs).round() * gs, (y / gs).round() * gs)
+                }
+                _ => (x, y),
+            };
+            let dx = target_x - x;
+            let dy = target_y - y;
+            if dx.abs() > 0.001 || dy.abs() > 0.001 {
+                move_cmds.push(crate::undo::EditCommand::MoveElements {
+                    items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                    dx,
+                    dy,
+                });
+            }
+        }
+
+        // Handle distribute operations
+        if matches!(action, ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically)
+            && positions.len() > 2
+        {
+            move_cmds.clear();
+            let mut sorted = positions.clone();
+            let n = sorted.len();
+            match action {
+                ActiveBarAction::DistributeHorizontally => {
+                    sorted.sort_by(|a, b| a.2.total_cmp(&b.2));
+                    let step = (max_x - min_x) / (n - 1) as f64;
+                    for (i, &(uuid, kind, x, _y)) in sorted.iter().enumerate() {
+                        let target_x = min_x + step * i as f64;
+                        let dx = target_x - x;
+                        if dx.abs() > 0.001 {
+                            move_cmds.push(crate::undo::EditCommand::MoveElements {
+                                items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                                dx,
+                                dy: 0.0,
+                            });
+                        }
+                    }
+                }
+                ActiveBarAction::DistributeVertically => {
+                    sorted.sort_by(|a, b| a.3.total_cmp(&b.3));
+                    let step = (max_y - min_y) / (n - 1) as f64;
+                    for (i, &(uuid, kind, _x, y)) in sorted.iter().enumerate() {
+                        let target_y = min_y + step * i as f64;
+                        let dy = target_y - y;
+                        if dy.abs() > 0.001 {
+                            move_cmds.push(crate::undo::EditCommand::MoveElements {
+                                items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                                dx: 0.0,
+                                dy,
+                            });
+                        }
+                    }
                 }
                 _ => {}
             }
         }
 
-        // Distribute evenly
-        if matches!(
-            action,
-            ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically
-        ) {
-            let mut sorted = positions.clone();
-            let n = sorted.len();
-            if n > 2 {
-                match action {
-                    ActiveBarAction::DistributeHorizontally => {
-                        sorted.sort_by(|a, b| a.1.total_cmp(&b.1));
-                        let step = (max_x - min_x) / (n - 1) as f64;
-                        for (i, (uuid, _, _)) in sorted.iter().enumerate() {
-                            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
-                                sym.position.x = min_x + step * i as f64;
-                            }
-                        }
-                    }
-                    ActiveBarAction::DistributeVertically => {
-                        sorted.sort_by(|a, b| a.2.total_cmp(&b.2));
-                        let step = (max_y - min_y) / (n - 1) as f64;
-                        for (i, (uuid, _, _)) in sorted.iter().enumerate() {
-                            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == *uuid) {
-                                sym.position.y = min_y + step * i as f64;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+        if !move_cmds.is_empty() {
+            if let Some(ref mut sheet) = self.schematic {
+                let cmd = crate::undo::EditCommand::Batch(move_cmds);
+                self.undo_stack.execute(sheet, cmd);
+                self.canvas.schematic = Some(sheet.clone());
+                self.canvas.clear_content_cache();
+                self.canvas.clear_overlay_cache();
+                self.mark_dirty();
+                self.commit_schematic();
             }
         }
-
-        self.canvas.schematic = Some(sheet.clone());
-        self.canvas.clear_content_cache();
-        self.canvas.clear_overlay_cache();
-        self.mark_dirty();
-        self.commit_schematic();
     }
 
     fn mark_dirty(&mut self) {
@@ -2230,6 +2680,8 @@ impl Signex {
         let selected = &self.canvas.selected;
         self.panel_ctx.selection_count = selected.len();
         self.panel_ctx.selection_info.clear();
+        self.panel_ctx.selected_uuid = None;
+        self.panel_ctx.selected_kind = None;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -2241,6 +2693,8 @@ impl Signex {
         }
 
         let item = &selected[0];
+        self.panel_ctx.selected_uuid = Some(item.uuid);
+        self.panel_ctx.selected_kind = Some(item.kind);
         if let Some(ref sheet) = self.schematic {
             match item.kind {
                 SelectedKind::Symbol => {
@@ -2434,7 +2888,7 @@ impl Signex {
 
         // Edit operations
         // TODO: implement proper Cut (copy+delete)
-        items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Delete));
+        items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
         items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
         items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
         items.push(self.ctx_menu_sep());
@@ -2526,47 +2980,143 @@ impl Signex {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let menu = menu_bar::view(self.theme_id, self.active_menu).map(Message::Menu);
+        let menu = menu_bar::view(self.theme_id).map(Message::Menu);
 
-        // Collapse states (needed before building panels and handles)
+        // Dock regions with collapse-aware sizing
         let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
         let right_collapsed = self.dock.is_collapsed(PanelPosition::Right);
         let bottom_collapsed = self.dock.is_collapsed(PanelPosition::Bottom);
 
-        // Left panel (resizable width, collapsible)
-        let left_panel = self
-            .dock
-            .view_region(PanelPosition::Left, &self.panel_ctx)
-            .map(Message::Dock);
-        let left_w = if left_collapsed {
-            28.0
-        } else {
-            self.left_width
-        };
-        let left = container(left_panel)
-            .width(left_w)
-            .height(Length::Fill)
-            .style(crate::styles::panel_region);
+        let left = self.view_dock_panel(PanelPosition::Left, left_collapsed, self.left_width);
+        let left_handle = self.view_resize_handle(DragTarget::LeftPanel, !left_collapsed, true);
+        let center = self.view_center();
+        let right_handle =
+            self.view_resize_handle(DragTarget::RightPanel, !right_collapsed, true);
+        let right = self.view_dock_panel(PanelPosition::Right, right_collapsed, self.right_width);
 
-        // Left resize handle (hidden when collapsed)
-        let left_handle_w = if left_collapsed { 0 } else { 5 };
-        let left_handle = iced::widget::mouse_area(
-            container(iced::widget::Space::new())
-                .width(left_handle_w)
-                .height(Length::Fill)
-                .style(crate::styles::resize_handle),
+        let center_row = row![left, left_handle, center, right_handle, right];
+
+        let bottom_handle =
+            self.view_resize_handle(DragTarget::BottomPanel, !bottom_collapsed, false);
+        let bottom =
+            self.view_dock_panel_h(PanelPosition::Bottom, bottom_collapsed, self.bottom_height);
+
+        let status = status_bar::view(
+            self.cursor_x,
+            self.cursor_y,
+            self.grid_visible,
+            self.snap_enabled,
+            self.zoom,
+            self.unit,
+            &self.current_tool,
+            self.grid_size_mm,
         )
-        .interaction(iced::mouse::Interaction::ResizingHorizontally)
-        .on_press(Message::DragStart(DragTarget::LeftPanel));
+        .map(Message::StatusBar);
 
-        // Center — canvas when a schematic is loaded, empty otherwise
-        let center: Element<'_, Message> = if self.schematic.is_some() {
-            let canvas_widget: Element<'_, Message> = canvas(&self.canvas)
+        // Assemble main column: menu → tabs → canvas row → bottom → status
+        // Active Bar is overlaid ON the canvas via Stack (not in column)
+        let mut main = column![menu];
+        if !self.tabs.is_empty() {
+            main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
+        }
+        let main = main
+            .push(center_row)
+            .push(bottom_handle)
+            .push(bottom)
+            .push(status);
+
+        // Overlay layer — Active Bar floats on canvas, plus menus/context/panels
+        let has_active_bar = self.schematic.is_some();
+        let needs_overlay = has_active_bar
+            || self.editing_text.is_some()
+            || self.context_menu.is_some()
+            || self.active_bar_menu.is_some()
+            || self.panel_list_open
+            || !self.dock.floating.is_empty();
+
+        if needs_overlay {
+            let overlays = self.collect_overlays();
+            let mut stack = iced::widget::Stack::new().push(main);
+            for overlay in overlays {
+                stack = stack.push(overlay);
+            }
+            stack.into()
+        } else {
+            main.into()
+        }
+    }
+
+    // ─── View helpers (extracted per iced guide View-Helper pattern) ──
+
+    /// Dock panel wrapped in a resizable container (vertical: width-based).
+    fn view_dock_panel(
+        &self,
+        pos: PanelPosition,
+        collapsed: bool,
+        size: f32,
+    ) -> Element<'_, Message> {
+        let panel = self.dock.view_region(pos, &self.panel_ctx).map(Message::Dock);
+        let w = if collapsed { 28.0 } else { size };
+        container(panel)
+            .width(w)
+            .height(Length::Fill)
+            .style(crate::styles::panel_region)
+            .into()
+    }
+
+    /// Dock panel wrapped in a resizable container (horizontal: height-based).
+    fn view_dock_panel_h(
+        &self,
+        pos: PanelPosition,
+        collapsed: bool,
+        size: f32,
+    ) -> Element<'_, Message> {
+        let panel = self.dock.view_region(pos, &self.panel_ctx).map(Message::Dock);
+        let h = if collapsed { 28.0 } else { size };
+        container(panel)
+            .width(Length::Fill)
+            .height(h)
+            .style(crate::styles::panel_region)
+            .into()
+    }
+
+    /// Resize handle between panels — hidden when panel is collapsed.
+    fn view_resize_handle(
+        &self,
+        target: DragTarget,
+        visible: bool,
+        horizontal: bool,
+    ) -> Element<'_, Message> {
+        let size = if visible { 5 } else { 0 };
+        let handle_container = if horizontal {
+            container(iced::widget::Space::new())
+                .width(size)
+                .height(Length::Fill)
+                .style(crate::styles::resize_handle)
+        } else {
+            container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(size)
+                .style(crate::styles::resize_handle)
+        };
+        let interaction = if horizontal {
+            iced::mouse::Interaction::ResizingHorizontally
+        } else {
+            iced::mouse::Interaction::ResizingVertically
+        };
+        iced::widget::mouse_area(handle_container)
+            .interaction(interaction)
+            .on_press(Message::DragStart(target))
+            .into()
+    }
+
+    /// Center area — canvas when a schematic is loaded, empty placeholder otherwise.
+    fn view_center(&self) -> Element<'_, Message> {
+        if self.schematic.is_some() {
+            canvas(&self.canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into();
-
-            canvas_widget
+                .into()
         } else {
             container(
                 column![
@@ -2580,268 +3130,162 @@ impl Signex {
                 .spacing(8)
                 .align_x(iced::Alignment::Center),
             )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
+            .center(Length::Fill)
             .style(crate::styles::panel_region)
             .into()
-        };
+        }
+    }
 
-        // Right resize handle (hidden when collapsed)
-        let right_handle_w = if right_collapsed { 0 } else { 5 };
-        let right_handle = iced::widget::mouse_area(
-            container(iced::widget::Space::new())
-                .width(right_handle_w)
-                .height(Length::Fill)
-                .style(crate::styles::resize_handle),
-        )
-        .interaction(iced::mouse::Interaction::ResizingHorizontally)
-        .on_press(Message::DragStart(DragTarget::RightPanel));
-
-        // Right panel (resizable width, collapsible)
-        let right_panel = self
-            .dock
-            .view_region(PanelPosition::Right, &self.panel_ctx)
-            .map(Message::Dock);
-        let right_w = if right_collapsed {
-            28.0
-        } else {
-            self.right_width
-        };
-        let right = container(right_panel)
-            .width(right_w)
-            .height(Length::Fill)
-            .style(crate::styles::panel_region);
-
-        // Center row: left | handle | center | handle | right
-        let center_row = row![left, left_handle, center, right_handle, right];
-
-        // Bottom resize handle (hidden when collapsed)
-        let bottom_handle_h = if bottom_collapsed { 0 } else { 5 };
-        let bottom_handle = iced::widget::mouse_area(
+    /// Transparent dismiss layer that closes popups on click.
+    fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
+        iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
-                .height(bottom_handle_h)
-                .style(crate::styles::resize_handle),
+                .height(Length::Fill),
         )
-        .interaction(iced::mouse::Interaction::ResizingVertically)
-        .on_press(Message::DragStart(DragTarget::BottomPanel));
+        .on_press(on_press)
+        .into()
+    }
 
-        // Bottom panel (resizable height, collapsible)
-        let bottom_panel = self
-            .dock
-            .view_region(PanelPosition::Bottom, &self.panel_ctx)
-            .map(Message::Dock);
-        let bottom_h = if bottom_collapsed {
-            28.0
-        } else {
-            self.bottom_height
-        };
-        let bottom = container(bottom_panel)
-            .width(Length::Fill)
-            .height(bottom_h)
-            .style(crate::styles::panel_region);
+    /// Collect all overlay layers (menus, context menu, panel list, floating panels).
+    fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
+        let mut layers = Vec::new();
 
-        // Status bar
-        let status = status_bar::view(
-            self.cursor_x,
-            self.cursor_y,
-            self.grid_visible,
-            self.snap_enabled,
-            self.zoom,
-            self.unit,
-            &self.current_tool,
-            self.grid_size_mm,
-        )
-        .map(Message::StatusBar);
-
-        let mut main = column![menu];
-        if !self.tabs.is_empty() {
-            main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
-        }
-        // Active Bar (centered above canvas)
+        // Active Bar — floats at top-center of canvas area
         if self.schematic.is_some() {
+            // Vertical offset: menu bar height + tab bar if present
+            let y_offset: f32 = 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 };
             let bar = crate::active_bar::view_bar(
                 self.current_tool,
                 self.draw_mode,
                 &self.last_tool,
             )
             .map(Message::ActiveBar);
-            main = main.push(
-                container(bar)
-                    .width(Length::Fill)
-                    .padding([3, 0])
-                    .align_x(iced::alignment::Horizontal::Center)
-                    .style(|_: &iced::Theme| container::Style {
-                        background: Some(iced::Color::from_rgb(0.09, 0.09, 0.10).into()),
-                        ..container::Style::default()
-                    }),
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
             );
         }
-        let main = main
-            .push(center_row)
-            .push(bottom_handle)
-            .push(bottom)
-            .push(status);
 
-        // Overlay: dropdown menus, Active Bar dropdowns, and context menus via Stack
-        let has_menu = self.active_menu.is_some();
-        let has_context = self.context_menu.is_some();
-        let has_ab_menu = self.active_bar_menu.is_some();
-
-        let has_floating = !self.dock.floating.is_empty();
-        if has_menu || has_context || has_ab_menu || self.panel_list_open || has_floating {
-            let mut stack = iced::widget::Stack::new().push(main);
-
-            // Dropdown menu overlay
-            if let Some(idx) = self.active_menu {
-                let x_offset = menu_bar::button_x_offset(idx);
-                let dropdown = menu_bar::view_dropdown(idx).map(Message::Menu);
-
-                // Dismiss layer
-                stack = stack.push(column![
-                    iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
-                    iced::widget::mouse_area(
-                        container(iced::widget::Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_press(Message::Menu(menu_bar::MenuMessage::CloseMenus)),
-                ]);
-                // Dropdown positioned below menu bar
-                stack = stack.push(column![
-                    iced::widget::Space::new().height(menu_bar::MENU_BAR_HEIGHT),
-                    row![iced::widget::Space::new().width(x_offset), dropdown,],
-                ]);
-            }
-
-            // Active Bar dropdown overlay
-            if let Some(ab_menu) = self.active_bar_menu {
-                let dropdown = crate::active_bar::view_dropdown(ab_menu).map(Message::ActiveBar);
-                let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-                // Vertical: menu(24) + toolbar(28) + tabs(~28) + bar on canvas(~36)
-                let ab_y: f32 = 24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
-                // Dismiss layer
-                stack = stack.push(
-                    iced::widget::mouse_area(
-                        container(iced::widget::Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_press(Message::ActiveBar(
-                        crate::active_bar::ActiveBarMsg::CloseMenus,
-                    )),
-                );
-                // Dropdown — aligned under the clicked button
-                let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
-                stack = stack.push(
-                    container(column![
-                        iced::widget::Space::new().height(ab_y),
-                        container(row![iced::widget::Space::new().width(x_off), dropdown,],)
-                            .width(bar_w),
-                    ])
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center),
-                );
-            }
-
-            // Context menu overlay (right-click)
-            if let Some(ref ctx_menu) = self.context_menu {
-                let menu = self.view_context_menu();
-                // Dismiss layer
-                stack = stack.push(
-                    iced::widget::mouse_area(
-                        container(iced::widget::Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_press(Message::CloseContextMenu),
-                );
-                // Menu positioned at click point
-                stack = stack.push(column![
-                    iced::widget::Space::new().height(ctx_menu.y),
-                    row![iced::widget::Space::new().width(ctx_menu.x), menu,],
-                ]);
-            }
-
-            // Panel list popup (bottom-right)
-            if self.panel_list_open {
-                // Dismiss layer
-                stack = stack.push(
-                    iced::widget::mouse_area(
-                        container(iced::widget::Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                    )
-                    .on_press(Message::TogglePanelList),
-                );
-                // Panel list popup at bottom-right
-                let mut panel_items: Vec<Element<'_, Message>> = Vec::new();
-                for &kind in crate::panels::ALL_PANELS {
-                    panel_items.push(
-                        iced::widget::button(
-                            iced::widget::text(kind.label().to_string())
-                                .size(11)
-                                .color(crate::styles::TEXT_PRIMARY),
+        // In-place text editing overlay
+        if let Some(ref edit_state) = self.editing_text {
+            let text = edit_state.text.clone();
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(edit_state.screen_y - 12.0),
+                    row![
+                        iced::widget::Space::new().width(edit_state.screen_x - 4.0),
+                        container(
+                            iced::widget::text_input("", &text)
+                                .on_input(Message::TextEditChanged)
+                                .on_submit(Message::TextEditSubmit)
+                                .size(13)
+                                .padding([4, 6])
+                                .width(180),
                         )
-                        .padding([4, 12])
-                        .width(Length::Fill)
-                        .on_press(Message::OpenPanel(kind))
-                        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
-                            let bg = match status {
-                                iced::widget::button::Status::Hovered => {
-                                    Some(iced::Background::Color(iced::Color::from_rgb(
-                                        0.20, 0.22, 0.30,
-                                    )))
-                                }
-                                _ => None,
-                            };
-                            iced::widget::button::Style {
-                                background: bg,
-                                border: iced::Border::default(),
-                                text_color: crate::styles::TEXT_PRIMARY,
-                                ..iced::widget::button::Style::default()
-                            }
-                        })
-                        .into(),
-                    );
-                }
-                let popup = container(
-                    iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
-                )
-                .padding([6, 0])
-                .style(crate::styles::context_menu);
+                        .style(crate::styles::context_menu),
+                    ],
+                ]
+                .into(),
+            );
+        }
 
-                stack = stack.push(
-                    container(
-                        container(popup)
-                            .align_x(iced::alignment::Horizontal::Right)
-                            .align_y(iced::alignment::Vertical::Bottom)
-                            .padding([15, 10]),
+        // Active Bar dropdown overlay
+        if let Some(ab_menu) = self.active_bar_menu {
+            let dropdown = crate::active_bar::view_dropdown(ab_menu).map(Message::ActiveBar);
+            let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
+            let ab_y: f32 =
+                24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
+            let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+
+            layers.push(Self::dismiss_layer(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::CloseMenus,
+            )));
+            layers.push(
+                container(column![
+                    iced::widget::Space::new().height(ab_y),
+                    container(row![iced::widget::Space::new().width(x_off), dropdown])
+                        .width(bar_w),
+                ])
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center)
+                .into(),
+            );
+        }
+
+        // Right-click context menu overlay
+        if let Some(ref ctx_menu) = self.context_menu {
+            let menu = self.view_context_menu();
+            layers.push(Self::dismiss_layer(Message::CloseContextMenu));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(ctx_menu.y),
+                    row![iced::widget::Space::new().width(ctx_menu.x), menu],
+                ]
+                .into(),
+            );
+        }
+
+        // Panel list popup (bottom-right)
+        if self.panel_list_open {
+            let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
+                .iter()
+                .map(|&kind| {
+                    iced::widget::button(
+                        iced::widget::text(kind.label().to_string())
+                            .size(11)
+                            .color(crate::styles::TEXT_PRIMARY),
                     )
+                    .padding([4, 12])
                     .width(Length::Fill)
-                    .height(Length::Fill),
-                );
-            }
+                    .on_press(Message::OpenPanel(kind))
+                    .style(crate::styles::menu_item)
+                    .into()
+                })
+                .collect();
 
-            // Floating panels
-            for i in 0..self.dock.floating.len() {
-                if let Some(panel_widget) = self.dock.view_floating_panel(i, &self.panel_ctx) {
-                    let fp = &self.dock.floating[i];
-                    stack = stack.push(column![
+            let popup = container(
+                iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
+            )
+            .padding([6, 0])
+            .style(crate::styles::context_menu);
+
+            layers.push(Self::dismiss_layer(Message::TogglePanelList));
+            layers.push(
+                container(
+                    container(popup)
+                        .align_x(iced::alignment::Horizontal::Right)
+                        .align_y(iced::alignment::Vertical::Bottom)
+                        .padding([15, 10]),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+            );
+        }
+
+        // Floating panels
+        for i in 0..self.dock.floating.len() {
+            if let Some(panel_widget) = self.dock.view_floating_panel(i, &self.panel_ctx) {
+                let fp = &self.dock.floating[i];
+                layers.push(
+                    column![
                         iced::widget::Space::new().height(fp.y),
                         row![
                             iced::widget::Space::new().width(fp.x),
                             panel_widget.map(Message::Dock),
                         ],
-                    ]);
-                }
+                    ]
+                    .into(),
+                );
             }
-
-            stack.into()
-        } else {
-            main.into()
         }
+
+        layers
     }
 }
