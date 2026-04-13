@@ -1,4 +1,4 @@
-# Signex — Migration Plan
+# Signex — Master Plan
 
 ## Architecture Decision: wgpu Canvas + Iced Panels
 

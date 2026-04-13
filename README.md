@@ -140,7 +140,7 @@ Development is organized into milestones tracked on [GitHub Milestones](../../mi
 | v0.3.0 | Canvas — wgpu pan/zoom/grid, Altium-style widgets | Done |
 | v0.4.0 | Schematic Viewer — selection, fit-to-content, search | Done |
 | v0.5.0 | Schematic Editor — wire drawing, undo/redo, edit ops | Done |
-| v0.6.0 | Full Editor — multi-select, copy/paste, save | Done |
+| v0.6.0 | Full Editor — multi-select, copy/paste, save | In Progress |
 | v0.7.0 | Validation — ERC 11 checks, annotation | |
 | v0.8.0 | Output — PDF, BOM, netlist, library editor | |
 | v0.9.0 | PCB Viewer — GPU rendering, layer compositing | |
@@ -150,7 +150,7 @@ Development is organized into milestones tracked on [GitHub Milestones](../../mi
 | v1.1–v1.8 | 3D viewer, simulation, high-speed, AI, plugins | |
 | **v2.0.0** | **Pro Release** — AI + collaboration | |
 
-See [`docs/migration-plan.md`](https://github.com/alplabai/signex/blob/main/docs/migration-plan.md) for the full plan.
+See [`docs/master-plan.md`](docs/master-plan.md) for the full plan.
 
 ## Contributing
 
