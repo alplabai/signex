@@ -1,28 +1,19 @@
 # Signex — Master Plan
 
-## Architecture Decision: wgpu Canvas + Iced Panels
+## Architecture
 
-**Source:** Tauri v2 + React 19 + TypeScript + Canvas2D + Zustand (signex repo)
-**Target:** wgpu + Iced 0.14 + pure Rust (alplabai/signex)
+**Stack:** wgpu + Iced 0.14 + pure Rust
 **Editions:** Signex Community (free, GPL-3.0) + Signex Pro (subscription, proprietary)
 
-### Why wgpu + Iced Over Bevy + egui
+### Why wgpu + Iced
 
-| Concern | Bevy + bevy_egui | wgpu + Iced |
-|---|---|---|
-| **Architecture** | Game engine with ECS — massive runtime for a desktop app | Elm architecture — clean unidirectional data flow, no ECS boilerplate |
-| **UI quality** | egui = immediate mode, no native feel, limited layout | Iced = retained mode, native-feeling widgets, proper layout engine |
-| **Custom canvas** | Bevy rendering pipeline (over-engineered for 2D schematics) | Raw wgpu access via `iced::widget::Canvas` + `widget::Shader` |
-| **Binary size** | ~80MB+ (Bevy pulls PBR, audio, animation, scene, etc.) | ~15MB (Iced + wgpu, lean dependency tree) |
-| **Compile time** | 3-8 min clean build (Bevy is enormous) | 30-90s clean build |
-| **3D rendering** | Bevy PBR built-in (advantage) | Raw wgpu — more work but full control, no game engine overhead |
-| **Panel system** | egui_dock — functional but looks like a debug UI | Iced pane_grid + iced_aw Tabs — custom desktop panel system |
-| **Docking** | Third-party (egui_dock) — limited styling | Custom: `pane_grid` (tiling) + `iced_aw::Tabs` (tabs) — requires assembly |
-| **Font rendering** | Bevy text (cosmic-text) — good but ECS-coupled | Iced text (cosmic-text) — same engine, simpler integration |
-| **State model** | ECS (Entity-Component-System) — overkill for forms/panels | Elm Model-Message-Update — natural for UI state |
-| **Learning curve** | High (Bevy ECS + egui + bevy_egui interop) | Moderate (Iced Elm pattern + wgpu for canvas) |
-| **Stability** | Bevy 0.x — breaking changes every release | Iced 0.14 — maturing, fewer churn cycles |
-| **Desktop features** | Via Bevy plugins (file dialogs, menus) — game engine gaps | Built for desktop apps — file dialogs, clipboard, multi-window |
+- **Elm architecture** — clean unidirectional data flow (Message → update → view), no ECS boilerplate
+- **Retained-mode UI** — native-feeling widgets, proper layout engine
+- **Raw wgpu access** — `iced::widget::Canvas` for schematic, `widget::Shader` for PCB GPU rendering
+- **~15MB binary** — lean dependency tree
+- **30-90s clean build** — fast iteration
+- **Built for desktop** — file dialogs, clipboard, multi-window support
+- **iced_aw 0.13** — additional widgets (Tabs, MenuBar, NumberInput, etc.)
 
 ### Known Risks and Mitigations
 
@@ -548,29 +539,6 @@ The plan is restructured so **multiple engineers work simultaneously** on indepe
 
 ---
 
-## Prior Art: Circe → Scirke (Lessons Learned)
-
-The only EDA tool ever built with Iced is **Circe** (github.com/Iraeis/circe, 41 stars) — a schematic capture tool with ngspice simulation. Its author abandoned it and rewrote it as **Scirke** using Bevy + bevy_egui.
-
-**What Circe did right (adopt these patterns):**
-- Three-layer cache system: `active_cache` (cleared every frame for cursor/selection), `passive_cache` (cleared on schematic changes), `background_cache` (grid, borders — almost never cleared)
-- Coordinate space system using `euclid` crate: CanvasSpace (screen pixels), ViewportSpace (f32 schematic), SchematicSpace (i16 snapped grid)
-- Device symbols drawn with Canvas path primitives
-- ngspice integration via FFI bindings
-
-**Why Circe failed (avoid these mistakes):**
-- Used only `Canvas` widget — CPU tessellation for everything, no GPU instancing
-- No custom WGSL shaders — hit performance ceiling
-- Manual coordinate transforms were error-prone
-- No entity system — all rendering was procedural
-
-**How Signex-Iced avoids these traps:**
-1. Use `widget::Shader` (not just `Canvas`) for PCB rendering — custom instanced WGSL pipelines
-2. Use `Canvas` with aggressive caching for schematic (fine at schematic scale)
-3. Build proper coordinate system crate (`signex-render`) with clean world↔screen transforms
-4. Domain types in `signex-types` provide the entity abstraction that Circe lacked
-5. Build the missing infrastructure (dock tabs, tree view) rather than working around gaps
-
 ---
 
 ## Repository: alplabai/signex
@@ -578,32 +546,19 @@ The only EDA tool ever built with Iced is **Circe** (github.com/Iraeis/circe, 41
 ### Branch Strategy
 
 ```
-main                    # Stable releases only. Tagged vX.Y.Z.
-├── dev                 # Integration branch. All feature branches merge here first.
-│   ├── feature/phase-0-scaffold
-│   ├── feature/phase-1-parser
-│   ├── feature/phase-2-canvas
-│   ├── feature/phase-3-schematic-viewer
-│   ├── feature/phase-4-editor-foundation
-│   ├── feature/phase-5-core-editing
-│   ├── feature/phase-6-validation
-│   ├── feature/phase-7-advanced-schematic
-│   ├── feature/phase-8-pcb-viewer
-│   ├── feature/phase-9-pcb-editor
-│   ├── feature/phase-10-3d-viewer
-│   ├── feature/phase-11-simulation
-│   ├── feature/phase-12-signal-ai          # Pro only
-│   ├── feature/phase-13-plugin-system
-│   ├── feature/phase-14-polish
-│   └── feature/phase-15-collaboration      # Pro only
+main                    # Protected. Stable releases only. Tagged vX.Y.Z.
+└── dev                 # Default branch. All feature branches merge here via PR.
+    ├── feature/...     # New features: feature/v0.6-full-editor
+    ├── fix/...         # Bug fixes: fix/parser-unicode
+    └── hotfix/...      # Urgent fixes branched from main, merged to both main and dev
 ```
 
 **Rules:**
-- `main` is protected. Only merge from `dev` after all CI passes + manual QA.
+- `main` is protected — requires PR with 1 approval, no direct pushes, no force pushes.
 - `dev` is the integration branch. Feature branches merge here via PR.
-- Feature branches: `feature/phase-N-description` format.
-- Hotfixes: `hotfix/description` branched from `main`, merged to both `main` and `dev`.
-- Every merge to `main` gets a version tag.
+- Feature branches: `feature/<description>` format.
+- Hotfixes: `hotfix/<description>` branched from `main`, merged to both `main` and `dev`.
+- Every merge to `main` gets a version tag (e.g., `v0.6.0`).
 - CI runs on every push to `dev` and `feature/*`.
 
 ---
@@ -616,10 +571,6 @@ signex/
 ├── CLAUDE.md                         # Agent instructions
 ├── LICENSE                           # GPL-3.0
 ├── README.md
-├── _legacy/                          # Reference: TypeScript/React source from signex repo
-│   ├── src/                          # All .tsx/.ts files
-│   └── src-tauri/                    # Rust Tauri commands + engine
-│
 ├── crates/
 │   ├── signex-app/                   # Main binary — Iced Application
 │   │   ├── Cargo.toml
@@ -1316,7 +1267,7 @@ Full Signex with AI + plugins. Pro subscription unlocks Signal AI + Collaboratio
 
 ## Phase 0: Application Scaffold — v0.1.0
 
-**Branch:** `feature/phase-0-scaffold`
+**Branch:** `feature/v0.1-scaffold`
 **Goal:** Empty Iced window with Altium-style shell layout — menu bar, toolbar, dockable panels, status bar, tabbed document area, 6 themes.
 
 ### Implementation
@@ -1324,7 +1275,7 @@ Full Signex with AI + plugins. Pro subscription unlocks Signal AI + Collaboratio
 #### 0.1 — Workspace setup
 - Create `Cargo.toml` workspace manifest
 - Create `crates/signex-app/` and `crates/signex-types/`
-- Copy TypeScript source to `_legacy/` for reference
+- Set up workspace dependencies and CI
 
 #### 0.2 — Iced application shell
 - `main.rs`: window setup (title "Signex", size 1400x900, dark theme)
@@ -1332,7 +1283,7 @@ Full Signex with AI + plugins. Pro subscription unlocks Signal AI + Collaboratio
 - Basic layout: `Column` [ menu_bar, toolbar, `Row` [ left_panel, center, right_panel ], bottom_panel, status_bar ]
 
 #### 0.3 — Theme system
-- Port all 6 themes from `_legacy/src/lib/themes.ts` to `crates/signex-types/src/theme.rs`
+- Define all 6 themes in `crates/signex-types/src/theme.rs`
 - `ThemeTokens` struct with all color tokens (bg, text, accent, canvas colors)
 - Iced `Theme` implementation that maps tokens to widget styles
 - Theme switching via menu
@@ -1419,21 +1370,21 @@ anyhow          = "1"
 
 ## Phase 1: KiCad Parser — v0.2.0
 
-**Branch:** `feature/phase-1-parser`
-**Goal:** Port the existing Rust S-expression parser from `_legacy/src-tauri/src/engine/` to `crates/kicad-parser/`.
+**Branch:** `feature/v0.2-parser`
+**Goal:** Build the S-expression parser in `crates/kicad-parser/`.
 
 ### Implementation
 
 #### 1.1 — S-expression tokenizer
-- Port `sexpr.rs` — tokenizer + tree builder
+- Build `sexpr.rs` — tokenizer + tree builder
 - Unit tests for nested S-expressions, quoted strings, escape sequences
 
 #### 1.2 — Schematic parser
-- Port `parser.rs` — `.kicad_sch` → `SchematicSheet`
+- Build `parser.rs` — `.kicad_sch` → `SchematicSheet`
 - All types in `signex-types`: Symbol, Wire, Label, Junction, Bus, BusEntry, NoConnect, TextNote, Drawing, ChildSheet
 
 #### 1.3 — PCB parser
-- Port `pcb_parser.rs` — `.kicad_pcb` → `PcbBoard`
+- Build `pcb_parser.rs` — `.kicad_pcb` → `PcbBoard`
 - All PCB types in `signex-types`: Track, Pad, Via, Zone, Footprint, BoardOutline
 
 #### 1.4 — Symbol library parser
@@ -1443,7 +1394,7 @@ anyhow          = "1"
 - Unit + bodyStyle filtering metadata
 
 #### 1.5 — Writer (save)
-- Port `writer.rs` — `SchematicSheet` → S-expression string
+- Build `writer.rs` — `SchematicSheet` → S-expression string
 - Round-trip test: parse → write → parse → assert equal
 
 #### 1.6 — Rich text markup parser
@@ -1475,7 +1426,7 @@ nom = "8"    # Parser combinator for S-expressions
 
 ## Phase 2: wgpu Canvas — v0.3.0
 
-**Branch:** `feature/phase-2-canvas`
+**Branch:** `feature/v0.3-canvas`
 **Goal:** Working `iced::widget::Canvas` with Altium-style pan/zoom/grid in the center area.
 
 ### Implementation
@@ -1536,7 +1487,7 @@ nom = "8"    # Parser combinator for S-expressions
 
 ## Phase 3: Schematic Viewer — v0.4.0
 
-**Branch:** `feature/phase-3-schematic-viewer`
+**Branch:** `feature/v0.4-schematic-viewer`
 **Goal:** Open a KiCad `.kicad_sch` file and render it correctly on the wgpu canvas.
 
 ### Implementation
@@ -1547,7 +1498,7 @@ nom = "8"    # Parser combinator for S-expressions
 - Open first sheet, populate Projects panel tree
 
 #### 3.2 — Schematic render pipeline
-Port render logic from `_legacy/src/canvas/SchematicRenderer.tsx`. Reference KiCad `SCH_PAINTER` for correctness.
+Implement render logic referencing KiCad `SCH_PAINTER` for correctness.
 
 **Render order (Z-layers, matching KiCad):**
 1. Sheet border + title block (z=0)
@@ -1629,7 +1580,7 @@ rfd = "0.17"    # Native file dialogs
 
 ## Phase 4: Editor Foundation — v0.5.0
 
-**Branch:** `feature/phase-4-editor-foundation`
+**Branch:** `feature/v0.5-schematic-editor`
 **Goal:** Selection, move, wire drawing, delete, rotate, mirror, undo/redo, save.
 
 ### Implementation
@@ -1713,7 +1664,7 @@ rfd = "0.17"    # Native file dialogs
 
 ## Phase 5: Core Editing — v0.6.0
 
-**Branch:** `feature/phase-5-core-editing`
+**Branch:** `feature/v0.6-full-editor`
 **Goal:** Full schematic editing with copy/paste, labels, power ports, bus, in-place text edit.
 
 ### Implementation
@@ -1786,13 +1737,13 @@ rfd = "0.17"    # Native file dialogs
 
 ## Phase 6: Validation — v0.7.0
 
-**Branch:** `feature/phase-6-validation`
+**Branch:** `feature/v0.7-validation`
 **Goal:** ERC with 11 checks, pin connection matrix, annotation, net color override, AutoFocus.
 
 ### Implementation
 
 #### 6.1 — ERC engine
-Port from `_legacy/src/lib/erc.ts`:
+Implement ERC rules:
 1. Duplicate designator
 2. Unconnected pin
 3. Floating wire
@@ -1849,7 +1800,7 @@ Port from `_legacy/src/lib/erc.ts`:
 
 ## Phase 7: Advanced Schematic — v0.8.0
 
-**Branch:** `feature/phase-7-advanced-schematic`
+**Branch:** `feature/v0.8-output`
 **Goal:** Library editor, PDF/print, output jobs, templates, BOM, drawing tools, selection filter, 40+ Altium parity features.
 
 ### Implementation
@@ -1926,7 +1877,7 @@ Port from `_legacy/src/lib/erc.ts`:
 
 ## Phase 8: PCB Viewer — v0.9.0
 
-**Branch:** `feature/phase-8-pcb-viewer`
+**Branch:** `feature/v0.9-pcb-viewer`
 **Goal:** Render KiCad `.kicad_pcb` files on the wgpu canvas with layer compositing.
 
 ### Implementation
@@ -1995,7 +1946,7 @@ Port from `_legacy/src/lib/erc.ts`:
 
 ## Phase 9: PCB Editor — v0.10.0
 
-**Branch:** `feature/phase-9-pcb-editor`
+**Branch:** `feature/v0.10-pcb-editor`
 **Goal:** Interactive routing, DRC, copper pour, component placement on PCB.
 
 ### Implementation
@@ -2013,7 +1964,7 @@ Port from `_legacy/src/lib/erc.ts`:
 - Meander patterns for length tuning
 
 #### 9.3 — DRC engine
-Port from `_legacy/src/lib/pcbDrc.ts`:
+Implement DRC rules:
 15 rule types (clearance, min width, min via, annular ring, etc.)
 
 #### 9.4 — Copper pour
@@ -2060,7 +2011,7 @@ Port from `_legacy/src/lib/pcbDrc.ts`:
 
 ## Phase 10: 3D PCB Viewer — v0.11.0
 
-**Branch:** `feature/phase-10-3d-viewer`
+**Branch:** `feature/v1.1-3d-viewer`
 **Goal:** 3D PCB viewer with PBR materials, STEP models, thermal overlay.
 
 ### Implementation
@@ -2106,7 +2057,7 @@ Port from `_legacy/src/lib/pcbDrc.ts`:
 
 ## Phase 11: Simulation — v0.12.0
 
-**Branch:** `feature/phase-11-simulation`
+**Branch:** `feature/v1.4-simulation`
 **Goal:** SPICE (ngspice), RF/EM (OpenEMS), thermal (Elmer FEM) simulation.
 
 ### Implementation
@@ -2122,7 +2073,7 @@ Port from `_legacy/src/lib/pcbDrc.ts`:
 - PCB geometry → CSX XML (tracks, vias, zones → conductors)
 - Material database (copper, FR4, Rogers, soldermask, prepreg)
 - Auto-mesh with conductor refinement (lambda/100 near edges)
-- Port auto-detection
+- Build auto-detection
 - Subprocess execution with progress parsing
 - HDF5 → S-parameter matrix
 - S-param panel: dB + phase plot, Smith chart
@@ -2169,7 +2120,7 @@ libloading   = "0.8"           # ngspice FFI
 
 ## Phase 12: Signal AI — v0.13.0 (Pro Only)
 
-**Branch:** `feature/phase-12-signal-ai`
+**Branch:** `feature/v1.7-signal-ai`
 **Edition:** Pro (feature-gated behind `#[cfg(feature = "pro")]`)
 **Crate:** `crates/signex-signal/`
 **Goal:** Claude-powered design copilot via Alp Lab's managed API gateway. Users don't need their own API key — Signal AI usage is included in the Pro subscription.
@@ -2249,7 +2200,7 @@ signex-types    = { path = "../signex-types" }
 
 ## Phase 13: Plugin System — v0.14.0
 
-**Branch:** `feature/phase-13-plugin-system`
+**Branch:** `feature/v1.8-plugins`
 **Goal:** Extism WASM plugin API for third-party extensions.
 
 ### Implementation
@@ -2288,7 +2239,7 @@ extism = "1.21"    # WASM plugin framework
 
 ## Phase 14: Polish — v1.0.0 (Community Release)
 
-**Branch:** `feature/phase-14-polish`
+**Branch:** `feature/v2.0-pro`
 **Goal:** Production quality Community edition — performance, stability, UX polish.
 
 ### Implementation
@@ -2328,7 +2279,7 @@ extism = "1.21"    # WASM plugin framework
 
 ## Phase 15: Live Collaboration — v1.1.0 (Pro Only)
 
-**Branch:** `feature/phase-15-collaboration`
+**Branch:** `feature/v2.1-collaboration`
 **Edition:** Pro (feature-gated behind `#[cfg(feature = "pro")]`)
 **Crate:** `crates/signex-collab/` (client) + `crates/signex-collab-server/` (Edge Functions)
 **Backend:** Supabase (Postgres + Realtime + Storage + Auth + Edge Functions)
