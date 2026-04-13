@@ -124,6 +124,10 @@ pub struct PanelContext {
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
     pub snap_hotspots: bool,
+    /// UI font family name (shown in settings; applies on restart).
+    pub ui_font_name: String,
+    /// Canvas font family name (Iosevka by default; applies immediately).
+    pub canvas_font_name: String,
     pub properties_tab: usize, // 0=General, 1=Parameters
     // Components panel
     pub kicad_libraries: Vec<String>,
@@ -215,6 +219,10 @@ pub enum PanelMsg {
     SetVisibleGridSize(f32),
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
+    /// Change the UI font (saved to prefs; applies on next restart).
+    SetUiFont(String),
+    /// Change the canvas font (applied immediately to schematic/PCB text).
+    SetCanvasFont(String),
     /// Set page margin vertical zones.
     SetMarginVertical(u32),
     /// Set page margin horizontal zones.
@@ -1181,6 +1189,8 @@ fn view_properties_general<'a>(
         let snap_enabled = ctx.snap_enabled;
         let snap_hotspots = ctx.snap_hotspots;
         let grid_visible = ctx.grid_visible;
+        let ui_font_name = ctx.ui_font_name.clone();
+        let canvas_font_name = ctx.canvas_font_name.clone();
         col = col.push(collapsible_section(
             "prop_general",
             "General",
@@ -1211,7 +1221,8 @@ fn view_properties_general<'a>(
                     "Shift+E",
                     muted,
                 ));
-                c = c.push(form_input_row("Document Font", "Arial, 8", muted));
+                c = c.push(form_font_row("UI Font", &ui_font_name, PanelMsg::SetUiFont, muted, true));
+                c = c.push(form_font_row("Canvas Font", &canvas_font_name, PanelMsg::SetCanvasFont, muted, false));
                 c = c.push(form_input_row("Sheet Color", "Black", muted));
                 c
             },
@@ -1666,6 +1677,55 @@ fn form_check_row_shortcut<'a>(
     .padding([2, 8])
     .width(Length::Fill)
     .into()
+}
+
+/// Font selection row: [Label LABEL_W] [pick_list of system fonts]
+/// `restart_hint` — when true, appends a small "(restart)" note below.
+fn form_font_row<'a>(
+    label: &'static str,
+    current: &str,
+    on_change: impl Fn(String) -> PanelMsg + 'static,
+    label_c: Color,
+    restart_hint: bool,
+) -> Element<'a, PanelMsg> {
+    let families = crate::fonts::system_font_families();
+    let current_owned = current.to_string();
+    let pick = iced::widget::pick_list(
+        families.as_slice(),
+        Some(current_owned),
+        on_change,
+    )
+    .text_size(11)
+    .width(Length::Fill);
+
+    let mut col = Column::new().spacing(0).width(Length::Fill);
+    col = col.push(
+        container(
+            row![
+                text(label)
+                    .size(11)
+                    .color(label_c)
+                    .width(LABEL_W)
+                    .wrapping(iced::widget::text::Wrapping::None),
+                pick,
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    if restart_hint {
+        col = col.push(
+            container(
+                text("(restart to apply)")
+                    .size(9)
+                    .color(Color::from_rgba(1.0, 0.75, 0.2, 0.8)),
+            )
+            .padding(iced::Padding { top: 0.0, right: 8.0, bottom: 4.0, left: 8.0 + LABEL_W }),
+        );
+    }
+    col.into()
 }
 
 /// Form row: label | NumberInput (iced_aw) with step/bounds.

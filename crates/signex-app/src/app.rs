@@ -182,6 +182,10 @@ pub struct Signex {
     pub visible_grid_mm: f32,
     /// Snap to electrical object hotspots (pin endpoints, wire ends).
     pub snap_hotspots: bool,
+    /// UI font family (default: "Roboto").  Applies on next restart.
+    pub ui_font_name: String,
+    /// Canvas font family (default: "Iosevka").  Applies immediately to canvas text.
+    pub canvas_font_name: String,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
@@ -468,6 +472,8 @@ impl Signex {
             grid_size_mm,
             visible_grid_mm: 2.54,
             snap_hotspots: true,
+            ui_font_name: crate::fonts::read_ui_font_pref(),
+            canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
             schematic: None,
             project_path: None,
             project_data: None,
@@ -493,6 +499,8 @@ impl Signex {
                 grid_size_mm: 2.54,
                 visible_grid_mm: 2.54,
                 snap_hotspots: true,
+                ui_font_name: crate::fonts::read_ui_font_pref(),
+                canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 properties_tab: 0,
                 kicad_libraries,
                 active_library: None,
@@ -1557,6 +1565,15 @@ impl Signex {
                         self.snap_hotspots = !self.snap_hotspots;
                         self.panel_ctx.snap_hotspots = self.snap_hotspots;
                     }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetUiFont(name)) => {
+                        self.ui_font_name = name.clone();
+                        self.panel_ctx.ui_font_name = name.clone();
+                        crate::fonts::write_ui_font_pref(name);
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetCanvasFont(name)) => {
+                        self.canvas_font_name = name.clone();
+                        self.panel_ctx.canvas_font_name = name.clone();
+                    }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::SetMarginVertical(_)
                         | crate::panels::PanelMsg::SetMarginHorizontal(_),
@@ -2575,6 +2592,8 @@ impl Signex {
             grid_size_mm: self.grid_size_mm,
             visible_grid_mm: self.visible_grid_mm,
             snap_hotspots: self.snap_hotspots,
+            ui_font_name: self.ui_font_name.clone(),
+            canvas_font_name: self.canvas_font_name.clone(),
             properties_tab: self.panel_ctx.properties_tab,
             kicad_libraries: self.panel_ctx.kicad_libraries.clone(),
             active_library: self.panel_ctx.active_library.clone(),
