@@ -178,6 +178,10 @@ pub struct Signex {
     pub current_tool: Tool,
     pub canvas: SchematicCanvas,
     pub grid_size_mm: f32,
+    /// Separate visible grid spacing (what dots are drawn at).
+    pub visible_grid_mm: f32,
+    /// Snap to electrical object hotspots (pin endpoints, wire ends).
+    pub snap_hotspots: bool,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
@@ -357,6 +361,78 @@ fn constrain_segments(
     }
 }
 
+/// Check whether point `p` lies strictly on the interior of wire segment `wire`.
+/// "Strictly interior" excludes the start/end endpoints (within `tol` mm).
+fn point_on_wire_interior(
+    p: signex_types::schematic::Point,
+    wire: &signex_types::schematic::Wire,
+    tol: f64,
+) -> bool {
+    let (ax, ay) = (wire.start.x, wire.start.y);
+    let (bx, by) = (wire.end.x, wire.end.y);
+    let (px, py) = (p.x, p.y);
+    let (abx, aby) = (bx - ax, by - ay);
+    let (apx, apy) = (px - ax, py - ay);
+    let len_sq = abx * abx + aby * aby;
+    if len_sq < tol * tol {
+        return false; // degenerate (zero-length) wire
+    }
+    // Must be collinear: |AB × AP|² / |AB|² < tol²
+    let cross = abx * apy - aby * apx;
+    if (cross * cross) > tol * tol * len_sq {
+        return false;
+    }
+    // Parameter t = AP · AB / |AB|². Interior means t ∈ (tol/len, 1 - tol/len)
+    let t = (apx * abx + apy * aby) / len_sq;
+    let margin = tol / len_sq.sqrt();
+    t > margin && t < 1.0 - margin
+}
+
+/// Collect junctions needed at the given point `pt` in the existing sheet.
+/// Returns a new `Junction` if:
+///   - `pt` lies strictly on the interior of any existing wire segment, OR
+///   - 3 or more wire endpoints (start/end) coincide at `pt`
+/// Returns `None` if no junction is needed or one already exists.
+fn needed_junction(
+    pt: signex_types::schematic::Point,
+    sheet: &signex_types::schematic::SchematicSheet,
+    tol: f64,
+) -> Option<signex_types::schematic::Junction> {
+    // Already has a junction here?
+    let already = sheet.junctions.iter().any(|j| {
+        (j.position.x - pt.x).abs() < tol && (j.position.y - pt.y).abs() < tol
+    });
+    if already {
+        return None;
+    }
+    // T-junction: pt lies on the interior of an existing wire
+    let on_interior = sheet
+        .wires
+        .iter()
+        .any(|w| point_on_wire_interior(pt, w, tol));
+    if on_interior {
+        return Some(signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: pt,
+            diameter: 0.0,
+        });
+    }
+    // Y-junction: 3+ wire endpoints share this point
+    let endpoint_count = sheet.wires.iter().filter(|w| {
+        let at_s = (w.start.x - pt.x).abs() < tol && (w.start.y - pt.y).abs() < tol;
+        let at_e = (w.end.x - pt.x).abs() < tol && (w.end.y - pt.y).abs() < tol;
+        at_s || at_e
+    }).count();
+    if endpoint_count >= 3 {
+        return Some(signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: pt,
+            diameter: 0.0,
+        });
+    }
+    None
+}
+
 // ─── Iced Application ─────────────────────────────────────────
 
 impl Signex {
@@ -390,6 +466,8 @@ impl Signex {
             current_tool: Tool::Select,
             canvas: sch_canvas,
             grid_size_mm,
+            visible_grid_mm: 2.54,
+            snap_hotspots: true,
             schematic: None,
             project_path: None,
             project_data: None,
@@ -413,6 +491,8 @@ impl Signex {
                 grid_visible: true,
                 snap_enabled: true,
                 grid_size_mm: 2.54,
+                visible_grid_mm: 2.54,
+                snap_hotspots: true,
                 properties_tab: 0,
                 kicad_libraries,
                 active_library: None,
@@ -682,6 +762,7 @@ impl Signex {
             }
             Message::StatusBar(StatusBarMsg::ToggleSnap) => {
                 self.snap_enabled = !self.snap_enabled;
+                self.canvas.snap_enabled = self.snap_enabled;
             }
             Message::StatusBar(StatusBarMsg::TogglePanelList) => {
                 return self.update(Message::TogglePanelList);
@@ -723,8 +804,34 @@ impl Signex {
                                     end: seg.1,
                                 };
                                 if let Some(ref mut sheet) = self.schematic {
-                                    let cmd = crate::undo::EditCommand::AddWire(wire);
+                                    // Collect needed junctions BEFORE adding the wire
+                                    const TOL: f64 = 0.01;
+                                    let mut cmds: Vec<crate::undo::EditCommand> =
+                                        vec![crate::undo::EditCommand::AddWire(wire.clone())];
+                                    // Check start endpoint (may land on existing wire mid-segment)
+                                    if let Some(j) = needed_junction(wire.start, sheet, TOL) {
+                                        cmds.push(crate::undo::EditCommand::AddJunction(j));
+                                    }
+                                    // Check end endpoint
+                                    if let Some(j) = needed_junction(wire.end, sheet, TOL) {
+                                        cmds.push(crate::undo::EditCommand::AddJunction(j));
+                                    }
+                                    let cmd = if cmds.len() == 1 {
+                                        cmds.remove(0)
+                                    } else {
+                                        crate::undo::EditCommand::Batch(cmds)
+                                    };
                                     self.undo_stack.execute(sheet, cmd);
+                                    // After adding wire, check if Y-junction needed at endpoints
+                                    // (3+ wires now meet — Y-junction may only appear after the wire is added)
+                                    for &check_pt in &[wire.start, wire.end] {
+                                        if let Some(j) = needed_junction(check_pt, sheet, TOL) {
+                                            self.undo_stack.execute(
+                                                sheet,
+                                                crate::undo::EditCommand::AddJunction(j),
+                                            );
+                                        }
+                                    }
                                     self.canvas.schematic = Some(sheet.clone());
                                     self.canvas.clear_content_cache();
                                     self.mark_dirty();
@@ -1186,6 +1293,7 @@ impl Signex {
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleSnap) => {
                         self.snap_enabled = !self.snap_enabled;
+                        self.canvas.snap_enabled = self.snap_enabled;
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::PropertiesTab(
                         idx,
@@ -1434,7 +1542,20 @@ impl Signex {
                     )) => {
                         self.grid_size_mm = *size;
                         self.panel_ctx.grid_size_mm = *size;
+                        self.canvas.snap_grid_mm = *size as f64;
                         self.canvas.clear_bg_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetVisibleGridSize(
+                        size,
+                    )) => {
+                        self.visible_grid_mm = *size;
+                        self.panel_ctx.visible_grid_mm = *size;
+                        self.canvas.visible_grid_mm = *size as f64;
+                        self.canvas.clear_bg_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleSnapHotspots) => {
+                        self.snap_hotspots = !self.snap_hotspots;
+                        self.panel_ctx.snap_hotspots = self.snap_hotspots;
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::SetMarginVertical(_)
@@ -2217,6 +2338,8 @@ impl Signex {
         self.panel_ctx.grid_visible = self.grid_visible;
         self.panel_ctx.snap_enabled = self.snap_enabled;
         self.panel_ctx.grid_size_mm = self.grid_size_mm;
+        self.panel_ctx.visible_grid_mm = self.visible_grid_mm;
+        self.panel_ctx.snap_hotspots = self.snap_hotspots;
         Task::none()
     }
 
@@ -2450,6 +2573,8 @@ impl Signex {
             grid_visible: self.grid_visible,
             snap_enabled: self.snap_enabled,
             grid_size_mm: self.grid_size_mm,
+            visible_grid_mm: self.visible_grid_mm,
+            snap_hotspots: self.snap_hotspots,
             properties_tab: self.panel_ctx.properties_tab,
             kicad_libraries: self.panel_ctx.kicad_libraries.clone(),
             active_library: self.panel_ctx.active_library.clone(),

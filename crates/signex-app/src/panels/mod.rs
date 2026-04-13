@@ -122,6 +122,8 @@ pub struct PanelContext {
     pub grid_visible: bool,
     pub snap_enabled: bool,
     pub grid_size_mm: f32,
+    pub visible_grid_mm: f32,
+    pub snap_hotspots: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
     // Components panel
     pub kicad_libraries: Vec<String>,
@@ -207,8 +209,12 @@ pub enum PanelMsg {
     SetPrePlacementRotation(f64),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
-    /// Set grid size (mm).
+    /// Set snap grid size (mm).
     SetGridSize(f32),
+    /// Set visible grid size (mm) — independent of snap grid.
+    SetVisibleGridSize(f32),
+    /// Toggle snap to electrical object hotspots.
+    ToggleSnapHotspots,
     /// Set page margin vertical zones.
     SetMarginVertical(u32),
     /// Set page margin horizontal zones.
@@ -1171,7 +1177,9 @@ fn view_properties_general<'a>(
     {
         let unit = ctx.unit;
         let grid_size_mm = ctx.grid_size_mm;
+        let visible_grid_mm = ctx.visible_grid_mm;
         let snap_enabled = ctx.snap_enabled;
+        let snap_hotspots = ctx.snap_hotspots;
         let grid_visible = ctx.grid_visible;
         col = col.push(collapsible_section(
             "prop_general",
@@ -1193,24 +1201,14 @@ fn view_properties_general<'a>(
                     )
                     .padding([2, 8]),
                 );
-                c = c.push(form_number_row(
-                    "Visible Grid",
-                    grid_size_mm,
-                    0.01..=25.4,
-                    0.01,
-                    PanelMsg::SetGridSize,
-                    muted,
-                ));
-                c = c.push(form_check_row(
-                    "Snap Grid",
-                    snap_enabled,
-                    PanelMsg::ToggleSnap,
-                    muted,
-                ));
-                c = c.push(form_check_row(
-                    "Grid Visible",
-                    grid_visible,
-                    PanelMsg::ToggleGrid,
+                // Altium-style: Visible Grid and Snap Grid are independent
+                c = c.push(form_grid_row("Visible Grid", visible_grid_mm, false, PanelMsg::SetVisibleGridSize, muted, grid_visible, PanelMsg::ToggleGrid));
+                c = c.push(form_grid_row("Snap Grid", grid_size_mm, true, PanelMsg::SetGridSize, muted, snap_enabled, PanelMsg::ToggleSnap));
+                c = c.push(form_check_row_shortcut(
+                    "Snap to Hotspots",
+                    snap_hotspots,
+                    PanelMsg::ToggleSnapHotspots,
+                    "Shift+E",
                     muted,
                 ));
                 c = c.push(form_input_row("Document Font", "Arial, 8", muted));
@@ -1522,6 +1520,147 @@ fn form_check_row<'a>(
                 .color(if checked { Color::WHITE } else { label_c }),
         ]
         .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
+fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
+    // Find the label that matches the current value (fallback to first).
+    let selected: Option<&'static str> = GRID_SIZES_MM
+        .iter()
+        .zip(GRID_SIZE_LABELS.iter())
+        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
+        .map(|(_, lbl)| *lbl);
+    container(
+        row![
+            text("Visible Grid".to_string())
+                .size(11)
+                .color(label_c)
+                .width(LABEL_W)
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::pick_list(
+                GRID_SIZE_LABELS,
+                selected,
+                |lbl: &'static str| {
+                    // Map label back to mm value
+                    let mm = GRID_SIZES_MM
+                        .iter()
+                        .zip(GRID_SIZE_LABELS.iter())
+                        .find(|(_, l)| **l == lbl)
+                        .map(|(v, _)| *v)
+                        .unwrap_or(2.54);
+                    PanelMsg::SetGridSize(mm)
+                },
+            )
+            .text_size(11)
+            .width(Length::Fill),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
+/// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
+fn form_grid_row(
+    label: &'static str,
+    current_mm: f32,
+    has_checkbox: bool,
+    on_size: impl Fn(f32) -> PanelMsg + 'static,
+    label_c: Color,
+    active: bool,
+    on_toggle: PanelMsg,
+) -> Element<'static, PanelMsg> {
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
+    let selected: Option<&'static str> = GRID_SIZES_MM
+        .iter()
+        .zip(GRID_SIZE_LABELS.iter())
+        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
+        .map(|(_, lbl)| *lbl);
+
+    let pick = iced::widget::pick_list(
+        GRID_SIZE_LABELS,
+        selected,
+        move |lbl: &'static str| {
+            let mm = GRID_SIZES_MM
+                .iter()
+                .zip(GRID_SIZE_LABELS.iter())
+                .find(|(_, l)| **l == lbl)
+                .map(|(v, _)| *v)
+                .unwrap_or(2.54);
+            on_size(mm)
+        },
+    )
+    .text_size(11)
+    .width(Length::Fill);
+
+    let label_widget = text(label.to_string())
+        .size(11)
+        .color(label_c)
+        .width(LABEL_W)
+        .wrapping(iced::widget::text::Wrapping::None);
+
+    let content: Element<PanelMsg> = if has_checkbox {
+        // Snap Grid row: checkbox before pick_list
+        row![
+            label_widget,
+            iced::widget::checkbox(active)
+                .on_toggle(move |_| on_toggle.clone())
+                .size(12)
+                .spacing(4),
+            pick,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        // Visible Grid row: no checkbox
+        row![label_widget, pick]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .into()
+    };
+
+    container(content)
+        .padding([2, 8])
+        .width(Length::Fill)
+        .into()
+}
+
+/// Form row: checkbox with a keyboard shortcut hint on the right.
+fn form_check_row_shortcut<'a>(
+    label: &'a str,
+    value: bool,
+    on_toggle: PanelMsg,
+    shortcut: &'a str,
+    label_c: Color,
+) -> Element<'a, PanelMsg> {
+    let shortcut_owned = shortcut.to_string();
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(LABEL_W)
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::checkbox(value)
+                .on_toggle(move |_| on_toggle.clone())
+                .size(12)
+                .spacing(4),
+            Space::new().width(Length::Fill),
+            text(shortcut_owned)
+                .size(10)
+                .color(label_c),
+        ]
+        .spacing(4)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, 8])
