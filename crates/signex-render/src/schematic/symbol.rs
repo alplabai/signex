@@ -3,7 +3,7 @@
 //! transform applied.
 
 use iced::Color;
-use iced::widget::canvas::{self, path};
+use iced::widget::canvas::{self, path, LineCap, LineJoin};
 
 use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
 
@@ -18,14 +18,22 @@ fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
     super::instance_transform(sym, local)
 }
 
+/// KiCad default symbol body stroke width in mm.
+const BODY_DEFAULT_WIDTH_MM: f64 = 0.15;
+
 /// Get the stroke width in screen pixels for a graphic element.
 fn graphic_stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
-    let w = if world_width > 0.0 {
-        transform.world_len(world_width)
-    } else {
-        transform.scale * 0.15
-    };
-    w.clamp(0.5, 4.0)
+    let mm = if world_width > 0.0 { world_width } else { BODY_DEFAULT_WIDTH_MM };
+    transform.world_len(mm).max(0.5)
+}
+
+/// Build a square-cap miter-join stroke for body outlines.
+fn body_stroke(color: Color, width: f32) -> canvas::Stroke<'static> {
+    canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(color).with_width(width)
+    }
 }
 
 /// Apply fill according to fill type, body_color, body_fill_color.
@@ -252,11 +260,7 @@ fn draw_polyline(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -290,11 +294,7 @@ fn draw_rectangle(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -316,11 +316,7 @@ fn draw_circle(
     let circle = canvas::Path::circle(screen_center, screen_radius);
 
     apply_fill(frame, &circle, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&circle, stroke);
+    frame.stroke(&circle, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -389,20 +385,13 @@ fn draw_arc(
         });
 
         apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-        let stroke = canvas::Stroke::default()
-            .with_color(body_color)
-            .with_width(graphic_stroke_width(transform, width));
-        frame.stroke(&path, stroke);
+        frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
     } else {
         // Degenerate: just draw a line from start to end
         let p1 = transform.to_screen_point(sx, sy);
         let p2 = transform.to_screen_point(ex, ey);
         let line = canvas::Path::line(p1, p2);
-        let stroke = canvas::Stroke::default()
-            .with_color(body_color)
-            .with_width(graphic_stroke_width(transform, width));
-        frame.stroke(&line, stroke);
+        frame.stroke(&line, body_stroke(body_color, graphic_stroke_width(transform, width)));
     }
 }
 
@@ -473,11 +462,7 @@ fn draw_bezier(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
 // ---------------------------------------------------------------------------
