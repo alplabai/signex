@@ -343,6 +343,24 @@ fn move_element(sheet: &mut SchematicSheet, item: &SelectedItem, dx: f64, dy: f6
             }
         }
         SelectedKind::Drawing => {} // TODO
+        SelectedKind::SymbolRefField => {
+            // UUID = symbol UUID; only move the ref_text anchor, not the whole symbol
+            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == item.uuid) {
+                if let Some(ref mut rt) = sym.ref_text {
+                    rt.position.x += dx;
+                    rt.position.y += dy;
+                }
+            }
+        }
+        SelectedKind::SymbolValField => {
+            // UUID = symbol UUID; only move the val_text anchor
+            if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == item.uuid) {
+                if let Some(ref mut vt) = sym.val_text {
+                    vt.position.x += dx;
+                    vt.position.y += dy;
+                }
+            }
+        }
     }
 }
 

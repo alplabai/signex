@@ -541,6 +541,10 @@ pub enum SelectedKind {
     TextNote,
     ChildSheet,
     Drawing,
+    /// Symbol reference field ("C39", "R1", …). UUID = symbol UUID.
+    SymbolRefField,
+    /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
+    SymbolValField,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
