@@ -1,4 +1,4 @@
-# Signex Iced — AI-first EDA
+# Signex — AI-first EDA
 
 ## Project
 

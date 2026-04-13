@@ -83,7 +83,7 @@ Signex is a native Rust EDA tool targeting **Altium Designer feature parity** wi
 ## Architecture
 
 ```
-signex-iced/
+signex/
 ├── crates/
 │   ├── signex-app/       # Main binary — Iced 0.14 application
 │   ├── signex-types/     # Domain types — NO rendering deps
@@ -150,7 +150,7 @@ Development is organized into milestones tracked on [GitHub Milestones](../../mi
 | v1.1–v1.8 | 3D viewer, simulation, high-speed, AI, plugins | |
 | **v2.0.0** | **Pro Release** — AI + collaboration | |
 
-See [`docs/signex-iced-migration-plan.md`](https://github.com/alplabai/signex/blob/main/docs/signex-iced-migration-plan.md) in the signex repo for the full plan.
+See [`docs/migration-plan.md`](https://github.com/alplabai/signex/blob/main/docs/migration-plan.md) for the full plan.
 
 ## Contributing
 
