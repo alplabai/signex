@@ -75,6 +75,21 @@ pub fn draw_selection_overlay(
                 }
             }
             SelectedKind::Drawing => {}
+            SelectedKind::SymbolRefField => {
+                // Highlight just the ref text anchor point
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    if let Some(ref rt) = sym.ref_text {
+                        draw_point_selection(frame, rt.position.x, rt.position.y, transform);
+                    }
+                }
+            }
+            SelectedKind::SymbolValField => {
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    if let Some(ref vt) = sym.val_text {
+                        draw_point_selection(frame, vt.position.x, vt.position.y, transform);
+                    }
+                }
+            }
         }
     }
 }
