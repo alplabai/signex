@@ -656,6 +656,7 @@ fn parse_wire(node: &SExpr) -> Wire {
         uuid: parse_uuid(node),
         start,
         end,
+        stroke_width: parse_stroke_width(node),
     }
 }
 

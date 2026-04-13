@@ -339,6 +339,9 @@ pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
+    /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
+    #[serde(default)]
+    pub stroke_width: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
