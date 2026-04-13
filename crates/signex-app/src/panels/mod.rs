@@ -324,7 +324,7 @@ fn collapsible_section<'a>(
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let bg = match status {
                 iced::widget::button::Status::Hovered => {
-                    Some(iced::Background::Color(Color::from_rgb(0.15, 0.15, 0.17)))
+                    Some(iced::Background::Color(border_c))
                 }
                 _ => None,
             };
@@ -473,6 +473,8 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let hover_c = crate::styles::ti(ctx.tokens.hover);
+    let panel_bg_c = crate::styles::ti(ctx.tokens.panel_bg);
 
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -579,7 +581,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             let bg = match (is_sel, status) {
                                 (true, _) => Some(Background::Color(row_bg)),
                                 (false, iced::widget::button::Status::Hovered) => {
-                                    Some(Background::Color(Color::from_rgb(0.20, 0.20, 0.23)))
+                                    Some(Background::Color(hover_c))
                                 }
                                 _ => None,
                             };
@@ -642,7 +644,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     )
                     .width(Length::Fill)
                     .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
+                        background: Some(Background::Color(panel_bg_c)),
                         border: Border {
                             width: 1.0,
                             radius: 2.0.into(),
@@ -666,7 +668,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .width(Length::Fill)
                     .padding([30, 8])
                     .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
+                        background: Some(Background::Color(panel_bg_c)),
                         border: Border {
                             width: 1.0,
                             radius: 2.0.into(),

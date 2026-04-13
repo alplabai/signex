@@ -2246,6 +2246,16 @@ impl Signex {
                         self.preferences_draft_font = self.ui_font_name.clone();
                         self.preferences_dirty = false;
                         self.preferences_open = false;
+                        // Restore tokens to the currently saved theme
+                        let tokens = if self.theme_id == ThemeId::Custom {
+                            self.custom_theme
+                                .as_ref()
+                                .map(|c| c.tokens)
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                        } else {
+                            signex_types::theme::theme_tokens(self.theme_id)
+                        };
+                        self.panel_ctx.tokens = tokens;
                     }
 
                     // ── Commit draft → real state ──
@@ -2270,6 +2280,16 @@ impl Signex {
                     // ── Draft updates (mark dirty, no immediate apply) ──
                     PrefMsg::DraftTheme(id) => {
                         self.preferences_draft_theme = id;
+                        // Update tokens immediately for live preview
+                        let tokens = if id == ThemeId::Custom {
+                            self.custom_theme
+                                .as_ref()
+                                .map(|c| c.tokens)
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                        } else {
+                            signex_types::theme::theme_tokens(id)
+                        };
+                        self.panel_ctx.tokens = tokens;
                         self.preferences_dirty =
                             self.preferences_draft_theme != self.theme_id
                             || self.preferences_draft_font != self.ui_font_name;
@@ -3287,7 +3307,7 @@ impl Signex {
 
         container(column(items).spacing(0))
             .padding([4, 0])
-            .style(crate::styles::context_menu)
+            .style(crate::styles::context_menu(&self.panel_ctx.tokens))
             .into()
     }
 
@@ -3298,32 +3318,34 @@ impl Signex {
         shortcut: &str,
         action: ContextAction,
     ) -> Element<'a, Message> {
+        let text_c = crate::styles::ti(self.panel_ctx.tokens.text);
+        let hover_c = crate::styles::ti(self.panel_ctx.tokens.hover);
         iced::widget::button(
             iced::widget::row![
                 iced::widget::text(label.to_string())
                     .size(11)
-                    .color(crate::styles::TEXT_PRIMARY),
+                    .color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(shortcut.to_string())
                     .size(10)
-                    .color(crate::styles::TEXT_MUTED),
+                    .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
             ]
             .spacing(12)
             .width(220),
         )
         .padding([4, 12])
         .on_press(Message::ContextAction(action))
-        .style(|_: &iced::Theme, status: iced::widget::button::Status| {
+        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
             let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgb(0.22, 0.22, 0.26),
-                )),
+                iced::widget::button::Status::Hovered => {
+                    Some(iced::Background::Color(hover_c))
+                }
                 _ => None,
             };
             iced::widget::button::Style {
                 background: bg,
                 border: iced::Border::default(),
-                text_color: crate::styles::TEXT_PRIMARY,
+                text_color: text_c,
                 ..iced::widget::button::Style::default()
             }
         })
@@ -3335,7 +3357,7 @@ impl Signex {
         container(
             iced::widget::text(label.to_string())
                 .size(11)
-                .color(crate::styles::TEXT_MUTED),
+                .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
         )
         .padding([4, 12])
         .width(220)
@@ -3343,18 +3365,19 @@ impl Signex {
     }
 
     fn ctx_menu_sep<'a>(&self) -> Element<'a, Message> {
+        let border_c = crate::styles::ti(self.panel_ctx.tokens.border);
         container(iced::widget::Space::new())
             .width(Length::Fill)
             .height(1)
-            .style(|_: &iced::Theme| container::Style {
-                background: Some(crate::styles::BORDER_SUBTLE.into()),
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(border_c.into()),
                 ..container::Style::default()
             })
             .into()
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let menu = menu_bar::view().map(Message::Menu);
+        let menu = menu_bar::view(&self.panel_ctx.tokens).map(Message::Menu);
 
         // Dock regions with collapse-aware sizing
         let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
@@ -3384,6 +3407,7 @@ impl Signex {
             self.unit,
             &self.current_tool,
             self.grid_size_mm,
+            &self.panel_ctx.tokens,
         )
         .map(Message::StatusBar);
 
@@ -3391,7 +3415,7 @@ impl Signex {
         // Active Bar is overlaid ON the canvas via Stack (not in column)
         let mut main = column![menu];
         if !self.tabs.is_empty() {
-            main = main.push(tab_bar::view(&self.tabs, self.active_tab).map(Message::Tab));
+            main = main.push(tab_bar::view(&self.tabs, self.active_tab, &self.panel_ctx.tokens).map(Message::Tab));
         }
         let main = main
             .push(center_row)
@@ -3435,7 +3459,7 @@ impl Signex {
         container(panel)
             .width(w)
             .height(Length::Fill)
-            .style(crate::styles::panel_region)
+            .style(crate::styles::panel_region(&self.panel_ctx.tokens))
             .into()
     }
 
@@ -3451,7 +3475,7 @@ impl Signex {
         container(panel)
             .width(Length::Fill)
             .height(h)
-            .style(crate::styles::panel_region)
+            .style(crate::styles::panel_region(&self.panel_ctx.tokens))
             .into()
     }
 
@@ -3467,12 +3491,12 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(size)
                 .height(Length::Fill)
-                .style(crate::styles::resize_handle)
+                .style(crate::styles::resize_handle(&self.panel_ctx.tokens))
         } else {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(size)
-                .style(crate::styles::resize_handle)
+                .style(crate::styles::resize_handle(&self.panel_ctx.tokens))
         };
         let interaction = if horizontal {
             iced::mouse::Interaction::ResizingHorizontally
@@ -3497,16 +3521,16 @@ impl Signex {
                 column![
                     iced::widget::text("No document open")
                         .size(14)
-                        .color(crate::styles::TEXT_MUTED),
+                        .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
                     iced::widget::text("Open a project with File > Open or Ctrl+O")
                         .size(11)
-                        .color(crate::styles::TEXT_MUTED),
+                        .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
                 ]
                 .spacing(8)
                 .align_x(iced::Alignment::Center),
             )
             .center(Length::Fill)
-            .style(crate::styles::panel_region)
+            .style(crate::styles::panel_region(&self.panel_ctx.tokens))
             .into()
         }
     }
@@ -3534,6 +3558,7 @@ impl Signex {
                 self.current_tool,
                 self.draw_mode,
                 &self.last_tool,
+                &self.panel_ctx.tokens,
             )
             .map(Message::ActiveBar);
             layers.push(
@@ -3563,7 +3588,7 @@ impl Signex {
                                 .padding([4, 6])
                                 .width(180),
                         )
-                        .style(crate::styles::context_menu),
+                        .style(crate::styles::context_menu(&self.panel_ctx.tokens)),
                     ],
                 ]
                 .into(),
@@ -3572,7 +3597,7 @@ impl Signex {
 
         // Active Bar dropdown overlay
         if let Some(ab_menu) = self.active_bar_menu {
-            let dropdown = crate::active_bar::view_dropdown(ab_menu).map(Message::ActiveBar);
+            let dropdown = crate::active_bar::view_dropdown(ab_menu, &self.panel_ctx.tokens).map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
             let ab_y: f32 =
                 24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
@@ -3608,18 +3633,19 @@ impl Signex {
 
         // Panel list popup (bottom-right)
         if self.panel_list_open {
+            let text_c = crate::styles::ti(self.panel_ctx.tokens.text);
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
                 .map(|&kind| {
                     iced::widget::button(
                         iced::widget::text(kind.label().to_string())
                             .size(11)
-                            .color(crate::styles::TEXT_PRIMARY),
+                            .color(text_c),
                     )
                     .padding([4, 12])
                     .width(Length::Fill)
                     .on_press(Message::OpenPanel(kind))
-                    .style(crate::styles::menu_item)
+                    .style(crate::styles::menu_item(&self.panel_ctx.tokens))
                     .into()
                 })
                 .collect();
@@ -3628,7 +3654,7 @@ impl Signex {
                 iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
             )
             .padding([6, 0])
-            .style(crate::styles::context_menu);
+            .style(crate::styles::context_menu(&self.panel_ctx.tokens));
 
             layers.push(Self::dismiss_layer(Message::TogglePanelList));
             layers.push(
