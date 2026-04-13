@@ -712,6 +712,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         position: iced::Point::new(cursor_pos.x + 12.0, cursor_pos.y - 12.0),
                         color: Color::from_rgba(1.0, 1.0, 1.0, 0.7),
                         size: iced::Pixels(11.0),
+                        font: signex_render::IOSEVKA,
                         ..canvas::Text::default()
                     });
                 }
