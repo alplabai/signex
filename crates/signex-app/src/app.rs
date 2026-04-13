@@ -890,6 +890,7 @@ impl Signex {
                                     uuid: uuid::Uuid::new_v4(),
                                     start: seg.0,
                                     end: seg.1,
+                                    stroke_width: 0.0,
                                 };
                                 if let Some(ref mut sheet) = self.schematic {
                                     // Collect needed junctions BEFORE adding the wire

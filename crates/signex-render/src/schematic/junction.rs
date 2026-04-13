@@ -7,8 +7,8 @@ use signex_types::schematic::{Junction, NoConnect};
 
 use super::ScreenTransform;
 
-/// Radius of a junction in world mm.
-const JUNCTION_RADIUS_MM: f64 = 0.75;
+/// KiCad default junction diameter when not specified (1.0mm → 0.5mm radius).
+const JUNCTION_DEFAULT_DIAMETER_MM: f64 = 1.0;
 
 /// Draw a junction as a filled circle at its position.
 pub fn draw_junction(
@@ -18,7 +18,13 @@ pub fn draw_junction(
     color: Color,
 ) {
     let center = transform.to_screen_point(junction.position.x, junction.position.y);
-    let radius = transform.world_len(JUNCTION_RADIUS_MM).max(2.0);
+    // Use diameter from file if non-zero, else KiCad default 1.0mm
+    let diameter = if junction.diameter > 0.0 {
+        junction.diameter
+    } else {
+        JUNCTION_DEFAULT_DIAMETER_MM
+    };
+    let radius = transform.world_len(diameter / 2.0).max(2.0);
 
     let circle = canvas::Path::circle(center, radius);
     frame.fill(&circle, color);
