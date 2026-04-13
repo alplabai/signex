@@ -47,17 +47,23 @@ pub enum ThemeId {
     GitHubDark,
     SolarizedLight,
     Nord,
+    /// User-defined custom theme (data stored externally in CustomThemeFile).
+    Custom,
 }
 
 impl ThemeId {
-    pub const ALL: &[ThemeId] = &[
-        ThemeId::CatppuccinMocha,
-        ThemeId::VsCodeDark,
+    /// All 6 built-in themes (excludes Custom).
+    pub const BUILTINS: &[ThemeId] = &[
         ThemeId::AltiumDark,
+        ThemeId::VsCodeDark,
+        ThemeId::CatppuccinMocha,
         ThemeId::GitHubDark,
         ThemeId::SolarizedLight,
         ThemeId::Nord,
     ];
+
+    #[deprecated = "Use ThemeId::BUILTINS; ThemeId::ALL now includes Custom"]
+    pub const ALL: &[ThemeId] = Self::BUILTINS;
 
     pub fn label(self) -> &'static str {
         match self {
@@ -67,8 +73,25 @@ impl ThemeId {
             ThemeId::GitHubDark => "GitHub Dark",
             ThemeId::SolarizedLight => "Solarized Light",
             ThemeId::Nord => "Nord",
+            ThemeId::Custom => "Custom",
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Custom theme file (JSON import/export)
+// ---------------------------------------------------------------------------
+
+/// A user-defined theme stored as JSON. Contains the full set of UI tokens
+/// and canvas palette colours so it can be round-tripped to/from disk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomThemeFile {
+    /// Display name shown in the Preferences dialog.
+    pub name: String,
+    /// Panel chrome / UI widget colour tokens.
+    pub tokens: ThemeTokens,
+    /// Schematic canvas colour palette.
+    pub canvas: CanvasColors,
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +402,7 @@ pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
         ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
         ThemeId::Nord => NORD_TOKENS,
+        ThemeId::Custom => ALTIUM_DARK_TOKENS, // caller must use CustomThemeFile directly
     }
 }
 
@@ -390,5 +414,6 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,
+        ThemeId::Custom => ALTIUM_DARK_CANVAS, // caller must use CustomThemeFile directly
     }
 }
