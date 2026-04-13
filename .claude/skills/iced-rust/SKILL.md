@@ -1,17 +1,17 @@
 ---
 name: iced-rust
 description: >
-  iced kütüphanesiyle Rust GUI uygulaması geliştirmek için kapsamlı rehber.
-  The Elm Architecture (state/message/update/view), iced::run ve
-  iced::application API, widget'lar (button, text, column, row, container,
-  scrollable, slider, text_input, canvas, vb.), layout (Length, Fill, Shrink,
+  Comprehensive reference for building Rust GUI applications with the iced
+  library. Covers The Elm Architecture (state/message/update/view), iced::run
+  and iced::application API, widgets (button, text, column, row, container,
+  scrollable, slider, text_input, canvas, etc.), layout (Length, Fill, Shrink,
   spacing, padding), styling (Theme, extended_palette, Status), Task (async),
-  Subscription (stream), custom widget (Widget trait), wgpu entegrasyonu,
-  EDA/CAD uygulamalar için nanometre koordinat sistemi, undo/redo (command
-  pattern), multi-tab belge yönetimi, crate workspace mimarisi, Cargo.toml
-  feature flag'leri gibi konuları kapsar. "iced", "iced-rs", "iced gui",
-  "rust gui", "elm architecture rust", "iced widget", "iced layout",
-  "iced theme", "iced task", "iced subscription" gibi ifadelerde tetiklenmeli.
+  Subscription (stream), custom Widget trait, wgpu integration, nanometer
+  coordinate system for EDA/CAD applications, undo/redo (command pattern),
+  multi-tab document management, crate workspace architecture, and Cargo.toml
+  feature flags. Trigger on: "iced", "iced-rs", "iced gui", "rust gui",
+  "elm architecture rust", "iced widget", "iced layout", "iced theme",
+  "iced task", "iced subscription".
 ---
 
 # iced — Rust GUI Library Reference

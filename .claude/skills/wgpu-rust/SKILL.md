@@ -1,14 +1,14 @@
 ---
 name: wgpu-rust
 description: >
-  wgpu kütüphanesiyle Rust GPU programlama için kapsamlı referans.
-  Instance/Adapter/Device/Queue bootstrap, render pipeline, vertex/index buffer,
-  uniform buffer, bind group, texture, instanced drawing, compute pipeline,
-  WGSL shader yazımı, buffer upload stratejileri (write_buffer, staging),
-  bytemuck Pod/Zeroable, best practices, middleware pattern gibi konuları kapsar.
-  "wgpu", "wgpu rust", "gpu rendering rust", "wgsl", "render pipeline",
-  "vertex buffer", "instance buffer", "bind group", "uniform buffer",
-  "compute shader", "gpu instancing" gibi ifadelerde mutlaka tetiklenmeli.
+  Comprehensive reference for Rust GPU programming with the wgpu library.
+  Covers Instance/Adapter/Device/Queue bootstrap, render pipeline, vertex/index
+  buffer, uniform buffer, bind group, texture, instanced drawing, compute
+  pipeline, WGSL shader authoring, buffer upload strategies (write_buffer,
+  staging), bytemuck Pod/Zeroable, best practices, and middleware patterns.
+  Trigger on: "wgpu", "wgpu rust", "gpu rendering rust", "wgsl",
+  "render pipeline", "vertex buffer", "instance buffer", "bind group",
+  "uniform buffer", "compute shader", "gpu instancing".
 ---
 
 # wgpu — Rust GPU Library Reference

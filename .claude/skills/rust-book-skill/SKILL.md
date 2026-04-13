@@ -1,17 +1,16 @@
 ---
-name: rust-lang-book
+name: rust-book-skill
 description: >
-  The Rust Programming Language kitabının tamamını kapsayan kapsamlı Rust
-  referansı. Ownership, borrowing, lifetimes, structs, enums, pattern matching,
+  Comprehensive Rust reference covering The Rust Programming Language book.
+  Includes ownership, borrowing, lifetimes, structs, enums, pattern matching,
   generics, traits, trait objects, closures, iterators, error handling
   (Result/Option/?), smart pointers (Box/Rc/Arc/RefCell/Weak), fearless
   concurrency (threads/channels/Mutex), async/await, futures, streams,
-  modules/crates/Cargo, testing, best practices ve common idioms içerir.
-  "rust ownership", "rust borrowing", "rust lifetime", "rust trait",
-  "rust generics", "rust error handling", "rust closures", "rust iterators",
-  "rust smart pointers", "rust async", "rust concurrency", "rust struct enum"
-  gibi ifadelerde tetiklenmeli. Kaynak: doc.rust-lang.org/book (Rust 1.90+,
-  edition 2024).
+  modules/crates/Cargo, testing, best practices, and common idioms.
+  Trigger on: "rust ownership", "rust borrowing", "rust lifetime",
+  "rust trait", "rust generics", "rust error handling", "rust closures",
+  "rust iterators", "rust smart pointers", "rust async", "rust concurrency".
+  Source: doc.rust-lang.org/book (Rust 1.90+, edition 2024).
 ---
 
 # The Rust Programming Language — Complete Reference
