@@ -474,7 +474,7 @@ impl Signex {
             .unwrap_or_default();
 
         let app = Self {
-            theme_id: ThemeId::AltiumDark,
+            theme_id: ThemeId::Signex,
             unit: Unit::Mm,
             grid_visible: true,
             snap_enabled: true,
@@ -509,7 +509,7 @@ impl Signex {
                 lib_symbol_count: 0,
                 lib_symbol_names: vec![],
                 placed_symbols: vec![],
-                tokens: signex_types::theme::theme_tokens(ThemeId::AltiumDark),
+                tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                 unit: Unit::Mm,
                 grid_visible: true,
                 snap_enabled: true,
@@ -564,7 +564,7 @@ impl Signex {
             panel_list_open: false,
             preferences_open: false,
             preferences_nav: crate::preferences::PrefNav::Appearance,
-            preferences_draft_theme: ThemeId::AltiumDark,
+            preferences_draft_theme: ThemeId::Signex,
             preferences_draft_font: String::new(),
             preferences_dirty: false,
             custom_theme: None,
@@ -623,7 +623,7 @@ impl Signex {
                     warning:    iced::Color::from_rgb(1.000, 0.549, 0.000),
                 },
             ),
-            ThemeId::AltiumDark => Theme::custom(
+            ThemeId::Signex => Theme::custom(
                 "Altium Dark".to_string(),
                 iced::theme::Palette {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
@@ -2251,7 +2251,7 @@ impl Signex {
                             self.custom_theme
                                 .as_ref()
                                 .map(|c| c.tokens)
-                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                         } else {
                             signex_types::theme::theme_tokens(self.theme_id)
                         };
@@ -2267,7 +2267,7 @@ impl Signex {
                             self.custom_theme
                                 .as_ref()
                                 .map(|c| c.tokens)
-                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                         } else {
                             signex_types::theme::theme_tokens(self.theme_id)
                         };
@@ -2285,7 +2285,7 @@ impl Signex {
                             self.custom_theme
                                 .as_ref()
                                 .map(|c| c.tokens)
-                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                         } else {
                             signex_types::theme::theme_tokens(id)
                         };
@@ -2332,13 +2332,13 @@ impl Signex {
                         };
                         let tokens = if id == ThemeId::Custom {
                             self.custom_theme.as_ref().map(|c| c.tokens)
-                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                         } else {
                             signex_types::theme::theme_tokens(id)
                         };
                         let canvas = if id == ThemeId::Custom {
                             self.custom_theme.as_ref().map(|c| c.canvas)
-                                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::AltiumDark))
+                                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
                         } else {
                             signex_types::theme::canvas_colors(id)
                         };
@@ -3244,7 +3244,7 @@ impl Signex {
             self.custom_theme
                 .as_ref()
                 .map(|c| c.canvas)
-                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::AltiumDark))
+                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
         } else {
             signex_types::theme::canvas_colors(self.theme_id)
         };
