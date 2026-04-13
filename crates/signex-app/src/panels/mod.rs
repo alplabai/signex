@@ -1189,7 +1189,6 @@ fn view_properties_general<'a>(
         let snap_enabled = ctx.snap_enabled;
         let snap_hotspots = ctx.snap_hotspots;
         let grid_visible = ctx.grid_visible;
-        let ui_font_name = ctx.ui_font_name.clone();
         let canvas_font_name = ctx.canvas_font_name.clone();
         col = col.push(collapsible_section(
             "prop_general",
@@ -1212,8 +1211,8 @@ fn view_properties_general<'a>(
                     .padding([2, 8]),
                 );
                 // Altium-style: Visible Grid and Snap Grid are independent
-                c = c.push(form_grid_row("Visible Grid", visible_grid_mm, false, PanelMsg::SetVisibleGridSize, muted, grid_visible, PanelMsg::ToggleGrid));
-                c = c.push(form_grid_row("Snap Grid", grid_size_mm, true, PanelMsg::SetGridSize, muted, snap_enabled, PanelMsg::ToggleSnap));
+                c = c.push(form_grid_row("Visible Grid", visible_grid_mm, unit, false, PanelMsg::SetVisibleGridSize, muted, grid_visible, PanelMsg::ToggleGrid));
+                c = c.push(form_grid_row("Snap Grid", grid_size_mm, unit, true, PanelMsg::SetGridSize, muted, snap_enabled, PanelMsg::ToggleSnap));
                 c = c.push(form_check_row_shortcut(
                     "Snap to Hotspots",
                     snap_hotspots,
@@ -1221,7 +1220,6 @@ fn view_properties_general<'a>(
                     "Shift+E",
                     muted,
                 ));
-                c = c.push(form_font_row("UI Font", &ui_font_name, PanelMsg::SetUiFont, muted, true));
                 c = c.push(form_font_row("Canvas Font", &canvas_font_name, PanelMsg::SetCanvasFont, muted, false));
                 c = c.push(form_input_row("Sheet Color", "Black", muted));
                 c
@@ -1581,31 +1579,42 @@ fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, Panel
 
 /// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
 /// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
+/// Labels and values are shown in the current `unit` (mm or mil).
 fn form_grid_row(
     label: &'static str,
     current_mm: f32,
+    unit: Unit,
     has_checkbox: bool,
     on_size: impl Fn(f32) -> PanelMsg + 'static,
     label_c: Color,
     active: bool,
     on_toggle: PanelMsg,
 ) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
+
+    let labels: &'static [&'static str] = if unit == Unit::Mil {
+        GRID_SIZE_LABELS_MIL
+    } else {
+        GRID_SIZE_LABELS
+    };
+
     let selected: Option<&'static str> = GRID_SIZES_MM
         .iter()
-        .zip(GRID_SIZE_LABELS.iter())
+        .zip(labels.iter())
         .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
         .map(|(_, lbl)| *lbl);
 
     let pick = iced::widget::pick_list(
-        GRID_SIZE_LABELS,
+        labels,
         selected,
         move |lbl: &'static str| {
-            let mm = GRID_SIZES_MM
+            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
+            let mm = GRID_SIZE_LABELS
                 .iter()
-                .zip(GRID_SIZE_LABELS.iter())
-                .find(|(_, l)| **l == lbl)
-                .map(|(v, _)| *v)
+                .chain(GRID_SIZE_LABELS_MIL.iter())
+                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
+                .find(|(l, _)| **l == lbl)
+                .map(|(_, v)| *v)
                 .unwrap_or(2.54);
             on_size(mm)
         },
