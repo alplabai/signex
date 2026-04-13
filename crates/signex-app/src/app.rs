@@ -112,6 +112,11 @@ pub enum Message {
     ShowContextMenu(f32, f32),
     CloseContextMenu,
     ContextAction(ContextAction),
+    // Preferences dialog
+    OpenPreferences,
+    ClosePreferences,
+    PreferencesNav(crate::preferences::PrefNav),
+    PreferencesMsg(crate::preferences::PrefMsg),
     Noop,
 }
 
@@ -227,6 +232,10 @@ pub struct Signex {
     pub pending_power: Option<(String, String)>,
     /// Panel list popup visible.
     pub panel_list_open: bool,
+    /// Preferences dialog open.
+    pub preferences_open: bool,
+    /// Selected nav item in the Preferences dialog.
+    pub preferences_nav: crate::preferences::PrefNav,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -545,6 +554,8 @@ impl Signex {
             last_tool: std::collections::HashMap::new(),
             pending_power: None,
             panel_list_open: false,
+            preferences_open: false,
+            preferences_nav: crate::preferences::PrefNav::Appearance,
         };
         (app, Task::none())
     }
@@ -596,6 +607,10 @@ impl Signex {
                 }
                 (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
                     Message::Tool(ToolMessage::SelectTool(Tool::Component))
+                }
+                // Ctrl+, open Preferences
+                (keyboard::Key::Character(c), m) if c == "," && m.command() => {
+                    Message::OpenPreferences
                 }
                 (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                     Message::Tool(ToolMessage::SelectTool(Tool::Select))
@@ -2126,6 +2141,43 @@ impl Signex {
                 self.dock.add_panel(crate::dock::PanelPosition::Right, kind);
                 return Task::none();
             }
+            // Preferences dialog
+            Message::OpenPreferences => {
+                self.preferences_open = true;
+                self.panel_list_open = false;
+                return Task::none();
+            }
+            Message::ClosePreferences => {
+                self.preferences_open = false;
+                return Task::none();
+            }
+            Message::PreferencesNav(nav) => {
+                self.preferences_nav = nav;
+                return Task::none();
+            }
+            Message::PreferencesMsg(msg) => {
+                use crate::preferences::PrefMsg;
+                match msg {
+                    PrefMsg::Close => {
+                        self.preferences_open = false;
+                    }
+                    PrefMsg::Nav(nav) => {
+                        self.preferences_nav = nav;
+                    }
+                    PrefMsg::SetTheme(id) => {
+                        self.theme_id = id;
+                        self.update_canvas_theme();
+                        self.panel_ctx.tokens =
+                            signex_types::theme::theme_tokens(id);
+                    }
+                    PrefMsg::SetUiFont(name) => {
+                        self.ui_font_name = name.clone();
+                        self.panel_ctx.ui_font_name = name.clone();
+                        crate::fonts::write_ui_font_pref(&name);
+                    }
+                }
+                return Task::none();
+            }
             // Active Bar
             Message::ActiveBar(msg) => {
                 use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
@@ -2363,12 +2415,6 @@ impl Signex {
     fn handle_menu(&mut self, msg: MenuMessage) -> Task<Message> {
         // iced_aw MenuBar manages open/close/hover state — no manual control needed
         let task = match msg {
-            // ── Theme ──
-            MenuMessage::ThemeSelected(id) => {
-                self.theme_id = id;
-                self.update_canvas_theme();
-                Task::none()
-            }
             // ── File ──
             MenuMessage::OpenProject => Task::perform(
                 async {
@@ -2459,6 +2505,10 @@ impl Signex {
             | MenuMessage::Annotate
             | MenuMessage::Erc
             | MenuMessage::GenerateBom => Task::none(),
+            // ── Preferences ──
+            MenuMessage::OpenPreferences => {
+                return self.update(Message::OpenPreferences);
+            }
         };
 
         task
@@ -3124,7 +3174,7 @@ impl Signex {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let menu = menu_bar::view(self.theme_id).map(Message::Menu);
+        let menu = menu_bar::view().map(Message::Menu);
 
         // Dock regions with collapse-aware sizing
         let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
@@ -3176,6 +3226,7 @@ impl Signex {
             || self.context_menu.is_some()
             || self.active_bar_menu.is_some()
             || self.panel_list_open
+            || self.preferences_open
             || !self.dock.floating.is_empty();
 
         if needs_overlay {
@@ -3428,6 +3479,17 @@ impl Signex {
                     .into(),
                 );
             }
+        }
+
+        // Preferences dialog — topmost overlay
+        if self.preferences_open {
+            let pref_view = crate::preferences::view(
+                self.preferences_nav,
+                self.theme_id,
+                &self.ui_font_name,
+            )
+            .map(Message::PreferencesMsg);
+            layers.push(pref_view);
         }
 
         layers
