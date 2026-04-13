@@ -7,7 +7,6 @@ use iced::widget::{button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
-use signex_types::theme::ThemeId;
 
 use crate::styles;
 
@@ -39,8 +38,9 @@ pub enum MenuMessage {
     Annotate,
     Erc,
     GenerateBom,
-    // Settings
-    ThemeSelected(ThemeId),
+    // Tools
+    /// Open the Preferences dialog.
+    OpenPreferences,
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -50,7 +50,7 @@ const DROPDOWN_WIDTH: f32 = 240.0;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(current_theme: ThemeId) -> Element<'static, MenuMessage> {
+pub fn view() -> Element<'static, MenuMessage> {
     let menu_template =
         |items| Menu::new(items).max_width(DROPDOWN_WIDTH).offset(4.0).spacing(2.0);
 
@@ -133,6 +133,8 @@ pub fn view(current_theme: ThemeId) -> Element<'static, MenuMessage> {
             separator(),
             leaf_stub("Design Rule Check", None),
             leaf_stub("Net Inspector", None),
+            separator(),
+            leaf("Preferences...", Some("Ctrl+,"), MenuMessage::OpenPreferences),
         ]),
     );
 
@@ -188,11 +190,8 @@ pub fn view(current_theme: ThemeId) -> Element<'static, MenuMessage> {
         path_border: Border::default(),
     });
 
-    // MenuBar + right-aligned theme selector in one row
-    let theme_row = view_theme_selector(current_theme);
-
     container(
-        row![mb, iced::widget::Space::new().width(Length::Fill), theme_row]
+        row![mb]
             .align_y(iced::Alignment::Center),
     )
     .width(Length::Fill)
@@ -297,34 +296,4 @@ fn menu_item_btn(
     } else {
         btn.into()
     }
-}
-
-/// Right-aligned theme selector buttons.
-fn view_theme_selector(current: ThemeId) -> Element<'static, MenuMessage> {
-    let theme_btn = |id: ThemeId, label: &'static str| {
-        let is_active = id == current;
-        let text_c = if is_active {
-            Color::WHITE
-        } else {
-            styles::TEXT_MUTED
-        };
-        button(text(label).size(10).color(text_c))
-            .padding([2, 5])
-            .on_press(MenuMessage::ThemeSelected(id))
-            .style(styles::dock_tab(is_active))
-    };
-
-    row![
-        text("Theme:").size(10).color(styles::TEXT_MUTED),
-        theme_btn(ThemeId::CatppuccinMocha, "Mocha"),
-        theme_btn(ThemeId::VsCodeDark, "VS Code"),
-        theme_btn(ThemeId::GitHubDark, "GitHub"),
-        theme_btn(ThemeId::AltiumDark, "Altium"),
-        theme_btn(ThemeId::SolarizedLight, "Solarized"),
-        theme_btn(ThemeId::Nord, "Nord"),
-    ]
-    .spacing(2)
-    .align_y(iced::Alignment::Center)
-    .padding([0, 6])
-    .into()
 }
