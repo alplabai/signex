@@ -4,7 +4,6 @@ use iced::widget::{Row, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::Tool;
-use crate::styles;
 
 #[derive(Debug, Clone)]
 pub enum ToolMessage {
@@ -16,15 +15,15 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
     let text_c = if is_active {
         Color::WHITE
     } else {
-        styles::TEXT_PRIMARY
+        Color::from_rgb(0.75, 0.76, 0.80)
     };
     let btn = button(text(label).size(11).color(text_c))
         .padding([3, 7])
         .on_press(ToolMessage::SelectTool(tool))
         .style(move |_: &Theme, status: button::Status| {
             let bg = match (is_active, status) {
-                (true, _) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
-                (false, button::Status::Hovered) => Some(Background::Color(styles::TAB_ACTIVE_BG)),
+                (true, _) => Some(Background::Color(Color::from_rgb(0.18, 0.19, 0.25))),
+                (false, button::Status::Hovered) => Some(Background::Color(Color::from_rgb(0.18, 0.19, 0.25))),
                 _ => None,
             };
             button::Style {
@@ -39,7 +38,7 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
 }
 
 pub fn view(active: Tool) -> Element<'static, ToolMessage> {
-    let sep = || text("|").size(10).color(styles::BORDER_COLOR);
+    let sep = || text("|").size(10).color(Color::from_rgb(0.30, 0.31, 0.36));
 
     let bar: Row<'static, ToolMessage> = row![
         tool_btn("Select", Tool::Select, active),
@@ -60,6 +59,9 @@ pub fn view(active: Tool) -> Element<'static, ToolMessage> {
     container(bar)
         .width(Length::Fill)
         .padding([1, 6])
-        .style(styles::toolbar_strip)
+        .style(|_: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgb(0.12, 0.13, 0.16))),
+            ..container::Style::default()
+        })
         .into()
 }

@@ -3155,6 +3155,7 @@ name = "signex-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fontdb",
  "iced",
  "iced_aw",
  "kicad-parser",
