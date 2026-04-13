@@ -46,6 +46,25 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
         }
     }
 
+    // Symbol field texts (tested before symbol body so clicking a label
+    // selects the field, not the whole symbol)
+    for sym in &sheet.symbols {
+        if !sym.is_power {
+            if let Some(ref ref_text) = sym.ref_text
+                && !ref_text.hidden
+                && hit_text_prop(&sym.reference, ref_text, wx, wy)
+            {
+                return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
+            }
+            if let Some(ref val_text) = sym.val_text
+                && !val_text.hidden
+                && hit_text_prop(&sym.value, val_text, wx, wy)
+            {
+                return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
+            }
+        }
+    }
+
     // Symbols
     for sym in &sheet.symbols {
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
@@ -194,6 +213,42 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
         cs.position.y + cs.size.1,
     )
     .contains(wx, wy)
+}
+
+/// Hit-test a text property (reference or value field).
+/// Approximates the text bounding box from character count and font size.
+/// For rotated text, rotates the click point into text-local space.
+fn hit_text_prop(content: &str, prop: &TextProp, wx: f64, wy: f64) -> bool {
+    let font_h = prop.font_size.max(1.27);
+    let char_count = content.chars().count() as f64;
+    // Iosevka is roughly 0.6× monospace: each char ≈ 0.6 × font_h wide.
+    let text_w = char_count * font_h * 0.6;
+    let half_h = font_h * 0.6;
+    let margin = 0.5;
+
+    // Click relative to text anchor
+    let dx = wx - prop.position.x;
+    let dy = wy - prop.position.y;
+
+    // Rotate click into text-local space (KiCad CCW = negate in Y-down)
+    let (ldx, ldy) = if prop.rotation.abs() > 0.1 {
+        let rad = prop.rotation.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        // Rotate by +rotation to undo the text rotation
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    } else {
+        (dx, dy)
+    };
+
+    // Text-local bounding box (depends on justification)
+    let (x_lo, x_hi) = match prop.justify_h {
+        HAlign::Left   => (-margin, text_w + margin),
+        HAlign::Right  => (-(text_w + margin), margin),
+        HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),
+    };
+
+    ldx >= x_lo && ldx <= x_hi && ldy >= -(half_h + margin) && ldy <= half_h + margin
 }
 
 fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {

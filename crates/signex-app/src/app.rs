@@ -3253,6 +3253,38 @@ impl Signex {
                         .selection_info
                         .push(("Type".into(), format!("{:?}", item.kind)));
                 }
+                SelectedKind::SymbolRefField => {
+                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                        self.panel_ctx
+                            .selection_info
+                            .push(("Type".into(), "Reference Field".into()));
+                        self.panel_ctx
+                            .selection_info
+                            .push(("Reference".into(), sym.reference.clone()));
+                        if let Some(ref rt) = sym.ref_text {
+                            self.panel_ctx.selection_info.push((
+                                "Position".into(),
+                                format!("{:.2}, {:.2} mm", rt.position.x, rt.position.y),
+                            ));
+                        }
+                    }
+                }
+                SelectedKind::SymbolValField => {
+                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                        self.panel_ctx
+                            .selection_info
+                            .push(("Type".into(), "Value Field".into()));
+                        self.panel_ctx
+                            .selection_info
+                            .push(("Value".into(), sym.value.clone()));
+                        if let Some(ref vt) = sym.val_text {
+                            self.panel_ctx.selection_info.push((
+                                "Position".into(),
+                                format!("{:.2}, {:.2} mm", vt.position.x, vt.position.y),
+                            ));
+                        }
+                    }
+                }
             }
         }
     }
