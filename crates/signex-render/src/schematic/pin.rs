@@ -7,7 +7,7 @@
 //! 3. The pin number (inside the body) if `show_pin_numbers` is true.
 
 use iced::Color;
-use iced::widget::canvas::{self, path};
+use iced::widget::canvas::{self, path, LineCap, LineJoin};
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
@@ -114,10 +114,12 @@ fn draw_pin(
     let p1 = transform.to_screen_point(wx1, wy1);
     let p2 = transform.to_screen_point(wx2, wy2);
 
-    let stroke_width = (transform.scale * 0.15).clamp(0.5, 2.5);
-    let stroke = canvas::Stroke::default()
-        .with_color(pin_color)
-        .with_width(stroke_width);
+    let stroke_width = transform.world_len(0.15).max(0.5);
+    let stroke = canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(pin_color).with_width(stroke_width)
+    };
 
     // INVERTED / INVERTED_CLOCK draw their own (shortened) line inside draw_pin_shape.
     // All other shapes get the full pin line drawn here.
@@ -133,10 +135,7 @@ fn draw_pin(
     // Draw shape decorator at the connection end (p1).
     draw_pin_shape(frame, p1, p2, pin.shape, stroke_width, transform, pin_color);
 
-    // Small circle at the connection point (endpoint)
-    let dot_radius = (transform.scale * 0.2).clamp(1.0, 3.0);
-    let dot = canvas::Path::circle(p1, dot_radius);
-    frame.fill(&dot, pin_color);
+    // Small circle at the connection point (endpoint) — removed, KiCad doesn't draw this
 
     // Pin name (outside the body, beyond the endpoint)
     let font_size_mm = 1.27;
