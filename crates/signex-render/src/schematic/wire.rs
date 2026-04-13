@@ -1,7 +1,7 @@
 //! Wire, bus, and bus-entry rendering.
 
 use iced::Color;
-use iced::widget::canvas::{self, path};
+use iced::widget::canvas::{self, path, LineCap, LineJoin};
 
 use signex_types::schematic::{Bus, BusEntry, Wire};
 
@@ -25,9 +25,11 @@ pub fn draw_wire(
     let mm = if wire.stroke_width > 0.0 { wire.stroke_width } else { WIRE_DEFAULT_WIDTH_MM };
     let width = transform.world_len(mm).max(1.0);
     let line = canvas::Path::line(p1, p2);
-    let stroke = canvas::Stroke::default()
-        .with_color(color)
-        .with_width(width);
+    let stroke = canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(color).with_width(width)
+    };
     frame.stroke(&line, stroke);
 }
 
@@ -38,9 +40,11 @@ pub fn draw_bus(frame: &mut canvas::Frame, bus: &Bus, transform: &ScreenTransfor
 
     let width = transform.world_len(BUS_DEFAULT_WIDTH_MM).max(2.0);
     let line = canvas::Path::line(p1, p2);
-    let stroke = canvas::Stroke::default()
-        .with_color(color)
-        .with_width(width);
+    let stroke = canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(color).with_width(width)
+    };
     frame.stroke(&line, stroke);
 }
 
@@ -63,8 +67,10 @@ pub fn draw_bus_entry(
     });
 
     let width = transform.world_len(WIRE_DEFAULT_WIDTH_MM).max(1.0);
-    let stroke = canvas::Stroke::default()
-        .with_color(color)
-        .with_width(width);
+    let stroke = canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(color).with_width(width)
+    };
     frame.stroke(&path, stroke);
 }
