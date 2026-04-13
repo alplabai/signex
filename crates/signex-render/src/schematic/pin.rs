@@ -176,19 +176,33 @@ fn draw_pin(
 
     // Pin number (inside the body, along the pin line)
     if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
-        // Number is placed at the midpoint of the pin line, offset slightly
+        // Number is placed at the midpoint of the pin line.
         let mid = Point::new(
             pin.position.x + dir_x * len * 0.5,
             pin.position.y + dir_y * len * 0.5,
         );
         let (mwx, mwy) = instance_transform(sym, &mid);
+        let np_base = transform.to_screen_point(mwx, mwy);
 
-        // Offset perpendicular to the pin direction so the number sits above the line
-        let (perp_x, perp_y) = (-dir_y, dir_x);
-        let perp_offset_mm = 0.8;
-        let (wp_dx, wp_dy) =
-            instance_rotate_dir(sym, perp_x * perp_offset_mm, perp_y * perp_offset_mm);
-        let np = transform.to_screen_point(mwx + wp_dx, mwy + wp_dy);
+        // Compute world-space pin direction (screen Y-down system).
+        let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+        let perp_offset_px = transform.world_len(0.8);
+
+        // Always offset toward screen-up for horizontal pins, screen-left for
+        // vertical pins.  This keeps numbers above (never below) the pin line
+        // regardless of lib-local rotation (0° vs 180° pins agree).
+        let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
+            // Horizontal pin → above line (screen -Y), centered on X.
+            (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
+        } else {
+            // Vertical pin → left of line (screen -X), right-aligned text.
+            (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
+        };
+
+        let np = iced::Point::new(
+            np_base.x + perp_sx * perp_offset_px,
+            np_base.y + perp_sy * perp_offset_px,
+        );
 
         let small_font = (screen_font * 0.8).max(5.0);
         let text = canvas::Text {
@@ -197,7 +211,7 @@ fn draw_pin(
             color: pin_color,
             size: iced::Pixels(small_font),
             font: crate::IOSEVKA,
-            align_x: iced::alignment::Horizontal::Center.into(),
+            align_x: num_align.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };
