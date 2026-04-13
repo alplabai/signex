@@ -217,14 +217,14 @@ pub fn render_schematic(
                 && !ref_text.hidden
                 && !sym.is_power
             {
-                text::draw_text_prop(frame, &sym.reference, ref_text, transform, reference_color);
+                text::draw_text_prop(frame, &sym.reference, ref_text, sym.mirror_x, transform, reference_color);
             }
 
             // Value text
             if let Some(ref val_text) = sym.val_text
                 && !val_text.hidden
             {
-                text::draw_text_prop(frame, &sym.value, val_text, transform, value_color);
+                text::draw_text_prop(frame, &sym.value, val_text, sym.mirror_x, transform, value_color);
             }
         }
     }
