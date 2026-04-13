@@ -96,16 +96,25 @@ pub struct SchematicCanvas {
 impl SchematicCanvas {
     pub fn new() -> Self {
         let default_colors =
-            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             grid_visible: true,
-            theme_bg: Color::from_rgb8(0x1a, 0x1b, 0x2e),
-            theme_grid: Color::from_rgb8(0x2d, 0x30, 0x60),
-            theme_paper: Color::from_rgb8(0x1e, 0x20, 0x35),
+            theme_bg: {
+                let c = &default_colors.background;
+                Color::from_rgb8(c.r, c.g, c.b)
+            },
+            theme_grid: {
+                let c = &default_colors.grid;
+                Color::from_rgb8(c.r, c.g, c.b)
+            },
+            theme_paper: {
+                let c = &default_colors.paper;
+                Color::from_rgb8(c.r, c.g, c.b)
+            },
             canvas_colors: default_colors,
             schematic: None,
             selected: Vec::new(),
