@@ -2,7 +2,7 @@
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use iced_aw::NumberInput;
+use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -1182,25 +1182,21 @@ fn view_properties_general<'a>(
             let mut c = Column::new().spacing(0).width(Length::Fill);
             c = c.push(
                 container(
-                    column![
-                        row![tag_btn("Components", tag_bg, tag_hover), tag_btn("Wires", tag_bg, tag_hover), tag_btn("Buses", tag_bg, tag_hover),]
-                            .spacing(4.0),
-                        row![
-                            tag_btn("Sheet Symbols", tag_bg, tag_hover),
-                            tag_btn("Sheet Entries", tag_bg, tag_hover),
-                            tag_btn("Net Labels", tag_bg, tag_hover),
-                        ]
-                        .spacing(4.0),
-                        row![
-                            tag_btn("Parameters", tag_bg, tag_hover),
-                            tag_btn("Ports", tag_bg, tag_hover),
-                            tag_btn("Power Ports", tag_bg, tag_hover),
-                            tag_btn("Texts", tag_bg, tag_hover),
-                        ]
-                        .spacing(4.0),
-                        row![tag_btn("Drawing Objects", tag_bg, tag_hover), tag_btn("Other", tag_bg, tag_hover),].spacing(4.0),
-                    ]
-                    .spacing(4.0),
+                    Wrap::new()
+                        .spacing(4.0)
+                        .line_spacing(4.0)
+                        .push(tag_btn("Components", tag_bg, tag_hover))
+                        .push(tag_btn("Wires", tag_bg, tag_hover))
+                        .push(tag_btn("Buses", tag_bg, tag_hover))
+                        .push(tag_btn("Sheet Symbols", tag_bg, tag_hover))
+                        .push(tag_btn("Sheet Entries", tag_bg, tag_hover))
+                        .push(tag_btn("Net Labels", tag_bg, tag_hover))
+                        .push(tag_btn("Parameters", tag_bg, tag_hover))
+                        .push(tag_btn("Ports", tag_bg, tag_hover))
+                        .push(tag_btn("Power Ports", tag_bg, tag_hover))
+                        .push(tag_btn("Texts", tag_bg, tag_hover))
+                        .push(tag_btn("Drawing Objects", tag_bg, tag_hover))
+                        .push(tag_btn("Other", tag_bg, tag_hover)),
                 )
                 .padding([6, 8]),
             );
