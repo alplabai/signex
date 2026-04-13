@@ -475,6 +475,8 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let border_c = theme_ext::border_color(&ctx.tokens);
     let hover_c = crate::styles::ti(ctx.tokens.hover);
     let panel_bg_c = crate::styles::ti(ctx.tokens.panel_bg);
+    let input_bg = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -623,12 +625,14 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .find(|(n, _)| n == comp_name)
             .map(|(_, p)| *p)
             .unwrap_or(0);
-        detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted));
-        detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted));
+        detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted, input_bg, input_bdr));
+        detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted, input_bg, input_bdr));
         detail_col = detail_col.push(form_input_row(
             "Library",
             ctx.active_library.as_deref().unwrap_or(""),
             muted,
+            input_bg,
+            input_bdr,
         ));
 
         // Symbol preview canvas
@@ -753,13 +757,13 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
 const LABEL_W: f32 = 90.0;
-const INPUT_BG: Color = Color::from_rgb(0.16, 0.22, 0.32);
-const TAG_BG: Color = Color::from_rgb(0.20, 0.35, 0.55);
 
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let input_bg = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     if !ctx.has_schematic {
         return container(
@@ -777,7 +781,7 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── Pre-placement properties (TAB pressed during tool) ──
     if let Some(ref pp) = ctx.pre_placement {
-        return view_pre_placement(pp, muted, primary, border_c);
+        return view_pre_placement(pp, muted, primary, border_c, input_bg, input_bdr);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
@@ -833,11 +837,13 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── General | Parameters tab bar ──
     let tab = ctx.properties_tab;
+    let tab_hover = crate::styles::ti(ctx.tokens.hover);
+    let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     col = col.push(
         container(
             row![
-                props_tab_btn("General", tab == 0, PanelMsg::PropertiesTab(0)),
-                props_tab_btn("Parameters", tab == 1, PanelMsg::PropertiesTab(1)),
+                props_tab_btn("General", tab == 0, PanelMsg::PropertiesTab(0), primary, text_inactive, tab_hover, border_c),
+                props_tab_btn("Parameters", tab == 1, PanelMsg::PropertiesTab(1), primary, text_inactive, tab_hover, border_c),
             ]
             .spacing(2.0),
         )
@@ -849,7 +855,12 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if tab == 0 {
         col = col.push(view_properties_general(ctx, muted, primary, border_c));
     } else {
-        col = col.push(view_properties_parameters(muted, primary, border_c));
+        col = col.push(view_properties_parameters(
+            muted, primary, border_c,
+            crate::styles::ti(ctx.tokens.selection),
+            crate::styles::ti(ctx.tokens.accent),
+            crate::styles::ti(ctx.tokens.hover),
+        ));
     }
 
     // ── Status: Nothing selected ──
@@ -872,6 +883,8 @@ fn view_selected_element_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
+    let input_bg  = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
     let elem_type = ctx
@@ -926,7 +939,7 @@ fn view_selected_element_properties<'a>(
                             move |s| PanelMsg::EditSymbolValue(id, s)));
                         c = c.push(form_edit_row("Footprint", &footprint, muted,
                             move |s| PanelMsg::EditSymbolFootprint(id, s)));
-                        c = c.push(form_input_row("Library ID", &lib_id, muted));
+                        c = c.push(form_input_row("Library ID", &lib_id, muted, input_bg, input_bdr));
                         c
                     },
                 ));
@@ -940,8 +953,8 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Position", &position, muted));
-                        c = c.push(form_input_row("Rotation", &rotation, muted));
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
                         c
                     },
                 ));
@@ -989,7 +1002,7 @@ fn view_selected_element_properties<'a>(
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(form_edit_row("Text", &label_text, muted,
                             move |s| PanelMsg::EditLabelText(id, s)));
-                        c = c.push(form_input_row("Position", &position, muted));
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
                         c
                     },
                 ));
@@ -1055,6 +1068,8 @@ fn view_pre_placement<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let label_text = pp.label_text.clone();
     let designator = pp.designator.clone();
@@ -1126,7 +1141,7 @@ fn view_pre_placement<'a>(
                 )
                 .padding([4, 8]),
                 // Rotation
-                form_input_row("Rotation", &format!("{rotation:.0}°"), muted),
+                form_input_row("Rotation", &format!("{rotation:.0}°"), muted, input_bg, input_bdr),
             ]
             .spacing(0),
         )
@@ -1144,6 +1159,16 @@ fn view_properties_general<'a>(
     primary: Color,
     border_c: Color,
 ) -> Column<'a, PanelMsg> {
+    // Derive button/input colors from tokens (Copy values captured in closures)
+    let input_bg   = crate::styles::ti(ctx.tokens.selection); // deep blue tint
+    let input_bdr  = crate::styles::ti(ctx.tokens.accent);
+    let tag_bg     = crate::styles::ti(ctx.tokens.accent);
+    let tag_hover  = {
+        let c = crate::styles::ti(ctx.tokens.accent);
+        Color { r: (c.r * 1.3).min(1.0), g: (c.g * 1.3).min(1.0), b: (c.b * 1.3).min(1.0), ..c }
+    };
+    let seg_hover  = crate::styles::ti(ctx.tokens.hover);
+
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
     // Selection Filter (collapsible)
@@ -1158,22 +1183,22 @@ fn view_properties_general<'a>(
             c = c.push(
                 container(
                     column![
-                        row![tag_btn("Components"), tag_btn("Wires"), tag_btn("Buses"),]
+                        row![tag_btn("Components", tag_bg, tag_hover), tag_btn("Wires", tag_bg, tag_hover), tag_btn("Buses", tag_bg, tag_hover),]
                             .spacing(4.0),
                         row![
-                            tag_btn("Sheet Symbols"),
-                            tag_btn("Sheet Entries"),
-                            tag_btn("Net Labels"),
+                            tag_btn("Sheet Symbols", tag_bg, tag_hover),
+                            tag_btn("Sheet Entries", tag_bg, tag_hover),
+                            tag_btn("Net Labels", tag_bg, tag_hover),
                         ]
                         .spacing(4.0),
                         row![
-                            tag_btn("Parameters"),
-                            tag_btn("Ports"),
-                            tag_btn("Power Ports"),
-                            tag_btn("Texts"),
+                            tag_btn("Parameters", tag_bg, tag_hover),
+                            tag_btn("Ports", tag_bg, tag_hover),
+                            tag_btn("Power Ports", tag_bg, tag_hover),
+                            tag_btn("Texts", tag_bg, tag_hover),
                         ]
                         .spacing(4.0),
-                        row![tag_btn("Drawing Objects"), tag_btn("Other"),].spacing(4.0),
+                        row![tag_btn("Drawing Objects", tag_bg, tag_hover), tag_btn("Other", tag_bg, tag_hover),].spacing(4.0),
                     ]
                     .spacing(4.0),
                 )
@@ -1204,8 +1229,8 @@ fn view_properties_general<'a>(
                 c = c.push(
                     container(
                         row![
-                            seg_btn("mm", unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm)),
-                            seg_btn("mils", unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil)),
+                            seg_btn("mm", unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm), input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("mils", unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil), input_bg, primary, muted, seg_hover, input_bdr),
                         ]
                         .spacing(0.0)
                         .width(Length::Fill),
@@ -1223,7 +1248,7 @@ fn view_properties_general<'a>(
                     muted,
                 ));
                 c = c.push(form_font_row("Canvas Font", &canvas_font_name, PanelMsg::SetCanvasFont, muted, false));
-                c = c.push(form_input_row("Sheet Color", "Black", muted));
+                c = c.push(form_input_row("Sheet Color", "Black", muted, input_bg, input_bdr));
                 c
             },
         ));
@@ -1244,16 +1269,16 @@ fn view_properties_general<'a>(
                 c = c.push(
                     container(
                         row![
-                            seg_btn("Template", true, PanelMsg::Noop),
-                            seg_btn("Standard", false, PanelMsg::Noop),
-                            seg_btn("Custom", false, PanelMsg::Noop),
+                            seg_btn("Template", true, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("Standard", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("Custom", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
                         ]
                         .spacing(0.0)
                         .width(Length::Fill),
                     )
                     .padding([2, 8]),
                 );
-                c = c.push(form_input_row("Paper", &paper_size, muted));
+                c = c.push(form_input_row("Paper", &paper_size, muted, input_bg, input_bdr));
                 let dims = match paper_size.as_str() {
                     "A4" => "Width: 297mm  Height: 210mm",
                     "A3" => "Width: 420mm  Height: 297mm",
@@ -1277,7 +1302,7 @@ fn view_properties_general<'a>(
                     PanelMsg::SetMarginHorizontal,
                     muted,
                 ));
-                c = c.push(form_input_row("Origin", "Upper Left", muted));
+                c = c.push(form_input_row("Origin", "Upper Left", muted, input_bg, input_bdr));
                 c
             },
         ));
@@ -1290,6 +1315,9 @@ fn view_properties_parameters<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
@@ -1299,9 +1327,9 @@ fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                seg_btn("All", false, PanelMsg::PropertiesTab(1)),
-                seg_btn("Parameters", true, PanelMsg::PropertiesTab(1)),
-                seg_btn("Rules", false, PanelMsg::PropertiesTab(1)),
+                seg_btn("All", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
+                seg_btn("Parameters", true, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
+                seg_btn("Rules", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
             ]
             .spacing(0.0)
             .width(Length::Fill),
@@ -1392,12 +1420,16 @@ fn param_table_row<'a, M: 'a>(
 }
 
 /// Properties panel tab button (General / Parameters).
-fn props_tab_btn(label: &str, active: bool, msg: PanelMsg) -> Element<'static, PanelMsg> {
-    let text_c = if active {
-        Color::WHITE
-    } else {
-        Color::from_rgb(0.55, 0.55, 0.58)
-    };
+fn props_tab_btn(
+    label: &str,
+    active: bool,
+    msg: PanelMsg,
+    text_active: Color,
+    text_inactive: Color,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(text(label.to_string()).size(11).color(text_c))
         .padding([4, 12])
         .on_press(msg)
@@ -1405,14 +1437,14 @@ fn props_tab_btn(label: &str, active: bool, msg: PanelMsg) -> Element<'static, P
             let hover = matches!(status, iced::widget::button::Status::Hovered);
             iced::widget::button::Style {
                 background: if active || hover {
-                    Some(Background::Color(Color::from_rgb(0.22, 0.22, 0.25)))
+                    Some(Background::Color(hover_bg))
                 } else {
                     None
                 },
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
-                    color: Color::from_rgb(0.30, 0.30, 0.33),
+                    color: border_c,
                 },
                 ..iced::widget::button::Style::default()
             }
@@ -1450,7 +1482,13 @@ fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Column
 }
 
 /// Form row: label | styled input-like value display.
-fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Element<'a, M> {
+fn form_input_row<'a, M: 'a>(
+    label: &str,
+    value: &str,
+    label_c: Color,
+    input_bg: Color,
+    input_border: Color,
+) -> Element<'a, M> {
     container(
         row![
             text(label.to_string())
@@ -1466,12 +1504,12 @@ fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Elemen
             )
             .padding([3, 6])
             .width(Length::Fill)
-            .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(INPUT_BG)),
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(input_bg)),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
-                    color: Color::from_rgb(0.22, 0.28, 0.38),
+                    color: input_border,
                 },
                 ..container::Style::default()
             }),
@@ -1815,7 +1853,7 @@ fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
 }
 
 /// Selection filter tag button (Altium blue pill).
-fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
+fn tag_btn(label: &str, bg: Color, hover_bg: Color) -> Element<'static, PanelMsg> {
     iced::widget::button(
         text(label.to_string())
             .size(10)
@@ -1823,14 +1861,10 @@ fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
             .align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3, 8])
-    .style(|_: &Theme, status: iced::widget::button::Status| {
-        let hover = matches!(status, iced::widget::button::Status::Hovered);
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let hovered = matches!(status, iced::widget::button::Status::Hovered);
         iced::widget::button::Style {
-            background: Some(Background::Color(if hover {
-                Color::from_rgb(0.25, 0.42, 0.65)
-            } else {
-                TAG_BG
-            })),
+            background: Some(Background::Color(if hovered { hover_bg } else { bg })),
             border: Border {
                 radius: 3.0.into(),
                 ..Border::default()
@@ -1842,13 +1876,18 @@ fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
 }
 
 /// Segmented button (for units toggle etc).
-fn seg_btn<'a>(label: &str, active: bool, msg: PanelMsg) -> Element<'a, PanelMsg> {
-    let bg = if active { INPUT_BG } else { Color::TRANSPARENT };
-    let text_c = if active {
-        Color::WHITE
-    } else {
-        Color::from_rgb(0.55, 0.55, 0.58)
-    };
+fn seg_btn<'a>(
+    label: &str,
+    active: bool,
+    msg: PanelMsg,
+    active_bg: Color,
+    text_active: Color,
+    text_inactive: Color,
+    hover_bg: Color,
+    seg_border: Color,
+) -> Element<'a, PanelMsg> {
+    let bg = if active { active_bg } else { Color::TRANSPARENT };
+    let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(
         text(label.to_string())
             .size(11)
@@ -1859,17 +1898,17 @@ fn seg_btn<'a>(label: &str, active: bool, msg: PanelMsg) -> Element<'a, PanelMsg
     .width(Length::Fill)
     .on_press(msg)
     .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let hover = matches!(status, iced::widget::button::Status::Hovered);
+        let hovered = matches!(status, iced::widget::button::Status::Hovered);
         iced::widget::button::Style {
-            background: Some(Background::Color(if hover && !active {
-                Color::from_rgb(0.20, 0.20, 0.23)
+            background: Some(Background::Color(if hovered && !active {
+                hover_bg
             } else {
                 bg
             })),
             border: Border {
                 width: 1.0,
                 radius: 2.0.into(),
-                color: Color::from_rgb(0.22, 0.28, 0.38),
+                color: seg_border,
             },
             ..iced::widget::button::Style::default()
         }
