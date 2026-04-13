@@ -226,7 +226,7 @@ impl DockArea {
         }
 
         if region.collapsed {
-            return self.view_rail(position, region);
+            return self.view_rail(position, region, ctx);
         }
 
         // ── Altium-style flat tabs with accent underline ──
@@ -237,12 +237,12 @@ impl DockArea {
             let is_active = i == region.active;
 
             let text_c = if is_active {
-                styles::TEXT_PRIMARY
+                styles::ti(ctx.tokens.text)
             } else {
-                styles::TEXT_MUTED
+                styles::ti(ctx.tokens.text_secondary)
             };
             let line_c = if is_active {
-                styles::ACCENT
+                styles::ti(ctx.tokens.accent)
             } else {
                 iced::Color::TRANSPARENT
             };
@@ -256,7 +256,7 @@ impl DockArea {
             let btn = button(column![label_el, underline].spacing(0))
                 .padding(0)
                 .on_press(DockMessage::SelectTab(position, i))
-                .style(styles::dock_tab(is_active));
+                .style(styles::dock_tab(&ctx.tokens, is_active));
 
             tab_row = tab_row.push(btn);
         }
@@ -305,7 +305,7 @@ impl DockArea {
             container(tab_row)
                 .width(Length::Fill)
                 .padding([0, 4])
-                .style(styles::tab_bar_strip),
+                .style(styles::tab_bar_strip(&ctx.tokens)),
             container(content)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -314,7 +314,7 @@ impl DockArea {
         .into()
     }
 
-    fn view_rail(&self, position: PanelPosition, region: &DockRegion) -> Element<'_, DockMessage> {
+    fn view_rail<'a>(&'a self, position: PanelPosition, region: &'a DockRegion, ctx: &'a panels::PanelContext) -> Element<'a, DockMessage> {
         // Altium-style collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
@@ -339,9 +339,9 @@ impl DockArea {
                 let label = panel.label().to_string();
                 let is_active = i == region.active;
                 let text_c = if is_active {
-                    styles::TEXT_PRIMARY
+                    styles::ti(ctx.tokens.text)
                 } else {
-                    styles::TEXT_MUTED
+                    styles::ti(ctx.tokens.text_secondary)
                 };
 
                 // Rotated text via canvas (Altium-style sideways tabs)
@@ -358,7 +358,7 @@ impl DockArea {
                     )
                     .padding(0)
                     .on_press(DockMessage::SelectTab(position, i))
-                    .style(styles::rail_tab(is_active)),
+                    .style(styles::rail_tab(&ctx.tokens, is_active)),
                 );
             }
 
@@ -366,7 +366,7 @@ impl DockArea {
                 .width(28)
                 .height(Length::Fill)
                 .padding([4, 2])
-                .style(styles::collapsed_rail)
+                .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         } else {
             // Bottom panel collapsed: horizontal thin strip with tab labels
@@ -376,9 +376,9 @@ impl DockArea {
                 let label = panel.label();
                 let is_active = i == region.active;
                 let text_c = if is_active {
-                    styles::TEXT_PRIMARY
+                    styles::ti(ctx.tokens.text)
                 } else {
-                    styles::TEXT_MUTED
+                    styles::ti(ctx.tokens.text_secondary)
                 };
 
                 rail = rail.push(
@@ -393,7 +393,7 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(28)
                 .padding([2, 4])
-                .style(styles::collapsed_rail)
+                .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         }
     }
@@ -412,7 +412,7 @@ impl DockArea {
         let title_bar = container(
             row![
                 iced::widget::mouse_area(
-                    container(text(label).size(11).color(styles::TEXT_PRIMARY))
+                    container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
                         .padding([4, 8])
                         .width(Length::Fill),
                 )
@@ -430,7 +430,7 @@ impl DockArea {
             .align_y(iced::Alignment::Center),
         )
         .width(fp.width)
-        .style(styles::floating_title_bar);
+        .style(styles::floating_title_bar(&ctx.tokens));
 
         let content = panels::view_panel(kind, ctx).map(DockMessage::Panel);
 
@@ -440,11 +440,11 @@ impl DockArea {
                 container(iced::widget::scrollable(content).width(Length::Fill))
                     .width(fp.width)
                     .height(fp.height)
-                    .style(styles::floating_panel_body),
+                    .style(styles::floating_panel_body(&ctx.tokens)),
             ]
             .spacing(0),
         )
-        .style(styles::floating_panel_shadow);
+        .style(styles::floating_panel_shadow(&ctx.tokens));
 
         Some(panel_widget.into())
     }

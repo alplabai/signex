@@ -7,6 +7,7 @@ use iced::widget::{button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
+use signex_types::theme::ThemeTokens;
 
 use crate::styles;
 
@@ -48,112 +49,143 @@ pub enum MenuMessage {
 pub const MENU_BAR_HEIGHT: f32 = 28.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
 
+/// Extracted theme colors (all Copy+ʼstatic so closures remain ʼstatic).
+#[derive(Clone, Copy)]
+struct MenuColors {
+    text: Color,
+    text_muted: Color,
+    text_disabled: Color,
+    toolbar_bg: Color,
+    panel_bg: Color,
+    border: Color,
+    hover: Color,
+}
+
+impl MenuColors {
+    fn from_tokens(tokens: &ThemeTokens) -> Self {
+        Self {
+            text: styles::ti(tokens.text),
+            text_muted: styles::ti(tokens.text_secondary),
+            text_disabled: {
+                let t = styles::ti(tokens.text_secondary);
+                Color { a: t.a * 0.6, ..t }
+            },
+            toolbar_bg: styles::ti(tokens.toolbar_bg),
+            panel_bg: styles::ti(tokens.paper),
+            border: styles::ti(tokens.border),
+            hover: styles::ti(tokens.hover),
+        }
+    }
+}
+
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view() -> Element<'static, MenuMessage> {
+pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
+    let mc = MenuColors::from_tokens(tokens);
+
     let menu_template =
         |items| Menu::new(items).max_width(DROPDOWN_WIDTH).offset(4.0).spacing(2.0);
 
     let file_menu = Item::with_menu(
-        root_btn("File"),
+        root_btn("File", mc),
         menu_template(vec![
-            leaf_stub("New Project", Some("Ctrl+N")),
-            leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject),
-            separator(),
-            leaf("Save", Some("Ctrl+S"), MenuMessage::Save),
-            leaf_stub("Save As...", Some("Ctrl+Shift+S")),
-            separator(),
-            leaf_stub("Exit", None),
+            leaf_stub("New Project", Some("Ctrl+N"), mc),
+            leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
+            separator(mc),
+            leaf("Save", Some("Ctrl+S"), MenuMessage::Save, mc),
+            leaf_stub("Save As...", Some("Ctrl+Shift+S"), mc),
+            separator(mc),
+            leaf_stub("Exit", None, mc),
         ]),
     );
 
     let edit_menu = Item::with_menu(
-        root_btn("Edit"),
+        root_btn("Edit", mc),
         menu_template(vec![
-            leaf("Undo", Some("Ctrl+Z"), MenuMessage::Undo),
-            leaf("Redo", Some("Ctrl+Y"), MenuMessage::Redo),
-            separator(),
-            leaf_stub("Cut", Some("Ctrl+X")),
-            leaf_stub("Copy", Some("Ctrl+C")),
-            leaf_stub("Paste", Some("Ctrl+V")),
-            leaf_stub("Delete", Some("Del")),
-            separator(),
-            leaf_stub("Select All", Some("Ctrl+A")),
+            leaf("Undo", Some("Ctrl+Z"), MenuMessage::Undo, mc),
+            leaf("Redo", Some("Ctrl+Y"), MenuMessage::Redo, mc),
+            separator(mc),
+            leaf_stub("Cut", Some("Ctrl+X"), mc),
+            leaf_stub("Copy", Some("Ctrl+C"), mc),
+            leaf_stub("Paste", Some("Ctrl+V"), mc),
+            leaf_stub("Delete", Some("Del"), mc),
+            separator(mc),
+            leaf_stub("Select All", Some("Ctrl+A"), mc),
         ]),
     );
 
     let view_menu = Item::with_menu(
-        root_btn("View"),
+        root_btn("View", mc),
         menu_template(vec![
-            leaf_stub("Zoom In", Some("Ctrl+=")),
-            leaf_stub("Zoom Out", Some("Ctrl+-")),
-            leaf("Fit All", Some("Home"), MenuMessage::ZoomFit),
-            separator(),
-            leaf("Toggle Grid", Some("Shift+Ctrl+G"), MenuMessage::ToggleGrid),
-            leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid),
-            separator(),
-            leaf_stub("Libraries", None),
-            leaf_stub("Properties", None),
-            leaf_stub("Messages", None),
+            leaf_stub("Zoom In", Some("Ctrl+="), mc),
+            leaf_stub("Zoom Out", Some("Ctrl+-"), mc),
+            leaf("Fit All", Some("Home"), MenuMessage::ZoomFit, mc),
+            separator(mc),
+            leaf("Toggle Grid", Some("Shift+Ctrl+G"), MenuMessage::ToggleGrid, mc),
+            leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid, mc),
+            separator(mc),
+            leaf_stub("Libraries", None, mc),
+            leaf_stub("Properties", None, mc),
+            leaf_stub("Messages", None, mc),
         ]),
     );
 
     let place_menu = Item::with_menu(
-        root_btn("Place"),
+        root_btn("Place", mc),
         menu_template(vec![
-            leaf("Wire", Some("W"), MenuMessage::PlaceWire),
-            leaf("Bus", Some("B"), MenuMessage::PlaceBus),
-            leaf("Net Label", Some("L"), MenuMessage::PlaceLabel),
-            separator(),
-            leaf("Component...", Some("P"), MenuMessage::PlaceComponent),
-            leaf_stub("Power Port", None),
-            separator(),
-            leaf_stub("Text", None),
-            leaf_stub("No Connect", None),
-            leaf_stub("Sheet Entry", None),
+            leaf("Wire", Some("W"), MenuMessage::PlaceWire, mc),
+            leaf("Bus", Some("B"), MenuMessage::PlaceBus, mc),
+            leaf("Net Label", Some("L"), MenuMessage::PlaceLabel, mc),
+            separator(mc),
+            leaf("Component...", Some("P"), MenuMessage::PlaceComponent, mc),
+            leaf_stub("Power Port", None, mc),
+            separator(mc),
+            leaf_stub("Text", None, mc),
+            leaf_stub("No Connect", None, mc),
+            leaf_stub("Sheet Entry", None, mc),
         ]),
     );
 
     let design_menu = Item::with_menu(
-        root_btn("Design"),
+        root_btn("Design", mc),
         menu_template(vec![
-            leaf_stub("Annotate Schematics", None),
-            separator(),
-            leaf_stub("Electrical Rules Check", None),
-            leaf_stub("Generate BOM", None),
-            leaf_stub("Generate Netlist", None),
+            leaf_stub("Annotate Schematics", None, mc),
+            separator(mc),
+            leaf_stub("Electrical Rules Check", None, mc),
+            leaf_stub("Generate BOM", None, mc),
+            leaf_stub("Generate Netlist", None, mc),
         ]),
     );
 
     let tools_menu = Item::with_menu(
-        root_btn("Tools"),
+        root_btn("Tools", mc),
         menu_template(vec![
-            leaf_stub("Assign Footprints", None),
-            leaf_stub("Library Editor", None),
-            separator(),
-            leaf_stub("Design Rule Check", None),
-            leaf_stub("Net Inspector", None),
-            separator(),
-            leaf("Preferences...", Some("Ctrl+,"), MenuMessage::OpenPreferences),
+            leaf_stub("Assign Footprints", None, mc),
+            leaf_stub("Library Editor", None, mc),
+            separator(mc),
+            leaf_stub("Design Rule Check", None, mc),
+            leaf_stub("Net Inspector", None, mc),
+            separator(mc),
+            leaf("Preferences...", Some("Ctrl+,"), MenuMessage::OpenPreferences, mc),
         ]),
     );
 
     let window_menu = Item::with_menu(
-        root_btn("Window"),
+        root_btn("Window", mc),
         menu_template(vec![
-            leaf_stub("Tile Horizontally", None),
-            leaf_stub("Tile Vertically", None),
-            separator(),
-            leaf_stub("Close All Documents", None),
+            leaf_stub("Tile Horizontally", None, mc),
+            leaf_stub("Tile Vertically", None, mc),
+            separator(mc),
+            leaf_stub("Close All Documents", None, mc),
         ]),
     );
 
     let help_menu = Item::with_menu(
-        root_btn("Help"),
+        root_btn("Help", mc),
         menu_template(vec![
-            leaf_stub("About Signex", None),
-            separator(),
-            leaf_stub("Keyboard Shortcuts", None),
+            leaf_stub("About Signex", None, mc),
+            separator(mc),
+            leaf_stub("Keyboard Shortcuts", None, mc),
         ]),
     );
 
@@ -171,22 +203,22 @@ pub fn view() -> Element<'static, MenuMessage> {
     .padding([1, 4])
     .close_on_item_click_global(true)
     .close_on_background_click_global(true)
-    .style(|_theme: &Theme, _status| menu_style::Style {
-        bar_background: Background::Color(styles::TOOLBAR_BG),
+    .style(move |_theme: &Theme, _status| menu_style::Style {
+        bar_background: Background::Color(mc.toolbar_bg),
         bar_border: Border::default(),
         bar_shadow: iced::Shadow::default(),
-        menu_background: Background::Color(Color::from_rgb(0.12, 0.12, 0.14)),
+        menu_background: Background::Color(mc.panel_bg),
         menu_border: Border {
             width: 1.0,
             radius: 4.0.into(),
-            color: styles::BORDER_COLOR,
+            color: mc.border,
         },
         menu_shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
             offset: iced::Vector::new(2.0, 4.0),
             blur_radius: 8.0,
         },
-        path: Background::Color(styles::TAB_ACTIVE_BG),
+        path: Background::Color(mc.hover),
         path_border: Border::default(),
     });
 
@@ -195,39 +227,40 @@ pub fn view() -> Element<'static, MenuMessage> {
             .align_y(iced::Alignment::Center),
     )
     .width(Length::Fill)
-    .style(styles::toolbar_strip)
+    .style(styles::toolbar_strip(tokens))
     .into()
 }
 
 // ─── Private helpers ─────────────────────────────────────────
 
 /// Root-level menu button (top bar).
-fn root_btn(label: &str) -> Element<'static, MenuMessage> {
-    button(text(label.to_owned()).size(12).color(styles::TEXT_PRIMARY))
+fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    let label = label.to_owned();
+    button(text(label).size(12).color(mc.text))
         .padding([3, 10])
         .style(button::text)
         .into()
 }
 
 /// Leaf menu item with an action.
-fn leaf(label: &str, shortcut: Option<&str>, msg: MenuMessage) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, Some(msg)))
+fn leaf(label: &str, shortcut: Option<&str>, msg: MenuMessage, mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+    Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
 }
 
 /// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(label: &str, shortcut: Option<&str>) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(menu_item_btn(label, shortcut, None))
+fn leaf_stub(label: &str, shortcut: Option<&str>, mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+    Item::new(menu_item_btn(label, shortcut, None, mc))
 }
 
 /// Separator line between menu sections.
-fn separator() -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(
         container(iced::widget::Space::new())
             .height(1)
             .width(Length::Fill)
             .padding([2, 8])
-            .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(styles::BORDER_SUBTLE)),
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(mc.border)),
                 ..container::Style::default()
             }),
     )
@@ -238,16 +271,14 @@ fn menu_item_btn(
     label: &str,
     shortcut: Option<&str>,
     msg: Option<MenuMessage>,
+    mc: MenuColors,
 ) -> Element<'static, MenuMessage> {
     let enabled = msg.is_some();
-    let text_c = if enabled {
-        styles::TEXT_PRIMARY
-    } else {
-        Color::from_rgb(0.35, 0.35, 0.38)
-    };
+    let text_c = if enabled { mc.text } else { mc.text_disabled };
 
+    let label = label.to_owned();
     let mut r = row![
-        text(label.to_owned())
+        text(label)
             .size(12)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
@@ -257,16 +288,17 @@ fn menu_item_btn(
     .width(Length::Fill);
 
     if let Some(sc) = shortcut {
+        let sc = sc.to_owned();
         r = r.push(iced::widget::Space::new().width(Length::Fill));
         r = r.push(
-            text(sc.to_owned())
+            text(sc)
                 .size(11)
-                .color(styles::TEXT_MUTED)
+                .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),
         );
     }
 
-    let hover_bg = styles::TAB_ACTIVE_BG;
+    let hover_bg = mc.hover;
     let btn = button(r).padding([4, 12]).width(Length::Fill).style(
         move |_: &Theme, status: button::Status| {
             let bg = if enabled {
@@ -282,10 +314,7 @@ fn menu_item_btn(
             button::Style {
                 background: bg,
                 text_color: text_c,
-                border: Border {
-                    radius: 2.0.into(),
-                    ..Border::default()
-                },
+                border: Border { radius: 2.0.into(), ..Border::default() },
                 ..button::Style::default()
             }
         },
