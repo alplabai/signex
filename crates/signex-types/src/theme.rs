@@ -43,7 +43,7 @@ impl Color {
 pub enum ThemeId {
     CatppuccinMocha,
     VsCodeDark,
-    AltiumDark,
+    Signex,
     GitHubDark,
     SolarizedLight,
     Nord,
@@ -54,7 +54,7 @@ pub enum ThemeId {
 impl ThemeId {
     /// All 6 built-in themes (excludes Custom).
     pub const BUILTINS: &[ThemeId] = &[
-        ThemeId::AltiumDark,
+        ThemeId::Signex,
         ThemeId::VsCodeDark,
         ThemeId::CatppuccinMocha,
         ThemeId::GitHubDark,
@@ -69,7 +69,7 @@ impl ThemeId {
         match self {
             ThemeId::CatppuccinMocha => "Catppuccin Mocha",
             ThemeId::VsCodeDark => "VS Code Dark",
-            ThemeId::AltiumDark => "Altium Dark",
+            ThemeId::Signex => "Signex",
             ThemeId::GitHubDark => "GitHub Dark",
             ThemeId::SolarizedLight => "Solarized Light",
             ThemeId::Nord => "Nord",
@@ -230,9 +230,9 @@ const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
     cursor: c(0xFF, 0xFF, 0xFF),
 };
 
-// ===== Altium Dark =====
+// ===== Signex =====
 
-const ALTIUM_DARK_TOKENS: ThemeTokens = ThemeTokens {
+const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
     bg: c(0x2D, 0x2D, 0x30),
     paper: c(0x1E, 0x1E, 0x1E),
     text: c(0xDC, 0xDC, 0xDC),
@@ -249,25 +249,26 @@ const ALTIUM_DARK_TOKENS: ThemeTokens = ThemeTokens {
     success: c(0x57, 0xA6, 0x4A),
 };
 
-const ALTIUM_DARK_CANVAS: CanvasColors = CanvasColors {
-    background: c(0x2D, 0x2D, 0x30),
-    paper: c(0x1E, 0x1E, 0x1E),
-    wire: c(0x57, 0xA6, 0x4A),
-    junction: c(0x57, 0xA6, 0x4A),
-    body: c(0xE8, 0x91, 0x2D),
-    body_fill: c(0x1E, 0x1E, 0x1E),
-    pin: c(0xDC, 0xDC, 0xDC),
-    reference: c(0xE8, 0x91, 0x2D),
-    value: c(0x9B, 0xDB, 0xF4),
-    net_label: c(0x4E, 0xC9, 0xB0),
-    global_label: c(0xDC, 0xDC, 0xAA),
-    hier_label: c(0xE8, 0x91, 0x2D),
-    no_connect: c(0xF4, 0x4E, 0x4E),
-    power: c(0xF4, 0x4E, 0x4E),
-    selection: c(0xFF, 0xFF, 0xFF),
-    bus: c(0x56, 0x9C, 0xD6),
-    grid: c(0x3F, 0x3F, 0x46),
-    cursor: c(0xFF, 0xFF, 0xFF),
+const SIGNEX_CANVAS: CanvasColors = CanvasColors {
+    // Classic Altium Designer schematic palette — cream sheet, dark elements
+    background: c(0x50, 0x50, 0x50),   // Medium gray workspace outside sheet
+    paper:      c(0xFF, 0xFF, 0xE0),   // Pale cream/yellow sheet (255,255,224)
+    wire:       c(0x00, 0x00, 0x80),   // Navy blue wires
+    junction:   c(0x00, 0x00, 0x80),   // Navy blue junction dots
+    body:       c(0x80, 0x60, 0x00),   // Brown component body border
+    body_fill:  c(0xFF, 0xFF, 0x80),   // Light yellow component fill
+    pin:        c(0x00, 0x00, 0x00),   // Black pin lines
+    reference:  c(0x80, 0x00, 0x00),   // Dark red designator (R1, C1…)
+    value:      c(0x00, 0x00, 0x80),   // Navy blue value/comment text
+    net_label:  c(0x80, 0x00, 0x00),   // Dark red / burgundy net labels
+    global_label: c(0x00, 0x80, 0x00), // Green global labels
+    hier_label: c(0x00, 0xAA, 0x00),   // Virulent green hierarchical blocks
+    no_connect: c(0x80, 0x00, 0x00),   // Dark red X marks
+    power:      c(0x80, 0x00, 0x00),   // Dark red power ports (VCC/GND)
+    selection:  c(0x00, 0x78, 0xD4),   // Windows blue selection highlight
+    bus:        c(0x00, 0x00, 0x80),   // Navy blue bus (rendered thicker)
+    grid:       c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
+    cursor:     c(0x00, 0x00, 0x00),   // Black cursor crosshair
 };
 
 // ===== GitHub Dark =====
@@ -398,11 +399,11 @@ pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
     match id {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_TOKENS,
         ThemeId::VsCodeDark => VSCODE_DARK_TOKENS,
-        ThemeId::AltiumDark => ALTIUM_DARK_TOKENS,
+        ThemeId::Signex => SIGNEX_TOKENS,
         ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
         ThemeId::Nord => NORD_TOKENS,
-        ThemeId::Custom => ALTIUM_DARK_TOKENS, // caller must use CustomThemeFile directly
+        ThemeId::Custom => SIGNEX_TOKENS, // caller must use CustomThemeFile directly
     }
 }
 
@@ -410,10 +411,10 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
     match id {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_CANVAS,
         ThemeId::VsCodeDark => VSCODE_DARK_CANVAS,
-        ThemeId::AltiumDark => ALTIUM_DARK_CANVAS,
+        ThemeId::Signex => SIGNEX_CANVAS,
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,
-        ThemeId::Custom => ALTIUM_DARK_CANVAS, // caller must use CustomThemeFile directly
+        ThemeId::Custom => SIGNEX_CANVAS, // caller must use CustomThemeFile directly
     }
 }
