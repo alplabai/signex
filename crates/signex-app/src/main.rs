@@ -9,6 +9,7 @@ mod dock;
 mod fonts;
 mod menu_bar;
 mod panels;
+mod preferences;
 mod shortcuts;
 mod status_bar;
 mod styles;
