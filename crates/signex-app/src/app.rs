@@ -2246,7 +2246,7 @@ impl Signex {
                         self.preferences_draft_font = self.ui_font_name.clone();
                         self.preferences_dirty = false;
                         self.preferences_open = false;
-                        // Restore tokens to the currently saved theme
+                        // Restore tokens and canvas to the currently saved theme
                         let tokens = if self.theme_id == ThemeId::Custom {
                             self.custom_theme
                                 .as_ref()
@@ -2256,6 +2256,7 @@ impl Signex {
                             signex_types::theme::theme_tokens(self.theme_id)
                         };
                         self.panel_ctx.tokens = tokens;
+                        self.update_canvas_theme();
                     }
 
                     // ── Commit draft → real state ──
@@ -2290,6 +2291,22 @@ impl Signex {
                             signex_types::theme::theme_tokens(id)
                         };
                         self.panel_ctx.tokens = tokens;
+                        // Also update canvas live preview (uses draft id)
+                        let canvas_colors = if id == ThemeId::Custom {
+                            self.custom_theme
+                                .as_ref()
+                                .map(|c| c.canvas)
+                                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
+                        } else {
+                            signex_types::theme::canvas_colors(id)
+                        };
+                        self.canvas.set_theme_colors(
+                            signex_render::colors::to_iced(&canvas_colors.background),
+                            signex_render::colors::to_iced(&canvas_colors.grid),
+                            signex_render::colors::to_iced(&canvas_colors.paper),
+                        );
+                        self.canvas.canvas_colors = canvas_colors;
+                        self.canvas.clear_content_cache();
                         self.preferences_dirty =
                             self.preferences_draft_theme != self.theme_id
                             || self.preferences_draft_font != self.ui_font_name;
