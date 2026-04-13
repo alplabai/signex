@@ -236,6 +236,14 @@ pub struct Signex {
     pub preferences_open: bool,
     /// Selected nav item in the Preferences dialog.
     pub preferences_nav: crate::preferences::PrefNav,
+    /// Draft theme selected in Preferences (live preview; committed on Save).
+    pub preferences_draft_theme: ThemeId,
+    /// Draft UI font name pending Save.
+    pub preferences_draft_font: String,
+    /// True when the Preferences draft differs from the saved state.
+    pub preferences_dirty: bool,
+    /// User-loaded custom theme (imported from JSON).
+    pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
 }
 
 /// Wire/bus drawing mode (Altium: cycle with Shift+Space).
@@ -556,6 +564,10 @@ impl Signex {
             panel_list_open: false,
             preferences_open: false,
             preferences_nav: crate::preferences::PrefNav::Appearance,
+            preferences_draft_theme: ThemeId::AltiumDark,
+            preferences_draft_font: String::new(),
+            preferences_dirty: false,
+            custom_theme: None,
         };
         (app, Task::none())
     }
@@ -565,21 +577,74 @@ impl Signex {
     }
 
     pub fn theme(&self) -> Theme {
-        match self.theme_id {
+        // While Preferences dialog is open, live-preview the draft theme.
+        let id = if self.preferences_open {
+            self.preferences_draft_theme
+        } else {
+            self.theme_id
+        };
+        Self::id_to_iced_theme(id, self.custom_theme.as_ref())
+    }
+
+    /// Map a ThemeId to an iced::Theme with a properly tuned palette.
+    fn id_to_iced_theme(
+        id: ThemeId,
+        custom: Option<&signex_types::theme::CustomThemeFile>,
+    ) -> Theme {
+        use signex_render::colors::to_iced;
+        match id {
+            ThemeId::Custom => {
+                if let Some(c) = custom {
+                    let t = &c.tokens;
+                    Theme::custom(
+                        c.name.clone(),
+                        iced::theme::Palette {
+                            background: to_iced(&t.bg),
+                            text:       to_iced(&t.text),
+                            primary:    to_iced(&t.accent),
+                            success:    to_iced(&t.success),
+                            danger:     to_iced(&t.error),
+                            warning:    to_iced(&t.warning),
+                        },
+                    )
+                } else {
+                    Theme::CatppuccinMocha
+                }
+            }
             ThemeId::CatppuccinMocha => Theme::CatppuccinMocha,
-            ThemeId::VsCodeDark => Theme::Dark,
+            ThemeId::VsCodeDark => Theme::custom(
+                "VS Code Dark".to_string(),
+                iced::theme::Palette {
+                    background: iced::Color::from_rgb(0.118, 0.118, 0.118),
+                    text:       iced::Color::from_rgb(0.831, 0.831, 0.831),
+                    primary:    iced::Color::from_rgb(0.000, 0.478, 0.800),
+                    success:    iced::Color::from_rgb(0.416, 0.600, 0.333),
+                    danger:     iced::Color::from_rgb(0.957, 0.267, 0.278),
+                    warning:    iced::Color::from_rgb(1.000, 0.549, 0.000),
+                },
+            ),
             ThemeId::AltiumDark => Theme::custom(
                 "Altium Dark".to_string(),
                 iced::theme::Palette {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
-                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
-                    primary: iced::Color::from_rgb(0.45, 0.45, 0.48),
-                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
-                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
-                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                    text:       iced::Color::from_rgb(0.86, 0.86, 0.86),
+                    primary:    iced::Color::from_rgb(0.91, 0.57, 0.18),
+                    success:    iced::Color::from_rgb(0.34, 0.65, 0.29),
+                    danger:     iced::Color::from_rgb(0.96, 0.31, 0.31),
+                    warning:    iced::Color::from_rgb(0.91, 0.57, 0.18),
                 },
             ),
-            ThemeId::GitHubDark => Theme::Dark,
+            ThemeId::GitHubDark => Theme::custom(
+                "GitHub Dark".to_string(),
+                iced::theme::Palette {
+                    background: iced::Color::from_rgb(0.051, 0.067, 0.090),
+                    text:       iced::Color::from_rgb(0.902, 0.929, 0.953),
+                    primary:    iced::Color::from_rgb(0.345, 0.651, 1.000),
+                    success:    iced::Color::from_rgb(0.247, 0.725, 0.314),
+                    danger:     iced::Color::from_rgb(1.000, 0.482, 0.447),
+                    warning:    iced::Color::from_rgb(0.824, 0.604, 0.133),
+                },
+            ),
             ThemeId::SolarizedLight => Theme::Light,
             ThemeId::Nord => Theme::Nord,
         }
@@ -2144,11 +2209,15 @@ impl Signex {
             // Preferences dialog
             Message::OpenPreferences => {
                 self.preferences_open = true;
+                self.preferences_draft_theme = self.theme_id;
+                self.preferences_draft_font = self.ui_font_name.clone();
+                self.preferences_dirty = false;
                 self.panel_list_open = false;
                 return Task::none();
             }
             Message::ClosePreferences => {
                 self.preferences_open = false;
+                self.preferences_dirty = false;
                 return Task::none();
             }
             Message::PreferencesNav(nav) => {
@@ -2158,22 +2227,126 @@ impl Signex {
             Message::PreferencesMsg(msg) => {
                 use crate::preferences::PrefMsg;
                 match msg {
-                    PrefMsg::Close => {
-                        self.preferences_open = false;
-                    }
+                    // ── Navigation ──
                     PrefMsg::Nav(nav) => {
                         self.preferences_nav = nav;
                     }
-                    PrefMsg::SetTheme(id) => {
-                        self.theme_id = id;
-                        self.update_canvas_theme();
-                        self.panel_ctx.tokens =
-                            signex_types::theme::theme_tokens(id);
+
+                    // ── Close (only when clean) ──
+                    PrefMsg::Close => {
+                        if !self.preferences_dirty {
+                            self.preferences_open = false;
+                        }
+                        // If dirty the view shows the warning row; user must Save or Discard.
                     }
-                    PrefMsg::SetUiFont(name) => {
-                        self.ui_font_name = name.clone();
-                        self.panel_ctx.ui_font_name = name.clone();
-                        crate::fonts::write_ui_font_pref(&name);
+
+                    // ── Discard unsaved and close ──
+                    PrefMsg::DiscardAndClose => {
+                        self.preferences_draft_theme = self.theme_id;
+                        self.preferences_draft_font = self.ui_font_name.clone();
+                        self.preferences_dirty = false;
+                        self.preferences_open = false;
+                    }
+
+                    // ── Commit draft → real state ──
+                    PrefMsg::Save => {
+                        self.theme_id = self.preferences_draft_theme;
+                        self.ui_font_name = self.preferences_draft_font.clone();
+                        self.update_canvas_theme();
+                        let tokens = if self.theme_id == ThemeId::Custom {
+                            self.custom_theme
+                                .as_ref()
+                                .map(|c| c.tokens)
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                        } else {
+                            signex_types::theme::theme_tokens(self.theme_id)
+                        };
+                        self.panel_ctx.tokens = tokens;
+                        self.panel_ctx.ui_font_name = self.ui_font_name.clone();
+                        crate::fonts::write_ui_font_pref(&self.ui_font_name);
+                        self.preferences_dirty = false;
+                    }
+
+                    // ── Draft updates (mark dirty, no immediate apply) ──
+                    PrefMsg::DraftTheme(id) => {
+                        self.preferences_draft_theme = id;
+                        self.preferences_dirty =
+                            self.preferences_draft_theme != self.theme_id
+                            || self.preferences_draft_font != self.ui_font_name;
+                    }
+                    PrefMsg::DraftFont(name) => {
+                        self.preferences_draft_font = name;
+                        self.preferences_dirty =
+                            self.preferences_draft_theme != self.theme_id
+                            || self.preferences_draft_font != self.ui_font_name;
+                    }
+
+                    // ── Custom theme import ──
+                    PrefMsg::ImportTheme => {
+                        return Task::future(async {
+                            let picked = rfd::AsyncFileDialog::new()
+                                .set_title("Import Signex Theme")
+                                .add_filter("Signex Theme", &["json"])
+                                .pick_file()
+                                .await;
+                            if let Some(f) = picked {
+                                let bytes = f.read().await;
+                                let s = String::from_utf8_lossy(&bytes).to_string();
+                                Message::PreferencesMsg(PrefMsg::ThemeFileLoaded(s))
+                            } else {
+                                Message::Noop
+                            }
+                        });
+                    }
+
+                    // ── Custom theme export ──
+                    PrefMsg::ExportTheme => {
+                        let id = self.preferences_draft_theme;
+                        let name = if id == ThemeId::Custom {
+                            self.custom_theme
+                                .as_ref()
+                                .map(|c| c.name.clone())
+                                .unwrap_or_else(|| "Custom".to_string())
+                        } else {
+                            id.label().to_string()
+                        };
+                        let tokens = if id == ThemeId::Custom {
+                            self.custom_theme.as_ref().map(|c| c.tokens)
+                                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::AltiumDark))
+                        } else {
+                            signex_types::theme::theme_tokens(id)
+                        };
+                        let canvas = if id == ThemeId::Custom {
+                            self.custom_theme.as_ref().map(|c| c.canvas)
+                                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::AltiumDark))
+                        } else {
+                            signex_types::theme::canvas_colors(id)
+                        };
+                        let export = signex_types::theme::CustomThemeFile { name, tokens, canvas };
+                        let json = serde_json::to_string_pretty(&export).unwrap_or_default();
+                        return Task::future(async move {
+                            let picked = rfd::AsyncFileDialog::new()
+                                .set_title("Export Signex Theme")
+                                .add_filter("Signex Theme", &["json"])
+                                .set_file_name("custom-theme.json")
+                                .save_file()
+                                .await;
+                            if let Some(f) = picked {
+                                let _ = f.write(json.as_bytes()).await;
+                            }
+                            Message::Noop
+                        });
+                    }
+
+                    // ── JSON payload from import ──
+                    PrefMsg::ThemeFileLoaded(content) => {
+                        if let Ok(custom) =
+                            serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content)
+                        {
+                            self.custom_theme = Some(custom);
+                            self.preferences_draft_theme = ThemeId::Custom;
+                            self.preferences_dirty = true;
+                        }
                     }
                 }
                 return Task::none();
@@ -3047,7 +3220,14 @@ impl Signex {
     }
 
     fn update_canvas_theme(&mut self) {
-        let colors = signex_types::theme::canvas_colors(self.theme_id);
+        let colors = if self.theme_id == ThemeId::Custom {
+            self.custom_theme
+                .as_ref()
+                .map(|c| c.canvas)
+                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::AltiumDark))
+        } else {
+            signex_types::theme::canvas_colors(self.theme_id)
+        };
         self.canvas.set_theme_colors(
             signex_render::colors::to_iced(&colors.background),
             signex_render::colors::to_iced(&colors.grid),
@@ -3485,8 +3665,11 @@ impl Signex {
         if self.preferences_open {
             let pref_view = crate::preferences::view(
                 self.preferences_nav,
+                self.preferences_draft_theme,
                 self.theme_id,
-                &self.ui_font_name,
+                &self.preferences_draft_font,
+                self.custom_theme.as_ref().map(|c| c.name.as_str()),
+                self.preferences_dirty,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
