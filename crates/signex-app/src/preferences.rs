@@ -333,7 +333,7 @@ fn content_appearance<'a>(
 
     // Built-in theme data: (id, display name, description)
     let builtins: &[(ThemeId, &str, &str)] = &[
-        (ThemeId::AltiumDark,      "Altium Dark",      "Default Altium dark palette"),
+        (ThemeId::Signex,          "Signex",               "Default Signex schematic palette"),
         (ThemeId::VsCodeDark,      "VS Code Dark",     "VS Code inspired dark theme"),
         (ThemeId::CatppuccinMocha, "Catppuccin Mocha", "Warm soft dark with pastels"),
         (ThemeId::GitHubDark,      "GitHub Dark",      "GitHub's dark mode colors"),
