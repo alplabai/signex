@@ -40,12 +40,22 @@ impl PrefNav {
 pub enum PrefMsg {
     /// Navigate to a category.
     Nav(PrefNav),
-    /// Close the dialog.
+    /// Close without saving (only if not dirty; app ignores if dirty).
     Close,
-    /// Change the application theme.
-    SetTheme(ThemeId),
-    /// Change the UI font (restart to apply).
-    SetUiFont(String),
+    /// Discard all unsaved changes and close.
+    DiscardAndClose,
+    /// Commit the current draft and keep the dialog open.
+    Save,
+    /// Update the draft theme (not applied until Save).
+    DraftTheme(ThemeId),
+    /// Update the draft UI font (not applied until Save).
+    DraftFont(String),
+    /// Open a file picker to import a custom theme JSON.
+    ImportTheme,
+    /// Save the current draft theme as a JSON file.
+    ExportTheme,
+    /// Loaded JSON content from an import pick dialog.
+    ThemeFileLoaded(String),
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -67,16 +77,30 @@ const ROW_HOVER: Color = Color::from_rgb(0.18, 0.18, 0.21);
 const SEP: Color = Color::from_rgb(0.22, 0.22, 0.25);
 const TEXT_PRI: Color = Color::from_rgb(0.90, 0.90, 0.92);
 const TEXT_MUT: Color = Color::from_rgb(0.50, 0.50, 0.55);
+const WARN_YELLOW: Color = Color::from_rgb(0.95, 0.72, 0.15);
+const BTN_IMPORT: Color = Color::from_rgb(0.18, 0.26, 0.40);
+const BTN_IMPORT_HOV: Color = Color::from_rgb(0.24, 0.34, 0.52);
+const BTN_DANGER: Color = Color::from_rgb(0.38, 0.16, 0.16);
+const BTN_DANGER_HOV: Color = Color::from_rgb(0.50, 0.22, 0.22);
 
 // ─── Public view ──────────────────────────────────────────────
 
 /// Build the full-screen backdrop + centred dialog.
+///
+/// * `draft_theme`      — theme currently selected in the dialog (not yet saved)
+/// * `saved_theme`      — the committed theme (used to detect unsaved changes)
+/// * `draft_font`       — UI font name pending save
+/// * `custom_name`      — name of the loaded custom theme (if any)
+/// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(
     nav: PrefNav,
-    theme_id: ThemeId,
-    ui_font_name: &str,
+    draft_theme: ThemeId,
+    saved_theme: ThemeId,
+    draft_font: &str,
+    custom_name: Option<&'a str>,
+    dirty: bool,
 ) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(nav, theme_id, ui_font_name);
+    let dialog = build_dialog(nav, draft_theme, saved_theme, draft_font, custom_name, dirty);
 
     container(
         column![
@@ -102,7 +126,14 @@ pub fn view<'a>(
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
-fn build_dialog<'a>(nav: PrefNav, theme_id: ThemeId, ui_font_name: &str) -> Element<'a, PrefMsg> {
+fn build_dialog<'a>(
+    nav: PrefNav,
+    draft_theme: ThemeId,
+    saved_theme: ThemeId,
+    draft_font: &str,
+    custom_name: Option<&'a str>,
+    dirty: bool,
+) -> Element<'a, PrefMsg> {
     // ── Header ──
     let header = container(
         row![
@@ -138,31 +169,13 @@ fn build_dialog<'a>(nav: PrefNav, theme_id: ThemeId, ui_font_name: &str) -> Elem
                 background: Some(Background::Color(SEP)),
                 ..container::Style::default()
             }),
-        build_content(nav, theme_id, ui_font_name),
+        build_content(nav, draft_theme, saved_theme, draft_font, custom_name),
     ]
     .width(Length::Fill)
     .height(Length::Fill);
 
     // ── Footer ──
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            close_footer_btn(),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(FOOTER_H)
-    .padding([0, 14])
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(HDR_BG)),
-        border: Border {
-            width: 1.0,
-            color: SEP,
-            radius: 0.0.into(),
-        },
-        ..container::Style::default()
-    });
+    let footer = build_footer(dirty);
 
     // ── Assemble ──
     container(
@@ -282,9 +295,15 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
-fn build_content<'a>(nav: PrefNav, theme_id: ThemeId, ui_font_name: &str) -> Element<'a, PrefMsg> {
+fn build_content<'a>(
+    nav: PrefNav,
+    draft_theme: ThemeId,
+    saved_theme: ThemeId,
+    draft_font: &str,
+    custom_name: Option<&'a str>,
+) -> Element<'a, PrefMsg> {
     let inner = match nav {
-        PrefNav::Appearance => content_appearance(theme_id, ui_font_name),
+        PrefNav::Appearance => content_appearance(draft_theme, saved_theme, draft_font, custom_name),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -300,43 +319,72 @@ fn build_content<'a>(nav: PrefNav, theme_id: ThemeId, ui_font_name: &str) -> Ele
 
 // ─── Appearance page ──────────────────────────────────────────
 
-fn content_appearance<'a>(current_theme: ThemeId, ui_font_name: &str) -> Element<'a, PrefMsg> {
+fn content_appearance<'a>(
+    draft_theme: ThemeId,
+    _saved_theme: ThemeId,
+    draft_font: &str,
+    custom_name: Option<&'a str>,
+) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
 
     // ── Section: Theme ──
     col = col.push(section_title("Theme"));
     col = col.push(Space::new().height(10));
 
-    // 2-column grid of theme cards
-    let themes = [
-        (ThemeId::AltiumDark,      "Altium Dark",     "Default Altium dark palette"),
-        (ThemeId::VsCodeDark,      "VS Code Dark",    "VS Code inspired dark theme"),
-        (ThemeId::CatppuccinMocha, "Catppuccin Mocha","Warm soft dark with pastels"),
-        (ThemeId::GitHubDark,      "GitHub Dark",     "GitHub's dark mode colors"),
-        (ThemeId::SolarizedLight,  "Solarized Light", "Warm light tone-on-tone"),
-        (ThemeId::Nord,            "Nord",            "Arctic blue cool dark theme"),
+    // Built-in theme data: (id, display name, description)
+    let builtins: &[(ThemeId, &str, &str)] = &[
+        (ThemeId::AltiumDark,      "Altium Dark",      "Default Altium dark palette"),
+        (ThemeId::VsCodeDark,      "VS Code Dark",     "VS Code inspired dark theme"),
+        (ThemeId::CatppuccinMocha, "Catppuccin Mocha", "Warm soft dark with pastels"),
+        (ThemeId::GitHubDark,      "GitHub Dark",      "GitHub's dark mode colors"),
+        (ThemeId::SolarizedLight,  "Solarized Light",  "Warm light tone-on-tone"),
+        (ThemeId::Nord,            "Nord",             "Arctic blue cool dark theme"),
     ];
+
+    // Build list of all theme entries including optional custom
+    let mut entries: Vec<(ThemeId, String, &'static str)> = builtins
+        .iter()
+        .map(|&(id, name, desc)| (id, name.to_string(), desc))
+        .collect();
+    if let Some(name) = custom_name {
+        entries.push((ThemeId::Custom, format!("\u{2728} {name}"), "Custom imported theme"));
+    }
 
     // Rows of 2
     let mut i = 0;
-    while i < themes.len() {
-        let (id_a, name_a, desc_a) = themes[i];
-        let card_a = theme_card(id_a, name_a, desc_a, current_theme);
-        let row_elem: Element<'_, PrefMsg> = if i + 1 < themes.len() {
-            let (id_b, name_b, desc_b) = themes[i + 1];
-            let card_b = theme_card(id_b, name_b, desc_b, current_theme);
+    while i < entries.len() {
+        let (id_a, ref name_a, desc_a) = entries[i];
+        let card_a = theme_card(id_a, name_a, desc_a, draft_theme);
+        let row_elem: Element<'_, PrefMsg> = if i + 1 < entries.len() {
+            let (id_b, ref name_b, desc_b) = entries[i + 1];
+            let card_b = theme_card(id_b, name_b, desc_b, draft_theme);
             row![card_a, Space::new().width(12), card_b]
                 .width(Length::Fill)
                 .into()
         } else {
-            row![card_a].width(Length::Fill).into()
+            row![card_a, Space::new().width(Length::Fill)]
+                .width(Length::Fill)
+                .into()
         };
         col = col.push(row_elem);
         col = col.push(Space::new().height(10));
         i += 2;
     }
 
+    // ── Custom theme import/export ──
+    col = col.push(Space::new().height(4));
+    col = col.push(
+        row![
+            import_btn(),
+            Space::new().width(8),
+            export_btn(),
+            Space::new().width(Length::Fill),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+
     // ── Divider ──
+    col = col.push(Space::new().height(16));
     col = col.push(h_sep());
     col = col.push(Space::new().height(16));
 
@@ -356,11 +404,11 @@ fn content_appearance<'a>(current_theme: ThemeId, ui_font_name: &str) -> Element
             Space::new().width(Length::Fill),
             {
                 let families = fonts::system_font_families();
-                let current_owned = ui_font_name.to_string();
+                let current_owned = draft_font.to_string();
                 iced::widget::pick_list(
                     families.as_slice(),
                     Some(current_owned),
-                    PrefMsg::SetUiFont,
+                    PrefMsg::DraftFont,
                 )
                 .text_size(12)
                 .width(200)
@@ -368,6 +416,7 @@ fn content_appearance<'a>(current_theme: ThemeId, ui_font_name: &str) -> Element
         ]
         .align_y(iced::Alignment::Center),
     );
+    col = col.push(Space::new().height(20));
 
     col.into()
 }
@@ -402,27 +451,22 @@ fn h_sep<'a>() -> Element<'a, PrefMsg> {
 
 fn theme_card<'a>(
     id: ThemeId,
-    name: &'static str,
+    name: &str,
     desc: &'static str,
     current: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let is_active = id == current;
     let border_c = if is_active { Color::from_rgb(0.30, 0.55, 0.90) } else { SEP };
-    let check = if is_active { "✓ " } else { "" };
-
-    let card_bg = if is_active {
-        Color::from_rgb(0.13, 0.21, 0.35)
-    } else {
-        Color::from_rgb(0.17, 0.17, 0.20)
-    };
+    let label = format!("{}{name}", if is_active { "✓ " } else { "" });
+    let card_bg = if is_active { Color::from_rgb(0.13, 0.21, 0.35) } else { Color::from_rgb(0.17, 0.17, 0.20) };
+    let text_color = if is_active { Color::WHITE } else { TEXT_PRI };
     let hover_bg = Color::from_rgb(0.20, 0.20, 0.24);
+    let msg = PrefMsg::DraftTheme(id);
 
     button(
         container(
             column![
-                text(format!("{check}{name}"))
-                    .size(12)
-                    .color(if is_active { Color::WHITE } else { TEXT_PRI }),
+                text(label).size(12).color(text_color),
                 text(desc)
                     .size(10)
                     .color(TEXT_MUT)
@@ -435,21 +479,15 @@ fn theme_card<'a>(
     )
     .padding(0)
     .width(Length::Fill)
-    .on_press(PrefMsg::SetTheme(id))
+    .on_press(msg)
     .style(move |_: &Theme, status: button::Status| {
         let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                Background::Color(hover_bg)
-            }
+            button::Status::Hovered | button::Status::Pressed => Background::Color(hover_bg),
             _ => Background::Color(card_bg),
         };
         button::Style {
             background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 4.0.into(),
-                color: border_c,
-            },
+            border: Border { width: 1.0, radius: 4.0.into(), color: border_c },
             ..button::Style::default()
         }
     })
@@ -457,44 +495,143 @@ fn theme_card<'a>(
 }
 
 fn close_btn<'a>() -> Element<'a, PrefMsg> {
-    button(
-        text("✕").size(14).color(TEXT_MUT),
-    )
-    .padding([2, 8])
-    .on_press(PrefMsg::Close)
-    .style(move |_: &Theme, status: button::Status| {
-        let tc = match status {
-            button::Status::Hovered => Color::WHITE,
-            _ => TEXT_MUT,
-        };
-        button::Style {
-            text_color: tc,
-            ..button::Style::default()
-        }
-    })
-    .into()
+    button(text("✕").size(14).color(TEXT_MUT))
+        .padding([2, 8])
+        .on_press(PrefMsg::Close)
+        .style(move |_: &Theme, status: button::Status| {
+            let tc = match status {
+                button::Status::Hovered => Color::WHITE,
+                _ => TEXT_MUT,
+            };
+            button::Style { text_color: tc, ..button::Style::default() }
+        })
+        .into()
+}
+
+/// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).
+fn build_footer<'a>(dirty: bool) -> Element<'a, PrefMsg> {
+    let footer_row: Element<'a, PrefMsg> = if dirty {
+        row![
+            text("● Unsaved changes").size(11).color(WARN_YELLOW),
+            Space::new().width(Length::Fill),
+            discard_btn(),
+            Space::new().width(8),
+            save_btn(),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        row![
+            Space::new().width(Length::Fill),
+            close_footer_btn(),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    };
+
+    container(footer_row)
+        .width(Length::Fill)
+        .height(FOOTER_H)
+        .padding([0, 16])
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(HDR_BG)),
+            border: Border { width: 1.0, color: SEP, radius: 0.0.into() },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn save_btn<'a>() -> Element<'a, PrefMsg> {
+    button(text("Save").size(12).color(Color::WHITE))
+        .padding([6, 20])
+        .on_press(PrefMsg::Save)
+        .style(|_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => Color::from_rgb(0.18, 0.52, 0.30),
+                _ => Color::from_rgb(0.14, 0.42, 0.24),
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { radius: 3.0.into(), ..Border::default() },
+                text_color: Color::WHITE,
+                ..button::Style::default()
+            }
+        })
+        .into()
+}
+
+fn discard_btn<'a>() -> Element<'a, PrefMsg> {
+    button(text("Discard & Close").size(12).color(Color::from_rgb(0.85, 0.60, 0.60)))
+        .padding([6, 16])
+        .on_press(PrefMsg::DiscardAndClose)
+        .style(|_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => BTN_DANGER_HOV,
+                _ => BTN_DANGER,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { radius: 3.0.into(), ..Border::default() },
+                text_color: Color::from_rgb(0.90, 0.70, 0.70),
+                ..button::Style::default()
+            }
+        })
+        .into()
 }
 
 fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
-    button(
-        text("Close").size(12).color(Color::WHITE),
-    )
-    .padding([6, 20])
-    .on_press(PrefMsg::Close)
-    .style(|_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => Color::from_rgb(0.28, 0.42, 0.65),
-            _ => Color::from_rgb(0.22, 0.36, 0.58),
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            text_color: Color::WHITE,
-            ..button::Style::default()
-        }
-    })
-    .into()
+    button(text("Close").size(12).color(Color::WHITE))
+        .padding([6, 20])
+        .on_press(PrefMsg::Close)
+        .style(|_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => Color::from_rgb(0.28, 0.42, 0.65),
+                _ => Color::from_rgb(0.22, 0.36, 0.58),
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { radius: 3.0.into(), ..Border::default() },
+                text_color: Color::WHITE,
+                ..button::Style::default()
+            }
+        })
+        .into()
+}
+
+fn import_btn<'a>() -> Element<'a, PrefMsg> {
+    button(text("⬆ Import Theme…").size(11).color(TEXT_PRI))
+        .padding([5, 12])
+        .on_press(PrefMsg::ImportTheme)
+        .style(|_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => BTN_IMPORT_HOV,
+                _ => BTN_IMPORT,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { width: 1.0, radius: 3.0.into(), color: SEP },
+                text_color: TEXT_PRI,
+                ..button::Style::default()
+            }
+        })
+        .into()
+}
+
+fn export_btn<'a>() -> Element<'a, PrefMsg> {
+    button(text("⬇ Export Theme…").size(11).color(TEXT_MUT))
+        .padding([5, 12])
+        .on_press(PrefMsg::ExportTheme)
+        .style(|_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => BTN_IMPORT_HOV,
+                _ => BTN_IMPORT,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { width: 1.0, radius: 3.0.into(), color: SEP },
+                text_color: TEXT_MUT,
+                ..button::Style::default()
+            }
+        })
+        .into()
 }
