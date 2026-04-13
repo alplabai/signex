@@ -131,7 +131,7 @@ cargo clippy --workspace -- -D warnings
 
 ## Roadmap
 
-Development is organized into milestones tracked on [GitHub Milestones](../../milestones):
+Development is organized into milestones tracked on [GitHub Milestones](https://github.com/alplabai/signex/milestones):
 
 | Version | Milestone | Status |
 |---|---|---|
@@ -156,7 +156,7 @@ See [`docs/master-plan.md`](docs/master-plan.md) for the full plan.
 
 We welcome contributions! Here's how to get started:
 
-1. Check the [open issues](../../issues) or [milestones](../../milestones) for something to work on
+1. Check the [open issues](https://github.com/alplabai/signex/issues) or [milestones](https://github.com/alplabai/signex/milestones) for something to work on
 2. Fork the repo and create a branch from `dev`
 3. Make your changes — ensure `cargo test` and `cargo clippy` pass
 4. Open a PR against `dev` (not main)
