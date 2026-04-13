@@ -85,6 +85,12 @@ pub struct SchematicCanvas {
     pub tool_preview: Option<String>,
     /// Current draw mode for wire preview constraint (90°, 45°, free).
     pub draw_mode: crate::app::DrawMode,
+    /// Whether snap-to-grid is enabled (for rubber-band cursor snapping).
+    pub snap_enabled: bool,
+    /// Grid size in mm for rubber-band cursor snapping AND visible grid rendering.
+    pub snap_grid_mm: f64,
+    /// Visible grid dot spacing in mm (independent of snap grid).
+    pub visible_grid_mm: f64,
 }
 
 impl SchematicCanvas {
@@ -108,6 +114,9 @@ impl SchematicCanvas {
             drawing_mode: false,
             tool_preview: None,
             draw_mode: crate::app::DrawMode::Ortho90,
+            snap_enabled: true,
+            snap_grid_mm: 2.54,
+            visible_grid_mm: 2.54,
         }
     }
 
@@ -247,8 +256,14 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.click_on_selected = false;
                     state.move_origin = None;
                     state.move_dragging = false;
-                    state.select_drag_start = Some((wx, wy));
-                    state.select_drag_end = None;
+                    // Don't track box-select during drawing mode (avoids spurious BoxSelect events)
+                    if !self.drawing_mode {
+                        state.select_drag_start = Some((wx, wy));
+                        state.select_drag_end = None;
+                    } else {
+                        state.select_drag_start = None;
+                        state.select_drag_end = None;
+                    }
                     let evt = if state.ctrl_held {
                         CanvasEvent::CtrlClicked {
                             world_x: wx,
@@ -495,9 +510,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                 );
             }
 
-            // Draw grid
+            // Draw grid — use visible_grid_mm so snap and visual grid are independent
             if self.grid_visible {
-                grid::draw_grid(frame, &state.camera, &state.grid, bounds, self.theme_grid);
+                grid::draw_grid(frame, &state.camera, self.visible_grid_mm as f32, bounds, self.theme_grid);
             }
         });
         layers.push(bg);
@@ -597,11 +612,18 @@ impl canvas::Program<Message> for SchematicCanvas {
                     // Rubber-band from last point to cursor (constrained by draw mode)
                     if let Some(last) = self.wire_preview.last() {
                         let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                        // Snap cursor to grid so the rubber-band preview matches what will be placed
+                        let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                            let g = self.snap_grid_mm;
+                            (
+                                (cursor_world.x as f64 / g).round() * g,
+                                (cursor_world.y as f64 / g).round() * g,
+                            )
+                        } else {
+                            (cursor_world.x as f64, cursor_world.y as f64)
+                        };
                         let start = signex_types::schematic::Point::new(last.x, last.y);
-                        let end = signex_types::schematic::Point::new(
-                            cursor_world.x as f64,
-                            cursor_world.y as f64,
-                        );
+                        let end = signex_types::schematic::Point::new(snap_x, snap_y);
                         let rubber_stroke = canvas::Stroke::default()
                             .with_color(Color {
                                 a: 0.6,
