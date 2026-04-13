@@ -1,0 +1,191 @@
+# Instanced Drawing
+
+> Draw many copies of the same geometry in a single draw call.
+> Essential for PCB track rendering (100K+ segments) or particle systems.
+
+---
+
+## Instance struct
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct Instance {
+    // A 4x4 model matrix packed as 4 rows of vec4
+    model_0: [f32; 4],
+    model_1: [f32; 4],
+    model_2: [f32; 4],
+    model_3: [f32; 4],
+    color:   [f32; 4],
+}
+
+impl Instance {
+    // Locations start after the vertex attributes (e.g., after location 1):
+    const ATTRIBS: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+        2 => Float32x4,   // model row 0
+        3 => Float32x4,   // model row 1
+        4 => Float32x4,   // model row 2
+        5 => Float32x4,   // model row 3
+        6 => Float32x4,   // color
+    ];
+
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+            step_mode:    wgpu::VertexStepMode::Instance,
+            attributes:   &Self::ATTRIBS,
+        }
+    }
+}
+```
+
+---
+
+## Instance buffer
+
+```rust
+use wgpu::util::DeviceExt;
+
+// Build instance data on CPU:
+let instances: Vec<Instance> = objects.iter().map(|obj| {
+    let m = obj.transform.to_mat4();
+    Instance {
+        model_0: m.x_axis.into(),
+        model_1: m.y_axis.into(),
+        model_2: m.z_axis.into(),
+        model_3: m.w_axis.into(),
+        color: obj.color.into(),
+    }
+}).collect();
+
+// Upload to GPU:
+let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    label:    Some("Instance Buffer"),
+    contents: bytemuck::cast_slice(&instances),
+    usage:    wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+});
+
+// Update per-frame (e.g., for animated objects):
+queue.write_buffer(&instance_buffer, 0, bytemuck::cast_slice(&instances));
+```
+
+---
+
+## Pipeline setup
+
+```rust
+// Pass both vertex and instance buffer layouts:
+vertex: wgpu::VertexState {
+    buffers: &[
+        Vertex::desc(),    // slot 0, per-vertex
+        Instance::desc(),  // slot 1, per-instance
+    ],
+    ..
+},
+```
+
+---
+
+## Draw call
+
+```rust
+rpass.set_pipeline(&pipeline);
+rpass.set_bind_group(0, &camera_bg, &[]);
+rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+rpass.set_vertex_buffer(1, instance_buffer.slice(..));
+rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+rpass.draw_indexed(
+    0..index_count,        // index range
+    0,                     // base vertex
+    0..instance_count,     // instance range
+);
+```
+
+---
+
+## WGSL shader side
+
+```wgsl
+struct VertexInput {
+    @location(0) position:  vec3<f32>,
+    @location(1) uv:        vec2<f32>,
+    // Per-instance:
+    @location(2) model_0:   vec4<f32>,
+    @location(3) model_1:   vec4<f32>,
+    @location(4) model_2:   vec4<f32>,
+    @location(5) model_3:   vec4<f32>,
+    @location(6) color:     vec4<f32>,
+};
+
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    let model = mat4x4<f32>(in.model_0, in.model_1, in.model_2, in.model_3);
+    var out: VertexOutput;
+    out.clip_position = camera.view_proj * model * vec4(in.position, 1.0);
+    out.color         = in.color;
+    return out;
+}
+```
+
+---
+
+## Efficient line segment instancing (PCB track pattern)
+
+Each track segment is a unit quad stretched between start and end points:
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct TrackInstance {
+    start:  [f32; 2],   // canvas pixels
+    end:    [f32; 2],   // canvas pixels
+    width:  f32,        // pixels
+    color:  [f32; 4],   // RGBA
+    _pad:   [f32; 3],   // align to 16 bytes
+}
+```
+
+The vertex shader expands a unit quad (4 vertices) into a round-capped segment
+using the start/end vectors. This draws 100K+ tracks in one call — see
+`iced-rust skill / references / wgpu-integration.md` for the full WGSL.
+
+---
+
+## Dynamic instance count
+
+When the instance count changes between frames (e.g., culled objects), pre-allocate
+the maximum and pass the actual count to `draw_indexed`:
+
+```rust
+// Allocate max capacity once:
+let max_instances = 500_000usize;
+let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+    label:              Some("Instance Buffer"),
+    size:               (max_instances * std::mem::size_of::<TrackInstance>()) as u64,
+    usage:              wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    mapped_at_creation: false,
+});
+
+// Each frame: upload only visible instances and draw that count:
+let visible: Vec<TrackInstance> = cull_and_build(&board, &viewport);
+queue.write_buffer(&instance_buffer, 0, bytemuck::cast_slice(&visible));
+rpass.draw_indexed(0..QUAD_INDICES, 0, 0..visible.len() as u32);
+```
+
+---
+
+## Indirect draw (GPU-driven rendering)
+
+For very large scenes, let the GPU determine the draw parameters:
+
+```rust
+// Buffer containing draw commands generated by a compute shader:
+let indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+    usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    ..
+});
+
+// Encode indirect draw:
+rpass.draw_indexed_indirect(&indirect_buffer, 0);
+```
