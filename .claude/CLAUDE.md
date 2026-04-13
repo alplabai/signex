@@ -25,7 +25,7 @@ cargo clippy --workspace -- -D warnings  # Lint
 
 ## Rules
 
-- **Never add Claude as a commit author, co-author, or contributor.** No `Co-Authored-By` lines. No mentions in CONTRIBUTORS files. Claude is a tool, not a contributor.
+- **Never add AI as a commit author, co-author, or contributor.** No `Co-Authored-By` lines. No mentions in CONTRIBUTORS files.
 - **Never push directly to `main`.** All work goes through `dev` via feature branches and PRs.
 - **Only replicate what Altium Designer shows.** Never invent UI sections or features that don't exist in Altium.
 - **Altium Dark theme is the default.** White chevrons, no blue/purple tints, neutral gray chrome.
@@ -95,3 +95,6 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - `.claude/skills/iced-guide/` — Comprehensive Iced 0.14 + iced_aw reference (11 files)
 - `.claude/skills/kicad-render/` — KiCad rendering pipeline reference
 - `.claude/skills/kicad-sexpr/` — KiCad S-expression format reference
+- `.claude/skills/rust-book-skill/` — Complete Rust language reference
+- `.claude/skills/iced-rust/` — Iced Rust API patterns and EDA conventions
+- `.claude/skills/wgpu-rust/` — wgpu GPU programming reference
