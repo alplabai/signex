@@ -5,6 +5,8 @@
 
 use signex_types::schematic::*;
 
+use super::field_display_pos;
+
 /// Threshold distance in mm for considering a click "on" a thin element.
 const HIT_TOLERANCE: f64 = 1.5;
 
@@ -52,13 +54,13 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
         if !sym.is_power {
             if let Some(ref ref_text) = sym.ref_text
                 && !ref_text.hidden
-                && hit_text_prop(&sym.reference, ref_text, wx, wy)
+                && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
             {
                 return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
             }
             if let Some(ref val_text) = sym.val_text
                 && !val_text.hidden
-                && hit_text_prop(&sym.value, val_text, wx, wy)
+                && hit_text_prop(&sym.value, val_text, sym, wx, wy)
             {
                 return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
             }
@@ -217,8 +219,9 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
 
 /// Hit-test a text property (reference or value field).
 /// Approximates the text bounding box from character count and font size.
-/// For rotated text, rotates the click point into text-local space.
-fn hit_text_prop(content: &str, prop: &TextProp, wx: f64, wy: f64) -> bool {
+/// Uses the KiCad `GetPosition()` display position (via `field_display_pos`)
+/// so the hit region matches where the text is actually rendered.
+fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64) -> bool {
     let font_h = prop.font_size.max(1.27);
     let char_count = content.chars().count() as f64;
     // Iosevka is roughly 0.6× monospace: each char ≈ 0.6 × font_h wide.
@@ -226,9 +229,12 @@ fn hit_text_prop(content: &str, prop: &TextProp, wx: f64, wy: f64) -> bool {
     let half_h = font_h * 0.6;
     let margin = 0.5;
 
+    // Use display position (TRANSFORM applied), not raw stored position.
+    let (disp_x, disp_y) = field_display_pos(&prop.position, sym);
+
     // Click relative to text anchor
-    let dx = wx - prop.position.x;
-    let dy = wy - prop.position.y;
+    let dx = wx - disp_x;
+    let dy = wy - disp_y;
 
     // Rotate click into text-local space (KiCad CCW = negate in Y-down)
     let (ldx, ldy) = if prop.rotation.abs() > 0.1 {

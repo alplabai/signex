@@ -184,8 +184,62 @@ def render_symbol(ctx, instance, lib_symbols, scale):
     # Property metinlerini (reference, value) draw
     for prop in instance.get('properties', []):
         if not prop.get('hide') and prop['key'] in ('Reference','Value'):
-            render_field_text(ctx, prop, tx, scale)
+            render_field_text(ctx, prop, at_x, at_y, tx, scale)
 
+    ctx.restore()
+
+
+def render_field_text(ctx, prop, sym_x, sym_y, tx, scale):
+    """
+    Render a symbol field (Reference or Value) at its DISPLAY position.
+
+    KiCad stores field positions as absolute schematic coordinates in the .kicad_sch
+    file (SCH_FIELD::GetTextPos()). But the RENDERER uses SCH_FIELD::GetPosition(),
+    which applies the symbol's TRANSFORM matrix to the relative field offset:
+
+        rel = field_pos - sym_pos
+        display_rel = TRANSFORM.TransformCoordinate(rel)   # x'=x1*x+x2*y, y'=y1*x+y2*y
+        display_pos = sym_pos + display_rel
+
+    For a 0° symbol (y2=-1 in TRANSFORM), this negates the Y component of the
+    relative offset, effectively mirroring the field to the correct side of the
+    body (e.g. Reference above, Value below for a horizontal resistor).
+
+    Equivalent formula: negate Y of rel, then rotate CCW by sym_rotation.
+
+    tx = (x1, x2, y1, y2) TRANSFORM tuple for the SYMBOL (used only for
+    determining the text rotation via GetDrawRotation, not for the position).
+    """
+    at   = prop.get('at', [0, 0, 0])       # [x, y, angle] in schematic coords
+    fx, fy, field_angle = at[0], at[1], at[2] if len(at) > 2 else 0
+
+    # --- Compute display position (GetPosition() equivalent) ---
+    # TRANSFORM = negate Y of relative offset, then rotate CCW by sym_rotation.
+    # (sym_rotation is embedded in tx via make_transform, but we need the raw angle.)
+    # We recover it from the tx tuple: at 0° tx=(1,0,0,-1), at 90° tx=(0,1,1,0), etc.
+    x1, x2, y1, y2 = tx
+    rel_x = fx - sym_x
+    rel_y = fy - sym_y
+    disp_x = x1 * rel_x + x2 * rel_y
+    disp_y = y1 * rel_x + y2 * rel_y
+    px = (sym_x + disp_x) * scale
+    py = -(sym_y + disp_y) * scale  # Y-down for canvas
+
+    # --- Text rotation: GetDrawRotation() toggles when y1 != 0 (90°/270°) ---
+    draw_angle = field_angle
+    if y1 != 0:   # symbol is 90° or 270° rotated
+        draw_angle = 90.0 if field_angle == 0.0 else 0.0
+
+    # --- Draw ---
+    ctx.save()
+    ctx.translate(px, py)
+    if abs(draw_angle) > 0.1:
+        ctx.rotate(-math.radians(draw_angle))  # canvas CW-positive, so negate CCW angle
+    ctx.font      = f"{1.27 * scale}px KiCad Font, monospace"
+    ctx.fillStyle = REFERENCE_COLOR if prop['key'] == 'Reference' else VALUE_COLOR
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(prop.get('value', ''), 0, 0)
     ctx.restore()
 
 

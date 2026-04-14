@@ -108,6 +108,42 @@ pub(super) fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
     }
 }
 
+/// Compute the display position of a symbol field, equivalent to KiCad's
+/// `SCH_FIELD::GetPosition()`.
+///
+/// KiCad stores field positions as absolute schematic coordinates, but the
+/// renderer must apply the symbol's TRANSFORM matrix to the relative offset
+/// before drawing — otherwise the field appears on the wrong side of the body.
+///
+/// The TRANSFORM for a 0° symbol has y2 = -1 (normal schematic orientation
+/// negates Y). For a resistor with a reference offset of +1.27 mm below the
+/// symbol centre, `GetPosition()` maps it to −1.27 mm (above), which is the
+/// visually correct position.
+///
+/// Formula: TRANSFORM = negate Y, then rotate CCW by `sym.rotation`.
+/// Mirrors are applied after rotation, consistent with `instance_transform`.
+pub(super) fn field_display_pos(
+    prop_pos: &signex_types::schematic::Point,
+    sym: &signex_types::schematic::Symbol,
+) -> (f64, f64) {
+    let rx = prop_pos.x - sym.position.x;
+    let ry = prop_pos.y - sym.position.y;
+
+    // TRANSFORM step: negate Y (schematic Y-down → lib Y-up), then rotate CCW.
+    let ry_neg = -ry;
+    let rad = sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let mut tx = rx * cos - ry_neg * sin;
+    let mut ty = rx * sin + ry_neg * cos;
+
+    // Mirrors applied after rotation (KiCad convention).
+    if sym.mirror_y { tx = -tx; }
+    if sym.mirror_x { ty = -ty; }
+
+    (sym.position.x + tx, sym.position.y + ty)
+}
+
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
 pub(super) fn instance_transform(
@@ -217,14 +253,16 @@ pub fn render_schematic(
                 && !ref_text.hidden
                 && !sym.is_power
             {
-                text::draw_text_prop(frame, &sym.reference, ref_text, sym.mirror_x, transform, reference_color);
+                let dpos = field_display_pos(&ref_text.position, sym);
+                text::draw_text_prop(frame, &sym.reference, ref_text, dpos, sym.mirror_x, transform, reference_color);
             }
 
             // Value text
             if let Some(ref val_text) = sym.val_text
                 && !val_text.hidden
             {
-                text::draw_text_prop(frame, &sym.value, val_text, sym.mirror_x, transform, value_color);
+                let dpos = field_display_pos(&val_text.position, sym);
+                text::draw_text_prop(frame, &sym.value, val_text, dpos, sym.mirror_x, transform, value_color);
             }
         }
     }
