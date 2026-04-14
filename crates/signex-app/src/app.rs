@@ -463,6 +463,8 @@ fn needed_junction(
 // ─── Iced Application ─────────────────────────────────────────
 
 impl Signex {
+    const CONTEXT_MENU_WIDTH: f32 = 248.0;
+
     pub fn new() -> (Self, Task<Message>) {
         let mut dock = DockArea::new();
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
@@ -3415,22 +3417,22 @@ impl Signex {
     fn view_context_menu(&self) -> Element<'_, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
         // Common items (both empty and selection context)
-        items.push(self.ctx_menu_item_disabled("Find Similar Objects..."));
-        items.push(self.ctx_menu_item_disabled("Find Text...                    Ctrl+F"));
-        items.push(self.ctx_menu_item_disabled("Clear Filter                  Shift+C"));
+        items.push(self.ctx_menu_item_disabled("Find Similar Objects...", None));
+        items.push(self.ctx_menu_item_disabled("Find Text...", Some("Ctrl+F")));
+        items.push(self.ctx_menu_item_disabled("Clear Filter", Some("Shift+C")));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_disabled("Place                              \u{25B6}"));
-        items.push(self.ctx_menu_item_disabled("Part Actions                       \u{25B6}"));
-        items.push(self.ctx_menu_item_disabled("Sheet Actions                      \u{25B6}"));
+        items.push(self.ctx_menu_item_disabled("Place", Some("\u{25B6}")));
+        items.push(self.ctx_menu_item_disabled("Part Actions", Some("\u{25B6}")));
+        items.push(self.ctx_menu_item_disabled("Sheet Actions", Some("\u{25B6}")));
 
         if !self.canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("References                         \u{25B6}"));
-            items.push(self.ctx_menu_item_disabled("Align                              \u{25B6}"));
-            items.push(self.ctx_menu_item_disabled("Unions                             \u{25B6}"));
-            items.push(self.ctx_menu_item_disabled("Snippets                           \u{25B6}"));
+            items.push(self.ctx_menu_item_disabled("References", Some("\u{25B6}")));
+            items.push(self.ctx_menu_item_disabled("Align", Some("\u{25B6}")));
+            items.push(self.ctx_menu_item_disabled("Unions", Some("\u{25B6}")));
+            items.push(self.ctx_menu_item_disabled("Snippets", Some("\u{25B6}")));
         }
 
-        items.push(self.ctx_menu_item_disabled("Cross Probe"));
+        items.push(self.ctx_menu_item_disabled("Cross Probe", None));
         items.push(self.ctx_menu_sep());
 
         // Edit operations
@@ -3448,17 +3450,17 @@ impl Signex {
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled("Comment..."));
-        items.push(self.ctx_menu_item_disabled("Pin Mapping..."));
-        items.push(self.ctx_menu_item_disabled("Project Options..."));
-        items.push(self.ctx_menu_item_disabled("Preferences..."));
+        items.push(self.ctx_menu_item_disabled("Comment...", None));
+        items.push(self.ctx_menu_item_disabled("Pin Mapping...", None));
+        items.push(self.ctx_menu_item_disabled("Project Options...", None));
+        items.push(self.ctx_menu_item_disabled("Preferences...", None));
 
         if !self.canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("Supplier Links..."));
-            items.push(self.ctx_menu_item_disabled("Properties..."));
+            items.push(self.ctx_menu_item_disabled("Supplier Links...", None));
+            items.push(self.ctx_menu_item_disabled("Properties...", None));
         }
 
-        container(column(items).spacing(0))
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
             .padding([4, 0])
             .style(crate::styles::context_menu(&self.panel_ctx.tokens))
             .into()
@@ -3484,8 +3486,9 @@ impl Signex {
                     .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
             ]
             .spacing(12)
-            .width(220),
+            .width(Length::Fill),
         )
+        .width(Self::CONTEXT_MENU_WIDTH)
         .padding([4, 12])
         .on_press(Message::ContextAction(action))
         .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
@@ -3506,14 +3509,28 @@ impl Signex {
     }
 
     /// Disabled/placeholder context menu item (no action).
-    fn ctx_menu_item_disabled<'a>(&self, label: &str) -> Element<'a, Message> {
-        container(
+    fn ctx_menu_item_disabled<'a>(&self, label: &str, right: Option<&str>) -> Element<'a, Message> {
+        let text_secondary = crate::styles::ti(self.panel_ctx.tokens.text_secondary);
+        let mut row = iced::widget::row![
             iced::widget::text(label.to_string())
                 .size(11)
-                .color(crate::styles::ti(self.panel_ctx.tokens.text_secondary)),
-        )
+                .color(text_secondary),
+            iced::widget::Space::new().width(Length::Fill),
+        ]
+        .spacing(12)
+        .width(Length::Fill);
+
+        if let Some(right_text) = right {
+            row = row.push(
+                iced::widget::text(right_text.to_string())
+                    .size(10)
+                    .color(text_secondary),
+            );
+        }
+
+        container(row)
         .padding([4, 12])
-        .width(220)
+        .width(Self::CONTEXT_MENU_WIDTH)
         .into()
     }
 
@@ -3778,7 +3795,12 @@ impl Signex {
             layers.push(
                 column![
                     iced::widget::Space::new().height(ctx_menu.y),
-                    row![iced::widget::Space::new().width(ctx_menu.x), menu],
+                    row![
+                        iced::widget::Space::new().width(ctx_menu.x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
                 ]
                 .into(),
             );
