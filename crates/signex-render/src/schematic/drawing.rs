@@ -226,13 +226,14 @@ pub fn draw_child_sheet(
     frame.stroke(&rect, stroke);
 
     // Sheet name text
-    let font_size = transform.world_len(1.5).max(8.0);
+    let font_size =
+        (transform.world_len(1.5).max(8.0) * crate::canvas_font_size_scale()).max(8.0);
     let text = canvas::Text {
         content: child.name.clone(),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
         color: body_color,
         size: iced::Pixels(font_size),
-        font: crate::IOSEVKA,
+        font: crate::canvas_font(),
         ..canvas::Text::default()
     };
     frame.fill_text(text);
@@ -247,7 +248,7 @@ pub fn draw_child_sheet(
             ..body_color
         },
         size: iced::Pixels(small_font),
-        font: crate::IOSEVKA,
+        font: crate::canvas_font(),
         ..canvas::Text::default()
     };
     frame.fill_text(file_text);
@@ -263,7 +264,7 @@ pub fn draw_child_sheet(
             position: iced::Point::new(pp.x + 4.0, pp.y),
             color: body_color,
             size: iced::Pixels(small_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };

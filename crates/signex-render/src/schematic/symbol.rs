@@ -409,18 +409,19 @@ fn draw_graphic_text(
     let (wx, wy) = instance_transform(sym, position);
     let sp = transform.to_screen_point(wx, wy);
 
-    let size = if font_size > 0.0 {
+    let base_size = if font_size > 0.0 {
         transform.world_len(font_size).max(6.0)
     } else {
         transform.world_len(1.27).max(6.0)
     };
+    let size = (base_size * crate::canvas_font_size_scale()).max(6.0);
 
     let text = canvas::Text {
         content: content.to_string(),
         position: sp,
         color,
         size: iced::Pixels(size),
-        font: crate::IOSEVKA,
+        font: crate::canvas_font(),
         align_x: iced::alignment::Horizontal::Center.into(),
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()

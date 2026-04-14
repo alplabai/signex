@@ -754,7 +754,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .children()
         .iter()
         .find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Value"));
-    let mut ref_text = ref_prop
+    let ref_text = ref_prop
         .map(|p| parse_text_prop(p, position))
         .unwrap_or(TextProp {
             position,
@@ -764,7 +764,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
             justify_v: VAlign::Center,
             hidden: false,
         });
-    let mut val_text = val_prop
+    let val_text = val_prop
         .map(|p| parse_text_prop(p, position))
         .unwrap_or(TextProp {
             position,
@@ -774,24 +774,6 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
             justify_v: VAlign::Center,
             hidden: false,
         });
-
-    // KiCad's GetDrawRotation(): stored angle is toggled (H<->V) when symbol
-    // rotation is 90 or 270 (transform has y1 != 0).
-    // Source: eeschema/sch_field.cpp GetDrawRotation()
-    let sym_90_or_270 = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
-    if sym_90_or_270 {
-        // Toggle: horizontal(0) <-> vertical(90)
-        ref_text.rotation = if ref_text.rotation.abs() < 0.1 {
-            90.0
-        } else {
-            0.0
-        };
-        val_text.rotation = if val_text.rotation.abs() < 0.1 {
-            90.0
-        } else {
-            0.0
-        };
-    }
 
     // Parse custom fields (all properties beyond Reference/Value/Footprint/Datasheet)
     let standard_props = ["Reference", "Value", "Footprint", "Datasheet"];

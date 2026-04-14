@@ -19,7 +19,9 @@ pub fn draw_text_note(
     } else {
         1.27
     };
-    let screen_font = transform.world_len(font_size_mm).max(6.0);
+    let screen_font = (transform.world_len(font_size_mm).max(6.0)
+        * crate::canvas_font_size_scale())
+    .max(6.0);
 
     let sp = transform.to_screen_point(note.position.x, note.position.y);
 
@@ -47,7 +49,7 @@ pub fn draw_text_note(
             position: iced::Point::ORIGIN,
             color,
             size: iced::Pixels(screen_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_x: h_align.into(),
             align_y: v_align,
             ..canvas::Text::default()
@@ -58,9 +60,8 @@ pub fn draw_text_note(
 
 /// Draw a property text (reference, value, or other field).
 ///
-/// `display_pos`: the KiCad `GetPosition()` display position — the stored field
-/// position after the symbol's TRANSFORM has been applied. Computed by the
-/// caller via [`field_display_pos`] so that this function stays pure.
+/// `display_pos`: resolved display position for the field text, computed by
+/// caller via [`field_display_pos`].
 ///
 /// `mirror_x`: true when the parent symbol has `mirror x` (flips Y axis),
 /// which causes KiCad to flip the horizontal justification of the field text
@@ -82,7 +83,9 @@ pub fn draw_text_prop(
     }
 
     let font_size_mm = if prop.font_size > 0.0 { prop.font_size } else { 1.27 };
-    let screen_font = transform.world_len(font_size_mm).max(6.0);
+    let screen_font = (transform.world_len(font_size_mm).max(6.0)
+        * crate::canvas_font_size_scale())
+    .max(6.0);
 
     let sp = transform.to_screen_point(display_pos.0, display_pos.1);
 
@@ -113,7 +116,7 @@ pub fn draw_text_prop(
             position: iced::Point::ORIGIN,
             color,
             size: iced::Pixels(screen_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_x: h_align.into(),
             align_y: v_align,
             ..canvas::Text::default()

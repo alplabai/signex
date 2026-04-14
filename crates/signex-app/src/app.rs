@@ -191,6 +191,12 @@ pub struct Signex {
     pub ui_font_name: String,
     /// Canvas font family (default: "Iosevka").  Applies immediately to canvas text.
     pub canvas_font_name: String,
+    /// Canvas font size in px (mapped to renderer text scale). Applies immediately.
+    pub canvas_font_size: f32,
+    /// Canvas font bold style toggle.
+    pub canvas_font_bold: bool,
+    /// Canvas font italic style toggle.
+    pub canvas_font_italic: bool,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
@@ -491,6 +497,9 @@ impl Signex {
             snap_hotspots: true,
             ui_font_name: crate::fonts::read_ui_font_pref(),
             canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
+            canvas_font_size: 11.0,
+            canvas_font_bold: false,
+            canvas_font_italic: false,
             schematic: None,
             project_path: None,
             project_data: None,
@@ -518,6 +527,10 @@ impl Signex {
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
+                canvas_font_size: 11.0,
+                canvas_font_bold: false,
+                canvas_font_italic: false,
+                canvas_font_popup_open: false,
                 properties_tab: 0,
                 kicad_libraries,
                 active_library: None,
@@ -569,6 +582,9 @@ impl Signex {
             preferences_dirty: false,
             custom_theme: None,
         };
+        signex_render::set_canvas_font_name(&app.canvas_font_name);
+        signex_render::set_canvas_font_size(app.canvas_font_size);
+        signex_render::set_canvas_font_style(app.canvas_font_bold, app.canvas_font_italic);
         (app, Task::none())
     }
 
@@ -729,20 +745,33 @@ impl Signex {
             _ => Message::Noop,
         });
 
-        // Mouse events for drag-to-resize and global position tracking
-        let mouse_sub = iced::event::listen().map(|event| match event {
-            iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                Message::DragMove(position.x, position.y)
-            }
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
-                Message::DragEnd
-            }
-            // Any click dismisses context menu
-            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
-                Message::CloseContextMenu
-            }
-            _ => Message::Noop,
-        });
+        // Mouse events for drag-to-resize/floating-drag.
+        // Subscribing to cursor move only while dragging avoids per-frame
+        // app updates when idle, which noticeably hurts smoothness on macOS.
+        let drag_active = self.dragging.is_some() || self.dock.floating.iter().any(|fp| fp.dragging);
+        let mouse_sub = if drag_active {
+            iced::event::listen().map(|event| match event {
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Message::DragMove(position.x, position.y)
+                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+                    Message::DragEnd
+                }
+                // Any click dismisses context menu
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
+                    Message::CloseContextMenu
+                }
+                _ => Message::Noop,
+            })
+        } else {
+            iced::event::listen().map(|event| match event {
+                // Any click dismisses context menu
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
+                    Message::CloseContextMenu
+                }
+                _ => Message::Noop,
+            })
+        };
         Subscription::batch([kbd, mouse_sub])
     }
 
@@ -1654,6 +1683,46 @@ impl Signex {
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetCanvasFont(name)) => {
                         self.canvas_font_name = name.clone();
                         self.panel_ctx.canvas_font_name = name.clone();
+                        signex_render::set_canvas_font_name(name);
+                        signex_render::set_canvas_font_style(
+                            self.canvas_font_bold,
+                            self.canvas_font_italic,
+                        );
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetCanvasFontSize(size)) => {
+                        self.canvas_font_size = *size;
+                        self.panel_ctx.canvas_font_size = *size;
+                        signex_render::set_canvas_font_size(*size);
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetCanvasFontBold(bold)) => {
+                        self.canvas_font_bold = *bold;
+                        self.panel_ctx.canvas_font_bold = *bold;
+                        signex_render::set_canvas_font_style(
+                            self.canvas_font_bold,
+                            self.canvas_font_italic,
+                        );
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetCanvasFontItalic(italic)) => {
+                        self.canvas_font_italic = *italic;
+                        self.panel_ctx.canvas_font_italic = *italic;
+                        signex_render::set_canvas_font_style(
+                            self.canvas_font_bold,
+                            self.canvas_font_italic,
+                        );
+                        self.canvas.clear_content_cache();
+                        self.canvas.clear_overlay_cache();
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::OpenCanvasFontPopup) => {
+                        self.panel_ctx.canvas_font_popup_open = true;
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::CloseCanvasFontPopup) => {
+                        self.panel_ctx.canvas_font_popup_open = false;
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::SetMarginVertical(_)
@@ -2663,6 +2732,36 @@ impl Signex {
                 self.canvas.clear_bg_cache();
                 Task::none()
             }
+            MenuMessage::OpenProjectsPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Left, crate::panels::PanelKind::Projects);
+                Task::none()
+            }
+            MenuMessage::OpenComponentsPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Left, crate::panels::PanelKind::Components);
+                Task::none()
+            }
+            MenuMessage::OpenNavigatorPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Right, crate::panels::PanelKind::Navigator);
+                Task::none()
+            }
+            MenuMessage::OpenPropertiesPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Right, crate::panels::PanelKind::Properties);
+                Task::none()
+            }
+            MenuMessage::OpenMessagesPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Bottom, crate::panels::PanelKind::Messages);
+                Task::none()
+            }
+            MenuMessage::OpenSignalPanel => {
+                self.dock
+                    .add_panel(crate::dock::PanelPosition::Bottom, crate::panels::PanelKind::Signal);
+                Task::none()
+            }
             // ── Place ──
             MenuMessage::PlaceWire => {
                 self.current_tool = Tool::Wire;
@@ -2855,6 +2954,10 @@ impl Signex {
             snap_hotspots: self.snap_hotspots,
             ui_font_name: self.ui_font_name.clone(),
             canvas_font_name: self.canvas_font_name.clone(),
+            canvas_font_size: self.canvas_font_size,
+            canvas_font_bold: self.canvas_font_bold,
+            canvas_font_italic: self.canvas_font_italic,
+            canvas_font_popup_open: self.panel_ctx.canvas_font_popup_open,
             properties_tab: self.panel_ctx.properties_tab,
             kicad_libraries: self.panel_ctx.kicad_libraries.clone(),
             active_library: self.panel_ctx.active_library.clone(),
