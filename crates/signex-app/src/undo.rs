@@ -26,6 +26,7 @@ pub enum EditCommand {
     /// Add a bus entry.
     AddBusEntry(BusEntry),
     /// Add a child sheet (hierarchical sheet symbol).
+    #[allow(dead_code)]
     AddChildSheet(ChildSheet),
 
     /// Remove element by UUID and kind, storing the removed element for undo.
@@ -36,7 +37,9 @@ pub enum EditCommand {
     RemoveSymbol(Symbol),
     RemoveNoConnect(NoConnect),
     RemoveTextNote(TextNote),
+    #[allow(dead_code)]
     RemoveBusEntry(BusEntry),
+    #[allow(dead_code)]
     RemoveChildSheet(ChildSheet),
 
     /// Move element(s) by a delta offset.

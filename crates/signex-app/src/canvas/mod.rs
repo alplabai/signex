@@ -23,7 +23,7 @@ use crate::app::Message;
 #[derive(Debug, Default)]
 pub struct CanvasState {
     pub camera: Camera,
-    pub grid: GridState,
+    pub _grid: GridState,
     /// Is the user currently panning (right-click or middle-click drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
@@ -232,6 +232,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                                 CanvasEvent::DoubleClicked {
                                     world_x: wx,
                                     world_y: wy,
+                                    screen_x: cursor_pos.x,
+                                    screen_y: cursor_pos.y,
                                 },
                             )));
                         }
@@ -1036,6 +1038,8 @@ pub enum CanvasEvent {
     DoubleClicked {
         world_x: f64,
         world_y: f64,
+        screen_x: f32,
+        screen_y: f32,
     },
     /// Box selection — select all items within the rectangle (world coords).
     BoxSelect {

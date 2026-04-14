@@ -296,7 +296,9 @@ pub enum Tool {
     Label,
     Component,
     Text,
+    #[allow(dead_code)]
     NoConnect,
+    #[allow(dead_code)]
     BusEntry,
     Line,
     Rectangle,
@@ -1211,7 +1213,12 @@ impl Signex {
                     }
                 }
             }
-            Message::CanvasEvent(CanvasEvent::DoubleClicked { world_x, world_y }) => {
+            Message::CanvasEvent(CanvasEvent::DoubleClicked {
+                world_x,
+                world_y,
+                screen_x,
+                screen_y,
+            }) => {
                 // Finish wire drawing on double-click
                 if self.wire_drawing {
                     self.wire_drawing = false;
@@ -1245,8 +1252,8 @@ impl Signex {
                                 kind,
                                 original_text: text.clone(),
                                 text,
-                                screen_x: self.last_mouse_pos.0,
-                                screen_y: self.last_mouse_pos.1,
+                                screen_x,
+                                screen_y,
                             });
                         }
                     }
@@ -1595,10 +1602,16 @@ impl Signex {
                         }
                     }
                     crate::dock::DockMessage::Panel(
-                        crate::panels::PanelMsg::ToggleSymbolLocked(_)
-                        | crate::panels::PanelMsg::ToggleSymbolDnp(_),
+                        crate::panels::PanelMsg::ToggleSymbolLocked(uuid),
                     ) => {
-                        // TODO: implement locked/DNP toggling
+                        let _ = *uuid;
+                        // TODO: implement locked toggling
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ToggleSymbolDnp(uuid),
+                    ) => {
+                        let _ = *uuid;
+                        // TODO: implement DNP toggling
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditLabelText(uuid, new_text),
@@ -1743,9 +1756,15 @@ impl Signex {
                         self.panel_ctx.canvas_font_popup_open = false;
                     }
                     crate::dock::DockMessage::Panel(
-                        crate::panels::PanelMsg::SetMarginVertical(_)
-                        | crate::panels::PanelMsg::SetMarginHorizontal(_),
+                        crate::panels::PanelMsg::SetMarginVertical(zones),
                     ) => {
+                        let _ = *zones;
+                        // Margins stored in schematic — handle when editable
+                    }
+                    crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::SetMarginHorizontal(zones),
+                    ) => {
+                        let _ = *zones;
                         // Margins stored in schematic — handle when editable
                     }
                     crate::dock::DockMessage::Panel(
@@ -1825,6 +1844,10 @@ impl Signex {
                 self.dock.update(msg);
             }
             Message::FileOpened(Some(path)) => {
+                // Reset transient overlays when opening a new file/project.
+                self.editing_text = None;
+                self.context_menu = None;
+
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 match ext {
                     "kicad_pro" | "snxprj" => {
@@ -3068,6 +3091,9 @@ impl Signex {
     }
 
     fn sync_active_tab(&mut self) {
+        // In-place text editor belongs to a specific document item; clear on tab switch.
+        self.editing_text = None;
+
         if let Some(tab) = self.tabs.get(self.active_tab) {
             self.schematic = tab.schematic.clone();
             self.canvas.schematic = tab.schematic.clone();
@@ -3636,23 +3662,50 @@ impl Signex {
         let menu = menu_bar::view(&self.panel_ctx.tokens).map(Message::Menu);
 
         // Dock regions with collapse-aware sizing
+        let left_has_panels = self.dock.has_panels(PanelPosition::Left);
+        let right_has_panels = self.dock.has_panels(PanelPosition::Right);
+        let bottom_has_panels = self.dock.has_panels(PanelPosition::Bottom);
         let left_collapsed = self.dock.is_collapsed(PanelPosition::Left);
         let right_collapsed = self.dock.is_collapsed(PanelPosition::Right);
         let bottom_collapsed = self.dock.is_collapsed(PanelPosition::Bottom);
 
-        let left = self.view_dock_panel(PanelPosition::Left, left_collapsed, self.left_width);
-        let left_handle = self.view_resize_handle(DragTarget::LeftPanel, !left_collapsed, true);
+        let left = self.view_dock_panel(
+            PanelPosition::Left,
+            left_has_panels,
+            left_collapsed,
+            self.left_width,
+        );
+        let left_handle = self.view_resize_handle(
+            DragTarget::LeftPanel,
+            left_has_panels && !left_collapsed,
+            true,
+        );
         let center = self.view_center();
-        let right_handle =
-            self.view_resize_handle(DragTarget::RightPanel, !right_collapsed, true);
-        let right = self.view_dock_panel(PanelPosition::Right, right_collapsed, self.right_width);
+        let right_handle = self.view_resize_handle(
+            DragTarget::RightPanel,
+            right_has_panels && !right_collapsed,
+            true,
+        );
+        let right = self.view_dock_panel(
+            PanelPosition::Right,
+            right_has_panels,
+            right_collapsed,
+            self.right_width,
+        );
 
         let center_row = row![left, left_handle, center, right_handle, right];
 
-        let bottom_handle =
-            self.view_resize_handle(DragTarget::BottomPanel, !bottom_collapsed, false);
-        let bottom =
-            self.view_dock_panel_h(PanelPosition::Bottom, bottom_collapsed, self.bottom_height);
+        let bottom_handle = self.view_resize_handle(
+            DragTarget::BottomPanel,
+            bottom_has_panels && !bottom_collapsed,
+            false,
+        );
+        let bottom = self.view_dock_panel_h(
+            PanelPosition::Bottom,
+            bottom_has_panels,
+            bottom_collapsed,
+            self.bottom_height,
+        );
 
         let status = status_bar::view(
             self.cursor_x,
@@ -3707,11 +3760,18 @@ impl Signex {
     fn view_dock_panel(
         &self,
         pos: PanelPosition,
+        has_panels: bool,
         collapsed: bool,
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self.dock.view_region(pos, &self.panel_ctx).map(Message::Dock);
-        let w = if collapsed { 28.0 } else { size };
+        let w = if !has_panels {
+            0.0
+        } else if collapsed {
+            28.0
+        } else {
+            size
+        };
         container(panel)
             .width(w)
             .height(Length::Fill)
@@ -3723,11 +3783,18 @@ impl Signex {
     fn view_dock_panel_h(
         &self,
         pos: PanelPosition,
+        has_panels: bool,
         collapsed: bool,
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self.dock.view_region(pos, &self.panel_ctx).map(Message::Dock);
-        let h = if collapsed { 28.0 } else { size };
+        let h = if !has_panels {
+            0.0
+        } else if collapsed {
+            28.0
+        } else {
+            size
+        };
         container(panel)
             .width(Length::Fill)
             .height(h)
@@ -3809,7 +3876,8 @@ impl Signex {
         // Active Bar — floats at top-center of canvas area
         if self.schematic.is_some() {
             // Vertical offset: menu bar height + tab bar if present
-            let y_offset: f32 = 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 };
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if self.tabs.is_empty() { 0.0 } else { 28.0 };
             let bar = crate::active_bar::view_bar(
                 self.current_tool,
                 self.draw_mode,
@@ -3829,7 +3897,7 @@ impl Signex {
         }
 
         // In-place text editing overlay
-        if let Some(ref edit_state) = self.editing_text {
+        if self.schematic.is_some() && let Some(ref edit_state) = self.editing_text {
             let text = edit_state.text.clone();
             layers.push(
                 column![
