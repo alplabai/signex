@@ -918,7 +918,6 @@ pub fn view_dropdown(
                     .align_y(iced::Alignment::Center),
                 )
                 .padding([4, 12])
-                .width(Length::Fill)
                 .on_press(ActiveBarMsg::Action(action))
                 .style(dd_btn_style_f(ac.text, ac.hover))
                 .into()
@@ -966,9 +965,8 @@ pub fn view_dropdown(
         }
     };
 
-    let min_w = dropdown_min_width(menu);
-
-    container(column(items).spacing(0).width(min_w))
+    // No hardcoded width — Iced auto-sizes the column to its widest child.
+    container(column(items).spacing(0))
         .padding([6, 0])
         .style(move |_: &Theme| container::Style {
             background: Some(ac.drop_bg.into()),
@@ -1186,18 +1184,17 @@ fn dd_item_icon(
 }
 
 fn dd_sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
-    container(
-        container(Space::new())
-            .width(Length::Fill)
-            .height(1)
-            .style(move |_: &Theme| container::Style {
-                background: Some(sep_c.into()),
-                ..container::Style::default()
-            }),
-    )
-    .padding([3, 8])
-    .width(Length::Fill)
-    .into()
+    // No Fill on the outer container — that would expand the parent column.
+    // The inner 1px line uses a styled container with bottom-padding trick
+    // (same approach as tab underlines) to avoid Length::Fill.
+    container(Space::new())
+        .height(1)
+        .padding(iced::Padding { top: 3.0, right: 8.0, bottom: 3.0, left: 8.0 })
+        .style(move |_: &Theme| container::Style {
+            background: Some(sep_c.into()),
+            ..container::Style::default()
+        })
+        .into()
 }
 
 fn dd_btn_style_f(text_c: Color, hover_c: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
