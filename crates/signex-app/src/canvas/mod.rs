@@ -193,7 +193,10 @@ impl canvas::Program<Message> for SchematicCanvas {
                 };
 
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
-                    state.camera.zoom_at(cursor_pos, scroll_y, bounds);
+                    let changed = state.camera.zoom_at(cursor_pos, scroll_y, bounds);
+                    if !changed {
+                        return None;
+                    }
                     // Grid + content need redraw on zoom
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))

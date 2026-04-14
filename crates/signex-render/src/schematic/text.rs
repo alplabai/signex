@@ -19,9 +19,10 @@ pub fn draw_text_note(
     } else {
         1.27
     };
-    let screen_font = (transform.world_len(font_size_mm).max(6.0)
-        * crate::canvas_font_size_scale())
-    .max(6.0);
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    if screen_font < 1.0 {
+        return;
+    }
 
     let sp = transform.to_screen_point(note.position.x, note.position.y);
 
@@ -83,9 +84,10 @@ pub fn draw_text_prop(
     }
 
     let font_size_mm = if prop.font_size > 0.0 { prop.font_size } else { 1.27 };
-    let screen_font = (transform.world_len(font_size_mm).max(6.0)
-        * crate::canvas_font_size_scale())
-    .max(6.0);
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    if screen_font < 1.0 {
+        return;
+    }
 
     let sp = transform.to_screen_point(display_pos.0, display_pos.1);
 

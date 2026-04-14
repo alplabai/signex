@@ -139,10 +139,9 @@ fn draw_pin(
 
     // Pin name (outside the body, beyond the endpoint)
     let font_size_mm = 1.27;
-    let screen_font =
-        (transform.world_len(font_size_mm).max(6.0) * crate::canvas_font_size_scale()).max(6.0);
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
 
-    if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
+    if screen_font >= 1.0 && lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
         let name_offset = lib.pin_name_offset.max(0.5);
         // Name is placed beyond the body end, offset along pin direction
         let name_pos = Point::new(
@@ -176,7 +175,7 @@ fn draw_pin(
     }
 
     // Pin number (inside the body, along the pin line)
-    if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+    if screen_font >= 1.0 && lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
         // Number is placed at the midpoint of the pin line.
         let mid = Point::new(
             pin.position.x + dir_x * len * 0.5,
@@ -205,7 +204,10 @@ fn draw_pin(
             np_base.y + perp_sy * perp_offset_px,
         );
 
-        let small_font = (screen_font * 0.8).max(6.0);
+        let small_font = (screen_font * 0.8).abs();
+        if small_font < 1.0 {
+            return;
+        }
         let text = canvas::Text {
             content: pin.number.clone(),
             position: np,

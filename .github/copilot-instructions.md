@@ -35,3 +35,4 @@ Tüm kod ingilizce yazılmalıdır. Değişken adları, fonksiyon adları, yorum
 ```rustlet total_price = calculate_total_price(cart);
 ```Bu, kodun İngilizce olduğunu ve anlaşılır olduğunu gösterir. Ayrıca, kodun tutarlı bir şekilde İngilizce yazılması, diğer geliştiricilerin kodu daha kolay anlamasına ve katkıda bulunmasına yardımcı olur. Bu, özellikle uluslararası bir ekipte çalışırken önemlidir, çünkü farklı dillerde konuşan geliştiriciler arasında iletişimi kolaylaştırır.
 ````
+Kendini co-author olarak ekleme sadece yazar görünsün.
