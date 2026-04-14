@@ -56,9 +56,11 @@ pub fn draw_text_note(
     });
 }
 
-/// Draw a property text (reference, value, or other field) at the
-/// property's own position. These positions are absolute in world space,
-/// not relative to the symbol -- KiCad stores them that way.
+/// Draw a property text (reference, value, or other field).
+///
+/// `display_pos`: the KiCad `GetPosition()` display position — the stored field
+/// position after the symbol's TRANSFORM has been applied. Computed by the
+/// caller via [`field_display_pos`] so that this function stays pure.
 ///
 /// `mirror_x`: true when the parent symbol has `mirror x` (flips Y axis),
 /// which causes KiCad to flip the horizontal justification of the field text
@@ -70,6 +72,7 @@ pub fn draw_text_prop(
     frame: &mut canvas::Frame,
     content: &str,
     prop: &TextProp,
+    display_pos: (f64, f64),
     mirror_x: bool,
     transform: &ScreenTransform,
     color: Color,
@@ -81,7 +84,7 @@ pub fn draw_text_prop(
     let font_size_mm = if prop.font_size > 0.0 { prop.font_size } else { 1.27 };
     let screen_font = transform.world_len(font_size_mm).max(6.0);
 
-    let sp = transform.to_screen_point(prop.position.x, prop.position.y);
+    let sp = transform.to_screen_point(display_pos.0, display_pos.1);
 
     // KiCad SCH_FIELD::GetEffectiveJustify(): when symbol transform.x1 < 0
     // (i.e. mirror_x), flip Left ↔ Right.
