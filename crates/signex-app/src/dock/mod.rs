@@ -52,6 +52,7 @@ pub enum DockMessage {
     /// Undock a panel to floating (double-click on tab).
     UndockPanel(PanelPosition, usize),
     /// Move a floating panel by delta.
+    #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
     /// Start dragging a floating panel.
     StartDragFloating(usize),
@@ -207,6 +208,15 @@ impl DockArea {
             PanelPosition::Left => self.left.collapsed,
             PanelPosition::Right => self.right.collapsed,
             PanelPosition::Bottom => self.bottom.collapsed,
+        }
+    }
+
+    /// Check if a dock region currently contains any panels.
+    pub fn has_panels(&self, position: PanelPosition) -> bool {
+        match position {
+            PanelPosition::Left => !self.left.panels.is_empty(),
+            PanelPosition::Right => !self.right.panels.is_empty(),
+            PanelPosition::Bottom => !self.bottom.panels.is_empty(),
         }
     }
 

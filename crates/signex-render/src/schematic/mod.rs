@@ -340,8 +340,6 @@ fn draw_builtin_power(
 ) {
     use iced::widget::canvas::path;
 
-    let px = sym.position.x;
-    let py = sym.position.y;
     let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
     let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
 
