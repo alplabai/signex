@@ -128,6 +128,14 @@ pub struct PanelContext {
     pub ui_font_name: String,
     /// Canvas font family name (Iosevka by default; applies immediately).
     pub canvas_font_name: String,
+    /// Canvas font size in px (applied immediately as a global scale).
+    pub canvas_font_size: f32,
+    /// Canvas font bold style flag.
+    pub canvas_font_bold: bool,
+    /// Canvas font italic style flag.
+    pub canvas_font_italic: bool,
+    /// Whether the canvas font picker popup is open.
+    pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
     // Components panel
     pub kicad_libraries: Vec<String>,
@@ -223,6 +231,16 @@ pub enum PanelMsg {
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),
+    /// Change canvas font size (px) applied to canvas text rendering.
+    SetCanvasFontSize(f32),
+    /// Toggle canvas font bold style.
+    SetCanvasFontBold(bool),
+    /// Toggle canvas font italic style.
+    SetCanvasFontItalic(bool),
+    /// Open canvas font popup.
+    OpenCanvasFontPopup,
+    /// Close canvas font popup.
+    CloseCanvasFontPopup,
     /// Set page margin vertical zones.
     SetMarginVertical(u32),
     /// Set page margin horizontal zones.
@@ -1213,6 +1231,10 @@ fn view_properties_general<'a>(
         let snap_hotspots = ctx.snap_hotspots;
         let grid_visible = ctx.grid_visible;
         let canvas_font_name = ctx.canvas_font_name.clone();
+        let canvas_font_size = ctx.canvas_font_size;
+        let canvas_font_bold = ctx.canvas_font_bold;
+        let canvas_font_italic = ctx.canvas_font_italic;
+        let canvas_font_popup_open = ctx.canvas_font_popup_open;
         col = col.push(collapsible_section(
             "prop_general",
             "General",
@@ -1243,7 +1265,33 @@ fn view_properties_general<'a>(
                     "Shift+E",
                     muted,
                 ));
-                c = c.push(form_font_row("Canvas Font", &canvas_font_name, PanelMsg::SetCanvasFont, muted, false));
+                c = c.push(form_font_link_row(
+                    "Canvas Font",
+                    &canvas_font_name,
+                    canvas_font_size,
+                    canvas_font_bold,
+                    canvas_font_italic,
+                    muted,
+                ));
+                if canvas_font_popup_open {
+                    c = c.push(
+                        container(canvas_font_popup(
+                            &canvas_font_name,
+                            canvas_font_size,
+                            canvas_font_bold,
+                            canvas_font_italic,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ))
+                        .padding(iced::Padding {
+                            top: 0.0,
+                            right: 16.0,
+                            bottom: 4.0,
+                            left: 8.0,
+                        }),
+                    );
+                }
                 c = c.push(form_input_row("Sheet Color", "Black", muted, input_bg, input_bdr));
                 c
             },
@@ -1724,53 +1772,158 @@ fn form_check_row_shortcut<'a>(
     .into()
 }
 
-/// Font selection row: [Label LABEL_W] [pick_list of system fonts]
-/// `restart_hint` — when true, appends a small "(restart)" note below.
-fn form_font_row<'a>(
+fn form_font_link_row<'a>(
     label: &'static str,
-    current: &str,
-    on_change: impl Fn(String) -> PanelMsg + 'static,
+    current_family: &str,
+    current_size_px: f32,
+    _bold: bool,
+    _italic: bool,
     label_c: Color,
-    restart_hint: bool,
+) -> Element<'a, PanelMsg> {
+    let summary = format!("{current_family}, {:.0}px", current_size_px);
+
+    container(
+        row![
+            text(label)
+                .size(11)
+                .color(label_c)
+                .width(LABEL_W)
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::button(
+                text(summary)
+                    .size(11)
+                    .color(Color::from_rgb(0.35, 0.7, 1.0))
+                    .width(Length::Fill),
+            )
+            .on_press(PanelMsg::OpenCanvasFontPopup)
+            .padding([1, 0])
+            .width(Length::Fill)
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let underline = match status {
+                    iced::widget::button::Status::Hovered => true,
+                    _ => false,
+                };
+                iced::widget::button::Style {
+                    background: None,
+                    text_color: if underline {
+                        Color::from_rgb(0.55, 0.82, 1.0)
+                    } else {
+                        Color::from_rgb(0.35, 0.7, 1.0)
+                    },
+                    border: Border::default(),
+                    shadow: iced::Shadow::default(),
+                    ..Default::default()
+                }
+            }),
+        ]
+        .spacing(4)
+        .width(Length::Fill)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+fn canvas_font_popup<'a>(
+    current_family: &str,
+    current_size_px: f32,
+    bold: bool,
+    italic: bool,
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let families = crate::fonts::system_font_families();
-    let current_owned = current.to_string();
-    let pick = iced::widget::pick_list(
+    let family_pick = iced::widget::pick_list(
         families.as_slice(),
-        Some(current_owned),
-        on_change,
+        Some(current_family.to_string()),
+        PanelMsg::SetCanvasFont,
     )
     .text_size(11)
     .width(Length::Fill);
 
-    let mut col = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(
-        container(
+    let size_input = NumberInput::new(
+        &current_size_px,
+        6.0..=36.0,
+        PanelMsg::SetCanvasFontSize,
+    )
+    .step(1.0)
+    .width(Length::Fill)
+    .padding(4);
+
+    container(
+        column![
             row![
-                text(label)
-                    .size(11)
-                    .color(label_c)
-                    .width(LABEL_W)
-                    .wrapping(iced::widget::text::Wrapping::None),
-                pick,
+                text("Canvas Font Settings").size(11).color(label_c),
+                Space::new().width(Length::Fill),
+                iced::widget::button(text("Close").size(10))
+                    .on_press(PanelMsg::CloseCanvasFontPopup)
+                    .padding([2, 6])
             ]
-            .spacing(4)
             .align_y(iced::Alignment::Center),
-        )
-        .padding([2, 8])
-        .width(Length::Fill),
-    );
-    if restart_hint {
-        col = col.push(
-            container(
-                text("(restart to apply)")
-                    .size(9)
-                    .color(Color::from_rgba(1.0, 0.75, 0.2, 0.8)),
-            )
-            .padding(iced::Padding { top: 0.0, right: 8.0, bottom: 4.0, left: 8.0 + LABEL_W }),
-        );
-    }
-    col.into()
+            row![
+                text("Family")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                family_pick,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Size")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                size_input,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Style")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                row![
+                    iced::widget::checkbox(bold)
+                        .on_toggle(PanelMsg::SetCanvasFontBold)
+                        .size(12)
+                        .spacing(4),
+                    text("Bold").size(10).color(label_c),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                row![
+                    iced::widget::checkbox(italic)
+                        .on_toggle(PanelMsg::SetCanvasFontItalic)
+                        .size(12)
+                        .spacing(4),
+                    text("Italic").size(10).color(label_c),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center),
+            text("Applies immediately to canvas text rendering.")
+                .size(9)
+                .color(label_c),
+        ]
+        .spacing(6),
+    )
+    .padding([6, 8])
+    .style(move |_: &Theme| iced::widget::container::Style {
+        background: Some(Background::Color(input_bg)),
+        border: Border {
+            color: input_bdr,
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..Default::default()
+    })
+    .width(Length::Fill)
+    .into()
 }
 
 /// Form row: label | NumberInput (iced_aw) with step/bounds.

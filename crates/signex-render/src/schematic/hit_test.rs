@@ -218,8 +218,7 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
 
 /// Hit-test a text property (reference or value field).
 /// Approximates the text bounding box from character count and font size.
-/// Uses the KiCad `GetPosition()` display position (via `field_display_pos`)
-/// so the hit region matches where the text is actually rendered.
+/// Uses `field_display_pos` so the hit region matches where the text is rendered.
 fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64) -> bool {
     let font_h = prop.font_size.max(1.27);
     let char_count = content.chars().count() as f64;

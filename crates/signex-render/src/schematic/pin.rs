@@ -139,7 +139,8 @@ fn draw_pin(
 
     // Pin name (outside the body, beyond the endpoint)
     let font_size_mm = 1.27;
-    let screen_font = transform.world_len(font_size_mm).max(6.0);
+    let screen_font =
+        (transform.world_len(font_size_mm).max(6.0) * crate::canvas_font_size_scale()).max(6.0);
 
     if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
         let name_offset = lib.pin_name_offset.max(0.5);
@@ -166,7 +167,7 @@ fn draw_pin(
             position: np,
             color: pin_color,
             size: iced::Pixels(screen_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_x: h_align.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
@@ -204,13 +205,13 @@ fn draw_pin(
             np_base.y + perp_sy * perp_offset_px,
         );
 
-        let small_font = (screen_font * 0.8).max(5.0);
+        let small_font = (screen_font * 0.8).max(6.0);
         let text = canvas::Text {
             content: pin.number.clone(),
             position: np,
             color: pin_color,
             size: iced::Pixels(small_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_x: num_align.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
