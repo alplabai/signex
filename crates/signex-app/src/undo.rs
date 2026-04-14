@@ -346,22 +346,48 @@ fn move_element(sheet: &mut SchematicSheet, item: &SelectedItem, dx: f64, dy: f6
         SelectedKind::SymbolRefField => {
             // UUID = symbol UUID; only move the ref_text anchor, not the whole symbol
             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == item.uuid) {
+                let (field_dx, field_dy) = inverse_field_display_delta(sym, dx, dy);
                 if let Some(ref mut rt) = sym.ref_text {
-                    rt.position.x += dx;
-                    rt.position.y += dy;
+                    rt.position.x += field_dx;
+                    rt.position.y += field_dy;
                 }
             }
         }
         SelectedKind::SymbolValField => {
             // UUID = symbol UUID; only move the val_text anchor
             if let Some(sym) = sheet.symbols.iter_mut().find(|s| s.uuid == item.uuid) {
+                let (field_dx, field_dy) = inverse_field_display_delta(sym, dx, dy);
                 if let Some(ref mut vt) = sym.val_text {
-                    vt.position.x += dx;
-                    vt.position.y += dy;
+                    vt.position.x += field_dx;
+                    vt.position.y += field_dy;
                 }
             }
         }
     }
+}
+
+/// Convert a drag delta measured in displayed field coordinates back to the
+/// stored field-coordinate delta before symbol TRANSFORM is applied.
+fn inverse_field_display_delta(sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
+    // Undo mirror (applied last in forward transform).
+    let mut tx = dx;
+    let mut ty = dy;
+    if sym.mirror_y {
+        tx = -tx;
+    }
+    if sym.mirror_x {
+        ty = -ty;
+    }
+
+    // Undo rotation: forward uses CCW rotation by sym.rotation.
+    let rad = sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let ux = tx * cos + ty * sin;
+    let uy = -tx * sin + ty * cos;
+
+    // Undo pre-rotation Y negation used by field display transform.
+    (ux, -uy)
 }
 
 /// Undo history stack with configurable depth.

@@ -5,7 +5,7 @@ use iced::widget::canvas;
 
 use signex_types::schematic::*;
 
-use super::ScreenTransform;
+use super::{ScreenTransform, field_display_pos};
 
 /// Selection outline color (Altium-style — thin outline, no fill).
 const SEL_COLOR: Color = Color {
@@ -77,17 +77,19 @@ pub fn draw_selection_overlay(
             SelectedKind::Drawing => {}
             SelectedKind::SymbolRefField => {
                 // Highlight just the ref text anchor point
-                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                    if let Some(ref rt) = sym.ref_text {
-                        draw_point_selection(frame, rt.position.x, rt.position.y, transform);
-                    }
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
+                    && let Some(ref rt) = sym.ref_text
+                {
+                    let (dx, dy) = field_display_pos(&rt.position, sym);
+                    draw_point_selection(frame, dx, dy, transform);
                 }
             }
             SelectedKind::SymbolValField => {
-                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                    if let Some(ref vt) = sym.val_text {
-                        draw_point_selection(frame, vt.position.x, vt.position.y, transform);
-                    }
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
+                    && let Some(ref vt) = sym.val_text
+                {
+                    let (dx, dy) = field_display_pos(&vt.position, sym);
+                    draw_point_selection(frame, dx, dy, transform);
                 }
             }
         }
