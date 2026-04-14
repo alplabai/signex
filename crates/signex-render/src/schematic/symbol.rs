@@ -410,11 +410,14 @@ fn draw_graphic_text(
     let sp = transform.to_screen_point(wx, wy);
 
     let base_size = if font_size > 0.0 {
-        transform.world_len(font_size).max(6.0)
+        transform.world_len(font_size)
     } else {
-        transform.world_len(1.27).max(6.0)
+        transform.world_len(1.27)
     };
-    let size = (base_size * crate::canvas_font_size_scale()).max(6.0);
+    let size = (base_size * crate::canvas_font_size_scale()).abs();
+    if size < 1.0 {
+        return;
+    }
 
     let text = canvas::Text {
         content: content.to_string(),
