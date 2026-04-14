@@ -83,6 +83,8 @@ pub struct SchematicCanvas {
     pub drawing_mode: bool,
     /// Current tool name for preview display.
     pub tool_preview: Option<String>,
+    /// Ghost label preview for port/label placement (follows cursor).
+    pub ghost_label: Option<signex_types::schematic::Label>,
     /// Current draw mode for wire preview constraint (90°, 45°, free).
     pub draw_mode: crate::app::DrawMode,
     /// Whether snap-to-grid is enabled (for rubber-band cursor snapping).
@@ -122,6 +124,7 @@ impl SchematicCanvas {
             wire_preview: Vec::new(),
             drawing_mode: false,
             tool_preview: None,
+            ghost_label: None,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
             snap_grid_mm: 2.54,
@@ -721,6 +724,35 @@ impl canvas::Program<Message> for SchematicCanvas {
                             frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
                         }
                     }
+                }
+
+                // Ghost label/port preview at cursor position
+                if let Some(ref ghost) = self.ghost_label {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let snap_world = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let mut preview_label = ghost.clone();
+                    preview_label.position =
+                        signex_types::schematic::Point::new(snap_world.0, snap_world.1);
+                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    signex_render::schematic::label::draw_label(
+                        &mut frame,
+                        &preview_label,
+                        &ghost_transform,
+                        ghost_color,
+                    );
                 }
 
                 // Tool preview text at cursor (for Label, Component placement)

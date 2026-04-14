@@ -232,10 +232,15 @@ pub struct Signex {
     pub last_mouse_pos: (f32, f32),
     /// Active Bar open dropdown menu.
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
+    /// Selection filter state — which object types are selectable.
+    pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// Last-used tool per Active Bar group (Altium behavior: left-click re-activates).
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     /// Pending power port placement (net name, lib_id).
     pub pending_power: Option<(String, String)>,
+    /// Pending port placement: (label_type, shape string).
+    /// Global = "input"/"output"/"bidirectional"/"passive", Hierarchical = flag shape.
+    pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Panel list popup visible.
     pub panel_list_open: bool,
     /// Preferences dialog open.
@@ -574,8 +579,10 @@ impl Signex {
             context_menu: None,
             last_mouse_pos: (0.0, 0.0),
             active_bar_menu: None,
+            selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
             last_tool: std::collections::HashMap::new(),
             pending_power: None,
+            pending_port: None,
             panel_list_open: false,
             preferences_open: false,
             preferences_nav: crate::preferences::PrefNav::Appearance,
@@ -996,20 +1003,24 @@ impl Signex {
                         }
                     }
                     Tool::Label => {
-                        // Place a net label — use pre-placement text if set
+                        // Place a label — net label, global (port), or hierarchical
                         let label_text = self
                             .panel_ctx
                             .pre_placement
                             .as_ref()
                             .map(|pp| pp.label_text.clone())
                             .unwrap_or_else(|| "NET".to_string());
+                        let (label_type, shape) = self
+                            .pending_port
+                            .clone()
+                            .unwrap_or((signex_types::schematic::LabelType::Net, String::new()));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
                             text: label_text,
                             position: signex_types::schematic::Point::new(wx, wy),
                             rotation: 0.0,
-                            label_type: signex_types::schematic::LabelType::Net,
-                            shape: String::new(),
+                            label_type,
+                            shape,
                             font_size: 1.27,
                             justify: signex_types::schematic::HAlign::Left,
                         };
@@ -1021,7 +1032,10 @@ impl Signex {
                             self.mark_dirty();
                             self.commit_schematic();
                         }
-                        self.current_tool = Tool::Select;
+                        // Stay in placement mode for ports, return to select for net labels
+                        if self.pending_port.is_none() {
+                            self.current_tool = Tool::Select;
+                        }
                     }
                     Tool::Component if self.pending_power.is_some() => {
                         // Place power port symbol
@@ -1384,7 +1398,9 @@ impl Signex {
                 // Escape: cancel wire drawing, pending placements, pre-placement, text editing
                 if tool == Tool::Select {
                     self.pending_power = None;
-                    self.panel_ctx.pre_placement = None;
+                    self.pending_port = None;
+                    self.canvas.ghost_label = None;
+                                        self.panel_ctx.pre_placement = None;
                     self.editing_text = None;
                     if self.wire_drawing {
                         self.wire_drawing = false;
@@ -2471,6 +2487,27 @@ impl Signex {
                     ActiveBarMsg::CloseMenus => {
                         self.active_bar_menu = None;
                     }
+                    ActiveBarMsg::ToggleFilter(filter) => {
+                        // Toggle individual filter — keep menu open
+                        if self.selection_filters.contains(&filter) {
+                            self.selection_filters.remove(&filter);
+                        } else {
+                            self.selection_filters.insert(filter);
+                        }
+                        return Task::none();
+                    }
+                    ActiveBarMsg::ToggleAllFilters => {
+                        // Toggle all on/off — keep menu open
+                        if self.selection_filters.len()
+                            == crate::active_bar::SelectionFilter::ALL.len()
+                        {
+                            self.selection_filters.clear();
+                        } else {
+                            self.selection_filters =
+                                crate::active_bar::SelectionFilter::ALL.iter().copied().collect();
+                        }
+                        return Task::none();
+                    }
                     ActiveBarMsg::Action(action) => {
                         self.active_bar_menu = None;
                         // Store last-used tool per group
@@ -2512,6 +2549,11 @@ impl Signex {
                             | ActiveBarAction::PlaceSheetEntry
                             | ActiveBarAction::PlaceDeviceSheetSymbol
                             | ActiveBarAction::PlaceReuseBlock => Some("sheet"),
+                            ActiveBarAction::PlaceParameterSet
+                            | ActiveBarAction::PlaceNoERC
+                            | ActiveBarAction::PlaceDiffPair
+                            | ActiveBarAction::PlaceBlanket
+                            | ActiveBarAction::PlaceCompileMask => Some("directives"),
                             _ => None,
                         };
                         if let Some(g) = group {
@@ -2569,27 +2611,27 @@ impl Signex {
                             ActiveBarAction::PlacePowerGND => {
                                 self.pending_power = Some(("GND".into(), "power:GND".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("GND".into());
                             }
                             ActiveBarAction::PlacePowerVCC => {
                                 self.pending_power = Some(("VCC".into(), "power:VCC".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("VCC".into());
                             }
                             ActiveBarAction::PlacePowerPlus12 => {
                                 self.pending_power = Some(("+12V".into(), "power:+12V".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("+12V".into());
                             }
                             ActiveBarAction::PlacePowerPlus5 => {
                                 self.pending_power = Some(("+5V".into(), "power:+5V".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("+5V".into());
                             }
                             ActiveBarAction::PlacePowerMinus5 => {
                                 self.pending_power = Some(("-5V".into(), "power:-5V".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("-5V".into());
                             }
                             ActiveBarAction::PlacePowerArrow
                             | ActiveBarAction::PlacePowerWave
@@ -2597,17 +2639,17 @@ impl Signex {
                             | ActiveBarAction::PlacePowerCircle => {
                                 self.pending_power = Some(("PWR".into(), "power:PWR_FLAG".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("PWR".into());
                             }
                             ActiveBarAction::PlacePowerSignalGND => {
                                 self.pending_power = Some(("GNDREF".into(), "power:GNDREF".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("GNDREF".into());
                             }
                             ActiveBarAction::PlacePowerEarth => {
                                 self.pending_power = Some(("Earth".into(), "power:Earth".into()));
                                 self.current_tool = Tool::Component;
-                                self.canvas.tool_preview = None;
+                                self.canvas.tool_preview = Some("Earth".into());
                             }
                             // Alignment operations
                             ActiveBarAction::AlignLeft
@@ -2627,10 +2669,39 @@ impl Signex {
                             // Port placement (Global Label)
                             ActiveBarAction::PlacePort => {
                                 self.current_tool = Tool::Label;
-                                // Place as global label on next click
+                                self.pending_port = Some((
+                                    signex_types::schematic::LabelType::Global,
+                                    "bidirectional".to_string(),
+                                ));
+                                self.canvas.ghost_label =
+                                    Some(signex_types::schematic::Label {
+                                        uuid: uuid::Uuid::new_v4(),
+                                        text: "PORT".to_string(),
+                                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                                        rotation: 0.0,
+                                        label_type: signex_types::schematic::LabelType::Global,
+                                        shape: "bidirectional".to_string(),
+                                        font_size: 1.27,
+                                        justify: signex_types::schematic::HAlign::Left,
+                                    });
                             }
                             ActiveBarAction::PlaceOffSheetConnector => {
                                 self.current_tool = Tool::Label;
+                                self.pending_port = Some((
+                                    signex_types::schematic::LabelType::Hierarchical,
+                                    String::new(),
+                                ));
+                                self.canvas.ghost_label =
+                                    Some(signex_types::schematic::Label {
+                                        uuid: uuid::Uuid::new_v4(),
+                                        text: "SHEET".to_string(),
+                                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                                        rotation: 0.0,
+                                        label_type: signex_types::schematic::LabelType::Hierarchical,
+                                        shape: String::new(),
+                                        font_size: 1.27,
+                                        justify: signex_types::schematic::HAlign::Left,
+                                    });
                             }
                             // Bus Entry placement
                             ActiveBarAction::PlaceBusEntry => {
@@ -2653,6 +2724,21 @@ impl Signex {
             }
             // Context menu actions
             Message::ShowContextMenu(x, y) => {
+                // Right-click during placement mode: cancel placement (Altium behavior)
+                if self.current_tool != Tool::Select {
+                    self.pending_power = None;
+                    self.pending_port = None;
+                    self.canvas.ghost_label = None;
+                    self.canvas.tool_preview = None;
+                    self.current_tool = Tool::Select;
+                    if self.wire_drawing {
+                        self.wire_drawing = false;
+                        self.wire_points.clear();
+                        self.canvas.wire_preview.clear();
+                        self.canvas.drawing_mode = false;
+                    }
+                    return Task::none();
+                }
                 // Don't show context menu if Active Bar dropdown is open
                 if self.active_bar_menu.is_none() {
                     self.context_menu = Some(ContextMenuState { x, y });
@@ -3767,11 +3853,17 @@ impl Signex {
 
         // Active Bar dropdown overlay
         if let Some(ab_menu) = self.active_bar_menu {
-            let dropdown = crate::active_bar::view_dropdown(ab_menu, &self.panel_ctx.tokens).map(Message::ActiveBar);
+            let dropdown = crate::active_bar::view_dropdown(ab_menu, &self.panel_ctx.tokens, &self.selection_filters).map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
             let ab_y: f32 =
                 24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
             let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+            // The dropdown may be wider than (bar_w - x_off). Use a wider
+            // centered container and adjust x_off so the dropdown still
+            // lines up with the correct button.
+            let dd_w = crate::active_bar::dropdown_min_width(ab_menu);
+            let row_w = (x_off + dd_w).max(bar_w);
+            let adjusted_x = x_off + (row_w - bar_w) / 2.0;
 
             layers.push(Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
@@ -3779,8 +3871,8 @@ impl Signex {
             layers.push(
                 container(column![
                     iced::widget::Space::new().height(ab_y),
-                    container(row![iced::widget::Space::new().width(x_off), dropdown])
-                        .width(bar_w),
+                    container(row![iced::widget::Space::new().width(adjusted_x), dropdown])
+                        .width(row_w),
                 ])
                 .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center)

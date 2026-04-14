@@ -145,6 +145,59 @@ pub enum ActiveBarMsg {
     ToggleMenu(ActiveBarMenu),
     CloseMenus,
     Action(ActiveBarAction),
+    ToggleFilter(SelectionFilter),
+    ToggleAllFilters,
+}
+
+/// Selection filter categories — each can be independently toggled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SelectionFilter {
+    Components,
+    Wires,
+    Buses,
+    SheetSymbols,
+    SheetEntries,
+    NetLabels,
+    Parameters,
+    Ports,
+    PowerPorts,
+    Texts,
+    DrawingObjects,
+    Other,
+}
+
+impl SelectionFilter {
+    pub const ALL: &'static [SelectionFilter] = &[
+        Self::Components,
+        Self::Wires,
+        Self::Buses,
+        Self::SheetSymbols,
+        Self::SheetEntries,
+        Self::NetLabels,
+        Self::Parameters,
+        Self::Ports,
+        Self::PowerPorts,
+        Self::Texts,
+        Self::DrawingObjects,
+        Self::Other,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Components => "Components",
+            Self::Wires => "Wires",
+            Self::Buses => "Buses",
+            Self::SheetSymbols => "Sheet Symbols",
+            Self::SheetEntries => "Sheet Entries",
+            Self::NetLabels => "Net Labels",
+            Self::Parameters => "Parameters",
+            Self::Ports => "Ports",
+            Self::PowerPorts => "Power Ports",
+            Self::Texts => "Texts",
+            Self::DrawingObjects => "Drawing Objects",
+            Self::Other => "Other",
+        }
+    }
 }
 
 /// All actions available from Active Bar buttons and dropdown items.
@@ -248,6 +301,64 @@ pub enum ActiveBarAction {
     PlaceComponent,
 }
 
+/// Resolve the toolbar icon for the last-used action in a group.
+fn action_icon(action: &ActiveBarAction) -> &'static [u8] {
+    match action {
+        // Wiring
+        ActiveBarAction::DrawWire => DD_WIRE,
+        ActiveBarAction::DrawBus => DD_BUS,
+        ActiveBarAction::PlaceBusEntry => DD_BUS_ENTRY,
+        ActiveBarAction::PlaceNetLabel => DD_NET_LABEL,
+        // Power
+        ActiveBarAction::PlacePowerGND => DD_GND,
+        ActiveBarAction::PlacePowerVCC => DD_VCC,
+        ActiveBarAction::PlacePowerPlus12 => DD_PWR_PLUS12,
+        ActiveBarAction::PlacePowerPlus5 => DD_PWR_PLUS5,
+        ActiveBarAction::PlacePowerMinus5 => DD_PWR_MINUS5,
+        ActiveBarAction::PlacePowerArrow => DD_PWR_ARROW,
+        ActiveBarAction::PlacePowerWave => DD_PWR_WAVE,
+        ActiveBarAction::PlacePowerBar => DD_PWR_BAR,
+        ActiveBarAction::PlacePowerCircle => DD_PWR_CIRCLE,
+        ActiveBarAction::PlacePowerSignalGND => DD_PWR_SIG_GND,
+        ActiveBarAction::PlacePowerEarth => DD_PWR_EARTH,
+        // Port
+        ActiveBarAction::PlacePort => DD_PORT,
+        ActiveBarAction::PlaceOffSheetConnector => DD_OFF_SHEET,
+        // Harness
+        ActiveBarAction::PlaceSignalHarness => DD_HARNESS,
+        ActiveBarAction::PlaceHarnessConnector => DD_HARNESS_CONN,
+        ActiveBarAction::PlaceHarnessEntry => DD_HARNESS,
+        // Sheet
+        ActiveBarAction::PlaceSheetSymbol => DD_SHEET_SYM,
+        ActiveBarAction::PlaceSheetEntry => DD_SHEET_ENTRY,
+        ActiveBarAction::PlaceDeviceSheetSymbol => DD_DEVICE_SHEET,
+        ActiveBarAction::PlaceReuseBlock => DD_REUSE_BLOCK,
+        // Directives
+        ActiveBarAction::PlaceParameterSet => DD_PARAM_SET,
+        ActiveBarAction::PlaceNoERC => DD_NO_ERC,
+        ActiveBarAction::PlaceDiffPair => DD_DIFF_PAIR,
+        ActiveBarAction::PlaceBlanket => DD_BLANKET,
+        ActiveBarAction::PlaceCompileMask => DD_BLANKET,
+        // Text
+        ActiveBarAction::PlaceTextString => DD_TEXT_STRING,
+        ActiveBarAction::PlaceTextFrame => DD_TEXT_FRAME,
+        ActiveBarAction::PlaceNote => DD_NOTE,
+        // Shapes
+        ActiveBarAction::DrawArc => DD_ARC,
+        ActiveBarAction::DrawFullCircle => DD_CIRCLE,
+        ActiveBarAction::DrawEllipticalArc => DD_ARC,
+        ActiveBarAction::DrawEllipse => DD_ELLIPSE,
+        ActiveBarAction::DrawLine => DD_LINE,
+        ActiveBarAction::DrawRectangle => DD_RECT,
+        ActiveBarAction::DrawRoundRectangle => DD_ROUND_RECT,
+        ActiveBarAction::DrawPolygon => DD_POLYGON,
+        ActiveBarAction::DrawBezier => DD_BEZIER,
+        ActiveBarAction::PlaceGraphic => DD_GRAPHIC,
+        // Fallback — use the group's default icon
+        _ => ICON_SELECT,
+    }
+}
+
 // ─── View: Active Bar ────────────────────────────────────────
 
 /// Render the Active Bar (the floating toolbar strip).
@@ -261,6 +372,13 @@ pub fn view_bar(
     // Helper: get last-used action for a group, or use default
     let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
         ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
+    };
+    // Helper: get the icon for the last-used action in a group, or fall back to default
+    let last_icon = |group: &str, default_icon: &'static [u8]| -> &'static [u8] {
+        last_tool
+            .get(group)
+            .map(|a| action_icon(a))
+            .unwrap_or(default_icon)
     };
     let mut items: Vec<Element<'_, ActiveBarMsg>> = Vec::with_capacity(20);
     // 1. Filter — left: toggle, right: filter dropdown
@@ -304,14 +422,14 @@ pub fn view_bar(
     items.push(sep(ac.sep));
 
     items.push(ab_icon_btn(
-        ICON_WIRE,
+        last_icon("wiring", ICON_WIRE),
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
         last("wiring", ActiveBarAction::DrawWire),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
         "Wiring",
     ));
     items.push(ab_icon_btn(
-        ICON_POWER,
+        last_icon("power", ICON_POWER),
         false,
         last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
@@ -320,44 +438,44 @@ pub fn view_bar(
     items.push(sep(ac.sep));
 
     items.push(ab_icon_btn(
-        ICON_HARNESS,
+        last_icon("harness", ICON_HARNESS),
         false,
         last("harness", ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
         "Harness",
     ));
     items.push(ab_icon_btn(
-        ICON_SHEETSYM,
+        last_icon("sheet", ICON_SHEETSYM),
         false,
         last("sheet", ActiveBarAction::PlaceSheetSymbol),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
         "Sheet Symbol",
     ));
     items.push(ab_icon_btn(
-        ICON_PORT,
+        last_icon("port", ICON_PORT),
         false,
         last("port", ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
         "Port / Connector",
     ));
     items.push(ab_icon_btn(
-        ICON_DIRECTIVES,
+        last_icon("directives", ICON_DIRECTIVES),
         false,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceParameterSet),
+        last("directives", ActiveBarAction::PlaceParameterSet),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
         "Directives",
     ));
     items.push(sep(ac.sep));
 
     items.push(ab_icon_btn(
-        ICON_TEXT,
+        last_icon("text", ICON_TEXT),
         current_tool == crate::app::Tool::Text,
         last("text", ActiveBarAction::PlaceTextString),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
         "Text",
     ));
     items.push(ab_icon_btn(
-        ICON_SHAPES,
+        last_icon("shapes", ICON_SHAPES),
         matches!(
             current_tool,
             crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle
@@ -422,79 +540,92 @@ pub fn view_bar(
 // ─── View: Dropdown menus ────────────────────────────────────
 
 /// Render the dropdown menu for the given Active Bar button.
-pub fn view_dropdown(menu: ActiveBarMenu, tokens: &ThemeTokens) -> Element<'static, ActiveBarMsg> {
+pub fn view_dropdown(
+    menu: ActiveBarMenu,
+    tokens: &ThemeTokens,
+    filters: &std::collections::HashSet<SelectionFilter>,
+) -> Element<'static, ActiveBarMsg> {
     let ac = AbColors::from_tokens(tokens);
     let items: Vec<Element<'_, ActiveBarMsg>> = match menu {
         ActiveBarMenu::Filter => {
             // Altium-style tag buttons for selection filter
             let text_primary = ac.text;
             let hover_c = ac.hover;
-            let tag = |label: &str| -> Element<'static, ActiveBarMsg> {
+            let all_on = filters.len() == SelectionFilter::ALL.len();
+            let tag = |filter: SelectionFilter, enabled: bool| -> Element<'static, ActiveBarMsg> {
+                let label = filter.label();
+                let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+                let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+                let active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
+                let inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
+                let text_on = text_primary;
+                let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
                 button(
                     text(label.to_string())
                         .size(11)
-                        .color(text_primary),
+                        .color(if enabled { text_on } else { text_off }),
                 )
                 .padding([4, 10])
-                .on_press(ActiveBarMsg::Action(ActiveBarAction::ToolSelect))
+                .on_press(ActiveBarMsg::ToggleFilter(filter))
                 .style(move |_: &Theme, status: button::Status| {
                     let bg = match status {
                         button::Status::Hovered => Background::Color(hover_c),
-                        _ => Background::Color(Color::from_rgba8(0x2E, 0x33, 0x45, 1.0)),
+                        _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
                     };
                     button::Style {
                         background: Some(bg),
                         border: Border {
                             width: 1.0,
                             radius: 12.0.into(),
-                            color: Color::from_rgba8(0x4D, 0x52, 0x66, 1.0),
+                            color: if enabled { active_border } else { inactive_border },
                         },
-                        text_color: text_primary,
+                        text_color: if enabled { text_on } else { text_off },
                         ..button::Style::default()
                     }
                 })
                 .into()
             };
+            let all_label = if all_on { "All - On" } else { "All - Off" };
             // Return tag grid as a single element wrapped in vec
             let filter_content: Element<'static, ActiveBarMsg> = column![
                 container(
                     button(
-                        text("All - On".to_string())
+                        text(all_label.to_string())
                             .size(11)
                             .color(text_primary),
                     )
                     .padding([4, 12])
-                    .on_press(ActiveBarMsg::Action(ActiveBarAction::ToolSelect))
+                    .on_press(ActiveBarMsg::ToggleAllFilters)
                     .style(button::text),
                 )
                 .padding([4, 8]),
                 container(
                     column![
                         row![
-                            tag("Components"),
-                            tag("Wires"),
-                            tag("Buses"),
+                            tag(SelectionFilter::Components, filters.contains(&SelectionFilter::Components)),
+                            tag(SelectionFilter::Wires, filters.contains(&SelectionFilter::Wires)),
+                            tag(SelectionFilter::Buses, filters.contains(&SelectionFilter::Buses)),
                         ]
                         .spacing(4),
                         row![
-                            tag("Sheet Symbols"),
-                            tag("Sheet Entries"),
+                            tag(SelectionFilter::SheetSymbols, filters.contains(&SelectionFilter::SheetSymbols)),
+                            tag(SelectionFilter::SheetEntries, filters.contains(&SelectionFilter::SheetEntries)),
                         ]
                         .spacing(4),
                         row![
-                            tag("Net Labels"),
-                            tag("Parameters"),
-                            tag("Ports"),
+                            tag(SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels)),
+                            tag(SelectionFilter::Parameters, filters.contains(&SelectionFilter::Parameters)),
+                            tag(SelectionFilter::Ports, filters.contains(&SelectionFilter::Ports)),
                         ]
                         .spacing(4),
                         row![
-                            tag("Power Ports"),
-                            tag("Texts"),
+                            tag(SelectionFilter::PowerPorts, filters.contains(&SelectionFilter::PowerPorts)),
+                            tag(SelectionFilter::Texts, filters.contains(&SelectionFilter::Texts)),
                         ]
                         .spacing(4),
                         row![
-                            tag("Drawing Objects"),
-                            tag("Other"),
+                            tag(SelectionFilter::DrawingObjects, filters.contains(&SelectionFilter::DrawingObjects)),
+                            tag(SelectionFilter::Other, filters.contains(&SelectionFilter::Other)),
                         ]
                         .spacing(4),
                     ]
@@ -835,7 +966,9 @@ pub fn view_dropdown(menu: ActiveBarMenu, tokens: &ThemeTokens) -> Element<'stat
         }
     };
 
-    container(column(items).spacing(0))
+    let min_w = dropdown_min_width(menu);
+
+    container(column(items).spacing(0).width(min_w))
         .padding([6, 0])
         .style(move |_: &Theme| container::Style {
             background: Some(ac.drop_bg.into()),
@@ -853,6 +986,26 @@ pub fn view_dropdown(menu: ActiveBarMenu, tokens: &ThemeTokens) -> Element<'stat
             ..container::Style::default()
         })
         .into()
+}
+
+/// Minimum width (in px) for each dropdown so labels are never truncated.
+/// Computed as: icon(14) + spacing(8) + approx text width + padding(24).
+pub fn dropdown_min_width(menu: ActiveBarMenu) -> f32 {
+    match menu {
+        ActiveBarMenu::Filter => 200.0,
+        ActiveBarMenu::SelectMode => 170.0,   // "Touching Rectangle"
+        ActiveBarMenu::Select => 170.0,        // "Drag Selection"
+        ActiveBarMenu::Align => 170.0,         // "Distribute Vertically"
+        ActiveBarMenu::Wiring => 150.0,        // "Bus Entry"
+        ActiveBarMenu::Power => 200.0,         // "Signal Ground power port"
+        ActiveBarMenu::Harness => 180.0,       // "Harness Connector"
+        ActiveBarMenu::SheetSymbol => 190.0,   // "Device Sheet Symbol"
+        ActiveBarMenu::Port => 190.0,          // "Off Sheet Connector"
+        ActiveBarMenu::Directives => 170.0,    // "Differential Pair"
+        ActiveBarMenu::TextTools => 140.0,     // "Text String"
+        ActiveBarMenu::Shapes => 170.0,        // "Rounded Rectangle"
+        ActiveBarMenu::NetColor => 180.0,      // "Clear All Net Colors"
+    }
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
@@ -927,28 +1080,34 @@ fn ab_icon_btn(
             .into()
     };
 
-    let icon_widget = container(icon_content).style(move |_: &Theme| {
-        let bg = if active {
-            Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30)))
-        } else {
-            Some(Background::Color(Color::TRANSPARENT))
-        };
-        container::Style {
-            background: bg,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                color: Color::TRANSPARENT,
-            },
-            ..container::Style::default()
-        }
-    });
+    // Use a button for left-click (reliable event delivery) and wrap
+    // with mouse_area for right-click (dropdown toggle).
+    let left_msg = left_click;
+    let btn = button(icon_content)
+        .padding(0)
+        .on_press(left_msg)
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => Color::from_rgb(0.26, 0.27, 0.34),
+                _ if active => Color::from_rgb(0.22, 0.23, 0.30),
+                _ => Color::TRANSPARENT,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    color: Color::TRANSPARENT,
+                },
+                ..button::Style::default()
+            }
+        });
 
-    let mut area = iced::widget::mouse_area(icon_widget).on_press(left_click);
-
-    if let Some(rc) = right_click {
-        area = area.on_right_press(rc);
-    }
+    let widget: Element<'static, ActiveBarMsg> = if let Some(rc) = right_click {
+        iced::widget::mouse_area(btn).on_right_press(rc).into()
+    } else {
+        btn.into()
+    };
 
     let tip = container(text(tooltip_text).size(11).color(Color::from_rgb(0.85, 0.85, 0.88)))
         .padding([4, 8])
@@ -962,7 +1121,7 @@ fn ab_icon_btn(
             ..container::Style::default()
         });
 
-    iced::widget::tooltip(area, tip, iced::widget::tooltip::Position::Bottom)
+    iced::widget::tooltip(widget, tip, iced::widget::tooltip::Position::Bottom)
         .gap(4)
         .into()
 }

@@ -232,6 +232,7 @@ pub fn render_schematic(
     let value_color = to_iced(&colors.value);
     let no_connect_color = to_iced(&colors.no_connect);
     let bus_color = to_iced(&colors.bus);
+    let power_color = to_iced(&colors.power);
 
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
@@ -306,6 +307,9 @@ pub fn render_schematic(
                 let dpos = field_display_pos(&val_text.position, sym);
                 text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_color);
             }
+        } else if sym.is_power {
+            // Built-in Altium-style power symbol rendering (no lib_symbol needed)
+            draw_builtin_power(frame, sym, transform, power_color, value_color);
         }
     }
 
@@ -317,5 +321,146 @@ pub fn render_schematic(
     // Z=12: Text notes
     for tn in &sheet.text_notes {
         text::draw_text_note(frame, tn, transform, to_iced(&colors.body));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Built-in Altium-style power symbol rendering
+// ---------------------------------------------------------------------------
+
+/// Draw a built-in power symbol when no lib_symbol definition exists.
+/// Renders Altium-style shapes: GND (3 horizontal lines), VCC (bar + arrow),
+/// Earth (diagonal hatch), Signal GND (triangle), generic (bar + label).
+fn draw_builtin_power(
+    frame: &mut canvas::Frame,
+    sym: &signex_types::schematic::Symbol,
+    transform: &ScreenTransform,
+    color: iced::Color,
+    label_color: iced::Color,
+) {
+    use iced::widget::canvas::path;
+
+    let px = sym.position.x;
+    let py = sym.position.y;
+    let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
+    let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+
+    // Pin line: vertical stub from anchor upward (1.27mm) — connection point
+    let pin_len = 1.27;
+    let (p0x, p0y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, 0.0));
+    let (p1x, p1y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, pin_len));
+    let s0 = transform.to_screen_point(p0x, p0y);
+    let s1 = transform.to_screen_point(p1x, p1y);
+    frame.stroke(&canvas::Path::line(s0, s1), stroke);
+
+    // Identify power type from lib_id or value
+    let id = sym.lib_id.to_lowercase();
+    let net = sym.value.to_uppercase();
+
+    if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
+        // GND: 3 horizontal lines of decreasing width
+        let bar_w = 2.54;
+        for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
+            let dy = pin_len + 0.4 * i as f64;
+            let hw = bar_w * 0.5 * frac;
+            let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, dy));
+            let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, dy));
+            let sl = transform.to_screen_point(lx, ly);
+            let sr = transform.to_screen_point(rx, ry);
+            frame.stroke(&canvas::Path::line(sl, sr), stroke);
+        }
+    } else if id.contains("gndref") {
+        // Signal GND: downward triangle
+        let hw = 1.27;
+        let tri_h = 1.27;
+        let base_y = pin_len;
+        let pts = [
+            signex_types::schematic::Point::new(-hw, base_y),
+            signex_types::schematic::Point::new(hw, base_y),
+            signex_types::schematic::Point::new(0.0, base_y + tri_h),
+        ];
+        let screen_pts: Vec<iced::Point> = pts
+            .iter()
+            .map(|p| {
+                let (wx, wy) = instance_transform(sym, p);
+                transform.to_screen_point(wx, wy)
+            })
+            .collect();
+        let tri = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(screen_pts[0]);
+            b.line_to(screen_pts[1]);
+            b.line_to(screen_pts[2]);
+            b.close();
+        });
+        frame.stroke(&tri, stroke);
+    } else if id.contains("earth") {
+        // Earth: horizontal bar + 3 diagonal hatch lines
+        let bar_w = 2.54;
+        let base_y = pin_len;
+        let hw = bar_w * 0.5;
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
+        // Diagonal hatch lines below bar
+        for i in 0..3 {
+            let x_off = -hw + (i as f64 + 0.5) * (bar_w / 3.0);
+            let (hx1, hy1) = instance_transform(
+                sym,
+                &signex_types::schematic::Point::new(x_off, base_y),
+            );
+            let (hx2, hy2) = instance_transform(
+                sym,
+                &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8),
+            );
+            frame.stroke(
+                &canvas::Path::line(
+                    transform.to_screen_point(hx1, hy1),
+                    transform.to_screen_point(hx2, hy2),
+                ),
+                stroke,
+            );
+        }
+    } else {
+        // VCC / generic power: horizontal bar at top of pin
+        let bar_w = 2.54;
+        let base_y = pin_len;
+        let hw = bar_w * 0.5;
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
+    }
+
+    // Draw value label (net name) above the symbol
+    let label_y = pin_len + 1.5;
+    let font_size_mm = 1.27;
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    if screen_font >= 1.0 {
+        let (tx, ty) = instance_transform(
+            sym,
+            &signex_types::schematic::Point::new(0.0, label_y),
+        );
+        let sp = transform.to_screen_point(tx, ty);
+        frame.fill_text(canvas::Text {
+            content: net,
+            position: sp,
+            color: label_color,
+            size: iced::Pixels(screen_font),
+            font: crate::canvas_font(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Top,
+            ..canvas::Text::default()
+        });
     }
 }
