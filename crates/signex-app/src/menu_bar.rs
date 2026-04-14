@@ -30,6 +30,12 @@ pub enum MenuMessage {
     ZoomFit,
     ToggleGrid,
     CycleGrid,
+    OpenProjectsPanel,
+    OpenComponentsPanel,
+    OpenNavigatorPanel,
+    OpenPropertiesPanel,
+    OpenMessagesPanel,
+    OpenSignalPanel,
     // Place
     PlaceWire,
     PlaceBus,
@@ -124,9 +130,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf("Toggle Grid", Some("Shift+Ctrl+G"), MenuMessage::ToggleGrid, mc),
             leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid, mc),
             separator(mc),
-            leaf_stub("Libraries", None, mc),
-            leaf_stub("Properties", None, mc),
-            leaf_stub("Messages", None, mc),
+            leaf("Projects", None, MenuMessage::OpenProjectsPanel, mc),
+            leaf("Components", None, MenuMessage::OpenComponentsPanel, mc),
+            leaf("Navigator", None, MenuMessage::OpenNavigatorPanel, mc),
+            leaf("Properties", None, MenuMessage::OpenPropertiesPanel, mc),
+            leaf("Messages", None, MenuMessage::OpenMessagesPanel, mc),
+            leaf("Signal", None, MenuMessage::OpenSignalPanel, mc),
         ]),
     );
 

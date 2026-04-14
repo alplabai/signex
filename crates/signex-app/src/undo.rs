@@ -368,26 +368,8 @@ fn move_element(sheet: &mut SchematicSheet, item: &SelectedItem, dx: f64, dy: f6
 
 /// Convert a drag delta measured in displayed field coordinates back to the
 /// stored field-coordinate delta before symbol TRANSFORM is applied.
-fn inverse_field_display_delta(sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
-    // Undo mirror (applied last in forward transform).
-    let mut tx = dx;
-    let mut ty = dy;
-    if sym.mirror_y {
-        tx = -tx;
-    }
-    if sym.mirror_x {
-        ty = -ty;
-    }
-
-    // Undo rotation: forward uses CCW rotation by sym.rotation.
-    let rad = sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let ux = tx * cos + ty * sin;
-    let uy = -tx * sin + ty * cos;
-
-    // Undo pre-rotation Y negation used by field display transform.
-    (ux, -uy)
+fn inverse_field_display_delta(_sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
+    (dx, dy)
 }
 
 /// Undo history stack with configurable depth.

@@ -970,27 +970,9 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
 
 fn field_display_pos_local(
     prop_pos: signex_types::schematic::Point,
-    sym: &signex_types::schematic::Symbol,
+    _sym: &signex_types::schematic::Symbol,
 ) -> (f32, f32) {
-    let rx = prop_pos.x - sym.position.x;
-    let ry = prop_pos.y - sym.position.y;
-    let ry_neg = -ry;
-
-    let rad = sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-
-    let mut tx = rx * cos - ry_neg * sin;
-    let mut ty = rx * sin + ry_neg * cos;
-
-    if sym.mirror_y {
-        tx = -tx;
-    }
-    if sym.mirror_x {
-        ty = -ty;
-    }
-
-    ((sym.position.x + tx) as f32, (sym.position.y + ty) as f32)
+    (prop_pos.x as f32, prop_pos.y as f32)
 }
 
 // ─── Canvas events sent to the app ────────────────────────────
