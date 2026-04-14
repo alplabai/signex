@@ -13,6 +13,22 @@ use std::sync::{OnceLock, RwLock};
 /// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PowerPortStyle {
+	KiCad,
+	#[default]
+	Altium,
+}
+
+impl std::fmt::Display for PowerPortStyle {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			PowerPortStyle::KiCad => write!(f, "KiCad"),
+			PowerPortStyle::Altium => write!(f, "Altium"),
+		}
+	}
+}
+
 #[derive(Clone, Copy)]
 struct CanvasTextConfig {
 	font_name: &'static str,
@@ -20,6 +36,7 @@ struct CanvasTextConfig {
 	size_scale: f32,
 	bold: bool,
 	italic: bool,
+	power_port_style: PowerPortStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -48,6 +65,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
 			size_scale: 1.0,
 			bold: false,
 			italic: false,
+			power_port_style: PowerPortStyle::Altium,
 		})
 	})
 }
@@ -73,6 +91,19 @@ pub fn set_canvas_font_style(bold: bool, italic: bool) {
 		cfg.italic = italic;
 		cfg.font = build_font(cfg.font_name, cfg.bold, cfg.italic);
 	}
+}
+
+pub fn set_power_port_style(style: PowerPortStyle) {
+	if let Ok(mut cfg) = canvas_text_config().write() {
+		cfg.power_port_style = style;
+	}
+}
+
+pub fn power_port_style() -> PowerPortStyle {
+	canvas_text_config()
+		.read()
+		.map(|c| c.power_port_style)
+		.unwrap_or(PowerPortStyle::Altium)
 }
 
 pub fn canvas_font() -> iced::Font {

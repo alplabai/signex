@@ -21,6 +21,7 @@ use signex_types::schematic::{LabelType, SchematicSheet};
 use signex_types::theme::CanvasColors;
 
 use crate::colors::to_iced;
+use crate::PowerPortStyle;
 
 // ---------------------------------------------------------------------------
 // ScreenTransform -- decouples rendering from the app-layer Camera
@@ -154,7 +155,6 @@ pub(super) fn field_effective_style(
 
     let orig_horiz = is_horiz(prop.rotation);
     let screen_horiz = (x1.abs() > 1e-6) ^ !orig_horiz;
-    let draw_rotation = if screen_horiz { 0.0 } else { 90.0 };
 
     let flip_h = if orig_horiz {
         if screen_horiz { x1 < 0.0 } else { x2 > 0.0 }
@@ -183,7 +183,9 @@ pub(super) fn field_effective_style(
         };
     }
 
-    (draw_rotation, h, v)
+    // Keep symbol fields horizontally readable on-screen (Altium-style)
+    // even when the symbol body is rotated.
+    (0.0, h, v)
 }
 
 /// Transform a local library-space point through a symbol instance's
@@ -233,6 +235,7 @@ pub fn render_schematic(
     let no_connect_color = to_iced(&colors.no_connect);
     let bus_color = to_iced(&colors.bus);
     let power_color = to_iced(&colors.power);
+    let power_style = crate::power_port_style();
 
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
@@ -277,6 +280,13 @@ pub fn render_schematic(
 
     // Z=10-11: Symbol bodies + pins
     for sym in &sheet.symbols {
+        if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
+            // Altium mode: always render the built-in power marker style,
+            // independent of library symbol body details.
+            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            continue;
+        }
+
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
             symbol::draw_symbol(
                 frame,
@@ -340,26 +350,34 @@ fn draw_builtin_power(
 ) {
     use iced::widget::canvas::path;
 
-    let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
+    // Keep power symbol stroke consistent with normal wire width.
+    let sw = transform.world_len(0.15).max(1.0);
     let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
 
-    // Pin line: vertical stub from anchor upward (1.27mm) — connection point
+    // GND-like symbols should point downward from anchor, VCC-like upward.
+    let id = sym.lib_id.to_lowercase();
+    let is_gnd_like = id.contains("gnd");
+    let dir = if is_gnd_like { -1.0 } else { 1.0 };
+
+    // Pin line: vertical stub from anchor toward symbol body.
     let pin_len = 1.27;
     let (p0x, p0y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, 0.0));
-    let (p1x, p1y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, pin_len));
+    let (p1x, p1y) = instance_transform(
+        sym,
+        &signex_types::schematic::Point::new(0.0, pin_len * dir),
+    );
     let s0 = transform.to_screen_point(p0x, p0y);
     let s1 = transform.to_screen_point(p1x, p1y);
     frame.stroke(&canvas::Path::line(s0, s1), stroke);
 
     // Identify power type from lib_id or value
-    let id = sym.lib_id.to_lowercase();
     let net = sym.value.to_uppercase();
 
     if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
         // GND: 3 horizontal lines of decreasing width
         let bar_w = 2.54;
         for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
-            let dy = pin_len + 0.4 * i as f64;
+            let dy = (pin_len + 0.4 * i as f64) * dir;
             let hw = bar_w * 0.5 * frac;
             let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, dy));
             let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, dy));
@@ -371,11 +389,11 @@ fn draw_builtin_power(
         // Signal GND: downward triangle
         let hw = 1.27;
         let tri_h = 1.27;
-        let base_y = pin_len;
+        let base_y = pin_len * dir;
         let pts = [
             signex_types::schematic::Point::new(-hw, base_y),
             signex_types::schematic::Point::new(hw, base_y),
-            signex_types::schematic::Point::new(0.0, base_y + tri_h),
+            signex_types::schematic::Point::new(0.0, base_y + tri_h * dir),
         ];
         let screen_pts: Vec<iced::Point> = pts
             .iter()
@@ -394,7 +412,7 @@ fn draw_builtin_power(
     } else if id.contains("earth") {
         // Earth: horizontal bar + 3 diagonal hatch lines
         let bar_w = 2.54;
-        let base_y = pin_len;
+        let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
         let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
         let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
@@ -414,7 +432,7 @@ fn draw_builtin_power(
             );
             let (hx2, hy2) = instance_transform(
                 sym,
-                &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8),
+                &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8 * dir),
             );
             frame.stroke(
                 &canvas::Path::line(
@@ -427,7 +445,7 @@ fn draw_builtin_power(
     } else {
         // VCC / generic power: horizontal bar at top of pin
         let bar_w = 2.54;
-        let base_y = pin_len;
+        let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
         let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
         let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
@@ -440,8 +458,8 @@ fn draw_builtin_power(
         );
     }
 
-    // Draw value label (net name) above the symbol
-    let label_y = pin_len + 1.5;
+    // Draw value label on the same side as symbol body.
+    let label_y = (pin_len + 1.5) * dir;
     let font_size_mm = 1.27;
     let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
     if screen_font >= 1.0 {
