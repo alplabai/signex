@@ -3,9 +3,9 @@
 use iced::Color;
 use iced::widget::canvas;
 
-use signex_types::schematic::{HAlign, TextNote, TextProp, VAlign};
+use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
-use super::ScreenTransform;
+use super::{ScreenTransform, field_effective_style};
 
 /// Draw a text note on the schematic.
 pub fn draw_text_note(
@@ -72,8 +72,8 @@ pub fn draw_text_prop(
     frame: &mut canvas::Frame,
     content: &str,
     prop: &TextProp,
+    sym: &Symbol,
     display_pos: (f64, f64),
-    mirror_x: bool,
     transform: &ScreenTransform,
     color: Color,
 ) {
@@ -86,17 +86,7 @@ pub fn draw_text_prop(
 
     let sp = transform.to_screen_point(display_pos.0, display_pos.1);
 
-    // KiCad SCH_FIELD::GetEffectiveJustify(): when symbol transform.x1 < 0
-    // (i.e. mirror_x), flip Left ↔ Right.
-    let effective_h = if mirror_x {
-        match prop.justify_h {
-            HAlign::Left => HAlign::Right,
-            HAlign::Right => HAlign::Left,
-            HAlign::Center => HAlign::Center,
-        }
-    } else {
-        prop.justify_h
-    };
+    let (draw_rotation, effective_h, effective_v) = field_effective_style(prop, sym);
 
     let h_align = match effective_h {
         HAlign::Left => iced::alignment::Horizontal::Left,
@@ -104,15 +94,14 @@ pub fn draw_text_prop(
         HAlign::Right => iced::alignment::Horizontal::Right,
     };
 
-    let v_align = match prop.justify_v {
+    let v_align = match effective_v {
         VAlign::Top => iced::alignment::Vertical::Top,
         VAlign::Center => iced::alignment::Vertical::Center,
         VAlign::Bottom => iced::alignment::Vertical::Bottom,
     };
 
-    // KiCad angle: 0 = horizontal, 90 = vertical (reads bottom-to-top = CCW).
-    // Iced CW-positive, Y-down → negate to get CCW.
-    let rad = -(prop.rotation.to_radians() as f32);
+    // Iced CW-positive, Y-down; KiCad field angles are CCW.
+    let rad = -(draw_rotation.to_radians() as f32);
 
     frame.with_save(|f| {
         f.translate(iced::Vector::new(sp.x, sp.y));

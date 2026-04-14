@@ -5,7 +5,7 @@
 
 use signex_types::schematic::*;
 
-use super::field_display_pos;
+use super::{field_display_pos, field_effective_style};
 
 /// Threshold distance in mm for considering a click "on" a thin element.
 const HIT_TOLERANCE: f64 = 1.5;
@@ -51,19 +51,18 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
     // Symbol field texts (tested before symbol body so clicking a label
     // selects the field, not the whole symbol)
     for sym in &sheet.symbols {
-        if !sym.is_power {
-            if let Some(ref ref_text) = sym.ref_text
-                && !ref_text.hidden
-                && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
-            {
-                return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
-            }
-            if let Some(ref val_text) = sym.val_text
-                && !val_text.hidden
-                && hit_text_prop(&sym.value, val_text, sym, wx, wy)
-            {
-                return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
-            }
+        if let Some(ref ref_text) = sym.ref_text
+            && !sym.is_power
+            && !ref_text.hidden
+            && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
+        }
+        if let Some(ref val_text) = sym.val_text
+            && !val_text.hidden
+            && hit_text_prop(&sym.value, val_text, sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
         }
     }
 
@@ -231,14 +230,15 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
 
     // Use display position (TRANSFORM applied), not raw stored position.
     let (disp_x, disp_y) = field_display_pos(&prop.position, sym);
+    let (draw_rotation, justify_h, _justify_v) = field_effective_style(prop, sym);
 
     // Click relative to text anchor
     let dx = wx - disp_x;
     let dy = wy - disp_y;
 
     // Rotate click into text-local space (KiCad CCW = negate in Y-down)
-    let (ldx, ldy) = if prop.rotation.abs() > 0.1 {
-        let rad = prop.rotation.to_radians();
+    let (ldx, ldy) = if draw_rotation.abs() > 0.1 {
+        let rad = draw_rotation.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
         // Rotate by +rotation to undo the text rotation
@@ -248,7 +248,7 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
     };
 
     // Text-local bounding box (depends on justification)
-    let (x_lo, x_hi) = match prop.justify_h {
+    let (x_lo, x_hi) = match justify_h {
         HAlign::Left   => (-margin, text_w + margin),
         HAlign::Right  => (-(text_w + margin), margin),
         HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),

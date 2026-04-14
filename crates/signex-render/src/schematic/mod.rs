@@ -144,6 +144,73 @@ pub(super) fn field_display_pos(
     (sym.position.x + tx, sym.position.y + ty)
 }
 
+/// Compute KiCad-like effective field draw properties under symbol TRANSFORM.
+///
+/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)` where
+/// alignment flips follow transform parity and reading direction.
+pub(super) fn field_effective_style(
+    prop: &signex_types::schematic::TextProp,
+    sym: &signex_types::schematic::Symbol,
+) -> (
+    f64,
+    signex_types::schematic::HAlign,
+    signex_types::schematic::VAlign,
+) {
+    use signex_types::schematic::{HAlign, VAlign};
+
+    let is_horiz = |angle: f64| {
+        let a = angle.rem_euclid(180.0);
+        a < 0.1 || (180.0 - a) < 0.1
+    };
+
+    let rad = sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let sx = if sym.mirror_x { -1.0 } else { 1.0 };
+    let sy = if sym.mirror_y { -1.0 } else { 1.0 };
+
+    // Matrix for field display transform:
+    // [tx]   [x1 x2] [rx]
+    // [ty] = [y1 y2] [ry]
+    let x1 = sy * cos;
+    let x2 = sy * sin;
+    let y1 = sx * sin;
+    let y2 = -sx * cos;
+
+    let orig_horiz = is_horiz(prop.rotation);
+    let screen_horiz = (x1.abs() > 1e-6) ^ !orig_horiz;
+    let draw_rotation = if screen_horiz { 0.0 } else { 90.0 };
+
+    let flip_h = if orig_horiz {
+        if screen_horiz { x1 < 0.0 } else { x2 > 0.0 }
+    } else if screen_horiz {
+        y1 > 0.0
+    } else {
+        y2 < 0.0
+    };
+
+    let mut h = prop.justify_h;
+    if flip_h {
+        h = match h {
+            HAlign::Left => HAlign::Right,
+            HAlign::Right => HAlign::Left,
+            HAlign::Center => HAlign::Center,
+        };
+    }
+
+    let mut v = prop.justify_v;
+    let det = x1 * y2 - x2 * y1;
+    if det < 0.0 && (orig_horiz == (x1 > 0.0)) {
+        v = match v {
+            VAlign::Top => VAlign::Bottom,
+            VAlign::Bottom => VAlign::Top,
+            VAlign::Center => VAlign::Center,
+        };
+    }
+
+    (draw_rotation, h, v)
+}
+
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
 pub(super) fn instance_transform(
@@ -254,7 +321,7 @@ pub fn render_schematic(
                 && !sym.is_power
             {
                 let dpos = field_display_pos(&ref_text.position, sym);
-                text::draw_text_prop(frame, &sym.reference, ref_text, dpos, sym.mirror_x, transform, reference_color);
+                text::draw_text_prop(frame, &sym.reference, ref_text, sym, dpos, transform, reference_color);
             }
 
             // Value text
@@ -262,7 +329,7 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(frame, &sym.value, val_text, dpos, sym.mirror_x, transform, value_color);
+                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_color);
             }
         }
     }

@@ -449,7 +449,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                             }
                         }
                         if state.move_dragging {
-                            state.move_current = Some((wx, wy));
+                            let (mx, my) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                                let g = self.snap_grid_mm;
+                                ((wx / g).round() * g, (wy / g).round() * g)
+                            } else {
+                                (wx, wy)
+                            };
+                            state.move_current = Some((mx, my));
                         }
                     }
 
@@ -728,51 +734,98 @@ impl canvas::Program<Message> for SchematicCanvas {
             }
 
             // Drag-to-move preview: show translucent outlines at offset
-            if state.move_dragging {
-                if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
-                    let dx = (current.0 - origin.0) as f32;
-                    let dy = (current.1 - origin.1) as f32;
-                    let move_color = Color::from_rgba(0.3, 0.7, 1.0, 0.5);
-                    let move_stroke = canvas::Stroke::default()
-                        .with_color(move_color)
-                        .with_width(1.5);
-                    if let Some(ref sheet) = self.schematic {
-                        for sel in &self.selected {
-                            // Draw a simple marker at the moved position
-                            let pos = match sel.kind {
-                                signex_types::schematic::SelectedKind::Symbol => sheet
-                                    .symbols
-                                    .iter()
-                                    .find(|s| s.uuid == sel.uuid)
-                                    .map(|s| (s.position.x as f32, s.position.y as f32)),
-                                signex_types::schematic::SelectedKind::Wire => sheet
-                                    .wires
-                                    .iter()
-                                    .find(|w| w.uuid == sel.uuid)
-                                    .map(|w| {
-                                        (
-                                            ((w.start.x + w.end.x) / 2.0) as f32,
-                                            ((w.start.y + w.end.y) / 2.0) as f32,
-                                        )
-                                    }),
-                                signex_types::schematic::SelectedKind::Label => sheet
-                                    .labels
-                                    .iter()
-                                    .find(|l| l.uuid == sel.uuid)
-                                    .map(|l| (l.position.x as f32, l.position.y as f32)),
+            if state.move_dragging
+                && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
+            {
+                let dx = (current.0 - origin.0) as f32;
+                let dy = (current.1 - origin.1) as f32;
+                let move_color = Color::from_rgba(0.3, 0.7, 1.0, 0.5);
+                let move_stroke = canvas::Stroke::default()
+                    .with_color(move_color)
+                    .with_width(1.5);
+                if let Some(ref sheet) = self.schematic {
+                    for sel in &self.selected {
+                        if matches!(
+                            sel.kind,
+                            signex_types::schematic::SelectedKind::SymbolRefField
+                                | signex_types::schematic::SelectedKind::SymbolValField
+                        ) && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == sel.uuid)
+                        {
+                            let prop = match sel.kind {
+                                signex_types::schematic::SelectedKind::SymbolRefField => {
+                                    sym.ref_text.as_ref()
+                                }
+                                signex_types::schematic::SelectedKind::SymbolValField => {
+                                    sym.val_text.as_ref()
+                                }
                                 _ => None,
                             };
-                            if let Some((px, py)) = pos {
-                                let screen = state.camera.world_to_screen(
-                                    iced::Point::new(px + dx, py + dy),
+
+                            if let Some(prop) = prop {
+                                let (fx, fy) = field_display_pos_local(prop.position, sym);
+                                let anchor = state.camera.world_to_screen(
+                                    iced::Point::new(sym.position.x as f32, sym.position.y as f32),
                                     bounds,
                                 );
+                                let moved = state.camera.world_to_screen(
+                                    iced::Point::new(fx + dx, fy + dy),
+                                    bounds,
+                                );
+
+                                let guide = canvas::Path::line(anchor, moved);
+                                frame.stroke(
+                                    &guide,
+                                    canvas::Stroke::default()
+                                        .with_color(Color::from_rgba(0.3, 0.7, 1.0, 0.35))
+                                        .with_width(1.0),
+                                );
+
+                                let anchor_circle = canvas::Path::circle(anchor, 3.0);
+                                frame.fill(&anchor_circle, Color::from_rgba(0.3, 0.7, 1.0, 0.65));
+
                                 let rect = canvas::Path::rectangle(
-                                    iced::Point::new(screen.x - 6.0, screen.y - 6.0),
-                                    iced::Size::new(12.0, 12.0),
+                                    iced::Point::new(moved.x - 7.0, moved.y - 7.0),
+                                    iced::Size::new(14.0, 14.0),
                                 );
                                 frame.stroke(&rect, move_stroke);
+                                continue;
                             }
+                        }
+
+                        // Draw a simple marker at the moved position
+                        let pos = match sel.kind {
+                            signex_types::schematic::SelectedKind::Symbol => sheet
+                                .symbols
+                                .iter()
+                                .find(|s| s.uuid == sel.uuid)
+                                .map(|s| (s.position.x as f32, s.position.y as f32)),
+                            signex_types::schematic::SelectedKind::Wire => sheet
+                                .wires
+                                .iter()
+                                .find(|w| w.uuid == sel.uuid)
+                                .map(|w| {
+                                    (
+                                        ((w.start.x + w.end.x) / 2.0) as f32,
+                                        ((w.start.y + w.end.y) / 2.0) as f32,
+                                    )
+                                }),
+                            signex_types::schematic::SelectedKind::Label => sheet
+                                .labels
+                                .iter()
+                                .find(|l| l.uuid == sel.uuid)
+                                .map(|l| (l.position.x as f32, l.position.y as f32)),
+                            _ => None,
+                        };
+                        if let Some((px, py)) = pos {
+                            let screen =
+                                state
+                                    .camera
+                                    .world_to_screen(iced::Point::new(px + dx, py + dy), bounds);
+                            let rect = canvas::Path::rectangle(
+                                iced::Point::new(screen.x - 6.0, screen.y - 6.0),
+                                iced::Size::new(12.0, 12.0),
+                            );
+                            frame.stroke(&rect, move_stroke);
                         }
                     }
                 }
@@ -913,6 +966,31 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
         return Some(ActiveBarMenu::NetColor);
     }
     None
+}
+
+fn field_display_pos_local(
+    prop_pos: signex_types::schematic::Point,
+    sym: &signex_types::schematic::Symbol,
+) -> (f32, f32) {
+    let rx = prop_pos.x - sym.position.x;
+    let ry = prop_pos.y - sym.position.y;
+    let ry_neg = -ry;
+
+    let rad = sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+
+    let mut tx = rx * cos - ry_neg * sin;
+    let mut ty = rx * sin + ry_neg * cos;
+
+    if sym.mirror_y {
+        tx = -tx;
+    }
+    if sym.mirror_x {
+        ty = -ty;
+    }
+
+    ((sym.position.x + tx) as f32, (sym.position.y + ty) as f32)
 }
 
 // ─── Canvas events sent to the app ────────────────────────────
