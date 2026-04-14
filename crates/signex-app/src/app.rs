@@ -92,6 +92,7 @@ pub enum Message {
     ClosePreferences,
     PreferencesNav(crate::preferences::PrefNav),
     PreferencesMsg(crate::preferences::PrefMsg),
+    WindowResized(f32, f32),
     Noop,
 }
 
@@ -185,6 +186,10 @@ pub struct Signex {
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
+    /// Mouse position when a tab drag started (for undock threshold).
+    pub tab_drag_origin: Option<(f32, f32)>,
+    /// Current window size for dock-zone detection.
+    pub window_size: (f32, f32),
     // v0.5: Undo/Redo
     pub undo_stack: crate::undo::UndoStack,
     // v0.5: Wire drawing state
@@ -382,6 +387,18 @@ impl Signex {
                         }
                     }
                 }
+                // Tab drag-to-undock: if mouse moved >20px from press origin, undock the tab.
+                if let (Some((pos, idx)), Some((ox, oy))) =
+                    (self.dock.tab_drag, self.tab_drag_origin)
+                {
+                    let dx = x - ox;
+                    let dy = y - oy;
+                    if (dx * dx + dy * dy).sqrt() > 20.0 {
+                        self.dock
+                            .update(DockMessage::UndockPanel(pos, idx));
+                        self.tab_drag_origin = None;
+                    }
+                }
                 // Move floating panels that are being dragged
                 for fp in &mut self.dock.floating {
                     if fp.dragging {
@@ -398,10 +415,42 @@ impl Signex {
                 self.dragging = None;
                 self.drag_start_pos = None;
             }
+            Message::WindowResized(w, h) => {
+                self.window_size = (w, h);
+            }
             Message::DragEnd => {
-                // Stop floating panel drags
-                for fp in &mut self.dock.floating {
-                    fp.dragging = false;
+                // Clear tab drag state
+                self.dock.tab_drag = None;
+                self.tab_drag_origin = None;
+                // Dock floating panels if dragged to an edge zone
+                let (mx, my) = self.last_mouse_pos;
+                let (ww, wh) = self.window_size;
+                let dock_zone = 120.0;
+                let has_dragging = self.dock.floating.iter().any(|fp| fp.dragging);
+                #[cfg(debug_assertions)]
+                eprintln!("[dock-end] mouse=({mx:.0},{my:.0}) win=({ww:.0},{wh:.0}) floating={} dragging={has_dragging}",
+                    self.dock.floating.len());
+                if let Some(drag_idx) = self.dock.floating.iter().position(|fp| fp.dragging) {
+                    let target = if mx < dock_zone {
+                        Some(PanelPosition::Left)
+                    } else if mx > ww - dock_zone {
+                        Some(PanelPosition::Right)
+                    } else if my > wh - dock_zone {
+                        Some(PanelPosition::Bottom)
+                    } else {
+                        None
+                    };
+                    #[cfg(debug_assertions)]
+                    eprintln!("[dock-end] target={target:?}");
+                    if let Some(pos) = target {
+                        self.dock.update(DockMessage::DockFloatingTo(drag_idx, pos));
+                    } else {
+                        self.dock.floating[drag_idx].dragging = false;
+                    }
+                } else {
+                    for fp in &mut self.dock.floating {
+                        fp.dragging = false;
+                    }
                 }
             }
             Message::GridCycle => {
@@ -1247,6 +1296,36 @@ impl Signex {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                    crate::dock::DockMessage::TabDragStart(..) => {
+                        self.tab_drag_origin = Some(self.last_mouse_pos);
+                    }
+                    crate::dock::DockMessage::FloatingDragEnd(idx) => {
+                        let idx = *idx;
+                        // Detect dock zone from floating panel position
+                        if let Some(fp) = self.dock.floating.get(idx) {
+                            let (ww, wh) = self.window_size;
+                            let zone = 120.0;
+                            let cx = fp.x + fp.width / 2.0;
+                            let cy = fp.y + fp.height / 4.0;
+                            let target = if cx < zone {
+                                Some(PanelPosition::Left)
+                            } else if cx > ww - zone {
+                                Some(PanelPosition::Right)
+                            } else if cy > wh - zone {
+                                Some(PanelPosition::Bottom)
+                            } else {
+                                None
+                            };
+                            eprintln!("[dock-back] fp=({:.0},{:.0}) win=({ww:.0},{wh:.0}) target={target:?}",
+                                fp.x, fp.y);
+                            if let Some(pos) = target {
+                                self.dock.update(
+                                    DockMessage::DockFloatingTo(idx, pos),
+                                );
+                                return Task::none();
                             }
                         }
                     }
@@ -2728,19 +2807,18 @@ impl Signex {
             );
         }
 
-        // Active Bar dropdown overlay
+        // Active Bar dropdown overlay — no width constraint, Iced auto-sizes.
         if let Some(ab_menu) = self.active_bar_menu {
             let dropdown = crate::active_bar::view_dropdown(ab_menu, &self.panel_ctx.tokens, &self.selection_filters).map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
             let ab_y: f32 =
                 24.0 + 28.0 + if self.tabs.is_empty() { 0.0 } else { 28.0 } + 36.0;
             let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
-            // The dropdown may be wider than (bar_w - x_off). Use a wider
-            // centered container and adjust x_off so the dropdown still
-            // lines up with the correct button.
-            let dd_w = crate::active_bar::dropdown_min_width(ab_menu);
-            let row_w = (x_off + dd_w).max(bar_w);
-            let adjusted_x = x_off + (row_w - bar_w) / 2.0;
+            // Position: center the active bar width, then offset inside it.
+            // Use window width so the dropdown is never squeezed.
+            let (ww, _) = self.window_size;
+            let inner_w = ww;
+            let adjusted_x = x_off + (inner_w - bar_w) / 2.0;
 
             layers.push(Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
@@ -2749,7 +2827,7 @@ impl Signex {
                 container(column![
                     iced::widget::Space::new().height(ab_y),
                     container(row![iced::widget::Space::new().width(adjusted_x), dropdown])
-                        .width(row_w),
+                        .width(inner_w),
                 ])
                 .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -2778,8 +2856,19 @@ impl Signex {
         // Panel list popup (bottom-right)
         if self.panel_list_open {
             let text_c = crate::styles::ti(self.panel_ctx.tokens.text);
+            let has_sch = self.panel_ctx.has_schematic;
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
+                .filter(|&&kind| {
+                    if kind.needs_schematic() && !has_sch {
+                        return false;
+                    }
+                    // PCB panels hidden until a PCB document is open (future)
+                    if kind.needs_pcb() {
+                        return false;
+                    }
+                    true
+                })
                 .map(|&kind| {
                     iced::widget::button(
                         iced::widget::text(kind.label().to_string())
@@ -2814,15 +2903,66 @@ impl Signex {
             );
         }
 
-        // Floating panels
+        // Dock-zone highlight: show target region when dragging a floating panel near an edge
+        if let Some(fp) = self.dock.floating.iter().find(|fp| fp.dragging) {
+            let (ww, wh) = self.window_size;
+            let zone = 120.0;
+            let cx = fp.x + fp.width / 2.0;
+            let cy = fp.y + fp.height / 4.0;
+            let zone_style = crate::styles::dock_zone_highlight(&self.panel_ctx.tokens);
+            if cx < zone {
+                layers.push(
+                    container(iced::widget::Space::new())
+                        .width(self.left_width)
+                        .height(Length::Fill)
+                        .style(zone_style)
+                        .into(),
+                );
+            } else if cx > ww - zone {
+                layers.push(
+                    row![
+                        iced::widget::Space::new().width(Length::Fill),
+                        container(iced::widget::Space::new())
+                            .width(self.right_width)
+                            .height(Length::Fill)
+                            .style(zone_style),
+                    ]
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into(),
+                );
+            } else if cy > wh - zone {
+                layers.push(
+                    column![
+                        iced::widget::Space::new().height(Length::Fill),
+                        container(iced::widget::Space::new())
+                            .width(Length::Fill)
+                            .height(self.bottom_height)
+                            .style(zone_style),
+                    ]
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into(),
+                );
+            }
+        }
+
+        // Floating panels — display position clamped so the panel is never
+        // squeezed by the layout engine; the real fp.x/fp.y remain unclamped
+        // so dock-zone detection works correctly at any drag position.
+        let (ww, wh) = self.window_size;
         for i in 0..self.dock.floating.len() {
             if let Some(panel_widget) = self.dock.view_floating_panel(i, &self.panel_ctx) {
                 let fp = &self.dock.floating[i];
+                // Clamp display X so the panel never loses width
+                let max_x = (ww - fp.width).max(0.0);
+                let px = fp.x.clamp(0.0, max_x);
+                let py = fp.y.clamp(0.0, wh - 40.0).max(0.0);
                 layers.push(
                     column![
-                        iced::widget::Space::new().height(fp.y),
+                        iced::widget::Space::new().height(py),
                         row![
-                            iced::widget::Space::new().width(fp.x),
+                            iced::widget::Space::new().width(px),
                             panel_widget.map(Message::Dock),
                         ],
                     ]

@@ -165,6 +165,19 @@ pub fn floating_panel_shadow(_tokens: &ThemeTokens) -> impl Fn(&Theme) -> contai
     }
 }
 
+/// Translucent highlight overlay shown on dock regions when a floating panel
+/// is dragged near a window edge.
+pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let accent = ti(tokens.accent);
+    move |_| container::Style {
+        background: Some(Background::Color(Color::from_rgba(
+            accent.r, accent.g, accent.b, 0.15,
+        ))),
+        border: Border { width: 2.0, radius: 4.0.into(), color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4) },
+        ..container::Style::default()
+    }
+}
+
 // ─── Button styles ────────────────────────────────────────────
 
 /// Dock tab button — active state gets highlighted bg + border.
@@ -182,6 +195,17 @@ pub fn dock_tab(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme, button
             border: Border { width: 1.0, radius: 0.0.into(), color: border },
             ..button::Style::default()
         }
+    }
+}
+
+/// Container-based dock tab (used with mouse_area for drag-to-undock).
+pub fn dock_tab_container(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme) -> container::Style + 'static {
+    let tab_active = ti(tokens.hover);
+    let border = ti(tokens.border);
+    move |_: &Theme| container::Style {
+        background: if is_active { Some(Background::Color(tab_active)) } else { None },
+        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        ..container::Style::default()
     }
 }
 
