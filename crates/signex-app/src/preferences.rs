@@ -6,6 +6,7 @@
 
 use iced::widget::{button, column, container, row, scrollable, text, Space};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use signex_render::PowerPortStyle;
 use signex_types::theme::ThemeId;
 
 use crate::fonts;
@@ -50,6 +51,8 @@ pub enum PrefMsg {
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
     DraftFont(String),
+    /// Update draft power port drawing style (applies as live preview).
+    DraftPowerPortStyle(PowerPortStyle),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -97,10 +100,19 @@ pub fn view<'a>(
     draft_theme: ThemeId,
     saved_theme: ThemeId,
     draft_font: &str,
+    draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
 ) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(nav, draft_theme, saved_theme, draft_font, custom_name, dirty);
+    let dialog = build_dialog(
+        nav,
+        draft_theme,
+        saved_theme,
+        draft_font,
+        draft_power_port_style,
+        custom_name,
+        dirty,
+    );
 
     container(
         column![
@@ -131,6 +143,7 @@ fn build_dialog<'a>(
     draft_theme: ThemeId,
     saved_theme: ThemeId,
     draft_font: &str,
+    draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
 ) -> Element<'a, PrefMsg> {
@@ -169,7 +182,14 @@ fn build_dialog<'a>(
                 background: Some(Background::Color(SEP)),
                 ..container::Style::default()
             }),
-        build_content(nav, draft_theme, saved_theme, draft_font, custom_name),
+        build_content(
+            nav,
+            draft_theme,
+            saved_theme,
+            draft_font,
+            draft_power_port_style,
+            custom_name,
+        ),
     ]
     .width(Length::Fill)
     .height(Length::Fill);
@@ -300,10 +320,17 @@ fn build_content<'a>(
     draft_theme: ThemeId,
     saved_theme: ThemeId,
     draft_font: &str,
+    draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
-        PrefNav::Appearance => content_appearance(draft_theme, saved_theme, draft_font, custom_name),
+        PrefNav::Appearance => content_appearance(
+            draft_theme,
+            saved_theme,
+            draft_font,
+            draft_power_port_style,
+            custom_name,
+        ),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -323,6 +350,7 @@ fn content_appearance<'a>(
     draft_theme: ThemeId,
     _saved_theme: ThemeId,
     draft_font: &str,
+    draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -415,6 +443,38 @@ fn content_appearance<'a>(
             },
         ]
         .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Power Port Symbols ──
+    col = col.push(section_title("Power Ports"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Power Port Style").size(12).color(TEXT_PRI),
+                text("Choose how power symbols are rendered on canvas.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                [PowerPortStyle::Altium, PowerPortStyle::KiCad],
+                Some(draft_power_port_style),
+                PrefMsg::DraftPowerPortStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(12));
+    col = col.push(
+        text("Altium changes only rendering view. KiCad preserves library symbol appearance.")
+            .size(10)
+            .color(TEXT_MUT),
     );
     col = col.push(Space::new().height(20));
 

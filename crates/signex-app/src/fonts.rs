@@ -11,6 +11,8 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use signex_render::PowerPortStyle;
+
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
 
@@ -95,6 +97,45 @@ pub fn write_ui_font_pref(font_name: &str) {
         .unwrap_or(serde_json::json!({}));
 
     json["ui_font"] = serde_json::Value::String(font_name.to_string());
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read `power_port_style` from preferences file.
+/// Defaults to `Altium` when missing or invalid.
+pub fn read_power_port_style_pref() -> PowerPortStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return PowerPortStyle::Altium;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return PowerPortStyle::Altium;
+    };
+
+    match json["power_port_style"].as_str().unwrap_or("altium") {
+        "kicad" | "KiCad" => PowerPortStyle::KiCad,
+        _ => PowerPortStyle::Altium,
+    }
+}
+
+/// Persist power port style without clobbering other preference keys.
+pub fn write_power_port_style_pref(style: PowerPortStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    json["power_port_style"] = serde_json::Value::String(match style {
+        PowerPortStyle::KiCad => "kicad".to_string(),
+        PowerPortStyle::Altium => "altium".to_string(),
+    });
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
