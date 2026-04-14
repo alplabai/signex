@@ -10,6 +10,7 @@ pub enum ToolMessage {
     SelectTool(Tool),
 }
 
+#[allow(dead_code)]
 fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, ToolMessage> {
     let is_active = tool == active;
     let text_c = if is_active {
@@ -37,6 +38,7 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
     btn.into()
 }
 
+#[allow(dead_code)]
 pub fn view(active: Tool) -> Element<'static, ToolMessage> {
     let sep = || text("|").size(10).color(Color::from_rgb(0.30, 0.31, 0.36));
 

@@ -218,6 +218,7 @@ pub enum PanelMsg {
     /// Pre-placement: update designator field.
     SetPrePlacementDesignator(String),
     /// Pre-placement: update rotation.
+    #[allow(dead_code)]
     SetPrePlacementRotation(f64),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
@@ -228,6 +229,7 @@ pub enum PanelMsg {
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
+    #[allow(dead_code)]
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),
@@ -1621,6 +1623,7 @@ fn form_check_row<'a>(
 }
 
 /// Form row: label | pick_list for grid size presets (2.54 mm multiples).
+#[allow(dead_code)]
 fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
     use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
     // Find the label that matches the current value (fallback to first).

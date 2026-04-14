@@ -45,6 +45,7 @@ pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
 }
 
 /// Active Bar strip (centered toolbar above canvas)
+#[allow(dead_code)]
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.statusbar_bg);
     move |_| container::Style {
