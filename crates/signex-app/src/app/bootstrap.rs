@@ -97,6 +97,8 @@ impl Signex {
             dragging: None,
             drag_start_pos: None,
             drag_start_size: 0.0,
+            tab_drag_origin: None,
+            window_size: (1400.0, 900.0),
             undo_stack: crate::undo::UndoStack::new(100),
             wire_points: Vec::new(),
             wire_drawing: false,
@@ -295,7 +297,9 @@ impl Signex {
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
         // app updates when idle, which noticeably hurts smoothness on macOS.
-        let drag_active = self.dragging.is_some() || self.dock.floating.iter().any(|fp| fp.dragging);
+        let drag_active = self.dragging.is_some()
+            || self.dock.tab_drag.is_some()
+            || self.dock.floating.iter().any(|fp| fp.dragging);
         let mouse_sub = if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
@@ -308,6 +312,9 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
                     Message::CloseContextMenu
                 }
+                iced::Event::Window(iced::window::Event::Resized(size)) => {
+                    Message::WindowResized(size.width, size.height)
+                }
                 _ => Message::Noop,
             })
         } else {
@@ -315,6 +322,9 @@ impl Signex {
                 // Any click dismisses context menu
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
                     Message::CloseContextMenu
+                }
+                iced::Event::Window(iced::window::Event::Resized(size)) => {
+                    Message::WindowResized(size.width, size.height)
                 }
                 _ => Message::Noop,
             })

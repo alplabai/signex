@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Column, Space, button, canvas, column, container, row, svg, text};
+use iced::widget::{Column, Space, button, canvas, column, container, mouse_area, row, svg, text};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
 use crate::panels::{self, PanelKind, PanelMsg};
@@ -49,15 +49,25 @@ pub enum DockMessage {
     SelectTab(PanelPosition, usize),
     ToggleCollapse(PanelPosition),
     ClosePanel(PanelPosition, usize),
-    /// Undock a panel to floating (double-click on tab).
+    /// Undock a panel to floating (drag tab out).
     UndockPanel(PanelPosition, usize),
+    /// Mouse down on a tab — starts potential drag-to-undock.
+    TabDragStart(PanelPosition, usize),
+    /// Mouse up on a tab — if no drag happened, select it.
+    TabClick(PanelPosition, usize),
+    /// Scroll tabs left/right when they overflow the panel width.
+    TabScroll(PanelPosition, i32),
     /// Move a floating panel by delta.
     #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
     /// Start dragging a floating panel.
     StartDragFloating(usize),
+    /// Mouse released after dragging a floating panel — try to dock at mouse pos.
+    FloatingDragEnd(usize),
     /// Re-dock a floating panel (close floating → add to right dock).
     DockFloating(usize),
+    /// Re-dock a floating panel to a specific region.
+    DockFloatingTo(usize, PanelPosition),
     Panel(PanelMsg),
 }
 
@@ -76,6 +86,8 @@ struct DockRegion {
     panels: Vec<PanelKind>,
     active: usize,
     collapsed: bool,
+    /// First visible tab index (for overflow scrolling).
+    tab_offset: usize,
 }
 
 pub struct DockArea {
@@ -83,6 +95,8 @@ pub struct DockArea {
     right: DockRegion,
     bottom: DockRegion,
     pub floating: Vec<FloatingPanel>,
+    /// Active tab drag: (region, tab index). Set on mouse-down, cleared on release or undock.
+    pub tab_drag: Option<(PanelPosition, usize)>,
 }
 
 impl DockArea {
@@ -92,18 +106,22 @@ impl DockArea {
                 panels: Vec::new(),
                 active: 0,
                 collapsed: false,
+                tab_offset: 0,
             },
             right: DockRegion {
                 panels: Vec::new(),
                 active: 0,
                 collapsed: false,
+                tab_offset: 0,
             },
             bottom: DockRegion {
                 panels: Vec::new(),
                 active: 0,
                 collapsed: false,
+                tab_offset: 0,
             },
             floating: Vec::new(),
+            tab_drag: None,
         }
     }
 
@@ -132,6 +150,16 @@ impl DockArea {
                     region.collapsed = false;
                 }
             }
+            DockMessage::TabScroll(pos, delta) => {
+                let region = match pos {
+                    PanelPosition::Left => &mut self.left,
+                    PanelPosition::Right => &mut self.right,
+                    PanelPosition::Bottom => &mut self.bottom,
+                };
+                let new_off = region.tab_offset as i32 + delta;
+                let max_off = region.panels.len().saturating_sub(1) as i32;
+                region.tab_offset = new_off.clamp(0, max_off) as usize;
+            }
             DockMessage::ToggleCollapse(pos) => {
                 let region = match pos {
                     PanelPosition::Left => &mut self.left,
@@ -153,7 +181,26 @@ impl DockArea {
                     }
                 }
             }
+            DockMessage::TabDragStart(pos, idx) => {
+                self.tab_drag = Some((pos, idx));
+            }
+            DockMessage::TabClick(pos, idx) => {
+                // Mouse-up on tab: if no drag undocked it, treat as click → select.
+                if self.tab_drag.is_some() {
+                    self.tab_drag = None;
+                    let region = match pos {
+                        PanelPosition::Left => &mut self.left,
+                        PanelPosition::Right => &mut self.right,
+                        PanelPosition::Bottom => &mut self.bottom,
+                    };
+                    if idx < region.panels.len() {
+                        region.active = idx;
+                        region.collapsed = false;
+                    }
+                }
+            }
             DockMessage::UndockPanel(pos, idx) => {
+                self.tab_drag = None;
                 let region = match pos {
                     PanelPosition::Left => &mut self.left,
                     PanelPosition::Right => &mut self.right,
@@ -164,20 +211,26 @@ impl DockArea {
                     if region.active >= region.panels.len() && region.active > 0 {
                         region.active -= 1;
                     }
-                    // Create floating panel at center of screen
+                    // Create floating panel at cursor position
                     self.floating.push(FloatingPanel {
                         kind,
                         x: 300.0,
                         y: 150.0,
                         width: 280.0,
                         height: 400.0,
-                        dragging: false,
+                        dragging: true, // start dragging immediately
                     });
                 }
             }
             DockMessage::StartDragFloating(idx) => {
                 if let Some(fp) = self.floating.get_mut(idx) {
                     fp.dragging = true;
+                }
+            }
+            DockMessage::FloatingDragEnd(idx) => {
+                // Stop the drag; dock-zone detection handled by app before this.
+                if let Some(fp) = self.floating.get_mut(idx) {
+                    fp.dragging = false;
                 }
             }
             DockMessage::MoveFloating(idx, dx, dy) => {
@@ -189,12 +242,26 @@ impl DockArea {
             DockMessage::DockFloating(idx) => {
                 if idx < self.floating.len() {
                     let fp = self.floating.remove(idx);
-                    // Re-dock to right panel
                     if !self.right.panels.contains(&fp.kind) {
                         self.right.panels.push(fp.kind);
                         self.right.active = self.right.panels.len() - 1;
                         self.right.collapsed = false;
                     }
+                }
+            }
+            DockMessage::DockFloatingTo(idx, target) => {
+                if idx < self.floating.len() {
+                    let fp = self.floating.remove(idx);
+                    let region = match target {
+                        PanelPosition::Left => &mut self.left,
+                        PanelPosition::Right => &mut self.right,
+                        PanelPosition::Bottom => &mut self.bottom,
+                    };
+                    if !region.panels.contains(&fp.kind) {
+                        region.panels.push(fp.kind);
+                    }
+                    region.active = region.panels.iter().position(|k| *k == fp.kind).unwrap_or(0);
+                    region.collapsed = false;
                 }
             }
             // Panel messages are handled by app.rs before reaching here.
@@ -220,6 +287,48 @@ impl DockArea {
         }
     }
 
+    pub fn locate_panel(&self, kind: PanelKind) -> Option<&'static str> {
+        if self.left.panels.contains(&kind) {
+            Some("Left")
+        } else if self.right.panels.contains(&kind) {
+            Some("Right")
+        } else if self.bottom.panels.contains(&kind) {
+            Some("Bottom")
+        } else if self.floating.iter().any(|panel| panel.kind == kind) {
+            Some("Floating")
+        } else {
+            None
+        }
+    }
+
+    pub fn focus_panel(&mut self, kind: PanelKind) -> bool {
+        if let Some(index) = self.left.panels.iter().position(|panel| *panel == kind) {
+            self.left.active = index;
+            self.left.collapsed = false;
+            return true;
+        }
+
+        if let Some(index) = self.right.panels.iter().position(|panel| *panel == kind) {
+            self.right.active = index;
+            self.right.collapsed = false;
+            return true;
+        }
+
+        if let Some(index) = self.bottom.panels.iter().position(|panel| *panel == kind) {
+            self.bottom.active = index;
+            self.bottom.collapsed = false;
+            return true;
+        }
+
+        if let Some(index) = self.floating.iter().position(|panel| panel.kind == kind) {
+            let panel = self.floating.remove(index);
+            self.floating.push(panel);
+            return true;
+        }
+
+        false
+    }
+
     pub fn view_region<'a>(
         &'a self,
         position: PanelPosition,
@@ -239,10 +348,30 @@ impl DockArea {
             return self.view_rail(position, region, ctx);
         }
 
-        // ── Altium-style flat tabs with accent underline ──
-        let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
+        // ── Altium-style flat tabs with accent underline + overflow scroll ──
+        let total_tabs = region.panels.len();
+        let offset = region.tab_offset.min(total_tabs.saturating_sub(1));
+        let has_overflow = total_tabs > 3;
+        let can_scroll_left = offset > 0;
+        let can_scroll_right = offset + 3 < total_tabs;
 
-        for (i, panel) in region.panels.iter().enumerate() {
+        let mut tab_row = row![]
+            .spacing(0.0)
+            .align_y(iced::Alignment::End);
+
+        // Left scroll arrow (only when tabs are scrolled)
+        if has_overflow {
+            let arrow = button(text("<").size(10))
+                .padding([4, 4])
+                .style(button::text);
+            tab_row = tab_row.push(if can_scroll_left {
+                arrow.on_press(DockMessage::TabScroll(position, -1))
+            } else {
+                arrow
+            });
+        }
+
+        for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
             let is_active = i == region.active;
 
@@ -257,22 +386,35 @@ impl DockArea {
                 iced::Color::TRANSPARENT
             };
 
-            let label_el = container(text(label).size(11).color(text_c)).padding([5, 10]);
-            let underline = container(Space::new())
-                .height(2.0)
-                .width(Length::Fill)
-                .style(styles::tab_underline(line_c));
+            // No manual width — Iced's layout engine measures the text.
+            // The accent underline is done via bottom-padding on an outer
+            // container whose background is the accent color, avoiding
+            // Length::Fill which would expand the tab to the panel width.
+            let label_el = container(text(label).size(11).color(text_c))
+                .padding([5, 10])
+                .style(styles::dock_tab_container(&ctx.tokens, is_active));
+            let tab = mouse_area(
+                container(label_el)
+                    .padding(iced::Padding { top: 0.0, right: 0.0, bottom: 2.0, left: 0.0 })
+                    .style(styles::tab_underline(line_c)),
+            )
+            .on_press(DockMessage::TabDragStart(position, i))
+            .on_release(DockMessage::TabClick(position, i));
 
-            let btn = button(column![label_el, underline].spacing(0))
-                .padding(0)
-                .on_press(DockMessage::SelectTab(position, i))
-                .style(styles::dock_tab(&ctx.tokens, is_active));
-
-            tab_row = tab_row.push(btn);
+            tab_row = tab_row.push(tab);
         }
 
-        // Spacer to push buttons right
-        tab_row = tab_row.push(Space::new().width(Length::Fill));
+        // Right scroll arrow (only when more tabs are hidden)
+        if has_overflow {
+            let arrow = button(text(">").size(10))
+                .padding([4, 4])
+                .style(button::text);
+            tab_row = tab_row.push(if can_scroll_right {
+                arrow.on_press(DockMessage::TabScroll(position, 1))
+            } else {
+                arrow
+            });
+        }
 
         // Collapse button (SVG icon)
         let collapse_icon = match position {
@@ -280,28 +422,25 @@ impl DockArea {
             PanelPosition::Right => svg_icon(&H_COLLAPSE_RIGHT),
             PanelPosition::Bottom => svg_icon(&H_COLLAPSE_DOWN),
         };
-        tab_row = tab_row.push(
-            button(collapse_icon)
-                .padding([5, 4])
-                .style(button::text)
-                .on_press(DockMessage::ToggleCollapse(position)),
-        );
+        let close_btn = button(svg_icon(&H_CLOSE))
+            .padding([5, 4])
+            .style(button::text)
+            .on_press(DockMessage::ClosePanel(position, region.active));
+        let collapse_btn = button(collapse_icon)
+            .padding([5, 4])
+            .style(button::text)
+            .on_press(DockMessage::ToggleCollapse(position));
 
-        // Undock button (float panel)
-        tab_row = tab_row.push(
-            button(svg_icon(&H_UNDOCK))
-                .padding([5, 4])
-                .style(button::text)
-                .on_press(DockMessage::UndockPanel(position, region.active)),
-        );
-
-        // Close button (X) for active panel
-        tab_row = tab_row.push(
-            button(svg_icon(&H_CLOSE))
-                .padding([5, 4])
-                .style(button::text)
-                .on_press(DockMessage::ClosePanel(position, region.active)),
-        );
+        // Header: [tabs (shrink)] [spacer (fill)] [buttons (shrink)]
+        let header = row![
+            tab_row,
+            Space::new().width(Length::Fill),
+            collapse_btn,
+            close_btn,
+        ]
+        .spacing(0)
+        .align_y(iced::Alignment::End)
+        .width(Length::Fill);
 
         // Panel content
         let content: Element<'_, DockMessage> =
@@ -312,7 +451,7 @@ impl DockArea {
             };
 
         column![
-            container(tab_row)
+            container(header)
                 .width(Length::Fill)
                 .padding([0, 4])
                 .style(styles::tab_bar_strip(&ctx.tokens)),
@@ -340,7 +479,8 @@ impl DockArea {
             };
             rail = rail.push(
                 button(expand_icon)
-                    .padding([4, 6])
+                    .padding(4)
+                    .width(RAIL_CANVAS_W)
                     .style(button::text)
                     .on_press(DockMessage::ToggleCollapse(position)),
             );
@@ -354,8 +494,8 @@ impl DockArea {
                     styles::ti(ctx.tokens.text_secondary)
                 };
 
-                // Rotated text via canvas (Altium-style sideways tabs)
-                let tab_h = (label.len() as f32 * 7.5 + 16.0).max(60.0);
+                // Canvas height = estimated text pixel width + 1× font size padding
+                let tab_h = estimate_text_width(&label, RAIL_FONT_SIZE) + RAIL_FONT_SIZE;
 
                 rail = rail.push(
                     button(
@@ -363,7 +503,7 @@ impl DockArea {
                             label,
                             color: text_c,
                         })
-                        .width(24)
+                        .width(RAIL_CANVAS_W)
                         .height(tab_h),
                     )
                     .padding(0)
@@ -373,9 +513,8 @@ impl DockArea {
             }
 
             container(rail)
-                .width(28)
                 .height(Length::Fill)
-                .padding([4, 2])
+                .padding([3, 2])
                 .style(styles::collapsed_rail(&ctx.tokens))
                 .into()
         } else {
@@ -418,19 +557,12 @@ impl DockArea {
         let kind = fp.kind;
         let label = kind.label();
 
-        // Title bar with drag handle + dock/close buttons
-        let title_bar = container(
+        // Title bar with drag handle + close button
+        let title_bar_content = container(
             row![
-                iced::widget::mouse_area(
-                    container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
-                        .padding([4, 8])
-                        .width(Length::Fill),
-                )
-                .on_press(DockMessage::StartDragFloating(idx)),
-                button(svg_icon(&H_UNDOCK))
-                    .padding([4, 4])
-                    .style(button::text)
-                    .on_press(DockMessage::DockFloating(idx)),
+                container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
+                    .padding([4, 8])
+                    .width(Length::Fill),
                 button(svg_icon(&H_CLOSE))
                     .padding([4, 4])
                     .style(button::text)
@@ -441,6 +573,10 @@ impl DockArea {
         )
         .width(fp.width)
         .style(styles::floating_title_bar(&ctx.tokens));
+
+        let title_bar = mouse_area(title_bar_content)
+            .on_press(DockMessage::StartDragFloating(idx))
+            .on_release(DockMessage::FloatingDragEnd(idx));
 
         let content = panels::view_panel(kind, ctx).map(DockMessage::Panel);
 
@@ -458,6 +594,46 @@ impl DockArea {
 
         Some(panel_widget.into())
     }
+}
+
+/// Font size for collapsed rail labels — every other dimension derives from this.
+const RAIL_FONT_SIZE: f32 = 12.0;
+/// Canvas width = text line-height after 90° rotation ≈ 1.5 × font size.
+const RAIL_CANVAS_W: f32 = RAIL_FONT_SIZE * 1.5;
+
+/// Estimate the rendered pixel width of a string at `font_size`.
+///
+/// Ratios are calibrated for Segoe UI (Windows default / Iced default).
+/// Grouped by measured glyph-width bands so every panel label gets
+/// near-identical visual padding after center-alignment.
+fn estimate_text_width(s: &str, font_size: f32) -> f32 {
+    s.chars()
+        .map(|c| {
+            font_size
+                * match c {
+                    // ── narrowest glyphs ──
+                    'i' | 'l' | '|' | '!' | '.' | ',' | ':' | ';' | '\'' => 0.28,
+                    'I' | 'j' => 0.30,
+                    'f' => 0.33,
+                    'r' | 't' => 0.36,
+                    ' ' => 0.28,
+                    // ── medium-narrow ──
+                    'c' | 's' | 'z' => 0.50,
+                    'a' | 'e' | 'g' | 'k' | 'v' | 'x' | 'y' => 0.54,
+                    // ── medium-wide ──
+                    'b' | 'd' | 'h' | 'n' | 'o' | 'p' | 'q' | 'u' => 0.58,
+                    // ── widest lowercase ──
+                    'm' => 0.86,
+                    'w' => 0.80,
+                    // ── capitals ──
+                    'M' | 'W' => 0.86,
+                    'A'..='Z' => 0.62,
+                    // ── digits & fallback ──
+                    '0'..='9' => 0.58,
+                    _ => 0.55,
+                }
+        })
+        .sum()
 }
 
 /// Canvas program that draws rotated text (90° CW) for collapsed panel tabs.
@@ -478,16 +654,19 @@ impl canvas::Program<DockMessage> for RotatedLabel {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-        // Rotate 90° clockwise: translate to center, rotate, draw text
         let cx = bounds.width / 2.0;
         let cy = bounds.height / 2.0;
         frame.translate(iced::Vector::new(cx, cy));
         frame.rotate(std::f32::consts::FRAC_PI_2); // 90° CW
+        // After rotation, origin is at canvas center. Use center alignment
+        // so the text is perfectly centered regardless of label length.
         frame.fill_text(canvas::Text {
             content: self.label.clone(),
-            position: iced::Point::new(-cy + 8.0, -5.0),
+            position: iced::Point::ORIGIN,
             color: self.color,
-            size: iced::Pixels(11.0),
+            size: iced::Pixels(RAIL_FONT_SIZE),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         });
         vec![frame.into_geometry()]

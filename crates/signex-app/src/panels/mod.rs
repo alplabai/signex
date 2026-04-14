@@ -27,7 +27,7 @@ pub enum PanelKind {
     // Additional Altium schematic panels
     SchFilter,
     SchList,
-    ActiveBom,
+    BomStudio,
     Favorites,
     Snippets,
     Todo,
@@ -46,7 +46,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Messages,
     PanelKind::Signal,
     PanelKind::Drc,
-    PanelKind::ActiveBom,
+    PanelKind::BomStudio,
     PanelKind::Favorites,
     PanelKind::Snippets,
     PanelKind::LayerStack,
@@ -58,6 +58,29 @@ pub const ALL_PANELS: &[PanelKind] = &[
 ];
 
 impl PanelKind {
+    /// Whether this panel requires a schematic document to be open.
+    pub fn needs_schematic(self) -> bool {
+        matches!(
+            self,
+            PanelKind::Navigator
+                | PanelKind::Properties
+                | PanelKind::Filter
+                | PanelKind::SchFilter
+                | PanelKind::SchList
+                | PanelKind::Signal
+                | PanelKind::Drc
+                | PanelKind::BomStudio
+                | PanelKind::Snippets
+                | PanelKind::Variants
+                | PanelKind::OutputJobs
+        )
+    }
+
+    /// Whether this panel requires a PCB document to be open.
+    pub fn needs_pcb(self) -> bool {
+        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             PanelKind::Projects => "Projects",
@@ -73,7 +96,7 @@ impl PanelKind {
             PanelKind::Variants => "Variants",
             PanelKind::SchFilter => "SCH Filter",
             PanelKind::SchList => "SCH List",
-            PanelKind::ActiveBom => "ActiveBOM",
+            PanelKind::BomStudio => "BOM Studio",
             PanelKind::Favorites => "Favorites",
             PanelKind::Snippets => "Snippets",
             PanelKind::Todo => "To-Do",
@@ -273,7 +296,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
         PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
         PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
-        PanelKind::ActiveBom => view_stub("ActiveBOM", "Bill of Materials management", ctx),
+        PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
         PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
         PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
         PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),

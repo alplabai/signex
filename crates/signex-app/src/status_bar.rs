@@ -8,6 +8,9 @@ use signex_types::theme::ThemeTokens;
 use crate::app::{StatusBarMsg, Tool};
 use crate::styles;
 
+pub const STATUS_BAR_HEIGHT: f32 = 22.0;
+pub const STATUS_BAR_HORIZONTAL_PADDING: u16 = 8;
+
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     x: f64,
@@ -77,7 +80,7 @@ pub fn view<'a>(
 
     container(bar)
         .width(Length::Fill)
-        .padding([2, 8])
+        .padding([2, STATUS_BAR_HORIZONTAL_PADDING])
         .style(styles::status_bar(tokens))
         .into()
 }
