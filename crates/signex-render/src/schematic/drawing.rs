@@ -226,8 +226,10 @@ pub fn draw_child_sheet(
     frame.stroke(&rect, stroke);
 
     // Sheet name text
-    let font_size =
-        (transform.world_len(1.5).max(8.0) * crate::canvas_font_size_scale()).max(8.0);
+    let font_size = (transform.world_len(1.5) * crate::canvas_font_size_scale()).abs();
+    if font_size < 1.0 {
+        return;
+    }
     let text = canvas::Text {
         content: child.name.clone(),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
@@ -239,7 +241,10 @@ pub fn draw_child_sheet(
     frame.fill_text(text);
 
     // Filename text (smaller, below name)
-    let small_font = (font_size * 0.75).max(6.0);
+    let small_font = (font_size * 0.75).abs();
+    if small_font < 1.0 {
+        return;
+    }
     let file_text = canvas::Text {
         content: child.filename.clone(),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),

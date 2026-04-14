@@ -26,9 +26,10 @@ pub fn draw_label(
     } else {
         1.27
     };
-    let screen_font = (transform.world_len(font_size_mm).max(6.0)
-        * crate::canvas_font_size_scale())
-    .max(6.0);
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    if screen_font < 1.0 {
+        return;
+    }
 
     match label.label_type {
         LabelType::Net => draw_net_label(frame, label, transform, color, screen_font),
