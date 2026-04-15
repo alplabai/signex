@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-only"
+license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
