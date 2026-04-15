@@ -76,7 +76,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::DocumentReplaced,
-                    document: DocumentPatch::DocumentReplaced,
+                    document: DocumentPatch::FULL,
                 };
 
                 self.history.push(HistoryEntry {
@@ -89,6 +89,14 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::UpdateText { target, value } => {
+                let document_patch = match target {
+                    TextTarget::Label(_) => DocumentPatch::LABELS,
+                    TextTarget::TextNote(_) => DocumentPatch::TEXT_NOTES,
+                    TextTarget::SymbolReference(_) | TextTarget::SymbolValue(_) => {
+                        DocumentPatch::SYMBOLS
+                    }
+                };
+
                 let changed = match target {
                     TextTarget::Label(uuid) => self
                         .document
@@ -154,7 +162,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::TextUpdated,
-                    document: DocumentPatch::TextUpdated,
+                    document: document_patch,
                 };
 
                 self.history.push(HistoryEntry {
@@ -198,7 +206,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
-                    document: DocumentPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -213,8 +221,8 @@ impl Engine {
             Command::DeleteSelection { items } => {
                 let mut changed = false;
 
-                for item in items {
-                    changed |= self.remove_selected_item(&item);
+                for item in &items {
+                    changed |= self.remove_selected_item(item);
                 }
 
                 if !changed {
@@ -223,7 +231,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionDeleted,
-                    document: DocumentPatch::SelectionDeleted,
+                    document: DocumentPatch::from_selected_items(&items),
                 };
 
                 self.history.push(HistoryEntry {
@@ -248,7 +256,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMoved,
-                    document: DocumentPatch::SelectionMoved,
+                    document: DocumentPatch::from_selected_items(&items),
                 };
 
                 self.history.push(HistoryEntry {
@@ -276,7 +284,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionRotated,
-                    document: DocumentPatch::SelectionRotated,
+                    document: DocumentPatch::from_selected_items(&items),
                 };
 
                 self.history.push(HistoryEntry {
@@ -301,7 +309,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMirrored,
-                    document: DocumentPatch::SelectionMirrored,
+                    document: DocumentPatch::from_selected_items(&items),
                 };
 
                 self.history.push(HistoryEntry {
@@ -318,7 +326,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::BUSES,
                 };
 
                 self.history.push(HistoryEntry {
@@ -335,7 +343,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::LABELS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -352,7 +360,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::SYMBOLS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -375,7 +383,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::WIRES | DocumentPatch::JUNCTIONS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -392,7 +400,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::JUNCTIONS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -409,7 +417,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::NO_CONNECTS,
                 };
 
                 self.history.push(HistoryEntry {
@@ -426,7 +434,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::BUS_ENTRIES,
                 };
 
                 self.history.push(HistoryEntry {
@@ -443,7 +451,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::ObjectPlaced,
+                    document: DocumentPatch::TEXT_NOTES,
                 };
 
                 self.history.push(HistoryEntry {
