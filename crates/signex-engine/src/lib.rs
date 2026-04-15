@@ -193,6 +193,38 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::UpdateSymbolFootprint {
+                symbol_id,
+                footprint,
+            } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == symbol_id)
+                    .map(|symbol| {
+                        if symbol.footprint == footprint {
+                            false
+                        } else {
+                            symbol.footprint = footprint;
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::UpdateSymbolFields {
                 symbol_id,
                 reference,
