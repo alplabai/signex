@@ -1,5 +1,19 @@
 use super::*;
 
+fn selection_slot_from_key(key: &str) -> Option<usize> {
+    match key {
+        "1" => Some(0),
+        "2" => Some(1),
+        "3" => Some(2),
+        "4" => Some(3),
+        "5" => Some(4),
+        "6" => Some(5),
+        "7" => Some(6),
+        "8" => Some(7),
+        _ => None,
+    }
+}
+
 impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
 
@@ -118,6 +132,7 @@ impl Signex {
             last_mouse_pos: (0.0, 0.0),
             active_bar_menu: None,
             selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
+            selection_slots: std::array::from_fn(|_| Vec::new()),
             last_tool: std::collections::HashMap::new(),
             pending_power: None,
             pending_port: None,
@@ -278,6 +293,31 @@ impl Signex {
                 // Ctrl+A select all
                 (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
                     Message::Selection(selection_message::SelectionMessage::SelectAll)
+                }
+                // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
+                (keyboard::Key::Character(c), m)
+                    if m.command() && !m.alt() =>
+                {
+                    match selection_slot_from_key(c.as_ref()) {
+                        Some(slot) => {
+                            Message::Selection(selection_message::SelectionMessage::StoreSlot {
+                                slot,
+                            })
+                        }
+                        _ => Message::Noop,
+                    }
+                }
+                (keyboard::Key::Character(c), m)
+                    if m.alt() && !m.command() =>
+                {
+                    match selection_slot_from_key(c.as_ref()) {
+                        Some(slot) => {
+                            Message::Selection(selection_message::SelectionMessage::RecallSlot {
+                                slot,
+                            })
+                        }
+                        _ => Message::Noop,
+                    }
                 }
                 // Ctrl+C copy, Ctrl+X cut
                 (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,

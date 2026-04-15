@@ -2,6 +2,78 @@ use iced::Task;
 
 use super::super::*;
 
+fn all_selectable_items(
+    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+) -> Vec<signex_types::schematic::SelectedItem> {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    let mut items = Vec::new();
+    for symbol in &snapshot.symbols {
+        items.push(SelectedItem::new(symbol.uuid, SelectedKind::Symbol));
+    }
+    for wire in &snapshot.wires {
+        items.push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+    }
+    for bus in &snapshot.buses {
+        items.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
+    }
+    for label in &snapshot.labels {
+        items.push(SelectedItem::new(label.uuid, SelectedKind::Label));
+    }
+    for junction in &snapshot.junctions {
+        items.push(SelectedItem::new(junction.uuid, SelectedKind::Junction));
+    }
+    for no_connect in &snapshot.no_connects {
+        items.push(SelectedItem::new(no_connect.uuid, SelectedKind::NoConnect));
+    }
+    for text_note in &snapshot.text_notes {
+        items.push(SelectedItem::new(text_note.uuid, SelectedKind::TextNote));
+    }
+    for child_sheet in &snapshot.child_sheets {
+        items.push(SelectedItem::new(child_sheet.uuid, SelectedKind::ChildSheet));
+    }
+    for bus_entry in &snapshot.bus_entries {
+        items.push(SelectedItem::new(bus_entry.uuid, SelectedKind::BusEntry));
+    }
+    for drawing in &snapshot.drawings {
+        let uuid = match drawing {
+            signex_types::schematic::SchDrawing::Line { uuid, .. }
+            | signex_types::schematic::SchDrawing::Rect { uuid, .. }
+            | signex_types::schematic::SchDrawing::Circle { uuid, .. }
+            | signex_types::schematic::SchDrawing::Arc { uuid, .. }
+            | signex_types::schematic::SchDrawing::Polyline { uuid, .. } => *uuid,
+        };
+        items.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+    }
+
+    items
+}
+
+fn valid_selection_items(
+    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    items: &[signex_types::schematic::SelectedItem],
+) -> Vec<signex_types::schematic::SelectedItem> {
+    use signex_types::schematic::SelectedKind;
+
+    let valid_items: std::collections::HashSet<_> = all_selectable_items(snapshot)
+        .into_iter()
+        .flat_map(|item| match item.kind {
+            SelectedKind::Symbol => vec![
+                item,
+                signex_types::schematic::SelectedItem::new(item.uuid, SelectedKind::SymbolRefField),
+                signex_types::schematic::SelectedItem::new(item.uuid, SelectedKind::SymbolValField),
+            ],
+            _ => vec![item],
+        })
+        .collect();
+
+    items
+        .iter()
+        .copied()
+        .filter(|item| valid_items.contains(item))
+        .collect()
+}
+
 impl Signex {
     pub(crate) fn handle_selection_message(
         &mut self,
@@ -10,33 +82,24 @@ impl Signex {
         match msg {
             selection_message::SelectionMessage::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    use signex_types::schematic::{SelectedItem, SelectedKind};
-                    let mut all = Vec::new();
-                    for s in &snapshot.symbols {
-                        all.push(SelectedItem::new(s.uuid, SelectedKind::Symbol));
-                    }
-                    for w in &snapshot.wires {
-                        all.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
-                    }
-                    for b in &snapshot.buses {
-                        all.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
-                    }
-                    for l in &snapshot.labels {
-                        all.push(SelectedItem::new(l.uuid, SelectedKind::Label));
-                    }
-                    for j in &snapshot.junctions {
-                        all.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
-                    }
-                    for nc in &snapshot.no_connects {
-                        all.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
-                    }
-                    for tn in &snapshot.text_notes {
-                        all.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
-                    }
-                    for cs in &snapshot.child_sheets {
-                        all.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
-                    }
-                    self.canvas.selected = all;
+                    self.canvas.selected = all_selectable_items(snapshot);
+                    self.canvas.clear_overlay_cache();
+                    self.update_selection_info();
+                }
+            }
+            selection_message::SelectionMessage::StoreSlot { slot } => {
+                if let Some(selection_slot) = self.selection_slots.get_mut(slot) {
+                    *selection_slot = self.canvas.selected.clone();
+                }
+            }
+            selection_message::SelectionMessage::RecallSlot { slot } => {
+                if let Some(snapshot) = self.active_render_snapshot() {
+                    let recalled = self
+                        .selection_slots
+                        .get(slot)
+                        .map(|items| valid_selection_items(snapshot, items))
+                        .unwrap_or_default();
+                    self.canvas.selected = recalled;
                     self.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }

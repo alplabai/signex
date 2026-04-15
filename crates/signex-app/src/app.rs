@@ -220,6 +220,8 @@ pub struct Signex {
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     /// Selection filter state — which object types are selectable.
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Selection memory slots (Ctrl+1-8 store, Alt+1-8 recall).
+    pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     /// Last-used tool per Active Bar group (Altium behavior: left-click re-activates).
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     /// Pending power port placement (net name, lib_id).
