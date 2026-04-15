@@ -131,68 +131,53 @@ cargo clippy --workspace -- -D warnings
 
 ## Roadmap
 
-Development is organized into milestones tracked on [GitHub Milestones](https://github.com/alplabai/signex/milestones):
-
-| Version | Milestone | Status |
+| Milestone | Version | Status |
 |---|---|---|
-| v0.1.0 | Scaffold — Iced shell, panels, themes, status bar | Done |
-| v0.2.0 | Parser — KiCad format read/write, domain types | Done |
-| v0.3.0 | Canvas — wgpu pan/zoom/grid, Altium-style widgets | Done |
-| v0.4.0 | Schematic Viewer — selection, fit-to-content, search | Done |
-| v0.5.0 | Schematic Editor — wire drawing, undo/redo, edit ops | Done |
-| v0.6.0 | Full Editor — multi-select, copy/paste, save | In Progress |
-| v0.7.0 | Validation — ERC 11 checks, annotation | |
-| v0.8.0 | Output — PDF, BOM, netlist, library editor | |
-| v0.9.0 | PCB Viewer — GPU rendering, layer compositing | |
-| v0.10.0 | PCB Editor — routing, DRC, copper pour | |
-| v0.11.0 | PCB Output — Gerber, ODB++, STEP | |
-| **v1.0.0** | **Community Release** | |
-| v1.1–v1.8 | 3D viewer, simulation, high-speed, AI, plugins | |
-| **v2.0.0** | **Pro Release** — AI + collaboration | |
+| Scaffold — Iced shell, panels, themes, dock system | v0.1 | Done |
+| Parser — KiCad format read/write, domain types | v0.2 | Done |
+| Canvas — wgpu pan/zoom/grid, Altium-style camera | v0.3 | Done |
+| Schematic Viewer — render all elements, multi-sheet nav | v0.4 | Done |
+| Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
+| Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | In Progress |
+| Validation — ERC, annotation, pin matrix | v0.7 | |
+| Output — PDF, BOM, netlist | v0.8 | |
+| Library & Polish — symbol/footprint editor, installers | v0.9 | |
+| **Community Preview** — schematic-only editor | **v1.0** | |
+| PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
+| PCB Routing + DRC + Output | v2.1–v2.2 | |
+| **Community Release** — full schematic + PCB editor | **v2.2** | |
+| 3D Viewer, Advanced PCB, High-Speed Design | v2.3–v2.5 | |
+| **Pro Release** — Signal AI + plugins + collaboration | **v3.0** | |
+| Simulation — SPICE, EM, thermal, simulation wizards | v4.0–v4.1 | |
+| **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **v5.0** | |
 
-See [`docs/master-plan.md`](docs/master-plan.md) for the full plan.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
 
 ## Contributing
 
-We welcome contributions! Here's how to get started:
+Signex is open source and we welcome contributions from everyone — whether
+you're an EDA professional, a Rust developer, a KiCad user, or someone who
+just wants to help build a better design tool.
 
-1. Check the [open issues](https://github.com/alplabai/signex/issues) or [milestones](https://github.com/alplabai/signex/milestones) for something to work on
-2. Fork the repo and create a branch from `dev`
-3. Make your changes — ensure `cargo test` and `cargo clippy` pass
-4. Open a PR against `dev` (not main)
+**Ways to contribute:**
 
-### Branching
+- Report bugs or rendering discrepancies vs KiCad
+- Add KiCad test fixtures from real projects
+- Implement a feature from the [roadmap](docs/ROADMAP.md)
+- Fix an [open issue](https://github.com/alplabai/signex/issues)
+- Improve documentation
 
+**Quick start:**
+
+```bash
+git clone https://github.com/alplabai/signex.git
+cd signex
+cargo build --workspace
+cargo run -p signex-app
 ```
-main   ← stable releases only (protected, requires PR + approval)
-└─ dev ← integration branch (default, all PRs target here)
-   ├─ feature/...   new features
-   └─ fix/...       bug fixes
-```
 
-- **`main`** is protected. Only receives merges from `dev` after QA. Tagged with version numbers.
-- **`dev`** is the default branch. All feature and fix branches merge here via PR.
-- Branch naming: `feature/<description>` or `fix/<description>`
-
-### Crate ownership
-
-Each workstream owns specific crates to minimize conflicts:
-
-| Crate | Focus |
-|---|---|
-| `signex-types` | Domain types — shared by all, PR review required for changes |
-| `kicad-parser` | File format parsing |
-| `kicad-writer` | File format serialization |
-| `signex-render` | Rendering logic (Canvas + Shader) |
-| `signex-widgets` | Reusable Iced widgets (tree view, icon button, status bar, symbol preview) |
-| `signex-app` | UI, panels, dialogs, interactions |
-
-### Code style
-
-- Run `cargo clippy --workspace -- -D warnings` before committing
-- Follow existing patterns in the codebase
-- Types go in `signex-types`, rendering in `signex-render`, UI in `signex-app`
-- Altium Designer UX is the reference for all interactions
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide: branching
+workflow, crate map, code style, and good first issues.
 
 ## License
 
