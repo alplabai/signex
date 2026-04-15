@@ -356,6 +356,7 @@ pub struct TabInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
     Select,
+    Measure,
     Wire,
     Bus,
     Label,
@@ -374,6 +375,7 @@ impl std::fmt::Display for Tool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Tool::Select => write!(f, "Select"),
+            Tool::Measure => write!(f, "Measure"),
             Tool::Wire => write!(f, "Draw Wire"),
             Tool::Bus => write!(f, "Draw Bus"),
             Tool::Label => write!(f, "Place Label"),
@@ -391,6 +393,26 @@ impl std::fmt::Display for Tool {
 // ─── Iced Application ─────────────────────────────────────────
 
 impl Signex {
+    fn clear_measurement(&mut self) {
+        self.canvas.reset_measurement();
+    }
+
+    fn clear_transient_schematic_tool_state(&mut self) {
+        self.pending_power = None;
+        self.pending_port = None;
+        self.canvas.ghost_label = None;
+        self.canvas.tool_preview = None;
+        self.panel_ctx.pre_placement = None;
+        self.editing_text = None;
+        self.clear_measurement();
+
+        if self.wire_drawing {
+            self.wire_drawing = false;
+            self.wire_points.clear();
+            self.canvas.wire_preview.clear();
+            self.canvas.drawing_mode = false;
+        }
+    }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -551,6 +573,18 @@ impl Signex {
                 self.cursor_x = x as f64;
                 self.cursor_y = y as f64;
                 self.zoom = zoom_pct;
+                if self.current_tool == Tool::Measure
+                    && self.canvas.measure_start.is_some()
+                    && !self.canvas.measure_locked
+                {
+                    let (mx, my) = if self.snap_enabled {
+                        let gs = self.grid_size_mm as f64;
+                        ((x as f64 / gs).round() * gs, (y as f64 / gs).round() * gs)
+                    } else {
+                        (x as f64, y as f64)
+                    };
+                    self.canvas.measure_end = Some(signex_types::schematic::Point::new(mx, my));
+                }
                 // Don't clear bg cache here — crosshair is in the overlay (uncached) layer.
                 // Grid only needs redraw on zoom/pan/grid-change.
             }
@@ -564,6 +598,17 @@ impl Signex {
                 };
 
                 match self.current_tool {
+                    Tool::Measure => {
+                        let point = signex_types::schematic::Point::new(wx, wy);
+                        if self.canvas.measure_start.is_some() && !self.canvas.measure_locked {
+                            self.canvas.measure_end = Some(point);
+                            self.canvas.measure_locked = true;
+                        } else {
+                            self.canvas.measure_start = Some(point);
+                            self.canvas.measure_end = Some(point);
+                            self.canvas.measure_locked = false;
+                        }
+                    }
                     Tool::Wire => {
                         let pt = signex_types::schematic::Point::new(wx, wy);
                         if !self.wire_drawing {
@@ -822,7 +867,7 @@ impl Signex {
             }
             Message::PrePlacementTab => {
                 // Only activate during placement tools (not Select)
-                if self.current_tool != Tool::Select {
+                if self.current_tool != Tool::Select && self.current_tool != Tool::Measure {
                     let tool_name = format!("{}", self.current_tool);
                     let label_text = self
                         .panel_ctx
@@ -892,18 +937,12 @@ impl Signex {
                 // Set tool preview text for placement modes
                 // No cursor text — Active Bar shows the active tool
                 self.canvas.tool_preview = None;
-                // Escape: cancel wire drawing, pending placements, pre-placement, text editing
-                if tool == Tool::Select {
-                    self.pending_power = None;
-                    self.pending_port = None;
-                    self.canvas.ghost_label = None;
-                                        self.panel_ctx.pre_placement = None;
-                    self.editing_text = None;
-                    if self.wire_drawing {
-                        self.wire_drawing = false;
-                        self.wire_points.clear();
-                        self.canvas.wire_preview.clear();
-                        self.canvas.drawing_mode = false;
+                if tool == Tool::Measure {
+                    self.clear_transient_schematic_tool_state();
+                } else {
+                    self.clear_measurement();
+                    if tool == Tool::Select {
+                        self.clear_transient_schematic_tool_state();
                     }
                 }
             }
@@ -1608,17 +1647,8 @@ impl Signex {
             Message::ShowContextMenu(x, y) => {
                 // Right-click during placement mode: cancel placement (Altium behavior)
                 if self.current_tool != Tool::Select {
-                    self.pending_power = None;
-                    self.pending_port = None;
-                    self.canvas.ghost_label = None;
-                    self.canvas.tool_preview = None;
+                    self.clear_transient_schematic_tool_state();
                     self.current_tool = Tool::Select;
-                    if self.wire_drawing {
-                        self.wire_drawing = false;
-                        self.wire_points.clear();
-                        self.canvas.wire_preview.clear();
-                        self.canvas.drawing_mode = false;
-                    }
                     return Task::none();
                 }
                 // Don't show context menu if Active Bar dropdown is open
@@ -1655,6 +1685,11 @@ impl Signex {
             Message::Noop => {
                 return Task::none();
             }
+        }
+        if self.current_tool != Tool::Measure
+            && (self.canvas.measure_start.is_some() || self.canvas.measure_end.is_some())
+        {
+            self.clear_measurement();
         }
         // Sync live settings to panel context for Properties panel
         self.panel_ctx.unit = self.unit;
@@ -1747,18 +1782,22 @@ impl Signex {
             // ── Place ──
             MenuMessage::PlaceWire => {
                 self.current_tool = Tool::Wire;
+                self.clear_measurement();
                 Task::none()
             }
             MenuMessage::PlaceBus => {
                 self.current_tool = Tool::Bus;
+                self.clear_measurement();
                 Task::none()
             }
             MenuMessage::PlaceLabel => {
                 self.current_tool = Tool::Label;
+                self.clear_measurement();
                 Task::none()
             }
             MenuMessage::PlaceComponent => {
                 self.current_tool = Tool::Component;
+                self.clear_measurement();
                 Task::none()
             }
             MenuMessage::Undo => self.update(Message::Undo),
