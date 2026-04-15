@@ -9,7 +9,7 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             selection_message::SelectionMessage::SelectAll => {
-                if let Some(ref sheet) = self.schematic {
+                if let Some(sheet) = self.active_schematic().cloned() {
                     use signex_types::schematic::{SelectedItem, SelectedKind};
                     let mut all = Vec::new();
                     for s in &sheet.symbols {
@@ -42,15 +42,15 @@ impl Signex {
                 }
             }
             selection_message::SelectionMessage::HitAt { world_x, world_y } => {
-                if let Some(ref sheet) = self.schematic {
-                    let hit = signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y);
+                if let Some(sheet) = self.active_schematic().cloned() {
+                    let hit = signex_render::schematic::hit_test::hit_test(&sheet, world_x, world_y);
                     self.canvas.selected = hit.into_iter().collect();
                     self.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
             selection_message::SelectionMessage::BoxSelect { x1, y1, x2, y2 } => {
-                if let Some(ref sheet) = self.schematic {
+                if let Some(sheet) = self.active_schematic().cloned() {
                     use signex_types::schematic::{SelectedItem, SelectedKind};
                     let mut selected = Vec::new();
 
