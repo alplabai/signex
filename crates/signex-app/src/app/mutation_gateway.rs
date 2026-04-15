@@ -68,36 +68,6 @@ impl Signex {
         self.finish_schematic_mutation(updated_sheet, clear_overlay_cache, update_selection_info)
     }
 
-    pub(crate) fn apply_edit_command(
-        &mut self,
-        command: crate::undo::EditCommand,
-        clear_overlay_cache: bool,
-        update_selection_info: bool,
-    ) -> bool {
-        let updated_sheet = if let Some(ref mut sheet) = self.schematic {
-            self.undo_stack.execute(sheet, command);
-            Some(sheet.clone())
-        } else {
-            None
-        };
-
-        self.finish_schematic_mutation(updated_sheet, clear_overlay_cache, update_selection_info)
-    }
-
-    pub(crate) fn apply_undo(&mut self, update_selection_info: bool) -> bool {
-        let updated_sheet = if let Some(ref mut sheet) = self.schematic {
-            if self.undo_stack.undo(sheet) {
-                Some(sheet.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        self.finish_schematic_mutation(updated_sheet, true, update_selection_info)
-    }
-
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
         let updated_sheet = if let Some(engine) = self.engine.as_mut() {
             let Some(steps) = self.undo_stack.peek_undo_engine_steps() else {
@@ -118,20 +88,6 @@ impl Signex {
 
             if undone_steps == steps && self.undo_stack.step_back() {
                 Some(engine.document().clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        self.finish_schematic_mutation(updated_sheet, true, update_selection_info)
-    }
-
-    pub(crate) fn apply_redo(&mut self, update_selection_info: bool) -> bool {
-        let updated_sheet = if let Some(ref mut sheet) = self.schematic {
-            if self.undo_stack.redo(sheet) {
-                Some(sheet.clone())
             } else {
                 None
             }
@@ -189,8 +145,7 @@ impl Signex {
         } else if let Ok(engine) = signex_engine::Engine::new_with_path(updated_sheet.clone(), engine_path) {
             self.engine = Some(engine);
         }
-        self.canvas.schematic = Some(updated_sheet.clone());
-        self.schematic = Some(updated_sheet);
+        self.sync_visible_cache_from_engine();
         self.canvas.clear_content_cache();
         if clear_overlay_cache {
             self.canvas.clear_overlay_cache();

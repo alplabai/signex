@@ -167,31 +167,29 @@ Completed in the current migration slice:
   batches
 - wire placement and its automatic junction insertion now execute inside
   `signex-engine`
+- label and text-note property edits now emit `signex_engine::Command::UpdateText`
+  instead of app-local legacy edit commands
 - read-only UI flows have started switching from direct `self.schematic` reads
   to engine-derived `active_schematic()` access
+- app-local undo history is now engine-marker-only; the legacy undo execution
+  branch has been removed from `signex-app`
+- visible schematic cache sync now flows from the active engine into
+  `self.schematic`, `canvas.schematic`, and the active tab cache instead of
+  treating `self.schematic` as the primary mutable source of truth
 
 Still intentionally left for the next slice:
 
-- label/text-note text edits and some other legacy commands still route through
-  app-local undo execution
-- undo/redo ownership is still split between engine-backed and legacy flows
 - the `self.schematic` field still exists as synchronized cache state while UI
   code is being migrated to engine-derived reads
+- `canvas.schematic` still mirrors the visible document as a render-facing cache
+  instead of pulling directly from engine-owned state
 
 Bridge note:
 
-- the first engine-backed edit path still mirrors a legacy undo command into the
-  app-local undo stack so behavior stays stable during migration
-- symbol field edits use the same transitional undo bridge pattern
-- delete and direct move flows also use the same transitional undo bridge
-- alignment/distribution uses the same transitional undo bridge, but now through
-  a shared engine batch gateway instead of app-local mutation batches
-- the app still mirrors legacy undo commands, but engine-backed commands now run
-  against a persistent engine instance whose document/path are synchronized
-- undo/redo ownership is now partially split: engine-backed commands undo via
-  engine history, while legacy commands still undo through the app-local stack
-- engine-backed batch actions now carry marker step counts so grouped actions
-  can drive multiple engine undo/redo operations behind one app-level marker
+- app-level undo history now acts only as a lightweight step-grouping layer over
+  persistent engine history
+- grouped engine-backed actions still use marker step counts so one app-level
+  history entry can drive multiple engine undo/redo operations
 
 This means both local seams are now in place and the engine vocabulary exists,
 but command execution and persistence orchestration still need to move out of
