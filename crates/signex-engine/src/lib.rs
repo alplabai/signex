@@ -9,6 +9,8 @@ pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
 
+const JUNCTION_TOLERANCE_MM: f64 = 0.01;
+
 #[derive(Debug, Clone)]
 struct HistoryEntry {
     before: SchematicSheet,
@@ -328,8 +330,65 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::PlaceLabel { label } => {
+                self.document.labels.push(label);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::ObjectPlaced,
+                };
+
+                self.history.push(HistoryEntry {
+                    before,
+                    after: self.document.clone(),
+                    patch_pair,
+                });
+                self.redo_stack.clear();
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::PlaceSymbol { symbol } => {
                 self.document.symbols.push(symbol);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::ObjectPlaced,
+                };
+
+                self.history.push(HistoryEntry {
+                    before,
+                    after: self.document.clone(),
+                    patch_pair,
+                });
+                self.redo_stack.clear();
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::PlaceWireSegment { wire } => {
+                self.document.wires.push(wire.clone());
+
+                for point in [wire.start, wire.end] {
+                    if let Some(junction) = needed_junction(point, &self.document, JUNCTION_TOLERANCE_MM) {
+                        self.document.junctions.push(junction);
+                    }
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::ObjectPlaced,
+                };
+
+                self.history.push(HistoryEntry {
+                    before,
+                    after: self.document.clone(),
+                    patch_pair,
+                });
+                self.redo_stack.clear();
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::PlaceJunction { junction } => {
+                self.document.junctions.push(junction);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
@@ -396,7 +455,6 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
-            other => Err(EngineError::UnsupportedCommand(other.kind())),
         }
     }
 
@@ -638,6 +696,79 @@ impl Engine {
 
 fn inverse_field_display_delta(dx: f64, dy: f64) -> (f64, f64) {
     (dx, dy)
+}
+
+fn point_on_wire_interior(
+    point: signex_types::schematic::Point,
+    wire: &signex_types::schematic::Wire,
+    tolerance: f64,
+) -> bool {
+    let (ax, ay) = (wire.start.x, wire.start.y);
+    let (bx, by) = (wire.end.x, wire.end.y);
+    let (px, py) = (point.x, point.y);
+    let (abx, aby) = (bx - ax, by - ay);
+    let (apx, apy) = (px - ax, py - ay);
+    let len_sq = abx * abx + aby * aby;
+
+    if len_sq < tolerance * tolerance {
+        return false;
+    }
+
+    let cross = abx * apy - aby * apx;
+    if (cross * cross) > tolerance * tolerance * len_sq {
+        return false;
+    }
+
+    let t = (apx * abx + apy * aby) / len_sq;
+    let margin = tolerance / len_sq.sqrt();
+    t > margin && t < 1.0 - margin
+}
+
+fn needed_junction(
+    point: signex_types::schematic::Point,
+    document: &SchematicSheet,
+    tolerance: f64,
+) -> Option<signex_types::schematic::Junction> {
+    let already_present = document.junctions.iter().any(|junction| {
+        (junction.position.x - point.x).abs() < tolerance
+            && (junction.position.y - point.y).abs() < tolerance
+    });
+    if already_present {
+        return None;
+    }
+
+    let on_wire_interior = document
+        .wires
+        .iter()
+        .any(|wire| point_on_wire_interior(point, wire, tolerance));
+    if on_wire_interior {
+        return Some(signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: point,
+            diameter: 0.0,
+        });
+    }
+
+    let endpoint_count = document
+        .wires
+        .iter()
+        .filter(|wire| {
+            let at_start = (wire.start.x - point.x).abs() < tolerance
+                && (wire.start.y - point.y).abs() < tolerance;
+            let at_end = (wire.end.x - point.x).abs() < tolerance
+                && (wire.end.y - point.y).abs() < tolerance;
+            at_start || at_end
+        })
+        .count();
+    if endpoint_count >= 3 {
+        return Some(signex_types::schematic::Junction {
+            uuid: uuid::Uuid::new_v4(),
+            position: point,
+            diameter: 0.0,
+        });
+    }
+
+    None
 }
 
 fn remove_by_uuid<T>(items: &mut Vec<T>, uuid: uuid::Uuid) -> bool

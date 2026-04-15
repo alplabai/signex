@@ -36,6 +36,7 @@ impl HistoryEntry {
 
 /// A reversible edit operation on a schematic.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum EditCommand {
     /// Add a wire segment.
     AddWire(Wire),

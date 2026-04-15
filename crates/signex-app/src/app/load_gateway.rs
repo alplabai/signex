@@ -1,6 +1,17 @@
 use super::*;
 
 impl Signex {
+    pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
+        self.engine
+            .as_ref()
+            .map(|engine| engine.document())
+            .or(self.schematic.as_ref())
+    }
+
+    pub(crate) fn has_active_schematic(&self) -> bool {
+        self.active_schematic().is_some()
+    }
+
     fn active_tab_path(&self) -> Option<PathBuf> {
         self.tabs.get(self.active_tab).map(|tab| tab.path.clone())
     }
@@ -76,40 +87,33 @@ impl Signex {
     }
 
     fn sync_panel_ctx_from_visible_schematic(&mut self) {
-        self.panel_ctx.has_schematic = self.schematic.is_some();
+        self.panel_ctx.has_schematic = self.has_active_schematic();
         self.panel_ctx.sym_count = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.symbols.len())
             .unwrap_or(0);
         self.panel_ctx.wire_count = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.wires.len())
             .unwrap_or(0);
         self.panel_ctx.label_count = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.labels.len())
             .unwrap_or(0);
         self.panel_ctx.junction_count = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.junctions.len())
             .unwrap_or(0);
         self.panel_ctx.lib_symbol_count = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.lib_symbols.len())
             .unwrap_or(0);
         self.panel_ctx.lib_symbol_names = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.lib_symbols.keys().cloned().collect())
             .unwrap_or_default();
         self.panel_ctx.placed_symbols = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| {
                 sheet
                     .symbols
@@ -126,8 +130,7 @@ impl Signex {
             })
             .unwrap_or_default();
         self.panel_ctx.paper_size = self
-            .schematic
-            .as_ref()
+            .active_schematic()
             .map(|sheet| sheet.paper_size.clone())
             .unwrap_or_else(|| "A4".to_string());
     }

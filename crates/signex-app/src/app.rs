@@ -497,6 +497,7 @@ impl Signex {
                         } else if let Some(&start) = self.wire_points.last() {
                             // Apply draw mode constraints
                             let segments = constrain_segments(start, pt, self.draw_mode);
+                            let mut wire_commands = Vec::new();
                             for seg in &segments {
                                 let wire = signex_types::schematic::Wire {
                                     uuid: uuid::Uuid::new_v4(),
@@ -504,7 +505,10 @@ impl Signex {
                                     end: seg.1,
                                     stroke_width: 0.0,
                                 };
-                                self.place_wire_segment_with_junctions(wire);
+                                wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
+                            }
+                            if !wire_commands.is_empty() {
+                                self.apply_engine_commands(wire_commands, false, false);
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.wire_points = vec![end_pt];
@@ -694,7 +698,7 @@ impl Signex {
                     self.wire_points.clear();
                     self.canvas.wire_preview.clear();
                     self.canvas.drawing_mode = false;
-                } else if let Some(ref sheet) = self.schematic {
+                } else if let Some(sheet) = self.active_schematic() {
                     // In-place text editing: check if double-clicked on a label or text note
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
@@ -892,8 +896,7 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.reference != new_val
@@ -916,8 +919,7 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.value != new_val
@@ -940,8 +942,7 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.footprint != new_val
@@ -963,8 +964,7 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         if let Some((old_mirror_x, old_mirror_y)) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
                             .map(|sym| (sym.mirror_x, sym.mirror_y))
                         {
@@ -987,8 +987,7 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         if let Some((old_mirror_x, old_mirror_y)) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
                             .map(|sym| (sym.mirror_x, sym.mirror_y))
                         {
@@ -1024,8 +1023,7 @@ impl Signex {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
                         if let Some(old_text) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.labels.iter().find(|l| l.uuid == uuid))
                             .map(|label| label.text.clone())
                             && old_text != new_text
@@ -1047,8 +1045,7 @@ impl Signex {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
                         if let Some(old_text) = self
-                            .schematic
-                            .as_ref()
+                            .active_schematic()
                             .and_then(|sheet| sheet.text_notes.iter().find(|t| t.uuid == uuid))
                             .map(|text_note| text_note.text.clone())
                             && old_text != new_text
@@ -1287,7 +1284,7 @@ impl Signex {
             Message::MirrorSelectedY => self.handle_mirror_selected_y(),
             Message::CanvasEvent(CanvasEvent::CtrlClicked { world_x, world_y }) => {
                 // Ctrl+click: toggle selection (multi-select)
-                if let Some(ref sheet) = self.schematic
+                if let Some(sheet) = self.active_schematic()
                     && let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y)
                 {
@@ -1837,41 +1834,34 @@ impl Signex {
             pcb_file: self.project_data.as_ref().and_then(|p| p.pcb_file.clone()),
             sheets,
             sym_count: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.symbols.len())
                 .unwrap_or(0),
-            wire_count: self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0),
-            label_count: self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0),
+            wire_count: self.active_schematic().map(|s| s.wires.len()).unwrap_or(0),
+            label_count: self.active_schematic().map(|s| s.labels.len()).unwrap_or(0),
             junction_count: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.junctions.len())
                 .unwrap_or(0),
             child_sheets: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.child_sheets.iter().map(|c| c.name.clone()).collect())
                 .unwrap_or_default(),
-            has_schematic: self.schematic.is_some(),
+            has_schematic: self.has_active_schematic(),
             paper_size: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.paper_size.clone())
                 .unwrap_or_else(|| "A4".to_string()),
             lib_symbol_count: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.lib_symbols.len())
                 .unwrap_or(0),
             lib_symbol_names: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| s.lib_symbols.keys().cloned().collect())
                 .unwrap_or_default(),
             placed_symbols: self
-                .schematic
-                .as_ref()
+                .active_schematic()
                 .map(|s| {
                     s.symbols
                         .iter()
@@ -1932,7 +1922,7 @@ impl Signex {
         if self.canvas.selected.len() < 2 && !matches!(action, ActiveBarAction::AlignToGrid) {
             return;
         }
-        let Some(ref sheet) = self.schematic else {
+        let Some(sheet) = self.active_schematic() else {
             return;
         };
 
@@ -2101,7 +2091,7 @@ impl Signex {
         let item = &selected[0];
         self.panel_ctx.selected_uuid = Some(item.uuid);
         self.panel_ctx.selected_kind = Some(item.kind);
-        if let Some(ref sheet) = self.schematic {
+        if let Some(sheet) = self.active_schematic().cloned() {
             match item.kind {
                 SelectedKind::Symbol => {
                     if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
@@ -2517,7 +2507,7 @@ impl Signex {
             .push(status);
 
         // Overlay layer — Active Bar floats on canvas, plus menus/context/panels
-        let has_active_bar = self.schematic.is_some();
+        let has_active_bar = self.has_active_schematic();
         let needs_overlay = has_active_bar
             || self.editing_text.is_some()
             || self.context_menu.is_some()
@@ -2618,7 +2608,7 @@ impl Signex {
 
     /// Center area — canvas when a schematic is loaded, empty placeholder otherwise.
     fn view_center(&self) -> Element<'_, Message> {
-        if self.schematic.is_some() {
+        if self.has_active_schematic() {
             canvas(&self.canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -2658,7 +2648,7 @@ impl Signex {
         let mut layers = Vec::new();
 
         // Active Bar — floats at top-center of canvas area
-        if self.schematic.is_some() {
+        if self.has_active_schematic() {
             // Vertical offset: menu bar height + tab bar if present
             let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
                 + if self.tabs.is_empty() { 0.0 } else { 28.0 };
@@ -2681,7 +2671,7 @@ impl Signex {
         }
 
         // In-place text editing overlay
-        if self.schematic.is_some() && let Some(ref edit_state) = self.editing_text {
+        if self.has_active_schematic() && let Some(ref edit_state) = self.editing_text {
             let text = edit_state.text.clone();
             layers.push(
                 column![

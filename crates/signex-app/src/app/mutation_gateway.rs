@@ -68,42 +68,6 @@ impl Signex {
         self.finish_schematic_mutation(updated_sheet, clear_overlay_cache, update_selection_info)
     }
 
-    pub(crate) fn place_wire_segment_with_junctions(
-        &mut self,
-        wire: signex_types::schematic::Wire,
-    ) -> bool {
-        const TOL: f64 = 0.01;
-
-        let updated_sheet = if let Some(ref mut sheet) = self.schematic {
-            let mut commands = vec![crate::undo::EditCommand::AddWire(wire.clone())];
-
-            if let Some(junction) = helpers::needed_junction(wire.start, sheet, TOL) {
-                commands.push(crate::undo::EditCommand::AddJunction(junction));
-            }
-            if let Some(junction) = helpers::needed_junction(wire.end, sheet, TOL) {
-                commands.push(crate::undo::EditCommand::AddJunction(junction));
-            }
-
-            self.undo_stack.execute(
-                sheet,
-                crate::undo::EditCommand::Batch(commands),
-            );
-
-            for &check_point in &[wire.start, wire.end] {
-                if let Some(junction) = helpers::needed_junction(check_point, sheet, TOL) {
-                    self.undo_stack
-                        .execute(sheet, crate::undo::EditCommand::AddJunction(junction));
-                }
-            }
-
-            Some(sheet.clone())
-        } else {
-            None
-        };
-
-        self.finish_schematic_mutation(updated_sheet, false, false)
-    }
-
     pub(crate) fn apply_edit_command(
         &mut self,
         command: crate::undo::EditCommand,
@@ -118,23 +82,6 @@ impl Signex {
         };
 
         self.finish_schematic_mutation(updated_sheet, clear_overlay_cache, update_selection_info)
-    }
-
-    pub(crate) fn apply_edit_batch(
-        &mut self,
-        commands: Vec<crate::undo::EditCommand>,
-        clear_overlay_cache: bool,
-        update_selection_info: bool,
-    ) -> bool {
-        if commands.is_empty() {
-            return false;
-        }
-
-        self.apply_edit_command(
-            crate::undo::EditCommand::Batch(commands),
-            clear_overlay_cache,
-            update_selection_info,
-        )
     }
 
     pub(crate) fn apply_undo(&mut self, update_selection_info: bool) -> bool {

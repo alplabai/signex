@@ -140,8 +140,6 @@ Completed in the current migration slice:
 - app-local edit execution now flows through `mutation_gateway`
 - extracted edit handlers use shared mutation finalization instead of open-coded
   schematic sync
-- wire placement now uses a dedicated gateway helper, including junction
-  insertion handling
 - direct `undo_stack.execute(...)` calls were removed from `app.rs` and the
   extracted edit/update modules
 - file-load and sheet-swap flows now route through a dedicated `load_gateway`
@@ -165,13 +163,20 @@ Completed in the current migration slice:
   legacy commands for engine-backed actions
 - rotate, mirror, and simple placement flows (bus, power symbol, no-connect,
   bus entry, text note) now execute through `signex-engine`
+- clipboard paste now emits engine placement commands instead of legacy undo
+  batches
+- wire placement and its automatic junction insertion now execute inside
+  `signex-engine`
+- read-only UI flows have started switching from direct `self.schematic` reads
+  to engine-derived `active_schematic()` access
 
 Still intentionally left for the next slice:
 
-- `signex-engine::execute` only supports document replacement today
-- undo/redo and command execution are still owned by `signex-app`
-- file save/load orchestration still lives in the UI layer even though the
-  gateway seam now exists
+- label/text-note text edits and some other legacy commands still route through
+  app-local undo execution
+- undo/redo ownership is still split between engine-backed and legacy flows
+- the `self.schematic` field still exists as synchronized cache state while UI
+  code is being migrated to engine-derived reads
 
 Bridge note:
 

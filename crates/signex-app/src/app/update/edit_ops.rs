@@ -3,7 +3,7 @@ use super::super::*;
 impl Signex {
     pub(crate) fn handle_delete_selected(&mut self) {
         if !self.canvas.selected.is_empty()
-            && let Some(sheet) = self.schematic.as_ref()
+            && let Some(sheet) = self.active_schematic()
         {
             let mut cmds = Vec::new();
             for item in &self.canvas.selected {
@@ -89,7 +89,7 @@ impl Signex {
         if self.canvas.selected.len() == 1 {
             let item = self.canvas.selected[0];
             if item.kind == signex_types::schematic::SelectedKind::Symbol
-                && let Some(ref mut sheet) = self.schematic
+                && let Some(sheet) = self.active_schematic()
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
                 let _rotation = sym.rotation;
@@ -109,7 +109,7 @@ impl Signex {
         if self.canvas.selected.len() == 1 {
             let item = self.canvas.selected[0];
             if item.kind == signex_types::schematic::SelectedKind::Symbol
-                && let Some(ref mut sheet) = self.schematic
+                && let Some(sheet) = self.active_schematic()
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
                 let _mirror = (sym.mirror_x, sym.mirror_y);
@@ -129,7 +129,7 @@ impl Signex {
         if self.canvas.selected.len() == 1 {
             let item = self.canvas.selected[0];
             if item.kind == signex_types::schematic::SelectedKind::Symbol
-                && let Some(ref mut sheet) = self.schematic
+                && let Some(sheet) = self.active_schematic()
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
                 let _mirror = (sym.mirror_x, sym.mirror_y);
