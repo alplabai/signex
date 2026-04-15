@@ -211,6 +211,7 @@ impl Signex {
         self.canvas.set_render_cache(None);
         self.canvas.selected.clear();
         self.canvas.wire_preview.clear();
+        self.canvas.reset_measurement();
         self.canvas.drawing_mode = false;
         self.canvas.clear_content_cache();
         self.canvas.clear_overlay_cache();
