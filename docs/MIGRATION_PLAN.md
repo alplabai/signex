@@ -173,16 +173,19 @@ Completed in the current migration slice:
   to engine-derived `active_schematic()` access
 - app-local undo history is now engine-marker-only; the legacy undo execution
   branch has been removed from `signex-app`
-- visible schematic cache sync now flows from the active engine into
-  `self.schematic`, `canvas.schematic`, and the active tab cache instead of
-  treating `self.schematic` as the primary mutable source of truth
+- the `Signex` app state no longer owns a `self.schematic` field; visible
+  document reads now resolve from the active engine first and the active tab
+  cache second
+- render sync now feeds `canvas.schematic` through a dedicated setter from the
+  engine-derived visible schematic, keeping the canvas mirror as a passive
+  render-facing cache
 
 Still intentionally left for the next slice:
 
-- the `self.schematic` field still exists as synchronized cache state while UI
-  code is being migrated to engine-derived reads
 - `canvas.schematic` still mirrors the visible document as a render-facing cache
-  instead of pulling directly from engine-owned state
+  instead of consuming a narrower render snapshot/view-model
+- `tab.schematic` still exists as the inactive-tab and tab-switch cache layer
+  around the active engine-owned document
 
 Bridge note:
 
