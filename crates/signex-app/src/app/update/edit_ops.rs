@@ -3,7 +3,7 @@ use super::super::*;
 impl Signex {
     pub(crate) fn handle_delete_selected(&mut self) {
         if !self.canvas.selected.is_empty()
-            && let Some(ref mut sheet) = self.schematic
+            && let Some(sheet) = self.schematic.as_ref()
         {
             let mut cmds = Vec::new();
             for item in &self.canvas.selected {
@@ -48,44 +48,40 @@ impl Signex {
                 }
             }
             if !cmds.is_empty() {
-                let batch = crate::undo::EditCommand::Batch(cmds);
-                self.undo_stack.execute(sheet, batch);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.selected.clear();
-                self.canvas.clear_content_cache();
-                self.canvas.clear_overlay_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-                self.update_selection_info();
+                if self.apply_engine_command(
+                    signex_engine::Command::DeleteSelection {
+                        items: self.canvas.selected.clone(),
+                    },
+                    true,
+                    true,
+                ) {
+                    self.canvas.selected.clear();
+                }
             }
         }
     }
 
     pub(crate) fn handle_undo(&mut self) {
-        if let Some(ref mut sheet) = self.schematic
-            && self.undo_stack.undo(sheet)
-        {
-            self.canvas.schematic = Some(sheet.clone());
+        let undone = match self.undo_stack.peek_undo_origin() {
+            Some(crate::undo::CommandOrigin::EngineMirrored) => self.apply_engine_undo(true),
+            Some(crate::undo::CommandOrigin::Legacy) => self.apply_undo(true),
+            None => false,
+        };
+
+        if undone {
             self.canvas.selected.clear();
-            self.canvas.clear_content_cache();
-            self.canvas.clear_overlay_cache();
-            self.mark_dirty();
-            self.commit_schematic();
-            self.update_selection_info();
         }
     }
 
     pub(crate) fn handle_redo(&mut self) {
-        if let Some(ref mut sheet) = self.schematic
-            && self.undo_stack.redo(sheet)
-        {
-            self.canvas.schematic = Some(sheet.clone());
+        let redone = match self.undo_stack.peek_redo_origin() {
+            Some(crate::undo::CommandOrigin::EngineMirrored) => self.apply_engine_redo(true),
+            Some(crate::undo::CommandOrigin::Legacy) => self.apply_redo(true),
+            None => false,
+        };
+
+        if redone {
             self.canvas.selected.clear();
-            self.canvas.clear_content_cache();
-            self.canvas.clear_overlay_cache();
-            self.mark_dirty();
-            self.commit_schematic();
-            self.update_selection_info();
         }
     }
 
@@ -96,20 +92,15 @@ impl Signex {
                 && let Some(ref mut sheet) = self.schematic
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
-                let old_rotation = sym.rotation;
-                let new_rotation = (old_rotation + 90.0) % 360.0;
-                let cmd = crate::undo::EditCommand::RotateSymbol {
-                    uuid: item.uuid,
-                    old_rotation,
-                    new_rotation,
-                };
-                self.undo_stack.execute(sheet, cmd);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.clear_content_cache();
-                self.canvas.clear_overlay_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-                self.update_selection_info();
+                let _rotation = sym.rotation;
+                self.apply_engine_command(
+                    signex_engine::Command::RotateSelection {
+                        items: vec![item],
+                        angle_degrees: 90.0,
+                    },
+                    true,
+                    true,
+                );
             }
         }
     }
@@ -121,19 +112,15 @@ impl Signex {
                 && let Some(ref mut sheet) = self.schematic
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
-                let cmd = crate::undo::EditCommand::MirrorSymbol {
-                    uuid: item.uuid,
-                    axis: crate::undo::MirrorAxis::X,
-                    old_mirror_x: sym.mirror_x,
-                    old_mirror_y: sym.mirror_y,
-                };
-                self.undo_stack.execute(sheet, cmd);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.clear_content_cache();
-                self.canvas.clear_overlay_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-                self.update_selection_info();
+                let _mirror = (sym.mirror_x, sym.mirror_y);
+                self.apply_engine_command(
+                    signex_engine::Command::MirrorSelection {
+                        items: vec![item],
+                        axis: signex_engine::MirrorAxis::Vertical,
+                    },
+                    true,
+                    true,
+                );
             }
         }
     }
@@ -145,19 +132,15 @@ impl Signex {
                 && let Some(ref mut sheet) = self.schematic
                 && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
             {
-                let cmd = crate::undo::EditCommand::MirrorSymbol {
-                    uuid: item.uuid,
-                    axis: crate::undo::MirrorAxis::Y,
-                    old_mirror_x: sym.mirror_x,
-                    old_mirror_y: sym.mirror_y,
-                };
-                self.undo_stack.execute(sheet, cmd);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.clear_content_cache();
-                self.canvas.clear_overlay_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-                self.update_selection_info();
+                let _mirror = (sym.mirror_x, sym.mirror_y);
+                self.apply_engine_command(
+                    signex_engine::Command::MirrorSelection {
+                        items: vec![item],
+                        axis: signex_engine::MirrorAxis::Horizontal,
+                    },
+                    true,
+                    true,
+                );
             }
         }
     }

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/signex-app",
+    "crates/signex-engine",
     "crates/signex-types",
     "crates/kicad-parser",
     "crates/kicad-writer",
@@ -40,6 +41,7 @@ rfd = "0.15"
 
 # Internal crates
 signex-types = { path = "crates/signex-types" }
+signex-engine = { path = "crates/signex-engine" }
 kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
