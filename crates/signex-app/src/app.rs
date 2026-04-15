@@ -404,6 +404,151 @@ impl Signex {
         self.canvas.reset_measurement();
     }
 
+    fn component_value_from_lib_id(lib_id: &str) -> String {
+        lib_id
+            .rsplit(':')
+            .next()
+            .filter(|value| !value.is_empty())
+            .unwrap_or(lib_id)
+            .to_string()
+    }
+
+    fn component_prefix_from_lib_id(lib_id: &str) -> String {
+        let value = Self::component_value_from_lib_id(lib_id);
+        let prefix: String = value
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphabetic())
+            .collect();
+        if prefix.is_empty() {
+            "U".to_string()
+        } else {
+            prefix.to_ascii_uppercase()
+        }
+    }
+
+    fn increment_designator(reference: &str) -> Option<String> {
+        let digit_start = reference
+            .char_indices()
+            .find(|(_, ch)| ch.is_ascii_digit())
+            .map(|(idx, _)| idx)?;
+        let prefix = &reference[..digit_start];
+        let digits = &reference[digit_start..];
+        let value = digits.parse::<u32>().ok()?;
+        Some(format!("{prefix}{:0width$}", value + 1, width = digits.len()))
+    }
+
+    fn next_designator_for_prefix(&self, prefix: &str) -> String {
+        let next_index = self
+            .active_render_snapshot()
+            .map(|snapshot| {
+                snapshot
+                    .symbols
+                    .iter()
+                    .filter_map(|symbol| {
+                        let reference = symbol.reference.trim();
+                        if !reference.starts_with(prefix) {
+                            return None;
+                        }
+                        reference[prefix.len()..].parse::<u32>().ok()
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    + 1
+            })
+            .unwrap_or(1);
+
+        format!("{prefix}{next_index}")
+    }
+
+    fn current_component_defaults(&self) -> Option<(String, String)> {
+        let lib_id = self.panel_ctx.selected_component.as_ref()?;
+        let value = Self::component_value_from_lib_id(lib_id);
+        let designator = self
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.designator.trim().to_string())
+            .filter(|designator| !designator.is_empty())
+            .unwrap_or_else(|| self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(lib_id)));
+        Some((value, designator))
+    }
+
+    fn place_selected_component(&mut self, wx: f64, wy: f64) -> bool {
+        let Some(lib_id) = self.panel_ctx.selected_component.clone() else {
+            return false;
+        };
+
+        let default_value = Self::component_value_from_lib_id(&lib_id);
+        let reference = self
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.designator.trim().to_string())
+            .filter(|designator| !designator.is_empty())
+            .unwrap_or_else(|| self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id)));
+        let value = self
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.label_text.trim().to_string())
+            .filter(|text| !text.is_empty() && text != "NET")
+            .unwrap_or(default_value.clone());
+        let rotation = self
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.rotation)
+            .unwrap_or(0.0);
+
+        let symbol = signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::new_v4(),
+            lib_id: lib_id.clone(),
+            reference: reference.clone(),
+            value,
+            footprint: String::new(),
+            position: signex_types::schematic::Point::new(wx, wy),
+            rotation,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: Some(signex_types::schematic::TextProp {
+                position: signex_types::schematic::Point::new(wx, wy - 2.54),
+                rotation,
+                font_size: 1.27,
+                justify_h: signex_types::schematic::HAlign::Center,
+                justify_v: signex_types::schematic::VAlign::default(),
+                hidden: false,
+            }),
+            val_text: Some(signex_types::schematic::TextProp {
+                position: signex_types::schematic::Point::new(wx, wy + 2.54),
+                rotation,
+                font_size: 1.27,
+                justify_h: signex_types::schematic::HAlign::Center,
+                justify_v: signex_types::schematic::VAlign::default(),
+                hidden: false,
+            }),
+            fields_autoplaced: true,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: std::collections::HashMap::new(),
+        };
+        self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
+
+        let next_designator = Self::increment_designator(&reference)
+            .unwrap_or_else(|| self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id)));
+
+        if let Some(ref mut pp) = self.panel_ctx.pre_placement {
+            pp.label_text = default_value;
+            pp.designator = next_designator;
+        }
+
+        true
+    }
+
     fn clear_transient_schematic_tool_state(&mut self) {
         self.pending_power = None;
         self.pending_port = None;
@@ -716,6 +861,9 @@ impl Signex {
                         }
                         // Stay in power placement mode for continuous placement
                     }
+                    Tool::Component => {
+                        let _ = self.place_selected_component(wx, wy);
+                    }
                     Tool::NoConnect => {
                         let nc = signex_types::schematic::NoConnect {
                             uuid: uuid::Uuid::new_v4(),
@@ -876,18 +1024,27 @@ impl Signex {
                 // Only activate during placement tools (not Select)
                 if self.current_tool != Tool::Select && self.current_tool != Tool::Measure {
                     let tool_name = format!("{}", self.current_tool);
+                    let (default_label_text, default_designator) =
+                        if self.current_tool == Tool::Component {
+                            self.current_component_defaults()
+                                .unwrap_or_else(|| ("NET".to_string(), String::new()))
+                        } else {
+                            ("NET".to_string(), String::new())
+                        };
                     let label_text = self
                         .panel_ctx
                         .pre_placement
                         .as_ref()
                         .map(|pp| pp.label_text.clone())
-                        .unwrap_or_else(|| "NET".to_string());
+                        .filter(|text| !text.is_empty())
+                        .unwrap_or(default_label_text);
                     let designator = self
                         .panel_ctx
                         .pre_placement
                         .as_ref()
                         .map(|pp| pp.designator.clone())
-                        .unwrap_or_default();
+                        .filter(|designator| !designator.is_empty())
+                        .unwrap_or(default_designator);
                     self.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
