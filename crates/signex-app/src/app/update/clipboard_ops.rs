@@ -10,58 +10,66 @@ impl Signex {
     }
 
     pub(crate) fn handle_copy(&mut self) {
-        let Some(sheet) = self.active_schematic().cloned() else {
+        let Some(sheet) = self.active_schematic() else {
             return;
         };
 
-        self.clipboard_wires.clear();
-        self.clipboard_buses.clear();
-        self.clipboard_labels.clear();
-        self.clipboard_symbols.clear();
-        self.clipboard_junctions.clear();
-        self.clipboard_no_connects.clear();
-        self.clipboard_text_notes.clear();
+        let mut clipboard_wires = Vec::new();
+        let mut clipboard_buses = Vec::new();
+        let mut clipboard_labels = Vec::new();
+        let mut clipboard_symbols = Vec::new();
+        let mut clipboard_junctions = Vec::new();
+        let mut clipboard_no_connects = Vec::new();
+        let mut clipboard_text_notes = Vec::new();
         for item in &self.canvas.selected {
             use signex_types::schematic::SelectedKind;
             match item.kind {
                 SelectedKind::Wire => {
                     if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
-                        self.clipboard_wires.push(w.clone());
+                        clipboard_wires.push(w.clone());
                     }
                 }
                 SelectedKind::Bus => {
                     if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
-                        self.clipboard_buses.push(b.clone());
+                        clipboard_buses.push(b.clone());
                     }
                 }
                 SelectedKind::Label => {
                     if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
-                        self.clipboard_labels.push(l.clone());
+                        clipboard_labels.push(l.clone());
                     }
                 }
                 SelectedKind::Symbol => {
                     if let Some(s) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        self.clipboard_symbols.push(s.clone());
+                        clipboard_symbols.push(s.clone());
                     }
                 }
                 SelectedKind::Junction => {
                     if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
-                        self.clipboard_junctions.push(j.clone());
+                        clipboard_junctions.push(j.clone());
                     }
                 }
                 SelectedKind::NoConnect => {
                     if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
-                        self.clipboard_no_connects.push(nc.clone());
+                        clipboard_no_connects.push(nc.clone());
                     }
                 }
                 SelectedKind::TextNote => {
                     if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
-                        self.clipboard_text_notes.push(tn.clone());
+                        clipboard_text_notes.push(tn.clone());
                     }
                 }
                 _ => {}
             }
         }
+
+        self.clipboard_wires = clipboard_wires;
+        self.clipboard_buses = clipboard_buses;
+        self.clipboard_labels = clipboard_labels;
+        self.clipboard_symbols = clipboard_symbols;
+        self.clipboard_junctions = clipboard_junctions;
+        self.clipboard_no_connects = clipboard_no_connects;
+        self.clipboard_text_notes = clipboard_text_notes;
     }
 
     pub(crate) fn handle_paste(&mut self) {

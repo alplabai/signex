@@ -96,6 +96,10 @@ pub struct SchematicCanvas {
 }
 
 impl SchematicCanvas {
+    pub fn active_render_cache(&self) -> Option<&signex_render::schematic::SchematicRenderCache> {
+        self.render_cache.as_ref()
+    }
+
     pub fn active_snapshot(&self) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
         self.render_cache.as_ref().map(|cache| cache.snapshot())
     }
@@ -791,32 +795,34 @@ impl canvas::Program<Message> for SchematicCanvas {
                 let move_stroke = canvas::Stroke::default()
                     .with_color(move_color)
                     .with_width(1.5);
-                if let Some(snapshot) = self.active_snapshot() {
+                if let Some(render_cache) = self.active_render_cache() {
+                    let preview = render_cache.prepared_preview();
                     for sel in &self.selected {
                         if matches!(
                             sel.kind,
                             signex_types::schematic::SelectedKind::SymbolRefField
                                 | signex_types::schematic::SelectedKind::SymbolValField
-                        ) && let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == sel.uuid)
-                        {
-                            let prop = match sel.kind {
+                        ) {
+                            let anchor_pos = preview.symbol_position(sel.uuid);
+                            let moved_pos = match sel.kind {
                                 signex_types::schematic::SelectedKind::SymbolRefField => {
-                                    sym.ref_text.as_ref()
+                                    preview.symbol_reference_position(sel.uuid)
                                 }
                                 signex_types::schematic::SelectedKind::SymbolValField => {
-                                    sym.val_text.as_ref()
+                                    preview.symbol_value_position(sel.uuid)
                                 }
                                 _ => None,
                             };
 
-                            if let Some(prop) = prop {
-                                let (fx, fy) = field_display_pos_local(prop.position, sym);
+                            if let (Some((anchor_x, anchor_y)), Some((field_x, field_y))) =
+                                (anchor_pos, moved_pos)
+                            {
                                 let anchor = state.camera.world_to_screen(
-                                    iced::Point::new(sym.position.x as f32, sym.position.y as f32),
+                                    iced::Point::new(anchor_x, anchor_y),
                                     bounds,
                                 );
                                 let moved = state.camera.world_to_screen(
-                                    iced::Point::new(fx + dx, fy + dy),
+                                    iced::Point::new(field_x + dx, field_y + dy),
                                     bounds,
                                 );
 
@@ -842,26 +848,15 @@ impl canvas::Program<Message> for SchematicCanvas {
 
                         // Draw a simple marker at the moved position
                         let pos = match sel.kind {
-                            signex_types::schematic::SelectedKind::Symbol => snapshot
-                                .symbols
-                                .iter()
-                                .find(|s| s.uuid == sel.uuid)
-                                .map(|s| (s.position.x as f32, s.position.y as f32)),
-                            signex_types::schematic::SelectedKind::Wire => snapshot
-                                .wires
-                                .iter()
-                                .find(|w| w.uuid == sel.uuid)
-                                .map(|w| {
-                                    (
-                                        ((w.start.x + w.end.x) / 2.0) as f32,
-                                        ((w.start.y + w.end.y) / 2.0) as f32,
-                                    )
-                                }),
-                            signex_types::schematic::SelectedKind::Label => snapshot
-                                .labels
-                                .iter()
-                                .find(|l| l.uuid == sel.uuid)
-                                .map(|l| (l.position.x as f32, l.position.y as f32)),
+                            signex_types::schematic::SelectedKind::Symbol => {
+                                preview.symbol_position(sel.uuid)
+                            }
+                            signex_types::schematic::SelectedKind::Wire => {
+                                preview.wire_midpoint(sel.uuid)
+                            }
+                            signex_types::schematic::SelectedKind::Label => {
+                                preview.label_position(sel.uuid)
+                            }
                             _ => None,
                         };
                         if let Some((px, py)) = pos {
@@ -1014,13 +1009,6 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
         return Some(ActiveBarMenu::NetColor);
     }
     None
-}
-
-fn field_display_pos_local(
-    prop_pos: signex_types::schematic::Point,
-    _sym: &signex_types::schematic::Symbol,
-) -> (f32, f32) {
-    (prop_pos.x as f32, prop_pos.y as f32)
 }
 
 // ─── Canvas events sent to the app ────────────────────────────

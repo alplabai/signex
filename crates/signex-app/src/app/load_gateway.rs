@@ -1,6 +1,12 @@
 use super::*;
 
 impl Signex {
+    fn active_tab_cached_document(&self) -> Option<&TabDocument> {
+        self.tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.cached_document.as_ref())
+    }
+
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
         self.engine
             .as_ref()
@@ -19,10 +25,7 @@ impl Signex {
     }
 
     fn active_tab_cached_schematic(&self) -> Option<&SchematicSheet> {
-        self.tabs
-            .get(self.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_schematic)
+        self.active_tab_cached_document().and_then(TabDocument::as_schematic)
     }
 
     fn active_tab_path(&self) -> Option<PathBuf> {
@@ -34,11 +37,30 @@ impl Signex {
             .and_then(|sheet| signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok());
     }
 
-    pub(crate) fn sync_canvas_from_visible_schematic(&mut self) {
-        self.canvas.set_render_cache(
-            self.active_schematic()
-                .map(signex_render::schematic::SchematicRenderCache::from_sheet),
-        );
+    pub(crate) fn sync_canvas_from_visible_schematic(
+        &mut self,
+        invalidation: signex_render::schematic::RenderInvalidation,
+    ) {
+        if let Some(engine) = self.engine.as_ref() {
+            if let Some(cache) = self.canvas.render_cache.as_mut() {
+                cache.update_from_sheet(engine.document(), invalidation);
+            } else {
+                self.canvas.set_render_cache(Some(
+                    signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
+                ));
+            }
+            return;
+        }
+
+        let rebuilt_cache = self
+            .active_tab_cached_schematic()
+            .map(signex_render::schematic::SchematicRenderCache::from_sheet);
+
+        if let Some(cache) = rebuilt_cache {
+            self.canvas.set_render_cache(Some(cache));
+        } else {
+            self.canvas.set_render_cache(None);
+        }
     }
 
     pub(crate) fn open_schematic_tab(
@@ -58,21 +80,49 @@ impl Signex {
         self.apply_loaded_schematic(Some(sheet), true, true, true, true);
     }
 
+    pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        self.tabs.push(TabInfo {
+            title,
+            path,
+            cached_document: Some(TabDocument::Pcb(board)),
+            dirty: false,
+        });
+        self.active_tab = self.tabs.len() - 1;
+        self.apply_loaded_non_schematic_document(true);
+    }
+
     pub(crate) fn load_schematic_into_active_tab(&mut self, sheet: SchematicSheet) {
         self.apply_loaded_schematic(Some(sheet), false, false, true, false);
     }
 
-    pub(crate) fn sync_visible_schematic_from_active_tab(&mut self) {
+    pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
         self.editing_text = None;
 
-        let schematic = self
-            .tabs
-            .get(self.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_schematic)
-            .cloned();
+        match self.active_tab_cached_document() {
+            Some(TabDocument::Schematic(sheet)) => {
+                self.apply_loaded_schematic(Some(sheet.clone()), true, false, false, false);
+            }
+            Some(TabDocument::Pcb(_)) | None => {
+                self.apply_loaded_non_schematic_document(false);
+            }
+        }
+    }
 
-        self.apply_loaded_schematic(schematic, true, false, false, false);
+    fn apply_loaded_non_schematic_document(&mut self, refresh_panel_ctx: bool) {
+        self.engine = None;
+        self.canvas.set_render_cache(None);
+        self.canvas.selected.clear();
+        self.canvas.wire_preview.clear();
+        self.canvas.drawing_mode = false;
+        self.canvas.clear_content_cache();
+        self.canvas.clear_overlay_cache();
+        self.current_tool = Tool::Select;
+
+        if refresh_panel_ctx {
+            self.refresh_panel_ctx();
+        } else {
+            self.sync_panel_ctx_from_visible_schematic();
+        }
     }
 
     fn apply_loaded_schematic(
@@ -84,7 +134,7 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) {
         self.sync_engine_from_schematic(schematic);
-        self.sync_canvas_from_visible_schematic();
+        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
 
         if fit_to_paper {
             self.canvas.fit_to_paper();
