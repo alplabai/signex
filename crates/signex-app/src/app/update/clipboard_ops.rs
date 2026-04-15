@@ -9,6 +9,15 @@ impl Signex {
         Task::none()
     }
 
+    pub(crate) fn handle_duplicate(&mut self) {
+        if self.canvas.selected.is_empty() || !self.has_active_schematic() {
+            return;
+        }
+
+        self.handle_copy();
+        self.handle_paste();
+    }
+
     pub(crate) fn handle_copy(&mut self) {
         let Some(engine) = self.engine.as_ref() else {
             return;

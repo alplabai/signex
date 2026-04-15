@@ -284,6 +284,10 @@ impl Signex {
                 (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
                 // Ctrl+V paste
                 (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
+                // Ctrl+D duplicate
+                (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
+                    Message::Duplicate
+                }
                 // Shift+Ctrl+G -- toggle grid visibility
                 (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
                     Message::GridToggle
