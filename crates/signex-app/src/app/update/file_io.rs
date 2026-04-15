@@ -51,6 +51,17 @@ impl Signex {
                     Err(e) => eprintln!("Failed to parse schematic: {e}"),
                 }
             }
+            "kicad_pcb" | "snxpcb" => match kicad_parser::parse_pcb_file(&path) {
+                Ok(board) => {
+                    self.project_path = Some(path.clone());
+                    let title = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "PCB".to_string());
+                    self.open_pcb_tab(path.clone(), title, board);
+                }
+                Err(e) => eprintln!("Failed to parse pcb: {e}"),
+            },
             _ => {
                 eprintln!("Unsupported file type: .{ext}");
             }

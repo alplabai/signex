@@ -1,8 +1,11 @@
 //! App-local undo stack now tracks engine step markers only.
 
+use signex_render::schematic::RenderInvalidation;
+
 #[derive(Debug, Clone)]
 struct HistoryEntry {
     steps: usize,
+    invalidation: RenderInvalidation,
 }
 
 /// Undo history stack with configurable depth.
@@ -21,12 +24,12 @@ impl UndoStack {
         }
     }
 
-    pub fn record_engine_marker(&mut self, steps: usize) {
-        if steps == 0 {
+    pub fn record_engine_marker(&mut self, steps: usize, invalidation: RenderInvalidation) {
+        if steps == 0 || invalidation == RenderInvalidation::NONE {
             return;
         }
 
-        self.record(HistoryEntry { steps });
+        self.record(HistoryEntry { steps, invalidation });
     }
 
     fn record(&mut self, entry: HistoryEntry) {
@@ -42,12 +45,18 @@ impl UndoStack {
         }
     }
 
-    pub fn peek_undo_engine_steps(&self) -> Option<usize> {
-        (self.position > 0).then(|| self.history[self.position - 1].steps)
+    pub fn peek_undo_engine_marker(&self) -> Option<(usize, RenderInvalidation)> {
+        (self.position > 0).then(|| {
+            let entry = &self.history[self.position - 1];
+            (entry.steps, entry.invalidation)
+        })
     }
 
-    pub fn peek_redo_engine_steps(&self) -> Option<usize> {
-        (self.position < self.history.len()).then(|| self.history[self.position].steps)
+    pub fn peek_redo_engine_marker(&self) -> Option<(usize, RenderInvalidation)> {
+        (self.position < self.history.len()).then(|| {
+            let entry = &self.history[self.position];
+            (entry.steps, entry.invalidation)
+        })
     }
 
     pub fn step_back(&mut self) -> bool {
