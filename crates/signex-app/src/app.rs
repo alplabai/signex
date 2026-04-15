@@ -1028,11 +1028,11 @@ impl Signex {
                             .map(|label| label.text.clone())
                             && old_text != new_text
                         {
-                            self.apply_edit_command(
-                                crate::undo::EditCommand::UpdateLabelText {
-                                    uuid,
-                                    old_text,
-                                    new_text,
+                            let _old_text = old_text;
+                            self.apply_engine_command(
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::Label(uuid),
+                                    value: new_text,
                                 },
                                 false,
                                 false,
@@ -1050,11 +1050,11 @@ impl Signex {
                             .map(|text_note| text_note.text.clone())
                             && old_text != new_text
                         {
-                            self.apply_edit_command(
-                                crate::undo::EditCommand::UpdateTextNoteText {
-                                    uuid,
-                                    old_text,
-                                    new_text,
+                            let _old_text = old_text;
+                            self.apply_engine_command(
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::TextNote(uuid),
+                                    value: new_text,
                                 },
                                 false,
                                 false,
@@ -1964,7 +1964,6 @@ impl Signex {
         let gs = self.grid_size_mm as f64;
 
         // Compute move delta for each item and create batch undo command
-        let mut move_cmds = Vec::new();
         let mut engine_commands = Vec::new();
         for &(uuid, kind, x, y) in &positions {
             let (target_x, target_y) = match action {
@@ -1983,11 +1982,6 @@ impl Signex {
             let dy = target_y - y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
                 let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
-                move_cmds.push(crate::undo::EditCommand::MoveElements {
-                    items: items.clone(),
-                    dx,
-                    dy,
-                });
                 engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
             }
         }
@@ -1996,7 +1990,6 @@ impl Signex {
         if matches!(action, ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically)
             && positions.len() > 2
         {
-            move_cmds.clear();
             engine_commands.clear();
             let mut sorted = positions.clone();
             let n = sorted.len();
@@ -2009,11 +2002,6 @@ impl Signex {
                         let dx = target_x - x;
                         if dx.abs() > 0.001 {
                             let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
-                            move_cmds.push(crate::undo::EditCommand::MoveElements {
-                                items: items.clone(),
-                                dx,
-                                dy: 0.0,
-                            });
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx,
@@ -2030,11 +2018,6 @@ impl Signex {
                         let dy = target_y - y;
                         if dy.abs() > 0.001 {
                             let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
-                            move_cmds.push(crate::undo::EditCommand::MoveElements {
-                                items: items.clone(),
-                                dx: 0.0,
-                                dy,
-                            });
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx: 0.0,
@@ -2047,7 +2030,7 @@ impl Signex {
             }
         }
 
-        if !move_cmds.is_empty() {
+        if !engine_commands.is_empty() {
             self.apply_engine_commands(
                 engine_commands,
                 true,
@@ -2065,8 +2048,9 @@ impl Signex {
     /// Write the current working schematic back to the active tab.
     /// Must be called after every mutation to keep tab state in sync.
     fn commit_schematic(&mut self) {
+        let schematic = self.active_schematic().cloned();
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.schematic = self.schematic.clone();
+            tab.schematic = schematic;
         }
     }
 
