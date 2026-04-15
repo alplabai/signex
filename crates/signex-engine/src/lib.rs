@@ -7,14 +7,17 @@ use std::path::{Path, PathBuf};
 pub use command::{Command, CommandKind, MirrorAxis, TextTarget};
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
-use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{
+    Bus, Junction, Label, NoConnect, SchematicSheet, SelectedItem, SelectedKind, Symbol,
+    TextNote, Wire,
+};
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
+const MAX_HISTORY_ENTRIES: usize = 100;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct HistoryEntry {
-    before: SchematicSheet,
-    after: SchematicSheet,
+    snapshot: SchematicSheet,
     patch_pair: PatchPair,
 }
 
@@ -24,6 +27,32 @@ pub struct Engine {
     path: Option<PathBuf>,
     history: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ClipboardSelection {
+    pub wires: Vec<Wire>,
+    pub buses: Vec<Bus>,
+    pub labels: Vec<Label>,
+    pub symbols: Vec<Symbol>,
+    pub junctions: Vec<Junction>,
+    pub no_connects: Vec<NoConnect>,
+    pub text_notes: Vec<TextNote>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SelectionAnchor {
+    pub uuid: uuid::Uuid,
+    pub kind: SelectedKind,
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectionDetails {
+    pub selected_uuid: uuid::Uuid,
+    pub selected_kind: SelectedKind,
+    pub info: Vec<(String, String)>,
 }
 
 impl Engine {
@@ -79,12 +108,7 @@ impl Engine {
                     document: DocumentPatch::FULL,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -165,12 +189,7 @@ impl Engine {
                     document: document_patch,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -209,12 +228,7 @@ impl Engine {
                     document: DocumentPatch::SYMBOLS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -234,12 +248,7 @@ impl Engine {
                     document: DocumentPatch::from_selected_items(&items),
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -259,12 +268,7 @@ impl Engine {
                     document: DocumentPatch::from_selected_items(&items),
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -287,12 +291,7 @@ impl Engine {
                     document: DocumentPatch::from_selected_items(&items),
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -312,12 +311,7 @@ impl Engine {
                     document: DocumentPatch::from_selected_items(&items),
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -329,12 +323,7 @@ impl Engine {
                     document: DocumentPatch::BUSES,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -346,12 +335,7 @@ impl Engine {
                     document: DocumentPatch::LABELS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -363,12 +347,7 @@ impl Engine {
                     document: DocumentPatch::SYMBOLS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -386,12 +365,7 @@ impl Engine {
                     document: DocumentPatch::WIRES | DocumentPatch::JUNCTIONS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -403,12 +377,7 @@ impl Engine {
                     document: DocumentPatch::JUNCTIONS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -420,12 +389,7 @@ impl Engine {
                     document: DocumentPatch::NO_CONNECTS,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -437,12 +401,7 @@ impl Engine {
                     document: DocumentPatch::BUS_ENTRIES,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -454,12 +413,7 @@ impl Engine {
                     document: DocumentPatch::TEXT_NOTES,
                 };
 
-                self.history.push(HistoryEntry {
-                    before,
-                    after: self.document.clone(),
-                    patch_pair,
-                });
-                self.redo_stack.clear();
+                self.record_history(before, patch_pair);
 
                 Ok(CommandResult::changed(patch_pair))
             }
@@ -471,9 +425,12 @@ impl Engine {
             return Ok(None);
         };
 
-        self.document = entry.before.clone();
         let patch_pair = entry.patch_pair;
-        self.redo_stack.push(entry);
+        let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
+        self.redo_stack.push(HistoryEntry {
+            snapshot: redo_snapshot,
+            patch_pair,
+        });
         Ok(Some(patch_pair))
     }
 
@@ -482,9 +439,12 @@ impl Engine {
             return Ok(None);
         };
 
-        self.document = entry.after.clone();
         let patch_pair = entry.patch_pair;
-        self.history.push(entry);
+        let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot);
+        self.history.push(HistoryEntry {
+            snapshot: undo_snapshot,
+            patch_pair,
+        });
         Ok(Some(patch_pair))
     }
 
@@ -502,6 +462,321 @@ impl Engine {
 
     pub fn set_document(&mut self, document: SchematicSheet) {
         self.document = document;
+    }
+
+    pub fn has_selected_items(&self, items: &[SelectedItem]) -> bool {
+        items.iter().any(|item| self.contains_selected_item(item))
+    }
+
+    pub fn selection_is_single_symbol(&self, items: &[SelectedItem]) -> bool {
+        matches!(items, [item] if item.kind == SelectedKind::Symbol && self.contains_selected_item(item))
+    }
+
+    pub fn collect_selection_clipboard(&self, items: &[SelectedItem]) -> ClipboardSelection {
+        let mut clipboard = ClipboardSelection::default();
+
+        for item in items {
+            match item.kind {
+                SelectedKind::Wire => {
+                    if let Some(wire) = self.document.wires.iter().find(|wire| wire.uuid == item.uuid) {
+                        clipboard.wires.push(wire.clone());
+                    }
+                }
+                SelectedKind::Bus => {
+                    if let Some(bus) = self.document.buses.iter().find(|bus| bus.uuid == item.uuid) {
+                        clipboard.buses.push(bus.clone());
+                    }
+                }
+                SelectedKind::Label => {
+                    if let Some(label) = self.document.labels.iter().find(|label| label.uuid == item.uuid)
+                    {
+                        clipboard.labels.push(label.clone());
+                    }
+                }
+                SelectedKind::Symbol => {
+                    if let Some(symbol) = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)
+                    {
+                        clipboard.symbols.push(symbol.clone());
+                    }
+                }
+                SelectedKind::Junction => {
+                    if let Some(junction) = self
+                        .document
+                        .junctions
+                        .iter()
+                        .find(|junction| junction.uuid == item.uuid)
+                    {
+                        clipboard.junctions.push(junction.clone());
+                    }
+                }
+                SelectedKind::NoConnect => {
+                    if let Some(no_connect) = self
+                        .document
+                        .no_connects
+                        .iter()
+                        .find(|no_connect| no_connect.uuid == item.uuid)
+                    {
+                        clipboard.no_connects.push(no_connect.clone());
+                    }
+                }
+                SelectedKind::TextNote => {
+                    if let Some(text_note) = self
+                        .document
+                        .text_notes
+                        .iter()
+                        .find(|text_note| text_note.uuid == item.uuid)
+                    {
+                        clipboard.text_notes.push(text_note.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        clipboard
+    }
+
+    pub fn selection_anchors(&self, items: &[SelectedItem]) -> Vec<SelectionAnchor> {
+        let mut anchors = Vec::new();
+
+        for item in items {
+            let position = match item.kind {
+                SelectedKind::Symbol => self
+                    .document
+                    .symbols
+                    .iter()
+                    .find(|symbol| symbol.uuid == item.uuid)
+                    .map(|symbol| (symbol.position.x, symbol.position.y)),
+                SelectedKind::Label => self
+                    .document
+                    .labels
+                    .iter()
+                    .find(|label| label.uuid == item.uuid)
+                    .map(|label| (label.position.x, label.position.y)),
+                SelectedKind::Junction => self
+                    .document
+                    .junctions
+                    .iter()
+                    .find(|junction| junction.uuid == item.uuid)
+                    .map(|junction| (junction.position.x, junction.position.y)),
+                SelectedKind::NoConnect => self
+                    .document
+                    .no_connects
+                    .iter()
+                    .find(|no_connect| no_connect.uuid == item.uuid)
+                    .map(|no_connect| (no_connect.position.x, no_connect.position.y)),
+                SelectedKind::TextNote => self
+                    .document
+                    .text_notes
+                    .iter()
+                    .find(|text_note| text_note.uuid == item.uuid)
+                    .map(|text_note| (text_note.position.x, text_note.position.y)),
+                SelectedKind::Wire => self
+                    .document
+                    .wires
+                    .iter()
+                    .find(|wire| wire.uuid == item.uuid)
+                    .map(|wire| ((wire.start.x + wire.end.x) / 2.0, (wire.start.y + wire.end.y) / 2.0)),
+                SelectedKind::Bus => self
+                    .document
+                    .buses
+                    .iter()
+                    .find(|bus| bus.uuid == item.uuid)
+                    .map(|bus| ((bus.start.x + bus.end.x) / 2.0, (bus.start.y + bus.end.y) / 2.0)),
+                _ => None,
+            };
+
+            if let Some((x, y)) = position {
+                anchors.push(SelectionAnchor {
+                    uuid: item.uuid,
+                    kind: item.kind,
+                    x,
+                    y,
+                });
+            }
+        }
+
+        anchors
+    }
+
+    pub fn describe_single_selection(&self, items: &[SelectedItem]) -> Option<SelectionDetails> {
+        let [item] = items else {
+            return None;
+        };
+
+        let mut info = Vec::new();
+
+        match item.kind {
+            SelectedKind::Symbol => {
+                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                info.push(("Type".into(), "Symbol".into()));
+                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push(("Value".into(), symbol.value.clone()));
+                info.push(("Library ID".into(), symbol.lib_id.clone()));
+                info.push(("Footprint".into(), symbol.footprint.clone()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2} mm", symbol.position.x, symbol.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}\u{00b0}", symbol.rotation)));
+                if symbol.mirror_x {
+                    info.push(("Mirror".into(), "X".into()));
+                }
+                if symbol.mirror_y {
+                    info.push(("Mirror".into(), "Y".into()));
+                }
+                if symbol.unit > 1 {
+                    info.push(("Unit".into(), symbol.unit.to_string()));
+                }
+            }
+            SelectedKind::Wire => {
+                let wire = self.document.wires.iter().find(|wire| wire.uuid == item.uuid)?;
+                let dx = wire.end.x - wire.start.x;
+                let dy = wire.end.y - wire.start.y;
+                let len = (dx * dx + dy * dy).sqrt();
+                info.push(("Type".into(), "Wire".into()));
+                info.push(("Start".into(), format!("{:.2}, {:.2}", wire.start.x, wire.start.y)));
+                info.push(("End".into(), format!("{:.2}, {:.2}", wire.end.x, wire.end.y)));
+                info.push(("Length".into(), format!("{:.2} mm", len)));
+            }
+            SelectedKind::Label => {
+                let label = self.document.labels.iter().find(|label| label.uuid == item.uuid)?;
+                info.push(("Type".into(), format!("{:?} Label", label.label_type)));
+                info.push(("Net Name".into(), label.text.clone()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", label.position.x, label.position.y),
+                ));
+            }
+            SelectedKind::Junction => {
+                let junction = self
+                    .document
+                    .junctions
+                    .iter()
+                    .find(|junction| junction.uuid == item.uuid)?;
+                info.push(("Type".into(), "Junction".into()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", junction.position.x, junction.position.y),
+                ));
+            }
+            SelectedKind::NoConnect => {
+                let no_connect = self
+                    .document
+                    .no_connects
+                    .iter()
+                    .find(|no_connect| no_connect.uuid == item.uuid)?;
+                info.push(("Type".into(), "No Connect".into()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", no_connect.position.x, no_connect.position.y),
+                ));
+            }
+            SelectedKind::TextNote => {
+                let text_note = self
+                    .document
+                    .text_notes
+                    .iter()
+                    .find(|text_note| text_note.uuid == item.uuid)?;
+                info.push(("Type".into(), "Text Note".into()));
+                info.push(("Text".into(), text_note.text.clone()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", text_note.position.x, text_note.position.y),
+                ));
+            }
+            SelectedKind::ChildSheet => {
+                let child_sheet = self
+                    .document
+                    .child_sheets
+                    .iter()
+                    .find(|child_sheet| child_sheet.uuid == item.uuid)?;
+                info.push(("Type".into(), "Hierarchical Sheet".into()));
+                info.push(("Name".into(), child_sheet.name.clone()));
+                info.push(("File".into(), child_sheet.filename.clone()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", child_sheet.position.x, child_sheet.position.y),
+                ));
+                info.push((
+                    "Size".into(),
+                    format!("{:.1} x {:.1} mm", child_sheet.size.0, child_sheet.size.1),
+                ));
+            }
+            SelectedKind::Bus => {
+                let bus = self.document.buses.iter().find(|bus| bus.uuid == item.uuid)?;
+                info.push(("Type".into(), "Bus".into()));
+                info.push(("Start".into(), format!("{:.2}, {:.2}", bus.start.x, bus.start.y)));
+                info.push(("End".into(), format!("{:.2}, {:.2}", bus.end.x, bus.end.y)));
+            }
+            SelectedKind::BusEntry | SelectedKind::Drawing => {
+                info.push(("Type".into(), format!("{:?}", item.kind)));
+            }
+            SelectedKind::SymbolRefField => {
+                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                info.push(("Type".into(), "Reference Field".into()));
+                info.push(("Reference".into(), symbol.reference.clone()));
+                if let Some(ref_text) = symbol.ref_text.as_ref() {
+                    info.push((
+                        "Position".into(),
+                        format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
+                    ));
+                }
+            }
+            SelectedKind::SymbolValField => {
+                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                info.push(("Type".into(), "Value Field".into()));
+                info.push(("Value".into(), symbol.value.clone()));
+                if let Some(value_text) = symbol.val_text.as_ref() {
+                    info.push((
+                        "Position".into(),
+                        format!("{:.2}, {:.2} mm", value_text.position.x, value_text.position.y),
+                    ));
+                }
+            }
+        }
+
+        Some(SelectionDetails {
+            selected_uuid: item.uuid,
+            selected_kind: item.kind,
+            info,
+        })
+    }
+
+    fn record_history(&mut self, snapshot: SchematicSheet, patch_pair: PatchPair) {
+        if self.history.len() >= MAX_HISTORY_ENTRIES {
+            self.history.remove(0);
+        }
+        self.history.push(HistoryEntry {
+            snapshot,
+            patch_pair,
+        });
+        self.redo_stack.clear();
+    }
+
+    fn contains_selected_item(&self, item: &SelectedItem) -> bool {
+        match item.kind {
+            SelectedKind::Wire => self.document.wires.iter().any(|wire| wire.uuid == item.uuid),
+            SelectedKind::Bus => self.document.buses.iter().any(|bus| bus.uuid == item.uuid),
+            SelectedKind::Label => self.document.labels.iter().any(|label| label.uuid == item.uuid),
+            SelectedKind::Junction => self
+                .document
+                .junctions
+                .iter()
+                .any(|junction| junction.uuid == item.uuid),
+            SelectedKind::NoConnect => self
+                .document
+                .no_connects
+                .iter()
+                .any(|no_connect| no_connect.uuid == item.uuid),
+            SelectedKind::Symbol => self.document.symbols.iter().any(|symbol| symbol.uuid == item.uuid),
+            SelectedKind::TextNote => self
+                .document
+                .text_notes
+                .iter()
+                .any(|text_note| text_note.uuid == item.uuid),
+            _ => false,
+        }
     }
 
     fn remove_selected_item(&mut self, item: &SelectedItem) -> bool {

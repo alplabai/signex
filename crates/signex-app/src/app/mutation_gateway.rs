@@ -210,10 +210,12 @@ impl Signex {
             return false;
         }
 
-        let engine_path = self.tabs.get(self.active_tab).map(|tab| tab.path.clone());
-        if let Some(engine) = self.engine.as_mut() {
-            engine.set_path(engine_path);
-        } else {
+        if self
+            .with_active_schematic_session_mut(|session| {
+                session.set_dirty(true);
+            })
+            .is_none()
+        {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
@@ -221,8 +223,6 @@ impl Signex {
         if clear_overlay_cache {
             self.canvas.clear_overlay_cache();
         }
-        self.mark_dirty();
-        self.commit_schematic();
         if update_selection_info {
             self.update_selection_info();
         }
