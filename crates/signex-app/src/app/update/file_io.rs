@@ -46,19 +46,7 @@ impl Signex {
                             .file_stem()
                             .map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "Schematic".to_string());
-                        self.tabs.push(TabInfo {
-                            title,
-                            path: path.clone(),
-                            schematic: Some(sheet.clone()),
-                            dirty: false,
-                        });
-                        self.active_tab = self.tabs.len() - 1;
-                        self.schematic = Some(sheet.clone());
-                        self.canvas.schematic = Some(sheet);
-                        self.canvas.fit_to_paper();
-                        self.canvas.clear_bg_cache();
-                        self.canvas.clear_content_cache();
-                        self.refresh_panel_ctx();
+                        self.open_schematic_tab(path.clone(), title, sheet);
                     }
                     Err(e) => eprintln!("Failed to parse schematic: {e}"),
                 }
@@ -70,11 +58,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_save_file(&mut self) {
-        if let Some(ref sheet) = self.schematic
+        if let Some(engine) = self.engine.as_mut()
             && let Some(tab) = self.tabs.get_mut(self.active_tab)
         {
-            let content = kicad_writer::write_schematic(sheet);
-            match std::fs::write(&tab.path, &content) {
+            engine.set_path(Some(tab.path.clone()));
+            match engine.save() {
                 Ok(_) => {
                     tab.dirty = false;
                     #[cfg(debug_assertions)]
@@ -89,9 +77,8 @@ impl Signex {
     }
 
     pub(crate) fn handle_save_file_as(&mut self, path: PathBuf) {
-        if let Some(ref sheet) = self.schematic {
-            let content = kicad_writer::write_schematic(sheet);
-            match std::fs::write(&path, &content) {
+        if let Some(engine) = self.engine.as_mut() {
+            match engine.save_as(&path) {
                 Ok(_) => {
                     if let Some(tab) = self.tabs.get_mut(self.active_tab) {
                         tab.path = path.clone();
@@ -101,6 +88,7 @@ impl Signex {
                             .unwrap_or_else(|| "Schematic".to_string());
                         tab.dirty = false;
                     }
+                    self.update_active_engine_path();
                     #[cfg(debug_assertions)]
                     eprintln!("[save-as] Wrote {}", path.display());
                 }

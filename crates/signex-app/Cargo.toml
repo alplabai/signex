@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 signex-types = { workspace = true }
+signex-engine = { workspace = true }
 kicad-parser = { workspace = true }
 kicad-writer = { workspace = true }
 signex-render = { workspace = true }
