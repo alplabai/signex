@@ -267,10 +267,24 @@ impl DrawMode {
 }
 
 #[derive(Debug, Clone)]
+pub enum TabDocument {
+    Schematic(SchematicSheet),
+}
+
+impl TabDocument {
+    pub fn as_schematic(&self) -> Option<&SchematicSheet> {
+        match self {
+            Self::Schematic(sheet) => Some(sheet),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct TabInfo {
     pub title: String,
     pub path: PathBuf,
-    pub schematic: Option<SchematicSheet>,
+    /// Inactive-tab document cache and tab-switch restore source.
+    pub cached_document: Option<TabDocument>,
     pub dirty: bool,
 }
 
@@ -697,11 +711,13 @@ impl Signex {
                     self.wire_points.clear();
                     self.canvas.wire_preview.clear();
                     self.canvas.drawing_mode = false;
-                } else if let Some(sheet) = self.active_schematic() {
+                } else if let (Some(sheet), Some(snapshot)) =
+                    (self.active_schematic(), self.active_render_snapshot())
+                {
                     // In-place text editing: check if double-clicked on a label or text note
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
-                        signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y)
+                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
                     {
                         let edit_info = match hit.kind {
                             SelectedKind::Label => sheet
@@ -1227,7 +1243,9 @@ impl Signex {
                                                 self.tabs.push(TabInfo {
                                                     title: filename.replace(".kicad_sch", ""),
                                                     path: file_path,
-                                                    schematic: Some(sheet),
+                                                    cached_document: Some(TabDocument::Schematic(
+                                                        sheet,
+                                                    )),
                                                     dirty: false,
                                                 });
                                                 self.active_tab = self.tabs.len() - 1;
@@ -1283,9 +1301,9 @@ impl Signex {
             Message::MirrorSelectedY => self.handle_mirror_selected_y(),
             Message::CanvasEvent(CanvasEvent::CtrlClicked { world_x, world_y }) => {
                 // Ctrl+click: toggle selection (multi-select)
-                if let Some(sheet) = self.active_schematic()
+                if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) =
-                        signex_render::schematic::hit_test::hit_test(sheet, world_x, world_y)
+                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
                 {
                     if let Some(pos) = self.canvas.selected.iter().position(|s| s.uuid == hit.uuid)
                     {
@@ -2049,7 +2067,7 @@ impl Signex {
     fn commit_schematic(&mut self) {
         let schematic = self.active_schematic().cloned();
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.schematic = schematic;
+            tab.cached_document = schematic.map(TabDocument::Schematic);
         }
     }
 

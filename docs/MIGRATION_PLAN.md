@@ -176,16 +176,18 @@ Completed in the current migration slice:
 - the `Signex` app state no longer owns a `self.schematic` field; visible
   document reads now resolve from the active engine first and the active tab
   cache second
-- render sync now feeds `canvas.schematic` through a dedicated setter from the
-  engine-derived visible schematic, keeping the canvas mirror as a passive
-  render-facing cache
+- render sync now feeds `canvas.render_cache` through a dedicated setter from
+  the engine-derived visible schematic; that cache shares one
+  `SchematicRenderSnapshot` across draw, hit-test, and selection-overlay paths
+- `TabInfo` now exposes `cached_document` explicitly as the inactive-tab and
+  tab-switch cache boundary around the active engine-owned document
 
 Still intentionally left for the next slice:
 
-- `canvas.schematic` still mirrors the visible document as a render-facing cache
-  instead of consuming a narrower render snapshot/view-model
-- `tab.schematic` still exists as the inactive-tab and tab-switch cache layer
-  around the active engine-owned document
+- the render cache still rebuilds a full `SchematicRenderSnapshot` after each
+  document mutation instead of applying finer-grained incremental updates
+- `cached_document` still stores a full inactive-tab document; that boundary is
+  now explicit, but only the schematic variant exists today
 
 Bridge note:
 

@@ -42,8 +42,12 @@ impl Signex {
                 }
             }
             selection_message::SelectionMessage::HitAt { world_x, world_y } => {
-                if let Some(sheet) = self.active_schematic().cloned() {
-                    let hit = signex_render::schematic::hit_test::hit_test(&sheet, world_x, world_y);
+                if let Some(snapshot) = self.active_render_snapshot() {
+                    let hit = signex_render::schematic::hit_test::hit_test(
+                        snapshot,
+                        world_x,
+                        world_y,
+                    );
                     self.canvas.selected = hit.into_iter().collect();
                     self.canvas.clear_overlay_cache();
                     self.update_selection_info();
