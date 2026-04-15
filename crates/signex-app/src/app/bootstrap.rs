@@ -294,6 +294,10 @@ impl Signex {
                 (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
                     Message::Selection(selection_message::SelectionMessage::SelectAll)
                 }
+                // Ctrl+M measure tool
+                (keyboard::Key::Character(c), m) if c == "m" && m.command() => {
+                    Message::Tool(ToolMessage::SelectTool(Tool::Measure))
+                }
                 // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
                 (keyboard::Key::Character(c), m)
                     if m.command() && !m.alt() =>

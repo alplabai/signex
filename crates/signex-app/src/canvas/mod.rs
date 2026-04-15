@@ -85,6 +85,12 @@ pub struct SchematicCanvas {
     pub tool_preview: Option<String>,
     /// Ghost label preview for port/label placement (follows cursor).
     pub ghost_label: Option<signex_types::schematic::Label>,
+    /// Measurement anchor point for the interactive measure tool.
+    pub measure_start: Option<signex_types::schematic::Point>,
+    /// Current or finalized measurement endpoint.
+    pub measure_end: Option<signex_types::schematic::Point>,
+    /// True after the second click locks the current measurement.
+    pub measure_locked: bool,
     /// Current draw mode for wire preview constraint (90°, 45°, free).
     pub draw_mode: crate::app::DrawMode,
     /// Whether snap-to-grid is enabled (for rubber-band cursor snapping).
@@ -133,6 +139,9 @@ impl SchematicCanvas {
             drawing_mode: false,
             tool_preview: None,
             ghost_label: None,
+            measure_start: None,
+            measure_end: None,
+            measure_locked: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
             snap_grid_mm: 2.54,
@@ -142,6 +151,12 @@ impl SchematicCanvas {
 
     pub fn clear_overlay_cache(&mut self) {
         self.overlay_cache.clear();
+    }
+
+    pub fn reset_measurement(&mut self) {
+        self.measure_start = None;
+        self.measure_end = None;
+        self.measure_locked = false;
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -778,6 +793,63 @@ impl canvas::Program<Message> for SchematicCanvas {
                         content: label.clone(),
                         position: iced::Point::new(cursor_pos.x + 12.0, cursor_pos.y - 12.0),
                         color: Color::from_rgba(1.0, 1.0, 1.0, 0.7),
+                        size: iced::Pixels(11.0),
+                        font: signex_render::IOSEVKA,
+                        ..canvas::Text::default()
+                    });
+                }
+
+                if let (Some(start), Some(end)) = (self.measure_start, self.measure_end) {
+                    let start_screen = state.camera.world_to_screen(
+                        iced::Point::new(start.x as f32, start.y as f32),
+                        bounds,
+                    );
+                    let end_screen = state.camera.world_to_screen(
+                        iced::Point::new(end.x as f32, end.y as f32),
+                        bounds,
+                    );
+                    let measure_color = Color::from_rgba(0.98, 0.82, 0.25, 0.95);
+                    let helper_color = Color::from_rgba(0.98, 0.82, 0.25, 0.45);
+                    let main_stroke = canvas::Stroke::default()
+                        .with_color(measure_color)
+                        .with_width(1.5);
+                    let helper_stroke = canvas::Stroke::default()
+                        .with_color(helper_color)
+                        .with_width(1.0);
+
+                    frame.stroke(&canvas::Path::line(start_screen, end_screen), main_stroke);
+
+                    let horizontal_guide = canvas::Path::line(
+                        start_screen,
+                        iced::Point::new(end_screen.x, start_screen.y),
+                    );
+                    let vertical_guide = canvas::Path::line(
+                        iced::Point::new(end_screen.x, start_screen.y),
+                        end_screen,
+                    );
+                    frame.stroke(&horizontal_guide, helper_stroke);
+                    frame.stroke(&vertical_guide, helper_stroke);
+
+                    frame.fill(&canvas::Path::circle(start_screen, 3.0), measure_color);
+                    frame.fill(&canvas::Path::circle(end_screen, 3.0), measure_color);
+
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    let distance = (dx * dx + dy * dy).sqrt();
+                    let label = format!(
+                        "D {:.2} mm | dX {:.2} | dY {:.2}",
+                        distance,
+                        dx.abs(),
+                        dy.abs()
+                    );
+                    let label_pos = iced::Point::new(
+                        ((start_screen.x + end_screen.x) * 0.5) + 10.0,
+                        ((start_screen.y + end_screen.y) * 0.5) - 12.0,
+                    );
+                    frame.fill_text(canvas::Text {
+                        content: label,
+                        position: label_pos,
+                        color: measure_color,
                         size: iced::Pixels(11.0),
                         font: signex_render::IOSEVKA,
                         ..canvas::Text::default()
