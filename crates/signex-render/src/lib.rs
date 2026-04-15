@@ -5,6 +5,7 @@
 //! just pure rendering functions.
 
 pub mod colors;
+pub mod pcb;
 pub mod schematic;
 
 use std::sync::{OnceLock, RwLock};

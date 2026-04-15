@@ -133,6 +133,7 @@ pub struct PanelContext {
     pub junction_count: usize,
     pub child_sheets: Vec<String>,
     pub has_schematic: bool,
+    pub has_pcb: bool,
     pub paper_size: String,
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
