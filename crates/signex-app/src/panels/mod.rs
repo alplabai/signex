@@ -122,6 +122,14 @@ pub struct SheetInfo {
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
+#[derive(Debug, Clone)]
+pub struct LibrarySymbolEntry {
+    pub lib_id: String,
+    pub symbol_name: String,
+    pub library_name: String,
+    pub pin_count: usize,
+}
+
 pub struct PanelContext {
     pub project_name: Option<String>,
     pub project_file: Option<String>,
@@ -164,8 +172,9 @@ pub struct PanelContext {
     // Components panel
     pub kicad_libraries: Vec<String>,
     pub active_library: Option<String>,
-    /// (symbol_name, pin_count) from the currently loaded library.
-    pub library_symbols: Vec<(String, usize)>,
+    /// Browser entries from the selected library or aggregated catalog.
+    pub library_symbols: Vec<LibrarySymbolEntry>,
+    /// Selected component lib_id.
     pub selected_component: Option<String>,
     /// (pin_number, pin_name, pin_type) for the selected component.
     pub selected_pins: Vec<(String, String, String)>,
@@ -557,7 +566,11 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 text("Name")
                     .size(10)
                     .color(muted)
-                    .width(Length::FillPortion(4)),
+                    .width(Length::FillPortion(3)),
+                text("Library")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
                 text("Pins")
                     .size(10)
                     .color(muted)
@@ -572,12 +585,16 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Filter the symbol list
     let filter = ctx.component_filter.to_ascii_lowercase();
-    let filtered_symbols: Vec<&(String, usize)> = if filter.is_empty() {
+    let filtered_symbols: Vec<&LibrarySymbolEntry> = if filter.is_empty() {
         ctx.library_symbols.iter().collect()
     } else {
         ctx.library_symbols
             .iter()
-            .filter(|(name, _)| name.to_ascii_lowercase().contains(&filter))
+            .filter(|entry| {
+                entry.symbol_name.to_ascii_lowercase().contains(&filter)
+                    || entry.library_name.to_ascii_lowercase().contains(&filter)
+                    || entry.lib_id.to_ascii_lowercase().contains(&filter)
+            })
             .collect()
     };
 
@@ -594,25 +611,30 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         list_col = list_col.push(container(text(msg).size(10).color(muted)).padding([8, 8]));
     } else {
         let sel = &ctx.selected_component;
-        for &(name, pins) in &filtered_symbols {
-            let is_sel = sel.as_deref() == Some(name.as_str());
+        for entry in &filtered_symbols {
+            let is_sel = sel.as_deref() == Some(entry.lib_id.as_str());
             let row_bg = if is_sel {
                 theme_ext::selection_color(&ctx.tokens)
             } else {
                 Color::TRANSPARENT
             };
             let name_c = if is_sel { Color::WHITE } else { primary };
-            let n = name.clone();
+            let lib_id = entry.lib_id.clone();
             list_col = list_col.push(
                 column![
                     iced::widget::button(
                         row![
-                            text(name.clone())
+                            text(entry.symbol_name.clone())
                                 .size(10)
                                 .color(name_c)
-                                .width(Length::FillPortion(4))
+                                .width(Length::FillPortion(3))
                                 .wrapping(iced::widget::text::Wrapping::None),
-                            text(pins.to_string())
+                            text(entry.library_name.clone())
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(2))
+                                .wrapping(iced::widget::text::Wrapping::None),
+                            text(entry.pin_count.to_string())
                                 .size(10)
                                 .color(muted)
                                 .width(Length::FillPortion(1)),
@@ -621,7 +643,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     )
                     .padding([3, 8])
                     .width(Length::Fill)
-                    .on_press(PanelMsg::SelectComponent(n))
+                    .on_press(PanelMsg::SelectComponent(lib_id))
                     .style(
                         move |_: &Theme, status: iced::widget::button::Status| {
                             let bg = match (is_sel, status) {
@@ -657,7 +679,14 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── BOTTOM: Details panel (scrollable) ──
     let mut detail_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    if let Some(comp_name) = &ctx.selected_component {
+    if let Some(comp_id) = &ctx.selected_component {
+        let selected_entry = ctx
+            .library_symbols
+            .iter()
+            .find(|entry| &entry.lib_id == comp_id);
+        let comp_name = selected_entry
+            .map(|entry| entry.symbol_name.as_str())
+            .unwrap_or(comp_id.as_str());
         detail_col = detail_col.push(section_hdr(
             &format!("\u{25BC} Details  {comp_name}"),
             primary,
@@ -666,14 +695,17 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let pin_count = ctx
             .library_symbols
             .iter()
-            .find(|(n, _)| n == comp_name)
-            .map(|(_, p)| *p)
+            .find(|entry| entry.lib_id == *comp_id)
+            .map(|entry| entry.pin_count)
             .unwrap_or(0);
         detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted, input_bg, input_bdr));
         detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted, input_bg, input_bdr));
         detail_col = detail_col.push(form_input_row(
             "Library",
-            ctx.active_library.as_deref().unwrap_or(""),
+            selected_entry
+                .map(|entry| entry.library_name.as_str())
+                .or(ctx.active_library.as_deref())
+                .unwrap_or(""),
             muted,
             input_bg,
             input_bdr,

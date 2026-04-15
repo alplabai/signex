@@ -29,10 +29,13 @@ impl Signex {
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
         let kicad_lib_dir = helpers::find_kicad_symbols_dir();
-        let kicad_libraries = kicad_lib_dir
+        let mut kicad_libraries = kicad_lib_dir
             .as_deref()
             .map(helpers::list_kicad_libraries)
             .unwrap_or_default();
+        if !kicad_libraries.is_empty() {
+            kicad_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
+        }
 
         let app = Self {
             theme_id: ThemeId::Signex,

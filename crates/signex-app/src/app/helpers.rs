@@ -2,13 +2,47 @@ use std::path::PathBuf;
 
 use super::DrawMode;
 
+pub(super) const ALL_LIBRARIES: &str = "All Libraries";
+
 /// Find the KiCad symbol library directory.
 pub(super) fn find_kicad_symbols_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        for path in [
+            "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols",
+            "/Applications/KiCad/KiCad Nightly.app/Contents/SharedSupport/symbols",
+            "/opt/homebrew/share/kicad/symbols",
+            "/usr/local/share/kicad/symbols",
+        ] {
+            let candidate = PathBuf::from(path);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for path in [
+            "/usr/share/kicad/symbols",
+            "/usr/local/share/kicad/symbols",
+            "/var/lib/flatpak/app/org.kicad.KiCad/current/active/files/share/kicad/symbols",
+        ] {
+            let candidate = PathBuf::from(path);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
     for ver in &["9.0", "8.0", "7.0"] {
         let p = PathBuf::from(format!("C:/Program Files/KiCad/{ver}/share/kicad/symbols"));
         if p.exists() {
             return Some(p);
         }
+    }
     }
     None
 }

@@ -1143,27 +1143,58 @@ impl Signex {
                     )) => {
                         let name = name.clone();
                         if let Some(dir) = &self.kicad_lib_dir {
-                            let path = dir.join(format!("{name}.kicad_sym"));
-                            match std::fs::read_to_string(&path) {
-                                Ok(content) => match kicad_parser::parse_symbol_lib(&content) {
-                                    Ok(symbols) => {
-                                        let mut syms: Vec<(String, usize)> = symbols
-                                            .iter()
-                                            .map(|(id, lib)| (id.clone(), lib.pins.len()))
-                                            .collect();
-                                        syms.sort_by(|a, b| a.0.cmp(&b.0));
-                                        self.panel_ctx.library_symbols = syms;
-                                        self.panel_ctx.active_library = Some(name);
-                                        self.panel_ctx.selected_component = None;
-                                        self.panel_ctx.selected_pins.clear();
-                                        self.loaded_lib = symbols;
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Failed to parse library: {e}");
-                                    }
-                                },
-                                Err(e) => eprintln!("Failed to read {}: {e}", path.display()),
+                            let mut symbols = std::collections::HashMap::new();
+                            let mut syms = Vec::new();
+                            let libraries: Vec<String> = if name == helpers::ALL_LIBRARIES {
+                                self.panel_ctx
+                                    .kicad_libraries
+                                    .iter()
+                                    .filter(|entry| entry.as_str() != helpers::ALL_LIBRARIES)
+                                    .cloned()
+                                    .collect()
+                            } else {
+                                vec![name.clone()]
+                            };
+
+                            for library_name in libraries {
+                                let path = dir.join(format!("{library_name}.kicad_sym"));
+                                match std::fs::read_to_string(&path) {
+                                    Ok(content) => match kicad_parser::parse_symbol_lib(&content) {
+                                        Ok(parsed) => {
+                                            for (lib_id, lib_symbol) in parsed {
+                                                syms.push(crate::panels::LibrarySymbolEntry {
+                                                    symbol_name: lib_id
+                                                        .rsplit(':')
+                                                        .next()
+                                                        .unwrap_or(&lib_id)
+                                                        .to_string(),
+                                                    library_name: library_name.clone(),
+                                                    pin_count: lib_symbol.pins.len(),
+                                                    lib_id: lib_id.clone(),
+                                                });
+                                                symbols.insert(lib_id, lib_symbol);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Failed to parse library '{}': {e}", library_name);
+                                        }
+                                    },
+                                    Err(e) => eprintln!("Failed to read {}: {e}", path.display()),
+                                }
                             }
+
+                            syms.sort_by(|a, b| {
+                                a.symbol_name
+                                    .cmp(&b.symbol_name)
+                                    .then_with(|| a.library_name.cmp(&b.library_name))
+                            });
+
+                            self.panel_ctx.library_symbols = syms;
+                            self.panel_ctx.active_library = Some(name);
+                            self.panel_ctx.selected_component = None;
+                            self.panel_ctx.selected_pins.clear();
+                            self.panel_ctx.selected_lib_symbol = None;
+                            self.loaded_lib = symbols;
                         }
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ComponentFilter(
@@ -1203,6 +1234,34 @@ impl Signex {
                             false,
                             false,
                         );
+                    }
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SelectComponent(
+                        lib_id,
+                    )) => {
+                        let lib_id = lib_id.clone();
+                        if let Some(sym) = self.loaded_lib.get(&lib_id) {
+                            let library_name = lib_id
+                                .split(':')
+                                .next()
+                                .unwrap_or(helpers::ALL_LIBRARIES)
+                                .to_string();
+                            self.panel_ctx.selected_component = Some(lib_id);
+                            self.panel_ctx.selected_pins = sym
+                                .pins
+                                .iter()
+                                .map(|lp| {
+                                    (
+                                        lp.pin.number.clone(),
+                                        lp.pin.name.clone(),
+                                        format!("{:?}", lp.pin.pin_type),
+                                    )
+                                })
+                                .collect();
+                            self.panel_ctx.selected_lib_symbol = Some(sym.clone());
+                            if self.panel_ctx.active_library.is_none() {
+                                self.panel_ctx.active_library = Some(library_name);
+                            }
+                        }
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditSymbolFootprint(uuid, new_val),
@@ -1399,26 +1458,6 @@ impl Signex {
                         self.dragging = Some(DragTarget::ComponentsSplit);
                         self.drag_start_pos = None;
                         self.drag_start_size = self.panel_ctx.components_split;
-                    }
-                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SelectComponent(
-                        name,
-                    )) => {
-                        let name = name.clone();
-                        if let Some(sym) = self.loaded_lib.get(&name) {
-                            self.panel_ctx.selected_component = Some(name);
-                            self.panel_ctx.selected_pins = sym
-                                .pins
-                                .iter()
-                                .map(|lp| {
-                                    (
-                                        lp.pin.number.clone(),
-                                        lp.pin.name.clone(),
-                                        format!("{:?}", lp.pin.pin_type),
-                                    )
-                                })
-                                .collect();
-                            self.panel_ctx.selected_lib_symbol = Some(sym.clone());
-                        }
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::Tree(
                         TreeMsg::Toggle(path),
