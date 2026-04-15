@@ -333,6 +333,10 @@ impl Signex {
                 // Ctrl+C copy, Ctrl+X cut
                 (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,
                 (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
+                // Shift+Ctrl+V smart paste
+                (keyboard::Key::Character(c), m) if c == "v" && m.command() && m.shift() => {
+                    Message::SmartPaste
+                }
                 // Ctrl+V paste
                 (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
                 // Ctrl+D duplicate
