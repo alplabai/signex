@@ -69,8 +69,8 @@ pub struct SchematicCanvas {
     pub theme_grid: Color,
     pub theme_paper: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
-    /// Reference to the currently loaded schematic (if any).
-    /// Set by the app when a file is opened.
+    /// Render-facing cache of the currently visible schematic.
+    /// The app updates this from the active engine or active tab cache.
     pub schematic: Option<signex_types::schematic::SchematicSheet>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
@@ -146,6 +146,10 @@ impl SchematicCanvas {
 
     pub fn clear_content_cache(&mut self) {
         self.content_cache.clear();
+    }
+
+    pub fn set_schematic(&mut self, schematic: Option<signex_types::schematic::SchematicSheet>) {
+        self.schematic = schematic;
     }
 
     /// Fit the camera to show the schematic content.

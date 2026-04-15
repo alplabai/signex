@@ -176,7 +176,6 @@ pub struct Signex {
     /// Canvas font italic style toggle.
     pub canvas_font_italic: bool,
     pub engine: Option<signex_engine::Engine>,
-    pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
     pub panel_ctx: crate::panels::PanelContext,

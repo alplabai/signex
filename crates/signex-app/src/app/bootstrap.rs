@@ -41,7 +41,6 @@ impl Signex {
             canvas_font_bold: false,
             canvas_font_italic: false,
             engine: None,
-            schematic: None,
             project_path: None,
             project_data: None,
             panel_ctx: crate::panels::PanelContext {

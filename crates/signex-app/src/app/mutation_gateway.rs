@@ -145,7 +145,7 @@ impl Signex {
         } else if let Ok(engine) = signex_engine::Engine::new_with_path(updated_sheet.clone(), engine_path) {
             self.engine = Some(engine);
         }
-        self.sync_visible_cache_from_engine();
+        self.sync_canvas_from_visible_schematic();
         self.canvas.clear_content_cache();
         if clear_overlay_cache {
             self.canvas.clear_overlay_cache();
