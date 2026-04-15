@@ -30,6 +30,8 @@ pub enum MenuMessage {
     Delete,
     SelectAll,
     Duplicate,
+    Find,
+    Replace,
     // View
     ZoomIn,
     ZoomOut,
@@ -124,6 +126,9 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf("Delete", Some("Del"), MenuMessage::Delete, mc),
             separator(mc),
             leaf("Select All", Some("Ctrl+A"), MenuMessage::SelectAll, mc),
+            separator(mc),
+            leaf("Find", Some("Ctrl+F"), MenuMessage::Find, mc),
+            leaf("Find and Replace", Some("Ctrl+H"), MenuMessage::Replace, mc),
         ]),
     );
 
