@@ -17,7 +17,7 @@
 Signex is a native Rust EDA tool targeting **Altium Designer feature parity** with an AI-first design philosophy. Built on [Iced](https://iced.rs) 0.14 (Elm architecture) with [wgpu](https://wgpu.rs) for GPU-accelerated rendering.
 
 **Two editions from one codebase:**
-- **Signex Community** (GPL-3.0, free) — full schematic + PCB editor, 3D viewer, simulation, plugins
+- **Signex Community** (Apache-2.0, free) — full schematic + PCB editor, 3D viewer, simulation, plugins
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design assistant) + live collaboration
 
 > **Status:** Early development. See [Roadmap](#roadmap) for current progress.
@@ -196,6 +196,6 @@ Each workstream owns specific crates to minimize conflicts:
 
 ## License
 
-Signex Community Edition is licensed under [GPL-3.0-only](LICENSE).
+Signex Community Edition is licensed under [Apache License 2.0](LICENSE).
 
 Copyright (C) 2026 [Alp Lab AI](https://github.com/alplabai)

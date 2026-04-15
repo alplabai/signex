@@ -110,23 +110,25 @@ corrodes trust in both.
 ### 3.1. What Community Is
 
 Signex Community is a full-featured, desktop EDA editor. It is what most users
-will ever need. It is released under **GPL-3.0** and its source code is fully
-open.
+will ever need. It is released under **Apache License 2.0** and its source code
+is fully open.
 
 ### 3.2. License
 
-**GPL-3.0.** Chosen over more permissive options deliberately:
+**Apache License 2.0.** Chosen deliberately because:
 
-- KiCad itself is GPL-3.0; using the same license reduces friction for users
-  and contributors coming from that ecosystem
-- GPL-3.0 prevents a competitor from forking Community, adding proprietary
-  features, and releasing a closed product that undercuts both Signex Pro and
-  Signex Community
-- GPL-3.0 does not prevent commercial use; companies can use Community
-  internally for any purpose, including producing closed-source hardware
-  designs
-- The distinction between "using the tool to make your thing" and "distributing
-  a modified version of the tool" is clear and well-understood in this industry
+- it keeps the Community edition genuinely open and easy to adopt across
+  hobbyist, academic, and commercial environments
+- it permits broad use of the editor, including inside commercial engineering
+  organizations
+- it provides an explicit patent license, which is valuable for a technical
+  product with substantial implementation detail
+- it lowers legal friction for contributors and downstream integrations that
+  want to build on the Community core without ambiguity
+
+The open-source editor core remains Apache-2.0. Pro-only services and hosted
+capabilities remain outside that grant and continue to ship under commercial
+terms.
 
 ### 3.3. Price
 
@@ -177,7 +179,7 @@ backend infrastructure:
 
 Pro is proprietary software. It is a separate binary, built from the same
 workspace with the `pro` Cargo feature enabled. The Pro-only crates are not
-GPL; they are proprietary and shipped under Signex's commercial license.
+Apache-2.0; they are proprietary and shipped under Signex's commercial license.
 
 ### 4.2. License
 
