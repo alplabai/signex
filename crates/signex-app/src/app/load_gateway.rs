@@ -40,7 +40,79 @@ impl Signex {
         self.active_tab_cached_document().and_then(TabDocument::as_schematic)
     }
 
-    fn active_tab_path(&self) -> Option<PathBuf> {
+    pub(crate) fn with_active_schematic_session_mut<R>(
+        &mut self,
+        update: impl FnOnce(&mut SchematicTabSession) -> R,
+    ) -> Option<R> {
+        let engine = self.engine.take()?;
+        let Some((title, path, dirty)) = self
+            .tabs
+            .get(self.active_tab)
+            .map(|tab| (tab.title.clone(), tab.path.clone(), tab.dirty))
+        else {
+            self.engine = Some(engine);
+            return None;
+        };
+
+        let mut session = SchematicTabSession::new(engine, title, path, dirty);
+        let result = update(&mut session);
+        let (engine, title, path, dirty) = session.into_parts();
+
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.title = title;
+            tab.path = path;
+            tab.dirty = dirty;
+        }
+
+        self.engine = Some(engine);
+        Some(result)
+    }
+
+    pub(crate) fn park_active_schematic_session(&mut self) {
+        let Some(engine) = self.engine.take() else {
+            return;
+        };
+
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.cached_document = Some(TabDocument::Schematic(SchematicTabSession::new(
+                engine,
+                tab.title.clone(),
+                tab.path.clone(),
+                tab.dirty,
+            )));
+        } else {
+            self.engine = Some(engine);
+        }
+    }
+
+    fn activate_active_schematic_session(&mut self) -> bool {
+        let cached_document = self
+            .tabs
+            .get_mut(self.active_tab)
+            .and_then(|tab| tab.cached_document.take());
+
+        match cached_document {
+            Some(TabDocument::Schematic(session)) => {
+                let (engine, title, path, dirty) = session.into_parts();
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    tab.title = title;
+                    tab.path = path;
+                    tab.dirty = dirty;
+                }
+                self.engine = Some(engine);
+                true
+            }
+            Some(other_document) => {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    tab.cached_document = Some(other_document);
+                }
+                false
+            }
+            None => self.engine.is_some(),
+        }
+    }
+
+    pub(crate) fn active_tab_path(&self) -> Option<PathBuf> {
         self.tabs.get(self.active_tab).map(|tab| tab.path.clone())
     }
 
@@ -88,10 +160,11 @@ impl Signex {
         title: String,
         sheet: SchematicSheet,
     ) {
+        self.park_active_schematic_session();
         self.tabs.push(TabInfo {
             title,
             path,
-            cached_document: Some(TabDocument::Schematic(sheet.clone())),
+            cached_document: None,
             dirty: false,
         });
         self.active_tab = self.tabs.len() - 1;
@@ -100,6 +173,7 @@ impl Signex {
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        self.park_active_schematic_session();
         self.tabs.push(TabInfo {
             title,
             path,
@@ -118,8 +192,10 @@ impl Signex {
         self.editing_text = None;
 
         match self.active_tab_cached_document() {
-            Some(TabDocument::Schematic(sheet)) => {
-                self.apply_loaded_schematic(Some(sheet.clone()), true, false, false, false);
+            Some(TabDocument::Schematic(_)) => {
+                if self.activate_active_schematic_session() {
+                    self.apply_loaded_schematic(None, true, false, false, false);
+                }
             }
             Some(TabDocument::Pcb(_)) => {
                 self.apply_loaded_pcb_document(false, false);
@@ -178,7 +254,12 @@ impl Signex {
         commit_to_active_tab: bool,
         refresh_panel_ctx: bool,
     ) {
-        self.sync_engine_from_schematic(schematic);
+        if let Some(schematic) = schematic {
+            self.sync_engine_from_schematic(Some(schematic));
+        }
+        if self.engine.is_none() {
+            return;
+        }
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
 
         if fit_to_paper {
@@ -189,9 +270,7 @@ impl Signex {
         }
         self.canvas.clear_content_cache();
 
-        if commit_to_active_tab {
-            self.commit_schematic();
-        }
+        let _ = commit_to_active_tab;
 
         if refresh_panel_ctx {
             self.refresh_panel_ctx();
@@ -260,12 +339,5 @@ impl Signex {
         self.panel_ctx.lib_symbol_names = document_summary.5;
         self.panel_ctx.placed_symbols = document_summary.6;
         self.panel_ctx.paper_size = document_summary.7;
-    }
-
-    pub(crate) fn update_active_engine_path(&mut self) {
-        let path = self.active_tab_path();
-        if let Some(engine) = self.engine.as_mut() {
-            engine.set_path(path);
-        }
     }
 }

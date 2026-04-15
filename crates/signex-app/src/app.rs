@@ -268,17 +268,66 @@ impl DrawMode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+pub struct SchematicTabSession {
+    title: String,
+    path: PathBuf,
+    dirty: bool,
+    engine: signex_engine::Engine,
+}
+
+impl SchematicTabSession {
+    pub fn new(engine: signex_engine::Engine, title: String, path: PathBuf, dirty: bool) -> Self {
+        Self {
+            title,
+            path,
+            dirty,
+            engine,
+        }
+    }
+
+    pub fn document(&self) -> &SchematicSheet {
+        self.engine.document()
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty;
+    }
+
+    pub fn save(&mut self) -> Result<(), signex_engine::EngineError> {
+        self.engine.set_path(Some(self.path.clone()));
+        self.engine.save()?;
+        self.dirty = false;
+        Ok(())
+    }
+
+    pub fn save_as(&mut self, path: PathBuf) -> Result<(), signex_engine::EngineError> {
+        self.engine.save_as(&path)?;
+        self.title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Schematic".to_string());
+        self.path = path;
+        self.dirty = false;
+        Ok(())
+    }
+
+    pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {
+        (self.engine, self.title, self.path, self.dirty)
+    }
+}
+
+#[derive(Debug)]
 #[allow(dead_code)]
 pub enum TabDocument {
-    Schematic(SchematicSheet),
+    Schematic(SchematicTabSession),
     Pcb(PcbBoard),
 }
 
 impl TabDocument {
     pub fn as_schematic(&self) -> Option<&SchematicSheet> {
         match self {
-            Self::Schematic(sheet) => Some(sheet),
+            Self::Schematic(session) => Some(session.document()),
             Self::Pcb(_) => None,
         }
     }
@@ -292,11 +341,11 @@ impl TabDocument {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TabInfo {
     pub title: String,
     pub path: PathBuf,
-    /// Inactive-tab document cache and tab-switch restore source.
+    /// Inactive-tab document session cache and tab-switch restore source.
     pub cached_document: Option<TabDocument>,
     pub dirty: bool,
 }
@@ -1254,24 +1303,22 @@ impl Signex {
                                     if let Some(idx) =
                                         self.tabs.iter().position(|t| t.path == file_path)
                                     {
-                                        self.active_tab = idx;
-                                        self.sync_active_tab();
+                                        if idx != self.active_tab {
+                                            self.park_active_schematic_session();
+                                            self.active_tab = idx;
+                                            self.sync_active_tab();
+                                        }
                                     } else if filename.ends_with(".kicad_sch")
                                         || filename.ends_with(".snxsch")
                                     {
                                         // Open new schematic tab
                                         match kicad_parser::parse_schematic_file(&file_path) {
                                             Ok(sheet) => {
-                                                self.tabs.push(TabInfo {
-                                                    title: filename.replace(".kicad_sch", ""),
-                                                    path: file_path,
-                                                    cached_document: Some(TabDocument::Schematic(
-                                                        sheet,
-                                                    )),
-                                                    dirty: false,
-                                                });
-                                                self.active_tab = self.tabs.len() - 1;
-                                                self.sync_active_tab();
+                                                self.open_schematic_tab(
+                                                    file_path,
+                                                    filename.replace(".kicad_sch", ""),
+                                                    sheet,
+                                                );
                                             }
                                             Err(e) => eprintln!("Failed to parse {filename}: {e}"),
                                         }
@@ -1815,7 +1862,8 @@ impl Signex {
     fn handle_tab(&mut self, msg: TabMessage) {
         match msg {
             TabMessage::Select(idx) => {
-                if idx < self.tabs.len() {
+                if idx < self.tabs.len() && idx != self.active_tab {
+                    self.park_active_schematic_session();
                     self.active_tab = idx;
                     self.sync_active_tab();
                 }
@@ -1830,6 +1878,9 @@ impl Signex {
                             self.tabs[idx].title
                         );
                         return;
+                    }
+                    if idx == self.active_tab {
+                        self.engine = None;
                     }
                     self.tabs.remove(idx);
                     if self.active_tab >= self.tabs.len() && self.active_tab > 0 {
@@ -1989,71 +2040,53 @@ impl Signex {
     /// Align selected symbols based on the alignment action.
     fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
-        use signex_types::schematic::SelectedKind;
 
         if self.canvas.selected.len() < 2 && !matches!(action, ActiveBarAction::AlignToGrid) {
             return;
         }
-        let Some(sheet) = self.active_schematic() else {
+        let Some(engine) = self.engine.as_ref() else {
             return;
         };
 
-        // Gather positions of ALL selected items (not just symbols)
-        let mut positions: Vec<(uuid::Uuid, SelectedKind, f64, f64)> = Vec::new();
-        for sel in &self.canvas.selected {
-            let pos = match sel.kind {
-                SelectedKind::Symbol => sheet.symbols.iter().find(|s| s.uuid == sel.uuid)
-                    .map(|s| (s.position.x, s.position.y)),
-                SelectedKind::Label => sheet.labels.iter().find(|l| l.uuid == sel.uuid)
-                    .map(|l| (l.position.x, l.position.y)),
-                SelectedKind::Junction => sheet.junctions.iter().find(|j| j.uuid == sel.uuid)
-                    .map(|j| (j.position.x, j.position.y)),
-                SelectedKind::NoConnect => sheet.no_connects.iter().find(|n| n.uuid == sel.uuid)
-                    .map(|n| (n.position.x, n.position.y)),
-                SelectedKind::TextNote => sheet.text_notes.iter().find(|t| t.uuid == sel.uuid)
-                    .map(|t| (t.position.x, t.position.y)),
-                SelectedKind::Wire => sheet.wires.iter().find(|w| w.uuid == sel.uuid)
-                    .map(|w| ((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
-                SelectedKind::Bus => sheet.buses.iter().find(|b| b.uuid == sel.uuid)
-                    .map(|b| ((b.start.x + b.end.x) / 2.0, (b.start.y + b.end.y) / 2.0)),
-                _ => None,
-            };
-            if let Some((x, y)) = pos {
-                positions.push((sel.uuid, sel.kind, x, y));
-            }
-        }
+        let positions = engine.selection_anchors(&self.canvas.selected);
 
         if positions.is_empty() {
             return;
         }
 
-        let min_x = positions.iter().map(|p| p.2).fold(f64::INFINITY, f64::min);
-        let max_x = positions.iter().map(|p| p.2).fold(f64::NEG_INFINITY, f64::max);
-        let min_y = positions.iter().map(|p| p.3).fold(f64::INFINITY, f64::min);
-        let max_y = positions.iter().map(|p| p.3).fold(f64::NEG_INFINITY, f64::max);
+        let min_x = positions.iter().map(|anchor| anchor.x).fold(f64::INFINITY, f64::min);
+        let max_x = positions
+            .iter()
+            .map(|anchor| anchor.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = positions.iter().map(|anchor| anchor.y).fold(f64::INFINITY, f64::min);
+        let max_y = positions
+            .iter()
+            .map(|anchor| anchor.y)
+            .fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
         let gs = self.grid_size_mm as f64;
 
         // Compute move delta for each item and create batch undo command
         let mut engine_commands = Vec::new();
-        for &(uuid, kind, x, y) in &positions {
+        for anchor in &positions {
             let (target_x, target_y) = match action {
-                ActiveBarAction::AlignLeft => (min_x, y),
-                ActiveBarAction::AlignRight => (max_x, y),
-                ActiveBarAction::AlignTop => (x, min_y),
-                ActiveBarAction::AlignBottom => (x, max_y),
-                ActiveBarAction::AlignHorizontalCenters => (center_x, y),
-                ActiveBarAction::AlignVerticalCenters => (x, center_y),
+                ActiveBarAction::AlignLeft => (min_x, anchor.y),
+                ActiveBarAction::AlignRight => (max_x, anchor.y),
+                ActiveBarAction::AlignTop => (anchor.x, min_y),
+                ActiveBarAction::AlignBottom => (anchor.x, max_y),
+                ActiveBarAction::AlignHorizontalCenters => (center_x, anchor.y),
+                ActiveBarAction::AlignVerticalCenters => (anchor.x, center_y),
                 ActiveBarAction::AlignToGrid => {
-                    ((x / gs).round() * gs, (y / gs).round() * gs)
+                    ((anchor.x / gs).round() * gs, (anchor.y / gs).round() * gs)
                 }
-                _ => (x, y),
+                _ => (anchor.x, anchor.y),
             };
-            let dx = target_x - x;
-            let dy = target_y - y;
+            let dx = target_x - anchor.x;
+            let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
+                let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
                 engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
             }
         }
@@ -2067,13 +2100,13 @@ impl Signex {
             let n = sorted.len();
             match action {
                 ActiveBarAction::DistributeHorizontally => {
-                    sorted.sort_by(|a, b| a.2.total_cmp(&b.2));
+                    sorted.sort_by(|a, b| a.x.total_cmp(&b.x));
                     let step = (max_x - min_x) / (n - 1) as f64;
-                    for (i, &(uuid, kind, x, _y)) in sorted.iter().enumerate() {
+                    for (i, anchor) in sorted.iter().enumerate() {
                         let target_x = min_x + step * i as f64;
-                        let dx = target_x - x;
+                        let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx,
@@ -2083,13 +2116,13 @@ impl Signex {
                     }
                 }
                 ActiveBarAction::DistributeVertically => {
-                    sorted.sort_by(|a, b| a.3.total_cmp(&b.3));
+                    sorted.sort_by(|a, b| a.y.total_cmp(&b.y));
                     let step = (max_y - min_y) / (n - 1) as f64;
-                    for (i, &(uuid, kind, _x, y)) in sorted.iter().enumerate() {
+                    for (i, anchor) in sorted.iter().enumerate() {
                         let target_y = min_y + step * i as f64;
-                        let dy = target_y - y;
+                        let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx: 0.0,
@@ -2111,24 +2144,7 @@ impl Signex {
         }
     }
 
-    fn mark_dirty(&mut self) {
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.dirty = true;
-        }
-    }
-
-    /// Write the current working schematic back to the active tab.
-    /// Must be called after every mutation to keep tab state in sync.
-    fn commit_schematic(&mut self) {
-        let schematic = self.active_schematic().cloned();
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.cached_document = schematic.map(TabDocument::Schematic);
-        }
-    }
-
     fn update_selection_info(&mut self) {
-        use signex_types::schematic::SelectedKind;
-
         let selected = &self.canvas.selected;
         self.panel_ctx.selection_count = selected.len();
         self.panel_ctx.selection_info.clear();
@@ -2144,142 +2160,13 @@ impl Signex {
             return;
         }
 
-        let item = &selected[0];
-        self.panel_ctx.selected_uuid = Some(item.uuid);
-        self.panel_ctx.selected_kind = Some(item.kind);
-        let mut selection_info = Vec::new();
-        if let Some(snapshot) = self.active_render_snapshot() {
-            match item.kind {
-                SelectedKind::Symbol => {
-                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Symbol".into()));
-                        selection_info.push(("Reference".into(), sym.reference.clone()));
-                        selection_info.push(("Value".into(), sym.value.clone()));
-                        selection_info.push(("Library ID".into(), sym.lib_id.clone()));
-                        selection_info.push(("Footprint".into(), sym.footprint.clone()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2} mm", sym.position.x, sym.position.y),
-                        ));
-                        selection_info.push(("Rotation".into(), format!("{:.0}\u{00b0}", sym.rotation)));
-                        if sym.mirror_x {
-                            selection_info.push(("Mirror".into(), "X".into()));
-                        }
-                        if sym.mirror_y {
-                            selection_info.push(("Mirror".into(), "Y".into()));
-                        }
-                        if sym.unit > 1 {
-                            selection_info.push(("Unit".into(), format!("{}", sym.unit)));
-                        }
-                    }
-                }
-                SelectedKind::Wire => {
-                    if let Some(w) = snapshot.wires.iter().find(|w| w.uuid == item.uuid) {
-                        let dx = w.end.x - w.start.x;
-                        let dy = w.end.y - w.start.y;
-                        let len = (dx * dx + dy * dy).sqrt();
-                        selection_info.push(("Type".into(), "Wire".into()));
-                        selection_info.push((
-                            "Start".into(),
-                            format!("{:.2}, {:.2}", w.start.x, w.start.y),
-                        ));
-                        selection_info.push(("End".into(), format!("{:.2}, {:.2}", w.end.x, w.end.y)));
-                        selection_info.push(("Length".into(), format!("{:.2} mm", len)));
-                    }
-                }
-                SelectedKind::Label => {
-                    if let Some(l) = snapshot.labels.iter().find(|l| l.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), format!("{:?} Label", l.label_type)));
-                        selection_info.push(("Net Name".into(), l.text.clone()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2}", l.position.x, l.position.y),
-                        ));
-                    }
-                }
-                SelectedKind::Junction => {
-                    if let Some(j) = snapshot.junctions.iter().find(|j| j.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Junction".into()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2}", j.position.x, j.position.y),
-                        ));
-                    }
-                }
-                SelectedKind::NoConnect => {
-                    if let Some(nc) = snapshot.no_connects.iter().find(|n| n.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "No Connect".into()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2}", nc.position.x, nc.position.y),
-                        ));
-                    }
-                }
-                SelectedKind::TextNote => {
-                    if let Some(tn) = snapshot.text_notes.iter().find(|t| t.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Text Note".into()));
-                        selection_info.push(("Text".into(), tn.text.clone()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2}", tn.position.x, tn.position.y),
-                        ));
-                    }
-                }
-                SelectedKind::ChildSheet => {
-                    if let Some(cs) = snapshot.child_sheets.iter().find(|c| c.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Hierarchical Sheet".into()));
-                        selection_info.push(("Name".into(), cs.name.clone()));
-                        selection_info.push(("File".into(), cs.filename.clone()));
-                        selection_info.push((
-                            "Position".into(),
-                            format!("{:.2}, {:.2}", cs.position.x, cs.position.y),
-                        ));
-                        selection_info.push((
-                            "Size".into(),
-                            format!("{:.1} x {:.1} mm", cs.size.0, cs.size.1),
-                        ));
-                    }
-                }
-                SelectedKind::Bus => {
-                    if let Some(b) = snapshot.buses.iter().find(|b| b.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Bus".into()));
-                        selection_info.push((
-                            "Start".into(),
-                            format!("{:.2}, {:.2}", b.start.x, b.start.y),
-                        ));
-                        selection_info.push(("End".into(), format!("{:.2}, {:.2}", b.end.x, b.end.y)));
-                    }
-                }
-                SelectedKind::BusEntry | SelectedKind::Drawing => {
-                    selection_info.push(("Type".into(), format!("{:?}", item.kind)));
-                }
-                SelectedKind::SymbolRefField => {
-                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Reference Field".into()));
-                        selection_info.push(("Reference".into(), sym.reference.clone()));
-                        if let Some(ref rt) = sym.ref_text {
-                            selection_info.push((
-                                "Position".into(),
-                                format!("{:.2}, {:.2} mm", rt.position.x, rt.position.y),
-                            ));
-                        }
-                    }
-                }
-                SelectedKind::SymbolValField => {
-                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        selection_info.push(("Type".into(), "Value Field".into()));
-                        selection_info.push(("Value".into(), sym.value.clone()));
-                        if let Some(ref vt) = sym.val_text {
-                            selection_info.push((
-                                "Position".into(),
-                                format!("{:.2}, {:.2} mm", vt.position.x, vt.position.y),
-                            ));
-                        }
-                    }
-                }
-            }
+        if let Some(engine) = self.engine.as_ref()
+            && let Some(details) = engine.describe_single_selection(selected)
+        {
+            self.panel_ctx.selected_uuid = Some(details.selected_uuid);
+            self.panel_ctx.selected_kind = Some(details.selected_kind);
+            self.panel_ctx.selection_info = details.info;
         }
-        self.panel_ctx.selection_info = selection_info;
     }
 
     fn update_canvas_theme(&mut self) {
