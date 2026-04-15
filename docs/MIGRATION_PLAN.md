@@ -181,13 +181,24 @@ Completed in the current migration slice:
   `SchematicRenderSnapshot` across draw, hit-test, and selection-overlay paths
 - `TabInfo` now exposes `cached_document` explicitly as the inactive-tab and
   tab-switch cache boundary around the active engine-owned document
+- `SchematicRenderCache` now supports invalidation-scoped refresh plus prepared
+  preview geometry lookups, so drag-preview overlays stop rescanning live
+  vectors for symbol, wire, and label markers
+- engine-backed mutation finalization now keeps the active document inside the
+  persistent engine and only syncs tab/cache mirrors from that owner
+- app-level undo markers now store render invalidation alongside engine step
+  counts, so undo/redo can replay narrower cache refresh scopes instead of
+  always forcing full redraw semantics
+- PCB files now open into `TabDocument::Pcb` tabs through direct file-open and
+  project-tree selection paths, and activating those tabs clears schematic-only
+  engine/canvas state instead of falling through schematic sync logic
 
 Still intentionally left for the next slice:
 
-- the render cache still rebuilds a full `SchematicRenderSnapshot` after each
-  document mutation instead of applying finer-grained incremental updates
-- `cached_document` still stores a full inactive-tab document; that boundary is
-  now explicit, but only the schematic variant exists today
+- some mutation kinds still collapse to coarse invalidation buckets because the
+  engine patch model does not yet describe object-type deltas in enough detail
+- PCB tabs are now wired into tab activation/load flow, but they still do not
+  have a dedicated board view, save path, or board-specific panel sync
 
 Bridge note:
 

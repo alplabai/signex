@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length, Subscription, Task, Theme};
 use signex_types::coord::Unit;
+use signex_types::pcb::PcbBoard;
 use signex_types::project::ProjectData;
 use signex_types::schematic::SchematicSheet;
 use signex_types::theme::ThemeId;
@@ -263,18 +264,28 @@ impl DrawMode {
             DrawMode::FreeAngle => DrawMode::Ortho90,
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum TabDocument {
     Schematic(SchematicSheet),
+    Pcb(PcbBoard),
 }
 
 impl TabDocument {
     pub fn as_schematic(&self) -> Option<&SchematicSheet> {
         match self {
             Self::Schematic(sheet) => Some(sheet),
+            Self::Pcb(_) => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn as_pcb(&self) -> Option<&PcbBoard> {
+        match self {
+            Self::Schematic(_) => None,
+            Self::Pcb(board) => Some(board),
         }
     }
 }
@@ -678,25 +689,25 @@ impl Signex {
                 }
             }
             Message::TextEditSubmit => {
-                if let Some(state) = self.editing_text.take() {
-                    if state.text != state.original_text {
-                        let engine_command = match state.kind {
-                            signex_types::schematic::SelectedKind::Label => {
-                                signex_engine::Command::UpdateText {
-                                    target: signex_engine::TextTarget::Label(state.uuid),
-                                    value: state.text.clone(),
-                                }
+                if let Some(state) = self.editing_text.take()
+                    && state.text != state.original_text
+                {
+                    let engine_command = match state.kind {
+                        signex_types::schematic::SelectedKind::Label => {
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::Label(state.uuid),
+                                value: state.text.clone(),
                             }
-                            signex_types::schematic::SelectedKind::TextNote => {
-                                signex_engine::Command::UpdateText {
-                                    target: signex_engine::TextTarget::TextNote(state.uuid),
-                                    value: state.text.clone(),
-                                }
+                        }
+                        signex_types::schematic::SelectedKind::TextNote => {
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::TextNote(state.uuid),
+                                value: state.text.clone(),
                             }
-                            _ => return Task::none(),
-                        };
-                        self.apply_engine_command(engine_command, false, true);
-                    }
+                        }
+                        _ => return Task::none(),
+                    };
+                    self.apply_engine_command(engine_command, false, true);
                 }
             }
             Message::CanvasEvent(CanvasEvent::DoubleClicked {
@@ -1226,18 +1237,17 @@ impl Signex {
                             let filename = node.label.clone();
                             if let Some(dir) = self.project_path.as_ref().and_then(|p| p.parent()) {
                                 let file_path = dir.join(&filename);
-                                if file_path.exists()
-                                    && (filename.ends_with(".kicad_sch")
-                                        || filename.ends_with(".snxsch"))
-                                {
+                                if file_path.exists() {
                                     // Already open? Switch to it
                                     if let Some(idx) =
                                         self.tabs.iter().position(|t| t.path == file_path)
                                     {
                                         self.active_tab = idx;
                                         self.sync_active_tab();
-                                    } else {
-                                        // Open new tab
+                                    } else if filename.ends_with(".kicad_sch")
+                                        || filename.ends_with(".snxsch")
+                                    {
+                                        // Open new schematic tab
                                         match kicad_parser::parse_schematic_file(&file_path) {
                                             Ok(sheet) => {
                                                 self.tabs.push(TabInfo {
@@ -1253,6 +1263,21 @@ impl Signex {
                                             }
                                             Err(e) => eprintln!("Failed to parse {filename}: {e}"),
                                         }
+                                    } else if filename.ends_with(".kicad_pcb")
+                                        || filename.ends_with(".snxpcb")
+                                    {
+                                        match kicad_parser::parse_pcb_file(&file_path) {
+                                            Ok(board) => {
+                                                let title = filename
+                                                    .trim_end_matches(".kicad_pcb")
+                                                    .trim_end_matches(".snxpcb")
+                                                    .to_string();
+                                                self.open_pcb_tab(file_path, title, board);
+                                            }
+                                            Err(e) => eprintln!("Failed to parse {filename}: {e}"),
+                                        }
+                                    } else {
+                                        eprintln!("Unsupported project tree document: {filename}");
                                     }
                                 }
                             }
@@ -1649,7 +1674,7 @@ impl Signex {
 
     fn handle_menu(&mut self, msg: MenuMessage) -> Task<Message> {
         // iced_aw MenuBar manages open/close/hover state — no manual control needed
-        let task = match msg {
+        match msg {
             // ── File ──
             MenuMessage::OpenProject => Task::perform(
                 async {
@@ -1734,35 +1759,27 @@ impl Signex {
                 self.current_tool = Tool::Component;
                 Task::none()
             }
-            MenuMessage::Undo => {
-                return self.update(Message::Undo);
-            }
-            MenuMessage::Redo => {
-                return self.update(Message::Redo);
-            }
-            MenuMessage::Save => {
-                return self.update(Message::SaveFile);
-            }
-            MenuMessage::SaveAs => {
-                return Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Save Schematic As")
-                            .add_filter("Signex Schematic", &["snxsch"])
-                            .add_filter("KiCad Schematic", &["kicad_sch"])
-                            .save_file()
-                            .await
-                            .map(|f| f.path().to_path_buf())
-                    },
-                    |path| {
-                        if let Some(p) = path {
-                            Message::SaveFileAs(p)
-                        } else {
-                            Message::Noop
-                        }
-                    },
-                );
-            }
+            MenuMessage::Undo => self.update(Message::Undo),
+            MenuMessage::Redo => self.update(Message::Redo),
+            MenuMessage::Save => self.update(Message::SaveFile),
+            MenuMessage::SaveAs => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Save Schematic As")
+                        .add_filter("Signex Schematic", &["snxsch"])
+                        .add_filter("KiCad Schematic", &["kicad_sch"])
+                        .save_file()
+                        .await
+                        .map(|f| f.path().to_path_buf())
+                },
+                |path| {
+                    if let Some(p) = path {
+                        Message::SaveFileAs(p)
+                    } else {
+                        Message::Noop
+                    }
+                },
+            ),
             // ── Stubs (not yet implemented) ──
             MenuMessage::NewProject
             | MenuMessage::ZoomIn
@@ -1771,12 +1788,8 @@ impl Signex {
             | MenuMessage::Erc
             | MenuMessage::GenerateBom => Task::none(),
             // ── Preferences ──
-            MenuMessage::OpenPreferences => {
-                return self.update(Message::OpenPreferences);
-            }
-        };
-
-        task
+            MenuMessage::OpenPreferences => self.update(Message::OpenPreferences),
+        }
     }
 
     fn handle_tab(&mut self, msg: TabMessage) {
@@ -1928,7 +1941,7 @@ impl Signex {
     }
 
     fn sync_active_tab(&mut self) {
-        self.sync_visible_schematic_from_active_tab();
+        self.sync_visible_document_from_active_tab();
     }
 
     /// Align selected symbols based on the alignment action.
@@ -2092,46 +2105,29 @@ impl Signex {
         let item = &selected[0];
         self.panel_ctx.selected_uuid = Some(item.uuid);
         self.panel_ctx.selected_kind = Some(item.kind);
-        if let Some(sheet) = self.active_schematic().cloned() {
+        let mut selection_info = Vec::new();
+        if let Some(sheet) = self.active_schematic() {
             match item.kind {
                 SelectedKind::Symbol => {
                     if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Symbol".into()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Reference".into(), sym.reference.clone()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Value".into(), sym.value.clone()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Library ID".into(), sym.lib_id.clone()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Footprint".into(), sym.footprint.clone()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Symbol".into()));
+                        selection_info.push(("Reference".into(), sym.reference.clone()));
+                        selection_info.push(("Value".into(), sym.value.clone()));
+                        selection_info.push(("Library ID".into(), sym.lib_id.clone()));
+                        selection_info.push(("Footprint".into(), sym.footprint.clone()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2} mm", sym.position.x, sym.position.y),
                         ));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Rotation".into(), format!("{:.0}\u{00b0}", sym.rotation)));
+                        selection_info.push(("Rotation".into(), format!("{:.0}\u{00b0}", sym.rotation)));
                         if sym.mirror_x {
-                            self.panel_ctx
-                                .selection_info
-                                .push(("Mirror".into(), "X".into()));
+                            selection_info.push(("Mirror".into(), "X".into()));
                         }
                         if sym.mirror_y {
-                            self.panel_ctx
-                                .selection_info
-                                .push(("Mirror".into(), "Y".into()));
+                            selection_info.push(("Mirror".into(), "Y".into()));
                         }
                         if sym.unit > 1 {
-                            self.panel_ctx
-                                .selection_info
-                                .push(("Unit".into(), format!("{}", sym.unit)));
+                            selection_info.push(("Unit".into(), format!("{}", sym.unit)));
                         }
                     }
                 }
@@ -2140,30 +2136,20 @@ impl Signex {
                         let dx = w.end.x - w.start.x;
                         let dy = w.end.y - w.start.y;
                         let len = (dx * dx + dy * dy).sqrt();
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Wire".into()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Wire".into()));
+                        selection_info.push((
                             "Start".into(),
                             format!("{:.2}, {:.2}", w.start.x, w.start.y),
                         ));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("End".into(), format!("{:.2}, {:.2}", w.end.x, w.end.y)));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Length".into(), format!("{:.2} mm", len)));
+                        selection_info.push(("End".into(), format!("{:.2}, {:.2}", w.end.x, w.end.y)));
+                        selection_info.push(("Length".into(), format!("{:.2} mm", len)));
                     }
                 }
                 SelectedKind::Label => {
                     if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), format!("{:?} Label", l.label_type)));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Net Name".into(), l.text.clone()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), format!("{:?} Label", l.label_type)));
+                        selection_info.push(("Net Name".into(), l.text.clone()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2}", l.position.x, l.position.y),
                         ));
@@ -2171,10 +2157,8 @@ impl Signex {
                 }
                 SelectedKind::Junction => {
                     if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Junction".into()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Junction".into()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2}", j.position.x, j.position.y),
                         ));
@@ -2182,10 +2166,8 @@ impl Signex {
                 }
                 SelectedKind::NoConnect => {
                     if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "No Connect".into()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "No Connect".into()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2}", nc.position.x, nc.position.y),
                         ));
@@ -2193,13 +2175,9 @@ impl Signex {
                 }
                 SelectedKind::TextNote => {
                     if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Text Note".into()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Text".into(), tn.text.clone()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Text Note".into()));
+                        selection_info.push(("Text".into(), tn.text.clone()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2}", tn.position.x, tn.position.y),
                         ));
@@ -2207,20 +2185,14 @@ impl Signex {
                 }
                 SelectedKind::ChildSheet => {
                     if let Some(cs) = sheet.child_sheets.iter().find(|c| c.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Hierarchical Sheet".into()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Name".into(), cs.name.clone()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("File".into(), cs.filename.clone()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Hierarchical Sheet".into()));
+                        selection_info.push(("Name".into(), cs.name.clone()));
+                        selection_info.push(("File".into(), cs.filename.clone()));
+                        selection_info.push((
                             "Position".into(),
                             format!("{:.2}, {:.2}", cs.position.x, cs.position.y),
                         ));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push((
                             "Size".into(),
                             format!("{:.1} x {:.1} mm", cs.size.0, cs.size.1),
                         ));
@@ -2228,33 +2200,23 @@ impl Signex {
                 }
                 SelectedKind::Bus => {
                     if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Bus".into()));
-                        self.panel_ctx.selection_info.push((
+                        selection_info.push(("Type".into(), "Bus".into()));
+                        selection_info.push((
                             "Start".into(),
                             format!("{:.2}, {:.2}", b.start.x, b.start.y),
                         ));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("End".into(), format!("{:.2}, {:.2}", b.end.x, b.end.y)));
+                        selection_info.push(("End".into(), format!("{:.2}, {:.2}", b.end.x, b.end.y)));
                     }
                 }
                 SelectedKind::BusEntry | SelectedKind::Drawing => {
-                    self.panel_ctx
-                        .selection_info
-                        .push(("Type".into(), format!("{:?}", item.kind)));
+                    selection_info.push(("Type".into(), format!("{:?}", item.kind)));
                 }
                 SelectedKind::SymbolRefField => {
                     if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Reference Field".into()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Reference".into(), sym.reference.clone()));
+                        selection_info.push(("Type".into(), "Reference Field".into()));
+                        selection_info.push(("Reference".into(), sym.reference.clone()));
                         if let Some(ref rt) = sym.ref_text {
-                            self.panel_ctx.selection_info.push((
+                            selection_info.push((
                                 "Position".into(),
                                 format!("{:.2}, {:.2} mm", rt.position.x, rt.position.y),
                             ));
@@ -2263,14 +2225,10 @@ impl Signex {
                 }
                 SelectedKind::SymbolValField => {
                     if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Type".into(), "Value Field".into()));
-                        self.panel_ctx
-                            .selection_info
-                            .push(("Value".into(), sym.value.clone()));
+                        selection_info.push(("Type".into(), "Value Field".into()));
+                        selection_info.push(("Value".into(), sym.value.clone()));
                         if let Some(ref vt) = sym.val_text {
-                            self.panel_ctx.selection_info.push((
+                            selection_info.push((
                                 "Position".into(),
                                 format!("{:.2}, {:.2} mm", vt.position.x, vt.position.y),
                             ));
@@ -2279,6 +2237,7 @@ impl Signex {
                 }
             }
         }
+        self.panel_ctx.selection_info = selection_info;
     }
 
     fn update_canvas_theme(&mut self) {

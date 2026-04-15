@@ -8,3 +8,4 @@ license.workspace = true
 [dependencies]
 signex-types = { workspace = true }
 iced = { workspace = true }
+uuid = { workspace = true }
