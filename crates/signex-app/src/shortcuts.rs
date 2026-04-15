@@ -30,6 +30,11 @@ pub const SHORTCUTS: &[Shortcut] = &[
         description: "Paste",
     },
     Shortcut {
+        key: "V",
+        modifiers: "Shift+Ctrl",
+        description: "Smart paste",
+    },
+    Shortcut {
         key: "D",
         modifiers: "Ctrl",
         description: "Duplicate",
