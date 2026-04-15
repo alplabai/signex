@@ -238,8 +238,7 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
-        let find_replace_open = self.find_replace.open;
-        let kbd = keyboard::listen().map(move |event| match event {
+        let kbd = keyboard::listen().with(self.find_replace.open).map(|(find_replace_open, event)| match event {
             keyboard::Event::KeyPressed {
                 key, modifiers: m, ..
             } => match (key.as_ref(), m) {
