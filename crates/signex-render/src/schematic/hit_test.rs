@@ -5,14 +5,14 @@
 
 use signex_types::schematic::*;
 
-use super::{field_display_pos, field_effective_style};
+use super::{SchematicRenderSnapshot, field_display_pos, field_effective_style};
 
 /// Threshold distance in mm for considering a click "on" a thin element.
 const HIT_TOLERANCE: f64 = 1.5;
 
 /// Find the topmost element at the given world position.
 /// Elements are tested in reverse z-order (top first) so the first hit wins.
-pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem> {
+pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<SelectedItem> {
     // Labels (topmost in z-order)
     for lbl in &sheet.labels {
         if hit_label(lbl, wx, wy) {
@@ -100,7 +100,7 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
 }
 
 /// Find all elements within a rectangular region (rubber-band selection).
-pub fn hit_test_rect(sheet: &SchematicSheet, rect: &Aabb) -> Vec<SelectedItem> {
+pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
     let mut result = Vec::new();
 
     for sym in &sheet.symbols {

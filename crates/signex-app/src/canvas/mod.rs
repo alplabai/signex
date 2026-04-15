@@ -71,7 +71,7 @@ pub struct SchematicCanvas {
     pub canvas_colors: signex_types::theme::CanvasColors,
     /// Render-facing cache of the currently visible schematic.
     /// The app updates this from the active engine or active tab cache.
-    pub schematic: Option<signex_types::schematic::SchematicSheet>,
+    pub render_cache: Option<signex_render::schematic::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
     /// Pending fit target to transfer to CanvasState.
@@ -96,8 +96,8 @@ pub struct SchematicCanvas {
 }
 
 impl SchematicCanvas {
-    fn active_schematic(&self) -> Option<&signex_types::schematic::SchematicSheet> {
-        self.schematic.as_ref()
+    pub fn active_snapshot(&self) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+        self.render_cache.as_ref().map(|cache| cache.snapshot())
     }
 
     pub fn new() -> Self {
@@ -122,7 +122,7 @@ impl SchematicCanvas {
                 Color::from_rgb8(c.r, c.g, c.b)
             },
             canvas_colors: default_colors,
-            schematic: None,
+            render_cache: None,
             selected: Vec::new(),
             pending_fit: std::cell::Cell::new(None),
             wire_preview: Vec::new(),
@@ -148,14 +148,17 @@ impl SchematicCanvas {
         self.content_cache.clear();
     }
 
-    pub fn set_schematic(&mut self, schematic: Option<signex_types::schematic::SchematicSheet>) {
-        self.schematic = schematic;
+    pub fn set_render_cache(
+        &mut self,
+        render_cache: Option<signex_render::schematic::SchematicRenderCache>,
+    ) {
+        self.render_cache = render_cache;
     }
 
     /// Fit the camera to show the schematic content.
     pub fn fit_to_paper(&mut self) {
-        if let Some(sheet) = self.active_schematic()
-            && let Some(bounds) = sheet.content_bounds()
+        if let Some(snapshot) = self.active_snapshot()
+            && let Some(bounds) = snapshot.content_bounds()
         {
             self.pending_fit.set(Some(Rectangle::new(
                 iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
@@ -252,9 +255,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                     // Check: did we click on an already-selected item?
                     // If yes, prepare for drag-to-move (defer the Clicked event).
                     let on_selected = if !self.drawing_mode && !self.selected.is_empty() {
-                        if let Some(sheet) = self.active_schematic() {
+                        if let Some(snapshot) = self.active_snapshot() {
                             if let Some(hit) =
-                                signex_render::schematic::hit_test::hit_test(sheet, wx, wy)
+                                signex_render::schematic::hit_test::hit_test(snapshot, wx, wy)
                             {
                                 self.selected.iter().any(|s| s.uuid == hit.uuid)
                             } else {
@@ -561,7 +564,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 state.camera.offset.y,
                 state.camera.scale,
             ));
-            if let Some(sheet) = self.active_schematic() {
+            if let Some(snapshot) = self.active_snapshot() {
                 let transform = signex_render::schematic::ScreenTransform {
                     offset_x: state.camera.offset.x,
                     offset_y: state.camera.offset.y,
@@ -569,7 +572,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 };
                 signex_render::schematic::render_schematic(
                     frame,
-                    sheet,
+                    snapshot,
                     &transform,
                     &self.canvas_colors,
                     bounds,
@@ -580,7 +583,7 @@ impl canvas::Program<Message> for SchematicCanvas {
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
         if !self.selected.is_empty()
-            && let Some(sheet) = self.active_schematic()
+            && let Some(snapshot) = self.active_snapshot()
         {
             let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
                 let transform = signex_render::schematic::ScreenTransform {
@@ -590,7 +593,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 };
                 signex_render::schematic::selection::draw_selection_overlay(
                     frame,
-                    sheet,
+                    snapshot,
                     &self.selected,
                     &transform,
                 );
@@ -788,13 +791,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                 let move_stroke = canvas::Stroke::default()
                     .with_color(move_color)
                     .with_width(1.5);
-                if let Some(sheet) = self.active_schematic() {
+                if let Some(snapshot) = self.active_snapshot() {
                     for sel in &self.selected {
                         if matches!(
                             sel.kind,
                             signex_types::schematic::SelectedKind::SymbolRefField
                                 | signex_types::schematic::SelectedKind::SymbolValField
-                        ) && let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == sel.uuid)
+                        ) && let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == sel.uuid)
                         {
                             let prop = match sel.kind {
                                 signex_types::schematic::SelectedKind::SymbolRefField => {
@@ -839,12 +842,12 @@ impl canvas::Program<Message> for SchematicCanvas {
 
                         // Draw a simple marker at the moved position
                         let pos = match sel.kind {
-                            signex_types::schematic::SelectedKind::Symbol => sheet
+                            signex_types::schematic::SelectedKind::Symbol => snapshot
                                 .symbols
                                 .iter()
                                 .find(|s| s.uuid == sel.uuid)
                                 .map(|s| (s.position.x as f32, s.position.y as f32)),
-                            signex_types::schematic::SelectedKind::Wire => sheet
+                            signex_types::schematic::SelectedKind::Wire => snapshot
                                 .wires
                                 .iter()
                                 .find(|w| w.uuid == sel.uuid)
@@ -854,7 +857,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                                         ((w.start.y + w.end.y) / 2.0) as f32,
                                     )
                                 }),
-                            signex_types::schematic::SelectedKind::Label => sheet
+                            signex_types::schematic::SelectedKind::Label => snapshot
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == sel.uuid)

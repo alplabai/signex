@@ -5,7 +5,7 @@ use iced::widget::canvas;
 
 use signex_types::schematic::*;
 
-use super::{ScreenTransform, field_display_pos};
+use super::{SchematicRenderSnapshot, ScreenTransform, field_display_pos};
 
 /// Selection outline color (Altium-style — thin outline, no fill).
 const SEL_COLOR: Color = Color {
@@ -18,7 +18,7 @@ const SEL_COLOR: Color = Color {
 /// Draw selection highlights for all selected items.
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,
-    sheet: &SchematicSheet,
+    sheet: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
 ) {
