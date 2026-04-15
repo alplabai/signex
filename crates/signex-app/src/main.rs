@@ -6,6 +6,7 @@ mod active_bar;
 mod app;
 mod canvas;
 mod dock;
+mod find_replace;
 mod fonts;
 mod menu_bar;
 mod panels;

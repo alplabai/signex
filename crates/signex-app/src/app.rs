@@ -94,9 +94,12 @@ pub enum Message {
     ContextAction(ContextAction),
     // Preferences dialog
     OpenPreferences,
+    OpenFind,
+    OpenReplace,
     ClosePreferences,
     PreferencesNav(crate::preferences::PrefNav),
     PreferencesMsg(crate::preferences::PrefMsg),
+    FindReplaceMsg(crate::find_replace::FindReplaceMsg),
     WindowResized(f32, f32),
     Noop,
 }
@@ -233,6 +236,8 @@ pub struct Signex {
     pub panel_list_open: bool,
     /// Preferences dialog open.
     pub preferences_open: bool,
+    /// Find / Replace dialog state.
+    pub find_replace: crate::find_replace::FindReplaceState,
     /// Selected nav item in the Preferences dialog.
     pub preferences_nav: crate::preferences::PrefNav,
     /// Draft theme selected in Preferences (live preview; committed on Save).
@@ -1391,10 +1396,13 @@ impl Signex {
                 self.dock.add_panel(crate::dock::PanelPosition::Right, kind);
                 return Task::none();
             }
+            Message::OpenFind => return self.handle_open_find_replace(false),
+            Message::OpenReplace => return self.handle_open_find_replace(true),
             Message::OpenPreferences => return self.handle_open_preferences(),
             Message::ClosePreferences => return self.handle_close_preferences(),
             Message::PreferencesNav(nav) => return self.handle_preferences_nav(nav),
             Message::PreferencesMsg(msg) => return self.handle_preferences_msg(msg),
+            Message::FindReplaceMsg(msg) => return self.handle_find_replace_msg(msg),
             // Active Bar
             Message::ActiveBar(msg) => {
                 use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
@@ -1810,6 +1818,8 @@ impl Signex {
                 self.update(Message::Selection(selection_message::SelectionMessage::SelectAll))
             }
             MenuMessage::Duplicate => self.update(Message::Duplicate),
+            MenuMessage::Find => self.update(Message::OpenFind),
+            MenuMessage::Replace => self.update(Message::OpenReplace),
             MenuMessage::Save => self.update(Message::SaveFile),
             MenuMessage::SaveAs => Task::perform(
                 async {
@@ -2390,6 +2400,7 @@ impl Signex {
             || self.context_menu.is_some()
             || self.active_bar_menu.is_some()
             || self.panel_list_open
+            || self.find_replace.open
             || self.preferences_open
             || !self.dock.floating.is_empty();
 
@@ -2752,6 +2763,12 @@ impl Signex {
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
+        }
+
+        if self.find_replace.open {
+            let dialog = crate::find_replace::view(&self.find_replace, &self.panel_ctx.tokens)
+                .map(Message::FindReplaceMsg);
+            layers.push(dialog);
         }
 
         layers

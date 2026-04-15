@@ -138,6 +138,7 @@ impl Signex {
             pending_port: None,
             panel_list_open: false,
             preferences_open: false,
+            find_replace: crate::find_replace::FindReplaceState::default(),
             preferences_nav: crate::preferences::PrefNav::Appearance,
             preferences_draft_theme: ThemeId::Signex,
             preferences_draft_font: String::new(),
@@ -234,7 +235,8 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
-        let kbd = keyboard::listen().map(|event| match event {
+        let find_replace_open = self.find_replace.open;
+        let kbd = keyboard::listen().map(move |event| match event {
             keyboard::Event::KeyPressed {
                 key, modifiers: m, ..
             } => match (key.as_ref(), m) {
@@ -257,6 +259,11 @@ impl Signex {
                 // Ctrl+, open Preferences
                 (keyboard::Key::Character(c), m) if c == "," && m.command() => {
                     Message::OpenPreferences
+                }
+                (keyboard::Key::Character(c), m) if c == "f" && m.command() => Message::OpenFind,
+                (keyboard::Key::Character(c), m) if c == "h" && m.command() => Message::OpenReplace,
+                (keyboard::Key::Named(keyboard::key::Named::Escape), _) if find_replace_open => {
+                    Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
                 }
                 (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                     Message::Tool(ToolMessage::SelectTool(Tool::Select))
