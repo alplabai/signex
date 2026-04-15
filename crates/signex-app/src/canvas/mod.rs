@@ -96,6 +96,10 @@ pub struct SchematicCanvas {
 }
 
 impl SchematicCanvas {
+    fn active_schematic(&self) -> Option<&signex_types::schematic::SchematicSheet> {
+        self.schematic.as_ref()
+    }
+
     pub fn new() -> Self {
         let default_colors =
             signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
@@ -146,7 +150,7 @@ impl SchematicCanvas {
 
     /// Fit the camera to show the schematic content.
     pub fn fit_to_paper(&mut self) {
-        if let Some(ref sheet) = self.schematic
+        if let Some(sheet) = self.active_schematic()
             && let Some(bounds) = sheet.content_bounds()
         {
             self.pending_fit.set(Some(Rectangle::new(
@@ -244,7 +248,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     // Check: did we click on an already-selected item?
                     // If yes, prepare for drag-to-move (defer the Clicked event).
                     let on_selected = if !self.drawing_mode && !self.selected.is_empty() {
-                        if let Some(ref sheet) = self.schematic {
+                        if let Some(sheet) = self.active_schematic() {
                             if let Some(hit) =
                                 signex_render::schematic::hit_test::hit_test(sheet, wx, wy)
                             {
@@ -553,7 +557,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 state.camera.offset.y,
                 state.camera.scale,
             ));
-            if let Some(ref sheet) = self.schematic {
+            if let Some(sheet) = self.active_schematic() {
                 let transform = signex_render::schematic::ScreenTransform {
                     offset_x: state.camera.offset.x,
                     offset_y: state.camera.offset.y,
@@ -572,7 +576,7 @@ impl canvas::Program<Message> for SchematicCanvas {
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
         if !self.selected.is_empty()
-            && let Some(ref sheet) = self.schematic
+            && let Some(sheet) = self.active_schematic()
         {
             let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
                 let transform = signex_render::schematic::ScreenTransform {
@@ -780,7 +784,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 let move_stroke = canvas::Stroke::default()
                     .with_color(move_color)
                     .with_width(1.5);
-                if let Some(ref sheet) = self.schematic {
+                if let Some(sheet) = self.active_schematic() {
                     for sel in &self.selected {
                         if matches!(
                             sel.kind,
