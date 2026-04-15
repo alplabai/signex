@@ -977,117 +977,68 @@ impl Signex {
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditSymbolDesignator(uuid, new_val),
                     ) => {
-                        let uuid = *uuid;
-                        let new_val = new_val.clone();
-                        if let Some(symbol) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
-                            .cloned()
-                            && symbol.reference != new_val
-                        {
-                            self.apply_engine_command(
-                                signex_engine::Command::UpdateSymbolFields {
-                                    symbol_id: uuid,
-                                    reference: new_val.clone(),
-                                    value: symbol.value.clone(),
-                                    footprint: symbol.footprint.clone(),
-                                },
-                                false,
-                                false,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::SymbolReference(*uuid),
+                                value: new_val.clone(),
+                            },
+                            false,
+                            false,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditSymbolValue(uuid, new_val),
                     ) => {
-                        let uuid = *uuid;
-                        let new_val = new_val.clone();
-                        if let Some(symbol) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
-                            .cloned()
-                            && symbol.value != new_val
-                        {
-                            self.apply_engine_command(
-                                signex_engine::Command::UpdateSymbolFields {
-                                    symbol_id: uuid,
-                                    reference: symbol.reference.clone(),
-                                    value: new_val.clone(),
-                                    footprint: symbol.footprint.clone(),
-                                },
-                                false,
-                                false,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::SymbolValue(*uuid),
+                                value: new_val.clone(),
+                            },
+                            false,
+                            false,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditSymbolFootprint(uuid, new_val),
                     ) => {
-                        let uuid = *uuid;
-                        let new_val = new_val.clone();
-                        if let Some(symbol) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
-                            .cloned()
-                            && symbol.footprint != new_val
-                        {
-                            self.apply_engine_command(
-                                signex_engine::Command::UpdateSymbolFields {
-                                    symbol_id: uuid,
-                                    reference: symbol.reference.clone(),
-                                    value: symbol.value.clone(),
-                                    footprint: new_val.clone(),
-                                },
-                                false,
-                                false,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::UpdateSymbolFootprint {
+                                symbol_id: *uuid,
+                                footprint: new_val.clone(),
+                            },
+                            false,
+                            false,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ToggleSymbolMirrorX(uuid),
                     ) => {
-                        let uuid = *uuid;
-                        if let Some((old_mirror_x, old_mirror_y)) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
-                            .map(|sym| (sym.mirror_x, sym.mirror_y))
-                        {
-                            let _mirror = (old_mirror_x, old_mirror_y);
-                            self.apply_engine_command(
-                                signex_engine::Command::MirrorSelection {
-                                    items: vec![signex_types::schematic::SelectedItem::new(
-                                        uuid,
-                                        signex_types::schematic::SelectedKind::Symbol,
-                                    )],
-                                    axis: signex_engine::MirrorAxis::Vertical,
-                                },
-                                true,
-                                true,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::MirrorSelection {
+                                items: vec![signex_types::schematic::SelectedItem::new(
+                                    *uuid,
+                                    signex_types::schematic::SelectedKind::Symbol,
+                                )],
+                                axis: signex_engine::MirrorAxis::Vertical,
+                            },
+                            true,
+                            true,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ToggleSymbolMirrorY(uuid),
                     ) => {
-                        let uuid = *uuid;
-                        if let Some((old_mirror_x, old_mirror_y)) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
-                            .map(|sym| (sym.mirror_x, sym.mirror_y))
-                        {
-                            let _mirror = (old_mirror_x, old_mirror_y);
-                            self.apply_engine_command(
-                                signex_engine::Command::MirrorSelection {
-                                    items: vec![signex_types::schematic::SelectedItem::new(
-                                        uuid,
-                                        signex_types::schematic::SelectedKind::Symbol,
-                                    )],
-                                    axis: signex_engine::MirrorAxis::Horizontal,
-                                },
-                                true,
-                                true,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::MirrorSelection {
+                                items: vec![signex_types::schematic::SelectedItem::new(
+                                    *uuid,
+                                    signex_types::schematic::SelectedKind::Symbol,
+                                )],
+                                axis: signex_engine::MirrorAxis::Horizontal,
+                            },
+                            true,
+                            true,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ToggleSymbolLocked(uuid),
@@ -1104,46 +1055,26 @@ impl Signex {
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditLabelText(uuid, new_text),
                     ) => {
-                        let uuid = *uuid;
-                        let new_text = new_text.clone();
-                        if let Some(old_text) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.labels.iter().find(|l| l.uuid == uuid))
-                            .map(|label| label.text.clone())
-                            && old_text != new_text
-                        {
-                            let _old_text = old_text;
-                            self.apply_engine_command(
-                                signex_engine::Command::UpdateText {
-                                    target: signex_engine::TextTarget::Label(uuid),
-                                    value: new_text,
-                                },
-                                false,
-                                false,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::Label(*uuid),
+                                value: new_text.clone(),
+                            },
+                            false,
+                            false,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::EditTextNoteText(uuid, new_text),
                     ) => {
-                        let uuid = *uuid;
-                        let new_text = new_text.clone();
-                        if let Some(old_text) = self
-                            .active_render_snapshot()
-                            .and_then(|snapshot| snapshot.text_notes.iter().find(|t| t.uuid == uuid))
-                            .map(|text_note| text_note.text.clone())
-                            && old_text != new_text
-                        {
-                            let _old_text = old_text;
-                            self.apply_engine_command(
-                                signex_engine::Command::UpdateText {
-                                    target: signex_engine::TextTarget::TextNote(uuid),
-                                    value: new_text,
-                                },
-                                false,
-                                false,
-                            );
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::TextNote(*uuid),
+                                value: new_text.clone(),
+                            },
+                            false,
+                            false,
+                        );
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::SetPrePlacementText(text),

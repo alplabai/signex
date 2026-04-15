@@ -26,6 +26,7 @@ pub enum CommandKind {
     MirrorSelection,
     DeleteSelection,
     UpdateText,
+    UpdateSymbolFootprint,
     UpdateSymbolFields,
     PlaceWireSegment,
     PlaceBus,
@@ -61,6 +62,10 @@ pub enum Command {
     UpdateText {
         target: TextTarget,
         value: String,
+    },
+    UpdateSymbolFootprint {
+        symbol_id: Uuid,
+        footprint: String,
     },
     UpdateSymbolFields {
         symbol_id: Uuid,
@@ -103,6 +108,7 @@ impl Command {
             Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
             Command::DeleteSelection { .. } => CommandKind::DeleteSelection,
             Command::UpdateText { .. } => CommandKind::UpdateText,
+            Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
