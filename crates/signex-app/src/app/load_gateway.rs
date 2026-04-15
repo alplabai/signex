@@ -6,7 +6,6 @@ impl Signex {
             .as_ref()
             .map(|engine| engine.document())
             .or_else(|| self.tabs.get(self.active_tab).and_then(|tab| tab.schematic.as_ref()))
-            .or(self.schematic.as_ref())
     }
 
     pub(crate) fn has_active_schematic(&self) -> bool {
@@ -22,10 +21,9 @@ impl Signex {
             .and_then(|sheet| signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok());
     }
 
-    pub(crate) fn sync_visible_cache_from_engine(&mut self) {
-        let schematic = self.engine.as_ref().map(|engine| engine.document().clone());
-        self.schematic = schematic.clone();
-        self.canvas.schematic = schematic;
+    pub(crate) fn sync_canvas_from_visible_schematic(&mut self) {
+        self.canvas
+            .set_schematic(self.active_schematic().cloned());
     }
 
     pub(crate) fn open_schematic_tab(
@@ -69,7 +67,7 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) {
         self.sync_engine_from_schematic(schematic);
-        self.sync_visible_cache_from_engine();
+        self.sync_canvas_from_visible_schematic();
 
         if fit_to_paper {
             self.canvas.fit_to_paper();
