@@ -12,6 +12,7 @@ impl Signex {
         dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
 
         let sch_canvas = SchematicCanvas::new();
+        let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
         let kicad_lib_dir = helpers::find_kicad_symbols_dir();
         let kicad_libraries = kicad_lib_dir
@@ -32,6 +33,7 @@ impl Signex {
             active_tab: 0,
             current_tool: Tool::Select,
             canvas: sch_canvas,
+            pcb_canvas,
             grid_size_mm,
             visible_grid_mm: 2.54,
             snap_hotspots: true,
@@ -54,6 +56,7 @@ impl Signex {
                 junction_count: 0,
                 child_sheets: vec![],
                 has_schematic: false,
+                has_pcb: false,
                 paper_size: "A4".to_string(),
                 lib_symbol_count: 0,
                 lib_symbol_names: vec![],

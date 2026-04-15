@@ -1,72 +1,54 @@
 use super::*;
 
 impl Signex {
-    fn render_invalidation_for_selected_items(
-        items: &[signex_types::schematic::SelectedItem],
+    fn render_invalidation_for_patch(
+        patch: signex_engine::DocumentPatch,
     ) -> signex_render::schematic::RenderInvalidation {
         use signex_render::schematic::RenderInvalidation;
-        use signex_types::schematic::SelectedKind;
+
+        if patch.contains(signex_engine::DocumentPatch::FULL) {
+            return RenderInvalidation::FULL;
+        }
 
         let mut invalidation = RenderInvalidation::NONE;
-        for item in items {
-            invalidation |= match item.kind {
-                SelectedKind::Symbol
-                | SelectedKind::SymbolRefField
-                | SelectedKind::SymbolValField => {
-                    RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS
-                }
-                SelectedKind::Wire => RenderInvalidation::WIRES,
-                SelectedKind::Bus => RenderInvalidation::BUSES,
-                SelectedKind::BusEntry => RenderInvalidation::BUS_ENTRIES,
-                SelectedKind::Junction => RenderInvalidation::JUNCTIONS,
-                SelectedKind::NoConnect => RenderInvalidation::NO_CONNECTS,
-                SelectedKind::Label => RenderInvalidation::LABELS,
-                SelectedKind::TextNote => RenderInvalidation::TEXT_NOTES,
-                SelectedKind::ChildSheet => RenderInvalidation::CHILD_SHEETS,
-                SelectedKind::Drawing => RenderInvalidation::DRAWINGS,
-            };
+        if patch.contains(signex_engine::DocumentPatch::SYMBOLS) {
+            invalidation |= RenderInvalidation::SYMBOLS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::WIRES) {
+            invalidation |= RenderInvalidation::WIRES;
+        }
+        if patch.contains(signex_engine::DocumentPatch::LABELS) {
+            invalidation |= RenderInvalidation::LABELS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::TEXT_NOTES) {
+            invalidation |= RenderInvalidation::TEXT_NOTES;
+        }
+        if patch.contains(signex_engine::DocumentPatch::BUSES) {
+            invalidation |= RenderInvalidation::BUSES;
+        }
+        if patch.contains(signex_engine::DocumentPatch::BUS_ENTRIES) {
+            invalidation |= RenderInvalidation::BUS_ENTRIES;
+        }
+        if patch.contains(signex_engine::DocumentPatch::JUNCTIONS) {
+            invalidation |= RenderInvalidation::JUNCTIONS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
+            invalidation |= RenderInvalidation::NO_CONNECTS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
+            invalidation |= RenderInvalidation::CHILD_SHEETS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::DRAWINGS) {
+            invalidation |= RenderInvalidation::DRAWINGS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::LIB_SYMBOLS) {
+            invalidation |= RenderInvalidation::LIB_SYMBOLS;
+        }
+        if patch.contains(signex_engine::DocumentPatch::PAPER) {
+            invalidation |= RenderInvalidation::PAPER;
         }
 
-        if invalidation == RenderInvalidation::NONE {
-            RenderInvalidation::FULL
-        } else {
-            invalidation
-        }
-    }
-
-    fn render_invalidation_for_command(
-        command: &signex_engine::Command,
-    ) -> signex_render::schematic::RenderInvalidation {
-        use signex_render::schematic::RenderInvalidation;
-
-        match command {
-            signex_engine::Command::ReplaceDocument { .. } => RenderInvalidation::FULL,
-            signex_engine::Command::MoveSelection { items, .. }
-            | signex_engine::Command::RotateSelection { items, .. }
-            | signex_engine::Command::MirrorSelection { items, .. }
-            | signex_engine::Command::DeleteSelection { items } => {
-                Self::render_invalidation_for_selected_items(items)
-            }
-            signex_engine::Command::UpdateText { target, .. } => match target {
-                signex_engine::TextTarget::Label(_) => RenderInvalidation::LABELS,
-                signex_engine::TextTarget::TextNote(_) => RenderInvalidation::TEXT_NOTES,
-                signex_engine::TextTarget::SymbolReference(_)
-                | signex_engine::TextTarget::SymbolValue(_) => RenderInvalidation::SYMBOLS,
-            },
-            signex_engine::Command::UpdateSymbolFields { .. } => RenderInvalidation::SYMBOLS,
-            signex_engine::Command::PlaceWireSegment { .. } => {
-                RenderInvalidation::WIRES | RenderInvalidation::JUNCTIONS
-            }
-            signex_engine::Command::PlaceBus { .. } => RenderInvalidation::BUSES,
-            signex_engine::Command::PlaceLabel { .. } => RenderInvalidation::LABELS,
-            signex_engine::Command::PlaceSymbol { .. } => {
-                RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS
-            }
-            signex_engine::Command::PlaceJunction { .. } => RenderInvalidation::JUNCTIONS,
-            signex_engine::Command::PlaceNoConnect { .. } => RenderInvalidation::NO_CONNECTS,
-            signex_engine::Command::PlaceBusEntry { .. } => RenderInvalidation::BUS_ENTRIES,
-            signex_engine::Command::PlaceTextNote { .. } => RenderInvalidation::TEXT_NOTES,
-        }
+        invalidation
     }
 
     pub(crate) fn apply_engine_commands(
@@ -88,12 +70,11 @@ impl Signex {
             let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
 
             for command in commands {
-                let command_invalidation = Self::render_invalidation_for_command(&command);
                 match engine.execute(command) {
                     Ok(result) => {
-                        if result.changed {
+                        if let Some(patch_pair) = result.patch_pair {
                             changed_steps += 1;
-                            invalidation |= command_invalidation;
+                            invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
                         }
                     }
                     Err(error) => {
@@ -104,8 +85,7 @@ impl Signex {
             }
 
             if changed_steps > 0 {
-                self.undo_stack
-                    .record_engine_marker(changed_steps, invalidation);
+                self.undo_stack.record_engine_marker(changed_steps);
                 invalidation
             } else {
                 signex_render::schematic::RenderInvalidation::NONE
@@ -129,10 +109,13 @@ impl Signex {
             return false;
         };
 
-        let invalidation = match engine.execute(command.clone()) {
+        let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => {
-                let invalidation = Self::render_invalidation_for_command(&command);
-                self.undo_stack.record_engine_marker(1, invalidation);
+                let invalidation = result
+                    .patch_pair
+                    .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
+                    .unwrap_or(signex_render::schematic::RenderInvalidation::NONE);
+                self.undo_stack.record_engine_marker(1);
                 invalidation
             }
             Ok(_) => signex_render::schematic::RenderInvalidation::NONE,
@@ -151,14 +134,18 @@ impl Signex {
 
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.engine.as_mut() {
-            let Some((steps, invalidation)) = self.undo_stack.peek_undo_engine_marker() else {
+            let Some(steps) = self.undo_stack.peek_undo_engine_steps() else {
                 return false;
             };
 
             let mut undone_steps = 0usize;
+            let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
             for _ in 0..steps {
                 match engine.undo() {
-                    Ok(Some(_)) => undone_steps += 1,
+                    Ok(Some(patch_pair)) => {
+                        undone_steps += 1;
+                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
+                    }
                     Ok(None) => break,
                     Err(error) => {
                         eprintln!("[engine] undo failed: {error}");
@@ -181,14 +168,18 @@ impl Signex {
 
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
         let invalidation = if let Some(engine) = self.engine.as_mut() {
-            let Some((steps, invalidation)) = self.undo_stack.peek_redo_engine_marker() else {
+            let Some(steps) = self.undo_stack.peek_redo_engine_steps() else {
                 return false;
             };
 
             let mut redone_steps = 0usize;
+            let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
             for _ in 0..steps {
                 match engine.redo() {
-                    Ok(Some(_)) => redone_steps += 1,
+                    Ok(Some(patch_pair)) => {
+                        redone_steps += 1;
+                        invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
+                    }
                     Ok(None) => break,
                     Err(error) => {
                         eprintln!("[engine] redo failed: {error}");

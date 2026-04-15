@@ -186,19 +186,34 @@ Completed in the current migration slice:
   vectors for symbol, wire, and label markers
 - engine-backed mutation finalization now keeps the active document inside the
   persistent engine and only syncs tab/cache mirrors from that owner
-- app-level undo markers now store render invalidation alongside engine step
-  counts, so undo/redo can replay narrower cache refresh scopes instead of
-  always forcing full redraw semantics
+- `signex-engine::DocumentPatch` now carries object-family deltas as flags, so
+  forward command batches and undo/redo replay derive render invalidation from
+  engine-returned patch data instead of app-side command guessing
 - PCB files now open into `TabDocument::Pcb` tabs through direct file-open and
   project-tree selection paths, and activating those tabs clears schematic-only
   engine/canvas state instead of falling through schematic sync logic
+- PCB tabs now have a real board view path: `signex-render::pcb::PcbRenderSnapshot`
+  plus `signex-app::pcb_canvas::PcbCanvas` render board outline, copper
+  segments, vias, pads, graphics, and text with the same pan/zoom/fit flow as
+  the schematic canvas
+- panel/document sync is now document-aware on both sides: panel gating uses a
+  real `has_pcb` flag and visible-document summary data comes from schematic or
+  PCB render snapshots instead of assuming a schematic-only center view
+- read-only property-edit prechecks, double-click text lookup, and selection
+  info paths now prefer render snapshots over borrowing the full active sheet
 
 Still intentionally left for the next slice:
 
-- some mutation kinds still collapse to coarse invalidation buckets because the
-  engine patch model does not yet describe object-type deltas in enough detail
-- PCB tabs are now wired into tab activation/load flow, but they still do not
-  have a dedicated board view, save path, or board-specific panel sync
+- PCB tabs now render and fit correctly, but PCB documents still have no engine,
+  save flow, edit command vocabulary, hit-test/selection model, or board-side
+  panel detail sync beyond summary counts
+- inactive-tab caching still stores full cloned documents in `cached_document`;
+  the next ownership slice should decide between per-tab engine sessions and a
+  lighter document-session abstraction
+- several mutation-producing paths still read the live schematic document
+  directly for write-time preconditions; the next slice should isolate those
+  reads behind focused engine/query helpers so app logic stops depending on
+  `SchematicSheet` shape outside persistence boundaries
 
 Bridge note:
 

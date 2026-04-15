@@ -13,6 +13,7 @@ use signex_types::theme::ThemeId;
 use crate::canvas::{CanvasEvent, SchematicCanvas};
 use crate::dock::{DockArea, DockMessage, PanelPosition};
 use crate::menu_bar::{self, MenuMessage};
+use crate::pcb_canvas::PcbCanvas;
 use crate::panels::PanelKind;
 use crate::status_bar;
 use crate::tab_bar::{self, TabMessage};
@@ -161,6 +162,7 @@ pub struct Signex {
     pub active_tab: usize,
     pub current_tool: Tool,
     pub canvas: SchematicCanvas,
+    pub pcb_canvas: PcbCanvas,
     pub grid_size_mm: f32,
     /// Separate visible grid spacing (what dots are drawn at).
     pub visible_grid_mm: f32,
@@ -355,7 +357,9 @@ impl Signex {
             Message::GridToggle | Message::StatusBar(StatusBarMsg::ToggleGrid) => {
                 self.grid_visible = !self.grid_visible;
                 self.canvas.grid_visible = self.grid_visible;
+                self.pcb_canvas.grid_visible = self.grid_visible;
                 self.canvas.clear_bg_cache();
+                self.pcb_canvas.clear_bg_cache();
             }
             Message::DragStart(target) => {
                 #[cfg(debug_assertions)]
@@ -722,21 +726,19 @@ impl Signex {
                     self.wire_points.clear();
                     self.canvas.wire_preview.clear();
                     self.canvas.drawing_mode = false;
-                } else if let (Some(sheet), Some(snapshot)) =
-                    (self.active_schematic(), self.active_render_snapshot())
-                {
+                } else if let Some(snapshot) = self.active_render_snapshot() {
                     // In-place text editing: check if double-clicked on a label or text note
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
                     {
                         let edit_info = match hit.kind {
-                            SelectedKind::Label => sheet
+                            SelectedKind::Label => snapshot
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
                                 .map(|l| (l.text.clone(), SelectedKind::Label)),
-                            SelectedKind::TextNote => sheet
+                            SelectedKind::TextNote => snapshot
                                 .text_notes
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
@@ -816,17 +818,22 @@ impl Signex {
                 self.canvas.clear_bg_cache();
                 self.canvas.clear_content_cache();
                 self.canvas.clear_overlay_cache();
+                self.pcb_canvas.clear_bg_cache();
+                self.pcb_canvas.clear_content_cache();
                 // Clear pending fit after it's been applied
                 self.canvas.pending_fit.set(None);
+                self.pcb_canvas.pending_fit.set(None);
             }
             Message::CanvasEvent(CanvasEvent::FitAll) => {
-                // Fit-all is handled in the canvas state, but we can't access it
-                // from here. Instead, reset the canvas camera to default fit.
-                // A proper implementation would read canvas bounds, but for now
-                // we reset to a reasonable default that shows an A4 sheet.
-                self.canvas.fit_to_paper();
-                self.canvas.clear_bg_cache();
-                self.canvas.clear_content_cache();
+                if self.has_active_schematic() {
+                    self.canvas.fit_to_paper();
+                    self.canvas.clear_bg_cache();
+                    self.canvas.clear_content_cache();
+                } else if self.has_active_pcb() {
+                    self.pcb_canvas.fit_to_board();
+                    self.pcb_canvas.clear_bg_cache();
+                    self.pcb_canvas.clear_content_cache();
+                }
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.current_tool = tool;
@@ -863,7 +870,9 @@ impl Signex {
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleGrid) => {
                         self.grid_visible = !self.grid_visible;
                         self.canvas.grid_visible = self.grid_visible;
+                        self.pcb_canvas.grid_visible = self.grid_visible;
                         self.canvas.clear_bg_cache();
+                        self.pcb_canvas.clear_bg_cache();
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleSnap) => {
                         self.snap_enabled = !self.snap_enabled;
@@ -922,8 +931,8 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.reference != new_val
                         {
@@ -945,8 +954,8 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.value != new_val
                         {
@@ -968,8 +977,8 @@ impl Signex {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
                         if let Some(symbol) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
                             .cloned()
                             && symbol.footprint != new_val
                         {
@@ -990,8 +999,8 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         if let Some((old_mirror_x, old_mirror_y)) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
                             .map(|sym| (sym.mirror_x, sym.mirror_y))
                         {
                             let _mirror = (old_mirror_x, old_mirror_y);
@@ -1013,8 +1022,8 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         if let Some((old_mirror_x, old_mirror_y)) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.symbols.iter().find(|s| s.uuid == uuid))
                             .map(|sym| (sym.mirror_x, sym.mirror_y))
                         {
                             let _mirror = (old_mirror_x, old_mirror_y);
@@ -1049,8 +1058,8 @@ impl Signex {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
                         if let Some(old_text) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.labels.iter().find(|l| l.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.labels.iter().find(|l| l.uuid == uuid))
                             .map(|label| label.text.clone())
                             && old_text != new_text
                         {
@@ -1071,8 +1080,8 @@ impl Signex {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
                         if let Some(old_text) = self
-                            .active_schematic()
-                            .and_then(|sheet| sheet.text_notes.iter().find(|t| t.uuid == uuid))
+                            .active_render_snapshot()
+                            .and_then(|snapshot| snapshot.text_notes.iter().find(|t| t.uuid == uuid))
                             .map(|text_note| text_note.text.clone())
                             && old_text != new_text
                         {
@@ -1121,6 +1130,7 @@ impl Signex {
                         self.panel_ctx.grid_size_mm = *size;
                         self.canvas.snap_grid_mm = *size as f64;
                         self.canvas.clear_bg_cache();
+                        self.pcb_canvas.clear_bg_cache();
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SetVisibleGridSize(
                         size,
@@ -1128,7 +1138,9 @@ impl Signex {
                         self.visible_grid_mm = *size;
                         self.panel_ctx.visible_grid_mm = *size;
                         self.canvas.visible_grid_mm = *size as f64;
+                        self.pcb_canvas.visible_grid_mm = *size as f64;
                         self.canvas.clear_bg_cache();
+                        self.pcb_canvas.clear_bg_cache();
                     }
                     crate::dock::DockMessage::Panel(crate::panels::PanelMsg::ToggleSnapHotspots) => {
                         self.snap_hotspots = !self.snap_hotspots;
@@ -1697,15 +1709,23 @@ impl Signex {
             ),
             // ── View ──
             MenuMessage::ZoomFit => {
-                self.canvas.fit_to_paper();
-                self.canvas.clear_bg_cache();
-                self.canvas.clear_content_cache();
+                if self.has_active_schematic() {
+                    self.canvas.fit_to_paper();
+                    self.canvas.clear_bg_cache();
+                    self.canvas.clear_content_cache();
+                } else if self.has_active_pcb() {
+                    self.pcb_canvas.fit_to_board();
+                    self.pcb_canvas.clear_bg_cache();
+                    self.pcb_canvas.clear_content_cache();
+                }
                 Task::none()
             }
             MenuMessage::ToggleGrid => {
                 self.grid_visible = !self.grid_visible;
                 self.canvas.grid_visible = self.grid_visible;
+                self.pcb_canvas.grid_visible = self.grid_visible;
                 self.canvas.clear_bg_cache();
+                self.pcb_canvas.clear_bg_cache();
                 Task::none()
             }
             MenuMessage::CycleGrid => {
@@ -1850,6 +1870,9 @@ impl Signex {
                     .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_string()))
             });
 
+        let active_schematic_snapshot = self.active_render_snapshot();
+        let active_pcb_snapshot = self.active_pcb_snapshot();
+
         self.panel_ctx = crate::panels::PanelContext {
             project_name,
             project_file: self
@@ -1863,49 +1886,68 @@ impl Signex {
                 }),
             pcb_file: self.project_data.as_ref().and_then(|p| p.pcb_file.clone()),
             sheets,
-            sym_count: self
-                .active_schematic()
+            sym_count: active_schematic_snapshot
                 .map(|s| s.symbols.len())
+                .or_else(|| active_pcb_snapshot.map(|s| s.footprints.len()))
                 .unwrap_or(0),
-            wire_count: self.active_schematic().map(|s| s.wires.len()).unwrap_or(0),
-            label_count: self.active_schematic().map(|s| s.labels.len()).unwrap_or(0),
-            junction_count: self
-                .active_schematic()
+            wire_count: active_schematic_snapshot
+                .map(|s| s.wires.len())
+                .or_else(|| active_pcb_snapshot.map(|s| s.segments.len()))
+                .unwrap_or(0),
+            label_count: active_schematic_snapshot
+                .map(|s| s.labels.len())
+                .or_else(|| active_pcb_snapshot.map(|s| s.texts.len()))
+                .unwrap_or(0),
+            junction_count: active_schematic_snapshot
                 .map(|s| s.junctions.len())
+                .or_else(|| active_pcb_snapshot.map(|s| s.vias.len()))
                 .unwrap_or(0),
-            child_sheets: self
-                .active_schematic()
+            child_sheets: active_schematic_snapshot
                 .map(|s| s.child_sheets.iter().map(|c| c.name.clone()).collect())
                 .unwrap_or_default(),
             has_schematic: self.has_active_schematic(),
-            paper_size: self
-                .active_schematic()
+            has_pcb: self.has_active_pcb(),
+            paper_size: active_schematic_snapshot
                 .map(|s| s.paper_size.clone())
+                .or_else(|| active_pcb_snapshot.map(|s| format!("PCB • {} layers", s.layers.len())))
                 .unwrap_or_else(|| "A4".to_string()),
-            lib_symbol_count: self
-                .active_schematic()
+            lib_symbol_count: active_schematic_snapshot
                 .map(|s| s.lib_symbols.len())
                 .unwrap_or(0),
-            lib_symbol_names: self
-                .active_schematic()
+            lib_symbol_names: active_schematic_snapshot
                 .map(|s| s.lib_symbols.keys().cloned().collect())
                 .unwrap_or_default(),
-            placed_symbols: self
-                .active_schematic()
-                .map(|s| {
-                    s.symbols
-                        .iter()
-                        .map(|sym| {
-                            (
-                                sym.reference.clone(),
-                                sym.value.clone(),
-                                sym.footprint.clone(),
-                                sym.lib_id.clone(),
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
+            placed_symbols: if let Some(snapshot) = active_schematic_snapshot {
+                snapshot
+                    .symbols
+                    .iter()
+                    .map(|sym| {
+                        (
+                            sym.reference.clone(),
+                            sym.value.clone(),
+                            sym.footprint.clone(),
+                            sym.lib_id.clone(),
+                        )
+                    })
+                    .collect()
+            } else {
+                active_pcb_snapshot
+                    .map(|snapshot| {
+                        snapshot
+                            .footprints
+                            .iter()
+                            .map(|fp| {
+                                (
+                                    fp.reference.clone(),
+                                    fp.value.clone(),
+                                    fp.footprint_id.clone(),
+                                    fp.layer.clone(),
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            },
             tokens: signex_types::theme::theme_tokens(self.theme_id),
             unit: self.unit,
             grid_visible: self.grid_visible,
@@ -2106,10 +2148,10 @@ impl Signex {
         self.panel_ctx.selected_uuid = Some(item.uuid);
         self.panel_ctx.selected_kind = Some(item.kind);
         let mut selection_info = Vec::new();
-        if let Some(sheet) = self.active_schematic() {
+        if let Some(snapshot) = self.active_render_snapshot() {
             match item.kind {
                 SelectedKind::Symbol => {
-                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Symbol".into()));
                         selection_info.push(("Reference".into(), sym.reference.clone()));
                         selection_info.push(("Value".into(), sym.value.clone()));
@@ -2132,7 +2174,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::Wire => {
-                    if let Some(w) = sheet.wires.iter().find(|w| w.uuid == item.uuid) {
+                    if let Some(w) = snapshot.wires.iter().find(|w| w.uuid == item.uuid) {
                         let dx = w.end.x - w.start.x;
                         let dy = w.end.y - w.start.y;
                         let len = (dx * dx + dy * dy).sqrt();
@@ -2146,7 +2188,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::Label => {
-                    if let Some(l) = sheet.labels.iter().find(|l| l.uuid == item.uuid) {
+                    if let Some(l) = snapshot.labels.iter().find(|l| l.uuid == item.uuid) {
                         selection_info.push(("Type".into(), format!("{:?} Label", l.label_type)));
                         selection_info.push(("Net Name".into(), l.text.clone()));
                         selection_info.push((
@@ -2156,7 +2198,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::Junction => {
-                    if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == item.uuid) {
+                    if let Some(j) = snapshot.junctions.iter().find(|j| j.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Junction".into()));
                         selection_info.push((
                             "Position".into(),
@@ -2165,7 +2207,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::NoConnect => {
-                    if let Some(nc) = sheet.no_connects.iter().find(|n| n.uuid == item.uuid) {
+                    if let Some(nc) = snapshot.no_connects.iter().find(|n| n.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "No Connect".into()));
                         selection_info.push((
                             "Position".into(),
@@ -2174,7 +2216,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::TextNote => {
-                    if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                    if let Some(tn) = snapshot.text_notes.iter().find(|t| t.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Text Note".into()));
                         selection_info.push(("Text".into(), tn.text.clone()));
                         selection_info.push((
@@ -2184,7 +2226,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::ChildSheet => {
-                    if let Some(cs) = sheet.child_sheets.iter().find(|c| c.uuid == item.uuid) {
+                    if let Some(cs) = snapshot.child_sheets.iter().find(|c| c.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Hierarchical Sheet".into()));
                         selection_info.push(("Name".into(), cs.name.clone()));
                         selection_info.push(("File".into(), cs.filename.clone()));
@@ -2199,7 +2241,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::Bus => {
-                    if let Some(b) = sheet.buses.iter().find(|b| b.uuid == item.uuid) {
+                    if let Some(b) = snapshot.buses.iter().find(|b| b.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Bus".into()));
                         selection_info.push((
                             "Start".into(),
@@ -2212,7 +2254,7 @@ impl Signex {
                     selection_info.push(("Type".into(), format!("{:?}", item.kind)));
                 }
                 SelectedKind::SymbolRefField => {
-                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Reference Field".into()));
                         selection_info.push(("Reference".into(), sym.reference.clone()));
                         if let Some(ref rt) = sym.ref_text {
@@ -2224,7 +2266,7 @@ impl Signex {
                     }
                 }
                 SelectedKind::SymbolValField => {
-                    if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    if let Some(sym) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
                         selection_info.push(("Type".into(), "Value Field".into()));
                         selection_info.push(("Value".into(), sym.value.clone()));
                         if let Some(ref vt) = sym.val_text {
@@ -2254,8 +2296,14 @@ impl Signex {
             signex_render::colors::to_iced(&colors.grid),
             signex_render::colors::to_iced(&colors.paper),
         );
+        self.pcb_canvas.set_theme_colors(
+            signex_render::colors::to_iced(&colors.background),
+            signex_render::colors::to_iced(&colors.grid),
+        );
         self.canvas.canvas_colors = colors;
+        self.pcb_canvas.canvas_colors = colors;
         self.canvas.clear_content_cache();
+        self.pcb_canvas.clear_content_cache();
     }
 
     /// Right-click context menu with actions based on current state.
@@ -2573,6 +2621,11 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
+        } else if self.has_active_pcb() {
+            canvas(&self.pcb_canvas)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
         } else {
             container(
                 column![
@@ -2703,14 +2756,14 @@ impl Signex {
         if self.panel_list_open {
             let text_c = crate::styles::ti(self.panel_ctx.tokens.text);
             let has_sch = self.panel_ctx.has_schematic;
+            let has_pcb = self.panel_ctx.has_pcb;
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
                 .filter(|&&kind| {
                     if kind.needs_schematic() && !has_sch {
                         return false;
                     }
-                    // PCB panels hidden until a PCB document is open (future)
-                    if kind.needs_pcb() {
+                    if kind.needs_pcb() && !has_pcb {
                         return false;
                     }
                     true
