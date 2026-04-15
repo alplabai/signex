@@ -69,15 +69,12 @@ impl Signex {
     }
 
     pub(crate) fn handle_save_file(&mut self) {
-        if let Some(engine) = self.engine.as_mut()
-            && let Some(tab) = self.tabs.get_mut(self.active_tab)
-        {
-            engine.set_path(Some(tab.path.clone()));
-            match engine.save() {
+        if let Some(result) = self.with_active_schematic_session_mut(|session| session.save()) {
+            match result {
                 Ok(_) => {
-                    tab.dirty = false;
+                    let path = self.active_tab_path().unwrap_or_default();
                     #[cfg(debug_assertions)]
-                    eprintln!("[save] Wrote {}", tab.path.display());
+                    eprintln!("[save] Wrote {}", path.display());
                 }
                 Err(e) => {
                     eprintln!("[save] Error: {e}");
@@ -88,18 +85,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_save_file_as(&mut self, path: PathBuf) {
-        if let Some(engine) = self.engine.as_mut() {
-            match engine.save_as(&path) {
+        if let Some(result) = self.with_active_schematic_session_mut(|session| session.save_as(path.clone())) {
+            match result {
                 Ok(_) => {
-                    if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                        tab.path = path.clone();
-                        tab.title = path
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "Schematic".to_string());
-                        tab.dirty = false;
-                    }
-                    self.update_active_engine_path();
                     #[cfg(debug_assertions)]
                     eprintln!("[save-as] Wrote {}", path.display());
                 }
