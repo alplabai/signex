@@ -2,13 +2,47 @@ use std::path::PathBuf;
 
 use super::DrawMode;
 
+pub(super) const ALL_LIBRARIES: &str = "All Libraries";
+
 /// Find the Standard symbol library directory.
 pub(super) fn find_standard_symbols_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        for path in [
+            "/Applications/Standard/Standard.app/Contents/SharedSupport/symbols",
+            "/Applications/Standard/Standard Nightly.app/Contents/SharedSupport/symbols",
+            "/opt/homebrew/share/standard/symbols",
+            "/usr/local/share/standard/symbols",
+        ] {
+            let candidate = PathBuf::from(path);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for path in [
+            "/usr/share/standard/symbols",
+            "/usr/local/share/standard/symbols",
+            "/var/lib/flatpak/app/org.standard.Standard/current/active/files/share/standard/symbols",
+        ] {
+            let candidate = PathBuf::from(path);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
     for ver in &["9.0", "8.0", "7.0"] {
         let p = PathBuf::from(format!("C:/Program Files/Standard/{ver}/share/standard/symbols"));
         if p.exists() {
             return Some(p);
         }
+    }
     }
     None
 }

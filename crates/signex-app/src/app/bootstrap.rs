@@ -29,10 +29,13 @@ impl Signex {
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
         let standard_lib_dir = helpers::find_standard_symbols_dir();
-        let standard_libraries = standard_lib_dir
+        let mut standard_libraries = standard_lib_dir
             .as_deref()
             .map(helpers::list_standard_libraries)
             .unwrap_or_default();
+        if !standard_libraries.is_empty() {
+            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
+        }
 
         let app = Self {
             theme_id: ThemeId::Signex,
