@@ -19,6 +19,7 @@ use iced::widget::canvas;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use signex_types::schematic::{
     Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect,
@@ -91,6 +92,166 @@ impl SchematicRenderSnapshot {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderInvalidation(u16);
+
+impl RenderInvalidation {
+    pub const NONE: Self = Self(0);
+    pub const SYMBOLS: Self = Self(1 << 0);
+    pub const WIRES: Self = Self(1 << 1);
+    pub const LABELS: Self = Self(1 << 2);
+    pub const TEXT_NOTES: Self = Self(1 << 3);
+    pub const BUSES: Self = Self(1 << 4);
+    pub const BUS_ENTRIES: Self = Self(1 << 5);
+    pub const JUNCTIONS: Self = Self(1 << 6);
+    pub const NO_CONNECTS: Self = Self(1 << 7);
+    pub const CHILD_SHEETS: Self = Self(1 << 8);
+    pub const DRAWINGS: Self = Self(1 << 9);
+    pub const LIB_SYMBOLS: Self = Self(1 << 10);
+    pub const PAPER: Self = Self(1 << 11);
+    pub const FULL: Self = Self(u16::MAX);
+
+    pub fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    pub fn intersects(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+
+    pub fn affects_content_bounds(self) -> bool {
+        self.intersects(
+            Self::SYMBOLS
+                | Self::WIRES
+                | Self::LABELS
+                | Self::TEXT_NOTES
+                | Self::BUSES
+                | Self::BUS_ENTRIES
+                | Self::JUNCTIONS
+                | Self::NO_CONNECTS
+                | Self::CHILD_SHEETS
+                | Self::DRAWINGS
+                | Self::FULL,
+        )
+    }
+}
+
+impl std::ops::BitOr for RenderInvalidation {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for RenderInvalidation {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedPreviewGeometry {
+    symbol_positions: HashMap<Uuid, (f32, f32)>,
+    wire_midpoints: HashMap<Uuid, (f32, f32)>,
+    label_positions: HashMap<Uuid, (f32, f32)>,
+    symbol_reference_positions: HashMap<Uuid, (f32, f32)>,
+    symbol_value_positions: HashMap<Uuid, (f32, f32)>,
+}
+
+impl PreparedPreviewGeometry {
+    fn from_snapshot(snapshot: &SchematicRenderSnapshot) -> Self {
+        let mut prepared = Self::default();
+        prepared.refresh(snapshot, RenderInvalidation::FULL);
+        prepared
+    }
+
+    fn refresh(&mut self, snapshot: &SchematicRenderSnapshot, invalidation: RenderInvalidation) {
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
+        {
+            self.symbol_positions = snapshot
+                .symbols
+                .iter()
+                .map(|symbol| {
+                    (
+                        symbol.uuid,
+                        (symbol.position.x as f32, symbol.position.y as f32),
+                    )
+                })
+                .collect();
+            self.symbol_reference_positions = snapshot
+                .symbols
+                .iter()
+                .filter_map(|symbol| {
+                    symbol
+                        .ref_text
+                        .as_ref()
+                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                })
+                .collect();
+            self.symbol_value_positions = snapshot
+                .symbols
+                .iter()
+                .filter_map(|symbol| {
+                    symbol
+                        .val_text
+                        .as_ref()
+                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                })
+                .collect();
+        }
+
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.contains(RenderInvalidation::WIRES)
+        {
+            self.wire_midpoints = snapshot
+                .wires
+                .iter()
+                .map(|wire| {
+                    (
+                        wire.uuid,
+                        (
+                            ((wire.start.x + wire.end.x) / 2.0) as f32,
+                            ((wire.start.y + wire.end.y) / 2.0) as f32,
+                        ),
+                    )
+                })
+                .collect();
+        }
+
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.contains(RenderInvalidation::LABELS)
+        {
+            self.label_positions = snapshot
+                .labels
+                .iter()
+                .map(|label| (label.uuid, (label.position.x as f32, label.position.y as f32)))
+                .collect();
+        }
+    }
+
+    pub fn symbol_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_positions.get(&uuid).copied()
+    }
+
+    pub fn wire_midpoint(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.wire_midpoints.get(&uuid).copied()
+    }
+
+    pub fn label_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.label_positions.get(&uuid).copied()
+    }
+
+    pub fn symbol_reference_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_reference_positions.get(&uuid).copied()
+    }
+
+    pub fn symbol_value_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_value_positions.get(&uuid).copied()
+    }
+}
+
 /// Shared render-cache seam for the visible schematic.
 ///
 /// The cache owns an `Arc` to the immutable render snapshot so canvas drawing,
@@ -98,17 +259,79 @@ impl SchematicRenderSnapshot {
 #[derive(Debug, Clone)]
 pub struct SchematicRenderCache {
     snapshot: Arc<SchematicRenderSnapshot>,
+    prepared_preview: PreparedPreviewGeometry,
 }
 
 impl SchematicRenderCache {
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        let snapshot = SchematicRenderSnapshot::from_sheet(sheet);
         Self {
-            snapshot: Arc::new(SchematicRenderSnapshot::from_sheet(sheet)),
+            prepared_preview: PreparedPreviewGeometry::from_snapshot(&snapshot),
+            snapshot: Arc::new(snapshot),
         }
+    }
+
+    pub fn update_from_sheet(
+        &mut self,
+        sheet: &SchematicSheet,
+        invalidation: RenderInvalidation,
+    ) {
+        if invalidation.contains(RenderInvalidation::FULL) {
+            *self = Self::from_sheet(sheet);
+            return;
+        }
+
+        let snapshot = Arc::make_mut(&mut self.snapshot);
+
+        if invalidation.contains(RenderInvalidation::SYMBOLS) {
+            snapshot.symbols = sheet.symbols.clone();
+        }
+        if invalidation.contains(RenderInvalidation::WIRES) {
+            snapshot.wires = sheet.wires.clone();
+        }
+        if invalidation.contains(RenderInvalidation::LABELS) {
+            snapshot.labels = sheet.labels.clone();
+        }
+        if invalidation.contains(RenderInvalidation::TEXT_NOTES) {
+            snapshot.text_notes = sheet.text_notes.clone();
+        }
+        if invalidation.contains(RenderInvalidation::BUSES) {
+            snapshot.buses = sheet.buses.clone();
+        }
+        if invalidation.contains(RenderInvalidation::BUS_ENTRIES) {
+            snapshot.bus_entries = sheet.bus_entries.clone();
+        }
+        if invalidation.contains(RenderInvalidation::JUNCTIONS) {
+            snapshot.junctions = sheet.junctions.clone();
+        }
+        if invalidation.contains(RenderInvalidation::NO_CONNECTS) {
+            snapshot.no_connects = sheet.no_connects.clone();
+        }
+        if invalidation.contains(RenderInvalidation::CHILD_SHEETS) {
+            snapshot.child_sheets = sheet.child_sheets.clone();
+        }
+        if invalidation.contains(RenderInvalidation::DRAWINGS) {
+            snapshot.drawings = sheet.drawings.clone();
+        }
+        if invalidation.contains(RenderInvalidation::LIB_SYMBOLS) {
+            snapshot.lib_symbols = sheet.lib_symbols.clone();
+        }
+        if invalidation.contains(RenderInvalidation::PAPER) {
+            snapshot.paper_size = sheet.paper_size.clone();
+        }
+        if invalidation.affects_content_bounds() {
+            snapshot.content_bounds = sheet.content_bounds();
+        }
+
+        self.prepared_preview.refresh(snapshot, invalidation);
     }
 
     pub fn snapshot(&self) -> &SchematicRenderSnapshot {
         self.snapshot.as_ref()
+    }
+
+    pub fn prepared_preview(&self) -> &PreparedPreviewGeometry {
+        &self.prepared_preview
     }
 }
 
