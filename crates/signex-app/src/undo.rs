@@ -6,6 +6,34 @@
 use signex_types::schematic::*;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandOrigin {
+    Legacy,
+    EngineMirrored,
+}
+
+#[derive(Debug, Clone)]
+enum HistoryEntry {
+    Legacy(EditCommand),
+    EngineMarker { steps: usize },
+}
+
+impl HistoryEntry {
+    fn origin(&self) -> CommandOrigin {
+        match self {
+            HistoryEntry::Legacy(_) => CommandOrigin::Legacy,
+            HistoryEntry::EngineMarker { .. } => CommandOrigin::EngineMirrored,
+        }
+    }
+
+    fn engine_steps(&self) -> usize {
+        match self {
+            HistoryEntry::Legacy(_) => 0,
+            HistoryEntry::EngineMarker { steps } => *steps,
+        }
+    }
+}
+
 /// A reversible edit operation on a schematic.
 #[derive(Debug, Clone)]
 pub enum EditCommand {
@@ -24,6 +52,7 @@ pub enum EditCommand {
     /// Add a text note.
     AddTextNote(TextNote),
     /// Add a bus entry.
+    #[allow(dead_code)]
     AddBusEntry(BusEntry),
     /// Add a child sheet (hierarchical sheet symbol).
     #[allow(dead_code)]
@@ -51,6 +80,7 @@ pub enum EditCommand {
     },
 
     /// Rotate a symbol.
+    #[allow(dead_code)]
     RotateSymbol {
         uuid: Uuid,
         old_rotation: f64,
@@ -58,6 +88,7 @@ pub enum EditCommand {
     },
 
     /// Mirror a symbol.
+    #[allow(dead_code)]
     MirrorSymbol {
         uuid: Uuid,
         axis: MirrorAxis,
@@ -68,6 +99,7 @@ pub enum EditCommand {
     },
 
     /// Update a symbol's string field (designator, value, footprint).
+    #[allow(dead_code)]
     UpdateSymbolField {
         uuid: Uuid,
         field: SymbolField,
@@ -95,6 +127,7 @@ pub enum EditCommand {
 
 /// Which symbol field is being updated.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum SymbolField {
     Designator,
     Value,
@@ -102,6 +135,7 @@ pub enum SymbolField {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum MirrorAxis {
     X,
     Y,
@@ -377,7 +411,7 @@ fn inverse_field_display_delta(_sym: &Symbol, dx: f64, dy: f64) -> (f64, f64) {
 
 /// Undo history stack with configurable depth.
 pub struct UndoStack {
-    history: Vec<EditCommand>,
+    history: Vec<HistoryEntry>,
     position: usize,
     max_depth: usize,
 }
@@ -394,9 +428,21 @@ impl UndoStack {
     /// Execute a command and push it onto the stack.
     pub fn execute(&mut self, sheet: &mut SchematicSheet, cmd: EditCommand) {
         apply(sheet, &cmd);
+        self.record(HistoryEntry::Legacy(cmd));
+    }
+
+    pub fn record_engine_marker(&mut self, steps: usize) {
+        if steps == 0 {
+            return;
+        }
+
+        self.record(HistoryEntry::EngineMarker { steps });
+    }
+
+    fn record(&mut self, entry: HistoryEntry) {
         // Truncate any redo history
         self.history.truncate(self.position);
-        self.history.push(cmd);
+        self.history.push(entry);
         self.position += 1;
         // Trim oldest if over max depth
         if self.history.len() > self.max_depth {
@@ -412,7 +458,11 @@ impl UndoStack {
             return false;
         }
         self.position -= 1;
-        undo(sheet, &self.history[self.position].clone());
+        let HistoryEntry::Legacy(command) = &self.history[self.position] else {
+            self.position += 1;
+            return false;
+        };
+        undo(sheet, &command.clone());
         true
     }
 
@@ -421,7 +471,42 @@ impl UndoStack {
         if self.position >= self.history.len() {
             return false;
         }
-        apply(sheet, &self.history[self.position].clone());
+        let HistoryEntry::Legacy(command) = &self.history[self.position] else {
+            return false;
+        };
+        apply(sheet, &command.clone());
+        self.position += 1;
+        true
+    }
+
+    pub fn peek_undo_origin(&self) -> Option<CommandOrigin> {
+        (self.position > 0).then(|| self.history[self.position - 1].origin())
+    }
+
+    pub fn peek_redo_origin(&self) -> Option<CommandOrigin> {
+        (self.position < self.history.len()).then(|| self.history[self.position].origin())
+    }
+
+    pub fn peek_undo_engine_steps(&self) -> Option<usize> {
+        (self.position > 0).then(|| self.history[self.position - 1].engine_steps())
+    }
+
+    pub fn peek_redo_engine_steps(&self) -> Option<usize> {
+        (self.position < self.history.len()).then(|| self.history[self.position].engine_steps())
+    }
+
+    pub fn step_back(&mut self) -> bool {
+        if self.position == 0 {
+            return false;
+        }
+        self.position -= 1;
+        true
+    }
+
+    pub fn step_forward(&mut self) -> bool {
+        if self.position >= self.history.len() {
+            return false;
+        }
         self.position += 1;
         true
     }

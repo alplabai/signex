@@ -63,7 +63,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_paste(&mut self) {
-        if let Some(ref mut sheet) = self.schematic {
+        if self.schematic.is_some() {
             let offset = 5.08;
             let mut cmds = Vec::new();
             for w in &self.clipboard_wires {
@@ -127,14 +127,7 @@ impl Signex {
                 ntn.position.y += offset;
                 cmds.push(crate::undo::EditCommand::AddTextNote(ntn));
             }
-            if !cmds.is_empty() {
-                let batch = crate::undo::EditCommand::Batch(cmds);
-                self.undo_stack.execute(sheet, batch);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.clear_content_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-            }
+            self.apply_edit_batch(cmds, false, false);
         }
     }
 }

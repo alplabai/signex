@@ -20,10 +20,12 @@ use signex_render::PowerPortStyle;
 
 mod bootstrap;
 mod helpers;
+mod load_gateway;
+mod mutation_gateway;
 mod selection_message;
 mod update;
 
-use helpers::{constrain_segments, needed_junction};
+use helpers::constrain_segments;
 
 // ─── Message ──────────────────────────────────────────────────
 
@@ -173,6 +175,7 @@ pub struct Signex {
     pub canvas_font_bold: bool,
     /// Canvas font italic style toggle.
     pub canvas_font_italic: bool,
+    pub engine: Option<signex_engine::Engine>,
     pub schematic: Option<SchematicSheet>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
@@ -501,40 +504,7 @@ impl Signex {
                                     end: seg.1,
                                     stroke_width: 0.0,
                                 };
-                                if let Some(ref mut sheet) = self.schematic {
-                                    // Collect needed junctions BEFORE adding the wire
-                                    const TOL: f64 = 0.01;
-                                    let mut cmds: Vec<crate::undo::EditCommand> =
-                                        vec![crate::undo::EditCommand::AddWire(wire.clone())];
-                                    // Check start endpoint (may land on existing wire mid-segment)
-                                    if let Some(j) = needed_junction(wire.start, sheet, TOL) {
-                                        cmds.push(crate::undo::EditCommand::AddJunction(j));
-                                    }
-                                    // Check end endpoint
-                                    if let Some(j) = needed_junction(wire.end, sheet, TOL) {
-                                        cmds.push(crate::undo::EditCommand::AddJunction(j));
-                                    }
-                                    let cmd = if cmds.len() == 1 {
-                                        cmds.remove(0)
-                                    } else {
-                                        crate::undo::EditCommand::Batch(cmds)
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    // After adding wire, check if Y-junction needed at endpoints
-                                    // (3+ wires now meet — Y-junction may only appear after the wire is added)
-                                    for &check_pt in &[wire.start, wire.end] {
-                                        if let Some(j) = needed_junction(check_pt, sheet, TOL) {
-                                            self.undo_stack.execute(
-                                                sheet,
-                                                crate::undo::EditCommand::AddJunction(j),
-                                            );
-                                        }
-                                    }
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
+                                self.place_wire_segment_with_junctions(wire);
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.wire_points = vec![end_pt];
@@ -553,20 +523,17 @@ impl Signex {
                             self.canvas.tool_preview = None;
                         } else if let Some(&start) = self.wire_points.last() {
                             let segments = constrain_segments(start, pt, self.draw_mode);
+                            let mut bus_commands = Vec::new();
                             for seg in &segments {
                                 let bus = signex_types::schematic::Bus {
                                     uuid: uuid::Uuid::new_v4(),
                                     start: seg.0,
                                     end: seg.1,
                                 };
-                                if let Some(ref mut sheet) = self.schematic {
-                                    let cmd = crate::undo::EditCommand::AddBus(bus);
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
+                                bus_commands.push(signex_engine::Command::PlaceBus { bus });
+                            }
+                            if !bus_commands.is_empty() {
+                                self.apply_engine_commands(bus_commands, false, false);
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.wire_points = vec![end_pt];
@@ -605,14 +572,11 @@ impl Signex {
                                 locked: false,
                                 fields: std::collections::HashMap::new(),
                             };
-                            if let Some(ref mut sheet) = self.schematic {
-                                let cmd = crate::undo::EditCommand::AddSymbol(sym);
-                                self.undo_stack.execute(sheet, cmd);
-                                self.canvas.schematic = Some(sheet.clone());
-                                self.canvas.clear_content_cache();
-                                self.mark_dirty();
-                                self.commit_schematic();
-                            }
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSymbol { symbol: sym },
+                                false,
+                                false,
+                            );
                         }
                         // Stay in power placement mode for continuous placement
                     }
@@ -621,14 +585,11 @@ impl Signex {
                             uuid: uuid::Uuid::new_v4(),
                             position: signex_types::schematic::Point::new(wx, wy),
                         };
-                        if let Some(ref mut sheet) = self.schematic {
-                            let cmd = crate::undo::EditCommand::AddNoConnect(nc);
-                            self.undo_stack.execute(sheet, cmd);
-                            self.canvas.schematic = Some(sheet.clone());
-                            self.canvas.clear_content_cache();
-                            self.mark_dirty();
-                            self.commit_schematic();
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceNoConnect { no_connect: nc },
+                            false,
+                            false,
+                        );
                         // Stay in NoConnect mode for continuous placement
                     }
                     Tool::BusEntry => {
@@ -637,14 +598,11 @@ impl Signex {
                             position: signex_types::schematic::Point::new(wx, wy),
                             size: (2.54, 2.54),
                         };
-                        if let Some(ref mut sheet) = self.schematic {
-                            let cmd = crate::undo::EditCommand::AddBusEntry(be);
-                            self.undo_stack.execute(sheet, cmd);
-                            self.canvas.schematic = Some(sheet.clone());
-                            self.canvas.clear_content_cache();
-                            self.mark_dirty();
-                            self.commit_schematic();
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceBusEntry { bus_entry: be },
+                            false,
+                            false,
+                        );
                         // Stay in BusEntry mode for continuous placement
                     }
                     Tool::Text => {
@@ -663,14 +621,11 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         };
-                        if let Some(ref mut sheet) = self.schematic {
-                            let cmd = crate::undo::EditCommand::AddTextNote(tn);
-                            self.undo_stack.execute(sheet, cmd);
-                            self.canvas.schematic = Some(sheet.clone());
-                            self.canvas.clear_content_cache();
-                            self.mark_dirty();
-                            self.commit_schematic();
-                        }
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceTextNote { text_note: tn },
+                            false,
+                            false,
+                        );
                         self.current_tool = Tool::Select;
                     }
                     _ => {
@@ -689,20 +644,15 @@ impl Signex {
                     (dx, dy)
                 };
                 if (dx.abs() > 0.001 || dy.abs() > 0.001) && !self.canvas.selected.is_empty() {
-                    if let Some(ref mut sheet) = self.schematic {
-                        let cmd = crate::undo::EditCommand::MoveElements {
+                    self.apply_engine_command(
+                        signex_engine::Command::MoveSelection {
                             items: self.canvas.selected.clone(),
                             dx,
                             dy,
-                        };
-                        self.undo_stack.execute(sheet, cmd);
-                        self.canvas.schematic = Some(sheet.clone());
-                        self.canvas.clear_content_cache();
-                        self.canvas.clear_overlay_cache();
-                        self.mark_dirty();
-                        self.commit_schematic();
-                        self.update_selection_info();
-                    }
+                        },
+                        true,
+                        true,
+                    );
                 }
             }
             Message::TextEditChanged(text) => {
@@ -713,31 +663,22 @@ impl Signex {
             Message::TextEditSubmit => {
                 if let Some(state) = self.editing_text.take() {
                     if state.text != state.original_text {
-                        if let Some(ref mut sheet) = self.schematic {
-                            let cmd = match state.kind {
-                                signex_types::schematic::SelectedKind::Label => {
-                                    crate::undo::EditCommand::UpdateLabelText {
-                                        uuid: state.uuid,
-                                        old_text: state.original_text,
-                                        new_text: state.text,
-                                    }
+                        let engine_command = match state.kind {
+                            signex_types::schematic::SelectedKind::Label => {
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::Label(state.uuid),
+                                    value: state.text.clone(),
                                 }
-                                signex_types::schematic::SelectedKind::TextNote => {
-                                    crate::undo::EditCommand::UpdateTextNoteText {
-                                        uuid: state.uuid,
-                                        old_text: state.original_text,
-                                        new_text: state.text,
-                                    }
+                            }
+                            signex_types::schematic::SelectedKind::TextNote => {
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::TextNote(state.uuid),
+                                    value: state.text.clone(),
                                 }
-                                _ => return Task::none(),
-                            };
-                            self.undo_stack.execute(sheet, cmd);
-                            self.canvas.schematic = Some(sheet.clone());
-                            self.canvas.clear_content_cache();
-                            self.mark_dirty();
-                            self.commit_schematic();
-                            self.update_selection_info();
-                        }
+                            }
+                            _ => return Task::none(),
+                        };
+                        self.apply_engine_command(engine_command, false, true);
                     }
                 }
             }
@@ -950,23 +891,23 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
-                                let old_val = sym.reference.clone();
-                                if old_val != new_val {
-                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
-                                        uuid,
-                                        field: crate::undo::SymbolField::Designator,
-                                        old_value: old_val,
-                                        new_value: new_val,
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
-                            }
+                        if let Some(symbol) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .cloned()
+                            && symbol.reference != new_val
+                        {
+                            self.apply_engine_command(
+                                signex_engine::Command::UpdateSymbolFields {
+                                    symbol_id: uuid,
+                                    reference: new_val.clone(),
+                                    value: symbol.value.clone(),
+                                    footprint: symbol.footprint.clone(),
+                                },
+                                false,
+                                false,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
@@ -974,23 +915,23 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
-                                let old_val = sym.value.clone();
-                                if old_val != new_val {
-                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
-                                        uuid,
-                                        field: crate::undo::SymbolField::Value,
-                                        old_value: old_val,
-                                        new_value: new_val,
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
-                            }
+                        if let Some(symbol) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .cloned()
+                            && symbol.value != new_val
+                        {
+                            self.apply_engine_command(
+                                signex_engine::Command::UpdateSymbolFields {
+                                    symbol_id: uuid,
+                                    reference: symbol.reference.clone(),
+                                    value: new_val.clone(),
+                                    footprint: symbol.footprint.clone(),
+                                },
+                                false,
+                                false,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
@@ -998,67 +939,71 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         let new_val = new_val.clone();
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
-                                let old_val = sym.footprint.clone();
-                                if old_val != new_val {
-                                    let cmd = crate::undo::EditCommand::UpdateSymbolField {
-                                        uuid,
-                                        field: crate::undo::SymbolField::Footprint,
-                                        old_value: old_val,
-                                        new_value: new_val,
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
-                            }
+                        if let Some(symbol) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .cloned()
+                            && symbol.footprint != new_val
+                        {
+                            self.apply_engine_command(
+                                signex_engine::Command::UpdateSymbolFields {
+                                    symbol_id: uuid,
+                                    reference: symbol.reference.clone(),
+                                    value: symbol.value.clone(),
+                                    footprint: new_val.clone(),
+                                },
+                                false,
+                                false,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ToggleSymbolMirrorX(uuid),
                     ) => {
                         let uuid = *uuid;
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
-                                let cmd = crate::undo::EditCommand::MirrorSymbol {
-                                    uuid,
-                                    axis: crate::undo::MirrorAxis::X,
-                                    old_mirror_x: sym.mirror_x,
-                                    old_mirror_y: sym.mirror_y,
-                                };
-                                self.undo_stack.execute(sheet, cmd);
-                                self.canvas.schematic = Some(sheet.clone());
-                                self.canvas.clear_content_cache();
-                                self.canvas.clear_overlay_cache();
-                                self.mark_dirty();
-                                self.commit_schematic();
-                                self.update_selection_info();
-                            }
+                        if let Some((old_mirror_x, old_mirror_y)) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .map(|sym| (sym.mirror_x, sym.mirror_y))
+                        {
+                            let _mirror = (old_mirror_x, old_mirror_y);
+                            self.apply_engine_command(
+                                signex_engine::Command::MirrorSelection {
+                                    items: vec![signex_types::schematic::SelectedItem::new(
+                                        uuid,
+                                        signex_types::schematic::SelectedKind::Symbol,
+                                    )],
+                                    axis: signex_engine::MirrorAxis::Vertical,
+                                },
+                                true,
+                                true,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ToggleSymbolMirrorY(uuid),
                     ) => {
                         let uuid = *uuid;
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == uuid) {
-                                let cmd = crate::undo::EditCommand::MirrorSymbol {
-                                    uuid,
-                                    axis: crate::undo::MirrorAxis::Y,
-                                    old_mirror_x: sym.mirror_x,
-                                    old_mirror_y: sym.mirror_y,
-                                };
-                                self.undo_stack.execute(sheet, cmd);
-                                self.canvas.schematic = Some(sheet.clone());
-                                self.canvas.clear_content_cache();
-                                self.canvas.clear_overlay_cache();
-                                self.mark_dirty();
-                                self.commit_schematic();
-                                self.update_selection_info();
-                            }
+                        if let Some((old_mirror_x, old_mirror_y)) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.symbols.iter().find(|s| s.uuid == uuid))
+                            .map(|sym| (sym.mirror_x, sym.mirror_y))
+                        {
+                            let _mirror = (old_mirror_x, old_mirror_y);
+                            self.apply_engine_command(
+                                signex_engine::Command::MirrorSelection {
+                                    items: vec![signex_types::schematic::SelectedItem::new(
+                                        uuid,
+                                        signex_types::schematic::SelectedKind::Symbol,
+                                    )],
+                                    axis: signex_engine::MirrorAxis::Horizontal,
+                                },
+                                true,
+                                true,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
@@ -1078,22 +1023,22 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(lbl) = sheet.labels.iter().find(|l| l.uuid == uuid) {
-                                let old_text = lbl.text.clone();
-                                if old_text != new_text {
-                                    let cmd = crate::undo::EditCommand::UpdateLabelText {
-                                        uuid,
-                                        old_text,
-                                        new_text,
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
-                            }
+                        if let Some(old_text) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.labels.iter().find(|l| l.uuid == uuid))
+                            .map(|label| label.text.clone())
+                            && old_text != new_text
+                        {
+                            self.apply_edit_command(
+                                crate::undo::EditCommand::UpdateLabelText {
+                                    uuid,
+                                    old_text,
+                                    new_text,
+                                },
+                                false,
+                                false,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
@@ -1101,22 +1046,22 @@ impl Signex {
                     ) => {
                         let uuid = *uuid;
                         let new_text = new_text.clone();
-                        if let Some(ref mut sheet) = self.schematic {
-                            if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == uuid) {
-                                let old_text = tn.text.clone();
-                                if old_text != new_text {
-                                    let cmd = crate::undo::EditCommand::UpdateTextNoteText {
-                                        uuid,
-                                        old_text,
-                                        new_text,
-                                    };
-                                    self.undo_stack.execute(sheet, cmd);
-                                    self.canvas.schematic = Some(sheet.clone());
-                                    self.canvas.clear_content_cache();
-                                    self.mark_dirty();
-                                    self.commit_schematic();
-                                }
-                            }
+                        if let Some(old_text) = self
+                            .schematic
+                            .as_ref()
+                            .and_then(|sheet| sheet.text_notes.iter().find(|t| t.uuid == uuid))
+                            .map(|text_note| text_note.text.clone())
+                            && old_text != new_text
+                        {
+                            self.apply_edit_command(
+                                crate::undo::EditCommand::UpdateTextNoteText {
+                                    uuid,
+                                    old_text,
+                                    new_text,
+                                },
+                                false,
+                                false,
+                            );
                         }
                     }
                     crate::dock::DockMessage::Panel(
@@ -1363,10 +1308,7 @@ impl Signex {
             Message::SaveFile => self.handle_save_file(),
             Message::SaveFileAs(path) => self.handle_save_file_as(path),
             Message::SchematicLoaded(sheet) => {
-                self.schematic = Some(*sheet);
-                self.canvas.schematic = self.schematic.clone();
-                self.canvas.clear_content_cache();
-                self.commit_schematic();
+                self.load_schematic_into_active_tab(*sheet);
             }
             Message::TogglePanelList => {
                 self.panel_list_open = !self.panel_list_open;
@@ -1979,65 +1921,7 @@ impl Signex {
     }
 
     fn sync_active_tab(&mut self) {
-        // In-place text editor belongs to a specific document item; clear on tab switch.
-        self.editing_text = None;
-
-        if let Some(tab) = self.tabs.get(self.active_tab) {
-            self.schematic = tab.schematic.clone();
-            self.canvas.schematic = tab.schematic.clone();
-        } else {
-            self.schematic = None;
-            self.canvas.schematic = None;
-        }
-        self.canvas.clear_bg_cache();
-        self.canvas.clear_content_cache();
-
-        // Update panel stats from current schematic (preserve tree collapse state)
-        self.panel_ctx.has_schematic = self.schematic.is_some();
-        self.panel_ctx.sym_count = self
-            .schematic
-            .as_ref()
-            .map(|s| s.symbols.len())
-            .unwrap_or(0);
-        self.panel_ctx.wire_count = self.schematic.as_ref().map(|s| s.wires.len()).unwrap_or(0);
-        self.panel_ctx.label_count = self.schematic.as_ref().map(|s| s.labels.len()).unwrap_or(0);
-        self.panel_ctx.junction_count = self
-            .schematic
-            .as_ref()
-            .map(|s| s.junctions.len())
-            .unwrap_or(0);
-        self.panel_ctx.lib_symbol_count = self
-            .schematic
-            .as_ref()
-            .map(|s| s.lib_symbols.len())
-            .unwrap_or(0);
-        self.panel_ctx.lib_symbol_names = self
-            .schematic
-            .as_ref()
-            .map(|s| s.lib_symbols.keys().cloned().collect())
-            .unwrap_or_default();
-        self.panel_ctx.placed_symbols = self
-            .schematic
-            .as_ref()
-            .map(|s| {
-                s.symbols
-                    .iter()
-                    .map(|sym| {
-                        (
-                            sym.reference.clone(),
-                            sym.value.clone(),
-                            sym.footprint.clone(),
-                            sym.lib_id.clone(),
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        self.panel_ctx.paper_size = self
-            .schematic
-            .as_ref()
-            .map(|s| s.paper_size.clone())
-            .unwrap_or_else(|| "A4".to_string());
+        self.sync_visible_schematic_from_active_tab();
     }
 
     /// Align selected symbols based on the alignment action.
@@ -2091,6 +1975,7 @@ impl Signex {
 
         // Compute move delta for each item and create batch undo command
         let mut move_cmds = Vec::new();
+        let mut engine_commands = Vec::new();
         for &(uuid, kind, x, y) in &positions {
             let (target_x, target_y) = match action {
                 ActiveBarAction::AlignLeft => (min_x, y),
@@ -2107,11 +1992,13 @@ impl Signex {
             let dx = target_x - x;
             let dy = target_y - y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
+                let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
                 move_cmds.push(crate::undo::EditCommand::MoveElements {
-                    items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                    items: items.clone(),
                     dx,
                     dy,
                 });
+                engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
             }
         }
 
@@ -2120,6 +2007,7 @@ impl Signex {
             && positions.len() > 2
         {
             move_cmds.clear();
+            engine_commands.clear();
             let mut sorted = positions.clone();
             let n = sorted.len();
             match action {
@@ -2130,8 +2018,14 @@ impl Signex {
                         let target_x = min_x + step * i as f64;
                         let dx = target_x - x;
                         if dx.abs() > 0.001 {
+                            let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
                             move_cmds.push(crate::undo::EditCommand::MoveElements {
-                                items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                                items: items.clone(),
+                                dx,
+                                dy: 0.0,
+                            });
+                            engine_commands.push(signex_engine::Command::MoveSelection {
+                                items,
                                 dx,
                                 dy: 0.0,
                             });
@@ -2145,8 +2039,14 @@ impl Signex {
                         let target_y = min_y + step * i as f64;
                         let dy = target_y - y;
                         if dy.abs() > 0.001 {
+                            let items = vec![signex_types::schematic::SelectedItem::new(uuid, kind)];
                             move_cmds.push(crate::undo::EditCommand::MoveElements {
-                                items: vec![signex_types::schematic::SelectedItem::new(uuid, kind)],
+                                items: items.clone(),
+                                dx: 0.0,
+                                dy,
+                            });
+                            engine_commands.push(signex_engine::Command::MoveSelection {
+                                items,
                                 dx: 0.0,
                                 dy,
                             });
@@ -2158,15 +2058,11 @@ impl Signex {
         }
 
         if !move_cmds.is_empty() {
-            if let Some(ref mut sheet) = self.schematic {
-                let cmd = crate::undo::EditCommand::Batch(move_cmds);
-                self.undo_stack.execute(sheet, cmd);
-                self.canvas.schematic = Some(sheet.clone());
-                self.canvas.clear_content_cache();
-                self.canvas.clear_overlay_cache();
-                self.mark_dirty();
-                self.commit_schematic();
-            }
+            self.apply_engine_commands(
+                engine_commands,
+                true,
+                false,
+            );
         }
     }
 

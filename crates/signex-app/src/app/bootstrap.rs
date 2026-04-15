@@ -40,6 +40,7 @@ impl Signex {
             canvas_font_size: 11.0,
             canvas_font_bold: false,
             canvas_font_italic: false,
+            engine: None,
             schematic: None,
             project_path: None,
             project_data: None,
