@@ -5,11 +5,24 @@ impl Signex {
         self.engine
             .as_ref()
             .map(|engine| engine.document())
-            .or_else(|| self.tabs.get(self.active_tab).and_then(|tab| tab.schematic.as_ref()))
+            .or_else(|| self.active_tab_cached_schematic())
     }
 
     pub(crate) fn has_active_schematic(&self) -> bool {
         self.active_schematic().is_some()
+    }
+
+    pub(crate) fn active_render_snapshot(
+        &self,
+    ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+        self.canvas.active_snapshot()
+    }
+
+    fn active_tab_cached_schematic(&self) -> Option<&SchematicSheet> {
+        self.tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_schematic)
     }
 
     fn active_tab_path(&self) -> Option<PathBuf> {
@@ -22,8 +35,10 @@ impl Signex {
     }
 
     pub(crate) fn sync_canvas_from_visible_schematic(&mut self) {
-        self.canvas
-            .set_schematic(self.active_schematic().cloned());
+        self.canvas.set_render_cache(
+            self.active_schematic()
+                .map(signex_render::schematic::SchematicRenderCache::from_sheet),
+        );
     }
 
     pub(crate) fn open_schematic_tab(
@@ -35,7 +50,7 @@ impl Signex {
         self.tabs.push(TabInfo {
             title,
             path,
-            schematic: Some(sheet.clone()),
+            cached_document: Some(TabDocument::Schematic(sheet.clone())),
             dirty: false,
         });
         self.active_tab = self.tabs.len() - 1;
@@ -53,7 +68,9 @@ impl Signex {
         let schematic = self
             .tabs
             .get(self.active_tab)
-            .and_then(|tab| tab.schematic.clone());
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_schematic)
+            .cloned();
 
         self.apply_loaded_schematic(schematic, true, false, false, false);
     }

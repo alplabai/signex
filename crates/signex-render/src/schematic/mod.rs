@@ -17,7 +17,13 @@ pub mod wire;
 use iced::Rectangle;
 use iced::widget::canvas;
 
-use signex_types::schematic::{LabelType, SchematicSheet};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use signex_types::schematic::{
+    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect,
+    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
+};
 use signex_types::theme::CanvasColors;
 
 use crate::colors::to_iced;
@@ -38,6 +44,72 @@ pub struct ScreenTransform {
     pub offset_y: f32,
     /// Pixels per mm -- higher values mean more zoom.
     pub scale: f32,
+}
+
+/// Render-facing snapshot of the visible schematic.
+///
+/// This trims persistence and document metadata away from the canvas seam while
+/// keeping the fields that rendering, hit-testing, and selection overlays need.
+#[derive(Debug, Clone)]
+pub struct SchematicRenderSnapshot {
+    pub paper_size: String,
+    pub symbols: Vec<Symbol>,
+    pub wires: Vec<Wire>,
+    pub junctions: Vec<Junction>,
+    pub labels: Vec<Label>,
+    pub child_sheets: Vec<ChildSheet>,
+    pub no_connects: Vec<NoConnect>,
+    pub text_notes: Vec<TextNote>,
+    pub buses: Vec<Bus>,
+    pub bus_entries: Vec<BusEntry>,
+    pub drawings: Vec<SchDrawing>,
+    pub lib_symbols: HashMap<String, LibSymbol>,
+    content_bounds: Option<Aabb>,
+}
+
+impl SchematicRenderSnapshot {
+    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self {
+            paper_size: sheet.paper_size.clone(),
+            symbols: sheet.symbols.clone(),
+            wires: sheet.wires.clone(),
+            junctions: sheet.junctions.clone(),
+            labels: sheet.labels.clone(),
+            child_sheets: sheet.child_sheets.clone(),
+            no_connects: sheet.no_connects.clone(),
+            text_notes: sheet.text_notes.clone(),
+            buses: sheet.buses.clone(),
+            bus_entries: sheet.bus_entries.clone(),
+            drawings: sheet.drawings.clone(),
+            lib_symbols: sheet.lib_symbols.clone(),
+            content_bounds: sheet.content_bounds(),
+        }
+    }
+
+    pub fn content_bounds(&self) -> Option<Aabb> {
+        self.content_bounds
+    }
+}
+
+/// Shared render-cache seam for the visible schematic.
+///
+/// The cache owns an `Arc` to the immutable render snapshot so canvas drawing,
+/// hit-testing, and selection overlays can share one prepared view-model.
+#[derive(Debug, Clone)]
+pub struct SchematicRenderCache {
+    snapshot: Arc<SchematicRenderSnapshot>,
+}
+
+impl SchematicRenderCache {
+    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self {
+            snapshot: Arc::new(SchematicRenderSnapshot::from_sheet(sheet)),
+        }
+    }
+
+    pub fn snapshot(&self) -> &SchematicRenderSnapshot {
+        self.snapshot.as_ref()
+    }
 }
 
 impl ScreenTransform {
@@ -220,7 +292,7 @@ pub(super) fn instance_transform(
 /// on top of lower ones.
 pub fn render_schematic(
     frame: &mut canvas::Frame,
-    sheet: &SchematicSheet,
+    sheet: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
     _bounds: Rectangle,
