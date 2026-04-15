@@ -71,6 +71,7 @@ pub enum Message {
     Copy,
     Cut,
     Paste,
+    SmartPaste,
     Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
@@ -111,6 +112,7 @@ pub enum ContextAction {
     Copy,
     Cut,
     Paste,
+    SmartPaste,
     Delete,
     SelectAll,
     ZoomFit,
@@ -1381,6 +1383,7 @@ impl Signex {
             Message::Cut => return self.handle_cut(),
             Message::Copy => self.handle_copy(),
             Message::Paste => self.handle_paste(),
+            Message::SmartPaste => self.handle_smart_paste(),
             Message::Duplicate => self.handle_duplicate(),
             Message::SaveFile => self.handle_save_file(),
             Message::SaveFileAs(path) => self.handle_save_file_as(path),
@@ -1675,6 +1678,7 @@ impl Signex {
                     ContextAction::Copy => return self.update(Message::Copy),
                     ContextAction::Cut => return self.update(Message::Cut),
                     ContextAction::Paste => return self.update(Message::Paste),
+                    ContextAction::SmartPaste => return self.update(Message::SmartPaste),
                     ContextAction::Delete => return self.update(Message::DeleteSelected),
                     ContextAction::SelectAll => {
                         return self.update(Message::Selection(
@@ -1813,6 +1817,7 @@ impl Signex {
             MenuMessage::Cut => self.update(Message::Cut),
             MenuMessage::Copy => self.update(Message::Copy),
             MenuMessage::Paste => self.update(Message::Paste),
+            MenuMessage::SmartPaste => self.update(Message::SmartPaste),
             MenuMessage::Delete => self.update(Message::DeleteSelected),
             MenuMessage::SelectAll => {
                 self.update(Message::Selection(selection_message::SelectionMessage::SelectAll))
@@ -2213,6 +2218,7 @@ impl Signex {
         items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
         items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
         items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
+        items.push(self.ctx_menu_item_kb("Smart Paste", "Shift+Ctrl+V", ContextAction::SmartPaste));
         items.push(self.ctx_menu_sep());
 
         if !self.canvas.selected.is_empty() {
