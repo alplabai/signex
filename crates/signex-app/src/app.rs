@@ -71,6 +71,7 @@ pub enum Message {
     Copy,
     Cut,
     Paste,
+    Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
     CycleDrawMode,
@@ -1334,6 +1335,7 @@ impl Signex {
             Message::Cut => return self.handle_cut(),
             Message::Copy => self.handle_copy(),
             Message::Paste => self.handle_paste(),
+            Message::Duplicate => self.handle_duplicate(),
             Message::SaveFile => self.handle_save_file(),
             Message::SaveFileAs(path) => self.handle_save_file_as(path),
             Message::SchematicLoaded(sheet) => {
@@ -1759,6 +1761,14 @@ impl Signex {
             }
             MenuMessage::Undo => self.update(Message::Undo),
             MenuMessage::Redo => self.update(Message::Redo),
+            MenuMessage::Cut => self.update(Message::Cut),
+            MenuMessage::Copy => self.update(Message::Copy),
+            MenuMessage::Paste => self.update(Message::Paste),
+            MenuMessage::Delete => self.update(Message::DeleteSelected),
+            MenuMessage::SelectAll => {
+                self.update(Message::Selection(selection_message::SelectionMessage::SelectAll))
+            }
+            MenuMessage::Duplicate => self.update(Message::Duplicate),
             MenuMessage::Save => self.update(Message::SaveFile),
             MenuMessage::SaveAs => Task::perform(
                 async {
