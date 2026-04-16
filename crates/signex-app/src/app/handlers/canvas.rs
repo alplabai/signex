@@ -407,10 +407,8 @@ impl Signex {
             }
             CanvasEvent::CursorMoved => {
                 self.interaction_state.canvas.clear_bg_cache();
-                self.interaction_state.canvas.clear_content_cache();
                 self.interaction_state.canvas.clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.pcb_canvas.clear_content_cache();
                 self.interaction_state.canvas.pending_fit.set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }

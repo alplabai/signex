@@ -636,6 +636,17 @@ impl Engine {
             return None;
         };
 
+        let h_align_label = |align| match align {
+            signex_types::schematic::HAlign::Left => "Left",
+            signex_types::schematic::HAlign::Center => "Center",
+            signex_types::schematic::HAlign::Right => "Right",
+        };
+        let v_align_label = |align| match align {
+            signex_types::schematic::VAlign::Top => "Top",
+            signex_types::schematic::VAlign::Center => "Center",
+            signex_types::schematic::VAlign::Bottom => "Bottom",
+        };
+
         let mut info = Vec::new();
 
         match item.kind {
@@ -660,6 +671,8 @@ impl Engine {
                 if symbol.unit > 1 {
                     info.push(("Unit".into(), symbol.unit.to_string()));
                 }
+                info.push(("Locked".into(), if symbol.locked { "Yes" } else { "No" }.into()));
+                info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
             }
             SelectedKind::Wire => {
                 let wire = self.document.wires.iter().find(|wire| wire.uuid == item.uuid)?;
@@ -674,10 +687,17 @@ impl Engine {
             SelectedKind::Label => {
                 let label = self.document.labels.iter().find(|label| label.uuid == item.uuid)?;
                 info.push(("Type".into(), format!("{:?} Label", label.label_type)));
+                info.push(("Text".into(), label.text.clone()));
                 info.push(("Net Name".into(), label.text.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", label.position.x, label.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
+                info.push(("Text Size".into(), format!("{:.2} mm", label.font_size)));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(label.justify).into(),
                 ));
             }
             SelectedKind::Junction => {
@@ -716,6 +736,16 @@ impl Engine {
                     "Position".into(),
                     format!("{:.2}, {:.2}", text_note.position.x, text_note.position.y),
                 ));
+                info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
+                info.push(("Text Size".into(), format!("{:.2} mm", text_note.font_size)));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(text_note.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(text_note.justify_v).into(),
+                ));
             }
             SelectedKind::ChildSheet => {
                 let child_sheet = self
@@ -746,25 +776,55 @@ impl Engine {
             }
             SelectedKind::SymbolRefField => {
                 let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
+                info.push(("Text".into(), symbol.reference.clone()));
                 info.push(("Reference".into(), symbol.reference.clone()));
-                if let Some(ref_text) = symbol.ref_text.as_ref() {
-                    info.push((
-                        "Position".into(),
-                        format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
-                    ));
-                }
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
+                info.push(("Text Size".into(), format!("{:.2} mm", ref_text.font_size)));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(ref_text.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(ref_text.justify_v).into(),
+                ));
+                info.push(("Visible".into(), if ref_text.hidden { "No" } else { "Yes" }.into()));
+                info.push((
+                    "Fields Autoplaced".into(),
+                    if symbol.fields_autoplaced { "Yes" } else { "No" }.into(),
+                ));
             }
             SelectedKind::SymbolValField => {
                 let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                let value_text = symbol.val_text.as_ref()?;
                 info.push(("Type".into(), "Value Field".into()));
+                info.push(("Text".into(), symbol.value.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
-                if let Some(value_text) = symbol.val_text.as_ref() {
-                    info.push((
-                        "Position".into(),
-                        format!("{:.2}, {:.2} mm", value_text.position.x, value_text.position.y),
-                    ));
-                }
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2} mm", value_text.position.x, value_text.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
+                info.push(("Text Size".into(), format!("{:.2} mm", value_text.font_size)));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(value_text.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(value_text.justify_v).into(),
+                ));
+                info.push(("Visible".into(), if value_text.hidden { "No" } else { "Yes" }.into()));
+                info.push((
+                    "Fields Autoplaced".into(),
+                    if symbol.fields_autoplaced { "Yes" } else { "No" }.into(),
+                ));
             }
         }
 

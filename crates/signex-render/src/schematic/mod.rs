@@ -756,7 +756,7 @@ fn draw_builtin_power(
     // Draw value label on the same side as symbol body.
     let label_y = (pin_len + 1.5) * dir;
     let font_size_mm = 1.27;
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font >= 1.0 {
         let (tx, ty) = instance_transform(
             sym,

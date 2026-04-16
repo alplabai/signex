@@ -978,6 +978,14 @@ fn view_selected_element_properties<'a>(
         .unwrap_or("Object");
 
     let uuid = ctx.selected_uuid;
+    let selected_kind = ctx.selected_kind;
+    let get = |key: &str| -> String {
+        ctx.selection_info
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default()
+    };
 
     // ── Header ──
     col = col.push(
@@ -988,21 +996,16 @@ fn view_selected_element_properties<'a>(
     col = col.push(thin_sep(border_c));
 
     // ── Editable properties based on element type ──
-    match elem_type {
-        "Symbol" => {
-            let get = |key: &str| -> String {
-                ctx.selection_info
-                    .iter()
-                    .find(|(k, _)| k == key)
-                    .map(|(_, v)| v.clone())
-                    .unwrap_or_default()
-            };
+    match selected_kind {
+        Some(signex_types::schematic::SelectedKind::Symbol) => {
             let reference = get("Reference");
             let value = get("Value");
             let footprint = get("Footprint");
             let lib_id = get("Library ID");
             let position = get("Position");
             let rotation = get("Rotation");
+            let locked = get("Locked") == "Yes";
+            let dnp = get("DNP") == "Yes";
             let has_mirror_x = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "X");
             let has_mirror_y = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "Y");
 
@@ -1055,29 +1058,78 @@ fn view_selected_element_properties<'a>(
                             PanelMsg::ToggleSymbolMirrorX(id), muted));
                         c = c.push(form_check_row("Mirror Y", has_mirror_y,
                             PanelMsg::ToggleSymbolMirrorY(id), muted));
-                        c = c.push(form_check_row("Locked", false,
+                        c = c.push(form_check_row("Locked", locked,
                             PanelMsg::ToggleSymbolLocked(id), muted));
-                        c = c.push(form_check_row("DNP", false,
+                        c = c.push(form_check_row("DNP", dnp,
                             PanelMsg::ToggleSymbolDnp(id), muted));
                         c
                     },
                 ));
             }
         }
-        "Label" | "Global Label" | "Hierarchical Label" => {
-            let label_text = ctx.selection_info.iter()
-                .find(|(k, _)| k == "Text")
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default();
-            let position = ctx.selection_info.iter()
-                .find(|(k, _)| k == "Position")
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default();
+        Some(signex_types::schematic::SelectedKind::SymbolRefField)
+        | Some(signex_types::schematic::SelectedKind::SymbolValField) => {
+            let text_value = get("Text");
+            let position = get("Position");
+            let rotation = get("Rotation");
+            let text_size = get("Text Size");
+            let justify_h = get("Horizontal Justification");
+            let justify_v = get("Vertical Justification");
+            let visible = get("Visible");
+            let fields_autoplaced = get("Fields Autoplaced");
+            let is_reference = matches!(selected_kind, Some(signex_types::schematic::SelectedKind::SymbolRefField));
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
-                    "sel_general",
-                    "General",
+                    "sel_basic",
+                    "Basic Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_input_row("Field", if is_reference { "Reference" } else { "Value" }, muted, input_bg, input_bdr));
+                        c = c.push(form_edit_row("Text", &text_value, muted,
+                            move |s| if is_reference {
+                                PanelMsg::EditSymbolDesignator(id, s)
+                            } else {
+                                PanelMsg::EditSymbolValue(id, s)
+                            }));
+                        c = c.push(form_input_row("Visible", &visible, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Fields Autoplaced", &fields_autoplaced, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
+
+                col = col.push(collapsible_section(
+                    "sel_text",
+                    "Text Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Vertical Justification", &justify_v, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
+            }
+        }
+        Some(signex_types::schematic::SelectedKind::Label) => {
+            let label_text = get("Text");
+            let position = get("Position");
+            let rotation = get("Rotation");
+            let text_size = get("Text Size");
+            let justify_h = get("Horizontal Justification");
+
+            if let Some(id) = uuid {
+                col = col.push(collapsible_section(
+                    "sel_basic",
+                    "Basic Properties",
                     &ctx.collapsed_sections,
                     muted,
                     border_c,
@@ -1085,22 +1137,40 @@ fn view_selected_element_properties<'a>(
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(form_edit_row("Text", &label_text, muted,
                             move |s| PanelMsg::EditLabelText(id, s)));
+                        c = c.push(form_input_row("Label Type", elem_type, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
+
+                col = col.push(collapsible_section(
+                    "sel_text",
+                    "Text Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
                         c
                     },
                 ));
             }
         }
-        "Text Note" => {
-            let note_text = ctx.selection_info.iter()
-                .find(|(k, _)| k == "Text")
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default();
+        Some(signex_types::schematic::SelectedKind::TextNote) => {
+            let note_text = get("Text");
+            let position = get("Position");
+            let rotation = get("Rotation");
+            let text_size = get("Text Size");
+            let justify_h = get("Horizontal Justification");
+            let justify_v = get("Vertical Justification");
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
-                    "sel_general",
-                    "General",
+                    "sel_basic",
+                    "Basic Properties",
                     &ctx.collapsed_sections,
                     muted,
                     border_c,
@@ -1108,6 +1178,23 @@ fn view_selected_element_properties<'a>(
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(form_edit_row("Text", &note_text, muted,
                             move |s| PanelMsg::EditTextNoteText(id, s)));
+                        c
+                    },
+                ));
+
+                col = col.push(collapsible_section(
+                    "sel_text",
+                    "Text Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Vertical Justification", &justify_v, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
                         c
                     },
                 ));

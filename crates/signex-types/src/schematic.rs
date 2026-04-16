@@ -195,10 +195,20 @@ pub struct LibSymbol {
     pub footprint: String,
     #[serde(default)]
     pub datasheet: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: String,
+    #[serde(default)]
+    pub fp_filters: String,
     #[serde(default = "default_true")]
     pub in_bom: bool,
     #[serde(default = "default_true")]
     pub on_board: bool,
+    #[serde(default = "default_true")]
+    pub in_pos_files: bool,
+    #[serde(default)]
+    pub duplicate_pin_numbers_are_jumpers: bool,
     #[serde(default)]
     pub graphics: Vec<LibGraphic>,
     #[serde(default)]
@@ -311,6 +321,8 @@ pub struct Pin {
     pub name: String,
     #[serde(default)]
     pub number: String,
+    #[serde(default = "default_true")]
+    pub visible: bool,
     #[serde(default = "default_true")]
     pub name_visible: bool,
     #[serde(default = "default_true")]

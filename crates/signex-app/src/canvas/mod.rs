@@ -571,33 +571,49 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(bg);
 
         // Layer 2: content (schematic elements)
-        // Content is rendered with the CURRENT camera and cached. On pan/zoom, the
-        // cache is NOT cleared — we only clear it when schematic data changes.
-        // This means during active pan the content uses stale camera, but the grid
-        // (bg) and overlay always redraw. Content re-renders when pan/zoom stops
-        // via the CursorMoved handler clearing bg_cache which triggers a full redraw.
-        let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
-            // Store camera state for this cache generation
-            self.content_cache_camera.set((
-                state.camera.offset.x,
-                state.camera.offset.y,
-                state.camera.scale,
-            ));
+        let live_transform = signex_render::schematic::ScreenTransform {
+            offset_x: state.camera.offset.x,
+            offset_y: state.camera.offset.y,
+            scale: state.camera.scale,
+        };
+        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
+        let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
+            && (cached_offset_y - state.camera.offset.y).abs() < 0.01
+            && (cached_scale - state.camera.scale).abs() < 0.0001;
+
+        let content = if state.panning {
+            let mut frame = canvas::Frame::new(renderer, bounds.size());
             if let Some(snapshot) = self.active_snapshot() {
-                let transform = signex_render::schematic::ScreenTransform {
-                    offset_x: state.camera.offset.x,
-                    offset_y: state.camera.offset.y,
-                    scale: state.camera.scale,
-                };
                 signex_render::schematic::render_schematic(
-                    frame,
+                    &mut frame,
                     snapshot,
-                    &transform,
+                    &live_transform,
                     &self.canvas_colors,
                     bounds,
                 );
             }
-        });
+            frame.into_geometry()
+        } else {
+            if !camera_matches_cache {
+                self.content_cache.clear();
+            }
+            self.content_cache.draw(renderer, bounds.size(), |frame| {
+                self.content_cache_camera.set((
+                    state.camera.offset.x,
+                    state.camera.offset.y,
+                    state.camera.scale,
+                ));
+                if let Some(snapshot) = self.active_snapshot() {
+                    signex_render::schematic::render_schematic(
+                        frame,
+                        snapshot,
+                        &live_transform,
+                        &self.canvas_colors,
+                        bounds,
+                    );
+                }
+            })
+        };
         layers.push(content);
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
