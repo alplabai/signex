@@ -115,6 +115,7 @@ impl Signex {
             reference: reference.clone(),
             value,
             footprint: String::new(),
+            datasheet: String::new(),
             position: signex_types::schematic::Point::new(wx, wy),
             rotation,
             mirror_x: false,
@@ -144,6 +145,8 @@ impl Signex {
             exclude_from_sim: false,
             locked: false,
             fields: std::collections::HashMap::new(),
+            pin_uuids: std::collections::HashMap::new(),
+            instances: Vec::new(),
         };
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 

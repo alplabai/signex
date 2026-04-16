@@ -16,13 +16,62 @@ description: >
 
 KiCad, uses S-expression (sexpr) for all file formats:
 
-| Extension | Content |
-|--------|--------|
+| Extension    | Content                     |
+| ------------ | --------------------------- |
 | `.kicad_pcb` | Printed Circuit Board (PCB) |
-| `.kicad_sch` | Schematic |
-| `.kicad_sym` | Symbol library |
-| `.kicad_mod` | Footprint library |
-| `.kicad_wks` | Worksheet |
+| `.kicad_sch` | Schematic                   |
+| `.kicad_sym` | Symbol library              |
+| `.kicad_mod` | Footprint library           |
+| `.kicad_wks` | Worksheet                   |
+
+## Official File Headers
+
+Use the correct top-level token for each file type:
+
+```scheme
+; Schematic file
+(kicad_sch
+  (version YYYYMMDD)
+  (generator "your-tool")
+  ...
+)
+
+; Symbol library file
+(kicad_symbol_lib
+  (version YYYYMMDD)
+  (generator "your-tool")
+  ...
+)
+
+; Footprint library file
+(footprint "NAME"
+  (version YYYYMMDD)
+  (generator "your-tool")
+  ...
+)
+
+; Board file
+(kicad_pcb
+  (version YYYYMMDD)
+  (generator "your-tool")
+  ...
+)
+
+; Worksheet file
+(kicad_wks
+  (version YYYYMMDD)
+  (generator "your-tool")
+  ...
+)
+```
+
+**Generator rule:** third-party tools should not pretend to be KiCad. Do **not** use these generator identifiers:
+
+- `eeschema` for `.kicad_sch`
+- `kicad_symbol_editor` for `.kicad_sym`
+- `pcbnew` for `.kicad_mod`
+- `pcbnew` for `.kicad_pcb`
+- `pl_editor` for `.kicad_wks`
 
 ---
 
@@ -33,17 +82,19 @@ KiCad, uses S-expression (sexpr) for all file formats:
 ```
 
 **Rules:**
+
 - Each token is wrapped with `(` and `)`
 - All tokens are **lowercase** (`lowercase`)
 - Only `_` special character allowed in token names (no spaces)
 - Strings use `"double quotes"`, UTF-8 encoded
-- Numbers in **millimeters**, exponential notation (`1e-3`) **is **not used**
+- Numbers in **millimeters**, exponential notation (`1e-3`) **is **not used\*\*
 - PCB/Footprint precision: 6 decimals (0.000001 mm = 1 nm)
 - Schematic/Symbol precision: 4 decimals (0.0001 mm)
 - Optional attributes shown with `[square brackets]` (in this document)
 - Multiple options separated by `|`: `yes|no`
 
 **Coordinate system:**
+
 - All coordinates are **relative** to the parent origin
 - PCB Y-axis down positive (screen coordinates)
 - Schematic Y-axis up positive
@@ -88,6 +139,7 @@ KiCad, uses S-expression (sexpr) for all file formats:
 ```
 
 Valid `type` values:
+
 - `solid`, `dash`, `dot`, `dash_dot` — all versions
 - `dash_dot_dot` — KiCad 7+
 - `default` — theme default
@@ -169,14 +221,14 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 
 ### Layer Capacity
 
-| Category | Count |
-|----------|------|
-| Total | 60 |
-| Copper (copper) | 32 |
-| Technical paired (silk/mask/paste/adhesive) | 8 |
-| Pre-defined user layers | 4 |
-| Board outline + margin | 2 |
-| Optional user layers | 9 |
+| Category                                    | Count |
+| ------------------------------------------- | ----- |
+| Total                                       | 60    |
+| Copper (copper)                             | 32    |
+| Technical paired (silk/mask/paste/adhesive) | 8     |
+| Pre-defined user layers                     | 4     |
+| Board outline + margin                      | 2     |
+| Optional user layers                        | 9     |
 
 ### Canonical Layer Names
 
@@ -184,19 +236,19 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 
 Commonly used:
 
-| Name | Description |
-|------|----------|
-| `F.Cu` | Front copper |
-| `B.Cu` | Back copper |
-| `In1.Cu`…`In30.Cu` | Inner copper layers |
-| `F.SilkS` / `B.SilkS` | Front/back silkscreen |
-| `F.Mask` / `B.Mask` | Front/back solder mask |
-| `F.Paste` / `B.Paste` | Front/back solder paste |
-| `F.Fab` / `B.Fab` | Fabrication layer |
+| Name                  | Description               |
+| --------------------- | ------------------------- |
+| `F.Cu`                | Front copper              |
+| `B.Cu`                | Back copper               |
+| `In1.Cu`…`In30.Cu`    | Inner copper layers       |
+| `F.SilkS` / `B.SilkS` | Front/back silkscreen     |
+| `F.Mask` / `B.Mask`   | Front/back solder mask    |
+| `F.Paste` / `B.Paste` | Front/back solder paste   |
+| `F.Fab` / `B.Fab`     | Fabrication layer         |
 | `F.CrtYd` / `B.CrtYd` | Courtyard (keep-out area) |
-| `Edge.Cuts` | Board edge |
-| `Dwgs.User` | Drawing layer |
-| `User.1`…`User.9` | User-defined |
+| `Edge.Cuts`           | Board edge                |
+| `Dwgs.User`           | Drawing layer             |
+| `User.1`…`User.9`     | User-defined              |
 
 Wildcard usage: `*.Cu` -> all copper layers
 
@@ -371,8 +423,11 @@ Wildcard usage: `*.Cu` -> all copper layers
 ```
 
 **Unit ID format:** `"SYMBOL_NAME_UNIT_STYLE"`
+
 - `UNIT`: which unit, `0` = common to all units
 - `STYLE`: 1 or 2 (only two body styles supported)
+- If `pin_names` exists without an explicit offset, KiCad uses a default offset of `0.508 mm` (`0.020"`).
+- Child unit symbols cannot define symbol properties; mandatory properties belong on the parent symbol.
 
 ### Symbol Properties
 
@@ -386,12 +441,12 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 **Required properties (for parent symbols):**
 
-| Key | id | Description | Can be empty? |
-|---------|----|----------|-----------------|
-| `Reference` | 0 | Reference designator | No |
-| `Value` | 1 | Value string | No |
-| `Footprint` | 2 | Footprint lib ID | Yes |
-| `Datasheet` | 3 | Datasheet link | Yes |
+| Key         | id  | Description          | Can be empty? |
+| ----------- | --- | -------------------- | ------------- |
+| `Reference` | 0   | Reference designator | No            |
+| `Value`     | 1   | Value string         | No            |
+| `Footprint` | 2   | Footprint lib ID     | Yes           |
+| `Datasheet` | 3   | Datasheet link       | Yes           |
 
 **KiCad reserved keys** (cannot be used as user properties):
 `ki_keywords`, `ki_description`, `ki_locked`, `ki_fp_filters`
@@ -419,6 +474,7 @@ Wildcard usage: `*.Cu` -> all copper layers
 ```
 
 **`fill` token (for schematic/symbol):**
+
 ```scheme
 (fill (type none|outline|background))
 ```
@@ -438,20 +494,20 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 **Electrical types:**
 
-| Token | Description |
-|-------|----------|
-| `input` | Input |
-| `output` | Output |
-| `bidirectional` | Bidirectional |
-| `tri_state` | Three-state output |
-| `passive` | Passive |
-| `free` | Internally unconnected |
-| `unspecified` | Unspecified |
-| `power_in` | Power input |
-| `power_out` | Power output |
-| `open_collector` | Open collector |
-| `open_emitter` | Open emitter |
-| `no_connect` | No connection |
+| Token            | Description            |
+| ---------------- | ---------------------- |
+| `input`          | Input                  |
+| `output`         | Output                 |
+| `bidirectional`  | Bidirectional          |
+| `tri_state`      | Three-state output     |
+| `passive`        | Passive                |
+| `free`           | Internally unconnected |
+| `unspecified`    | Unspecified            |
+| `power_in`       | Power input            |
+| `power_out`      | Power output           |
+| `open_collector` | Open collector         |
+| `open_emitter`   | Open emitter           |
+| `no_connect`     | No connection          |
 
 **Graphic styles:** `line`, `inverted`, `clock`, `inverted_clock`, `input_low`,
 `clock_low`, `output_low`, `edge_clock_high`, `non_logic`
@@ -466,6 +522,59 @@ Wildcard usage: `*.Cu` -> all copper layers
   (members UUID1 UUID2 ... UUIDN)
 )
 ```
+
+---
+
+## Schematic-Specific Rules
+
+### Instance Paths
+
+- Hierarchical instance paths are slash-separated UUID chains, for example:
+
+```text
+/00000000-0000-0000-0000-00004b3a13a4/00000000-0000-0000-0000-00004b617b88
+```
+
+- The first UUID in a non-root instance path must be the root schematic UUID.
+- The root sheet instance path is always exactly `/`.
+
+### Schematic Symbol Instances
+
+```scheme
+(symbol
+  "LIBRARY_IDENTIFIER"
+  (at X Y ANGLE)
+  (unit N)
+  (in_bom yes|no)
+  (on_board yes|no)
+  (uuid UUID)
+  PROPERTIES...
+  (pin "PIN_NUMBER" (uuid UUID))...
+  (instances
+    (project "PROJECT_NAME"
+      (path "PATH_INSTANCE"
+        (reference "REFDES")
+        (unit N)
+      )
+    )
+  )
+)
+```
+
+- `instances -> project -> path -> reference/unit` ordering matters.
+- Project instance entries are sorted by `PROJECT_NAME`.
+- Every symbol has at least one instance entry.
+
+### Sheet and Label Shape Tokens
+
+Valid shape tokens for `global_label`, `hierarchical_label`, and hierarchical sheet `pin` are:
+
+`input`, `output`, `bidirectional`, `tri_state`, `passive`
+
+### Global Label Properties
+
+- `global_label` may include `fields_autoplaced`.
+- The only currently documented global-label property is the inter-sheet reference.
 
 ---
 
@@ -568,19 +677,23 @@ def to_sexpr(obj, indent=0):
 
 ## Critical Notes and Pitfalls
 
-1. **Coordinate precision:** `round(val, 6)` for PCB, `round(val, 4)` for schematic
+1. **Coordinate precision:** `round(val, 6)` for PCB/footprint, `round(val, 4)` for schematic/symbol, `round(val, 3)` for worksheet
 2. **UUID generation:** `uuid.uuid4()` is sufficient in Python, produces KiCad-compatible v4 UUID
 3. **Timestamp (tedit):** `format(int(time.time()), 'X')` — in hex format
 4. **fp_text requirement:** `reference` and `value` required in every footprint; KiCad will complain if missing
 5. **Layer names:** canonical names are always in English — user names are display-only
 6. **KiCad 7 changes:** `width` token -> `stroke` token; `dash_dot_dot` added; TrueType `face` token added
 7. **Version compatibility:** Pre-KiCad 6 used `module` instead of `footprint`
-8. **Wire/Bus syntax:** `(start X Y)(end X Y)` NOT — `(pts (xy X1 Y1)(xy X2 Y2))` uses
+8. **Wire/Bus syntax:** schematic `wire` and `bus` use `(pts (xy X1 Y1) (xy X2 Y2))`, not `(start ...)(end ...)`
 9. **Track/Via UUID difference:** PCB tracks and vias use `tstamp UUID` not `uuid`
 10. **Symbol `instances` block:** Schematic symbol placement token, in hierarchical designs `instances -> project -> path -> reference/unit` chain; if not filled correctly in third-party generators, netlist output corrupts
-11. **Schematic `generator` warning:** `eeschema` and `kicad_symbol_editor` are reserved for KiCad only; use your own identifier in third-party tools
+11. **Generator warning:** `eeschema`, `kicad_symbol_editor`, `pcbnew`, and `pl_editor` are reserved for KiCad tools only; use your own identifier in third-party tools
 12. **lib_symbols:** Schematic file stores a copy of all used symbols in `lib_symbols` - can be opened without library
 13. **Hierarchical sheet pin -> label matching:** Sheet `pin` name must be **letter-for-letter identical** to the `hierarchical_label` name in the sub-schematic; otherwise connection fails
+14. **Parent symbol properties:** Parent symbols must define `Reference`, `Value`, `Footprint`, and `Datasheet`; IDs are `0`, `1`, `2`, `3`
+15. **Reserved symbol property keys:** Never emit user properties with `ki_keywords`, `ki_description`, `ki_locked`, or `ki_fp_filters`
+16. **Pin electrical token:** The valid no-connect electrical type is `no_connect`, not `not_connected`
+17. **Root path rule:** The root schematic instance path is `/`; non-root instance paths must begin with the root schematic UUID
 
 ---
 
@@ -590,8 +703,12 @@ For more details, read these files:
 
 - `references/layers.md` — All canonical layer names, wildcard usage, Python pcbnew constants
 - `references/pad.md` — Full pad token reference, drill, custom pad, zone connection types
+- `references/sexpr-intro.md` — Official common syntax summary, precision rules, headers, generator warnings
 - `references/schematic.md` — Schematic format (wire, bus, junction, label, symbol instance, hierarchical sheet, instances block)
 - `references/board.md` — PCB board format (segment, via, arc, net, stackup, real example)
+- `references/symbol-lib.md` — Official symbol library summary, mandatory parent properties, reserved keys, pin rules
+- `references/footprint.md` — Official footprint library summary, required text objects, pad and attr rules
+- `references/worksheet.md` — Official worksheet summary, setup tokens, repeat/increment, bitmap rules
 - `references/klc-symbols.md` — **KiCad Library Convention (KLC)** — symbol creation rules, pin grid, fill, RefDes table, power symbol structure, Python generator template
 - `references/symbol-libraries.md` — **Official library catalog** — 130+ library names/descriptions, Device library contents, "which library?" quick search table
 - `references/symbol-examples.md` — **Annotated real symbol examples** — R, op-amp, GND power, MCU, crystal, active-low pin, pin stacking, extends pattern
