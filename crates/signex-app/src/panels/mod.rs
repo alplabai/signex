@@ -837,6 +837,9 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
 const LABEL_W: f32 = 76.0;
+const PROPERTY_LABEL_PORTION: u16 = 2;
+const PROPERTY_CONTROL_PORTION: u16 = 5;
+const PROPERTY_ROW_PAD_X: u16 = 6;
 
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
@@ -1195,31 +1198,37 @@ fn view_pre_placement<'a>(
                 // Text / Net Name field
                 container(
                     row![
-                        text("Text / Name").size(11).color(muted).width(LABEL_W),
+                            text("Text / Name")
+                                .size(11)
+                                .color(muted)
+                                .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
                         iced::widget::text_input("Enter text...", &label_text)
                             .on_input(PanelMsg::SetPrePlacementText)
                             .size(11)
                             .padding(4)
-                            .width(Length::Fill),
+                                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([4, 8]),
+                .padding([4, PROPERTY_ROW_PAD_X]),
                 // Designator field
                 container(
                     row![
-                        text("Designator").size(11).color(muted).width(LABEL_W),
+                        text("Designator")
+                            .size(11)
+                            .color(muted)
+                            .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
                         iced::widget::text_input("e.g. R1, U1", &designator)
                             .on_input(PanelMsg::SetPrePlacementDesignator)
                             .size(11)
                             .padding(4)
-                            .width(Length::Fill),
+                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([4, 8]),
+                .padding([4, PROPERTY_ROW_PAD_X]),
                 // Rotation
                 form_input_row("Rotation", &format!("{rotation:.0}°"), muted, input_bg, input_bdr),
             ]
@@ -1600,7 +1609,7 @@ fn form_input_row<'a, M: 'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             container(
                 text(value.to_string())
@@ -1609,7 +1618,7 @@ fn form_input_row<'a, M: 'a>(
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .padding([3, 6])
-            .width(Length::Fill)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(input_bg)),
                 border: Border {
@@ -1623,7 +1632,7 @@ fn form_input_row<'a, M: 'a>(
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -1640,14 +1649,14 @@ fn form_label_row<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
-            control,
+            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -1664,20 +1673,24 @@ fn form_check_row<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::checkbox(checked)
-                .on_toggle(move |_| msg.clone())
-                .size(14)
-                .spacing(4),
-            text(if checked { "On" } else { "Off" })
-                .size(11)
-                .color(if checked { Color::WHITE } else { label_c }),
+            row![
+                iced::widget::checkbox(checked)
+                    .on_toggle(move |_| msg.clone())
+                    .size(14)
+                    .spacing(4),
+                text(if checked { "On" } else { "Off" })
+                    .size(11)
+                    .color(if checked { Color::WHITE } else { label_c }),
+            ]
+            .spacing(8)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -1772,7 +1785,7 @@ fn form_grid_row(
     let label_widget = text(label.to_string())
         .size(11)
         .color(label_c)
-        .width(LABEL_W)
+        .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
         .wrapping(iced::widget::text::Wrapping::None);
 
     let content: Element<PanelMsg> = if has_checkbox {
@@ -1783,21 +1796,21 @@ fn form_grid_row(
                 .on_toggle(move |_| on_toggle.clone())
                 .size(12)
                 .spacing(4),
-            pick,
+            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center)
         .into()
     } else {
         // Visible Grid row: no checkbox
-        row![label_widget, pick]
+        row![label_widget, container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))]
             .spacing(4)
             .align_y(iced::Alignment::Center)
             .into()
     };
 
     container(content)
-        .padding([2, 8])
+        .padding([2, PROPERTY_ROW_PAD_X])
         .width(Length::Fill)
         .into()
 }
@@ -1816,21 +1829,25 @@ fn form_check_row_shortcut<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::checkbox(value)
-                .on_toggle(move |_| on_toggle.clone())
-                .size(12)
-                .spacing(4),
-            Space::new().width(Length::Fill),
-            text(shortcut_owned)
-                .size(10)
-                .color(label_c),
+            row![
+                iced::widget::checkbox(value)
+                    .on_toggle(move |_| on_toggle.clone())
+                    .size(12)
+                    .spacing(4),
+                Space::new().width(Length::Fill),
+                text(shortcut_owned)
+                    .size(10)
+                    .color(label_c),
+            ]
+            .spacing(4)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -1850,7 +1867,7 @@ fn form_font_link_row<'a>(
             text(label)
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             iced::widget::button(
                 text(summary)
@@ -1860,7 +1877,7 @@ fn form_font_link_row<'a>(
             )
             .on_press(PanelMsg::OpenCanvasFontPopup)
             .padding([1, 0])
-            .width(Length::Fill)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let underline = match status {
                     iced::widget::button::Status::Hovered => true,
@@ -1883,7 +1900,7 @@ fn form_font_link_row<'a>(
         .width(Length::Fill)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -2013,17 +2030,17 @@ where
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             NumberInput::new(&value, bounds, on_change)
                 .step(step)
-                .width(Length::Fill)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
                 .padding(4),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -2040,18 +2057,18 @@ fn form_edit_row<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             iced::widget::text_input("", value)
                 .on_input(on_input)
                 .size(11)
                 .padding(4)
-                .width(Length::Fill),
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -2182,6 +2199,10 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             text(entry.level.label())
                                 .size(9)
                                 .color(level_color),
+                            Space::new().width(6).height(Length::Shrink),
+                            text(entry.code.as_str())
+                                .size(9)
+                                .color(theme_ext::text_secondary(&ctx.tokens)),
                         ]
                         .align_y(iced::Alignment::Center),
                         text(entry.message.as_str())
