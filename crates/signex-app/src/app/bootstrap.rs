@@ -314,7 +314,7 @@ impl Signex {
                 (keyboard::Key::Character(c), m) if c == "s" && m.command() => Message::SaveFile,
                 // Ctrl+A select all
                 (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
-                    Message::Selection(selection_message::SelectionMessage::SelectAll)
+                    Message::Selection(selection_request::SelectionRequest::SelectAll)
                 }
                 // Ctrl+M measure tool
                 (keyboard::Key::Character(c), m) if c == "m" && m.command() => {
@@ -324,9 +324,9 @@ impl Signex {
                 (keyboard::Key::Character(c), m)
                     if m.command() && !m.alt() =>
                 {
-                    match selection_slot_from_key(c.as_ref()) {
+                    match selection_slot_from_key(c) {
                         Some(slot) => {
-                            Message::Selection(selection_message::SelectionMessage::StoreSlot {
+                            Message::Selection(selection_request::SelectionRequest::StoreSlot {
                                 slot,
                             })
                         }
@@ -336,9 +336,9 @@ impl Signex {
                 (keyboard::Key::Character(c), m)
                     if m.alt() && !m.command() =>
                 {
-                    match selection_slot_from_key(c.as_ref()) {
+                    match selection_slot_from_key(c) {
                         Some(slot) => {
-                            Message::Selection(selection_message::SelectionMessage::RecallSlot {
+                            Message::Selection(selection_request::SelectionRequest::RecallSlot {
                                 slot,
                             })
                         }
