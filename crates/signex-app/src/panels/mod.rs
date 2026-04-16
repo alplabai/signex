@@ -1,13 +1,16 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::widget::{column, container, row, scrollable, text, Column, Row, Space};
+use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum PanelKind {
     Projects,
     Components,
@@ -21,9 +24,63 @@ pub enum PanelKind {
     NetClasses,
     Variants,
     OutputJobs,
+    // Additional Altium schematic panels
+    SchFilter,
+    SchList,
+    BomStudio,
+    Favorites,
+    Snippets,
+    Todo,
+    Wiki,
 }
 
+/// All available panel kinds for the panel list button.
+pub const ALL_PANELS: &[PanelKind] = &[
+    PanelKind::Projects,
+    PanelKind::Components,
+    PanelKind::Navigator,
+    PanelKind::Properties,
+    PanelKind::Filter,
+    PanelKind::SchFilter,
+    PanelKind::SchList,
+    PanelKind::Messages,
+    PanelKind::Signal,
+    PanelKind::Drc,
+    PanelKind::BomStudio,
+    PanelKind::Favorites,
+    PanelKind::Snippets,
+    PanelKind::LayerStack,
+    PanelKind::NetClasses,
+    PanelKind::Variants,
+    PanelKind::OutputJobs,
+    PanelKind::Todo,
+    PanelKind::Wiki,
+];
+
 impl PanelKind {
+    /// Whether this panel requires a schematic document to be open.
+    pub fn needs_schematic(self) -> bool {
+        matches!(
+            self,
+            PanelKind::Navigator
+                | PanelKind::Properties
+                | PanelKind::Filter
+                | PanelKind::SchFilter
+                | PanelKind::SchList
+                | PanelKind::Signal
+                | PanelKind::Drc
+                | PanelKind::BomStudio
+                | PanelKind::Snippets
+                | PanelKind::Variants
+                | PanelKind::OutputJobs
+        )
+    }
+
+    /// Whether this panel requires a PCB document to be open.
+    pub fn needs_pcb(self) -> bool {
+        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             PanelKind::Projects => "Projects",
@@ -37,22 +94,42 @@ impl PanelKind {
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
+            PanelKind::SchFilter => "SCH Filter",
+            PanelKind::SchList => "SCH List",
+            PanelKind::BomStudio => "BOM Studio",
+            PanelKind::Favorites => "Favorites",
+            PanelKind::Snippets => "Snippets",
+            PanelKind::Todo => "To-Do",
+            PanelKind::Wiki => "Wiki",
             PanelKind::OutputJobs => "Output Jobs",
         }
     }
 }
 
+/// Track which sections are collapsed (by section name).
+pub type CollapsedSections = std::collections::HashSet<String>;
+
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone)]
 pub struct SheetInfo {
+    #[allow(dead_code)]
     pub name: String,
     pub filename: String,
     pub sym_count: usize,
     pub wire_count: usize,
+    #[allow(dead_code)]
     pub label_count: usize,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
+#[derive(Debug, Clone)]
+pub struct LibrarySymbolEntry {
+    pub lib_id: String,
+    pub symbol_name: String,
+    pub library_name: String,
+    pub pin_count: usize,
+}
+
 pub struct PanelContext {
     pub project_name: Option<String>,
     pub project_file: Option<String>,
@@ -64,6 +141,7 @@ pub struct PanelContext {
     pub junction_count: usize,
     pub child_sheets: Vec<String>,
     pub has_schematic: bool,
+    pub has_pcb: bool,
     pub paper_size: String,
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
@@ -76,12 +154,27 @@ pub struct PanelContext {
     pub grid_visible: bool,
     pub snap_enabled: bool,
     pub grid_size_mm: f32,
+    pub visible_grid_mm: f32,
+    pub snap_hotspots: bool,
+    /// UI font family name (shown in settings; applies on restart).
+    pub ui_font_name: String,
+    /// Canvas font family name (Iosevka by default; applies immediately).
+    pub canvas_font_name: String,
+    /// Canvas font size in px (applied immediately as a global scale).
+    pub canvas_font_size: f32,
+    /// Canvas font bold style flag.
+    pub canvas_font_bold: bool,
+    /// Canvas font italic style flag.
+    pub canvas_font_italic: bool,
+    /// Whether the canvas font picker popup is open.
+    pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
     // Components panel
     pub kicad_libraries: Vec<String>,
     pub active_library: Option<String>,
-    /// (symbol_name, pin_count) from the currently loaded library.
-    pub library_symbols: Vec<(String, usize)>,
+    /// Browser entries from the selected library or aggregated catalog.
+    pub library_symbols: Vec<LibrarySymbolEntry>,
+    /// Selected component lib_id.
     pub selected_component: Option<String>,
     /// (pin_number, pin_name, pin_type) for the selected component.
     pub selected_pins: Vec<(String, String, String)>,
@@ -94,10 +187,35 @@ pub struct PanelContext {
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
+    /// UUID of the single selected item (for property editing).
+    pub selected_uuid: Option<uuid::Uuid>,
+    /// Kind of the single selected item.
+    pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
     /// Component search filter text.
     pub component_filter: String,
+    /// Which sections are collapsed (by section name key).
+    pub collapsed_sections: CollapsedSections,
+    /// Pre-placement configuration (shown when Tab pressed during placement tool).
+    pub pre_placement: Option<PrePlacementData>,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
+    pub diagnostics_level: String,
+    /// Recent application diagnostics shown in the Messages panel.
+    pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
+}
+
+/// Pre-placement configuration data — shown in Properties panel when Tab pressed.
+#[derive(Debug, Clone)]
+pub struct PrePlacementData {
+    /// Which tool is being configured.
+    pub tool_name: String,
+    /// Net label / text note text.
+    pub label_text: String,
+    /// Component designator override.
+    pub designator: String,
+    /// Rotation (degrees).
+    pub rotation: f64,
 }
 
 /// Panel-level message wrapping widget messages.
@@ -112,6 +230,62 @@ pub enum PanelMsg {
     SelectComponent(String),
     DragComponentsSplit,
     ComponentFilter(String),
+    /// Toggle a collapsible section (by section key).
+    ToggleSection(String),
+    /// Edit a symbol's designator (committed on submit).
+    EditSymbolDesignator(uuid::Uuid, String),
+    /// Edit a symbol's value (committed on submit).
+    EditSymbolValue(uuid::Uuid, String),
+    /// Edit a symbol's footprint (committed on submit).
+    EditSymbolFootprint(uuid::Uuid, String),
+    /// Toggle a symbol's mirror_x.
+    ToggleSymbolMirrorX(uuid::Uuid),
+    /// Toggle a symbol's mirror_y.
+    ToggleSymbolMirrorY(uuid::Uuid),
+    /// Toggle a symbol's locked state.
+    ToggleSymbolLocked(uuid::Uuid),
+    /// Toggle a symbol's DNP state.
+    ToggleSymbolDnp(uuid::Uuid),
+    /// Edit a label's text (committed on submit).
+    EditLabelText(uuid::Uuid, String),
+    /// Edit a text note's text (committed on submit).
+    EditTextNoteText(uuid::Uuid, String),
+    /// Pre-placement: update label/text field.
+    SetPrePlacementText(String),
+    /// Pre-placement: update designator field.
+    SetPrePlacementDesignator(String),
+    /// Pre-placement: update rotation.
+    #[allow(dead_code)]
+    SetPrePlacementRotation(f64),
+    /// Pre-placement: confirm and close.
+    ConfirmPrePlacement,
+    /// Set snap grid size (mm).
+    SetGridSize(f32),
+    /// Set visible grid size (mm) — independent of snap grid.
+    SetVisibleGridSize(f32),
+    /// Toggle snap to electrical object hotspots.
+    ToggleSnapHotspots,
+    /// Change the UI font (saved to prefs; applies on next restart).
+    #[allow(dead_code)]
+    SetUiFont(String),
+    /// Change the canvas font (applied immediately to schematic/PCB text).
+    SetCanvasFont(String),
+    /// Change canvas font size (px) applied to canvas text rendering.
+    SetCanvasFontSize(f32),
+    /// Toggle canvas font bold style.
+    SetCanvasFontBold(bool),
+    /// Toggle canvas font italic style.
+    SetCanvasFontItalic(bool),
+    /// Open canvas font popup.
+    OpenCanvasFontPopup,
+    /// Close canvas font popup.
+    CloseCanvasFontPopup,
+    /// Set page margin vertical zones.
+    SetMarginVertical(u32),
+    /// Set page margin horizontal zones.
+    SetMarginHorizontal(u32),
+    /// No-op placeholder for unimplemented UI controls.
+    Noop,
 }
 
 /// Render a panel's content.
@@ -122,7 +296,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
     }
 
     let content = match kind {
-        PanelKind::Components => unreachable!(),
+        PanelKind::Components => return view_components(ctx),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
@@ -134,6 +308,13 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
+        PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
+        PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
+        PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
+        PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
+        PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
+        PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
+        PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
     };
 
     scrollable(content).width(Length::Fill).into()
@@ -141,23 +322,110 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
 
 // ─── Helpers ──────────────────────────────────────────────────
 
+// SVG chevrons (same as tree_view for consistency)
+const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
+const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
+
+fn chevron_right() -> svg::Handle {
+    static H: OnceLock<svg::Handle> = OnceLock::new();
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
+        .clone()
+}
+fn chevron_down() -> svg::Handle {
+    static H: OnceLock<svg::Handle> = OnceLock::new();
+    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
+        .clone()
+}
+
+/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
+fn collapsible_section<'a>(
+    key: &str,
+    title: &str,
+    collapsed: &CollapsedSections,
+    header_color: Color,
+    border_c: Color,
+    content: impl FnOnce() -> Column<'a, PanelMsg>,
+) -> Column<'a, PanelMsg> {
+    let is_collapsed = collapsed.contains(key);
+    let chevron_handle = if is_collapsed {
+        chevron_right()
+    } else {
+        chevron_down()
+    };
+    let key_owned = key.to_string();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Clickable header with SVG chevron
+    col = col.push(
+        iced::widget::button(
+            container(
+                row![
+                    svg(chevron_handle)
+                        .width(10)
+                        .height(10)
+                        .style(move |_: &Theme, _| iced::widget::svg::Style {
+                            color: Some(header_color),
+                        }),
+                    text(title.to_string()).size(10).color(header_color),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([4, 8])
+            .width(Length::Fill),
+        )
+        .padding(0)
+        .width(Length::Fill)
+        .on_press(PanelMsg::ToggleSection(key_owned))
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => {
+                    Some(iced::Background::Color(border_c))
+                }
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                ..iced::widget::button::Style::default()
+            }
+        }),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // Content (only when expanded)
+    if !is_collapsed {
+        col = col.push(content());
+    }
+
+    col
+}
+
+/// Property key-value row (owned strings to avoid lifetime issues in closures).
+fn prop_kv_row<'a>(key: &str, value: &str, key_c: Color, val_c: Color) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text(key.to_string()).size(10).color(key_c).width(84),
+            text(value.to_string()).size(10).color(val_c),
+        ]
+        .spacing(4),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
+}
+
 fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     text(title.to_uppercase())
         .size(9)
         .color(theme_ext::text_secondary(tokens))
 }
 
-fn prop_row<'a>(key: impl ToString, value: impl ToString, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
-    row![
-        text(key.to_string()).size(10).color(theme_ext::text_secondary(tokens)).width(70),
-        text(value.to_string()).size(10).color(theme_ext::text_primary(tokens)),
-    ]
-    .spacing(4)
-    .into()
-}
-
 fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    text("─".repeat(30)).size(4).color(theme_ext::border_color(tokens))
+    // Use a cached static string instead of allocating on every render
+    const SEP: &str = "──────────────────────────────";
+    text(SEP).size(4).color(theme_ext::border_color(tokens))
 }
 
 fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, PanelMsg> {
@@ -165,7 +433,9 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
         column![
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
-            text(desc.to_string()).size(10).color(theme_ext::text_secondary(&ctx.tokens)),
+            text(desc.to_string())
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
         .spacing(4)
         .padding(6),
@@ -190,8 +460,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         for sheet in &ctx.sheets {
             let badge = format!("{}c {}w", sheet.sym_count, sheet.wire_count);
             source_docs.push(
-                TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic)
-                    .with_badge(badge),
+                TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic).with_badge(badge),
             );
         }
     } else if let Some(file) = &ctx.project_file {
@@ -213,11 +482,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
     let lib_children = vec![
-        TreeNode::leaf(
-            format!("{} symbols loaded", lib_count),
-            TreeIcon::Component,
-        )
-        .with_badge(lib_count.to_string()),
+        TreeNode::leaf(format!("{} symbols loaded", lib_count), TreeIcon::Component)
+            .with_badge(lib_count.to_string()),
     ];
 
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
@@ -227,7 +493,11 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         name.clone(),
         TreeIcon::Folder,
         vec![
-            TreeNode::branch("Source Documents".to_string(), TreeIcon::Folder, source_docs),
+            TreeNode::branch(
+                "Source Documents".to_string(),
+                TreeIcon::Folder,
+                source_docs,
+            ),
             TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
             settings,
         ],
@@ -260,6 +530,10 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let hover_c = crate::styles::ti(ctx.tokens.hover);
+    let panel_bg_c = crate::styles::ti(ctx.tokens.panel_bg);
+    let input_bg = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -293,8 +567,18 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     list_col = list_col.push(
         container(
             row![
-                text("Name").size(10).color(muted).width(Length::FillPortion(4)),
-                text("Pins").size(10).color(muted).width(Length::FillPortion(1)),
+                text("Name")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(3)),
+                text("Library")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
+                text("Pins")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(1)),
             ]
             .spacing(4.0),
         )
@@ -305,71 +589,131 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Filter the symbol list
     let filter = ctx.component_filter.to_ascii_lowercase();
-    let filtered_symbols: Vec<&(String, usize)> = if filter.is_empty() {
+    let filtered_symbols: Vec<&LibrarySymbolEntry> = if filter.is_empty() {
         ctx.library_symbols.iter().collect()
     } else {
-        ctx.library_symbols.iter().filter(|(name, _)| name.to_ascii_lowercase().contains(&filter)).collect()
+        ctx.library_symbols
+            .iter()
+            .filter(|entry| {
+                entry.symbol_name.to_ascii_lowercase().contains(&filter)
+                    || entry.library_name.to_ascii_lowercase().contains(&filter)
+                    || entry.lib_id.to_ascii_lowercase().contains(&filter)
+            })
+            .collect()
     };
 
     if filtered_symbols.is_empty() {
         let msg = if ctx.active_library.is_some() {
-            if filter.is_empty() { "Loading..." } else { "No matches" }
+            if filter.is_empty() {
+                "Loading..."
+            } else {
+                "No matches"
+            }
         } else {
             "Select a library above"
         };
-        list_col = list_col.push(
-            container(text(msg).size(10).color(muted)).padding([8, 8]),
-        );
+        list_col = list_col.push(container(text(msg).size(10).color(muted)).padding([8, 8]));
     } else {
         let sel = &ctx.selected_component;
-        for &(name, pins) in &filtered_symbols {
-            let is_sel = sel.as_deref() == Some(name.as_str());
-            let row_bg = if is_sel { theme_ext::selection_color(&ctx.tokens) } else { Color::TRANSPARENT };
+        for entry in &filtered_symbols {
+            let is_sel = sel.as_deref() == Some(entry.lib_id.as_str());
+            let row_bg = if is_sel {
+                theme_ext::selection_color(&ctx.tokens)
+            } else {
+                Color::TRANSPARENT
+            };
             let name_c = if is_sel { Color::WHITE } else { primary };
-            let n = name.clone();
-            list_col = list_col.push(column![
-                iced::widget::button(
-                    row![
-                        text(name.clone()).size(10).color(name_c)
-                            .width(Length::FillPortion(4))
-                            .wrapping(iced::widget::text::Wrapping::None),
-                        text(pins.to_string()).size(10).color(muted)
-                            .width(Length::FillPortion(1)),
-                    ].spacing(4.0),
-                )
-                .padding([3, 8]).width(Length::Fill)
-                .on_press(PanelMsg::SelectComponent(n))
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
-                    let bg = match (is_sel, status) {
-                        (true, _) => Some(Background::Color(row_bg)),
-                        (false, iced::widget::button::Status::Hovered) =>
-                            Some(Background::Color(Color::from_rgb(0.20, 0.20, 0.23))),
-                        _ => None,
-                    };
-                    iced::widget::button::Style { background: bg, border: Border::default(), ..iced::widget::button::Style::default() }
-                }),
-                thin_sep(border_c),
-            ].spacing(0));
+            let lib_id = entry.lib_id.clone();
+            list_col = list_col.push(
+                column![
+                    iced::widget::button(
+                        row![
+                            text(entry.symbol_name.clone())
+                                .size(10)
+                                .color(name_c)
+                                .width(Length::FillPortion(3))
+                                .wrapping(iced::widget::text::Wrapping::None),
+                            text(entry.library_name.clone())
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(2))
+                                .wrapping(iced::widget::text::Wrapping::None),
+                            text(entry.pin_count.to_string())
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(1)),
+                        ]
+                        .spacing(4.0),
+                    )
+                    .padding([3, 8])
+                    .width(Length::Fill)
+                    .on_press(PanelMsg::SelectComponent(lib_id))
+                    .style(
+                        move |_: &Theme, status: iced::widget::button::Status| {
+                            let bg = match (is_sel, status) {
+                                (true, _) => Some(Background::Color(row_bg)),
+                                (false, iced::widget::button::Status::Hovered) => {
+                                    Some(Background::Color(hover_c))
+                                }
+                                _ => None,
+                            };
+                            iced::widget::button::Style {
+                                background: bg,
+                                border: Border::default(),
+                                ..iced::widget::button::Style::default()
+                            }
+                        }
+                    ),
+                    thin_sep(border_c),
+                ]
+                .spacing(0),
+            );
         }
     }
 
     list_col = list_col.push(
-        container(text(format!("Results: {}", filtered_symbols.len())).size(10).color(muted))
-            .padding([4, 8]),
+        container(
+            text(format!("Results: {}", filtered_symbols.len()))
+                .size(10)
+                .color(muted),
+        )
+        .padding([4, 8]),
     );
 
     // ── BOTTOM: Details panel (scrollable) ──
     let mut detail_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    if let Some(comp_name) = &ctx.selected_component {
+    if let Some(comp_id) = &ctx.selected_component {
+        let selected_entry = ctx
+            .library_symbols
+            .iter()
+            .find(|entry| &entry.lib_id == comp_id);
+        let comp_name = selected_entry
+            .map(|entry| entry.symbol_name.as_str())
+            .unwrap_or(comp_id.as_str());
         detail_col = detail_col.push(section_hdr(
-            &format!("\u{25BC} Details  {comp_name}"), primary, border_c,
+            &format!("\u{25BC} Details  {comp_name}"),
+            primary,
+            border_c,
         ));
-        let pin_count = ctx.library_symbols.iter()
-            .find(|(n, _)| n == comp_name).map(|(_, p)| *p).unwrap_or(0);
-        detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted));
-        detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted));
-        detail_col = detail_col.push(form_input_row("Library", ctx.active_library.as_deref().unwrap_or(""), muted));
+        let pin_count = ctx
+            .library_symbols
+            .iter()
+            .find(|entry| entry.lib_id == *comp_id)
+            .map(|entry| entry.pin_count)
+            .unwrap_or(0);
+        detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted, input_bg, input_bdr));
+        detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted, input_bg, input_bdr));
+        detail_col = detail_col.push(form_input_row(
+            "Library",
+            selected_entry
+                .map(|entry| entry.library_name.as_str())
+                .or(ctx.active_library.as_deref())
+                .unwrap_or(""),
+            muted,
+            input_bg,
+            input_bdr,
+        ));
 
         // Symbol preview canvas
         detail_col = detail_col.push(Space::new().height(4.0));
@@ -384,8 +728,12 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     )
                     .width(Length::Fill)
                     .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
-                        border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
+                        background: Some(Background::Color(panel_bg_c)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
                         ..container::Style::default()
                     }),
                 )
@@ -404,8 +752,12 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .width(Length::Fill)
                     .padding([30, 8])
                     .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(Color::from_rgb(0.12, 0.12, 0.14))),
-                        border: Border { width: 1.0, radius: 2.0.into(), color: border_c },
+                        background: Some(Background::Color(panel_bg_c)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
                         ..container::Style::default()
                     }),
                 )
@@ -415,12 +767,17 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
         for section in &["References", "Part Choices", "Where Used"] {
             detail_col = detail_col.push(Space::new().height(2.0));
-            detail_col = detail_col.push(section_hdr(&format!("\u{25BC} {section}"), primary, border_c));
+            detail_col = detail_col.push(section_hdr(
+                &format!("\u{25BC} {section}"),
+                primary,
+                border_c,
+            ));
         }
     } else {
         detail_col = detail_col.push(
             container(text("Select a component").size(10).color(muted))
-                .padding([12, 8]).width(Length::Fill),
+                .padding([12, 8])
+                .width(Length::Fill),
         );
     }
 
@@ -462,23 +819,34 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
         }
         let roots = vec![TreeNode::branch(name.clone(), TreeIcon::Schematic, sheets)];
-        col = col.push(TreeView::new(&roots, &ctx.tokens).view().map(PanelMsg::Tree));
+        col = col.push(
+            TreeView::new(&roots, &ctx.tokens)
+                .view()
+                .map(PanelMsg::Tree),
+        );
     } else {
-        col = col.push(text("No project").size(10).color(theme_ext::text_secondary(&ctx.tokens)));
+        col = col.push(
+            text("No project")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
     }
     container(col).width(Length::Fill).into()
 }
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-const LABEL_W: f32 = 90.0;
-const INPUT_BG: Color = Color::from_rgb(0.16, 0.22, 0.32);
-const TAG_BG: Color = Color::from_rgb(0.20, 0.35, 0.55);
+const LABEL_W: f32 = 76.0;
+const PROPERTY_LABEL_PORTION: u16 = 2;
+const PROPERTY_CONTROL_PORTION: u16 = 5;
+const PROPERTY_ROW_PAD_X: u16 = 6;
 
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let input_bg = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     if !ctx.has_schematic {
         return container(
@@ -494,6 +862,11 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .into();
     }
 
+    // ── Pre-placement properties (TAB pressed during tool) ──
+    if let Some(ref pp) = ctx.pre_placement {
+        return view_pre_placement(pp, muted, primary, border_c, input_bg, input_bdr);
+    }
+
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
     if ctx.selection_count == 1 && !ctx.selection_info.is_empty() {
         return view_selected_element_properties(ctx, muted, primary, border_c);
@@ -502,19 +875,35 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
         col = col.push(
             container(text("Multi-Selection").size(11).color(primary))
-                .padding([6, 8]).width(Length::Fill),
+                .padding([6, 8])
+                .width(Length::Fill),
         );
         col = col.push(thin_sep(border_c));
         col = col.push(
-            container(text(format!("{} objects selected", ctx.selection_count)).size(10).color(muted))
-                .padding([4, 8]),
+            container(
+                text(format!("{} objects selected", ctx.selection_count))
+                    .size(10)
+                    .color(muted),
+            )
+            .padding([4, 8]),
         );
         for (key, value) in &ctx.selection_info {
             col = col.push(
-                container(row![
-                    text(key).size(10).color(muted).width(Length::FillPortion(2)),
-                    text(value).size(10).color(primary).width(Length::FillPortion(3)),
-                ].spacing(4)).padding([3, 8]).width(Length::Fill),
+                container(
+                    row![
+                        text(key)
+                            .size(10)
+                            .color(muted)
+                            .width(Length::FillPortion(2)),
+                        text(value)
+                            .size(10)
+                            .color(primary)
+                            .width(Length::FillPortion(3)),
+                    ]
+                    .spacing(4),
+                )
+                .padding([3, 8])
+                .width(Length::Fill),
             );
         }
         return scrollable(col).width(Length::Fill).into();
@@ -531,11 +920,13 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── General | Parameters tab bar ──
     let tab = ctx.properties_tab;
+    let tab_hover = crate::styles::ti(ctx.tokens.hover);
+    let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     col = col.push(
         container(
             row![
-                props_tab_btn("General", tab == 0, PanelMsg::PropertiesTab(0)),
-                props_tab_btn("Parameters", tab == 1, PanelMsg::PropertiesTab(1)),
+                props_tab_btn("General", tab == 0, PanelMsg::PropertiesTab(0), primary, text_inactive, tab_hover, border_c),
+                props_tab_btn("Parameters", tab == 1, PanelMsg::PropertiesTab(1), primary, text_inactive, tab_hover, border_c),
             ]
             .spacing(2.0),
         )
@@ -547,7 +938,12 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if tab == 0 {
         col = col.push(view_properties_general(ctx, muted, primary, border_c));
     } else {
-        col = col.push(view_properties_parameters(muted, primary, border_c));
+        col = col.push(view_properties_parameters(
+            muted, primary, border_c,
+            crate::styles::ti(ctx.tokens.selection),
+            crate::styles::ti(ctx.tokens.accent),
+            crate::styles::ti(ctx.tokens.hover),
+        ));
     }
 
     // ── Status: Nothing selected ──
@@ -563,83 +959,287 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 }
 
 /// Altium-style context-aware properties for a single selected element.
+/// Shows EDITABLE fields for symbols, labels, and text notes.
 fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
+    let input_bg  = crate::styles::ti(ctx.tokens.selection);
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Determine element type from selection_info
-    let elem_type = ctx.selection_info.iter()
+    let elem_type = ctx
+        .selection_info
+        .iter()
         .find(|(k, _)| k == "Type")
         .map(|(_, v)| v.as_str())
         .unwrap_or("Object");
 
-    // ── Header: element type (like Altium's "Component" header) ──
+    let uuid = ctx.selected_uuid;
+
+    // ── Header ──
     col = col.push(
         container(text(elem_type.to_owned()).size(11).color(primary))
-            .padding([6, 8]).width(Length::Fill),
+            .padding([6, 8])
+            .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
 
-    // ── General section ──
-    col = col.push(section_hdr("General", muted, border_c));
+    // ── Editable properties based on element type ──
+    match elem_type {
+        "Symbol" => {
+            let get = |key: &str| -> String {
+                ctx.selection_info
+                    .iter()
+                    .find(|(k, _)| k == key)
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_default()
+            };
+            let reference = get("Reference");
+            let value = get("Value");
+            let footprint = get("Footprint");
+            let lib_id = get("Library ID");
+            let position = get("Position");
+            let rotation = get("Rotation");
+            let has_mirror_x = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "X");
+            let has_mirror_y = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "Y");
 
-    for (key, value) in &ctx.selection_info {
-        if key == "Type" { continue; } // already shown in header
-        col = col.push(
-            container(row![
-                text(key).size(10).color(muted).width(100),
-                text(value).size(10).color(primary),
-            ].spacing(4)).padding([4, 8]).width(Length::Fill),
-        );
-    }
+            if let Some(id) = uuid {
+                // General section — editable
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Designator", &reference, muted,
+                            move |s| PanelMsg::EditSymbolDesignator(id, s)));
+                        c = c.push(form_edit_row("Value", &value, muted,
+                            move |s| PanelMsg::EditSymbolValue(id, s)));
+                        c = c.push(form_edit_row("Footprint", &footprint, muted,
+                            move |s| PanelMsg::EditSymbolFootprint(id, s)));
+                        c = c.push(form_input_row("Library ID", &lib_id, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
 
-    // ── Location section (for elements that have position) ──
-    let has_position = ctx.selection_info.iter().any(|(k, _)| k == "Position");
-    if has_position {
-        col = col.push(Space::new().height(4.0));
-        col = col.push(section_hdr("Location", muted, border_c));
-        for (key, value) in &ctx.selection_info {
-            if key == "Position" || key == "Rotation" || key == "Start" || key == "End" || key == "Length" {
-                col = col.push(
-                    container(row![
-                        text(key).size(10).color(muted).width(100),
-                        text(value).size(10).color(primary),
-                    ].spacing(4)).padding([4, 8]).width(Length::Fill),
-                );
+                // Location section — read-only for now
+                col = col.push(collapsible_section(
+                    "sel_location",
+                    "Location",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
+
+                // Graphical section — checkboxes
+                col = col.push(collapsible_section(
+                    "sel_graphical",
+                    "Graphical",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_check_row("Mirror X", has_mirror_x,
+                            PanelMsg::ToggleSymbolMirrorX(id), muted));
+                        c = c.push(form_check_row("Mirror Y", has_mirror_y,
+                            PanelMsg::ToggleSymbolMirrorY(id), muted));
+                        c = c.push(form_check_row("Locked", false,
+                            PanelMsg::ToggleSymbolLocked(id), muted));
+                        c = c.push(form_check_row("DNP", false,
+                            PanelMsg::ToggleSymbolDnp(id), muted));
+                        c
+                    },
+                ));
             }
         }
-    }
+        "Label" | "Global Label" | "Hierarchical Label" => {
+            let label_text = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Text")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+            let position = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Position")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
 
-    // ── Graphical section (for symbols) ──
-    let has_mirror = ctx.selection_info.iter().any(|(k, _)| k == "Mirror");
-    if has_mirror || elem_type == "Symbol" {
-        col = col.push(Space::new().height(4.0));
-        col = col.push(section_hdr("Graphical", muted, border_c));
-        for (key, value) in &ctx.selection_info {
-            if key == "Mirror" || key == "Unit" {
-                col = col.push(
-                    container(row![
-                        text(key).size(10).color(muted).width(100),
-                        text(value).size(10).color(primary),
-                    ].spacing(4)).padding([4, 8]).width(Length::Fill),
-                );
+            if let Some(id) = uuid {
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Text", &label_text, muted,
+                            move |s| PanelMsg::EditLabelText(id, s)));
+                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
+                        c
+                    },
+                ));
             }
+        }
+        "Text Note" => {
+            let note_text = ctx.selection_info.iter()
+                .find(|(k, _)| k == "Text")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+
+            if let Some(id) = uuid {
+                col = col.push(collapsible_section(
+                    "sel_general",
+                    "General",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(form_edit_row("Text", &note_text, muted,
+                            move |s| PanelMsg::EditTextNoteText(id, s)));
+                        c
+                    },
+                ));
+            }
+        }
+        _ => {
+            // Generic read-only properties for other types
+            let info: Vec<(String, String)> = ctx.selection_info
+                .iter()
+                .filter(|(k, _)| k != "Type")
+                .cloned()
+                .collect();
+            col = col.push(collapsible_section(
+                "sel_general",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    for (key, value) in &info {
+                        c = c.push(prop_kv_row(key, value, muted, primary));
+                    }
+                    c
+                },
+            ));
         }
     }
 
     // ── Status bar ──
     col = col.push(Space::new().height(8.0));
     col = col.push(thin_sep(border_c));
-    col = col.push(
-        container(text("1 object selected").size(10).color(muted))
-            .padding([4, 8]),
-    );
+    col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
 
     scrollable(col).width(Length::Fill).into()
+}
+
+/// Pre-placement properties — shown when TAB pressed during a placement tool.
+fn view_pre_placement<'a>(
+    pp: &PrePlacementData,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    let label_text = pp.label_text.clone();
+    let designator = pp.designator.clone();
+    let rotation = pp.rotation;
+    let tool_name = pp.tool_name.clone();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Header
+    col = col.push(
+        container(
+            row![
+                text(format!("{} Properties", tool_name))
+                    .size(12)
+                    .color(primary),
+                Space::new().width(Length::Fill),
+                iced::widget::button(text("OK").size(10).color(Color::WHITE))
+                    .padding([2, 10])
+                    .on_press(PanelMsg::ConfirmPrePlacement)
+                    .style(iced::widget::button::primary),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 8])
+        .width(Length::Fill),
+    );
+
+    // Separator
+    col = col.push(
+        container(Space::new())
+            .height(1)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            }),
+    );
+
+    // Fields based on tool type
+    col = col.push(
+        container(
+            column![
+                // Text / Net Name field
+                container(
+                    row![
+                            text("Text / Name")
+                                .size(11)
+                                .color(muted)
+                                .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
+                        iced::widget::text_input("Enter text...", &label_text)
+                            .on_input(PanelMsg::SetPrePlacementText)
+                            .size(11)
+                            .padding(4)
+                                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([4, PROPERTY_ROW_PAD_X]),
+                // Designator field
+                container(
+                    row![
+                        text("Designator")
+                            .size(11)
+                            .color(muted)
+                            .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
+                        iced::widget::text_input("e.g. R1, U1", &designator)
+                            .on_input(PanelMsg::SetPrePlacementDesignator)
+                            .size(11)
+                            .padding(4)
+                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([4, PROPERTY_ROW_PAD_X]),
+                // Rotation
+                form_input_row("Rotation", &format!("{rotation:.0}°"), muted, input_bg, input_bdr),
+            ]
+            .spacing(0),
+        )
+        .width(Length::Fill),
+    );
+
+    container(scrollable(col).width(Length::Fill))
+        .width(Length::Fill)
+        .into()
 }
 
 fn view_properties_general<'a>(
@@ -648,81 +1248,180 @@ fn view_properties_general<'a>(
     primary: Color,
     border_c: Color,
 ) -> Column<'a, PanelMsg> {
+    // Derive button/input colors from tokens (Copy values captured in closures)
+    let input_bg   = crate::styles::ti(ctx.tokens.selection); // deep blue tint
+    let input_bdr  = crate::styles::ti(ctx.tokens.accent);
+    let tag_bg     = crate::styles::ti(ctx.tokens.accent);
+    let tag_hover  = {
+        let c = crate::styles::ti(ctx.tokens.accent);
+        Color { r: (c.r * 1.3).min(1.0), g: (c.g * 1.3).min(1.0), b: (c.b * 1.3).min(1.0), ..c }
+    };
+    let seg_hover  = crate::styles::ti(ctx.tokens.hover);
+
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Selection Filter
-    col = col.push(section_hdr("\u{25BC} Selection Filter", primary, border_c));
-    col = col.push(
-        container(
-            column![
-                row![tag_btn("Components"), tag_btn("Wires"), tag_btn("Buses"),].spacing(4.0),
-                row![
-                    tag_btn("Sheet Symbols"),
-                    tag_btn("Sheet Entries"),
-                    tag_btn("Net Labels"),
-                ]
-                .spacing(4.0),
-                row![
-                    tag_btn("Parameters"),
-                    tag_btn("Ports"),
-                    tag_btn("Power Ports"),
-                    tag_btn("Texts"),
-                ]
-                .spacing(4.0),
-                row![tag_btn("Drawing Objects"), tag_btn("Other"),].spacing(4.0),
-            ]
-            .spacing(4.0),
-        )
-        .padding([6, 8]),
-    );
+    // Selection Filter (collapsible)
+    col = col.push(collapsible_section(
+        "prop_sel_filter",
+        "Selection Filter",
+        &ctx.collapsed_sections,
+        primary,
+        border_c,
+        || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(
+                container(
+                    Wrap::new()
+                        .spacing(4.0)
+                        .line_spacing(4.0)
+                        .push(tag_btn("Components", tag_bg, tag_hover))
+                        .push(tag_btn("Wires", tag_bg, tag_hover))
+                        .push(tag_btn("Buses", tag_bg, tag_hover))
+                        .push(tag_btn("Sheet Symbols", tag_bg, tag_hover))
+                        .push(tag_btn("Sheet Entries", tag_bg, tag_hover))
+                        .push(tag_btn("Net Labels", tag_bg, tag_hover))
+                        .push(tag_btn("Parameters", tag_bg, tag_hover))
+                        .push(tag_btn("Ports", tag_bg, tag_hover))
+                        .push(tag_btn("Power Ports", tag_bg, tag_hover))
+                        .push(tag_btn("Texts", tag_bg, tag_hover))
+                        .push(tag_btn("Drawing Objects", tag_bg, tag_hover))
+                        .push(tag_btn("Other", tag_bg, tag_hover)),
+                )
+                .padding([6, 8]),
+            );
+            c
+        },
+    ));
 
-    // General
-    col = col.push(section_hdr("\u{25BC} General", primary, border_c));
-    col = col.push(form_label("Units", muted));
-    col = col.push(
-        container(
-            row![
-                seg_btn("mm", ctx.unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm)),
-                seg_btn("mils", ctx.unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil)),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([2, 8]),
-    );
-    col = col.push(form_input_row("Visible Grid", &format!("{}mm", ctx.grid_size_mm), muted));
-    col = col.push(form_check_row("Snap Grid", ctx.snap_enabled, PanelMsg::ToggleSnap, muted));
-    col = col.push(form_check_row("Grid Visible", ctx.grid_visible, PanelMsg::ToggleGrid, muted));
-    col = col.push(form_input_row("Document Font", "Arial, 8", muted));
-    col = col.push(form_input_row("Sheet Color", "Black", muted));
+    // General (collapsible)
+    {
+        let unit = ctx.unit;
+        let grid_size_mm = ctx.grid_size_mm;
+        let visible_grid_mm = ctx.visible_grid_mm;
+        let snap_enabled = ctx.snap_enabled;
+        let snap_hotspots = ctx.snap_hotspots;
+        let grid_visible = ctx.grid_visible;
+        let canvas_font_name = ctx.canvas_font_name.clone();
+        let canvas_font_size = ctx.canvas_font_size;
+        let canvas_font_bold = ctx.canvas_font_bold;
+        let canvas_font_italic = ctx.canvas_font_italic;
+        let canvas_font_popup_open = ctx.canvas_font_popup_open;
+        col = col.push(collapsible_section(
+            "prop_general",
+            "General",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_label("Units", muted));
+                c = c.push(
+                    container(
+                        row![
+                            seg_btn("mm", unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm), input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("mils", unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil), input_bg, primary, muted, seg_hover, input_bdr),
+                        ]
+                        .spacing(0.0)
+                        .width(Length::Fill),
+                    )
+                    .padding([2, 8]),
+                );
+                // Altium-style: Visible Grid and Snap Grid are independent
+                c = c.push(form_grid_row("Visible Grid", visible_grid_mm, unit, false, PanelMsg::SetVisibleGridSize, muted, grid_visible, PanelMsg::ToggleGrid));
+                c = c.push(form_grid_row("Snap Grid", grid_size_mm, unit, true, PanelMsg::SetGridSize, muted, snap_enabled, PanelMsg::ToggleSnap));
+                c = c.push(form_check_row_shortcut(
+                    "Snap to Hotspots",
+                    snap_hotspots,
+                    PanelMsg::ToggleSnapHotspots,
+                    "Shift+E",
+                    muted,
+                ));
+                c = c.push(form_font_link_row(
+                    "Canvas Font",
+                    &canvas_font_name,
+                    canvas_font_size,
+                    canvas_font_bold,
+                    canvas_font_italic,
+                    muted,
+                ));
+                if canvas_font_popup_open {
+                    c = c.push(
+                        container(canvas_font_popup(
+                            &canvas_font_name,
+                            canvas_font_size,
+                            canvas_font_bold,
+                            canvas_font_italic,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ))
+                        .padding(iced::Padding {
+                            top: 0.0,
+                            right: 16.0,
+                            bottom: 4.0,
+                            left: 8.0,
+                        }),
+                    );
+                }
+                c = c.push(form_input_row("Sheet Color", "Black", muted, input_bg, input_bdr));
+                c
+            },
+        ));
+    }
 
-    // Page Options
-    col = col.push(Space::new().height(2.0));
-    col = col.push(section_hdr("\u{25BC} Page Options", primary, border_c));
-    col = col.push(form_label("Formatting and Size", muted));
-    col = col.push(
-        container(
-            row![
-                seg_btn("Template", true, PanelMsg::ToggleGrid),
-                seg_btn("Standard", false, PanelMsg::ToggleGrid),
-                seg_btn("Custom", false, PanelMsg::ToggleGrid),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([2, 8]),
-    );
-    col = col.push(form_input_row("Paper", &ctx.paper_size, muted));
-    let dims = match ctx.paper_size.as_str() {
-        "A4" => "Width: 297mm  Height: 210mm",
-        "A3" => "Width: 420mm  Height: 297mm",
-        _ => "Width: 297mm  Height: 210mm",
-    };
-    col = col.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
-    col = col.push(form_label("Margin and Zones", muted));
-    col = col.push(form_input_row("Vertical", "1", muted));
-    col = col.push(form_input_row("Horizontal", "1", muted));
-    col = col.push(form_input_row("Origin", "Upper Left", muted));
+    // Page Options (collapsible)
+    {
+        let paper_size = ctx.paper_size.clone();
+        col = col.push(collapsible_section(
+            "prop_page_opts",
+            "Page Options",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_label("Formatting and Size", muted));
+                c = c.push(
+                    container(
+                        row![
+                            seg_btn("Template", true, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("Standard", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn("Custom", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                        ]
+                        .spacing(0.0)
+                        .width(Length::Fill),
+                    )
+                    .padding([2, 8]),
+                );
+                c = c.push(form_input_row("Paper", &paper_size, muted, input_bg, input_bdr));
+                let dims = match paper_size.as_str() {
+                    "A4" => "Width: 297mm  Height: 210mm",
+                    "A3" => "Width: 420mm  Height: 297mm",
+                    _ => "Width: 297mm  Height: 210mm",
+                };
+                c = c.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
+                c = c.push(form_label("Margin and Zones", muted));
+                c = c.push(form_number_row(
+                    "Vertical",
+                    1_u32,
+                    0..=10,
+                    1,
+                    PanelMsg::SetMarginVertical,
+                    muted,
+                ));
+                c = c.push(form_number_row(
+                    "Horizontal",
+                    1_u32,
+                    0..=10,
+                    1,
+                    PanelMsg::SetMarginHorizontal,
+                    muted,
+                ));
+                c = c.push(form_input_row("Origin", "Upper Left", muted, input_bg, input_bdr));
+                c
+            },
+        ));
+    }
 
     col
 }
@@ -731,6 +1430,9 @@ fn view_properties_parameters<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+    seg_hover: Color,
 ) -> Column<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
@@ -740,9 +1442,9 @@ fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                seg_btn("All", false, PanelMsg::PropertiesTab(1)),
-                seg_btn("Parameters", true, PanelMsg::PropertiesTab(1)),
-                seg_btn("Rules", false, PanelMsg::PropertiesTab(1)),
+                seg_btn("All", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
+                seg_btn("Parameters", true, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
+                seg_btn("Rules", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
             ]
             .spacing(0.0)
             .width(Length::Fill),
@@ -755,8 +1457,14 @@ fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                text("Name").size(10).color(muted).width(Length::FillPortion(3)),
-                text("Value").size(10).color(muted).width(Length::FillPortion(2)),
+                text("Name")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(3)),
+                text("Value")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
             ]
             .spacing(4.0),
         )
@@ -827,12 +1535,16 @@ fn param_table_row<'a, M: 'a>(
 }
 
 /// Properties panel tab button (General / Parameters).
-fn props_tab_btn(label: &str, active: bool, msg: PanelMsg) -> Element<'static, PanelMsg> {
-    let text_c = if active {
-        Color::WHITE
-    } else {
-        Color::from_rgb(0.55, 0.55, 0.58)
-    };
+fn props_tab_btn(
+    label: &str,
+    active: bool,
+    msg: PanelMsg,
+    text_active: Color,
+    text_inactive: Color,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(text(label.to_string()).size(11).color(text_c))
         .padding([4, 12])
         .on_press(msg)
@@ -840,14 +1552,14 @@ fn props_tab_btn(label: &str, active: bool, msg: PanelMsg) -> Element<'static, P
             let hover = matches!(status, iced::widget::button::Status::Hovered);
             iced::widget::button::Style {
                 background: if active || hover {
-                    Some(Background::Color(Color::from_rgb(0.22, 0.22, 0.25)))
+                    Some(Background::Color(hover_bg))
                 } else {
                     None
                 },
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
-                    color: Color::from_rgb(0.30, 0.30, 0.33),
+                    color: border_c,
                 },
                 ..iced::widget::button::Style::default()
             }
@@ -885,13 +1597,19 @@ fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Column
 }
 
 /// Form row: label | styled input-like value display.
-fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Element<'a, M> {
+fn form_input_row<'a, M: 'a>(
+    label: &str,
+    value: &str,
+    label_c: Color,
+    input_bg: Color,
+    input_border: Color,
+) -> Element<'a, M> {
     container(
         row![
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
             container(
                 text(value.to_string())
@@ -900,13 +1618,13 @@ fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Elemen
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .padding([3, 6])
-            .width(Length::Fill)
-            .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(INPUT_BG)),
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(input_bg)),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
-                    color: Color::from_rgb(0.22, 0.28, 0.38),
+                    color: input_border,
                 },
                 ..container::Style::default()
             }),
@@ -914,12 +1632,13 @@ fn form_input_row<'a, M: 'a>(label: &str, value: &str, label_c: Color) -> Elemen
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
 
 /// Form row: label | custom widget.
+#[allow(dead_code)]
 fn form_label_row<'a>(
     label: &str,
     control: Row<'a, PanelMsg>,
@@ -930,14 +1649,14 @@ fn form_label_row<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
-                .width(LABEL_W)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::None),
-            control,
+            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -954,24 +1673,402 @@ fn form_check_row<'a>(
             text(label.to_string())
                 .size(11)
                 .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            row![
+                iced::widget::checkbox(checked)
+                    .on_toggle(move |_| msg.clone())
+                    .size(14)
+                    .spacing(4),
+                text(if checked { "On" } else { "Off" })
+                    .size(11)
+                    .color(if checked { Color::WHITE } else { label_c }),
+            ]
+            .spacing(8)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
+#[allow(dead_code)]
+fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
+    // Find the label that matches the current value (fallback to first).
+    let selected: Option<&'static str> = GRID_SIZES_MM
+        .iter()
+        .zip(GRID_SIZE_LABELS.iter())
+        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
+        .map(|(_, lbl)| *lbl);
+    container(
+        row![
+            text("Visible Grid".to_string())
+                .size(11)
+                .color(label_c)
                 .width(LABEL_W)
                 .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::checkbox(checked)
-                .on_toggle(move |_| msg.clone())
-                .size(14)
-                .spacing(4),
-            text(if checked { "On" } else { "Off" })
-                .size(11)
-                .color(if checked {
-                    Color::WHITE
-                } else {
-                    label_c
-                }),
+            iced::widget::pick_list(
+                GRID_SIZE_LABELS,
+                selected,
+                |lbl: &'static str| {
+                    // Map label back to mm value
+                    let mm = GRID_SIZES_MM
+                        .iter()
+                        .zip(GRID_SIZE_LABELS.iter())
+                        .find(|(_, l)| **l == lbl)
+                        .map(|(v, _)| *v)
+                        .unwrap_or(2.54);
+                    PanelMsg::SetGridSize(mm)
+                },
+            )
+            .text_size(11)
+            .width(Length::Fill),
         ]
         .spacing(8.0)
         .align_y(iced::Alignment::Center),
     )
     .padding([2, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
+/// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
+/// Labels and values are shown in the current `unit` (mm or mil).
+fn form_grid_row(
+    label: &'static str,
+    current_mm: f32,
+    unit: Unit,
+    has_checkbox: bool,
+    on_size: impl Fn(f32) -> PanelMsg + 'static,
+    label_c: Color,
+    active: bool,
+    on_toggle: PanelMsg,
+) -> Element<'static, PanelMsg> {
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
+
+    let labels: &'static [&'static str] = if unit == Unit::Mil {
+        GRID_SIZE_LABELS_MIL
+    } else {
+        GRID_SIZE_LABELS
+    };
+
+    let selected: Option<&'static str> = GRID_SIZES_MM
+        .iter()
+        .zip(labels.iter())
+        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
+        .map(|(_, lbl)| *lbl);
+
+    let pick = iced::widget::pick_list(
+        labels,
+        selected,
+        move |lbl: &'static str| {
+            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
+            let mm = GRID_SIZE_LABELS
+                .iter()
+                .chain(GRID_SIZE_LABELS_MIL.iter())
+                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
+                .find(|(l, _)| **l == lbl)
+                .map(|(_, v)| *v)
+                .unwrap_or(2.54);
+            on_size(mm)
+        },
+    )
+    .text_size(11)
+    .width(Length::Fill);
+
+    let label_widget = text(label.to_string())
+        .size(11)
+        .color(label_c)
+        .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+        .wrapping(iced::widget::text::Wrapping::None);
+
+    let content: Element<PanelMsg> = if has_checkbox {
+        // Snap Grid row: checkbox before pick_list
+        row![
+            label_widget,
+            iced::widget::checkbox(active)
+                .on_toggle(move |_| on_toggle.clone())
+                .size(12)
+                .spacing(4),
+            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        // Visible Grid row: no checkbox
+        row![label_widget, container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .into()
+    };
+
+    container(content)
+        .padding([2, PROPERTY_ROW_PAD_X])
+        .width(Length::Fill)
+        .into()
+}
+
+/// Form row: checkbox with a keyboard shortcut hint on the right.
+fn form_check_row_shortcut<'a>(
+    label: &'a str,
+    value: bool,
+    on_toggle: PanelMsg,
+    shortcut: &'a str,
+    label_c: Color,
+) -> Element<'a, PanelMsg> {
+    let shortcut_owned = shortcut.to_string();
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            row![
+                iced::widget::checkbox(value)
+                    .on_toggle(move |_| on_toggle.clone())
+                    .size(12)
+                    .spacing(4),
+                Space::new().width(Length::Fill),
+                text(shortcut_owned)
+                    .size(10)
+                    .color(label_c),
+            ]
+            .spacing(4)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+fn form_font_link_row<'a>(
+    label: &'static str,
+    current_family: &str,
+    current_size_px: f32,
+    _bold: bool,
+    _italic: bool,
+    label_c: Color,
+) -> Element<'a, PanelMsg> {
+    let summary = format!("{current_family}, {:.0}px", current_size_px);
+
+    container(
+        row![
+            text(label)
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::button(
+                text(summary)
+                    .size(11)
+                    .color(Color::from_rgb(0.35, 0.7, 1.0))
+                    .width(Length::Fill),
+            )
+            .on_press(PanelMsg::OpenCanvasFontPopup)
+            .padding([1, 0])
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let underline = match status {
+                    iced::widget::button::Status::Hovered => true,
+                    _ => false,
+                };
+                iced::widget::button::Style {
+                    background: None,
+                    text_color: if underline {
+                        Color::from_rgb(0.55, 0.82, 1.0)
+                    } else {
+                        Color::from_rgb(0.35, 0.7, 1.0)
+                    },
+                    border: Border::default(),
+                    shadow: iced::Shadow::default(),
+                    ..Default::default()
+                }
+            }),
+        ]
+        .spacing(4)
+        .width(Length::Fill)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+fn canvas_font_popup<'a>(
+    current_family: &str,
+    current_size_px: f32,
+    bold: bool,
+    italic: bool,
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    let families = crate::fonts::system_font_families();
+    let family_pick = iced::widget::pick_list(
+        families.as_slice(),
+        Some(current_family.to_string()),
+        PanelMsg::SetCanvasFont,
+    )
+    .text_size(11)
+    .width(Length::Fill);
+
+    let size_input = NumberInput::new(
+        &current_size_px,
+        6.0..=36.0,
+        PanelMsg::SetCanvasFontSize,
+    )
+    .step(1.0)
+    .width(Length::Fill)
+    .padding(4);
+
+    container(
+        column![
+            row![
+                text("Canvas Font Settings").size(11).color(label_c),
+                Space::new().width(Length::Fill),
+                iced::widget::button(text("Close").size(10))
+                    .on_press(PanelMsg::CloseCanvasFontPopup)
+                    .padding([2, 6])
+            ]
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Family")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                family_pick,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Size")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                size_input,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Style")
+                    .size(10)
+                    .color(label_c)
+                    .width(56),
+                row![
+                    iced::widget::checkbox(bold)
+                        .on_toggle(PanelMsg::SetCanvasFontBold)
+                        .size(12)
+                        .spacing(4),
+                    text("Bold").size(10).color(label_c),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                row![
+                    iced::widget::checkbox(italic)
+                        .on_toggle(PanelMsg::SetCanvasFontItalic)
+                        .size(12)
+                        .spacing(4),
+                    text("Italic").size(10).color(label_c),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center),
+            text("Applies immediately to canvas text rendering.")
+                .size(9)
+                .color(label_c),
+        ]
+        .spacing(6),
+    )
+    .padding([6, 8])
+    .style(move |_: &Theme| iced::widget::container::Style {
+        background: Some(Background::Color(input_bg)),
+        border: Border {
+            color: input_bdr,
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..Default::default()
+    })
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | NumberInput (iced_aw) with step/bounds.
+fn form_number_row<'a, T>(
+    label: &str,
+    value: T,
+    bounds: impl std::ops::RangeBounds<T> + 'a,
+    step: T,
+    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: num_traits::Num
+        + num_traits::NumAssignOps
+        + PartialOrd
+        + std::fmt::Display
+        + std::str::FromStr
+        + Clone
+        + num_traits::Bounded
+        + 'static,
+{
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            NumberInput::new(&value, bounds, on_change)
+                .step(step)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+                .padding(4),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | editable text_input that emits a PanelMsg on input.
+fn form_edit_row<'a>(
+    label: &str,
+    value: &str,
+    label_c: Color,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::text_input("", value)
+                .on_input(on_input)
+                .size(11)
+                .padding(4)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .into()
 }
@@ -985,7 +2082,7 @@ fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
 }
 
 /// Selection filter tag button (Altium blue pill).
-fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
+fn tag_btn(label: &str, bg: Color, hover_bg: Color) -> Element<'static, PanelMsg> {
     iced::widget::button(
         text(label.to_string())
             .size(10)
@@ -993,14 +2090,10 @@ fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
             .align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3, 8])
-    .style(|_: &Theme, status: iced::widget::button::Status| {
-        let hover = matches!(status, iced::widget::button::Status::Hovered);
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let hovered = matches!(status, iced::widget::button::Status::Hovered);
         iced::widget::button::Style {
-            background: Some(Background::Color(if hover {
-                Color::from_rgb(0.25, 0.42, 0.65)
-            } else {
-                TAG_BG
-            })),
+            background: Some(Background::Color(if hovered { hover_bg } else { bg })),
             border: Border {
                 radius: 3.0.into(),
                 ..Border::default()
@@ -1012,13 +2105,18 @@ fn tag_btn(label: &str) -> Element<'static, PanelMsg> {
 }
 
 /// Segmented button (for units toggle etc).
-fn seg_btn<'a>(label: &str, active: bool, msg: PanelMsg) -> Element<'a, PanelMsg> {
-    let bg = if active { INPUT_BG } else { Color::TRANSPARENT };
-    let text_c = if active {
-        Color::WHITE
-    } else {
-        Color::from_rgb(0.55, 0.55, 0.58)
-    };
+fn seg_btn<'a>(
+    label: &str,
+    active: bool,
+    msg: PanelMsg,
+    active_bg: Color,
+    text_active: Color,
+    text_inactive: Color,
+    hover_bg: Color,
+    seg_border: Color,
+) -> Element<'a, PanelMsg> {
+    let bg = if active { active_bg } else { Color::TRANSPARENT };
+    let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(
         text(label.to_string())
             .size(11)
@@ -1029,17 +2127,17 @@ fn seg_btn<'a>(label: &str, active: bool, msg: PanelMsg) -> Element<'a, PanelMsg
     .width(Length::Fill)
     .on_press(msg)
     .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let hover = matches!(status, iced::widget::button::Status::Hovered);
+        let hovered = matches!(status, iced::widget::button::Status::Hovered);
         iced::widget::button::Style {
-            background: Some(Background::Color(if hover && !active {
-                Color::from_rgb(0.20, 0.20, 0.23)
+            background: Some(Background::Color(if hovered && !active {
+                hover_bg
             } else {
                 bg
             })),
             border: Border {
                 width: 1.0,
                 radius: 2.0.into(),
-                color: Color::from_rgb(0.22, 0.28, 0.38),
+                color: seg_border,
             },
             ..iced::widget::button::Style::default()
         }
@@ -1051,14 +2149,80 @@ fn seg_btn<'a>(label: &str, active: bool, msg: PanelMsg) -> Element<'a, PanelMsg
 
 fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
-    col = col.push(section_title("Messages", &ctx.tokens));
+    col = col.push(
+        row![
+            section_title("Messages", &ctx.tokens),
+            Space::new().width(Length::Fill).height(Length::Shrink),
+            text(format!("level {}", ctx.diagnostics_level))
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
     col = col.push(separator(&ctx.tokens));
 
-    if ctx.has_schematic {
-        col = col.push(text("No violations").size(10).color(theme_ext::success_color(&ctx.tokens)));
-        col = col.push(text("Run ERC to check").size(9).color(theme_ext::text_secondary(&ctx.tokens)));
+    if ctx.diagnostics.is_empty() {
+        col = col.push(
+            text("No runtime messages yet")
+                .size(10)
+                .color(theme_ext::success_color(&ctx.tokens)),
+        );
+        col = col.push(
+            text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
     } else {
-        col = col.push(text("Open a project first").size(10).color(theme_ext::text_secondary(&ctx.tokens)));
+        for entry in ctx.diagnostics.iter().rev() {
+            let level_color = match entry.level {
+                crate::diagnostics::DiagnosticLevel::Error => {
+                    theme_ext::error_color(&ctx.tokens)
+                }
+                crate::diagnostics::DiagnosticLevel::Warning => {
+                    theme_ext::warning_color(&ctx.tokens)
+                }
+                crate::diagnostics::DiagnosticLevel::Info => theme_ext::accent(&ctx.tokens),
+                crate::diagnostics::DiagnosticLevel::Debug
+                | crate::diagnostics::DiagnosticLevel::Trace => {
+                    theme_ext::text_secondary(&ctx.tokens)
+                }
+            };
+
+            col = col.push(
+                container(
+                    column![
+                        row![
+                            text(format!("#{}", entry.id))
+                                .size(9)
+                                .color(theme_ext::text_secondary(&ctx.tokens)),
+                            Space::new().width(6).height(Length::Shrink),
+                            text(entry.level.label())
+                                .size(9)
+                                .color(level_color),
+                            Space::new().width(6).height(Length::Shrink),
+                            text(entry.code.as_str())
+                                .size(9)
+                                .color(theme_ext::text_secondary(&ctx.tokens)),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                        text(entry.message.as_str())
+                            .size(10)
+                            .color(theme_ext::text_primary(&ctx.tokens)),
+                    ]
+                    .spacing(3),
+                )
+                .padding([5, 6])
+                .style(move |_theme: &Theme| iced::widget::container::Style {
+                    background: Some(Background::Color(theme_ext::to_color(&ctx.tokens.panel_bg))),
+                    border: Border {
+                        width: 1.0,
+                        radius: 0.0.into(),
+                        color: theme_ext::border_color(&ctx.tokens),
+                    },
+                    ..iced::widget::container::Style::default()
+                }),
+            );
+        }
     }
 
     container(col).width(Length::Fill).into()

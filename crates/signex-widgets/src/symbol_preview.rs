@@ -29,10 +29,18 @@ impl SymbolPreview {
         let mut max_y = f64::MIN;
 
         let mut expand = |x: f64, y: f64| {
-            if x < min_x { min_x = x; }
-            if y < min_y { min_y = y; }
-            if x > max_x { max_x = x; }
-            if y > max_y { max_y = y; }
+            if x < min_x {
+                min_x = x;
+            }
+            if y < min_y {
+                min_y = y;
+            }
+            if x > max_x {
+                max_x = x;
+            }
+            if y > max_y {
+                max_y = y;
+            }
         };
 
         for g in &self.symbol.graphics {
@@ -50,7 +58,9 @@ impl SymbolPreview {
                     expand(center.x - radius, center.y - radius);
                     expand(center.x + radius, center.y + radius);
                 }
-                Graphic::Arc { start, mid, end, .. } => {
+                Graphic::Arc {
+                    start, mid, end, ..
+                } => {
                     expand(start.x, start.y);
                     expand(mid.x, mid.y);
                     expand(end.x, end.y);
@@ -173,7 +183,9 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                             Stroke::default().with_color(body_color).with_width(1.5),
                         );
                     }
-                    Graphic::Arc { start, mid, end, .. } => {
+                    Graphic::Arc {
+                        start, mid, end, ..
+                    } => {
                         // Approximate arc as polyline through 3 points
                         let p1 = tx(start.x, start.y);
                         let p2 = tx(mid.x, mid.y);
@@ -217,10 +229,7 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                     270 => (0.0, pin.length * scale),
                     _ => (pin.length * scale, 0.0),
                 };
-                let tip = Point::new(
-                    origin.x + dx as f32,
-                    origin.y + dy as f32,
-                );
+                let tip = Point::new(origin.x + dx as f32, origin.y + dy as f32);
 
                 // Pin line
                 frame.stroke(

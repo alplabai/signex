@@ -339,6 +339,9 @@ pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
+    /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
+    #[serde(default)]
+    pub stroke_width: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -538,6 +541,10 @@ pub enum SelectedKind {
     TextNote,
     ChildSheet,
     Drawing,
+    /// Symbol reference field ("C39", "R1", …). UUID = symbol UUID.
+    SymbolRefField,
+    /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
+    SymbolValField,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

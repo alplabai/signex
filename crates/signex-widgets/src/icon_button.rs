@@ -3,7 +3,7 @@
 //! Themed icon buttons with tooltip, active/inactive state, separators,
 //! and grouping — all built on stock Iced 0.14 primitives.
 
-use iced::widget::{button, container, text, tooltip, Row};
+use iced::widget::{Row, button, container, text, tooltip};
 use iced::{Border, Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -55,9 +55,13 @@ pub fn icon_button<'a, M: Clone + 'a>(
     };
 
     let tip_text = tooltip_text.to_owned();
-    tooltip(styled_btn, text(tip_text).size(11), tooltip::Position::Bottom)
-        .gap(4)
-        .into()
+    tooltip(
+        styled_btn,
+        text(tip_text).size(11),
+        tooltip::Position::Bottom,
+    )
+    .gap(4)
+    .into()
 }
 
 // ---------------------------------------------------------------------------
