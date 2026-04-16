@@ -36,9 +36,35 @@ impl Signex {
             ActiveBarAction::DrawFullCircle => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)))
             }
-            ActiveBarAction::RotateSelection => self.update(Message::RotateSelected),
+            ActiveBarAction::RotateSelection | ActiveBarAction::RotateSelectionCW => {
+                self.update(Message::RotateSelected)
+            }
             ActiveBarAction::FlipSelectedX => self.update(Message::MirrorSelectedX),
             ActiveBarAction::FlipSelectedY => self.update(Message::MirrorSelectedY),
+            // Select-mode variants all currently enter the normal Select tool;
+            // distinct box/lasso modes will land with a later selection rewrite.
+            ActiveBarAction::LassoSelect
+            | ActiveBarAction::InsideArea
+            | ActiveBarAction::OutsideArea
+            | ActiveBarAction::TouchingRectangle
+            | ActiveBarAction::TouchingLine
+            | ActiveBarAction::SelectConnection
+            | ActiveBarAction::ToggleSelection => {
+                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+            }
+            // Drag / Move actions — for now, simply switch to the Select tool so
+            // the user can grab and move the current selection with the mouse.
+            ActiveBarAction::Drag
+            | ActiveBarAction::MoveSelection
+            | ActiveBarAction::MoveSelectionXY
+            | ActiveBarAction::DragSelection
+            | ActiveBarAction::MoveToFront
+            | ActiveBarAction::BringToFront
+            | ActiveBarAction::SendToBack
+            | ActiveBarAction::BringToFrontOf
+            | ActiveBarAction::SendToBackOf => {
+                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+            }
             ActiveBarAction::AlignLeft
             | ActiveBarAction::AlignRight
             | ActiveBarAction::AlignTop
