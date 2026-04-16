@@ -8,6 +8,7 @@ use iced::widget::canvas::{self, path, LineCap, LineJoin};
 use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
 
 use super::ScreenTransform;
+use super::text::display_text_content;
 
 // ---------------------------------------------------------------------------
 // Instance transform: position + rotation + mirror
@@ -414,13 +415,13 @@ fn draw_graphic_text(
     } else {
         transform.world_len(1.27)
     };
-    let size = (base_size * crate::canvas_font_size_scale()).abs();
+    let size = base_size.abs();
     if size < 1.0 {
         return;
     }
 
     let text = canvas::Text {
-        content: content.to_string(),
+        content: display_text_content(content),
         position: sp,
         color,
         size: iced::Pixels(size),

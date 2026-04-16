@@ -3,9 +3,37 @@
 use iced::Color;
 use iced::widget::canvas;
 
+use signex_types::markup::{RichSegment, parse_markup};
 use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
 use super::{ScreenTransform, field_effective_style};
+
+pub fn display_text_content(input: &str) -> String {
+    fn overbar_text(text: &str) -> String {
+        let mut out = String::new();
+        for ch in text.chars() {
+            out.push(ch);
+            out.push('\u{0305}');
+        }
+        out
+    }
+
+    let segments = parse_markup(input);
+    if segments.is_empty() {
+        return input.to_string();
+    }
+
+    let mut out = String::new();
+    for segment in segments {
+        match segment {
+            RichSegment::Normal(text)
+            | RichSegment::Subscript(text)
+            | RichSegment::Superscript(text) => out.push_str(&text),
+            RichSegment::Overbar(text) => out.push_str(&overbar_text(&text)),
+        }
+    }
+    out
+}
 
 /// Draw a text note on the schematic.
 pub fn draw_text_note(
@@ -19,7 +47,7 @@ pub fn draw_text_note(
     } else {
         1.27
     };
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
@@ -46,7 +74,7 @@ pub fn draw_text_note(
             f.rotate(rad);
         }
         let text = canvas::Text {
-            content: note.text.clone(),
+            content: display_text_content(&note.text),
             position: iced::Point::ORIGIN,
             color,
             size: iced::Pixels(screen_font),
@@ -84,7 +112,7 @@ pub fn draw_text_prop(
     }
 
     let font_size_mm = if prop.font_size > 0.0 { prop.font_size } else { 1.27 };
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
@@ -114,7 +142,7 @@ pub fn draw_text_prop(
             f.rotate(rad);
         }
         let text = canvas::Text {
-            content: content.to_string(),
+            content: display_text_content(content),
             position: iced::Point::ORIGIN,
             color,
             size: iced::Pixels(screen_font),
