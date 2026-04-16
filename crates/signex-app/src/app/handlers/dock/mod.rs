@@ -18,15 +18,15 @@ impl Signex {
                 || self.handle_dock_property_editor_message(panel_msg)
                 || self.handle_dock_project_navigation_panel_message(panel_msg)
             {
-                return Task::none();
+                return self.finish_update();
             }
         }
 
         if self.handle_dock_floating_layout_message(&msg) {
-            return Task::none();
+            return self.finish_update();
         }
 
         self.document_state.dock.update(msg);
-        Task::none()
+        self.finish_update()
     }
 }
