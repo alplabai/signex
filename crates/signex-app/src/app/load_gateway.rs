@@ -1,14 +1,20 @@
+use std::path::PathBuf;
+
+use signex_types::pcb::PcbBoard;
+use signex_types::schematic::SchematicSheet;
+
 use super::*;
 
 impl Signex {
     fn active_tab_cached_document(&self) -> Option<&TabDocument> {
-        self.tabs
-            .get(self.active_tab)
+        self.document_state
+            .tabs
+            .get(self.document_state.active_tab)
             .and_then(|tab| tab.cached_document.as_ref())
     }
 
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
-        self.engine
+        self.document_state.engine
             .as_ref()
             .map(|engine| engine.document())
             .or_else(|| self.active_tab_cached_schematic())
@@ -29,11 +35,11 @@ impl Signex {
     pub(crate) fn active_render_snapshot(
         &self,
     ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
-        self.canvas.active_snapshot()
+        self.interaction_state.canvas.active_snapshot()
     }
 
     pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
-        self.pcb_canvas.active_snapshot()
+        self.interaction_state.pcb_canvas.active_snapshot()
     }
 
     fn active_tab_cached_schematic(&self) -> Option<&SchematicSheet> {
@@ -44,13 +50,14 @@ impl Signex {
         &mut self,
         update: impl FnOnce(&mut SchematicTabSession) -> R,
     ) -> Option<R> {
-        let engine = self.engine.take()?;
+        let engine = self.document_state.engine.take()?;
         let Some((title, path, dirty)) = self
+            .document_state
             .tabs
-            .get(self.active_tab)
+            .get(self.document_state.active_tab)
             .map(|tab| (tab.title.clone(), tab.path.clone(), tab.dirty))
         else {
-            self.engine = Some(engine);
+            self.document_state.engine = Some(engine);
             return None;
         };
 
@@ -58,22 +65,30 @@ impl Signex {
         let result = update(&mut session);
         let (engine, title, path, dirty) = session.into_parts();
 
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+        if let Some(tab) = self
+            .document_state
+            .tabs
+            .get_mut(self.document_state.active_tab)
+        {
             tab.title = title;
             tab.path = path;
             tab.dirty = dirty;
         }
 
-        self.engine = Some(engine);
+        self.document_state.engine = Some(engine);
         Some(result)
     }
 
     pub(crate) fn park_active_schematic_session(&mut self) {
-        let Some(engine) = self.engine.take() else {
+        let Some(engine) = self.document_state.engine.take() else {
             return;
         };
 
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+        if let Some(tab) = self
+            .document_state
+            .tabs
+            .get_mut(self.document_state.active_tab)
+        {
             tab.cached_document = Some(TabDocument::Schematic(SchematicTabSession::new(
                 engine,
                 tab.title.clone(),
@@ -81,43 +96,55 @@ impl Signex {
                 tab.dirty,
             )));
         } else {
-            self.engine = Some(engine);
+            self.document_state.engine = Some(engine);
         }
     }
 
     fn activate_active_schematic_session(&mut self) -> bool {
         let cached_document = self
+            .document_state
             .tabs
-            .get_mut(self.active_tab)
+            .get_mut(self.document_state.active_tab)
             .and_then(|tab| tab.cached_document.take());
 
         match cached_document {
             Some(TabDocument::Schematic(session)) => {
                 let (engine, title, path, dirty) = session.into_parts();
-                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                if let Some(tab) = self
+                    .document_state
+                    .tabs
+                    .get_mut(self.document_state.active_tab)
+                {
                     tab.title = title;
                     tab.path = path;
                     tab.dirty = dirty;
                 }
-                self.engine = Some(engine);
+                self.document_state.engine = Some(engine);
                 true
             }
             Some(other_document) => {
-                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                if let Some(tab) = self
+                    .document_state
+                    .tabs
+                    .get_mut(self.document_state.active_tab)
+                {
                     tab.cached_document = Some(other_document);
                 }
                 false
             }
-            None => self.engine.is_some(),
+            None => self.document_state.engine.is_some(),
         }
     }
 
     pub(crate) fn active_tab_path(&self) -> Option<PathBuf> {
-        self.tabs.get(self.active_tab).map(|tab| tab.path.clone())
+        self.document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.clone())
     }
 
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
-        self.engine = schematic
+        self.document_state.engine = schematic
             .and_then(|sheet| signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok());
     }
 
@@ -125,11 +152,11 @@ impl Signex {
         &mut self,
         invalidation: signex_render::schematic::RenderInvalidation,
     ) {
-        if let Some(engine) = self.engine.as_ref() {
-            if let Some(cache) = self.canvas.render_cache.as_mut() {
+        if let Some(engine) = self.document_state.engine.as_ref() {
+            if let Some(cache) = self.interaction_state.canvas.render_cache.as_mut() {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.canvas.set_render_cache(Some(
+                self.interaction_state.canvas.set_render_cache(Some(
                     signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
                 ));
             }
@@ -141,14 +168,14 @@ impl Signex {
             .map(signex_render::schematic::SchematicRenderCache::from_sheet);
 
         if let Some(cache) = rebuilt_cache {
-            self.canvas.set_render_cache(Some(cache));
+            self.interaction_state.canvas.set_render_cache(Some(cache));
         } else {
-            self.canvas.set_render_cache(None);
+            self.interaction_state.canvas.set_render_cache(None);
         }
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        self.pcb_canvas.set_render_snapshot(
+        self.interaction_state.pcb_canvas.set_render_snapshot(
             self.active_pcb()
                 .map(signex_render::pcb::PcbRenderSnapshot::from_board),
         );
@@ -161,26 +188,26 @@ impl Signex {
         sheet: SchematicSheet,
     ) {
         self.park_active_schematic_session();
-        self.tabs.push(TabInfo {
+        self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: None,
             dirty: false,
         });
-        self.active_tab = self.tabs.len() - 1;
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true, true);
     }
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
-        self.tabs.push(TabInfo {
+        self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
         });
-        self.active_tab = self.tabs.len() - 1;
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
     }
 
@@ -189,7 +216,7 @@ impl Signex {
     }
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
-        self.editing_text = None;
+        self.interaction_state.editing_text = None;
 
         match self.active_tab_cached_document() {
             Some(TabDocument::Schematic(_)) => {
@@ -207,25 +234,25 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        self.engine = None;
-        self.canvas.set_render_cache(None);
-        self.canvas.selected.clear();
-        self.canvas.wire_preview.clear();
-        self.canvas.reset_measurement();
-        self.canvas.drawing_mode = false;
-        self.canvas.clear_content_cache();
-        self.canvas.clear_overlay_cache();
-        self.current_tool = Tool::Select;
+        self.document_state.engine = None;
+        self.interaction_state.canvas.set_render_cache(None);
+        self.interaction_state.canvas.selected.clear();
+        self.interaction_state.canvas.wire_preview.clear();
+        self.interaction_state.canvas.reset_measurement();
+        self.interaction_state.canvas.drawing_mode = false;
+        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.current_tool = Tool::Select;
     }
 
     fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
-            self.pcb_canvas.fit_to_board();
+            self.interaction_state.pcb_canvas.fit_to_board();
         }
-        self.pcb_canvas.clear_bg_cache();
-        self.pcb_canvas.clear_content_cache();
+        self.interaction_state.pcb_canvas.clear_bg_cache();
+        self.interaction_state.pcb_canvas.clear_content_cache();
 
         if refresh_panel_ctx {
             self.refresh_panel_ctx();
@@ -236,9 +263,9 @@ impl Signex {
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
-        self.pcb_canvas.set_render_snapshot(None);
-        self.pcb_canvas.clear_bg_cache();
-        self.pcb_canvas.clear_content_cache();
+        self.interaction_state.pcb_canvas.set_render_snapshot(None);
+        self.interaction_state.pcb_canvas.clear_bg_cache();
+        self.interaction_state.pcb_canvas.clear_content_cache();
 
         if refresh_panel_ctx {
             self.refresh_panel_ctx();
@@ -258,18 +285,18 @@ impl Signex {
         if let Some(schematic) = schematic {
             self.sync_engine_from_schematic(Some(schematic));
         }
-        if self.engine.is_none() {
+        if self.document_state.engine.is_none() {
             return;
         }
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
 
         if fit_to_paper {
-            self.canvas.fit_to_paper();
+            self.interaction_state.canvas.fit_to_paper();
         }
         if clear_bg_cache {
-            self.canvas.clear_bg_cache();
+            self.interaction_state.canvas.clear_bg_cache();
         }
-        self.canvas.clear_content_cache();
+        self.interaction_state.canvas.clear_content_cache();
 
         let _ = commit_to_active_tab;
 
@@ -281,8 +308,8 @@ impl Signex {
     }
 
     fn sync_panel_ctx_from_visible_document(&mut self) {
-        self.panel_ctx.has_schematic = self.has_active_schematic();
-        self.panel_ctx.has_pcb = self.has_active_pcb();
+        self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
+        self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
 
         let document_summary = if let Some(snapshot) = self.active_render_snapshot() {
             (
@@ -332,13 +359,13 @@ impl Signex {
             (0, 0, 0, 0, 0, Vec::new(), Vec::new(), "A4".to_string())
         };
 
-        self.panel_ctx.sym_count = document_summary.0;
-        self.panel_ctx.wire_count = document_summary.1;
-        self.panel_ctx.label_count = document_summary.2;
-        self.panel_ctx.junction_count = document_summary.3;
-        self.panel_ctx.lib_symbol_count = document_summary.4;
-        self.panel_ctx.lib_symbol_names = document_summary.5;
-        self.panel_ctx.placed_symbols = document_summary.6;
-        self.panel_ctx.paper_size = document_summary.7;
+        self.document_state.panel_ctx.sym_count = document_summary.0;
+        self.document_state.panel_ctx.wire_count = document_summary.1;
+        self.document_state.panel_ctx.label_count = document_summary.2;
+        self.document_state.panel_ctx.junction_count = document_summary.3;
+        self.document_state.panel_ctx.lib_symbol_count = document_summary.4;
+        self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
+        self.document_state.panel_ctx.placed_symbols = document_summary.6;
+        self.document_state.panel_ctx.paper_size = document_summary.7;
     }
 }

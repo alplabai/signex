@@ -8,7 +8,6 @@ use signex_types::theme::ThemeTokens;
 use crate::app::{StatusBarMsg, Tool};
 use crate::styles;
 
-pub const STATUS_BAR_HEIGHT: f32 = 22.0;
 pub const STATUS_BAR_HORIZONTAL_PADDING: u16 = 8;
 
 #[allow(clippy::too_many_arguments)]

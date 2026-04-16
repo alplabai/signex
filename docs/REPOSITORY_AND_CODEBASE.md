@@ -146,6 +146,19 @@ Responsibilities:
 This crate should not become the home for parser internals, raw file mutation,
 or renderer-specific geometry logic.
 
+### 5.1.1. `signex-app` internal app layout
+
+Inside `crates/signex-app/src/app/`, the app shell is now split by responsibility:
+
+- `state.rs` owns grouped application state for UI, document/session, and interaction concerns.
+- `view/` owns `Element` construction and overlay composition.
+- `handlers/` owns message-family handlers that are called from the main Iced update loop.
+- `dispatch/` is a thin routing layer that keeps the top-level `update()` entry point readable, with document and overlay dispatch families split into dedicated files.
+- `actions.rs` owns higher-level editor operations.
+- `runtime.rs` owns derived-state synchronization such as panel context and theme propagation.
+
+This split exists to keep the Iced `update()` entry point aligned with MVU responsibilities without turning `app.rs` back into a catch-all file.
+
 ### 5.2. `signex-types`
 
 The shared domain types crate.

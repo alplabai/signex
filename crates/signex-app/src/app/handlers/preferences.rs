@@ -3,31 +3,31 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_open_preferences(&mut self) -> Task<Message> {
-        self.preferences_open = true;
-        self.preferences_draft_theme = self.theme_id;
-        self.preferences_draft_font = self.ui_font_name.clone();
-        self.preferences_draft_power_port_style = self.power_port_style;
-        self.preferences_dirty = false;
-        self.panel_list_open = false;
+    pub(crate) fn handle_preferences_open_requested(&mut self) -> Task<Message> {
+        self.ui_state.preferences_open = true;
+        self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
+        self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
+        self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
+        self.ui_state.preferences_dirty = false;
+        self.ui_state.panel_list_open = false;
         Task::none()
     }
 
-    pub(crate) fn handle_close_preferences(&mut self) -> Task<Message> {
-        self.preferences_open = false;
-        self.preferences_dirty = false;
+    pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
+        self.ui_state.preferences_open = false;
+        self.ui_state.preferences_dirty = false;
         Task::none()
     }
 
-    pub(crate) fn handle_preferences_nav(
+    pub(crate) fn handle_preferences_navigation_requested(
         &mut self,
         nav: crate::preferences::PrefNav,
     ) -> Task<Message> {
-        self.preferences_nav = nav;
+        self.ui_state.preferences_nav = nav;
         Task::none()
     }
 
-    pub(crate) fn handle_preferences_msg(
+    pub(crate) fn handle_preferences_message(
         &mut self,
         msg: crate::preferences::PrefMsg,
     ) -> Task<Message> {
@@ -35,95 +35,95 @@ impl Signex {
 
         match msg {
             PrefMsg::Nav(nav) => {
-                self.preferences_nav = nav;
+                self.ui_state.preferences_nav = nav;
             }
             PrefMsg::Close => {
-                if !self.preferences_dirty {
-                    self.preferences_open = false;
+                if !self.ui_state.preferences_dirty {
+                    self.ui_state.preferences_open = false;
                 }
             }
             PrefMsg::DiscardAndClose => {
-                self.preferences_draft_theme = self.theme_id;
-                self.preferences_draft_font = self.ui_font_name.clone();
-                self.preferences_draft_power_port_style = self.power_port_style;
-                self.preferences_dirty = false;
-                self.preferences_open = false;
-                let tokens = if self.theme_id == ThemeId::Custom {
-                    self.custom_theme
+                self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
+                self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
+                self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
+                self.ui_state.preferences_dirty = false;
+                self.ui_state.preferences_open = false;
+                let tokens = if self.ui_state.theme_id == ThemeId::Custom {
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                 } else {
-                    signex_types::theme::theme_tokens(self.theme_id)
+                    signex_types::theme::theme_tokens(self.ui_state.theme_id)
                 };
-                self.panel_ctx.tokens = tokens;
+                self.document_state.panel_ctx.tokens = tokens;
                 self.update_canvas_theme();
-                signex_render::set_power_port_style(self.power_port_style);
-                self.canvas.clear_content_cache();
+                signex_render::set_power_port_style(self.ui_state.power_port_style);
+                self.interaction_state.canvas.clear_content_cache();
             }
             PrefMsg::Save => {
-                self.theme_id = self.preferences_draft_theme;
-                self.ui_font_name = self.preferences_draft_font.clone();
-                self.power_port_style = self.preferences_draft_power_port_style;
+                self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
+                self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
+                self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
                 self.update_canvas_theme();
-                let tokens = if self.theme_id == ThemeId::Custom {
-                    self.custom_theme
+                let tokens = if self.ui_state.theme_id == ThemeId::Custom {
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                 } else {
-                    signex_types::theme::theme_tokens(self.theme_id)
+                    signex_types::theme::theme_tokens(self.ui_state.theme_id)
                 };
-                self.panel_ctx.tokens = tokens;
-                self.panel_ctx.ui_font_name = self.ui_font_name.clone();
-                signex_render::set_power_port_style(self.power_port_style);
-                crate::fonts::write_ui_font_pref(&self.ui_font_name);
-                crate::fonts::write_power_port_style_pref(self.power_port_style);
-                self.preferences_dirty = false;
+                self.document_state.panel_ctx.tokens = tokens;
+                self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
+                signex_render::set_power_port_style(self.ui_state.power_port_style);
+                crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
+                crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
+                self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
-                self.preferences_draft_theme = id;
+                self.ui_state.preferences_draft_theme = id;
                 let tokens = if id == ThemeId::Custom {
-                    self.custom_theme
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
                 } else {
                     signex_types::theme::theme_tokens(id)
                 };
-                self.panel_ctx.tokens = tokens;
+                self.document_state.panel_ctx.tokens = tokens;
                 let canvas_colors = if id == ThemeId::Custom {
-                    self.custom_theme
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.canvas)
                         .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
                 } else {
                     signex_types::theme::canvas_colors(id)
                 };
-                self.canvas.set_theme_colors(
+                self.interaction_state.canvas.set_theme_colors(
                     signex_render::colors::to_iced(&canvas_colors.background),
                     signex_render::colors::to_iced(&canvas_colors.grid),
                     signex_render::colors::to_iced(&canvas_colors.paper),
                 );
-                self.canvas.canvas_colors = canvas_colors;
-                self.canvas.clear_content_cache();
-                self.preferences_dirty = self.preferences_draft_theme != self.theme_id
-                    || self.preferences_draft_font != self.ui_font_name
-                    || self.preferences_draft_power_port_style != self.power_port_style;
+                self.interaction_state.canvas.canvas_colors = canvas_colors;
+                self.interaction_state.canvas.clear_content_cache();
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
+                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
             }
             PrefMsg::DraftFont(name) => {
-                self.preferences_draft_font = name;
-                self.preferences_dirty = self.preferences_draft_theme != self.theme_id
-                    || self.preferences_draft_font != self.ui_font_name
-                    || self.preferences_draft_power_port_style != self.power_port_style;
+                self.ui_state.preferences_draft_font = name;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
+                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
             }
             PrefMsg::DraftPowerPortStyle(style) => {
-                self.preferences_draft_power_port_style = style;
+                self.ui_state.preferences_draft_power_port_style = style;
                 signex_render::set_power_port_style(style);
-                self.canvas.clear_content_cache();
-                self.preferences_dirty = self.preferences_draft_theme != self.theme_id
-                    || self.preferences_draft_font != self.ui_font_name
-                    || self.preferences_draft_power_port_style != self.power_port_style;
+                self.interaction_state.canvas.clear_content_cache();
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
+                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
@@ -142,9 +142,9 @@ impl Signex {
                 });
             }
             PrefMsg::ExportTheme => {
-                let id = self.preferences_draft_theme;
+                let id = self.ui_state.preferences_draft_theme;
                 let name = if id == ThemeId::Custom {
-                    self.custom_theme
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.name.clone())
                         .unwrap_or_else(|| "Custom".to_string())
@@ -152,7 +152,7 @@ impl Signex {
                     id.label().to_string()
                 };
                 let tokens = if id == ThemeId::Custom {
-                    self.custom_theme
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
@@ -160,7 +160,7 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 let canvas = if id == ThemeId::Custom {
-                    self.custom_theme
+                    self.ui_state.custom_theme
                         .as_ref()
                         .map(|c| c.canvas)
                         .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
@@ -190,9 +190,9 @@ impl Signex {
                 if let Ok(custom) =
                     serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content)
                 {
-                    self.custom_theme = Some(custom);
-                    self.preferences_draft_theme = ThemeId::Custom;
-                    self.preferences_dirty = true;
+                    self.ui_state.custom_theme = Some(custom);
+                    self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                    self.ui_state.preferences_dirty = true;
                 }
             }
         }
