@@ -199,6 +199,10 @@ pub struct PanelContext {
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
+    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
+    pub diagnostics_level: String,
+    /// Recent application diagnostics shown in the Messages panel.
+    pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
 }
 
 /// Pre-placement configuration data — shown in Properties panel when Tab pressed.
@@ -2128,26 +2132,76 @@ fn seg_btn<'a>(
 
 fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
-    col = col.push(section_title("Messages", &ctx.tokens));
+    col = col.push(
+        row![
+            section_title("Messages", &ctx.tokens),
+            Space::new().width(Length::Fill).height(Length::Shrink),
+            text(format!("level {}", ctx.diagnostics_level))
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
     col = col.push(separator(&ctx.tokens));
 
-    if ctx.has_schematic {
+    if ctx.diagnostics.is_empty() {
         col = col.push(
-            text("No violations")
+            text("No runtime messages yet")
                 .size(10)
                 .color(theme_ext::success_color(&ctx.tokens)),
         );
         col = col.push(
-            text("Run ERC to check")
+            text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
                 .size(9)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     } else {
-        col = col.push(
-            text("Open a project first")
-                .size(10)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
-        );
+        for entry in ctx.diagnostics.iter().rev() {
+            let level_color = match entry.level {
+                crate::diagnostics::DiagnosticLevel::Error => {
+                    theme_ext::error_color(&ctx.tokens)
+                }
+                crate::diagnostics::DiagnosticLevel::Warning => {
+                    theme_ext::warning_color(&ctx.tokens)
+                }
+                crate::diagnostics::DiagnosticLevel::Info => theme_ext::accent(&ctx.tokens),
+                crate::diagnostics::DiagnosticLevel::Debug
+                | crate::diagnostics::DiagnosticLevel::Trace => {
+                    theme_ext::text_secondary(&ctx.tokens)
+                }
+            };
+
+            col = col.push(
+                container(
+                    column![
+                        row![
+                            text(format!("#{}", entry.id))
+                                .size(9)
+                                .color(theme_ext::text_secondary(&ctx.tokens)),
+                            Space::new().width(6).height(Length::Shrink),
+                            text(entry.level.label())
+                                .size(9)
+                                .color(level_color),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                        text(entry.message.as_str())
+                            .size(10)
+                            .color(theme_ext::text_primary(&ctx.tokens)),
+                    ]
+                    .spacing(3),
+                )
+                .padding([5, 6])
+                .style(move |_theme: &Theme| iced::widget::container::Style {
+                    background: Some(Background::Color(theme_ext::to_color(&ctx.tokens.panel_bg))),
+                    border: Border {
+                        width: 1.0,
+                        radius: 0.0.into(),
+                        color: theme_ext::border_color(&ctx.tokens),
+                    },
+                    ..iced::widget::container::Style::default()
+                }),
+            );
+        }
     }
 
     container(col).width(Length::Fill).into()
