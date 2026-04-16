@@ -127,6 +127,8 @@ impl Signex {
                 component_filter: String::new(),
                 collapsed_sections: std::collections::HashSet::new(),
                 pre_placement: None,
+                diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
+                diagnostics: crate::diagnostics::recent_entries(),
             },
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),

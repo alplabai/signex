@@ -15,6 +15,7 @@ impl Signex {
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        self.sync_diagnostics_panel_ctx();
 
         Task::none()
     }
@@ -180,9 +181,17 @@ impl Signex {
             component_filter,
             collapsed_sections,
             pre_placement,
+            diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
+            diagnostics: crate::diagnostics::recent_entries(),
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
+    }
+
+    fn sync_diagnostics_panel_ctx(&mut self) {
+        self.document_state.panel_ctx.diagnostics_level =
+            crate::diagnostics::configured_level_label().to_string();
+        self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
