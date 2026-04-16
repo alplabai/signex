@@ -48,6 +48,10 @@ pub enum DockMessage {
     ClosePanel(PanelPosition, usize),
     /// Undock a panel to floating (drag tab out).
     UndockPanel(PanelPosition, usize),
+    /// Mouse down on a tab — arms drag-to-undock detection.
+    TabDragStart(PanelPosition, usize),
+    /// Mouse released on a tab — if no undock happened, treat as click → select.
+    TabClick(PanelPosition, usize),
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Move a floating panel by delta.
@@ -171,6 +175,24 @@ impl DockArea {
                     region.panels.remove(idx);
                     if region.active >= region.panels.len() && region.active > 0 {
                         region.active -= 1;
+                    }
+                }
+            }
+            DockMessage::TabDragStart(pos, idx) => {
+                self.tab_drag = Some((pos, idx));
+            }
+            DockMessage::TabClick(pos, idx) => {
+                // Mouse-up on tab: if UndockPanel did not fire, treat as click → select.
+                if self.tab_drag.is_some() {
+                    self.tab_drag = None;
+                    let region = match pos {
+                        PanelPosition::Left => &mut self.left,
+                        PanelPosition::Right => &mut self.right,
+                        PanelPosition::Bottom => &mut self.bottom,
+                    };
+                    if idx < region.panels.len() {
+                        region.active = idx;
+                        region.collapsed = false;
                     }
                 }
             }
@@ -326,14 +348,13 @@ impl DockArea {
             let label_el = container(text(label).size(11).color(text_c))
                 .padding([5, 10])
                 .style(styles::dock_tab_container(&ctx.tokens, is_active));
-            let tab = button(
+            let tab = mouse_area(
                 container(label_el)
                     .padding(iced::Padding { top: 0.0, right: 0.0, bottom: 2.0, left: 0.0 })
                     .style(styles::tab_underline(line_c)),
             )
-            .padding(0)
-            .style(button::text)
-            .on_press(DockMessage::SelectTab(position, i));
+            .on_press(DockMessage::TabDragStart(position, i))
+            .on_release(DockMessage::TabClick(position, i));
 
             tab_row = tab_row.push(tab);
         }

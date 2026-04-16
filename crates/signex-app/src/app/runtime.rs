@@ -70,6 +70,13 @@ impl Signex {
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
+        let page_format_mode = self.document_state.panel_ctx.page_format_mode;
+        let margin_vertical = self.document_state.panel_ctx.margin_vertical;
+        let margin_horizontal = self.document_state.panel_ctx.margin_horizontal;
+        let page_origin = self.document_state.panel_ctx.page_origin;
+        let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
+        let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
+        let sheet_color = self.document_state.panel_ctx.sheet_color;
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
             project_name,
@@ -183,6 +190,14 @@ impl Signex {
             pre_placement,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
+            selection_filters: self.interaction_state.selection_filters.clone(),
+            page_format_mode,
+            margin_vertical,
+            margin_horizontal,
+            page_origin,
+            custom_paper_w_mm,
+            custom_paper_h_mm,
+            sheet_color,
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);

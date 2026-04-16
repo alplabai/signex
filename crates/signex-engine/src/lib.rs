@@ -4,7 +4,7 @@ mod patch;
 
 use std::path::{Path, PathBuf};
 
-pub use command::{Command, CommandKind, MirrorAxis, TextTarget};
+pub use command::{Command, CommandKind, MirrorAxis, SymbolTextField, TextTarget};
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
@@ -187,6 +187,155 @@ impl Engine {
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::TextUpdated,
                     document: document_patch,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateLabelProps {
+                label_id,
+                font_size_mm,
+                justify,
+                rotation_degrees,
+            } => {
+                let changed = self
+                    .document
+                    .labels
+                    .iter_mut()
+                    .find(|l| l.uuid == label_id)
+                    .map(|l| {
+                        let mut any = false;
+                        if let Some(fs) = font_size_mm
+                            && (l.font_size - fs).abs() > 1e-6
+                        {
+                            l.font_size = fs;
+                            any = true;
+                        }
+                        if let Some(j) = justify
+                            && l.justify != j
+                        {
+                            l.justify = j;
+                            any = true;
+                        }
+                        if let Some(r) = rotation_degrees
+                            && (l.rotation - r).abs() > 1e-6
+                        {
+                            l.rotation = r;
+                            any = true;
+                        }
+                        any
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::LabelsMutated,
+                    document: DocumentPatch::LABELS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetSymbolRotation {
+                symbol_id,
+                rotation_degrees,
+            } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        if (s.rotation - rotation_degrees).abs() < 1e-6 {
+                            false
+                        } else {
+                            s.rotation = rotation_degrees;
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SelectionRotated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateSymbolTextSize {
+                symbol_id,
+                field,
+                font_size_mm,
+            } => {
+                use command::SymbolTextField;
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        let tp = match field {
+                            SymbolTextField::Reference => s.ref_text.as_mut(),
+                            SymbolTextField::Value => s.val_text.as_mut(),
+                        };
+                        if let Some(tp) = tp
+                            && (tp.font_size - font_size_mm).abs() > 1e-6
+                        {
+                            tp.font_size = font_size_mm;
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateSymbolLibId { symbol_id, lib_id } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        if s.lib_id == lib_id {
+                            false
+                        } else {
+                            s.lib_id = lib_id;
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
                 };
 
                 self.record_history(before, patch_pair);
@@ -652,7 +801,8 @@ impl Engine {
         match item.kind {
             SelectedKind::Symbol => {
                 let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
-                info.push(("Type".into(), "Symbol".into()));
+                let type_label = if symbol.is_power { "Power Port" } else { "Symbol" };
+                info.push(("Type".into(), type_label.into()));
                 info.push(("Reference".into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
                 info.push(("Library ID".into(), symbol.lib_id.clone()));
@@ -694,7 +844,7 @@ impl Engine {
                     format!("{:.2}, {:.2}", label.position.x, label.position.y),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
-                info.push(("Text Size".into(), format!("{:.2} mm", label.font_size)));
+                info.push(("Text Size".into(), format!("{}", (label.font_size.max(0.0) / 0.18).round() as i32)));
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(label.justify).into(),
@@ -737,7 +887,7 @@ impl Engine {
                     format!("{:.2}, {:.2}", text_note.position.x, text_note.position.y),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
-                info.push(("Text Size".into(), format!("{:.2} mm", text_note.font_size)));
+                info.push(("Text Size".into(), format!("{}", (text_note.font_size.max(0.0) / 0.18).round() as i32)));
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(text_note.justify_h).into(),
@@ -785,7 +935,7 @@ impl Engine {
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
-                info.push(("Text Size".into(), format!("{:.2} mm", ref_text.font_size)));
+                info.push(("Text Size".into(), format!("{}", (ref_text.font_size.max(0.0) / 0.18).round() as i32)));
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(ref_text.justify_h).into(),
@@ -811,7 +961,7 @@ impl Engine {
                     format!("{:.2}, {:.2} mm", value_text.position.x, value_text.position.y),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
-                info.push(("Text Size".into(), format!("{:.2} mm", value_text.font_size)));
+                info.push(("Text Size".into(), format!("{}", (value_text.font_size.max(0.0) / 0.18).round() as i32)));
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(value_text.justify_h).into(),

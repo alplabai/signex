@@ -125,7 +125,7 @@ impl Signex {
             ref_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy - 2.54),
                 rotation,
-                font_size: 1.27,
+                font_size: 1.8,
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
@@ -133,7 +133,7 @@ impl Signex {
             val_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy + 2.54),
                 rotation,
-                font_size: 1.27,
+                font_size: 1.8,
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,

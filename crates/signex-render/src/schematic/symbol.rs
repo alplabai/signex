@@ -410,11 +410,9 @@ fn draw_graphic_text(
     let (wx, wy) = instance_transform(sym, position);
     let sp = transform.to_screen_point(wx, wy);
 
-    let base_size = if font_size > 0.0 {
-        transform.world_len(font_size)
-    } else {
-        transform.world_len(1.27)
-    };
+    // Force 10 pt (1.8 mm) for all symbol-embedded graphic text.
+    let _stored = font_size;
+    let base_size = transform.world_len(crate::SCHEMATIC_TEXT_MM);
     let size = base_size.abs();
     if size < 1.0 {
         return;
