@@ -8,10 +8,12 @@
 
 use iced::Color;
 use iced::widget::canvas::{self, path, LineCap, LineJoin};
+use std::collections::HashMap;
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
+use super::text::display_text_content;
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -76,17 +78,52 @@ pub fn draw_symbol_pins(
     transform: &ScreenTransform,
     pin_color: Color,
 ) {
-    for lp in &lib.pins {
-        // unit 0 = common; otherwise must match sym.unit
-        if lp.unit != 0 && lp.unit != sym.unit {
-            continue;
-        }
-        // Skip De Morgan body style (body_style 2)
-        if lp.body_style != 0 && lp.body_style != 1 {
-            continue;
-        }
-        draw_pin(frame, sym, lib, &lp.pin, transform, pin_color);
+    let visible_pins: Vec<&Pin> = lib
+        .pins
+        .iter()
+        .filter(|lp| (lp.unit == 0 || lp.unit == sym.unit) && lp.pin.visible)
+        .filter(|lp| lp.body_style == 0 || lp.body_style == 1)
+        .map(|lp| &lp.pin)
+        .collect();
+
+    let mut stack_groups: HashMap<(u64, u64, u64), Vec<usize>> = HashMap::new();
+    for (index, pin) in visible_pins.iter().enumerate() {
+        stack_groups.entry(stack_key(pin)).or_default().push(index);
     }
+
+    for (visible_index, pin) in visible_pins.iter().enumerate() {
+        let stack = stack_groups.get(&stack_key(pin));
+        let stack_total = stack.map(|pins| pins.len()).unwrap_or(1);
+        let stack_index = stack
+            .and_then(|pins| pins.iter().position(|idx| *idx == visible_index))
+            .unwrap_or(0);
+        draw_pin(
+            frame,
+            sym,
+            lib,
+            pin,
+            transform,
+            pin_color,
+            StackPlacement {
+                index: stack_index,
+                total: stack_total,
+            },
+        );
+    }
+}
+
+fn stack_key(pin: &Pin) -> (u64, u64, u64) {
+    (
+        pin.position.x.to_bits(),
+        pin.position.y.to_bits(),
+        pin.rotation.to_bits(),
+    )
+}
+
+#[derive(Clone, Copy)]
+struct StackPlacement {
+    index: usize,
+    total: usize,
 }
 
 /// Draw a single pin: line + optional name + optional number.
@@ -97,7 +134,12 @@ fn draw_pin(
     pin: &Pin,
     transform: &ScreenTransform,
     pin_color: Color,
+    stack: StackPlacement,
 ) {
+    if !pin.visible {
+        return;
+    }
+
     // Pin position is the connection point (the end the wire connects to).
     // The pin line extends from the position toward the symbol body.
     let (dir_x, dir_y) = pin_direction(pin);
@@ -137,13 +179,14 @@ fn draw_pin(
 
     // Small circle at the connection point (endpoint) — removed, KiCad doesn't draw this
 
-    // Pin name (outside the body, beyond the endpoint)
+    // Pin name is drawn near the symbol-side end of the pin.
     let font_size_mm = 1.27;
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    let screen_font = transform.world_len(font_size_mm).abs();
 
     if screen_font >= 1.0 && lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
-        let name_offset = lib.pin_name_offset.max(0.5);
-        // Name is placed beyond the body end, offset along pin direction
+        let vertical_gap = if dir_x.abs() < 0.1 { font_size_mm * 0.9 } else { 0.0 };
+        let name_offset = lib.pin_name_offset.max(0.5) + vertical_gap;
+        // Place the name just beyond the pin root toward the symbol side.
         let name_pos = Point::new(
             body_end.x + dir_x * name_offset,
             body_end.y + dir_y * name_offset,
@@ -151,7 +194,7 @@ fn draw_pin(
         let (nwx, nwy) = instance_transform(sym, &name_pos);
         let np = transform.to_screen_point(nwx, nwy);
 
-        // Determine text alignment based on the world-space pin direction
+        // Determine text alignment from the symbol-facing direction.
         let (wdx, _wdy) = instance_rotate_dir(sym, dir_x, dir_y);
         let h_align = if wdx > 0.1 {
             iced::alignment::Horizontal::Left
@@ -162,7 +205,7 @@ fn draw_pin(
         };
 
         let text = canvas::Text {
-            content: pin.name.clone(),
+            content: display_text_content(&pin.name),
             position: np,
             color: pin_color,
             size: iced::Pixels(screen_font),
@@ -208,9 +251,18 @@ fn draw_pin(
         if small_font < 1.0 {
             return;
         }
+        let fanout_step_px = transform.world_len(0.9).max(small_font * 0.8);
+        let stack_center = stack.index as f32 - (stack.total as f32 - 1.0) * 0.5;
+        let line_dx = p2.x - p1.x;
+        let line_dy = p2.y - p1.y;
+        let line_len = (line_dx * line_dx + line_dy * line_dy).sqrt().max(0.001);
+        let stack_np = iced::Point::new(
+            np.x + (line_dx / line_len) * fanout_step_px * stack_center,
+            np.y + (line_dy / line_len) * fanout_step_px * stack_center,
+        );
         let text = canvas::Text {
-            content: pin.number.clone(),
-            position: np,
+            content: display_text_content(&pin.number),
+            position: stack_np,
             color: pin_color,
             size: iced::Pixels(small_font),
             font: crate::canvas_font(),

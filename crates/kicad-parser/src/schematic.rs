@@ -218,6 +218,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let value = symbol_node.property("Value").unwrap_or("").to_string();
     let footprint = symbol_node.property("Footprint").unwrap_or("").to_string();
     let datasheet = symbol_node.property("Datasheet").unwrap_or("").to_string();
+    let description = symbol_node.property("Description").unwrap_or("").to_string();
+    let keywords = symbol_node.property("ki_keywords").unwrap_or("").to_string();
+    let fp_filters = symbol_node.property("ki_fp_filters").unwrap_or("").to_string();
     let in_bom = symbol_node
         .find("in_bom")
         .and_then(|node| node.first_arg())
@@ -228,6 +231,16 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         .and_then(|node| node.first_arg())
         .map(|value| value == "yes")
         .unwrap_or(true);
+    let in_pos_files = symbol_node
+        .find("in_pos_files")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(true);
+    let duplicate_pin_numbers_are_jumpers = symbol_node
+        .find("duplicate_pin_numbers_are_jumpers")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(false);
     let mut graphics = Vec::new();
     let mut pins = Vec::new();
 
@@ -571,6 +584,10 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                 .find("length")
                 .and_then(|l| l.arg_f64(0))
                 .unwrap_or(2.54);
+            let visible = !pin
+                .find("hide")
+                .map(|hide| hide.first_arg().map(|value| value == "yes").unwrap_or(true))
+                .unwrap_or(false);
 
             let name_node = pin.find("name");
             let name = name_node
@@ -597,6 +614,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                     length,
                     name,
                     number,
+                    visible,
                     name_visible,
                     number_visible,
                 },
@@ -610,8 +628,13 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         value,
         footprint,
         datasheet,
+        description,
+        keywords,
+        fp_filters,
         in_bom,
         on_board,
+        in_pos_files,
+        duplicate_pin_numbers_are_jumpers,
         graphics,
         pins,
         show_pin_numbers,
@@ -1675,8 +1698,59 @@ mod tests {
         assert!(!sym.locked);
     }
 
+    #[test]
+    fn parse_lib_symbol_preserves_parent_metadata() {
+        let symbol = sexpr::parse(
+            r#"(symbol "Interface_Ethernet:W5500"
+  (in_bom yes)
+  (on_board yes)
+  (in_pos_files yes)
+  (duplicate_pin_numbers_are_jumpers no)
+  (property "Reference" "U" (id 0) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Value" "W5500" (id 1) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Footprint" "Package_QFP:LQFP-48_7x7mm_P0.5mm" (id 2) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Datasheet" "http://example.invalid/ds.pdf" (id 3) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Description" "Ethernet controller" (id 4) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "ki_keywords" "WIZnet Ethernet" (id 5) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "ki_fp_filters" "LQFP*" (id 6) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (symbol "W5500_0_1")
+  (symbol "W5500_1_1")
+)"#,
+        )
+        .unwrap();
+
+        let parsed = parse_lib_symbol(&symbol);
+        assert_eq!(parsed.description, "Ethernet controller");
+        assert_eq!(parsed.keywords, "WIZnet Ethernet");
+        assert_eq!(parsed.fp_filters, "LQFP*");
+        assert!(parsed.in_pos_files);
+        assert!(!parsed.duplicate_pin_numbers_are_jumpers);
+    }
+
         #[test]
-        fn parse_symbol_and_sheet_instances_and_root_page() {
+        fn parse_lib_symbol_preserves_pin_hide_flag() {
+                let symbol = sexpr::parse(
+                        r#"(symbol "Interface_Ethernet:W5500"
+    (symbol "W5500_1_1"
+        (pin no_connect line
+            (at 20.32 0 0)
+            (length 0)
+            (hide yes)
+            (name "NC" (effects (font (size 1.27 1.27))))
+            (number "7" (effects (font (size 1.27 1.27))))
+        )
+    )
+)"#,
+                )
+                .unwrap();
+
+                let parsed = parse_lib_symbol(&symbol);
+                assert_eq!(parsed.pins.len(), 1);
+                assert!(!parsed.pins[0].pin.visible);
+        }
+
+    #[test]
+    fn parse_symbol_and_sheet_instances_and_root_page() {
                 let content = r#"(kicad_sch
     (version 20231120)
     (generator "test")
@@ -1737,5 +1811,5 @@ mod tests {
                 assert!(matches!(sheet.child_sheets[0].fill, FillType::Background));
                 assert!(sheet.child_sheets[0].fields_autoplaced);
                 assert_eq!(sheet.child_sheets[0].instances[0].page, "2");
-        }
+            }
 }

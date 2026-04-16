@@ -14,6 +14,7 @@ use iced::widget::canvas::{self, path};
 use signex_types::schematic::{HAlign, Label, LabelType};
 
 use super::ScreenTransform;
+use super::text::display_text_content;
 
 pub fn draw_label(
     frame: &mut canvas::Frame,
@@ -26,7 +27,7 @@ pub fn draw_label(
     } else {
         1.27
     };
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
@@ -364,7 +365,7 @@ fn draw_spin_text(
     match spin {
         SpinStyle::Left | SpinStyle::Right => {
             frame.fill_text(canvas::Text {
-                content: label.text.clone(),
+                content: display_text_content(&label.text),
                 position: sp,
                 color,
                 size: iced::Pixels(screen_font),
@@ -385,7 +386,7 @@ fn draw_spin_text(
                 f.translate(iced::Vector::new(sp.x, sp.y));
                 f.rotate(rad);
                 f.fill_text(canvas::Text {
-                    content: label.text.clone(),
+                    content: display_text_content(&label.text),
                     position: iced::Point::ORIGIN,
                     color,
                     size: iced::Pixels(screen_font),

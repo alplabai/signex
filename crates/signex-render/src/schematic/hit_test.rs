@@ -322,6 +322,9 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
             continue;
         }
         let p = &lp.pin;
+        if !p.visible {
+            continue;
+        }
         ext(
             &mut min_x,
             &mut min_y,

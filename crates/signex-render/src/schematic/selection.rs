@@ -167,6 +167,9 @@ fn draw_symbol_selection(
             continue;
         }
         let p = &lp.pin;
+        if !p.visible {
+            continue;
+        }
         ext(
             &mut min_x,
             &mut min_y,
