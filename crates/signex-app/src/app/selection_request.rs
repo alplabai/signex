@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub enum SelectionMessage {
+pub enum SelectionRequest {
     SelectAll,
     StoreSlot { slot: usize },
     RecallSlot { slot: usize },

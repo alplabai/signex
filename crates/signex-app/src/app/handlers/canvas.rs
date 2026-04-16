@@ -8,8 +8,7 @@ use super::super::*;
 
 impl Signex {
     pub(crate) fn handle_layout_drag_started(&mut self, target: DragTarget) {
-        #[cfg(debug_assertions)]
-        eprintln!("[drag] START {:?}", target);
+        crate::diagnostics::log_debug(format!("[drag] START {target:?}"));
         self.interaction_state.dragging = Some(target);
         self.interaction_state.drag_start_pos = None;
         self.interaction_state.drag_start_size = match target {
@@ -86,8 +85,7 @@ impl Signex {
 
     pub(crate) fn handle_layout_drag_finished(&mut self) {
         if self.interaction_state.dragging.is_some() {
-            #[cfg(debug_assertions)]
-            eprintln!("[drag] END");
+            crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;
             self.interaction_state.drag_start_pos = None;
             return;
@@ -99,11 +97,10 @@ impl Signex {
         let (ww, wh) = self.ui_state.window_size;
         let dock_zone = 120.0;
         let has_dragging = self.document_state.dock.floating.iter().any(|fp| fp.dragging);
-        #[cfg(debug_assertions)]
-        eprintln!(
+        crate::diagnostics::log_debug(format!(
             "[dock-end] mouse=({mx:.0},{my:.0}) win=({ww:.0},{wh:.0}) floating={} dragging={has_dragging}",
             self.document_state.dock.floating.len()
-        );
+        ));
         if let Some(drag_idx) = self
             .document_state
             .dock
@@ -120,8 +117,7 @@ impl Signex {
             } else {
                 None
             };
-            #[cfg(debug_assertions)]
-            eprintln!("[dock-end] target={target:?}");
+            crate::diagnostics::log_debug(format!("[dock-end] target={target:?}"));
             if let Some(pos) = target {
                 self.document_state
                     .dock
@@ -328,7 +324,7 @@ impl Signex {
                         self.interaction_state.current_tool = Tool::Select;
                     }
                     _ => {
-                        return self.handle_selection_message(selection_message::SelectionMessage::HitAt {
+                        return self.handle_selection_request(selection_request::SelectionRequest::HitAt {
                             world_x,
                             world_y,
                         });
@@ -399,7 +395,7 @@ impl Signex {
                 }
             }
             CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
-                return self.handle_selection_message(selection_message::SelectionMessage::BoxSelect {
+                return self.handle_selection_request(selection_request::SelectionRequest::BoxSelect {
                     x1,
                     y1,
                     x2,

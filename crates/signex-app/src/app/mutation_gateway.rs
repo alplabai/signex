@@ -78,7 +78,8 @@ impl Signex {
                         }
                     }
                     Err(error) => {
-                        eprintln!("[engine] command execution failed: {error}");
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error("Engine command execution failed", &error);
                         return false;
                     }
                 }
@@ -120,7 +121,8 @@ impl Signex {
             }
             Ok(_) => signex_render::schematic::RenderInvalidation::NONE,
             Err(error) => {
-                eprintln!("[engine] failed to construct engine: {error}");
+                let error = anyhow::Error::new(error);
+                crate::diagnostics::log_error("Engine command failed", &error);
                 signex_render::schematic::RenderInvalidation::NONE
             }
         };
@@ -148,7 +150,8 @@ impl Signex {
                     }
                     Ok(None) => break,
                     Err(error) => {
-                        eprintln!("[engine] undo failed: {error}");
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error("Engine undo failed", &error);
                         return false;
                     }
                 }
@@ -182,7 +185,8 @@ impl Signex {
                     }
                     Ok(None) => break,
                     Err(error) => {
-                        eprintln!("[engine] redo failed: {error}");
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error("Engine redo failed", &error);
                         return false;
                     }
                 }

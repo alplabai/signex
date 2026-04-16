@@ -11,7 +11,7 @@ impl Signex {
                 self.finish_update()
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
-            Message::Selection(msg) => self.handle_selection_message(msg),
+            Message::Selection(request) => self.handle_selection_request(request),
             _ => unreachable!("dispatch_routed_message received non-routed message"),
         }
     }
