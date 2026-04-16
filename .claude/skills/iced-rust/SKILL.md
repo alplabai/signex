@@ -22,18 +22,18 @@ description: >
 
 ## Reference map
 
-| Topic | File |
-|-------|------|
-| Core architecture, run/application, full counter | This file |
-| All widgets — button, text, column, row, container... | `references/widgets.md` |
-| Layout — Length, Fill, Shrink, spacing, padding | `references/layout.md` |
-| Styling — Theme, Palette, custom styles | `references/styling.md` |
-| Task, Subscription, async, channels | `references/async.md` |
-| Custom Widget — Widget trait implementation | `references/custom-widget.md` |
-| Canvas advanced — cache, pan/zoom, hit-test, bezier | `references/canvas-advanced.md` |
-| wgpu integration — GPU shaders inside iced | `references/wgpu-integration.md` |
-| EDA patterns — nanometer coords, undo/redo, multi-tab | `references/eda-patterns.md` |
-| iced_aw — tabs, menu, number_input, card, context_menu | `references/iced-aw.md` |
+| Topic                                                  | File                             |
+| ------------------------------------------------------ | -------------------------------- |
+| Core architecture, run/application, full counter       | This file                        |
+| All widgets — button, text, column, row, container...  | `references/widgets.md`          |
+| Layout — Length, Fill, Shrink, spacing, padding        | `references/layout.md`           |
+| Styling — Theme, Palette, custom styles                | `references/styling.md`          |
+| Task, Subscription, async, channels                    | `references/async.md`            |
+| Custom Widget — Widget trait implementation            | `references/custom-widget.md`    |
+| Canvas advanced — cache, pan/zoom, hit-test, bezier    | `references/canvas-advanced.md`  |
+| wgpu integration — GPU shaders inside iced             | `references/wgpu-integration.md` |
+| EDA patterns — nanometer coords, undo/redo, multi-tab  | `references/eda-patterns.md`     |
+| iced_aw — tabs, menu, number_input, card, context_menu | `references/iced-aw.md`          |
 
 ---
 
@@ -41,12 +41,12 @@ description: >
 
 iced is built on **The Elm Architecture**. Four parts:
 
-| Part | Rust | Description |
-|------|------|-------------|
-| **State** | `struct` | All application data |
-| **Message** | `enum` | Possible interactions |
-| **Update** | `fn update(&mut self, msg: Message)` | Apply message to state |
-| **View** | `fn view(&self) -> Element<Message>` | Produce widget tree from state |
+| Part        | Rust                                 | Description                    |
+| ----------- | ------------------------------------ | ------------------------------ |
+| **State**   | `struct`                             | All application data           |
+| **Message** | `enum`                               | Possible interactions          |
+| **Update**  | `fn update(&mut self, msg: Message)` | Apply message to state         |
+| **View**    | `fn view(&self) -> Element<Message>` | Produce widget tree from state |
 
 ---
 
@@ -118,15 +118,15 @@ pub fn main() -> iced::Result {
 
 Builder methods:
 
-| Method | Description |
-|--------|-------------|
-| `.theme(fn)` | `fn(&State) -> Theme` — dynamic theme |
-| `.title(fn)` | `fn(&State) -> String` — dynamic window title |
-| `.subscription(fn)` | `fn(&State) -> Subscription<Message>` |
-| `.window_size((w, h))` | Initial window dimensions |
-| `.centered()` | Centre on screen at startup |
-| `.antialiasing(bool)` | Anti-aliasing toggle |
-| `.run()` | Start the runtime |
+| Method                 | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| `.theme(fn)`           | `fn(&State) -> Theme` — dynamic theme         |
+| `.title(fn)`           | `fn(&State) -> String` — dynamic window title |
+| `.subscription(fn)`    | `fn(&State) -> Subscription<Message>`         |
+| `.window_size((w, h))` | Initial window dimensions                     |
+| `.centered()`          | Centre on screen at startup                   |
+| `.antialiasing(bool)`  | Anti-aliasing toggle                          |
+| `.run()`               | Start the runtime                             |
 
 ### Boot with init task
 
@@ -171,17 +171,17 @@ iced = { version = "0.14", features = ["tokio", "canvas", "wgpu"] }
 
 Key feature flags:
 
-| Flag | Adds |
-|------|------|
-| `tokio` | Tokio runtime (required for tokio-dependent async Tasks) |
-| `canvas` | Canvas widget — 2D CPU drawing via Frame/Path API |
-| `wgpu` | wgpu backend + custom shader / geometry support |
-| `image` | Image widget (PNG/JPEG display) |
-| `svg` | SVG widget |
-| `tiny-skia` | Software renderer fallback |
-| `highlighter` | Syntax highlighting for TextEditor |
-| `qr_code` | QR code widget |
-| `debug` | F12 debug overlay |
+| Flag          | Adds                                                     |
+| ------------- | -------------------------------------------------------- |
+| `tokio`       | Tokio runtime (required for tokio-dependent async Tasks) |
+| `canvas`      | Canvas widget — 2D CPU drawing via Frame/Path API        |
+| `wgpu`        | wgpu backend + custom shader / geometry support          |
+| `image`       | Image widget (PNG/JPEG display)                          |
+| `svg`         | SVG widget                                               |
+| `tiny-skia`   | Software renderer fallback                               |
+| `highlighter` | Syntax highlighting for TextEditor                       |
+| `qr_code`     | QR code widget                                           |
+| `debug`       | F12 debug overlay                                        |
 
 ---
 
@@ -201,6 +201,11 @@ loop {
 
 - `view` and `subscription` run after every batch of messages.
 - iced 0.14: reactive rendering — only changed regions redrawn.
+
+## Narrow Dock Layout Notes
+
+- In narrow docked side panels, avoid building forms with large fixed pixel label columns plus generous horizontal padding on every row. This combination causes controls to appear shifted right and can clip the trailing edge of inputs, segmented buttons, and number controls.
+- Prefer proportional row layouts such as `Length::FillPortion(...)` for label/control splits in reusable form helpers, and keep row padding modest so the same helpers remain stable across left/right dock widths.
 
 ---
 

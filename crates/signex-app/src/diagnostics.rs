@@ -44,6 +44,7 @@ impl From<Level> for DiagnosticLevel {
 pub struct DiagnosticEntry {
     pub id: u64,
     pub level: DiagnosticLevel,
+    pub code: String,
     pub message: String,
 }
 
@@ -111,10 +112,12 @@ impl Log for SignexLogger {
         }
 
         let rendered = format!("{}", record.args());
+        let (code, message) = summarize_record(record.target(), &rendered);
         push_entry(DiagnosticEntry {
             id: NEXT_ENTRY_ID.fetch_add(1, Ordering::Relaxed),
             level: DiagnosticLevel::from(record.level()),
-            message: rendered.clone(),
+            code,
+            message,
         });
 
         eprintln!("[{}] {rendered}", record.level());
@@ -176,4 +179,109 @@ fn parse_level(level: &str) -> Option<LevelFilter> {
         "trace" => Some(LevelFilter::Trace),
         _ => None,
     }
+}
+
+fn summarize_record(target: &str, rendered: &str) -> (String, String) {
+    if let Some(summary) = summarize_graphics_record(rendered) {
+        return summary;
+    }
+
+    let code = diagnostic_code_from_target(target);
+    let message = compact_message(rendered);
+    (code, message)
+}
+
+fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
+    if rendered.contains("Selected: AdapterInfo") {
+        let adapter = extract_named_field(rendered, "name").unwrap_or_else(|| "Unknown adapter".to_string());
+        let backend = extract_named_field(rendered, "backend").unwrap_or_else(|| "Unknown backend".to_string());
+        return Some((
+            "GPU-ADAPTER-SELECTED".to_string(),
+            format!("Graphics adapter selected: {adapter} ({backend})"),
+        ));
+    }
+
+    if rendered.contains("Available formats:") {
+        let formats = extract_bracket_items(rendered);
+        let preview = join_preview(&formats, 4);
+        let suffix = if formats.len() > 4 { "..." } else { "" };
+        return Some((
+            "GPU-SURFACE-FORMATS".to_string(),
+            format!("Surface formats available: {}{}", preview, suffix),
+        ));
+    }
+
+    if rendered.contains("Available alpha modes:") {
+        let modes = extract_bracket_items(rendered);
+        let preview = join_preview(&modes, 4);
+        return Some((
+            "GPU-ALPHA-MODES".to_string(),
+            format!("Surface alpha modes available: {preview}"),
+        ));
+    }
+
+    None
+}
+
+fn diagnostic_code_from_target(target: &str) -> String {
+    let normalized = target
+        .split("::")
+        .flat_map(|part| part.split(':'))
+        .filter(|part| !part.is_empty())
+        .map(|part| part.replace(|ch: char| !ch.is_ascii_alphanumeric(), "_"))
+        .map(|part| part.to_ascii_uppercase())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+
+    if normalized.is_empty() {
+        "APP-EVENT".to_string()
+    } else {
+        normalized.join("-")
+    }
+}
+
+fn compact_message(rendered: &str) -> String {
+    let compact = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.len() <= 160 {
+        compact
+    } else {
+        format!("{}...", &compact[..157])
+    }
+}
+
+fn extract_named_field(rendered: &str, field_name: &str) -> Option<String> {
+    let marker = format!("{field_name}: ");
+    let start = rendered.find(&marker)? + marker.len();
+    let rest = &rendered[start..];
+    if let Some(stripped) = rest.strip_prefix('"') {
+        let end = stripped.find('"')?;
+        return Some(stripped[..end].to_string());
+    }
+    let end = rest.find([',', '\n', '}']).unwrap_or(rest.len());
+    Some(rest[..end].trim().to_string())
+}
+
+fn extract_bracket_items(rendered: &str) -> Vec<String> {
+    let Some(start) = rendered.find('[') else {
+        return Vec::new();
+    };
+    let Some(end) = rendered.rfind(']') else {
+        return Vec::new();
+    };
+
+    rendered[start + 1..end]
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn join_preview(items: &[String], max_items: usize) -> String {
+    items
+        .iter()
+        .take(max_items)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ")
 }
