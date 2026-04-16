@@ -1,11 +1,11 @@
 //! Selection overlay rendering -- draws highlight around selected elements.
 
-use iced::widget::canvas;
 use iced::Color;
+use iced::widget::canvas;
 
 use signex_types::schematic::*;
 
-use super::ScreenTransform;
+use super::{SchematicRenderSnapshot, ScreenTransform, field_display_pos};
 
 /// Selection outline color (Altium-style — thin outline, no fill).
 const SEL_COLOR: Color = Color {
@@ -15,28 +15,20 @@ const SEL_COLOR: Color = Color {
     a: 0.9,
 };
 
-/// Selection fill — transparent (Altium uses outline only, no filled background).
-const SEL_FILL: Color = Color {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 0.0,
-};
-
 /// Draw selection highlights for all selected items.
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,
-    sheet: &SchematicSheet,
+    sheet: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
 ) {
     for item in selected {
         match item.kind {
             SelectedKind::Symbol => {
-                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
-                    if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-                        draw_symbol_selection(frame, sym, lib_sym, transform);
-                    }
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
+                    && let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
+                {
+                    draw_symbol_selection(frame, sym, lib_sym, transform);
                 }
             }
             SelectedKind::Wire => {
@@ -83,6 +75,23 @@ pub fn draw_selection_overlay(
                 }
             }
             SelectedKind::Drawing => {}
+            SelectedKind::SymbolRefField => {
+                // Highlight just the ref text anchor point
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
+                    && let Some(ref rt) = sym.ref_text
+                {
+                    let (dx, dy) = field_display_pos(&rt.position, sym);
+                    draw_point_selection(frame, dx, dy, transform);
+                }
+            }
+            SelectedKind::SymbolValField => {
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
+                    && let Some(ref vt) = sym.val_text
+                {
+                    let (dx, dy) = field_display_pos(&vt.position, sym);
+                    draw_point_selection(frame, dx, dy, transform);
+                }
+            }
         }
     }
 }
@@ -101,11 +110,17 @@ fn draw_symbol_selection(
     let mut has = false;
 
     for lg in &lib_sym.graphics {
-        if lg.unit != 0 && lg.unit != sym.unit { continue; }
-        if lg.body_style != 0 && lg.body_style != 1 { continue; }
+        if lg.unit != 0 && lg.unit != sym.unit {
+            continue;
+        }
+        if lg.body_style != 0 && lg.body_style != 1 {
+            continue;
+        }
         match &lg.graphic {
             Graphic::Rectangle { start, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has = true;
             }
@@ -116,12 +131,30 @@ fn draw_symbol_selection(
                 }
             }
             Graphic::Circle { center, radius, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x - radius, center.y - radius);
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x + radius, center.y + radius);
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x - radius,
+                    center.y - radius,
+                );
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x + radius,
+                    center.y + radius,
+                );
                 has = true;
             }
-            Graphic::Arc { start, mid, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has = true;
@@ -130,17 +163,33 @@ fn draw_symbol_selection(
         }
     }
     for lp in &lib_sym.pins {
-        if lp.unit != 0 && lp.unit != sym.unit { continue; }
+        if lp.unit != 0 && lp.unit != sym.unit {
+            continue;
+        }
         let p = &lp.pin;
-        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.position.x, p.position.y);
+        ext(
+            &mut min_x,
+            &mut min_y,
+            &mut max_x,
+            &mut max_y,
+            p.position.x,
+            p.position.y,
+        );
         let a = p.rotation.to_radians();
-        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y,
+        ext(
+            &mut min_x,
+            &mut min_y,
+            &mut max_x,
+            &mut max_y,
             p.position.x + p.length * a.cos(),
-            p.position.y + p.length * a.sin());
+            p.position.y + p.length * a.sin(),
+        );
         has = true;
     }
 
-    if !has { return; }
+    if !has {
+        return;
+    }
 
     // Transform lib corners through symbol transform to get screen-space box
     let margin = 0.5; // Tight box like Altium
@@ -171,7 +220,9 @@ fn draw_symbol_selection(
     // Altium-style: thin outline only, no fill, no corner grips
     frame.stroke(
         &path,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.0),
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(1.0),
     );
 
     // Small corner dots (Altium shows small squares at corners)
@@ -192,7 +243,9 @@ fn draw_wire_selection(frame: &mut canvas::Frame, w: &Wire, transform: &ScreenTr
     let path = canvas::Path::line(s, e);
     frame.stroke(
         &path,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(3.0),
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(3.0),
     );
 
     // Endpoint grips
@@ -212,7 +265,9 @@ fn draw_bus_selection(frame: &mut canvas::Frame, b: &Bus, transform: &ScreenTran
     let path = canvas::Path::line(s, e);
     frame.stroke(
         &path,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(4.0),
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(4.0),
     );
     for p in &[s, e] {
         let grip = canvas::Path::rectangle(
@@ -224,21 +279,39 @@ fn draw_bus_selection(frame: &mut canvas::Frame, b: &Bus, transform: &ScreenTran
 }
 
 fn draw_label_selection(frame: &mut canvas::Frame, l: &Label, transform: &ScreenTransform) {
-    let tw = l.text.len() as f64 * l.font_size.max(1.27) * 0.7;
+    let tw = l.text.chars().count() as f64 * l.font_size.max(1.27) * 0.7;
     let th = l.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(l.position.x, l.position.y - th, l.position.x + tw, l.position.y + th * 0.5).expand(0.5);
+    let aabb = Aabb::new(
+        l.position.x,
+        l.position.y - th,
+        l.position.x + tw,
+        l.position.y + th * 0.5,
+    )
+    .expand(0.5);
     draw_rect_highlight(frame, &aabb, transform);
 }
 
 fn draw_text_selection(frame: &mut canvas::Frame, tn: &TextNote, transform: &ScreenTransform) {
-    let tw = tn.text.len() as f64 * tn.font_size.max(1.27) * 0.7;
+    let tw = tn.text.chars().count() as f64 * tn.font_size.max(1.27) * 0.7;
     let th = tn.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(tn.position.x, tn.position.y - th, tn.position.x + tw, tn.position.y + th * 0.5).expand(0.5);
+    let aabb = Aabb::new(
+        tn.position.x,
+        tn.position.y - th,
+        tn.position.x + tw,
+        tn.position.y + th * 0.5,
+    )
+    .expand(0.5);
     draw_rect_highlight(frame, &aabb, transform);
 }
 
 fn draw_sheet_selection(frame: &mut canvas::Frame, cs: &ChildSheet, transform: &ScreenTransform) {
-    let aabb = Aabb::new(cs.position.x, cs.position.y, cs.position.x + cs.size.0, cs.position.y + cs.size.1).expand(1.0);
+    let aabb = Aabb::new(
+        cs.position.x,
+        cs.position.y,
+        cs.position.x + cs.size.0,
+        cs.position.y + cs.size.1,
+    )
+    .expand(1.0);
     draw_rect_highlight(frame, &aabb, transform);
 }
 
@@ -248,7 +321,9 @@ fn draw_point_selection(frame: &mut canvas::Frame, x: f64, y: f64, transform: &S
     let circle = canvas::Path::circle(p, r);
     frame.stroke(
         &circle,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.5),
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(1.5),
     );
 }
 
@@ -257,18 +332,27 @@ fn draw_rect_highlight(frame: &mut canvas::Frame, aabb: &Aabb, transform: &Scree
     let br = transform.to_screen_point(aabb.max_x, aabb.max_y);
     let w = br.x - tl.x;
     let h = br.y - tl.y;
-    if w.abs() < 1.0 || h.abs() < 1.0 { return; }
+    if w.abs() < 1.0 || h.abs() < 1.0 {
+        return;
+    }
 
     // Altium-style: thin outline only, no fill
     let rect = canvas::Path::rectangle(tl, iced::Size::new(w, h));
     frame.stroke(
         &rect,
-        canvas::Stroke::default().with_color(SEL_COLOR).with_width(1.0),
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(1.0),
     );
 
     // Small corner dots
     let dot_sz = 2.0;
-    for p in &[tl, iced::Point::new(br.x, tl.y), br, iced::Point::new(tl.x, br.y)] {
+    for p in &[
+        tl,
+        iced::Point::new(br.x, tl.y),
+        br,
+        iced::Point::new(tl.x, br.y),
+    ] {
         let grip = canvas::Path::rectangle(
             iced::Point::new(p.x - dot_sz, p.y - dot_sz),
             iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
