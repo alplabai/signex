@@ -406,7 +406,7 @@ fn collapsible_section<'a>(
 fn prop_kv_row<'a>(key: &str, value: &str, key_c: Color, val_c: Color) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(key.to_string()).size(10).color(key_c).width(100),
+            text(key.to_string()).size(10).color(key_c).width(84),
             text(value.to_string()).size(10).color(val_c),
         ]
         .spacing(4),
@@ -836,7 +836,7 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-const LABEL_W: f32 = 90.0;
+const LABEL_W: f32 = 76.0;
 
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
