@@ -14,13 +14,21 @@ pub mod symbol;
 pub mod text;
 pub mod wire;
 
-use iced::widget::canvas;
 use iced::Rectangle;
+use iced::widget::canvas;
 
-use signex_types::schematic::{LabelType, SchematicSheet};
+use std::collections::HashMap;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use signex_types::schematic::{
+    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect,
+    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
+};
 use signex_types::theme::CanvasColors;
 
 use crate::colors::to_iced;
+use crate::PowerPortStyle;
 
 // ---------------------------------------------------------------------------
 // ScreenTransform -- decouples rendering from the app-layer Camera
@@ -37,6 +45,294 @@ pub struct ScreenTransform {
     pub offset_y: f32,
     /// Pixels per mm -- higher values mean more zoom.
     pub scale: f32,
+}
+
+/// Render-facing snapshot of the visible schematic.
+///
+/// This trims persistence and document metadata away from the canvas seam while
+/// keeping the fields that rendering, hit-testing, and selection overlays need.
+#[derive(Debug, Clone)]
+pub struct SchematicRenderSnapshot {
+    pub paper_size: String,
+    pub symbols: Vec<Symbol>,
+    pub wires: Vec<Wire>,
+    pub junctions: Vec<Junction>,
+    pub labels: Vec<Label>,
+    pub child_sheets: Vec<ChildSheet>,
+    pub no_connects: Vec<NoConnect>,
+    pub text_notes: Vec<TextNote>,
+    pub buses: Vec<Bus>,
+    pub bus_entries: Vec<BusEntry>,
+    pub drawings: Vec<SchDrawing>,
+    pub lib_symbols: HashMap<String, LibSymbol>,
+    content_bounds: Option<Aabb>,
+}
+
+impl SchematicRenderSnapshot {
+    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self {
+            paper_size: sheet.paper_size.clone(),
+            symbols: sheet.symbols.clone(),
+            wires: sheet.wires.clone(),
+            junctions: sheet.junctions.clone(),
+            labels: sheet.labels.clone(),
+            child_sheets: sheet.child_sheets.clone(),
+            no_connects: sheet.no_connects.clone(),
+            text_notes: sheet.text_notes.clone(),
+            buses: sheet.buses.clone(),
+            bus_entries: sheet.bus_entries.clone(),
+            drawings: sheet.drawings.clone(),
+            lib_symbols: sheet.lib_symbols.clone(),
+            content_bounds: sheet.content_bounds(),
+        }
+    }
+
+    pub fn content_bounds(&self) -> Option<Aabb> {
+        self.content_bounds
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderInvalidation(u16);
+
+impl RenderInvalidation {
+    pub const NONE: Self = Self(0);
+    pub const SYMBOLS: Self = Self(1 << 0);
+    pub const WIRES: Self = Self(1 << 1);
+    pub const LABELS: Self = Self(1 << 2);
+    pub const TEXT_NOTES: Self = Self(1 << 3);
+    pub const BUSES: Self = Self(1 << 4);
+    pub const BUS_ENTRIES: Self = Self(1 << 5);
+    pub const JUNCTIONS: Self = Self(1 << 6);
+    pub const NO_CONNECTS: Self = Self(1 << 7);
+    pub const CHILD_SHEETS: Self = Self(1 << 8);
+    pub const DRAWINGS: Self = Self(1 << 9);
+    pub const LIB_SYMBOLS: Self = Self(1 << 10);
+    pub const PAPER: Self = Self(1 << 11);
+    pub const FULL: Self = Self(u16::MAX);
+
+    pub fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    pub fn intersects(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+
+    pub fn affects_content_bounds(self) -> bool {
+        self.intersects(
+            Self::SYMBOLS
+                | Self::WIRES
+                | Self::LABELS
+                | Self::TEXT_NOTES
+                | Self::BUSES
+                | Self::BUS_ENTRIES
+                | Self::JUNCTIONS
+                | Self::NO_CONNECTS
+                | Self::CHILD_SHEETS
+                | Self::DRAWINGS
+                | Self::FULL,
+        )
+    }
+}
+
+impl std::ops::BitOr for RenderInvalidation {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for RenderInvalidation {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PreparedPreviewGeometry {
+    symbol_positions: HashMap<Uuid, (f32, f32)>,
+    wire_midpoints: HashMap<Uuid, (f32, f32)>,
+    label_positions: HashMap<Uuid, (f32, f32)>,
+    symbol_reference_positions: HashMap<Uuid, (f32, f32)>,
+    symbol_value_positions: HashMap<Uuid, (f32, f32)>,
+}
+
+impl PreparedPreviewGeometry {
+    fn from_snapshot(snapshot: &SchematicRenderSnapshot) -> Self {
+        let mut prepared = Self::default();
+        prepared.refresh(snapshot, RenderInvalidation::FULL);
+        prepared
+    }
+
+    fn refresh(&mut self, snapshot: &SchematicRenderSnapshot, invalidation: RenderInvalidation) {
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
+        {
+            self.symbol_positions = snapshot
+                .symbols
+                .iter()
+                .map(|symbol| {
+                    (
+                        symbol.uuid,
+                        (symbol.position.x as f32, symbol.position.y as f32),
+                    )
+                })
+                .collect();
+            self.symbol_reference_positions = snapshot
+                .symbols
+                .iter()
+                .filter_map(|symbol| {
+                    symbol
+                        .ref_text
+                        .as_ref()
+                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                })
+                .collect();
+            self.symbol_value_positions = snapshot
+                .symbols
+                .iter()
+                .filter_map(|symbol| {
+                    symbol
+                        .val_text
+                        .as_ref()
+                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                })
+                .collect();
+        }
+
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.contains(RenderInvalidation::WIRES)
+        {
+            self.wire_midpoints = snapshot
+                .wires
+                .iter()
+                .map(|wire| {
+                    (
+                        wire.uuid,
+                        (
+                            ((wire.start.x + wire.end.x) / 2.0) as f32,
+                            ((wire.start.y + wire.end.y) / 2.0) as f32,
+                        ),
+                    )
+                })
+                .collect();
+        }
+
+        if invalidation.contains(RenderInvalidation::FULL)
+            || invalidation.contains(RenderInvalidation::LABELS)
+        {
+            self.label_positions = snapshot
+                .labels
+                .iter()
+                .map(|label| (label.uuid, (label.position.x as f32, label.position.y as f32)))
+                .collect();
+        }
+    }
+
+    pub fn symbol_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_positions.get(&uuid).copied()
+    }
+
+    pub fn wire_midpoint(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.wire_midpoints.get(&uuid).copied()
+    }
+
+    pub fn label_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.label_positions.get(&uuid).copied()
+    }
+
+    pub fn symbol_reference_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_reference_positions.get(&uuid).copied()
+    }
+
+    pub fn symbol_value_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
+        self.symbol_value_positions.get(&uuid).copied()
+    }
+}
+
+/// Shared render-cache seam for the visible schematic.
+///
+/// The cache owns an `Arc` to the immutable render snapshot so canvas drawing,
+/// hit-testing, and selection overlays can share one prepared view-model.
+#[derive(Debug, Clone)]
+pub struct SchematicRenderCache {
+    snapshot: Arc<SchematicRenderSnapshot>,
+    prepared_preview: PreparedPreviewGeometry,
+}
+
+impl SchematicRenderCache {
+    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        let snapshot = SchematicRenderSnapshot::from_sheet(sheet);
+        Self {
+            prepared_preview: PreparedPreviewGeometry::from_snapshot(&snapshot),
+            snapshot: Arc::new(snapshot),
+        }
+    }
+
+    pub fn update_from_sheet(
+        &mut self,
+        sheet: &SchematicSheet,
+        invalidation: RenderInvalidation,
+    ) {
+        if invalidation.contains(RenderInvalidation::FULL) {
+            *self = Self::from_sheet(sheet);
+            return;
+        }
+
+        let snapshot = Arc::make_mut(&mut self.snapshot);
+
+        if invalidation.contains(RenderInvalidation::SYMBOLS) {
+            snapshot.symbols = sheet.symbols.clone();
+        }
+        if invalidation.contains(RenderInvalidation::WIRES) {
+            snapshot.wires = sheet.wires.clone();
+        }
+        if invalidation.contains(RenderInvalidation::LABELS) {
+            snapshot.labels = sheet.labels.clone();
+        }
+        if invalidation.contains(RenderInvalidation::TEXT_NOTES) {
+            snapshot.text_notes = sheet.text_notes.clone();
+        }
+        if invalidation.contains(RenderInvalidation::BUSES) {
+            snapshot.buses = sheet.buses.clone();
+        }
+        if invalidation.contains(RenderInvalidation::BUS_ENTRIES) {
+            snapshot.bus_entries = sheet.bus_entries.clone();
+        }
+        if invalidation.contains(RenderInvalidation::JUNCTIONS) {
+            snapshot.junctions = sheet.junctions.clone();
+        }
+        if invalidation.contains(RenderInvalidation::NO_CONNECTS) {
+            snapshot.no_connects = sheet.no_connects.clone();
+        }
+        if invalidation.contains(RenderInvalidation::CHILD_SHEETS) {
+            snapshot.child_sheets = sheet.child_sheets.clone();
+        }
+        if invalidation.contains(RenderInvalidation::DRAWINGS) {
+            snapshot.drawings = sheet.drawings.clone();
+        }
+        if invalidation.contains(RenderInvalidation::LIB_SYMBOLS) {
+            snapshot.lib_symbols = sheet.lib_symbols.clone();
+        }
+        if invalidation.contains(RenderInvalidation::PAPER) {
+            snapshot.paper_size = sheet.paper_size.clone();
+        }
+        if invalidation.affects_content_bounds() {
+            snapshot.content_bounds = sheet.content_bounds();
+        }
+
+        self.prepared_preview.refresh(snapshot, invalidation);
+    }
+
+    pub fn snapshot(&self) -> &SchematicRenderSnapshot {
+        self.snapshot.as_ref()
+    }
+
+    pub fn prepared_preview(&self) -> &PreparedPreviewGeometry {
+        &self.prepared_preview
+    }
 }
 
 impl ScreenTransform {
@@ -64,6 +360,152 @@ impl ScreenTransform {
 }
 
 // ---------------------------------------------------------------------------
+// Shared geometry helpers (used by symbol, drawing, hit_test)
+// ---------------------------------------------------------------------------
+
+/// Compute the circumscribed circle center and radius from three points.
+/// Returns `None` if the points are collinear.
+pub(super) fn circle_from_three_points(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+) -> Option<(f64, f64, f64)> {
+    let d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+    if d.abs() < 1e-10 {
+        return None;
+    }
+    let ux = ((x1 * x1 + y1 * y1) * (y2 - y3)
+        + (x2 * x2 + y2 * y2) * (y3 - y1)
+        + (x3 * x3 + y3 * y3) * (y1 - y2))
+        / d;
+    let uy = ((x1 * x1 + y1 * y1) * (x3 - x2)
+        + (x2 * x2 + y2 * y2) * (x1 - x3)
+        + (x3 * x3 + y3 * y3) * (x2 - x1))
+        / d;
+    let r = ((x1 - ux).powi(2) + (y1 - uy).powi(2)).sqrt();
+    Some((ux, uy, r))
+}
+
+/// Check if `mid_angle` lies between `start_angle` and `end_angle` when
+/// going counter-clockwise from start to end.
+pub(super) fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
+    let tau = std::f64::consts::TAU;
+    let normalize = |a: f64| ((a % tau) + tau) % tau;
+    let s = normalize(start);
+    let m = normalize(mid);
+    let e = normalize(end);
+    if s <= e {
+        s <= m && m <= e
+    } else {
+        m >= s || m <= e
+    }
+}
+
+/// Return symbol field display position.
+///
+/// In our data model, field positions are stored as absolute schematic
+/// coordinates from `.kicad_sch` and should be rendered directly.
+pub(super) fn field_display_pos(
+    prop_pos: &signex_types::schematic::Point,
+    _sym: &signex_types::schematic::Symbol,
+) -> (f64, f64) {
+    (prop_pos.x, prop_pos.y)
+}
+
+/// Compute KiCad-like effective field draw properties under symbol TRANSFORM.
+///
+/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)` where
+/// alignment flips follow transform parity and reading direction.
+pub(super) fn field_effective_style(
+    prop: &signex_types::schematic::TextProp,
+    sym: &signex_types::schematic::Symbol,
+) -> (
+    f64,
+    signex_types::schematic::HAlign,
+    signex_types::schematic::VAlign,
+) {
+    use signex_types::schematic::{HAlign, VAlign};
+
+    let is_horiz = |angle: f64| {
+        let a = angle.rem_euclid(180.0);
+        a < 0.1 || (180.0 - a) < 0.1
+    };
+
+    let rad = sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let sx = if sym.mirror_x { -1.0 } else { 1.0 };
+    let sy = if sym.mirror_y { -1.0 } else { 1.0 };
+
+    // Matrix for field display transform:
+    // [tx]   [x1 x2] [rx]
+    // [ty] = [y1 y2] [ry]
+    let x1 = sy * cos;
+    let x2 = sy * sin;
+    let y1 = sx * sin;
+    let y2 = -sx * cos;
+
+    let orig_horiz = is_horiz(prop.rotation);
+    let screen_horiz = (x1.abs() > 1e-6) ^ !orig_horiz;
+
+    let flip_h = if orig_horiz {
+        if screen_horiz { x1 < 0.0 } else { x2 > 0.0 }
+    } else if screen_horiz {
+        y1 > 0.0
+    } else {
+        y2 < 0.0
+    };
+
+    let mut h = prop.justify_h;
+    if flip_h {
+        h = match h {
+            HAlign::Left => HAlign::Right,
+            HAlign::Right => HAlign::Left,
+            HAlign::Center => HAlign::Center,
+        };
+    }
+
+    let mut v = prop.justify_v;
+    let det = x1 * y2 - x2 * y1;
+    if det < 0.0 && (orig_horiz == (x1 > 0.0)) {
+        v = match v {
+            VAlign::Top => VAlign::Bottom,
+            VAlign::Bottom => VAlign::Top,
+            VAlign::Center => VAlign::Center,
+        };
+    }
+
+    // Keep symbol fields horizontally readable on-screen (Altium-style)
+    // even when the symbol body is rotated.
+    (0.0, h, v)
+}
+
+/// Transform a local library-space point through a symbol instance's
+/// position, rotation, and mirror state, returning a world-space point.
+pub(super) fn instance_transform(
+    sym: &signex_types::schematic::Symbol,
+    local: &signex_types::schematic::Point,
+) -> (f64, f64) {
+    // Step 1: Flip Y — KiCad library coords are Y-up, schematic is Y-down.
+    let x = local.x;
+    let y = -local.y;
+    // Step 2: Rotate by NEGATIVE angle.
+    let rad = -sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
+    // Step 3: Mirror applied AFTER rotation (KiCad convention).
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
+    // Step 4: Translate to world position.
+    (rx + sym.position.x, ry + sym.position.y)
+}
+
+// ---------------------------------------------------------------------------
 // Main render entry point
 // ---------------------------------------------------------------------------
 
@@ -73,7 +515,7 @@ impl ScreenTransform {
 /// on top of lower ones.
 pub fn render_schematic(
     frame: &mut canvas::Frame,
-    sheet: &SchematicSheet,
+    sheet: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
     _bounds: Rectangle,
@@ -87,6 +529,8 @@ pub fn render_schematic(
     let value_color = to_iced(&colors.value);
     let no_connect_color = to_iced(&colors.no_connect);
     let bus_color = to_iced(&colors.bus);
+    let power_color = to_iced(&colors.power);
+    let power_style = crate::power_port_style();
 
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
@@ -131,6 +575,13 @@ pub fn render_schematic(
 
     // Z=10-11: Symbol bodies + pins
     for sym in &sheet.symbols {
+        if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
+            // Altium mode: always render the built-in power marker style,
+            // independent of library symbol body details.
+            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            continue;
+        }
+
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
             symbol::draw_symbol(
                 frame,
@@ -143,39 +594,27 @@ pub fn render_schematic(
             );
 
             // Pins
-            pin::draw_symbol_pins(
-                frame,
-                sym,
-                lib_sym,
-                transform,
-                pin_color,
-            );
+            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_color);
 
             // Reference text — power symbols (#PWR refs) are always hidden
-            if let Some(ref ref_text) = sym.ref_text {
-                if !ref_text.hidden && !sym.is_power {
-                    text::draw_text_prop(
-                        frame,
-                        &sym.reference,
-                        ref_text,
-                        transform,
-                        reference_color,
-                    );
-                }
+            if let Some(ref ref_text) = sym.ref_text
+                && !ref_text.hidden
+                && !sym.is_power
+            {
+                let dpos = field_display_pos(&ref_text.position, sym);
+                text::draw_text_prop(frame, &sym.reference, ref_text, sym, dpos, transform, reference_color);
             }
 
             // Value text
-            if let Some(ref val_text) = sym.val_text {
-                if !val_text.hidden {
-                    text::draw_text_prop(
-                        frame,
-                        &sym.value,
-                        val_text,
-                        transform,
-                        value_color,
-                    );
-                }
+            if let Some(ref val_text) = sym.val_text
+                && !val_text.hidden
+            {
+                let dpos = field_display_pos(&val_text.position, sym);
+                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_color);
             }
+        } else if sym.is_power {
+            // Built-in Altium-style power symbol rendering (no lib_symbol needed)
+            draw_builtin_power(frame, sym, transform, power_color, value_color);
         }
     }
 
@@ -187,5 +626,152 @@ pub fn render_schematic(
     // Z=12: Text notes
     for tn in &sheet.text_notes {
         text::draw_text_note(frame, tn, transform, to_iced(&colors.body));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Built-in Altium-style power symbol rendering
+// ---------------------------------------------------------------------------
+
+/// Draw a built-in power symbol when no lib_symbol definition exists.
+/// Renders Altium-style shapes: GND (3 horizontal lines), VCC (bar + arrow),
+/// Earth (diagonal hatch), Signal GND (triangle), generic (bar + label).
+fn draw_builtin_power(
+    frame: &mut canvas::Frame,
+    sym: &signex_types::schematic::Symbol,
+    transform: &ScreenTransform,
+    color: iced::Color,
+    label_color: iced::Color,
+) {
+    use iced::widget::canvas::path;
+
+    // Keep power symbol stroke consistent with normal wire width.
+    let sw = transform.world_len(0.15).max(1.0);
+    let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+
+    // GND-like symbols should point downward from anchor, VCC-like upward.
+    let id = sym.lib_id.to_lowercase();
+    let is_gnd_like = id.contains("gnd");
+    let dir = if is_gnd_like { -1.0 } else { 1.0 };
+
+    // Pin line: vertical stub from anchor toward symbol body.
+    let pin_len = 1.27;
+    let (p0x, p0y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, 0.0));
+    let (p1x, p1y) = instance_transform(
+        sym,
+        &signex_types::schematic::Point::new(0.0, pin_len * dir),
+    );
+    let s0 = transform.to_screen_point(p0x, p0y);
+    let s1 = transform.to_screen_point(p1x, p1y);
+    frame.stroke(&canvas::Path::line(s0, s1), stroke);
+
+    // Identify power type from lib_id or value
+    let net = sym.value.to_uppercase();
+
+    if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
+        // GND: 3 horizontal lines of decreasing width
+        let bar_w = 2.54;
+        for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
+            let dy = (pin_len + 0.4 * i as f64) * dir;
+            let hw = bar_w * 0.5 * frac;
+            let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, dy));
+            let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, dy));
+            let sl = transform.to_screen_point(lx, ly);
+            let sr = transform.to_screen_point(rx, ry);
+            frame.stroke(&canvas::Path::line(sl, sr), stroke);
+        }
+    } else if id.contains("gndref") {
+        // Signal GND: downward triangle
+        let hw = 1.27;
+        let tri_h = 1.27;
+        let base_y = pin_len * dir;
+        let pts = [
+            signex_types::schematic::Point::new(-hw, base_y),
+            signex_types::schematic::Point::new(hw, base_y),
+            signex_types::schematic::Point::new(0.0, base_y + tri_h * dir),
+        ];
+        let screen_pts: Vec<iced::Point> = pts
+            .iter()
+            .map(|p| {
+                let (wx, wy) = instance_transform(sym, p);
+                transform.to_screen_point(wx, wy)
+            })
+            .collect();
+        let tri = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(screen_pts[0]);
+            b.line_to(screen_pts[1]);
+            b.line_to(screen_pts[2]);
+            b.close();
+        });
+        frame.stroke(&tri, stroke);
+    } else if id.contains("earth") {
+        // Earth: horizontal bar + 3 diagonal hatch lines
+        let bar_w = 2.54;
+        let base_y = pin_len * dir;
+        let hw = bar_w * 0.5;
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
+        // Diagonal hatch lines below bar
+        for i in 0..3 {
+            let x_off = -hw + (i as f64 + 0.5) * (bar_w / 3.0);
+            let (hx1, hy1) = instance_transform(
+                sym,
+                &signex_types::schematic::Point::new(x_off, base_y),
+            );
+            let (hx2, hy2) = instance_transform(
+                sym,
+                &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8 * dir),
+            );
+            frame.stroke(
+                &canvas::Path::line(
+                    transform.to_screen_point(hx1, hy1),
+                    transform.to_screen_point(hx2, hy2),
+                ),
+                stroke,
+            );
+        }
+    } else {
+        // VCC / generic power: horizontal bar at top of pin
+        let bar_w = 2.54;
+        let base_y = pin_len * dir;
+        let hw = bar_w * 0.5;
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
+    }
+
+    // Draw value label on the same side as symbol body.
+    let label_y = (pin_len + 1.5) * dir;
+    let font_size_mm = 1.27;
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    if screen_font >= 1.0 {
+        let (tx, ty) = instance_transform(
+            sym,
+            &signex_types::schematic::Point::new(0.0, label_y),
+        );
+        let sp = transform.to_screen_point(tx, ty);
+        frame.fill_text(canvas::Text {
+            content: net,
+            position: sp,
+            color: label_color,
+            size: iced::Pixels(screen_font),
+            font: crate::canvas_font(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Top,
+            ..canvas::Text::default()
+        });
     }
 }

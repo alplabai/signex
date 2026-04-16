@@ -6,8 +6,8 @@
 //! 2. The pin name (outside the body) if `show_pin_names` is true.
 //! 3. The pin number (inside the body) if `show_pin_numbers` is true.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path, LineCap, LineJoin};
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
@@ -17,25 +17,9 @@ use super::ScreenTransform;
 // Instance transform (duplicated for self-containment -- could be shared)
 // ---------------------------------------------------------------------------
 
+/// Delegate to the shared instance_transform in mod.rs.
 fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
-    // Step 1: Flip Y — lib Y-up → schematic Y-down.
-    let x = local.x;
-    let y = -local.y;
-
-    // Step 2: Rotate by NEGATIVE angle (CCW in Y-up = CW in Y-down).
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
-
-    // Step 3: Mirror AFTER rotation.
-    //   (mirror x) = mirror about X-axis → flip Y
-    //   (mirror y) = mirror about Y-axis → flip X
-    let rx = if sym.mirror_y { -rx } else { rx };
-    let ry = if sym.mirror_x { -ry } else { ry };
-
-    (rx + sym.position.x, ry + sym.position.y)
+    super::instance_transform(sym, local)
 }
 
 /// Apply instance rotation + mirror to a direction vector (no translation).
@@ -69,7 +53,7 @@ fn pin_direction(pin: &Pin) -> (f64, f64) {
     let deg = ((pin.rotation % 360.0) + 360.0) % 360.0;
     match deg as i32 {
         0 => (1.0, 0.0),
-        90 => (0.0, 1.0),   // up in lib Y-up space
+        90 => (0.0, 1.0), // up in lib Y-up space
         180 => (-1.0, 0.0),
         270 => (0.0, -1.0), // down in lib Y-up space
         _ => {
@@ -121,10 +105,7 @@ fn draw_pin(
 
     // Endpoint = position (connection end)
     // Body end = position + direction * length (inside the symbol body)
-    let body_end = Point::new(
-        pin.position.x + dir_x * len,
-        pin.position.y + dir_y * len,
-    );
+    let body_end = Point::new(pin.position.x + dir_x * len, pin.position.y + dir_y * len);
 
     // Transform to world coordinates
     let (wx1, wy1) = instance_transform(sym, &pin.position);
@@ -133,15 +114,16 @@ fn draw_pin(
     let p1 = transform.to_screen_point(wx1, wy1);
     let p2 = transform.to_screen_point(wx2, wy2);
 
-    let stroke_width = (transform.scale * 0.15).max(0.5).min(2.5);
-    let stroke = canvas::Stroke::default()
-        .with_color(pin_color)
-        .with_width(stroke_width);
+    let stroke_width = transform.world_len(0.15).max(0.5);
+    let stroke = canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(pin_color).with_width(stroke_width)
+    };
 
     // INVERTED / INVERTED_CLOCK draw their own (shortened) line inside draw_pin_shape.
     // All other shapes get the full pin line drawn here.
-    let shape_draws_own_line =
-        matches!(pin.shape, PinShape::Inverted | PinShape::InvertedClock);
+    let shape_draws_own_line = matches!(pin.shape, PinShape::Inverted | PinShape::InvertedClock);
     if !shape_draws_own_line {
         let path = canvas::Path::new(|b: &mut path::Builder| {
             b.move_to(p1);
@@ -153,16 +135,13 @@ fn draw_pin(
     // Draw shape decorator at the connection end (p1).
     draw_pin_shape(frame, p1, p2, pin.shape, stroke_width, transform, pin_color);
 
-    // Small circle at the connection point (endpoint)
-    let dot_radius = (transform.scale * 0.2).max(1.0).min(3.0);
-    let dot = canvas::Path::circle(p1, dot_radius);
-    frame.fill(&dot, pin_color);
+    // Small circle at the connection point (endpoint) — removed, KiCad doesn't draw this
 
     // Pin name (outside the body, beyond the endpoint)
     let font_size_mm = 1.27;
-    let screen_font = transform.world_len(font_size_mm).max(6.0);
+    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
 
-    if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
+    if screen_font >= 1.0 && lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
         let name_offset = lib.pin_name_offset.max(0.5);
         // Name is placed beyond the body end, offset along pin direction
         let name_pos = Point::new(
@@ -187,38 +166,56 @@ fn draw_pin(
             position: np,
             color: pin_color,
             size: iced::Pixels(screen_font),
-            font: crate::IOSEVKA,
+            font: crate::canvas_font(),
             align_x: h_align.into(),
-            align_y: iced::alignment::Vertical::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };
         frame.fill_text(text);
     }
 
     // Pin number (inside the body, along the pin line)
-    if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
-        // Number is placed at the midpoint of the pin line, offset slightly
+    if screen_font >= 1.0 && lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+        // Number is placed at the midpoint of the pin line.
         let mid = Point::new(
             pin.position.x + dir_x * len * 0.5,
             pin.position.y + dir_y * len * 0.5,
         );
         let (mwx, mwy) = instance_transform(sym, &mid);
+        let np_base = transform.to_screen_point(mwx, mwy);
 
-        // Offset perpendicular to the pin direction so the number sits above the line
-        let (perp_x, perp_y) = (-dir_y, dir_x);
-        let perp_offset_mm = 0.8;
-        let (wp_dx, wp_dy) = instance_rotate_dir(sym, perp_x * perp_offset_mm, perp_y * perp_offset_mm);
-        let np = transform.to_screen_point(mwx + wp_dx, mwy + wp_dy);
+        // Compute world-space pin direction (screen Y-down system).
+        let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+        let perp_offset_px = transform.world_len(0.8);
 
-        let small_font = (screen_font * 0.8).max(5.0);
+        // Always offset toward screen-up for horizontal pins, screen-left for
+        // vertical pins.  This keeps numbers above (never below) the pin line
+        // regardless of lib-local rotation (0° vs 180° pins agree).
+        let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
+            // Horizontal pin → above line (screen -Y), centered on X.
+            (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
+        } else {
+            // Vertical pin → left of line (screen -X), right-aligned text.
+            (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
+        };
+
+        let np = iced::Point::new(
+            np_base.x + perp_sx * perp_offset_px,
+            np_base.y + perp_sy * perp_offset_px,
+        );
+
+        let small_font = (screen_font * 0.8).abs();
+        if small_font < 1.0 {
+            return;
+        }
         let text = canvas::Text {
             content: pin.number.clone(),
             position: np,
             color: pin_color,
             size: iced::Pixels(small_font),
-            font: crate::IOSEVKA,
-            align_x: iced::alignment::Horizontal::Center.into(),
-            align_y: iced::alignment::Vertical::Center.into(),
+            font: crate::canvas_font(),
+            align_x: num_align.into(),
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };
         frame.fill_text(text);
@@ -293,12 +290,16 @@ fn draw_pin_shape(
     // Forward / low helpers for InputLow, ClockLow, OutputLow.
     // KiCad uses absolute screen-space -Y (up) for horizontal, -X (left) for vertical.
     let is_horiz = bdx.abs() >= bdy.abs();
-    let (fwd_x, fwd_y) = if is_horiz { (bdx, 0.0_f32) } else { (0.0_f32, bdy) };
+    let (fwd_x, fwd_y) = if is_horiz {
+        (bdx, 0.0_f32)
+    } else {
+        (0.0_f32, bdy)
+    };
 
     // Decorator sizes in screen pixels.
-    let radius = transform.world_len(0.508).max(2.0) as f32;
+    let radius = transform.world_len(0.508).max(2.0);
     let diam = radius * 2.0;
-    let clock_size = transform.world_len(0.762).max(2.5) as f32;
+    let clock_size = transform.world_len(0.762).max(2.5);
 
     let stroke = canvas::Stroke::default()
         .with_color(color)

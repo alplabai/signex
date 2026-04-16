@@ -2,8 +2,8 @@
 //! circle, arc, text) with the symbol instance's position/rotation/mirror
 //! transform applied.
 
-use iced::widget::canvas::{self, path};
 use iced::Color;
+use iced::widget::canvas::{self, path, LineCap, LineJoin};
 
 use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
 
@@ -13,41 +13,27 @@ use super::ScreenTransform;
 // Instance transform: position + rotation + mirror
 // ---------------------------------------------------------------------------
 
-/// Transform a local library-space point through the symbol instance's
-/// position, rotation, and mirror state, returning a world-space point.
+/// Delegate to the shared instance_transform in mod.rs.
 fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
-    // Step 1: Flip Y — KiCad library coords are Y-up, schematic is Y-down.
-    let x = local.x;
-    let y = -local.y;
-
-    // Step 2: Rotate by NEGATIVE angle.
-    // KiCad stores rotation as CCW in Y-up (math) space.
-    // After Y-flip we are in Y-down space, so the rotation direction reverses:
-    // CCW in Y-up == CW in Y-down == negative angle in standard math rotation.
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
-
-    // Step 3: Mirror applied AFTER rotation (KiCad convention).
-    //   (mirror x) = mirror about X-axis → flip Y component
-    //   (mirror y) = mirror about Y-axis → flip X component
-    let rx = if sym.mirror_y { -rx } else { rx };
-    let ry = if sym.mirror_x { -ry } else { ry };
-
-    // Step 4: Translate to world position.
-    (rx + sym.position.x, ry + sym.position.y)
+    super::instance_transform(sym, local)
 }
+
+/// KiCad default symbol body stroke width in mm.
+const BODY_DEFAULT_WIDTH_MM: f64 = 0.15;
 
 /// Get the stroke width in screen pixels for a graphic element.
 fn graphic_stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
-    let w = if world_width > 0.0 {
-        transform.world_len(world_width)
-    } else {
-        transform.scale * 0.15
-    };
-    w.max(0.5).min(4.0)
+    let mm = if world_width > 0.0 { world_width } else { BODY_DEFAULT_WIDTH_MM };
+    transform.world_len(mm).max(0.5)
+}
+
+/// Build a square-cap miter-join stroke for body outlines.
+fn body_stroke(color: Color, width: f32) -> canvas::Stroke<'static> {
+    canvas::Stroke {
+        line_cap: LineCap::Square,
+        line_join: LineJoin::Miter,
+        ..canvas::Stroke::default().with_color(color).with_width(width)
+    }
 }
 
 /// Apply fill according to fill type, body_color, body_fill_color.
@@ -92,130 +78,127 @@ pub fn draw_symbol(
     // that happen to reside in an earlier sub-symbol (e.g. Relay_SPDT_0_0 triangle).
     for pass in 0u8..2 {
         for lg in &lib.graphics {
-        // unit 0 = common to all units; otherwise must match symbol's unit
-        if lg.unit != 0 && lg.unit != sym.unit {
-            continue;
-        }
-        // body_style 0 = common; 1 = normal (default). Skip De Morgan (body_style 2).
-        if lg.body_style != 0 && lg.body_style != 1 {
-            continue;
-        }
-        // Pass 0: only background-fill graphics.
-        // Pass 1: everything else (no-fill strokes + outline-fill strokes).
-        let is_bg = graphic_has_background_fill(&lg.graphic);
-        if pass == 0 && !is_bg { continue; }
-        if pass == 1 &&  is_bg { continue; }
-        match &lg.graphic {
-            Graphic::Polyline {
-                points,
-                width,
-                fill,
-            } => {
-                draw_polyline(
-                    frame,
-                    sym,
-                    points,
-                    *width,
-                    *fill,
-                    transform,
-                    body_color,
-                    body_fill_color,
-                );
+            // unit 0 = common to all units; otherwise must match symbol's unit
+            if lg.unit != 0 && lg.unit != sym.unit {
+                continue;
             }
-            Graphic::Rectangle {
-                start,
-                end,
-                width,
-                fill,
-            } => {
-                draw_rectangle(
-                    frame,
-                    sym,
+            // body_style 0 = common; 1 = normal (default). Skip De Morgan (body_style 2).
+            if lg.body_style != 0 && lg.body_style != 1 {
+                continue;
+            }
+            // Pass 0: only background-fill graphics.
+            // Pass 1: everything else (no-fill strokes + outline-fill strokes).
+            let is_bg = graphic_has_background_fill(&lg.graphic);
+            if pass == 0 && !is_bg {
+                continue;
+            }
+            if pass == 1 && is_bg {
+                continue;
+            }
+            match &lg.graphic {
+                Graphic::Polyline {
+                    points,
+                    width,
+                    fill,
+                } => {
+                    draw_polyline(
+                        frame,
+                        sym,
+                        points,
+                        *width,
+                        *fill,
+                        transform,
+                        body_color,
+                        body_fill_color,
+                    );
+                }
+                Graphic::Rectangle {
                     start,
                     end,
-                    *width,
-                    *fill,
-                    transform,
-                    body_color,
-                    body_fill_color,
-                );
-            }
-            Graphic::Circle {
-                center,
-                radius,
-                width,
-                fill,
-            } => {
-                draw_circle(
-                    frame,
-                    sym,
+                    width,
+                    fill,
+                } => {
+                    draw_rectangle(
+                        frame,
+                        sym,
+                        start,
+                        end,
+                        *width,
+                        *fill,
+                        transform,
+                        body_color,
+                        body_fill_color,
+                    );
+                }
+                Graphic::Circle {
                     center,
-                    *radius,
-                    *width,
-                    *fill,
-                    transform,
-                    body_color,
-                    body_fill_color,
-                );
-            }
-            Graphic::Arc {
-                start,
-                mid,
-                end,
-                width,
-                fill,
-            } => {
-                draw_arc(
-                    frame,
-                    sym,
+                    radius,
+                    width,
+                    fill,
+                } => {
+                    draw_circle(
+                        frame,
+                        sym,
+                        center,
+                        *radius,
+                        *width,
+                        *fill,
+                        transform,
+                        body_color,
+                        body_fill_color,
+                    );
+                }
+                Graphic::Arc {
                     start,
                     mid,
                     end,
-                    *width,
-                    *fill,
-                    transform,
-                    body_color,
-                    body_fill_color,
-                );
-            }
-            Graphic::Text {
-                text,
-                position,
-                rotation,
-                font_size,
-                ..
-            } => {
-                draw_graphic_text(
-                    frame,
-                    sym,
+                    width,
+                    fill,
+                } => {
+                    draw_arc(
+                        frame,
+                        sym,
+                        start,
+                        mid,
+                        end,
+                        *width,
+                        *fill,
+                        transform,
+                        body_color,
+                        body_fill_color,
+                    );
+                }
+                Graphic::Text {
                     text,
                     position,
-                    *rotation,
-                    *font_size,
-                    transform,
-                    body_color,
-                );
-            }
-            Graphic::TextBox { .. } => {
-                // TextBox rendering is a v0.5 item
-            }
-            Graphic::Bezier {
-                points,
-                width,
-                fill,
-            } => {
-                draw_bezier(
-                    frame,
-                    sym,
+                    rotation,
+                    font_size,
+                    ..
+                } => {
+                    draw_graphic_text(
+                        frame, sym, text, position, *rotation, *font_size, transform, body_color,
+                    );
+                }
+                Graphic::TextBox { .. } => {
+                    // TextBox rendering is a v0.5 item
+                }
+                Graphic::Bezier {
                     points,
-                    *width,
-                    *fill,
-                    transform,
-                    body_color,
-                    body_fill_color,
-                );
+                    width,
+                    fill,
+                } => {
+                    draw_bezier(
+                        frame,
+                        sym,
+                        points,
+                        *width,
+                        *fill,
+                        transform,
+                        body_color,
+                        body_fill_color,
+                    );
+                }
             }
-        }
         } // end inner for lg
     } // end for pass
 }
@@ -224,10 +207,19 @@ pub fn draw_symbol(
 fn graphic_has_background_fill(g: &Graphic) -> bool {
     matches!(
         g,
-        Graphic::Rectangle { fill: FillType::Background, .. }
-            | Graphic::Polyline { fill: FillType::Background, .. }
-            | Graphic::Circle { fill: FillType::Background, .. }
-            | Graphic::Arc { fill: FillType::Background, .. }
+        Graphic::Rectangle {
+            fill: FillType::Background,
+            ..
+        } | Graphic::Polyline {
+            fill: FillType::Background,
+            ..
+        } | Graphic::Circle {
+            fill: FillType::Background,
+            ..
+        } | Graphic::Arc {
+            fill: FillType::Background,
+            ..
+        }
     )
 }
 
@@ -235,6 +227,7 @@ fn graphic_has_background_fill(g: &Graphic) -> bool {
 // Individual graphic renderers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn draw_polyline(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -267,13 +260,10 @@ fn draw_polyline(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_rectangle(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -304,13 +294,10 @@ fn draw_rectangle(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_circle(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -329,13 +316,10 @@ fn draw_circle(
     let circle = canvas::Path::circle(screen_center, screen_radius);
 
     apply_fill(frame, &circle, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&circle, stroke);
+    frame.stroke(&circle, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_arc(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -401,23 +385,17 @@ fn draw_arc(
         });
 
         apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-        let stroke = canvas::Stroke::default()
-            .with_color(body_color)
-            .with_width(graphic_stroke_width(transform, width));
-        frame.stroke(&path, stroke);
+        frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
     } else {
         // Degenerate: just draw a line from start to end
         let p1 = transform.to_screen_point(sx, sy);
         let p2 = transform.to_screen_point(ex, ey);
         let line = canvas::Path::line(p1, p2);
-        let stroke = canvas::Stroke::default()
-            .with_color(body_color)
-            .with_width(graphic_stroke_width(transform, width));
-        frame.stroke(&line, stroke);
+        frame.stroke(&line, body_stroke(body_color, graphic_stroke_width(transform, width)));
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_graphic_text(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -431,25 +409,30 @@ fn draw_graphic_text(
     let (wx, wy) = instance_transform(sym, position);
     let sp = transform.to_screen_point(wx, wy);
 
-    let size = if font_size > 0.0 {
-        transform.world_len(font_size).max(6.0)
+    let base_size = if font_size > 0.0 {
+        transform.world_len(font_size)
     } else {
-        transform.world_len(1.27).max(6.0)
+        transform.world_len(1.27)
     };
+    let size = (base_size * crate::canvas_font_size_scale()).abs();
+    if size < 1.0 {
+        return;
+    }
 
     let text = canvas::Text {
         content: content.to_string(),
         position: sp,
         color,
         size: iced::Pixels(size),
-        font: crate::IOSEVKA,
+        font: crate::canvas_font(),
         align_x: iced::alignment::Horizontal::Center.into(),
-        align_y: iced::alignment::Vertical::Center.into(),
+        align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()
     };
     frame.fill_text(text);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_bezier(
     frame: &mut canvas::Frame,
     sym: &Symbol,
@@ -483,62 +466,12 @@ fn draw_bezier(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(graphic_stroke_width(transform, width));
-    frame.stroke(&path, stroke);
+    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
 }
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
 
-/// Compute the circumscribed circle center and radius from three points.
-/// Returns `None` if the points are collinear.
-fn circle_from_three_points(
-    x1: f64, y1: f64,
-    x2: f64, y2: f64,
-    x3: f64, y3: f64,
-) -> Option<(f64, f64, f64)> {
-    let ax = x1;
-    let ay = y1;
-    let bx = x2;
-    let by = y2;
-    let cx = x3;
-    let cy = y3;
-
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-10 {
-        return None;
-    }
-
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-
-    let r = ((ax - ux).powi(2) + (ay - uy).powi(2)).sqrt();
-    Some((ux, uy, r))
-}
-
-/// Check if `mid_angle` lies between `start_angle` and `end_angle` when
-/// going counter-clockwise from start to end.
-fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
-    let tau = std::f64::consts::TAU;
-    // Normalize angles to [0, TAU)
-    let normalize = |a: f64| ((a % tau) + tau) % tau;
-    let s = normalize(start);
-    let m = normalize(mid);
-    let e = normalize(end);
-
-    if s <= e {
-        s <= m && m <= e
-    } else {
-        m >= s || m <= e
-    }
-}
+// Geometry helpers — delegated to shared implementations in mod.rs
+use super::{circle_from_three_points, is_angle_between_ccw};

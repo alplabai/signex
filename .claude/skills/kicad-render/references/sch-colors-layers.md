@@ -7,7 +7,7 @@
 
 ## Layer constants (LAYER_* enum)
 
-KiCad `sch_painter.cpp::Draw()` dispatcher item tipine per hangi layer'da
+KiCad `sch_painter.cpp::Draw()` dispatcher item type determines which layer to
 to draw belirler.
 
 | Layer | Constant | Content |
@@ -74,7 +74,7 @@ def get_line_width(item, is_selected=False):
     """KiCad getLineWidth() logic."""
     w = item.get('stroke', {}).get('width', 0)
     if w == 0:
-        # Tip'e per default
+        # Tip is NOT default
         t = item['type']
         if t == 'wire':           w = DEFAULT_WIRE_WIDTH     # 0.0 → tema
         elif t == 'bus':          w = DEFAULT_BUS_WIDTH

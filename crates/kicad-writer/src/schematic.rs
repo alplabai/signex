@@ -120,10 +120,13 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // Title block
     write_title_block(&mut out, sheet);
 
-    // lib_symbols
+    // lib_symbols — sort keys for deterministic output order
     if !sheet.lib_symbols.is_empty() {
         wln!(out, "  (lib_symbols");
-        for (id, lib) in &sheet.lib_symbols {
+        let mut lib_ids: Vec<_> = sheet.lib_symbols.keys().collect();
+        lib_ids.sort();
+        for id in lib_ids {
+            let lib = &sheet.lib_symbols[id];
             write_lib_symbol(&mut out, id, lib);
         }
         wln!(out, "  )");
@@ -132,7 +135,12 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // Junctions
     for j in &sheet.junctions {
         wln!(out, "  (junction");
-        wln!(out, "    (at {} {})", fmt_f64(j.position.x), fmt_f64(j.position.y));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(j.position.x),
+            fmt_f64(j.position.y)
+        );
         wln!(out, "    (diameter 0)");
         wln!(out, "    (color 0 0 0 0)");
         wln!(out, "    (uuid \"{}\")", j.uuid);
@@ -142,7 +150,12 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // No connects
     for nc in &sheet.no_connects {
         wln!(out, "  (no_connect");
-        wln!(out, "    (at {} {})", fmt_f64(nc.position.x), fmt_f64(nc.position.y));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(nc.position.x),
+            fmt_f64(nc.position.y)
+        );
         wln!(out, "    (uuid \"{}\")", nc.uuid);
         wln!(out, "  )");
     }
@@ -154,8 +167,10 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         wln!(
             out,
             "      (xy {} {}) (xy {} {})",
-            fmt_f64(b.start.x), fmt_f64(b.start.y),
-            fmt_f64(b.end.x), fmt_f64(b.end.y)
+            fmt_f64(b.start.x),
+            fmt_f64(b.start.y),
+            fmt_f64(b.end.x),
+            fmt_f64(b.end.y)
         );
         wln!(out, "    )");
         wln!(out, "    (stroke (width 0) (type default) (color 0 0 0 0))");
@@ -166,8 +181,18 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // Bus entries
     for be in &sheet.bus_entries {
         wln!(out, "  (bus_entry");
-        wln!(out, "    (at {} {})", fmt_f64(be.position.x), fmt_f64(be.position.y));
-        wln!(out, "    (size {} {})", fmt_f64(be.size.0), fmt_f64(be.size.1));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(be.position.x),
+            fmt_f64(be.position.y)
+        );
+        wln!(
+            out,
+            "    (size {} {})",
+            fmt_f64(be.size.0),
+            fmt_f64(be.size.1)
+        );
         wln!(out, "    (stroke (width 0) (type default) (color 0 0 0 0))");
         wln!(out, "    (uuid \"{}\")", be.uuid);
         wln!(out, "  )");
@@ -180,8 +205,10 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         wln!(
             out,
             "      (xy {} {}) (xy {} {})",
-            fmt_f64(wire.start.x), fmt_f64(wire.start.y),
-            fmt_f64(wire.end.x), fmt_f64(wire.end.y)
+            fmt_f64(wire.start.x),
+            fmt_f64(wire.start.y),
+            fmt_f64(wire.end.x),
+            fmt_f64(wire.end.y)
         );
         wln!(out, "    )");
         wln!(out, "    (stroke");
@@ -205,7 +232,12 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
     // No ERC directives
     for ne in &sheet.no_erc_directives {
         wln!(out, "  (no_erc");
-        wln!(out, "    (at {} {})", fmt_f64(ne.position.x), fmt_f64(ne.position.y));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(ne.position.x),
+            fmt_f64(ne.position.y)
+        );
         wln!(out, "    (uuid \"{}\")", ne.uuid);
         wln!(out, "  )");
     }
@@ -268,11 +300,18 @@ fn write_label(out: &mut String, l: &Label) {
     wln!(
         out,
         "    (at {} {} {})",
-        fmt_f64(l.position.x), fmt_f64(l.position.y), fmt_f64(l.rotation)
+        fmt_f64(l.position.x),
+        fmt_f64(l.position.y),
+        fmt_f64(l.rotation)
     );
     wln!(out, "    (effects");
     wln!(out, "      (font");
-    wln!(out, "        (size {} {})", fmt_f64(l.font_size), fmt_f64(l.font_size));
+    wln!(
+        out,
+        "        (size {} {})",
+        fmt_f64(l.font_size),
+        fmt_f64(l.font_size)
+    );
     wln!(out, "      )");
     let needs_justify = l.justify != HAlign::Left
         || matches!(l.label_type, LabelType::Global | LabelType::Hierarchical);
@@ -290,7 +329,9 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     wln!(
         out,
         "    (at {} {} {})",
-        fmt_f64(sym.position.x), fmt_f64(sym.position.y), fmt_f64(sym.rotation)
+        fmt_f64(sym.position.x),
+        fmt_f64(sym.position.y),
+        fmt_f64(sym.rotation)
     );
     if sym.mirror_x {
         wln!(out, "    (mirror x)");
@@ -307,8 +348,16 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         "    (exclude_from_sim {})",
         if sym.exclude_from_sim { "yes" } else { "no" }
     );
-    wln!(out, "    (in_bom {})", if sym.in_bom { "yes" } else { "no" });
-    wln!(out, "    (on_board {})", if sym.on_board { "yes" } else { "no" });
+    wln!(
+        out,
+        "    (in_bom {})",
+        if sym.in_bom { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "    (on_board {})",
+        if sym.on_board { "yes" } else { "no" }
+    );
     wln!(out, "    (dnp {})", if sym.dnp { "yes" } else { "no" });
     if sym.fields_autoplaced {
         wln!(out, "    (fields_autoplaced yes)");
@@ -329,14 +378,32 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         "    (property \"Footprint\" \"{}\"",
         escape(&sym.footprint)
     );
-    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+    wln!(
+        out,
+        "      (at {} {} 0)",
+        fmt_f64(sym.position.x),
+        fmt_f64(sym.position.y)
+    );
     wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
     wln!(out, "    )");
 
-    // Custom fields
-    for (key, value) in &sym.fields {
-        wln!(out, "    (property \"{}\" \"{}\"", escape(key), escape(value));
-        wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+    // Custom fields — sort keys for deterministic output order
+    let mut field_keys: Vec<_> = sym.fields.keys().collect();
+    field_keys.sort();
+    for key in field_keys {
+        let value = &sym.fields[key];
+        wln!(
+            out,
+            "    (property \"{}\" \"{}\"",
+            escape(key),
+            escape(value)
+        );
+        wln!(
+            out,
+            "      (at {} {} 0)",
+            fmt_f64(sym.position.x),
+            fmt_f64(sym.position.y)
+        );
         wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
         wln!(out, "    )");
     }
@@ -348,11 +415,7 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym
     // Reconstruct stored rotation (reverse the toggle applied during parsing)
     let sym_90_270 = (sym_rot - 90.0).abs() < 0.1 || (sym_rot - 270.0).abs() < 0.1;
     let stored_rot = if sym_90_270 {
-        if text.rotation.abs() < 0.1 {
-            90.0
-        } else {
-            0.0
-        }
+        if text.rotation.abs() < 0.1 { 90.0 } else { 0.0 }
     } else {
         text.rotation
     };
@@ -361,9 +424,16 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym
     wln!(
         out,
         "      (at {} {} {})",
-        fmt_f64(text.position.x), fmt_f64(text.position.y), fmt_f64(stored_rot)
+        fmt_f64(text.position.x),
+        fmt_f64(text.position.y),
+        fmt_f64(stored_rot)
     );
-    w!(out, "      (effects (font (size {} {}))", fmt_f64(text.font_size), fmt_f64(text.font_size));
+    w!(
+        out,
+        "      (effects (font (size {} {}))",
+        fmt_f64(text.font_size),
+        fmt_f64(text.font_size)
+    );
     if text.hidden {
         w!(out, " (hide yes)");
     }
@@ -391,11 +461,18 @@ fn write_text_note(out: &mut String, note: &TextNote) {
     wln!(
         out,
         "    (at {} {} {})",
-        fmt_f64(note.position.x), fmt_f64(note.position.y), fmt_f64(note.rotation)
+        fmt_f64(note.position.x),
+        fmt_f64(note.position.y),
+        fmt_f64(note.rotation)
     );
     wln!(out, "    (effects");
     wln!(out, "      (font");
-    wln!(out, "        (size {} {})", fmt_f64(note.font_size), fmt_f64(note.font_size));
+    wln!(
+        out,
+        "        (size {} {})",
+        fmt_f64(note.font_size),
+        fmt_f64(note.font_size)
+    );
     wln!(out, "      )");
     wln!(out, "    )");
     wln!(out, "    (uuid \"{}\")", note.uuid);
@@ -404,57 +481,110 @@ fn write_text_note(out: &mut String, note: &TextNote) {
 
 fn write_drawing(out: &mut String, d: &SchDrawing) {
     match d {
-        SchDrawing::Line { uuid, start, end, width } => {
+        SchDrawing::Line {
+            uuid,
+            start,
+            end,
+            width,
+        } => {
             wln!(out, "  (polyline");
             wln!(
                 out,
                 "    (pts (xy {} {}) (xy {} {}))",
-                fmt_f64(start.x), fmt_f64(start.y), fmt_f64(end.x), fmt_f64(end.y)
+                fmt_f64(start.x),
+                fmt_f64(start.y),
+                fmt_f64(end.x),
+                fmt_f64(end.y)
             );
-            wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "    (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
-        SchDrawing::Polyline { uuid, points, width, fill } => {
+        SchDrawing::Polyline {
+            uuid,
+            points,
+            width,
+            fill,
+        } => {
             wln!(out, "  (polyline");
             w!(out, "    (pts");
             for p in points {
                 w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
             }
             wln!(out, ")");
-            wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
             wln!(
                 out,
-                "    (fill (type {}))",
-                fill_type_str(*fill)
+                "    (stroke (width {}) (type default))",
+                fmt_f64(*width)
             );
-            wln!(out, "    (uuid \"{}\")", uuid);
-            wln!(out, "  )");
-        }
-        SchDrawing::Circle { uuid, center, radius, width, fill } => {
-            wln!(out, "  (circle");
-            wln!(out, "    (center {} {})", fmt_f64(center.x), fmt_f64(center.y));
-            wln!(out, "    (radius {})", fmt_f64(*radius));
-            wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
-        SchDrawing::Arc { uuid, start, mid, end, width, fill } => {
+        SchDrawing::Circle {
+            uuid,
+            center,
+            radius,
+            width,
+            fill,
+        } => {
+            wln!(out, "  (circle");
+            wln!(
+                out,
+                "    (center {} {})",
+                fmt_f64(center.x),
+                fmt_f64(center.y)
+            );
+            wln!(out, "    (radius {})", fmt_f64(*radius));
+            wln!(
+                out,
+                "    (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
+            wln!(out, "    (fill (type {}))", fill_type_str(*fill));
+            wln!(out, "    (uuid \"{}\")", uuid);
+            wln!(out, "  )");
+        }
+        SchDrawing::Arc {
+            uuid,
+            start,
+            mid,
+            end,
+            width,
+            fill,
+        } => {
             wln!(out, "  (arc");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (mid {} {})", fmt_f64(mid.x), fmt_f64(mid.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "    (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
-        SchDrawing::Rect { uuid, start, end, width, fill } => {
+        SchDrawing::Rect {
+            uuid,
+            start,
+            end,
+            width,
+            fill,
+        } => {
             wln!(out, "  (rectangle");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(out, "    (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "    (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -464,10 +594,23 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
 
 fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
     wln!(out, "  (sheet");
-    wln!(out, "    (at {} {})", fmt_f64(cs.position.x), fmt_f64(cs.position.y));
-    wln!(out, "    (size {} {})", fmt_f64(cs.size.0), fmt_f64(cs.size.1));
+    wln!(
+        out,
+        "    (at {} {})",
+        fmt_f64(cs.position.x),
+        fmt_f64(cs.position.y)
+    );
+    wln!(
+        out,
+        "    (size {} {})",
+        fmt_f64(cs.size.0),
+        fmt_f64(cs.size.1)
+    );
     wln!(out, "    (uuid \"{}\")", cs.uuid);
-    // Sheetname property
+    // "Sheetname" (one word, no space) is the legacy KiCad 5/6 token that most
+    // KiCad versions accept for backward compatibility.  The parser reads both
+    // this form and the KiCad 7+ "Sheet name" (two words) form; we intentionally
+    // write the legacy form here so exported files open cleanly in older tools.
     wln!(out, "    (property \"Sheetname\" \"{}\"", escape(&cs.name));
     wln!(
         out,
@@ -475,17 +618,27 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
         fmt_f64(cs.position.x),
         fmt_f64(cs.position.y - 1.0)
     );
-    wln!(out, "      (effects (font (size 1.27 1.27)) (justify left bottom))");
+    wln!(
+        out,
+        "      (effects (font (size 1.27 1.27)) (justify left bottom))"
+    );
     wln!(out, "    )");
     // Sheetfile property
-    wln!(out, "    (property \"Sheetfile\" \"{}\"", escape(&cs.filename));
+    wln!(
+        out,
+        "    (property \"Sheetfile\" \"{}\"",
+        escape(&cs.filename)
+    );
     wln!(
         out,
         "      (at {} {} 0)",
         fmt_f64(cs.position.x),
         fmt_f64(cs.position.y + cs.size.1 + 1.0)
     );
-    wln!(out, "      (effects (font (size 1.27 1.27)) (justify left top))");
+    wln!(
+        out,
+        "      (effects (font (size 1.27 1.27)) (justify left top))"
+    );
     wln!(out, "    )");
     // Sheet pins
     for pin in &cs.pins {
@@ -493,9 +646,14 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
         wln!(
             out,
             "      (at {} {} {})",
-            fmt_f64(pin.position.x), fmt_f64(pin.position.y), fmt_f64(pin.rotation)
+            fmt_f64(pin.position.x),
+            fmt_f64(pin.position.y),
+            fmt_f64(pin.rotation)
         );
-        wln!(out, "      (effects (font (size 1.27 1.27)) (justify left))");
+        wln!(
+            out,
+            "      (effects (font (size 1.27 1.27)) (justify left))"
+        );
         wln!(out, "      (uuid \"{}\")", pin.uuid);
         wln!(out, "    )");
     }
@@ -518,7 +676,11 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
             fmt_f64(lib.pin_name_offset)
         );
     } else {
-        wln!(out, "      (pin_names (offset {}))", fmt_f64(lib.pin_name_offset));
+        wln!(
+            out,
+            "      (pin_names (offset {}))",
+            fmt_f64(lib.pin_name_offset)
+        );
     }
 
     // Sub-symbol for graphics
@@ -541,50 +703,117 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
 
 fn write_lib_graphic(out: &mut String, g: &Graphic) {
     match g {
-        Graphic::Polyline { points, width, fill } => {
+        Graphic::Polyline {
+            points,
+            width,
+            fill,
+        } => {
             wln!(out, "        (polyline");
             w!(out, "          (pts");
             for p in points {
                 w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
             }
             wln!(out, ")");
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
-        Graphic::Rectangle { start, end, width, fill } => {
+        Graphic::Rectangle {
+            start,
+            end,
+            width,
+            fill,
+        } => {
             wln!(out, "        (rectangle");
-            wln!(out, "          (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
+            wln!(
+                out,
+                "          (start {} {})",
+                fmt_f64(start.x),
+                fmt_f64(start.y)
+            );
             wln!(out, "          (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
-        Graphic::Circle { center, radius, width, fill } => {
+        Graphic::Circle {
+            center,
+            radius,
+            width,
+            fill,
+        } => {
             wln!(out, "        (circle");
-            wln!(out, "          (center {} {})", fmt_f64(center.x), fmt_f64(center.y));
+            wln!(
+                out,
+                "          (center {} {})",
+                fmt_f64(center.x),
+                fmt_f64(center.y)
+            );
             wln!(out, "          (radius {})", fmt_f64(*radius));
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
-        Graphic::Arc { start, mid, end, width, fill } => {
+        Graphic::Arc {
+            start,
+            mid,
+            end,
+            width,
+            fill,
+        } => {
             wln!(out, "        (arc");
-            wln!(out, "          (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
+            wln!(
+                out,
+                "          (start {} {})",
+                fmt_f64(start.x),
+                fmt_f64(start.y)
+            );
             wln!(out, "          (mid {} {})", fmt_f64(mid.x), fmt_f64(mid.y));
             wln!(out, "          (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
-        Graphic::Text { text, position, rotation, font_size, bold, italic, justify_h, justify_v } => {
+        Graphic::Text {
+            text,
+            position,
+            rotation,
+            font_size,
+            bold,
+            italic,
+            justify_h,
+            justify_v,
+        } => {
             wln!(out, "        (text {:?}", text);
             wln!(
                 out,
                 "          (at {} {} {})",
-                fmt_f64(position.x), fmt_f64(position.y), fmt_f64(*rotation)
+                fmt_f64(position.x),
+                fmt_f64(position.y),
+                fmt_f64(*rotation)
             );
-            w!(out, "          (effects (font (size {} {})", fmt_f64(*font_size), fmt_f64(*font_size));
+            w!(
+                out,
+                "          (effects (font (size {} {})",
+                fmt_f64(*font_size),
+                fmt_f64(*font_size)
+            );
             if *bold {
                 w!(out, " (bold yes)");
             }
@@ -605,17 +834,43 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
             wln!(out, ")");
             wln!(out, "        )");
         }
-        Graphic::TextBox { text, position, rotation, size, font_size, bold, italic, width, fill } => {
+        Graphic::TextBox {
+            text,
+            position,
+            rotation,
+            size,
+            font_size,
+            bold,
+            italic,
+            width,
+            fill,
+        } => {
             wln!(out, "        (text_box {:?}", text);
             wln!(
                 out,
                 "          (at {} {} {})",
-                fmt_f64(position.x), fmt_f64(position.y), fmt_f64(*rotation)
+                fmt_f64(position.x),
+                fmt_f64(position.y),
+                fmt_f64(*rotation)
             );
-            wln!(out, "          (size {} {})", fmt_f64(size.x), fmt_f64(size.y));
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (size {} {})",
+                fmt_f64(size.x),
+                fmt_f64(size.y)
+            );
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
-            w!(out, "          (effects (font (size {} {})", fmt_f64(*font_size), fmt_f64(*font_size));
+            w!(
+                out,
+                "          (effects (font (size {} {})",
+                fmt_f64(*font_size),
+                fmt_f64(*font_size)
+            );
             if *bold {
                 w!(out, " (bold yes)");
             }
@@ -625,14 +880,22 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
             wln!(out, "))");
             wln!(out, "        )");
         }
-        Graphic::Bezier { points, width, fill } => {
+        Graphic::Bezier {
+            points,
+            width,
+            fill,
+        } => {
             wln!(out, "        (bezier");
             wln!(out, "          (pts");
             for p in points {
                 wln!(out, "            (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
             }
             wln!(out, "          )");
-            wln!(out, "          (stroke (width {}) (type default))", fmt_f64(*width));
+            wln!(
+                out,
+                "          (stroke (width {}) (type default))",
+                fmt_f64(*width)
+            );
             wln!(out, "          (fill (type {}))", fill_type_str(*fill));
             wln!(out, "        )");
         }
@@ -649,7 +912,9 @@ fn write_lib_pin(out: &mut String, pin: &Pin) {
     wln!(
         out,
         "          (at {} {} {})",
-        fmt_f64(pin.position.x), fmt_f64(pin.position.y), fmt_f64(pin.rotation)
+        fmt_f64(pin.position.x),
+        fmt_f64(pin.position.y),
+        fmt_f64(pin.rotation)
     );
     wln!(out, "          (length {})", fmt_f64(pin.length));
     wln!(

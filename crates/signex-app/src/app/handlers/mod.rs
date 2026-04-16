@@ -1,0 +1,11 @@
+pub mod active_bar;
+pub mod canvas;
+pub mod clipboard_workflows;
+pub mod document_files;
+pub mod document_tabs;
+pub mod dock;
+pub mod editing_commands;
+pub mod find_replace;
+pub mod menu;
+pub mod preferences;
+pub mod selection_workflow;

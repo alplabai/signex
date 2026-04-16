@@ -5,12 +5,14 @@
 
 use signex_types::schematic::*;
 
+use super::{SchematicRenderSnapshot, field_display_pos, field_effective_style};
+
 /// Threshold distance in mm for considering a click "on" a thin element.
 const HIT_TOLERANCE: f64 = 1.5;
 
 /// Find the topmost element at the given world position.
 /// Elements are tested in reverse z-order (top first) so the first hit wins.
-pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem> {
+pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<SelectedItem> {
     // Labels (topmost in z-order)
     for lbl in &sheet.labels {
         if hit_label(lbl, wx, wy) {
@@ -46,12 +48,30 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
         }
     }
 
+    // Symbol field texts (tested before symbol body so clicking a label
+    // selects the field, not the whole symbol)
+    for sym in &sheet.symbols {
+        if let Some(ref ref_text) = sym.ref_text
+            && !sym.is_power
+            && !ref_text.hidden
+            && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
+        }
+        if let Some(ref val_text) = sym.val_text
+            && !val_text.hidden
+            && hit_text_prop(&sym.value, val_text, sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
+        }
+    }
+
     // Symbols
     for sym in &sheet.symbols {
-        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-            if hit_symbol(sym, lib_sym, wx, wy) {
-                return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
-            }
+        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
+            && hit_symbol(sym, lib_sym, wx, wy)
+        {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
         }
     }
 
@@ -80,7 +100,7 @@ pub fn hit_test(sheet: &SchematicSheet, wx: f64, wy: f64) -> Option<SelectedItem
 }
 
 /// Find all elements within a rectangular region (rubber-band selection).
-pub fn hit_test_rect(sheet: &SchematicSheet, rect: &Aabb) -> Vec<SelectedItem> {
+pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
     let mut result = Vec::new();
 
     for sym in &sheet.symbols {
@@ -144,7 +164,11 @@ fn hit_bus_entry(be: &BusEntry, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_junction(j: &Junction, wx: f64, wy: f64) -> bool {
-    let r = if j.diameter > 0.0 { j.diameter / 2.0 } else { 0.5 };
+    let r = if j.diameter > 0.0 {
+        j.diameter / 2.0
+    } else {
+        0.5
+    };
     let dx = wx - j.position.x;
     let dy = wy - j.position.y;
     (dx * dx + dy * dy).sqrt() < r + HIT_TOLERANCE
@@ -157,7 +181,7 @@ fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
-    let text_width = lbl.text.len() as f64 * lbl.font_size.max(1.27) * 0.7;
+    let text_width = lbl.text.chars().count() as f64 * lbl.font_size.max(1.27) * 0.7;
     let text_height = lbl.font_size.max(1.27) * 1.5;
     let aabb = Aabb::new(
         lbl.position.x,
@@ -170,7 +194,7 @@ fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
-    let text_width = tn.text.len() as f64 * tn.font_size.max(1.27) * 0.7;
+    let text_width = tn.text.chars().count() as f64 * tn.font_size.max(1.27) * 0.7;
     let text_height = tn.font_size.max(1.27) * 1.5;
     let aabb = Aabb::new(
         tn.position.x,
@@ -192,6 +216,46 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
     .contains(wx, wy)
 }
 
+/// Hit-test a text property (reference or value field).
+/// Approximates the text bounding box from character count and font size.
+/// Uses `field_display_pos` so the hit region matches where the text is rendered.
+fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64) -> bool {
+    let font_h = prop.font_size.max(1.27);
+    let char_count = content.chars().count() as f64;
+    // Iosevka is roughly 0.6× monospace: each char ≈ 0.6 × font_h wide.
+    let text_w = char_count * font_h * 0.6;
+    let half_h = font_h * 0.6;
+    let margin = 0.5;
+
+    // Use display position (TRANSFORM applied), not raw stored position.
+    let (disp_x, disp_y) = field_display_pos(&prop.position, sym);
+    let (draw_rotation, justify_h, _justify_v) = field_effective_style(prop, sym);
+
+    // Click relative to text anchor
+    let dx = wx - disp_x;
+    let dy = wy - disp_y;
+
+    // Rotate click into text-local space (KiCad CCW = negate in Y-down)
+    let (ldx, ldy) = if draw_rotation.abs() > 0.1 {
+        let rad = draw_rotation.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        // Rotate by +rotation to undo the text rotation
+        (dx * cos + dy * sin, -dx * sin + dy * cos)
+    } else {
+        (dx, dy)
+    };
+
+    // Text-local bounding box (depends on justification)
+    let (x_lo, x_hi) = match justify_h {
+        HAlign::Left   => (-margin, text_w + margin),
+        HAlign::Right  => (-(text_w + margin), margin),
+        HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),
+    };
+
+    ldx >= x_lo && ldx <= x_hi && ldy >= -(half_h + margin) && ldy <= half_h + margin
+}
+
 fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
     let mut min_x = f64::MAX;
     let mut min_y = f64::MAX;
@@ -208,7 +272,9 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
         }
         match &lg.graphic {
             Graphic::Rectangle { start, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_points = true;
             }
@@ -219,12 +285,30 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                 }
             }
             Graphic::Circle { center, radius, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x - radius, center.y - radius);
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x + radius, center.y + radius);
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x - radius,
+                    center.y - radius,
+                );
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x + radius,
+                    center.y + radius,
+                );
                 has_points = true;
             }
-            Graphic::Arc { start, mid, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_points = true;
@@ -238,7 +322,14 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
             continue;
         }
         let p = &lp.pin;
-        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.position.x, p.position.y);
+        ext(
+            &mut min_x,
+            &mut min_y,
+            &mut max_x,
+            &mut max_y,
+            p.position.x,
+            p.position.y,
+        );
         let angle_rad = p.rotation.to_radians();
         let end_x = p.position.x + p.length * angle_rad.cos();
         let end_y = p.position.y + p.length * angle_rad.sin();
@@ -247,33 +338,47 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
     }
 
     if !has_points {
-        let aabb = Aabb::new(sym.position.x - 5.0, sym.position.y - 5.0, sym.position.x + 5.0, sym.position.y + 5.0);
+        let aabb = Aabb::new(
+            sym.position.x - 5.0,
+            sym.position.y - 5.0,
+            sym.position.x + 5.0,
+            sym.position.y + 5.0,
+        );
         return aabb.contains(wx, wy);
     }
 
     // Transform click into lib-local space
     let (lx, ly) = world_to_lib_space(sym, wx, wy);
-    Aabb::new(min_x, min_y, max_x, max_y).expand(1.0).contains(lx, ly)
+    Aabb::new(min_x, min_y, max_x, max_y)
+        .expand(1.0)
+        .contains(lx, ly)
 }
 
 /// Transform a world point into symbol library-local coordinate space.
+/// Exact inverse of `instance_transform` in symbol.rs:
+///   forward:  Y-flip → rotate(-θ) → mirror → translate
+///   inverse:  un-translate → un-mirror → rotate(+θ) → un-Y-flip
 fn world_to_lib_space(sym: &Symbol, wx: f64, wy: f64) -> (f64, f64) {
-    let mut lx = wx - sym.position.x;
-    let mut ly = wy - sym.position.y;
+    // Step 1: Un-translate
+    let mut dx = wx - sym.position.x;
+    let mut dy = wy - sym.position.y;
 
-    if sym.mirror_x {
-        ly = -ly;
-    }
+    // Step 2: Un-mirror (mirrors are self-inverse, applied in reverse order)
     if sym.mirror_y {
-        lx = -lx;
+        dx = -dx;
+    }
+    if sym.mirror_x {
+        dy = -dy;
     }
 
-    let angle = -sym.rotation.to_radians();
-    let cos_a = angle.cos();
-    let sin_a = angle.sin();
-    let rx = lx * cos_a - ly * sin_a;
-    let ry = lx * sin_a + ly * cos_a;
+    // Step 3: Rotate by +θ (inverse of rotate by -θ)
+    let rad = sym.rotation.to_radians();
+    let cos_a = rad.cos();
+    let sin_a = rad.sin();
+    let rx = dx * cos_a - dy * sin_a;
+    let ry = dx * sin_a + dy * cos_a;
 
+    // Step 4: Un-Y-flip
     (rx, -ry)
 }
 

@@ -1,110 +1,110 @@
-# Pad Token — Detaylı Referans
+# Pad Token — Detailed Reference
 
-## Tam Pad Yapısı
+## Full Pad Structure
 
 ```scheme
-(pad "NUMARA"
-  PAD_TİPİ
-  PAD_ŞEKLİ
-  (at X Y [AÇI])
+(pad "NUMBER"
+  PAD_TYPE
+  PAD_SHAPE
+  (at X Y [ANGLE])
   [(locked)]
-  (size GENİŞLİK YÜKSEKLİK)
-  [(drill DRILL_TANIMI)]
-  (layers "KATMAN_LİSTESİ")
-  [(property PAD_ÖZELLIĞI)]
+  (size WIDTH HEIGHT)
+  [(drill DRILL_DEFINITION)]
+  (layers "LAYER_LIST")
+  [(property PAD_PROPERTY)]
   [(remove_unused_layer)]
   [(keep_end_layers)]
   [(roundrect_rratio 0.0-1.0)]
   [(chamfer_ratio 0.0-1.0)]
   [(chamfer top_left top_right bottom_left bottom_right)]
-  [(net NUMARA "NET_ADI")]
+  [(net NUMBER "NET_NAME")]
   (uuid UUID)
-  [(pinfunction "PIN_FONKSİYONU")]
-  [(pintype "PIN_TİPİ")]
-  [(die_length UZUNLUK)]
+  [(pinfunction "PIN_FUNCTION")]
+  [(pintype "PIN_TYPE")]
+  [(die_length LENGTH)]
   [(solder_mask_margin MM)]
   [(solder_paste_margin MM)]
-  [(solder_paste_margin_ratio ORAN)]
+  [(solder_paste_margin_ratio RATIO)]
   [(clearance MM)]
   [(zone_connect 0|1|2|3)]
   [(thermal_width MM)]
   [(thermal_gap MM)]
-  [(options (clearance outline|convexhull) (anchor rect|circle))]   ; sadece custom pad
-  [(primitives                                                        ; sadece custom pad
-    GRAFIK_ÖGELER...
+  [(options (clearance outline|convexhull) (anchor rect|circle))]   ; custom pad only
+  [(primitives                                                        ; custom pad only
+    GRAPHIC_ITEMS...
     (width MM)
     [(fill yes)]
   )]
 )
 ```
 
-## Pad Tipleri
+## Pad Types
 
-| Token | Açıklama |
+| Token | Description |
 |-------|----------|
-| `thru_hole` | Delikli (through-hole) pad |
-| `smd` | Yüzey montaj (SMD) pad |
-| `connect` | Bağlantı pad'i (net için) |
-| `np_thru_hole` | Delikli ama elektriksiz (non-plated) |
+| `thru_hole` | Through-hole pad |
+| `smd` | Surface mount (SMD) pad |
+| `connect` | Connection pad (for net) |
+| `np_thru_hole` | Through-hole but non-plated |
 
-## Pad Şekilleri
+## Pad Shapes
 
-| Token | Açıklama |
+| Token | Description |
 |-------|----------|
-| `circle` | Daire |
-| `rect` | Dikdörtgen |
+| `circle` | Circle |
+| `rect` | Rectangle |
 | `oval` | Oval |
-| `trapezoid` | Yamuk |
-| `roundrect` | Yuvarlatılmış dikdörtgen (`roundrect_rratio` gerekir) |
-| `custom` | Özel şekil (`primitives` gerekir) |
+| `trapezoid` | Trapezoid |
+| `roundrect` | Rounded rectangle (`roundrect_rratio` required) |
+| `custom` | Custom shape (`primitives` required) |
 
-## Drill Tanımı
+## Drill Definition
 
 ```scheme
-; Yuvarlak delik
-(drill ÇAPI)
+; Round hole
+(drill DIAMETER)
 
-; Oval delik (slot)
-(drill oval ÇAPI SLOT_GENİŞLİĞİ)
+; Oval hole (slot)
+(drill oval DIAMETER SLOT_WIDTH)
 
-; Offset ile
-(drill [oval] ÇAPI [SLOT_GENİŞLİĞİ] (offset X Y))
+; With offset
+(drill [oval] DIAMETER [SLOT_WIDTH] (offset X Y))
 ```
 
-## Pad Özel Özellikleri (`property` token)
+## Pad Special Properties (`property` token)
 
-| Token | Açıklama |
+| Token | Description |
 |-------|----------|
 | `pad_prop_bga` | BGA pad |
 | `pad_prop_fiducial_glob` | Global fiducial |
-| `pad_prop_fiducial_loc` | Lokal fiducial |
-| `pad_prop_testpoint` | Test noktası |
-| `pad_prop_heatsink` | Isı emici |
+| `pad_prop_fiducial_loc` | Local fiducial |
+| `pad_prop_testpoint` | Test point |
+| `pad_prop_heatsink` | Heat sink |
 | `pad_prop_castellated` | Castellated pad |
 
-## Zone Bağlantı Tipleri
+## Zone Connection Types
 
-| Değer | Açıklama |
+| Value | Description |
 |-------|----------|
-| `0` | Zone'a bağlı değil |
-| `1` | Thermal relief ile bağlı |
-| `2` | Solid fill ile bağlı |
-| `3` | Sadece through-hole thermal, SMD solid |
+| `0` | Not connected to zone |
+| `1` | Connected with thermal relief |
+| `2` | Connected with solid fill |
+| `3` | Through-hole thermal only, SMD solid |
 
-## Layer Listesi Örnekleri
+## Layer List Examples
 
 ```scheme
-; SMD pad — ön yüz
+; SMD pad — front side
 (layers "F.Cu F.Paste F.Mask")
 
-; Through-hole pad — her iki yüz + masker
+; Through-hole pad — both sides + mask
 (layers "*.Cu *.Mask")
 
-; Via benzeri — sadece bakır
+; Via-like — copper only
 (layers "*.Cu")
 ```
 
-## Custom Pad Örneği
+## Custom Pad Example
 
 ```scheme
 (pad "1" smd custom
@@ -124,7 +124,7 @@
 )
 ```
 
-## pcbnew API ile Pad Oluşturma
+## Creating Pads with pcbnew API
 
 ```python
 import pcbnew
@@ -132,7 +132,7 @@ import pcbnew
 board = pcbnew.GetBoard()
 fp = board.FindFootprintByReference("U1")
 
-# Yeni pad
+# New pad
 pad = pcbnew.PAD(fp)
 pad.SetNumber("1")
 pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)

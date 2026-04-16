@@ -11,14 +11,18 @@ path = "src/main.rs"
 
 [dependencies]
 signex-types = { workspace = true }
+signex-engine = { workspace = true }
 kicad-parser = { workspace = true }
 kicad-writer = { workspace = true }
 signex-render = { workspace = true }
 iced = { workspace = true }
-# iced_aw = { workspace = true }  # Re-enable when tabs feature is used
+iced_aw = { workspace = true }
+num-traits = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 rfd = { workspace = true }
+fontdb = "0.23"
+log = "0.4"

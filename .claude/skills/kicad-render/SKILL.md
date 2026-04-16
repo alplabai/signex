@@ -1,16 +1,17 @@
 ---
 name: kicad-render
 description: >
-  KiCad S-expression (.kicad_pcb, .kicad_sch) files to visual output
-  Comprehensive render pipeline guide. KiCad kmirrork kodundan (SCH_PAINTER, sch_symbol.cpp,
-  sch_label.cpp) real extracted implementasyon bilgisi contains. Schematic render (wire,
-  bus, symbol, pin, label, junction, sheet), PCB render (track, pad, via, zone), SVG/Canvas
-  output, TRANSFORM matrix calculation, layer compositing, global_label shape geometrisi,
-  PIN_LAYOUT_CACHE, LIB_SYMBOL::Flatten(), unit/bodyStyle filterme, koordinat conversion
-  gibi topics kapsar. "kicad render", "kicad svg", "kicad preview", "schematic to image",
-  "pcb to image", "kicad thumbnail", "kicad canvas", "kicad draw", "kicad visual" gibi
-  ifadelerde mutlaka tetiklenmeli. KiCanvas kullanmadan standalone renderer yazmak
-  when you want de bu skili kullan.
+  Comprehensive render pipeline guide for KiCad S-expression (.kicad_pcb,
+  .kicad_sch) files to visual output. Contains real implementation details
+  extracted from KiCad mirror source (SCH_PAINTER, sch_symbol.cpp,
+  sch_label.cpp). Covers schematic rendering (wire, bus, symbol, pin, label,
+  junction, sheet), PCB rendering (track, pad, via, zone), SVG/Canvas output,
+  TRANSFORM matrix calculation, layer compositing, global_label shape geometry,
+  PIN_LAYOUT_CACHE, LIB_SYMBOL::Flatten(), unit/bodyStyle filtering, and
+  coordinate conversion. Use this skill when writing a standalone renderer
+  without KiCanvas. Trigger on: "kicad render", "kicad svg", "kicad preview",
+  "schematic to image", "pcb to image", "kicad thumbnail", "kicad canvas",
+  "kicad draw", "kicad visual".
 ---
 
 # KiCad S-Expression → Render Guide

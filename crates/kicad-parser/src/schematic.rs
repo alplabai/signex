@@ -222,13 +222,19 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         .find("pin_numbers")
         .map(|pn| {
             // atom form: (pin_numbers hide)
-            if pn.first_arg() == Some("hide") { return false; }
+            if pn.first_arg() == Some("hide") {
+                return false;
+            }
             // list form: (pin_numbers (hide yes)) or (pin_numbers (hide))
             if let Some(h) = pn.find("hide") {
-                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+                return !h.first_arg().map(|v| v == "yes").unwrap_or(true);
             }
             // child atom form: (pin_numbers ... hide ...)
-            if pn.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "hide")) {
+            if pn
+                .children()
+                .iter()
+                .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+            {
                 return false;
             }
             true
@@ -241,10 +247,12 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let show_pin_names = pin_names_node
         .map(|pn| {
             // atom form: (pin_names hide)
-            if pn.first_arg() == Some("hide") { return false; }
+            if pn.first_arg() == Some("hide") {
+                return false;
+            }
             // list form: (pin_names (hide yes)) or (pin_names (hide))
             if let Some(h) = pn.find("hide") {
-                return h.first_arg().map(|v| v == "yes").unwrap_or(true) == false;
+                return !h.first_arg().map(|v| v == "yes").unwrap_or(true);
             }
             // child atom form: (pin_names (offset X) hide)
             !pn.children()
@@ -437,7 +445,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -447,7 +457,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -497,7 +509,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -507,7 +521,9 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .and_then(|b| b.first_arg())
                                 .map(|v| v == "yes")
                                 .unwrap_or_else(|| {
-                                    f.children().iter().any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                    f.children()
+                                        .iter()
+                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -532,13 +548,8 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
         }
 
         // Parse pins
-        for pin in sub
-            .children()
-            .iter()
-            .filter(|c| c.keyword() == Some("pin"))
-        {
-            let pin_type =
-                parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
+        for pin in sub.children().iter().filter(|c| c.keyword() == Some("pin")) {
+            let pin_type = parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
             let shape = parse_pin_shape(pin.arg(1).unwrap_or("line"));
             let (position, rotation) = parse_at(pin);
             let length = pin
@@ -645,6 +656,7 @@ fn parse_wire(node: &SExpr) -> Wire {
         uuid: parse_uuid(node),
         start,
         end,
+        stroke_width: parse_stroke_width(node),
     }
 }
 
@@ -742,7 +754,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .children()
         .iter()
         .find(|c| c.keyword() == Some("property") && c.first_arg() == Some("Value"));
-    let mut ref_text = ref_prop
+    let ref_text = ref_prop
         .map(|p| parse_text_prop(p, position))
         .unwrap_or(TextProp {
             position,
@@ -752,7 +764,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
             justify_v: VAlign::Center,
             hidden: false,
         });
-    let mut val_text = val_prop
+    let val_text = val_prop
         .map(|p| parse_text_prop(p, position))
         .unwrap_or(TextProp {
             position,
@@ -762,24 +774,6 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
             justify_v: VAlign::Center,
             hidden: false,
         });
-
-    // KiCad's GetDrawRotation(): stored angle is toggled (H<->V) when symbol
-    // rotation is 90 or 270 (transform has y1 != 0).
-    // Source: eeschema/sch_field.cpp GetDrawRotation()
-    let sym_90_or_270 = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
-    if sym_90_or_270 {
-        // Toggle: horizontal(0) <-> vertical(90)
-        ref_text.rotation = if ref_text.rotation.abs() < 0.1 {
-            90.0
-        } else {
-            0.0
-        };
-        val_text.rotation = if val_text.rotation.abs() < 0.1 {
-            90.0
-        } else {
-            0.0
-        };
-    }
 
     // Parse custom fields (all properties beyond Reference/Value/Footprint/Datasheet)
     let standard_props = ["Reference", "Value", "Footprint", "Datasheet"];
@@ -1035,6 +1029,10 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         }
     }
 
+    // find_all() only searches direct children of `root` (one level deep), so
+    // it will not descend into lib_symbols sub-symbols.  The `lib_id` filter
+    // is an additional guard: instance symbols always carry a `lib_id` child
+    // whereas lib-definition sub-symbols (e.g. "Device:R_0_1") never do.
     let symbols: Vec<Symbol> = root
         .find_all("symbol")
         .iter()
@@ -1054,10 +1052,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .map(|j| Junction {
             uuid: parse_uuid(j),
             position: parse_at(j).0,
-            diameter: j
-                .find("diameter")
-                .and_then(|d| d.arg_f64(0))
-                .unwrap_or(0.0),
+            diameter: j.find("diameter").and_then(|d| d.arg_f64(0)).unwrap_or(0.0),
         })
         .collect();
 
@@ -1205,7 +1200,7 @@ pub fn parse_schematic_file(path: &Path) -> Result<SchematicSheet, ParseError> {
 // Project parser
 // ---------------------------------------------------------------------------
 
-/// Parse a `.kicad_pro` project file and discover all sheets.
+/// Parse a `.kicad_pro` or `.snxprj` project file and discover all sheets.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
@@ -1214,17 +1209,24 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         .unwrap_or("Untitled")
         .to_string();
 
-    let root_sch_name = format!("{}.kicad_sch", project_name);
-    let root_sch_path = dir.join(&root_sch_name);
-    let schematic_root = if root_sch_path.exists() {
-        Some(root_sch_name.clone())
+    // Look for schematic root: prefer .snxsch, fall back to .kicad_sch
+    let snx_sch_name = format!("{}.snxsch", project_name);
+    let kicad_sch_name = format!("{}.kicad_sch", project_name);
+    let schematic_root = if dir.join(&snx_sch_name).exists() {
+        Some(snx_sch_name)
+    } else if dir.join(&kicad_sch_name).exists() {
+        Some(kicad_sch_name)
     } else {
         None
     };
 
-    let pcb_name = format!("{}.kicad_pcb", project_name);
-    let pcb_file = if dir.join(&pcb_name).exists() {
-        Some(pcb_name)
+    // Look for PCB: prefer .snxpcb, fall back to .kicad_pcb
+    let snx_pcb_name = format!("{}.snxpcb", project_name);
+    let kicad_pcb_name = format!("{}.kicad_pcb", project_name);
+    let pcb_file = if dir.join(&snx_pcb_name).exists() {
+        Some(snx_pcb_name)
+    } else if dir.join(&kicad_pcb_name).exists() {
+        Some(kicad_pcb_name)
     } else {
         None
     };
@@ -1352,7 +1354,7 @@ fn collect_sheets(
         });
 
         for child in child_filenames {
-            // Prevent path traversal via crafted sheet filenames
+            // Prevent path traversal via crafted sheet filenames.
             let child_path = std::path::Path::new(&child);
             let has_traversal = child_path.components().any(|c| {
                 matches!(
@@ -1366,14 +1368,20 @@ fn collect_sheets(
                 continue;
             }
             let joined = dir.join(&child);
-            if joined.exists() {
-                if let Ok(canonical) = joined.canonicalize() {
-                    if let Ok(canonical_dir) = dir.canonicalize() {
-                        if !canonical.starts_with(&canonical_dir) {
-                            continue;
-                        }
+            // Always try to canonicalize rather than checking exists() first:
+            // the exists()+canonicalize() pattern is a TOCTOU race.  If the
+            // file doesn't exist, canonicalize() will return an error and we
+            // simply skip the path; if it does exist we verify it stays within
+            // the project directory before queueing it.
+            if let Ok(canonical) = joined.canonicalize() {
+                if let Ok(canonical_dir) = dir.canonicalize() {
+                    if !canonical.starts_with(&canonical_dir) {
+                        continue;
                     }
                 }
+            } else {
+                // File does not exist (or is otherwise inaccessible) — skip.
+                continue;
             }
             queue.push((child, depth + 1));
         }

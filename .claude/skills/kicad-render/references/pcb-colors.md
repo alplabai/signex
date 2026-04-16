@@ -250,7 +250,7 @@ KiCad `~/.config/kicad/9.0/colors/*.json` tema file format:
 ```
 
 > **Not:** Tema JSON'daki key'ler nokta yerine alt line uses: `F_Cu` not `F.Cu`.
-> Parse ordernda `layer_name.replace('.','_')` ile convert.
+> Parse during `layer_name.replace('.','_')` with convert.
 
 ```python
 def parse_theme_json(json_data):

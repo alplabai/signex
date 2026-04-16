@@ -88,7 +88,7 @@ def transform_point(x1,x2,y1,y2, lx, ly):
 
 ## LIB_SYMBOL::Flatten — inheritance resolution
 
-`extends` keyword ile parent symbolden inheritance alan symboller flatten must be flattened.
+`extends` keyword with parent symbolden inheritance alan symboller flatten must be flattened.
 KiCad C++ `LIB_SYMBOL::Flatten()` parent's drawing items copies.
 
 ```python
@@ -184,8 +184,62 @@ def render_symbol(ctx, instance, lib_symbols, scale):
     # Property metinlerini (reference, value) draw
     for prop in instance.get('properties', []):
         if not prop.get('hide') and prop['key'] in ('Reference','Value'):
-            render_field_text(ctx, prop, tx, scale)
+            render_field_text(ctx, prop, at_x, at_y, tx, scale)
 
+    ctx.restore()
+
+
+def render_field_text(ctx, prop, sym_x, sym_y, tx, scale):
+    """
+    Render a symbol field (Reference or Value) at its DISPLAY position.
+
+    KiCad stores field positions as absolute schematic coordinates in the .kicad_sch
+    file (SCH_FIELD::GetTextPos()). But the RENDERER uses SCH_FIELD::GetPosition(),
+    which applies the symbol's TRANSFORM matrix to the relative field offset:
+
+        rel = field_pos - sym_pos
+        display_rel = TRANSFORM.TransformCoordinate(rel)   # x'=x1*x+x2*y, y'=y1*x+y2*y
+        display_pos = sym_pos + display_rel
+
+    For a 0° symbol (y2=-1 in TRANSFORM), this negates the Y component of the
+    relative offset, effectively mirroring the field to the correct side of the
+    body (e.g. Reference above, Value below for a horizontal resistor).
+
+    Equivalent formula: negate Y of rel, then rotate CCW by sym_rotation.
+
+    tx = (x1, x2, y1, y2) TRANSFORM tuple for the SYMBOL (used only for
+    determining the text rotation via GetDrawRotation, not for the position).
+    """
+    at   = prop.get('at', [0, 0, 0])       # [x, y, angle] in schematic coords
+    fx, fy, field_angle = at[0], at[1], at[2] if len(at) > 2 else 0
+
+    # --- Compute display position (GetPosition() equivalent) ---
+    # TRANSFORM = negate Y of relative offset, then rotate CCW by sym_rotation.
+    # (sym_rotation is embedded in tx via make_transform, but we need the raw angle.)
+    # We recover it from the tx tuple: at 0° tx=(1,0,0,-1), at 90° tx=(0,1,1,0), etc.
+    x1, x2, y1, y2 = tx
+    rel_x = fx - sym_x
+    rel_y = fy - sym_y
+    disp_x = x1 * rel_x + x2 * rel_y
+    disp_y = y1 * rel_x + y2 * rel_y
+    px = (sym_x + disp_x) * scale
+    py = -(sym_y + disp_y) * scale  # Y-down for canvas
+
+    # --- Text rotation: GetDrawRotation() toggles when y1 != 0 (90°/270°) ---
+    draw_angle = field_angle
+    if y1 != 0:   # symbol is 90° or 270° rotated
+        draw_angle = 90.0 if field_angle == 0.0 else 0.0
+
+    # --- Draw ---
+    ctx.save()
+    ctx.translate(px, py)
+    if abs(draw_angle) > 0.1:
+        ctx.rotate(-math.radians(draw_angle))  # canvas CW-positive, so negate CCW angle
+    ctx.font      = f"{1.27 * scale}px KiCad Font, monospace"
+    ctx.fillStyle = REFERENCE_COLOR if prop['key'] == 'Reference' else VALUE_COLOR
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(prop.get('value', ''), 0, 0)
     ctx.restore()
 
 
@@ -219,7 +273,7 @@ def render_lib_primitive(ctx, prim, tx, scale):
     elif t == 'circle':
         cx,cy  = prim['center']
         radius = prim['radius']
-        # Merkezi transform'dan passir; radius scale ile scales
+        # Pass center through transform; radius scale with scales
         px, py = tp(cx, cy)
         ctx.beginPath()
         ctx.arc(px, py, radius*scale, 0, 2*math.pi)
@@ -372,24 +426,24 @@ def _render_pin_label(ctx, text, px, py, ex, ey, role, scale):
 ## Critical pitfalls (extracted from source code)
 
 1. **TRANSFORM Y convertme:** Lib coordinates Y up positive. `tp()` function
-   hem transform applyr hem `-ny` ile canvas Y'ye convertir. Bunu iki kez yapma.
+   both applies transform and `-ny` with canvas to canvas Y. Do not do this twice.
 
 2. **unit=0 common grafikler:** Alt-symbol ismi `_0_`contains , all units.
    are drawn. `filter_units` functionnda `child_unit == 0` checking mandatory.
 
-3. **LIB_SYMBOL::Flatten:** `extends` ile inheritance alan symbollerde parent's
+3. **LIB_SYMBOL::Flatten:** `extends` with inheritance symbols parent's
    drawing items **first** gelmeli (child under the child) are drawn). Speciallikle `Device:C`
    gibi symboller another bir base symbolden extend eder.
 
 4. **Pin angles tam derece:** Lib pin `at[2]` tam derece (90, 180, 270, 0).
-   Symbol instance `at[2]` de tam derece. `round(angle/90)*90` ile snaple.
+   Symbol instance `at[2]` is also full degrees. `round(angle/90)*90` with snaple.
 
 5. **De Morgan (bodyStyle=2):** Logic gates alternatif symbol shape.
    `_X_2` sub-symbol. Basit render for `body_style=1` sufficient.
 
 6. **PIN_LAYOUT_CACHE:** KiCad C++ expensive text extent calculations cache'ler.
-   Python'da `ctx.measureText()` ile approximation sufficient; her pin for
+   Python'da `ctx.measureText()` with approximation sufficient; for each pin
    separateca cache tutmana gerek yok.
 
 7. **Symbol fields (Reference, Value):** `at` coordinates GLOBAL coordinates —
-   instance `at`'e per offset NOT. Direkt sch_to_px ile convert.
+   instance `at`'e is NOT offset. Direkt sch_to_px with convert.

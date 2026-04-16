@@ -183,7 +183,7 @@ PCB_RENDER_ORDER = [
 
 ## Layer visibility management
 
-Minimal renderer for hangi layersn visible  kontrol et:
+Minimal renderer for which layers are visible:
 
 ```python
 # Preview for default visible layer'lar

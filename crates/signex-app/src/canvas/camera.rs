@@ -26,8 +26,9 @@ impl Default for Camera {
 }
 
 impl Camera {
-    pub const MIN_SCALE: f32 = 0.05;
-    pub const MAX_SCALE: f32 = 200.0;
+    // 3.0 scale = 100%, so 25%..1600% => 0.75..48.0
+    pub const MIN_SCALE: f32 = 0.75;
+    pub const MAX_SCALE: f32 = 48.0;
     pub const ZOOM_FACTOR: f32 = 1.1;
 
     /// Convert world coordinates (mm) to screen coordinates (pixels).
@@ -54,7 +55,11 @@ impl Camera {
 
     /// Zoom centered on a screen-space point.
     /// `scroll_y` > 0 = zoom in, < 0 = zoom out.
-    pub fn zoom_at(&mut self, screen_pos: Point, scroll_y: f32, _bounds: Rectangle) {
+    pub fn zoom_at(&mut self, screen_pos: Point, scroll_y: f32, _bounds: Rectangle) -> bool {
+        if scroll_y == 0.0 {
+            return false;
+        }
+
         let factor = if scroll_y > 0.0 {
             Self::ZOOM_FACTOR
         } else {
@@ -62,12 +67,17 @@ impl Camera {
         };
 
         let new_scale = (self.scale * factor).clamp(Self::MIN_SCALE, Self::MAX_SCALE);
+        if (new_scale - self.scale).abs() < f32::EPSILON {
+            return false;
+        }
+
         let actual_factor = new_scale / self.scale;
 
         // Adjust offset so the point under the cursor stays fixed
         self.offset.x = screen_pos.x - (screen_pos.x - self.offset.x) * actual_factor;
         self.offset.y = screen_pos.y - (screen_pos.y - self.offset.y) * actual_factor;
         self.scale = new_scale;
+        true
     }
 
     /// Fit a world-space rectangle into the viewport with some padding.

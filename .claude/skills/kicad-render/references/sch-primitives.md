@@ -18,7 +18,7 @@ def render_wire(ctx, item, scale):
     ctx.lineCap     = 'round'
     ctx.stroke()
 
-# bus: tamamen same, sadece daha thick + different color
+# bus: exactly the same, only thicker + different color
 def render_bus(ctx, item, scale):
     p = item['pts']
     ctx.beginPath()
@@ -181,14 +181,14 @@ KiCad kmirrork: `sch_label.cpp::GetSchematicTextOffset`, `sch_painter.cpp`.
 ### Shape polygons
 
 `shape` value per different poligon frame are drawn.
-`tw` = metin piksel width (mm cinsinden), `h` = margin (≈1.27mm).
+`tw` = metin piksel width (in mm), `h` = margin (≈1.27mm).
 
 ```python
 def label_polygon(shape, tw_mm, h=1.27):
     """
     shape: 'input'|'output'|'bidirectional'|'tri_state'|'passive'
     Returned pts: (x,y) listesi, origin connection point.
-    All dimensions mm cinsinden; render ordernda scale ile multiply by scale.
+    All dimensions in mm; render during scale with multiply by scale.
     """
     w = tw_mm + h          # toplam width
     if shape == 'input':
@@ -201,7 +201,7 @@ def label_polygon(shape, tw_mm, h=1.27):
         # Her iki tarafta ok
         return [(0,0), (h,-h), (w,-h), (w+h,0), (w,h), (h,h)]
     elif shape == 'tri_state':
-        # bidirectional ile same shape
+        # bidirectional with same shape
         return label_polygon('bidirectional', tw_mm, h)
     else:  # passive
         # Plain rectangle
@@ -235,7 +235,7 @@ def render_global_label(ctx, item, scale):
     ctx.lineWidth   = 0.15 * scale
     ctx.stroke()
 
-    # Text (frame forde, margin kadar indented)
+    # Text (inside frame, margin up to indented)
     margin = 1.27 * scale
     ctx.font        = f"{size_h*scale}px KiCad Font, monospace"
     ctx.fillStyle   = GLOBAL_LABEL_COLOR
@@ -317,7 +317,7 @@ def render_sheet_pin(ctx, pin, scale):
 
 ## Full schematic render order
 
-KiCad `sch_painter.cpp` layer orderndan derived:
+KiCad `sch_painter.cpp` layer duringn derived:
 
 ```python
 def render_schematic(ctx, sch, scale):

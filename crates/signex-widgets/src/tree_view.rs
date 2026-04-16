@@ -9,17 +9,33 @@
 //!   - text-secondary default → text-primary on selected
 //!   - hover bg, selection bg, "(empty)" indicator
 
-use iced::widget::{button, container, scrollable, svg, text, Column, Row, Space};
+use std::sync::OnceLock;
+
+use iced::widget::{Column, Row, Space, button, container, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
-// ─── SVG Chevron Icons ────────────────────────────────────────
+// ─── SVG Chevron Icons (cached handles) ──────────────────────
 
-const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="black"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="black"/></svg>"#;
+const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
+const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
 
-use crate::theme_ext;
+fn chevron_right_handle() -> svg::Handle {
+    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
+    HANDLE
+        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
+        .clone()
+}
+
+fn chevron_down_handle() -> svg::Handle {
+    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
+    HANDLE
+        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
+        .clone()
+}
+
 use crate::PushIf;
+use crate::theme_ext;
 
 // ─── Data Model ───────────────────────────────────────────────
 
@@ -118,15 +134,14 @@ pub enum TreeMsg {
 // ─── Layout Constants (matched to Altium Designer) ────────────
 
 const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
-const BASE_PAD_LEFT: f32 = 4.0;     // minimal base indent
-const ELEM_GAP: f32 = 2.0;          // Altium: very tight gaps
-const CHEVRON_W: f32 = 10.0;        // triangle column
-const ICON_SZ: f32 = 13.0;          // Altium: small colored icons
-const FONT_SZ: f32 = 12.0;          // body text
-const CHEVRON_SZ: f32 = 10.0;       // large triangle glyphs at small font = visible + centered
-const BADGE_SZ: f32 = 10.0;         // muted counts
-const PAD_V: u16 = 2;               // Altium: compact rows (~20px total)
-const PAD_R: u16 = 4;               // minimal right margin
+const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
+const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
+const CHEVRON_W: f32 = 10.0; // triangle column
+const ICON_SZ: f32 = 13.0; // Altium: small colored icons
+const FONT_SZ: f32 = 12.0; // body text
+const BADGE_SZ: f32 = 10.0; // muted counts
+const PAD_V: u16 = 2; // Altium: compact rows (~20px total)
+const PAD_R: u16 = 4; // minimal right margin
 
 // ─── TreeView (COSMIC composition struct) ─────────────────────
 
@@ -160,8 +175,7 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
-        let mut col: Column<'static, TreeMsg> =
-            Column::new().spacing(0.0).width(Length::Fill);
+        let mut col: Column<'static, TreeMsg> = Column::new().spacing(0.0).width(Length::Fill);
         for (i, node) in self.roots.iter().enumerate() {
             col = render_node(col, node, 0, &[i], self.selected, self.tokens);
         }
@@ -214,12 +228,11 @@ fn render_node(
 
     // Chevron — SVG icon (Unicode triangles render as colored emoji on Windows)
     if is_expandable {
-        let svg_data = if node.expanded {
-            SVG_CHEVRON_DOWN
+        let handle = if node.expanded {
+            chevron_down_handle()
         } else {
-            SVG_CHEVRON_RIGHT
+            chevron_right_handle()
         };
-        let handle = svg::Handle::from_memory(svg_data);
         r = r.push(
             svg(handle)
                 .width(CHEVRON_W)
