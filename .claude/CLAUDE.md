@@ -68,27 +68,34 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - v0.3.0 — Canvas (wgpu pan/zoom/grid) ✅
 - v0.4.0 — Schematic Viewer ✅
 - v0.5.0 — Schematic Editor (selection, wire drawing, undo/redo) ✅
-- v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) 🔄 PR #5 open
+- v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) 🔄
 - v0.7.0 — Validation & ERC (11 violation types, annotation, pin connection matrix)
-- v0.8.0 — Output Generation (PDF, BOM, netlist, library editor)
+- v0.8.0 — Output Generation (PDF, BOM, netlist)
+- v0.9.0 — Library & Polish (symbol/footprint editor, installers)
+- v1.0.0 — Community Preview (schematic-only early access)
+
+### Schematic Polish
+- v1.1.0 — Advanced Schematic (variants, multi-channel, harness, parameter manager)
+- v1.2.0 — SCH Tables & Docs (tables, ToC, drawing tools)
+- v1.3.0 — Enhanced Output (smart PDF, BOM studio, output jobs)
+- v1.4.0 — Design Notebook (Typst editor, component-linked annotations, measurements)
+- v1.5.0 — Block Diagram (system-level blocks, signal flow, power tree)
 
 ### PCB Phase
-- v0.9.0 — PCB Viewer (Shader widget, layer stack, ratsnest)
-- v0.10.0 — PCB Editor (interactive routing, DRC, copper pour)
-- v0.11.0 — PCB Output (Gerber, drill, ODB++, STEP)
+- v2.0.0 — PCB Viewer (Shader widget, layer stack, ratsnest, cross-probe)
+- v2.1.0 — PCB Routing (interactive routing, DRC, copper pour, diff pair)
+- v2.2.0 — PCB Output (Gerber, drill, ODB++, STEP) — Community Release
 
-### Release
-- v1.0.0 — Community Release (full schematic + PCB editor)
+### Post-v2.2 (see MASTER_PLAN.md for full detail)
+- v2.3–v2.5 — 3D viewer, advanced PCB, high-speed design
+- v3.0–v3.4 — Pro Release (Signal AI, plugins, collaboration)
+- v4.0–v4.4 — Simulation, advanced output, import
+- v5.0–v5.4 — Signex 365 (cloud PLM, BOM Studio, ERP bridge)
 
-### Post-v1.0 (parallel tracks)
-- v1.1 — 3D viewer
-- v1.2 — Advanced schematic (variants, multi-channel)
-- v1.3 — Advanced PCB (impedance, constraints)
-- v1.4 — SPICE simulation
-- v1.7 — Signal AI (Pro)
-- v1.8 — Plugin system
-- v2.0 — Pro release
-- v2.1 — Live collaboration (Pro)
+## CI/CD
+
+- `.github/workflows/ci.yml` — check, clippy, test, fmt on push/PR to dev and main
+- `.github/workflows/release.yml` — triggered by version tags (v*), builds release binaries for Windows/Linux/macOS, creates GitHub Release with checksums
 
 ## Skills
 
