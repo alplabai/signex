@@ -61,7 +61,7 @@ impl Signex {
             return false;
         }
 
-        let Some(engine) = self.engine.as_mut() else {
+        let Some(engine) = self.document_state.engine.as_mut() else {
             return false;
         };
 
@@ -85,7 +85,7 @@ impl Signex {
             }
 
             if changed_steps > 0 {
-                self.undo_stack.record_engine_marker(changed_steps);
+                self.interaction_state.undo_stack.record_engine_marker(changed_steps);
                 invalidation
             } else {
                 signex_render::schematic::RenderInvalidation::NONE
@@ -105,7 +105,7 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        let Some(engine) = self.engine.as_mut() else {
+        let Some(engine) = self.document_state.engine.as_mut() else {
             return false;
         };
 
@@ -115,7 +115,7 @@ impl Signex {
                     .patch_pair
                     .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
                     .unwrap_or(signex_render::schematic::RenderInvalidation::NONE);
-                self.undo_stack.record_engine_marker(1);
+                self.interaction_state.undo_stack.record_engine_marker(1);
                 invalidation
             }
             Ok(_) => signex_render::schematic::RenderInvalidation::NONE,
@@ -133,8 +133,8 @@ impl Signex {
     }
 
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
-        let invalidation = if let Some(engine) = self.engine.as_mut() {
-            let Some(steps) = self.undo_stack.peek_undo_engine_steps() else {
+        let invalidation = if let Some(engine) = self.document_state.engine.as_mut() {
+            let Some(steps) = self.interaction_state.undo_stack.peek_undo_engine_steps() else {
                 return false;
             };
 
@@ -154,7 +154,7 @@ impl Signex {
                 }
             }
 
-            if undone_steps == steps && self.undo_stack.step_back() {
+            if undone_steps == steps && self.interaction_state.undo_stack.step_back() {
                 invalidation
             } else {
                 signex_render::schematic::RenderInvalidation::NONE
@@ -167,8 +167,8 @@ impl Signex {
     }
 
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
-        let invalidation = if let Some(engine) = self.engine.as_mut() {
-            let Some(steps) = self.undo_stack.peek_redo_engine_steps() else {
+        let invalidation = if let Some(engine) = self.document_state.engine.as_mut() {
+            let Some(steps) = self.interaction_state.undo_stack.peek_redo_engine_steps() else {
                 return false;
             };
 
@@ -188,7 +188,7 @@ impl Signex {
                 }
             }
 
-            if redone_steps == steps && self.undo_stack.step_forward() {
+            if redone_steps == steps && self.interaction_state.undo_stack.step_forward() {
                 invalidation
             } else {
                 signex_render::schematic::RenderInvalidation::NONE
@@ -219,9 +219,9 @@ impl Signex {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
-        self.canvas.clear_content_cache();
+        self.interaction_state.canvas.clear_content_cache();
         if clear_overlay_cache {
-            self.canvas.clear_overlay_cache();
+            self.interaction_state.canvas.clear_overlay_cache();
         }
         if update_selection_info {
             self.update_selection_info();

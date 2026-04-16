@@ -1,3 +1,9 @@
+use iced::Subscription;
+
+use crate::canvas::SchematicCanvas;
+use crate::dock::{DockArea, PanelPosition};
+use crate::panels::PanelKind;
+
 use super::*;
 
 fn selection_slot_from_key(key: &str) -> Option<usize> {
@@ -38,31 +44,45 @@ impl Signex {
         }
 
         let app = Self {
-            theme_id: ThemeId::Signex,
-            unit: Unit::Mm,
-            grid_visible: true,
-            snap_enabled: true,
-            cursor_x: 0.0,
-            cursor_y: 0.0,
-            zoom: 100.0,
-            dock,
-            tabs: vec![],
-            active_tab: 0,
-            current_tool: Tool::Select,
-            canvas: sch_canvas,
-            pcb_canvas,
-            grid_size_mm,
-            visible_grid_mm: 2.54,
-            snap_hotspots: true,
-            ui_font_name: crate::fonts::read_ui_font_pref(),
-            canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
-            canvas_font_size: 11.0,
-            canvas_font_bold: false,
-            canvas_font_italic: false,
-            engine: None,
-            project_path: None,
-            project_data: None,
-            panel_ctx: crate::panels::PanelContext {
+            ui_state: UiState {
+                theme_id: ThemeId::Signex,
+                unit: Unit::Mm,
+                grid_visible: true,
+                snap_enabled: true,
+                cursor_x: 0.0,
+                cursor_y: 0.0,
+                zoom: 100.0,
+                grid_size_mm,
+                visible_grid_mm: 2.54,
+                snap_hotspots: true,
+                ui_font_name: crate::fonts::read_ui_font_pref(),
+                canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
+                canvas_font_size: 11.0,
+                canvas_font_bold: false,
+                canvas_font_italic: false,
+                left_width: 240.0,
+                right_width: 220.0,
+                bottom_height: 120.0,
+                window_size: (1400.0, 900.0),
+                panel_list_open: false,
+                preferences_open: false,
+                find_replace: crate::find_replace::FindReplaceState::default(),
+                preferences_nav: crate::preferences::PrefNav::Appearance,
+                preferences_draft_theme: ThemeId::Signex,
+                preferences_draft_font: String::new(),
+                power_port_style: crate::fonts::read_power_port_style_pref(),
+                preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
+                preferences_dirty: false,
+                custom_theme: None,
+            },
+            document_state: DocumentState {
+                dock,
+                tabs: vec![],
+                active_tab: 0,
+                engine: None,
+                project_path: None,
+                project_data: None,
+                panel_ctx: crate::panels::PanelContext {
                 project_name: None,
                 project_file: None,
                 pcb_file: None,
@@ -108,52 +128,46 @@ impl Signex {
                 collapsed_sections: std::collections::HashSet::new(),
                 pre_placement: None,
             },
-            left_width: 240.0,
-            right_width: 220.0,
-            bottom_height: 120.0,
-            // active_menu removed — iced_aw MenuBar manages overlay state
-            kicad_lib_dir,
-            loaded_lib: std::collections::HashMap::new(),
-            dragging: None,
-            drag_start_pos: None,
-            drag_start_size: 0.0,
-            tab_drag_origin: None,
-            window_size: (1400.0, 900.0),
-            undo_stack: crate::undo::UndoStack::new(100),
-            wire_points: Vec::new(),
-            wire_drawing: false,
-            clipboard_wires: Vec::new(),
-            clipboard_buses: Vec::new(),
-            clipboard_labels: Vec::new(),
-            clipboard_symbols: Vec::new(),
-            clipboard_junctions: Vec::new(),
-            clipboard_no_connects: Vec::new(),
-            clipboard_text_notes: Vec::new(),
-            draw_mode: DrawMode::default(),
-            editing_text: None,
-            context_menu: None,
-            last_mouse_pos: (0.0, 0.0),
-            active_bar_menu: None,
-            selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
-            selection_slots: std::array::from_fn(|_| Vec::new()),
-            last_tool: std::collections::HashMap::new(),
-            pending_power: None,
-            pending_port: None,
-            panel_list_open: false,
-            preferences_open: false,
-            find_replace: crate::find_replace::FindReplaceState::default(),
-            preferences_nav: crate::preferences::PrefNav::Appearance,
-            preferences_draft_theme: ThemeId::Signex,
-            preferences_draft_font: String::new(),
-            power_port_style: crate::fonts::read_power_port_style_pref(),
-            preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
-            preferences_dirty: false,
-            custom_theme: None,
+                kicad_lib_dir,
+                loaded_lib: std::collections::HashMap::new(),
+            },
+            interaction_state: InteractionState {
+                current_tool: Tool::Select,
+                canvas: sch_canvas,
+                pcb_canvas,
+                dragging: None,
+                drag_start_pos: None,
+                drag_start_size: 0.0,
+                tab_drag_origin: None,
+                undo_stack: crate::undo::UndoStack::new(100),
+                wire_points: Vec::new(),
+                wire_drawing: false,
+                clipboard_wires: Vec::new(),
+                clipboard_buses: Vec::new(),
+                clipboard_labels: Vec::new(),
+                clipboard_symbols: Vec::new(),
+                clipboard_junctions: Vec::new(),
+                clipboard_no_connects: Vec::new(),
+                clipboard_text_notes: Vec::new(),
+                draw_mode: DrawMode::default(),
+                editing_text: None,
+                context_menu: None,
+                last_mouse_pos: (0.0, 0.0),
+                active_bar_menu: None,
+                selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
+                selection_slots: std::array::from_fn(|_| Vec::new()),
+                last_tool: std::collections::HashMap::new(),
+                pending_power: None,
+                pending_port: None,
+            },
         };
-        signex_render::set_canvas_font_name(&app.canvas_font_name);
-        signex_render::set_canvas_font_size(app.canvas_font_size);
-        signex_render::set_canvas_font_style(app.canvas_font_bold, app.canvas_font_italic);
-        signex_render::set_power_port_style(app.power_port_style);
+        signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
+        signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);
+        signex_render::set_canvas_font_style(
+            app.ui_state.canvas_font_bold,
+            app.ui_state.canvas_font_italic,
+        );
+        signex_render::set_power_port_style(app.ui_state.power_port_style);
         (app, Task::none())
     }
 
@@ -162,13 +176,12 @@ impl Signex {
     }
 
     pub fn theme(&self) -> Theme {
-        // While Preferences dialog is open, live-preview the draft theme.
-        let id = if self.preferences_open {
-            self.preferences_draft_theme
+        let id = if self.ui_state.preferences_open {
+            self.ui_state.preferences_draft_theme
         } else {
-            self.theme_id
+            self.ui_state.theme_id
         };
-        Self::id_to_iced_theme(id, self.custom_theme.as_ref())
+        Self::id_to_iced_theme(id, self.ui_state.custom_theme.as_ref())
     }
 
     /// Map a ThemeId to an iced::Theme with a properly tuned palette.
@@ -238,7 +251,7 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
-        let kbd = keyboard::listen().with(self.find_replace.open).map(|(find_replace_open, event)| match event {
+        let kbd = keyboard::listen().with(self.ui_state.find_replace.open).map(|(find_replace_open, event)| match event {
             keyboard::Event::KeyPressed {
                 key, modifiers: m, ..
             } => match (key.as_ref(), m) {
@@ -361,9 +374,9 @@ impl Signex {
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
         // app updates when idle, which noticeably hurts smoothness on macOS.
-        let drag_active = self.dragging.is_some()
-            || self.dock.tab_drag.is_some()
-            || self.dock.floating.iter().any(|fp| fp.dragging);
+        let drag_active = self.interaction_state.dragging.is_some()
+            || self.document_state.dock.tab_drag.is_some()
+            || self.document_state.dock.floating.iter().any(|fp| fp.dragging);
         let mouse_sub = if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {

@@ -180,24 +180,6 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 
 // ─── Button styles ────────────────────────────────────────────
 
-/// Dock tab button — active state gets highlighted bg + border.
-pub fn dock_tab(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let tab_active = ti(tokens.hover);
-    let border = ti(tokens.border);
-    move |_: &Theme, status: button::Status| {
-        let bg = match (is_active, status) {
-            (true, _) => Some(Background::Color(tab_active)),
-            (false, button::Status::Hovered) => Some(Background::Color(tab_active)),
-            _ => None,
-        };
-        button::Style {
-            background: bg,
-            border: Border { width: 1.0, radius: 0.0.into(), color: border },
-            ..button::Style::default()
-        }
-    }
-}
-
 /// Container-based dock tab (used with mouse_area for drag-to-undock).
 pub fn dock_tab_container(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);

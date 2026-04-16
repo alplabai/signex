@@ -4,7 +4,7 @@
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
 use iced::widget::{Space, button, column, container, row, svg, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles;
@@ -984,26 +984,6 @@ pub fn view_dropdown(
             ..container::Style::default()
         })
         .into()
-}
-
-/// Minimum width (in px) for each dropdown so labels are never truncated.
-/// Computed as: icon(14) + spacing(8) + approx text width + padding(24).
-pub fn dropdown_min_width(menu: ActiveBarMenu) -> f32 {
-    match menu {
-        ActiveBarMenu::Filter => 200.0,
-        ActiveBarMenu::SelectMode => 170.0,   // "Touching Rectangle"
-        ActiveBarMenu::Select => 170.0,        // "Drag Selection"
-        ActiveBarMenu::Align => 170.0,         // "Distribute Vertically"
-        ActiveBarMenu::Wiring => 150.0,        // "Bus Entry"
-        ActiveBarMenu::Power => 200.0,         // "Signal Ground power port"
-        ActiveBarMenu::Harness => 180.0,       // "Harness Connector"
-        ActiveBarMenu::SheetSymbol => 190.0,   // "Device Sheet Symbol"
-        ActiveBarMenu::Port => 190.0,          // "Off Sheet Connector"
-        ActiveBarMenu::Directives => 170.0,    // "Differential Pair"
-        ActiveBarMenu::TextTools => 140.0,     // "Text String"
-        ActiveBarMenu::Shapes => 170.0,        // "Rounded Rectangle"
-        ActiveBarMenu::NetColor => 180.0,      // "Clear All Net Colors"
-    }
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
