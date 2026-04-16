@@ -586,44 +586,54 @@ pub fn view_dropdown(
                 .into()
             };
             let all_label = if all_on { "All - On" } else { "All - Off" };
-            // Return tag grid as a single element wrapped in vec
+            // All-On/Off as a real toggle button (pill styling matches tag row).
+            let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+            let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+            let all_active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
+            let all_inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
+            let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+            let all_toggle = button(
+                text(all_label.to_string())
+                    .size(11)
+                    .color(if all_on { text_primary } else { all_text_off }),
+            )
+            .padding([4, 12])
+            .on_press(ActiveBarMsg::ToggleAllFilters)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered => Background::Color(hover_c),
+                    _ => Background::Color(if all_on { all_active_bg } else { all_inactive_bg }),
+                };
+                button::Style {
+                    background: Some(bg),
+                    border: Border {
+                        width: 1.0,
+                        radius: 12.0.into(),
+                        color: if all_on { all_active_border } else { all_inactive_border },
+                    },
+                    text_color: if all_on { text_primary } else { all_text_off },
+                    ..button::Style::default()
+                }
+            });
+            // 3-row layout: row 1 = All toggle. Rows 2 & 3 split the 12 filters 6+6.
             let filter_content: Element<'static, ActiveBarMsg> = column![
-                container(
-                    button(
-                        text(all_label.to_string())
-                            .size(11)
-                            .color(text_primary),
-                    )
-                    .padding([4, 12])
-                    .on_press(ActiveBarMsg::ToggleAllFilters)
-                    .style(button::text),
-                )
-                .padding([4, 8]),
+                container(all_toggle).padding([4, 8]),
                 container(
                     column![
                         row![
                             tag(SelectionFilter::Components, filters.contains(&SelectionFilter::Components)),
                             tag(SelectionFilter::Wires, filters.contains(&SelectionFilter::Wires)),
                             tag(SelectionFilter::Buses, filters.contains(&SelectionFilter::Buses)),
-                        ]
-                        .spacing(4),
-                        row![
                             tag(SelectionFilter::SheetSymbols, filters.contains(&SelectionFilter::SheetSymbols)),
                             tag(SelectionFilter::SheetEntries, filters.contains(&SelectionFilter::SheetEntries)),
+                            tag(SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels)),
                         ]
                         .spacing(4),
                         row![
-                            tag(SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels)),
                             tag(SelectionFilter::Parameters, filters.contains(&SelectionFilter::Parameters)),
                             tag(SelectionFilter::Ports, filters.contains(&SelectionFilter::Ports)),
-                        ]
-                        .spacing(4),
-                        row![
                             tag(SelectionFilter::PowerPorts, filters.contains(&SelectionFilter::PowerPorts)),
                             tag(SelectionFilter::Texts, filters.contains(&SelectionFilter::Texts)),
-                        ]
-                        .spacing(4),
-                        row![
                             tag(SelectionFilter::DrawingObjects, filters.contains(&SelectionFilter::DrawingObjects)),
                             tag(SelectionFilter::Other, filters.contains(&SelectionFilter::Other)),
                         ]

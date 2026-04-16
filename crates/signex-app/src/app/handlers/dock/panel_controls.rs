@@ -1,6 +1,21 @@
 use super::super::super::*;
 
 impl Signex {
+    /// Push the effective paper dimensions from PanelContext into the canvas so
+    /// the background / grid track Page Options changes immediately.
+    fn apply_page_dimensions_to_canvas(&mut self) {
+        let ctx = &self.document_state.panel_ctx;
+        let (w, h) = match ctx.page_format_mode {
+            crate::panels::PageFormatMode::Custom => {
+                (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm)
+            }
+            _ => crate::panels::paper_dimensions(&ctx.paper_size),
+        };
+        self.interaction_state.canvas.paper_width_mm = w;
+        self.interaction_state.canvas.paper_height_mm = h;
+        self.interaction_state.canvas.clear_bg_cache();
+    }
+
     pub(super) fn handle_dock_panel_control_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
@@ -118,14 +133,46 @@ impl Signex {
             crate::panels::PanelMsg::CloseCanvasFontPopup => {
                 self.document_state.panel_ctx.canvas_font_popup_open = false;
             }
-            crate::panels::PanelMsg::SetMarginVertical(zones)
-            | crate::panels::PanelMsg::SetMarginHorizontal(zones) => {
-                let _ = zones;
+            crate::panels::PanelMsg::SetMarginVertical(zones) => {
+                self.document_state.panel_ctx.margin_vertical = *zones;
+            }
+            crate::panels::PanelMsg::SetMarginHorizontal(zones) => {
+                self.document_state.panel_ctx.margin_horizontal = *zones;
+            }
+            crate::panels::PanelMsg::SetPageFormatMode(mode) => {
+                self.document_state.panel_ctx.page_format_mode = *mode;
+                self.apply_page_dimensions_to_canvas();
+            }
+            crate::panels::PanelMsg::SetPaperSize(size) => {
+                self.document_state.panel_ctx.paper_size = size.clone();
+                self.apply_page_dimensions_to_canvas();
+            }
+            crate::panels::PanelMsg::SetPageOrigin(origin) => {
+                self.document_state.panel_ctx.page_origin = *origin;
+            }
+            crate::panels::PanelMsg::SetCustomPaperWidth(w) => {
+                self.document_state.panel_ctx.custom_paper_w_mm = *w;
+                self.apply_page_dimensions_to_canvas();
+            }
+            crate::panels::PanelMsg::SetCustomPaperHeight(h) => {
+                self.document_state.panel_ctx.custom_paper_h_mm = *h;
+                self.apply_page_dimensions_to_canvas();
+            }
+            crate::panels::PanelMsg::SetSheetColor(color) => {
+                self.document_state.panel_ctx.sheet_color = *color;
+                self.interaction_state.canvas.theme_paper = color.to_color();
+                self.interaction_state.canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::DragComponentsSplit => {
                 self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
                 self.interaction_state.drag_start_pos = None;
                 self.interaction_state.drag_start_size = self.document_state.panel_ctx.components_split;
+            }
+            crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
+                let _ = self.handle_active_bar_filter_toggle(*filter);
+            }
+            crate::panels::PanelMsg::ToggleAllSelectionFilters => {
+                let _ = self.handle_active_bar_all_filters_toggle();
             }
             _ => return false,
         }

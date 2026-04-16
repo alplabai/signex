@@ -50,7 +50,7 @@ impl Signex {
                     rotation: 0.0,
                     label_type: signex_types::schematic::LabelType::Global,
                     shape: "bidirectional".to_string(),
-                    font_size: 1.27,
+                    font_size: 1.8,
                     justify: signex_types::schematic::HAlign::Left,
                 });
             }
@@ -67,35 +67,74 @@ impl Signex {
                     rotation: 0.0,
                     label_type: signex_types::schematic::LabelType::Hierarchical,
                     shape: String::new(),
-                    font_size: 1.27,
+                    font_size: 1.8,
                     justify: signex_types::schematic::HAlign::Left,
                 });
             }
             ActiveBarAction::PlaceBusEntry => {
-                self.interaction_state.current_tool = Tool::Component;
+                self.interaction_state.current_tool = Tool::BusEntry;
                 self.interaction_state.pending_power = None;
             }
+            // No-ERC directive reuses the existing No-Connect tool (Altium's
+            // "Place No ERC" also drops an X marker at the clicked pin).
+            ActiveBarAction::PlaceNoERC => {
+                self.interaction_state.current_tool = Tool::NoConnect;
+            }
+            // Sheet-symbol / frame / rounded rect — all rectangle-dragged shapes
+            // in Altium. Until each has a bespoke tool, use the rectangle tool
+            // so the drag-to-size gesture matches and produces a visible shape.
             ActiveBarAction::PlaceSheetSymbol
             | ActiveBarAction::PlaceSheetEntry
             | ActiveBarAction::PlaceDeviceSheetSymbol
             | ActiveBarAction::PlaceReuseBlock
             | ActiveBarAction::PlaceTextFrame
-            | ActiveBarAction::PlaceNote
-            | ActiveBarAction::DrawArc
-            | ActiveBarAction::DrawEllipticalArc
-            | ActiveBarAction::DrawEllipse
             | ActiveBarAction::DrawRoundRectangle
-            | ActiveBarAction::DrawPolygon
-            | ActiveBarAction::DrawBezier
-            | ActiveBarAction::PlaceGraphic
-            | ActiveBarAction::PlaceSignalHarness
+            | ActiveBarAction::PlaceGraphic => {
+                self.interaction_state.current_tool = Tool::Rectangle;
+            }
+            // Arcs / ellipses fall back to the circle tool.
+            ActiveBarAction::DrawArc
+            | ActiveBarAction::DrawEllipticalArc
+            | ActiveBarAction::DrawEllipse => {
+                self.interaction_state.current_tool = Tool::Circle;
+            }
+            // Polygon / bezier — multi-click line approximation.
+            ActiveBarAction::DrawPolygon | ActiveBarAction::DrawBezier => {
+                self.interaction_state.current_tool = Tool::Line;
+            }
+            // "Place Note" is Altium's sticky-note text.
+            ActiveBarAction::PlaceNote => {
+                self.interaction_state.current_tool = Tool::Text;
+            }
+            // Harness + signal integrity directives — not yet implemented.
+            // Log so the user sees the click registered and knows it's pending.
+            ActiveBarAction::PlaceSignalHarness
             | ActiveBarAction::PlaceHarnessConnector
-            | ActiveBarAction::PlaceHarnessEntry
-            | ActiveBarAction::PlaceParameterSet
-            | ActiveBarAction::PlaceNoERC
+            | ActiveBarAction::PlaceHarnessEntry => {
+                crate::diagnostics::log_info("Harness tools are planned for v1.1 (Advanced Schematic)");
+            }
+            ActiveBarAction::PlaceParameterSet
             | ActiveBarAction::PlaceDiffPair
             | ActiveBarAction::PlaceBlanket
-            | ActiveBarAction::PlaceCompileMask => {}
+            | ActiveBarAction::PlaceCompileMask => {
+                crate::diagnostics::log_info("Directive tool not yet implemented — coming with v0.7 ERC");
+            }
+            // Net-color palette (F5 / sidebar). The underlying net-color model
+            // isn't in place yet, but surface feedback so clicks don't silently
+            // swallow and the action shows up in diagnostics.
+            ActiveBarAction::NetColorBlue
+            | ActiveBarAction::NetColorLightGreen
+            | ActiveBarAction::NetColorLightBlue
+            | ActiveBarAction::NetColorRed
+            | ActiveBarAction::NetColorFuchsia
+            | ActiveBarAction::NetColorYellow
+            | ActiveBarAction::NetColorDarkGreen
+            | ActiveBarAction::ClearNetColor
+            | ActiveBarAction::ClearAllNetColors => {
+                crate::diagnostics::log_info(
+                    "Net-color override not yet implemented — planned for v0.7",
+                );
+            }
             _ => {}
         }
 

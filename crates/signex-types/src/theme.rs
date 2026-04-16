@@ -261,8 +261,8 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     reference:  c(0x80, 0x00, 0x00),   // Dark red designator (R1, C1…)
     value:      c(0x00, 0x00, 0x80),   // Navy blue value/comment text
     net_label:  c(0x80, 0x00, 0x00),   // Dark red / burgundy net labels
-    global_label: c(0x00, 0x80, 0x00), // Green global labels
-    hier_label: c(0x00, 0xAA, 0x00),   // Virulent green hierarchical blocks
+    global_label: c(0x80, 0x00, 0x00), // Altium maroon port outline/text
+    hier_label: c(0x80, 0x00, 0x00),   // Altium maroon hierarchical port outline/text
     no_connect: c(0x80, 0x00, 0x00),   // Dark red X marks
     power:      c(0x80, 0x00, 0x00),   // Dark red power ports (VCC/GND)
     selection:  c(0x00, 0x78, 0xD4),   // Windows blue selection highlight

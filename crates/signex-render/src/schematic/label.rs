@@ -22,11 +22,11 @@ pub fn draw_label(
     transform: &ScreenTransform,
     color: Color,
 ) {
-    let font_size_mm = if label.font_size > 0.0 {
-        label.font_size
-    } else {
-        1.27
-    };
+    // All schematic canvas text renders at 10 pt (1.8 mm, cap-height basis)
+    // regardless of what the source file declares. Overriding here instead of
+    // mutating the stored value keeps save round-trips stable.
+    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
+    let _stored = label.font_size;
     let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
@@ -53,7 +53,7 @@ fn draw_net_label(
     color: Color,
     screen_font: f32,
 ) {
-    let offset = schematic_text_offset_net(label, label.font_size.max(1.27));
+    let offset = schematic_text_offset_net(label, crate::SCHEMATIC_TEXT_MM);
     draw_spin_text(frame, label, transform, color, screen_font, offset, false);
 }
 
@@ -75,6 +75,9 @@ fn draw_global_label(
     let lx = label.position.x;
     let ly = label.position.y;
     let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
+    // Altium port palette — pale cream-yellow fill (#FFFACD / lemon chiffon)
+    // with outline + text painted in the label's configured color (dark red).
+    let fill_color = Color::from_rgb8(0xFF, 0xFA, 0xCD);
 
     if matches!(spin, SpinStyle::Left | SpinStyle::Right) {
         let conn_right = matches!(spin, SpinStyle::Right);
@@ -119,7 +122,7 @@ fn draw_global_label(
                 ]
             }
         };
-        draw_shape_closed(frame, &pts, transform, color, sw);
+        draw_shape_closed_filled(frame, &pts, transform, color, sw, Some(fill_color));
 
     } else {
         let (sx, sy) = transform.world_to_screen(lx, ly);
@@ -265,11 +268,109 @@ fn draw_hier_label(
 }
 
 #[derive(Clone, Copy)]
-enum SpinStyle {
+pub enum SpinStyle {
     Left,
     Up,
     Right,
     Bottom,
+}
+
+/// Approximate on-screen AABB for a net/global/hierarchical label, in world
+/// space, accounting for the label's orientation so hit-testing and selection
+/// overlays match what is drawn.
+/// AABB for a port (Global/Hierarchical) that wraps the whole pentagon shape,
+/// anchored on the connection point and extending forward into the body.
+fn port_shape_aabb(label: &Label) -> signex_types::schematic::Aabb {
+    let fs = crate::SCHEMATIC_TEXT_MM;
+    let h = fs * 1.4;
+    let arrow_w = h * 0.5;
+    let pad = fs * 0.3;
+    let text_w = label.text.len() as f64 * fs * 0.6;
+    let body_w = text_w + pad * 2.0;
+    let total_fw = arrow_w + body_w + arrow_w; // including tip
+    let half_h = h * 0.5;
+    let (x0, y0, x1, y1) = match label_spin_style(label) {
+        SpinStyle::Right => (
+            label.position.x,
+            label.position.y - half_h,
+            label.position.x + total_fw,
+            label.position.y + half_h,
+        ),
+        SpinStyle::Left => (
+            label.position.x - total_fw,
+            label.position.y - half_h,
+            label.position.x,
+            label.position.y + half_h,
+        ),
+        SpinStyle::Up => (
+            label.position.x - half_h,
+            label.position.y - total_fw,
+            label.position.x + half_h,
+            label.position.y,
+        ),
+        SpinStyle::Bottom => (
+            label.position.x - half_h,
+            label.position.y,
+            label.position.x + half_h,
+            label.position.y + total_fw,
+        ),
+    };
+    signex_types::schematic::Aabb::new(x0, y0, x1, y1)
+}
+
+pub fn label_text_aabb(label: &Label) -> signex_types::schematic::Aabb {
+    // Global/Hier labels are pentagons centered on the anchor; their bbox must
+    // wrap the whole arrow+body shape, not just the text column. Delegate.
+    if matches!(
+        label.label_type,
+        LabelType::Global | LabelType::Hierarchical
+    ) {
+        return port_shape_aabb(label);
+    }
+    let fs = crate::SCHEMATIC_TEXT_MM;
+    // Tight text width — slightly under half the font size per glyph matches
+    // the actual rendered widths for most monospace-ish labels.
+    // Iced's `fill_text(size = S)` reserves roughly S of vertical space for
+    // glyphs including descenders; visible glyphs sit slightly inside that
+    // metric (left bearing + small descender space). Use measurements tuned
+    // against a real canvas font so the bbox wraps the *visible* text.
+    let tw = label.text.chars().count() as f64 * fs * 0.58;
+    let baseline_off = pen_width_mm();
+    let cap = baseline_off + fs * 1.05;
+    // No inset — the visible first glyph actually aligns with the anchor,
+    // so shifting the bbox inward leaves a visible gap on the leading side.
+    let inset = 0.0_f64;
+    let (x0, y0, x1, y1) = match label_spin_style(label) {
+        // Text to the right of the anchor, above the anchor line.
+        SpinStyle::Right => (
+            label.position.x + inset,
+            label.position.y - cap,
+            label.position.x + inset + tw,
+            label.position.y,
+        ),
+        // Text to the left of the anchor, above the anchor line.
+        SpinStyle::Left => (
+            label.position.x - inset - tw,
+            label.position.y - cap,
+            label.position.x - inset,
+            label.position.y,
+        ),
+        // Rotated +90° — text extends upward from the anchor.
+        SpinStyle::Up => (
+            label.position.x,
+            label.position.y - inset - tw,
+            label.position.x + cap,
+            label.position.y - inset,
+        ),
+        // Rotated -90° — text extends downward from the anchor.
+        SpinStyle::Bottom => (
+            label.position.x - cap,
+            label.position.y + inset,
+            label.position.x,
+            label.position.y + inset + tw,
+        ),
+    };
+    signex_types::schematic::Aabb::new(x0, y0, x1, y1)
 }
 
 fn label_spin_style(label: &Label) -> SpinStyle {
@@ -301,8 +402,10 @@ fn approx_text_width_mm(text: &str, font_size_mm: f64) -> f64 {
     text.chars().count() as f64 * font_size_mm * 0.6
 }
 
-fn schematic_text_offset_net(label: &Label, font_size_mm: f64) -> (f64, f64) {
-    let dist = text_offset_mm(font_size_mm) + pen_width_mm();
+fn schematic_text_offset_net(label: &Label, _font_size_mm: f64) -> (f64, f64) {
+    // Altium places the net-label baseline right on the wire — just the
+    // pen width's worth of clearance above the anchor.
+    let dist = pen_width_mm();
     match label_spin_style(label) {
         SpinStyle::Up | SpinStyle::Bottom => (-dist, 0.0),
         SpinStyle::Left | SpinStyle::Right => (0.0, -dist),
@@ -407,6 +510,20 @@ fn draw_shape_closed(
     color: Color,
     stroke_width: f32,
 ) {
+    draw_shape_closed_filled(frame, pts, transform, color, stroke_width, None);
+}
+
+/// Like `draw_shape_closed` but with an optional fill color — used by global
+/// port shapes which render with an Altium-style pale-yellow body under the
+/// colored stroke.
+fn draw_shape_closed_filled(
+    frame: &mut canvas::Frame,
+    pts: &[(f64, f64)],
+    transform: &ScreenTransform,
+    stroke_color: Color,
+    stroke_width: f32,
+    fill: Option<Color>,
+) {
     if pts.is_empty() {
         return;
     }
@@ -418,10 +535,13 @@ fn draw_shape_closed(
         }
         b.close();
     });
+    if let Some(fc) = fill {
+        frame.fill(&pth, fc);
+    }
     frame.stroke(
         &pth,
         canvas::Stroke::default()
-            .with_color(color)
+            .with_color(stroke_color)
             .with_width(stroke_width),
     );
 }
