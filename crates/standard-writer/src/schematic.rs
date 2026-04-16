@@ -778,6 +778,14 @@ fn write_lib_symbol_property(out: &mut String, key: &str, value: &str, id: u32) 
     wln!(out, "      )");
 }
 
+fn write_optional_lib_symbol_property(out: &mut String, key: &str, value: &str, id: u32) {
+    if value.is_empty() {
+        return;
+    }
+
+    write_lib_symbol_property(out, key, value, id);
+}
+
 // ---------------------------------------------------------------------------
 // lib_symbol writer
 // ---------------------------------------------------------------------------
@@ -793,6 +801,20 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
         out,
         "      (on_board {})",
         if lib.on_board { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "      (in_pos_files {})",
+        if lib.in_pos_files { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "      (duplicate_pin_numbers_are_jumpers {})",
+        if lib.duplicate_pin_numbers_are_jumpers {
+            "yes"
+        } else {
+            "no"
+        }
     );
     if !lib.show_pin_numbers {
         wln!(out, "      (pin_numbers hide)");
@@ -818,6 +840,9 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     write_lib_symbol_property(out, "Value", value, 1);
     write_lib_symbol_property(out, "Footprint", &lib.footprint, 2);
     write_lib_symbol_property(out, "Datasheet", &lib.datasheet, 3);
+    write_optional_lib_symbol_property(out, "Description", &lib.description, 4);
+    write_optional_lib_symbol_property(out, "ki_keywords", &lib.keywords, 5);
+    write_optional_lib_symbol_property(out, "ki_fp_filters", &lib.fp_filters, 6);
 
     // Sub-symbol for graphics
     wln!(out, "      (symbol \"{}_0_1\"", base_name);
@@ -1052,6 +1077,9 @@ fn write_lib_pin(out: &mut String, pin: &Pin) {
         fmt_f64(pin.rotation)
     );
     wln!(out, "          (length {})", fmt_f64(pin.length));
+    if !pin.visible {
+        wln!(out, "          (hide yes)");
+    }
     w!(
         out,
         "          (name \"{}\" (effects (font (size 1.27 1.27))",
@@ -1177,5 +1205,57 @@ mod tests {
         assert!(rendered.contains("(pin \"1\" (uuid \"00000000-0000-0000-0000-000000000000\"))"));
         assert!(rendered.contains("(instances"));
         assert!(rendered.contains("(project \"GateMagic\""));
+    }
+
+    #[test]
+    fn writes_lib_symbol_parent_metadata() {
+        let mut out = String::new();
+        let lib = LibSymbol {
+            id: "Interface_Ethernet:W5500".to_string(),
+            reference: "U".to_string(),
+            value: "W5500".to_string(),
+            footprint: "Package_QFP:LQFP-48_7x7mm_P0.5mm".to_string(),
+            datasheet: "http://example.invalid/ds.pdf".to_string(),
+            description: "Ethernet controller".to_string(),
+            keywords: "WIZnet Ethernet".to_string(),
+            fp_filters: "LQFP*".to_string(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.508,
+        };
+
+        write_lib_symbol(&mut out, &lib.id, &lib);
+
+        assert!(out.contains("(in_pos_files yes)"));
+        assert!(out.contains("(duplicate_pin_numbers_are_jumpers no)"));
+        assert!(out.contains("(property \"Description\" \"Ethernet controller\""));
+        assert!(out.contains("(property \"ki_keywords\" \"WIZnet Ethernet\""));
+        assert!(out.contains("(property \"ki_fp_filters\" \"LQFP*\""));
+    }
+
+    #[test]
+    fn writes_hidden_lib_pin_flag() {
+        let mut out = String::new();
+        let pin = Pin {
+            pin_type: PinElectricalType::NotConnected,
+            shape: PinShape::Line,
+            position: Point { x: 20.32, y: 0.0 },
+            rotation: 0.0,
+            length: 0.0,
+            name: "NC".to_string(),
+            number: "7".to_string(),
+            visible: false,
+            name_visible: true,
+            number_visible: true,
+        };
+
+        write_lib_pin(&mut out, &pin);
+        assert!(out.contains("(hide yes)"));
     }
 }
