@@ -32,8 +32,10 @@ pub struct CanvasState {
     last_pan_pos: Option<iced::Point>,
     /// Pending fit target — consumed on next update.
     pub pending_fit: Option<Rectangle>,
-    /// Whether Ctrl is currently held (for multi-select).
+    /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
+    /// Whether Shift is currently held (for multi-select add).
+    pub shift_held: bool,
     /// Drag-to-select: start position in world coordinates.
     select_drag_start: Option<(f64, f64)>,
     /// Drag-to-select: current end position in world coordinates.
@@ -99,6 +101,10 @@ pub struct SchematicCanvas {
     pub snap_grid_mm: f64,
     /// Visible grid dot spacing in mm (independent of snap grid).
     pub visible_grid_mm: f64,
+    /// Active paper width in mm (world units).
+    pub paper_width_mm: f32,
+    /// Active paper height in mm (world units).
+    pub paper_height_mm: f32,
 }
 
 impl SchematicCanvas {
@@ -146,6 +152,8 @@ impl SchematicCanvas {
             snap_enabled: true,
             snap_grid_mm: 2.54,
             visible_grid_mm: 2.54,
+            paper_width_mm: 297.0,
+            paper_height_mm: 210.0,
         }
     }
 
@@ -271,22 +279,27 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.last_click_time = Some(now);
                     state.last_click_world = Some((wx, wy));
 
-                    // Check: did we click on an already-selected item?
-                    // If yes, prepare for drag-to-move (defer the Clicked event).
-                    let on_selected = if !self.drawing_mode && !self.selected.is_empty() {
+                    // Classify the click target:
+                    //   - hit an already-selected item  → defer click, prepare drag
+                    //   - hit an unselected item       → publish click (selects it), prepare drag
+                    //   - hit empty space              → publish click, start box-select
+                    // Altium-style: clicking and dragging on an unselected item
+                    // should immediately select-and-drag in one gesture.
+                    let (on_selected, on_unselected_item) = if !self.drawing_mode {
                         if let Some(snapshot) = self.active_snapshot() {
                             if let Some(hit) =
                                 signex_render::schematic::hit_test::hit_test(snapshot, wx, wy)
                             {
-                                self.selected.iter().any(|s| s.uuid == hit.uuid)
+                                let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
+                                (sel, !sel)
                             } else {
-                                false
+                                (false, false)
                             }
                         } else {
-                            false
+                            (false, false)
                         }
                     } else {
-                        false
+                        (false, false)
                     };
 
                     if on_selected && !state.ctrl_held {
@@ -297,6 +310,26 @@ impl canvas::Program<Message> for SchematicCanvas {
                         state.move_current = None;
                         state.select_drag_start = None;
                         return Some(canvas::Action::capture());
+                    }
+
+                    if on_unselected_item && !state.ctrl_held {
+                        // Publish the click (which selects the item via HitAt)
+                        // AND prepare drag state. If the user crosses the drag
+                        // threshold before mouse-up, the motion handler promotes
+                        // this into a move gesture without a second click.
+                        // `and_capture()` keeps subsequent mouse events flowing
+                        // through this program so the drag detection stays live.
+                        state.click_on_selected = true;
+                        state.move_origin = Some((wx, wy));
+                        state.move_dragging = false;
+                        state.move_current = None;
+                        state.select_drag_start = None;
+                        return Some(
+                            canvas::Action::publish(Message::CanvasEvent(
+                                CanvasEvent::Clicked { world_x: wx, world_y: wy },
+                            ))
+                            .and_capture(),
+                        );
                     }
 
                     // Normal click — publish immediately, start potential box-select
@@ -311,7 +344,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                         state.select_drag_start = None;
                         state.select_drag_end = None;
                     }
-                    let evt = if state.ctrl_held {
+                    // Ctrl+Click toggles selection (add if missing, remove if
+                    // present). Shift+Click adds to selection (Altium-style).
+                    let evt = if state.ctrl_held || state.shift_held {
                         CanvasEvent::CtrlClicked {
                             world_x: wx,
                             world_y: wy,
@@ -385,11 +420,37 @@ impl canvas::Program<Message> for SchematicCanvas {
             // ── Keyboard events for Ctrl detection ──
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.ctrl_held = mods.command();
+                state.shift_held = mods.shift();
                 None
             }
 
-            // ── Right-click press → start pan or Active Bar dropdown ──
+            // ── Escape cancels any in-progress drag ──
+            Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. })
+                if matches!(
+                    key,
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+                ) =>
+            {
+                if state.move_dragging || state.click_on_selected {
+                    state.move_dragging = false;
+                    state.click_on_selected = false;
+                    state.move_origin = None;
+                    state.move_current = None;
+                    return Some(canvas::Action::capture());
+                }
+                None
+            }
+
+            // ── Right-click press → cancel drag, else start pan or Active Bar dropdown ──
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                // Abort an in-progress drag — matches Altium / Esc behavior.
+                if state.move_dragging || state.click_on_selected {
+                    state.move_dragging = false;
+                    state.click_on_selected = false;
+                    state.move_origin = None;
+                    state.move_current = None;
+                    return Some(canvas::Action::capture());
+                }
                 if let Some(pos) = cursor.position_in(bounds) {
                     // Active Bar zone: top ~40px, centered
                     if pos.y < 40.0 {
@@ -487,9 +548,17 @@ impl canvas::Program<Message> for SchematicCanvas {
                             }
                         }
                         if state.move_dragging {
-                            let (mx, my) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                            // Snap the *delta*, not the absolute cursor. This keeps
+                            // the dragged item on-grid during the live preview
+                            // (origin may be off-grid, but offset stays a grid
+                            // multiple so object_start + offset stays on grid).
+                            let (mx, my) = if let (Some(origin), true) =
+                                (state.move_origin, self.snap_enabled && self.snap_grid_mm > 0.0)
+                            {
                                 let g = self.snap_grid_mm;
-                                ((wx / g).round() * g, (wy / g).round() * g)
+                                let dx = ((wx - origin.0) / g).round() * g;
+                                let dy = ((wy - origin.1) / g).round() * g;
+                                (origin.0 + dx, origin.1 + dy)
                             } else {
                                 (wx, wy)
                             };
@@ -536,13 +605,14 @@ impl canvas::Program<Message> for SchematicCanvas {
             // Fill background
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            // Draw paper rectangle (A4 landscape: 297x210mm)
+            // Draw paper rectangle using active paper size.
             let paper_tl = state
                 .camera
                 .world_to_screen(iced::Point::new(0.0, 0.0), bounds);
-            let paper_br = state
-                .camera
-                .world_to_screen(iced::Point::new(297.0, 210.0), bounds);
+            let paper_br = state.camera.world_to_screen(
+                iced::Point::new(self.paper_width_mm, self.paper_height_mm),
+                bounds,
+            );
             let paper_w = paper_br.x - paper_tl.x;
             let paper_h = paper_br.y - paper_tl.y;
 
@@ -565,7 +635,15 @@ impl canvas::Program<Message> for SchematicCanvas {
 
             // Draw grid — use visible_grid_mm so snap and visual grid are independent
             if self.grid_visible {
-                grid::draw_grid(frame, &state.camera, self.visible_grid_mm as f32, bounds, self.theme_grid);
+                grid::draw_grid(
+                    frame,
+                    &state.camera,
+                    self.visible_grid_mm as f32,
+                    bounds,
+                    self.theme_grid,
+                    self.paper_width_mm,
+                    self.paper_height_mm,
+                );
             }
         });
         layers.push(bg);
@@ -581,9 +659,36 @@ impl canvas::Program<Message> for SchematicCanvas {
             && (cached_offset_y - state.camera.offset.y).abs() < 0.01
             && (cached_scale - state.camera.scale).abs() < 0.0001;
 
-        let content = if state.panning {
+        // If mid-drag, build a snapshot with selected items shifted so the
+        // "move" visually lifts the originals out of place and places them at
+        // the cursor — matches Altium's behavior where the dragged objects
+        // travel with the mouse and nothing stays behind at the old location.
+        let drag_offset = if state.move_dragging {
+            state
+                .move_origin
+                .zip(state.move_current)
+                .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy))
+        } else {
+            None
+        };
+
+        let shifted_snapshot = if let (Some((dx, dy)), Some(snap)) =
+            (drag_offset, self.active_snapshot())
+        {
+            if !self.selected.is_empty() {
+                Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let effective_snapshot: Option<&signex_render::schematic::SchematicRenderSnapshot> =
+            shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
+
+        let content = if state.panning || drag_offset.is_some() {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
-            if let Some(snapshot) = self.active_snapshot() {
+            if let Some(snapshot) = effective_snapshot {
                 signex_render::schematic::render_schematic(
                     &mut frame,
                     snapshot,
@@ -603,7 +708,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.camera.offset.y,
                     state.camera.scale,
                 ));
-                if let Some(snapshot) = self.active_snapshot() {
+                if let Some(snapshot) = effective_snapshot {
                     signex_render::schematic::render_schematic(
                         frame,
                         snapshot,
@@ -617,10 +722,14 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(content);
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
+        // During drag we use the shifted snapshot so the selection rectangle
+        // travels with the dragged items instead of staying behind.
         if !self.selected.is_empty()
-            && let Some(snapshot) = self.active_snapshot()
+            && let Some(snapshot) = effective_snapshot
         {
-            let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
+            // During a drag we can't rely on overlay_cache — it must redraw
+            // with the shifted positions every frame.
+            let draw_overlay = |frame: &mut canvas::Frame| {
                 let transform = signex_render::schematic::ScreenTransform {
                     offset_x: state.camera.offset.x,
                     offset_y: state.camera.offset.y,
@@ -632,8 +741,15 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.selected,
                     &transform,
                 );
-            });
-            layers.push(sel_overlay);
+            };
+            if drag_offset.is_some() {
+                let mut frame = canvas::Frame::new(renderer, bounds.size());
+                draw_overlay(&mut frame);
+                layers.push(frame.into_geometry());
+            } else {
+                let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), draw_overlay);
+                layers.push(sel_overlay);
+            }
         }
 
         // Layer 4: overlay (cursor crosshair — redrawn every frame)
@@ -660,9 +776,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                 if self.drawing_mode && !self.wire_preview.is_empty() {
                     let wire_color = self.canvas_colors.wire;
                     let wire_color_iced = signex_render::colors::to_iced(&wire_color);
+                    // Match the placed-wire stroke width (0.15 mm in world),
+                    // scaled by camera. Previously fixed 1.5 px which looked
+                    // thin at higher zooms.
+                    let placed_width = (state.camera.scale * 0.15).max(1.0);
                     let preview_stroke = canvas::Stroke::default()
                         .with_color(wire_color_iced)
-                        .with_width(1.5);
+                        .with_width(placed_width);
 
                     // Draw placed segments
                     for pair in self.wire_preview.windows(2) {
@@ -695,10 +815,10 @@ impl canvas::Program<Message> for SchematicCanvas {
                         let end = signex_types::schematic::Point::new(snap_x, snap_y);
                         let rubber_stroke = canvas::Stroke::default()
                             .with_color(Color {
-                                a: 0.6,
+                                a: 0.7,
                                 ..wire_color_iced
                             })
-                            .with_width(1.0);
+                            .with_width(placed_width);
 
                         // Compute constrained segments based on draw mode
                         let segments = match self.draw_mode {
@@ -873,15 +993,21 @@ impl canvas::Program<Message> for SchematicCanvas {
                 }
             }
 
-            // Drag-to-move preview: show translucent outlines at offset
+            // Drag-to-move: the content layer already renders selected items
+            // at the dragged offset (via shifted_snapshot). Here we just handle
+            // the symbol-field anchor→moved guide line, which the content
+            // render doesn't draw on its own.
             if state.move_dragging
                 && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
             {
                 let dx = (current.0 - origin.0) as f32;
                 let dy = (current.1 - origin.1) as f32;
-                let move_color = Color::from_rgba(0.3, 0.7, 1.0, 0.5);
+                let wire_c = {
+                    let c = &self.canvas_colors.wire;
+                    Color::from_rgb8(c.r, c.g, c.b)
+                };
                 let move_stroke = canvas::Stroke::default()
-                    .with_color(move_color)
+                    .with_color(wire_c)
                     .with_width(1.5);
                 if let Some(render_cache) = self.active_render_cache() {
                     let preview = render_cache.prepared_preview();
@@ -918,45 +1044,126 @@ impl canvas::Program<Message> for SchematicCanvas {
                                 frame.stroke(
                                     &guide,
                                     canvas::Stroke::default()
-                                        .with_color(Color::from_rgba(0.3, 0.7, 1.0, 0.35))
+                                        .with_color(Color::from_rgb(0.3, 0.7, 1.0))
                                         .with_width(1.0),
                                 );
 
                                 let anchor_circle = canvas::Path::circle(anchor, 3.0);
-                                frame.fill(&anchor_circle, Color::from_rgba(0.3, 0.7, 1.0, 0.65));
+                                frame.fill(&anchor_circle, Color::from_rgb(0.3, 0.7, 1.0));
 
                                 let rect = canvas::Path::rectangle(
                                     iced::Point::new(moved.x - 7.0, moved.y - 7.0),
                                     iced::Size::new(14.0, 14.0),
                                 );
                                 frame.stroke(&rect, move_stroke);
-                                continue;
                             }
                         }
 
-                        // Draw a simple marker at the moved position
-                        let pos = match sel.kind {
-                            signex_types::schematic::SelectedKind::Symbol => {
-                                preview.symbol_position(sel.uuid)
+                    }
+                }
+
+                // Altium-style connection-point markers: small thin X at every
+                // pin / wire-end / junction position of the dragged objects.
+                let snapshot_live = self.active_snapshot();
+                if let Some(snap) = snapshot_live {
+                    let x_color = Color::from_rgb(1.0, 0.3, 0.3);
+                    let x_stroke = canvas::Stroke::default()
+                        .with_color(x_color)
+                        .with_width(1.0);
+                    let draw_x = |frame: &mut canvas::Frame, screen: iced::Point| {
+                        let r = 4.0;
+                        frame.stroke(
+                            &canvas::Path::line(
+                                iced::Point::new(screen.x - r, screen.y - r),
+                                iced::Point::new(screen.x + r, screen.y + r),
+                            ),
+                            x_stroke,
+                        );
+                        frame.stroke(
+                            &canvas::Path::line(
+                                iced::Point::new(screen.x - r, screen.y + r),
+                                iced::Point::new(screen.x + r, screen.y - r),
+                            ),
+                            x_stroke,
+                        );
+                    };
+                    for sel in &self.selected {
+                        use signex_types::schematic::{SelectedKind, Point};
+                        let dxf = dx as f64;
+                        let dyf = dy as f64;
+                        match sel.kind {
+                            SelectedKind::Wire => {
+                                if let Some(w) = snap.wires.iter().find(|w| w.uuid == sel.uuid) {
+                                    for p in [w.start, w.end] {
+                                        let s = state.camera.world_to_screen(
+                                            iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
+                                            bounds,
+                                        );
+                                        draw_x(&mut frame, s);
+                                    }
+                                }
                             }
-                            signex_types::schematic::SelectedKind::Wire => {
-                                preview.wire_midpoint(sel.uuid)
+                            SelectedKind::Bus => {
+                                if let Some(b) = snap.buses.iter().find(|b| b.uuid == sel.uuid) {
+                                    for p in [b.start, b.end] {
+                                        let s = state.camera.world_to_screen(
+                                            iced::Point::new((p.x + dxf) as f32, (p.y + dyf) as f32),
+                                            bounds,
+                                        );
+                                        draw_x(&mut frame, s);
+                                    }
+                                }
                             }
-                            signex_types::schematic::SelectedKind::Label => {
-                                preview.label_position(sel.uuid)
+                            SelectedKind::Junction => {
+                                if let Some(j) = snap.junctions.iter().find(|j| j.uuid == sel.uuid) {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new((j.position.x + dxf) as f32, (j.position.y + dyf) as f32),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
                             }
-                            _ => None,
-                        };
-                        if let Some((px, py)) = pos {
-                            let screen =
-                                state
-                                    .camera
-                                    .world_to_screen(iced::Point::new(px + dx, py + dy), bounds);
-                            let rect = canvas::Path::rectangle(
-                                iced::Point::new(screen.x - 6.0, screen.y - 6.0),
-                                iced::Size::new(12.0, 12.0),
-                            );
-                            frame.stroke(&rect, move_stroke);
+                            SelectedKind::Label => {
+                                if let Some(l) = snap.labels.iter().find(|l| l.uuid == sel.uuid) {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new((l.position.x + dxf) as f32, (l.position.y + dyf) as f32),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
+                            SelectedKind::NoConnect => {
+                                if let Some(nc) = snap.no_connects.iter().find(|n| n.uuid == sel.uuid) {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new((nc.position.x + dxf) as f32, (nc.position.y + dyf) as f32),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
+                            SelectedKind::Symbol => {
+                                if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid) {
+                                    if let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id) {
+                                        // Build a shifted copy so instance_transform
+                                        // uses the dragged position.
+                                        let mut shifted = sym.clone();
+                                        shifted.position = Point::new(sym.position.x + dxf, sym.position.y + dyf);
+                                        for lp in &lib_sym.pins {
+                                            if lp.unit != 0 && lp.unit != sym.unit {
+                                                continue;
+                                            }
+                                            let p = &lp.pin;
+                                            let (wx, wy) = signex_render::schematic::instance_transform(&shifted, &p.position);
+                                            let s = state.camera.world_to_screen(
+                                                iced::Point::new(wx as f32, wy as f32),
+                                                bounds,
+                                            );
+                                            draw_x(&mut frame, s);
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -1020,6 +1227,86 @@ impl canvas::Program<Message> for SchematicCanvas {
 
 /// Map a relative x position within the Active Bar to a dropdown menu.
 /// Returns None for buttons without dropdowns (Select, Add Component).
+/// Clone the snapshot and translate the world position of every item that
+/// appears in `selection` by `(dx, dy)`. Used during drag-to-move so the live
+/// render shows selected objects at the cursor position while the originals
+/// are not drawn at their pre-drag location.
+fn shift_snapshot_for_selection(
+    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    selection: &[signex_types::schematic::SelectedItem],
+    dx: f64,
+    dy: f64,
+) -> signex_render::schematic::SchematicRenderSnapshot {
+    use signex_types::schematic::{Point, SelectedKind};
+
+    let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {
+        selection
+            .iter()
+            .any(|s| s.uuid == uuid && (s.kind == kind
+                // Symbol field selections should still shift the whole symbol
+                // visually while its ref/val text moves.
+                || (matches!(kind, SelectedKind::Symbol)
+                    && matches!(s.kind, SelectedKind::SymbolRefField | SelectedKind::SymbolValField))))
+    };
+    let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
+
+    let mut out = snap.clone();
+    for w in out.wires.iter_mut() {
+        if is_selected(w.uuid, SelectedKind::Wire) {
+            w.start = shift(w.start);
+            w.end = shift(w.end);
+        }
+    }
+    for b in out.buses.iter_mut() {
+        if is_selected(b.uuid, SelectedKind::Bus) {
+            b.start = shift(b.start);
+            b.end = shift(b.end);
+        }
+    }
+    for be in out.bus_entries.iter_mut() {
+        if is_selected(be.uuid, SelectedKind::BusEntry) {
+            be.position = shift(be.position);
+        }
+    }
+    for j in out.junctions.iter_mut() {
+        if is_selected(j.uuid, SelectedKind::Junction) {
+            j.position = shift(j.position);
+        }
+    }
+    for nc in out.no_connects.iter_mut() {
+        if is_selected(nc.uuid, SelectedKind::NoConnect) {
+            nc.position = shift(nc.position);
+        }
+    }
+    for l in out.labels.iter_mut() {
+        if is_selected(l.uuid, SelectedKind::Label) {
+            l.position = shift(l.position);
+        }
+    }
+    for tn in out.text_notes.iter_mut() {
+        if is_selected(tn.uuid, SelectedKind::TextNote) {
+            tn.position = shift(tn.position);
+        }
+    }
+    for sym in out.symbols.iter_mut() {
+        if is_selected(sym.uuid, SelectedKind::Symbol) {
+            sym.position = shift(sym.position);
+            if let Some(rt) = &mut sym.ref_text {
+                rt.position = shift(rt.position);
+            }
+            if let Some(vt) = &mut sym.val_text {
+                vt.position = shift(vt.position);
+            }
+        }
+    }
+    for cs in out.child_sheets.iter_mut() {
+        if is_selected(cs.uuid, SelectedKind::ChildSheet) {
+            cs.position = shift(cs.position);
+        }
+    }
+    out
+}
+
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
     // Each btn=23px (22+1spacing), sep=2px (1+1spacing), pad=4px

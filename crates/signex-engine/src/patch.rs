@@ -4,6 +4,7 @@ use signex_types::schematic::{SelectedItem, SelectedKind};
 pub enum SemanticPatch {
     DocumentReplaced,
     TextUpdated,
+    LabelsMutated,
     SymbolFieldsUpdated,
     SelectionDeleted,
     SelectionMoved,

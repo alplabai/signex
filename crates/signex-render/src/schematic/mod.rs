@@ -485,7 +485,7 @@ pub(super) fn field_effective_style(
 
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
-pub(super) fn instance_transform(
+pub fn instance_transform(
     sym: &signex_types::schematic::Symbol,
     local: &signex_types::schematic::Point,
 ) -> (f64, f64) {
@@ -578,7 +578,9 @@ pub fn render_schematic(
         if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
             // Altium mode: always render the built-in power marker style,
             // independent of library symbol body details.
-            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            // Power-port label uses the same color as the symbol body —
+            // Altium convention.
+            draw_builtin_power(frame, sym, transform, power_color, power_color);
             continue;
         }
 
@@ -614,7 +616,9 @@ pub fn render_schematic(
             }
         } else if sym.is_power {
             // Built-in Altium-style power symbol rendering (no lib_symbol needed)
-            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            // Power-port label uses the same color as the symbol body —
+            // Altium convention.
+            draw_builtin_power(frame, sym, transform, power_color, power_color);
         }
     }
 
@@ -649,7 +653,7 @@ fn draw_builtin_power(
     let sw = transform.world_len(0.15).max(1.0);
     let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
 
-    // GND-like symbols should point downward from anchor, VCC-like upward.
+    // GND-like symbols point downward from anchor, VCC-like upward.
     let id = sym.lib_id.to_lowercase();
     let is_gnd_like = id.contains("gnd");
     let dir = if is_gnd_like { -1.0 } else { 1.0 };
@@ -669,7 +673,7 @@ fn draw_builtin_power(
     let net = sym.value.to_uppercase();
 
     if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
-        // GND: 3 horizontal lines of decreasing width
+        // GND: 3 horizontal lines of decreasing width (Altium uses 2.54 mm)
         let bar_w = 2.54;
         for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
             let dy = (pin_len + 0.4 * i as f64) * dir;
@@ -705,7 +709,7 @@ fn draw_builtin_power(
         });
         frame.stroke(&tri, stroke);
     } else if id.contains("earth") {
-        // Earth: horizontal bar + 3 diagonal hatch lines
+        // Earth: horizontal bar + 3 diagonal hatch lines (Altium 2.54 mm)
         let bar_w = 2.54;
         let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
@@ -737,8 +741,74 @@ fn draw_builtin_power(
                 stroke,
             );
         }
+    } else if id.contains("arrow") {
+        // Arrow: upward-pointing triangle at top of pin (Altium 2.54 mm base).
+        let base_y = pin_len * dir;
+        let tip_y = base_y + 1.4 * dir;
+        let pts = [
+            signex_types::schematic::Point::new(-1.27, base_y),
+            signex_types::schematic::Point::new(1.27, base_y),
+            signex_types::schematic::Point::new(0.0, tip_y),
+        ];
+        let screen_pts: Vec<iced::Point> = pts
+            .iter()
+            .map(|p| {
+                let (wx, wy) = instance_transform(sym, p);
+                transform.to_screen_point(wx, wy)
+            })
+            .collect();
+        let tri = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(screen_pts[0]);
+            b.line_to(screen_pts[2]);
+            b.line_to(screen_pts[1]);
+        });
+        frame.stroke(&tri, stroke);
+    } else if id.contains("wave") {
+        // Wave: sinusoidal cap
+        let base_y = pin_len * dir;
+        let steps = 24_i32;
+        let span = 2.6_f64;
+        let amp = 0.5_f64;
+        let mut pts: Vec<iced::Point> = Vec::with_capacity(steps as usize + 1);
+        for i in 0..=steps {
+            let t = i as f64 / steps as f64;
+            let x = -span / 2.0 + t * span;
+            let y = base_y + dir * amp * (t * std::f64::consts::PI * 2.0).sin();
+            let (wx, wy) = instance_transform(sym, &signex_types::schematic::Point::new(x, y));
+            pts.push(transform.to_screen_point(wx, wy));
+        }
+        let path = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(pts[0]);
+            for p in &pts[1..] {
+                b.line_to(*p);
+            }
+        });
+        frame.stroke(&path, stroke);
+    } else if id.contains("circle") {
+        // Circle: small open circle at pin top
+        let base_y = pin_len * dir + 0.6 * dir;
+        let (cx, cy) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, base_y));
+        let center = transform.to_screen_point(cx, cy);
+        let r = transform.world_len(0.6).max(2.0);
+        frame.stroke(&canvas::Path::circle(center, r), stroke);
+    } else if id.contains("bar") {
+        // Explicit "Bar" style — single horizontal bar (Altium convention).
+        let bar_w = 2.54;
+        let base_y = pin_len * dir;
+        let hw = bar_w * 0.5;
+        let (lx, ly) =
+            instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) =
+            instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
     } else {
-        // VCC / generic power: horizontal bar at top of pin
+        // VCC / generic power: horizontal bar at top of pin (Altium 2.54 mm)
         let bar_w = 2.54;
         let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
@@ -753,9 +823,31 @@ fn draw_builtin_power(
         );
     }
 
-    // Draw value label on the same side as symbol body.
-    let label_y = (pin_len + 1.5) * dir;
-    let font_size_mm = 1.27;
+    // Draw value label immediately below the *visible body* of the symbol.
+    // Each style has a different body extent beyond the pin stub, so the
+    // offset is computed per-shape rather than a single constant.
+    let body_extent = if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
+        // 3 decreasing GND bars span ~1.2 mm from top bar to bottom bar.
+        1.2
+    } else if id.contains("gndref") {
+        // Triangle height 1.27.
+        1.27
+    } else if id.contains("earth") {
+        // Bar + hatch ~0.8 mm.
+        0.9
+    } else if id.contains("arrow") {
+        // Triangle height 1.4.
+        1.4
+    } else if id.contains("circle") {
+        // Circle diameter ~1.2 mm.
+        1.2
+    } else {
+        // VCC / Bar: single bar has effectively zero extent beyond the pin.
+        0.0
+    };
+    let label_y = (pin_len + body_extent + 0.25) * dir;
+    // 10 pt — the canvas-wide default — matching Altium.
+    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
     let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font >= 1.0 {
         let (tx, ty) = instance_transform(
@@ -763,15 +855,47 @@ fn draw_builtin_power(
             &signex_types::schematic::Point::new(0.0, label_y),
         );
         let sp = transform.to_screen_point(tx, ty);
-        frame.fill_text(canvas::Text {
-            content: net,
-            position: sp,
-            color: label_color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: iced::alignment::Horizontal::Center.into(),
-            align_y: iced::alignment::Vertical::Top,
-            ..canvas::Text::default()
-        });
+        // Align text with the symbol's rotation so rotated GND / VCC ports
+        // don't display their label horizontally under a sideways glyph.
+        // Normalize rotation + decide whether the label should flip so it
+        // never renders upside down (180° rotations read as 0° in practice).
+        let rot_deg = ((sym.rotation.round() as i32) % 360 + 360) % 360;
+        // Rotate text so it reads along the body, never upside-down. For
+        // rotation 90° the body points left and we want the label to read
+        // bottom-to-top (standard electrical-drawing convention for
+        // vertically-oriented labels); 270° reads top-to-bottom.
+        let text_rot: f32 = match rot_deg {
+            90 => std::f32::consts::FRAC_PI_2,
+            180 => 0.0,
+            270 => -std::f32::consts::FRAC_PI_2,
+            _ => 0.0,
+        };
+        if text_rot.abs() < 1e-4 {
+            frame.fill_text(canvas::Text {
+                content: net,
+                position: sp,
+                color: label_color,
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: iced::alignment::Horizontal::Center.into(),
+                align_y: iced::alignment::Vertical::Top,
+                ..canvas::Text::default()
+            });
+        } else {
+            frame.with_save(|f| {
+                f.translate(iced::Vector::new(sp.x, sp.y));
+                f.rotate(text_rot);
+                f.fill_text(canvas::Text {
+                    content: net,
+                    position: iced::Point::ORIGIN,
+                    color: label_color,
+                    size: iced::Pixels(screen_font),
+                    font: crate::canvas_font(),
+                    align_x: iced::alignment::Horizontal::Center.into(),
+                    align_y: iced::alignment::Vertical::Top,
+                    ..canvas::Text::default()
+                });
+            });
+        }
     }
 }

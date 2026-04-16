@@ -3,7 +3,7 @@ use iced::Task;
 use super::super::super::*;
 
 impl Signex {
-    pub(super) fn handle_active_bar_filter_toggle(
+    pub(crate) fn handle_active_bar_filter_toggle(
         &mut self,
         filter: crate::active_bar::SelectionFilter,
     ) -> Task<Message> {
@@ -12,10 +12,12 @@ impl Signex {
         } else {
             self.interaction_state.selection_filters.insert(filter);
         }
+        self.document_state.panel_ctx.selection_filters =
+            self.interaction_state.selection_filters.clone();
         Task::none()
     }
 
-    pub(super) fn handle_active_bar_all_filters_toggle(&mut self) -> Task<Message> {
+    pub(crate) fn handle_active_bar_all_filters_toggle(&mut self) -> Task<Message> {
         if self.interaction_state.selection_filters.len()
             == crate::active_bar::SelectionFilter::ALL.len()
         {
@@ -24,6 +26,8 @@ impl Signex {
             self.interaction_state.selection_filters =
                 crate::active_bar::SelectionFilter::ALL.iter().copied().collect();
         }
+        self.document_state.panel_ctx.selection_filters =
+            self.interaction_state.selection_filters.clone();
         Task::none()
     }
 }

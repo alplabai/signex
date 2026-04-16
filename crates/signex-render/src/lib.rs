@@ -14,6 +14,12 @@ use std::sync::{OnceLock, RwLock};
 /// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 
+/// Default text size used everywhere on the schematic canvas — labels, symbol
+/// designators/values, pin name/number, graphic text. Kept as a single source
+/// so size changes flow through the whole renderer. 1.8 mm ≈ Altium "10 pt"
+/// (cap-height basis). Variable instead of a hardcoded literal.
+pub const SCHEMATIC_TEXT_MM: f64 = 1.8;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
 	KiCad,

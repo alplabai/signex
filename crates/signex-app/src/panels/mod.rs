@@ -203,6 +203,129 @@ pub struct PanelContext {
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
+    /// Selection filter state, shared with the Active Bar.
+    pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// Page formatting mode (Template / Standard / Custom).
+    pub page_format_mode: PageFormatMode,
+    /// Vertical page margin zones.
+    pub margin_vertical: u32,
+    /// Horizontal page margin zones.
+    pub margin_horizontal: u32,
+    /// Page coordinate origin.
+    pub page_origin: PageOrigin,
+    /// Custom paper width in mm (only used when page_format_mode == Custom).
+    pub custom_paper_w_mm: f32,
+    /// Custom paper height in mm (only used when page_format_mode == Custom).
+    pub custom_paper_h_mm: f32,
+    /// Sheet background colour.
+    pub sheet_color: SheetColor,
+}
+
+/// Sheet background colour presets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetColor {
+    Black,
+    White,
+    DarkGray,
+    LightGray,
+    Cream,
+}
+
+impl Default for SheetColor {
+    fn default() -> Self {
+        Self::Black
+    }
+}
+
+impl SheetColor {
+    pub fn to_color(self) -> iced::Color {
+        match self {
+            SheetColor::Black => iced::Color::from_rgb8(0x14, 0x14, 0x14),
+            SheetColor::White => iced::Color::WHITE,
+            SheetColor::DarkGray => iced::Color::from_rgb8(0x2A, 0x2A, 0x2A),
+            SheetColor::LightGray => iced::Color::from_rgb8(0xD0, 0xD0, 0xD0),
+            SheetColor::Cream => iced::Color::from_rgb8(0xFB, 0xF4, 0xE0),
+        }
+    }
+    pub const ALL: &'static [SheetColor] = &[
+        SheetColor::Black,
+        SheetColor::White,
+        SheetColor::DarkGray,
+        SheetColor::LightGray,
+        SheetColor::Cream,
+    ];
+}
+
+impl std::fmt::Display for SheetColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            SheetColor::Black => "Black",
+            SheetColor::White => "White",
+            SheetColor::DarkGray => "Dark Gray",
+            SheetColor::LightGray => "Light Gray",
+            SheetColor::Cream => "Cream",
+        })
+    }
+}
+
+/// Altium-style page formatting mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageFormatMode {
+    Template,
+    Standard,
+    Custom,
+}
+
+impl Default for PageFormatMode {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+/// Altium-style page coordinate origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageOrigin {
+    UpperLeft,
+    LowerLeft,
+}
+
+impl Default for PageOrigin {
+    fn default() -> Self {
+        Self::LowerLeft
+    }
+}
+
+impl std::fmt::Display for PageOrigin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            PageOrigin::UpperLeft => "Upper Left",
+            PageOrigin::LowerLeft => "Lower Left",
+        })
+    }
+}
+
+/// Supported paper sizes (Altium-compatible subset).
+pub const PAPER_SIZES: &[&str] = &[
+    "A0", "A1", "A2", "A3", "A4", "A5",
+    "B5",
+    "Letter", "Legal", "Tabloid",
+];
+
+/// (width_mm, height_mm) for a paper size string.
+pub fn paper_dimensions(size: &str) -> (f32, f32) {
+    match size {
+        "A0" => (1189.0, 841.0),
+        "A1" => (841.0, 594.0),
+        "A2" => (594.0, 420.0),
+        "A3" => (420.0, 297.0),
+        "A4" => (297.0, 210.0),
+        "A5" => (210.0, 148.0),
+        "B5" => (257.0, 182.0),
+        "Letter" => (279.4, 215.9),
+        "Legal" => (355.6, 215.9),
+        "Tabloid" => (431.8, 279.4),
+        _ => (297.0, 210.0),
+    }
 }
 
 /// Pre-placement configuration data — shown in Properties panel when Tab pressed.
@@ -246,8 +369,27 @@ pub enum PanelMsg {
     ToggleSymbolLocked(uuid::Uuid),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
+    /// Set absolute rotation on a symbol (degrees).
+    EditSymbolRotation(uuid::Uuid, f64),
+    /// Set font size (Altium pt) on a symbol's value text property.
+    EditSymbolValueFontSizePt(uuid::Uuid, u32),
+    /// Change the lib_id of a symbol (used by power-port Style dropdown).
+    EditSymbolLibId(uuid::Uuid, String),
+    /// Swap a power-port's style: change lib_id and preserve visual direction
+    /// by setting rotation accordingly.
+    EditPowerPortStyle {
+        symbol_id: uuid::Uuid,
+        new_lib_id: String,
+        rotation_degrees: f64,
+    },
     /// Edit a label's text (committed on submit).
     EditLabelText(uuid::Uuid, String),
+    /// Edit a label's horizontal justification.
+    EditLabelJustifyH(uuid::Uuid, signex_types::schematic::HAlign),
+    /// Edit a label's rotation (degrees).
+    EditLabelRotation(uuid::Uuid, f64),
+    /// Edit a label's font size in Altium pt (10 = 2.54 mm).
+    EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
     EditTextNoteText(uuid::Uuid, String),
     /// Pre-placement: update label/text field.
@@ -284,6 +426,22 @@ pub enum PanelMsg {
     SetMarginVertical(u32),
     /// Set page margin horizontal zones.
     SetMarginHorizontal(u32),
+    /// Toggle a single selection filter — shared with the Active Bar.
+    ToggleSelectionFilter(crate::active_bar::SelectionFilter),
+    /// Toggle all selection filters on/off — shared with the Active Bar.
+    ToggleAllSelectionFilters,
+    /// Page Options: choose formatting mode.
+    SetPageFormatMode(PageFormatMode),
+    /// Page Options: choose paper size.
+    SetPaperSize(String),
+    /// Page Options: choose origin corner.
+    SetPageOrigin(PageOrigin),
+    /// Page Options: set custom paper width (mm).
+    SetCustomPaperWidth(f32),
+    /// Page Options: set custom paper height (mm).
+    SetCustomPaperHeight(f32),
+    /// Page Options: choose sheet background colour.
+    SetSheetColor(SheetColor),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
@@ -996,6 +1154,219 @@ fn view_selected_element_properties<'a>(
     col = col.push(thin_sep(border_c));
 
     // ── Editable properties based on element type ──
+    // Power ports get their own Altium-style panel; regular symbols keep the
+    // existing designator/value/footprint layout.
+    let is_power_port = elem_type == "Power Port";
+
+    if is_power_port && let Some(id) = uuid {
+        let value = get("Value");
+        let position = get("Position");
+        let rotation_str = get("Rotation");
+        let lib_id = get("Library ID");
+        let rotation_deg = rotation_str
+            .trim_end_matches('°')
+            .trim()
+            .parse::<f64>()
+            .unwrap_or(0.0);
+        // Pick a Style token by looking inside the lib_id (same logic the
+        // built-in power renderer uses).
+        let lid = lib_id.to_lowercase();
+        let current_style = if lid.contains("gnd") && !lid.contains("earth") && !lid.contains("gndref") { "Power Ground" }
+            else if lid.contains("gndref") { "Signal Ground" }
+            else if lid.contains("earth") { "Earth" }
+            else if lid.contains("arrow") { "Arrow" }
+            else if lid.contains("wave") { "Wave" }
+            else if lid.contains("circle") { "Circle" }
+            else if lid.contains("bar") { "Bar" }
+            else { "Bar" };
+        let style_options: Vec<String> = [
+            "Bar", "Arrow", "Wave", "Circle", "Power Ground", "Signal Ground", "Earth",
+        ].iter().map(|s| (*s).to_string()).collect();
+
+        // ── Location ──
+        let pos_loc = position.clone();
+        let rot_current = rotation_deg;
+        col = col.push(collapsible_section(
+            "sel_location",
+            "Location",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_input_row("(X/Y)", &pos_loc, muted, input_bg, input_bdr));
+                let rotation_opts: Vec<String> = vec![
+                    "0 Degrees".into(),
+                    "90 Degrees".into(),
+                    "180 Degrees".into(),
+                    "270 Degrees".into(),
+                ];
+                let rot_label = format!("{:.0} Degrees", rot_current);
+                c = c.push(form_pick_row(
+                    "Rotation",
+                    rotation_opts,
+                    rot_label,
+                    move |s| {
+                        let deg = s.split_whitespace().next()
+                            .and_then(|n| n.parse::<f64>().ok()).unwrap_or(0.0);
+                        PanelMsg::EditSymbolRotation(id, deg)
+                    },
+                    muted,
+                ));
+                c
+            },
+        ));
+
+        // ── Properties (Name, Style) ──
+        let name_val = value.clone();
+        let base_lib = lib_id.clone();
+        col = col.push(collapsible_section(
+            "sel_props",
+            "Properties",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_edit_row("Name", &name_val, muted,
+                    move |s| PanelMsg::EditSymbolValue(id, s)));
+                let base_lib = base_lib.clone();
+                let current_rot = rot_current;
+                c = c.push(form_pick_row(
+                    "Style",
+                    style_options,
+                    current_style.to_string(),
+                    move |style_label| {
+                        // Map Altium Style label → lib_id keyword the built-in
+                        // power renderer recognizes.
+                        let tag = match style_label.as_str() {
+                            "Bar" => "bar",
+                            "Arrow" => "arrow",
+                            "Wave" => "wave",
+                            "Circle" => "circle",
+                            "Power Ground" => "GND",
+                            "Signal Ground" => "GNDREF",
+                            "Earth" => "Earth",
+                            _ => "bar",
+                        };
+                        let new_lib = format!("power:{tag}");
+                        // The built-in renderer flips body direction when
+                        // lib_id contains "gnd". Compensate rotation so the
+                        // port keeps its current visual orientation: if we
+                        // are switching between gnd-like and non-gnd-like,
+                        // rotate by +180° from current, else keep current.
+                        let old_gnd = base_lib.to_lowercase().contains("gnd")
+                            && !base_lib.to_lowercase().contains("earth");
+                        let new_gnd = new_lib.to_lowercase().contains("gnd")
+                            && !new_lib.to_lowercase().contains("earth");
+                        let target_rot = if old_gnd != new_gnd {
+                            (current_rot + 180.0).rem_euclid(360.0)
+                        } else {
+                            current_rot
+                        };
+                        PanelMsg::EditPowerPortStyle {
+                            symbol_id: id,
+                            new_lib_id: new_lib,
+                            rotation_degrees: target_rot,
+                        }
+                    },
+                    muted,
+                ));
+                c
+            },
+        ));
+
+        // Add Font + B/I/U/T row to Properties section via a second collapsible
+        col = col.push(collapsible_section(
+            "sel_props_font",
+            "Font",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                let font_opts: Vec<String> = vec![
+                    "Iosevka Fixed SS03".into(),
+                    "Roboto".into(),
+                    "Fira Code".into(),
+                    "Arial".into(),
+                    "Times New Roman".into(),
+                ];
+                c = c.push(form_pick_row(
+                    "Font",
+                    font_opts,
+                    "Iosevka Fixed SS03".to_string(),
+                    |_| PanelMsg::Noop,
+                    muted,
+                ));
+                let size_opts: Vec<String> =
+                    [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect();
+                c = c.push(form_pick_row(
+                    "Size",
+                    size_opts,
+                    "10".to_string(),
+                    move |s| {
+                        let pt: u32 = s.parse().unwrap_or(10);
+                        PanelMsg::EditSymbolValueFontSizePt(id, pt)
+                    },
+                    muted,
+                ));
+                c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                c
+            },
+        ));
+
+        // ── General (Net) — informational ──
+        let phys_name = value.clone();
+        col = col.push(collapsible_section(
+            "sel_net",
+            "General (Net)",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_input_row("Physical Name", &phys_name, muted, input_bg, input_bdr));
+                c = c.push(form_input_row("Net Name", &phys_name, muted, input_bg, input_bdr));
+                c = c.push(net_numeric_row("Power Net", "0.000", "V", muted, input_bg, input_bdr));
+                c = c.push(net_numeric_row("High Speed", "0.000", "Hz", muted, input_bg, input_bdr));
+                let dp_opts: Vec<String> = vec!["None".into()];
+                c = c.push(form_pick_row(
+                    "Differential Pair",
+                    dp_opts,
+                    "None".to_string(),
+                    |_| PanelMsg::Noop,
+                    muted,
+                ));
+                c
+            },
+        ));
+
+        // ── Parameters (Net) — placeholder (no parameters/rules/classes yet) ──
+        col = col.push(collapsible_section(
+            "sel_net_params",
+            "Parameters (Net)",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(net_params_tabs(primary, muted, input_bg, input_bdr));
+                c = c.push(net_params_header(muted, border_c));
+                c = c.push(empty_section_row("No Parameters", muted, border_c));
+                c = c.push(empty_section_row("No Rules", muted, border_c));
+                c = c.push(empty_section_row("No Classes", muted, border_c));
+                c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
+                c
+            },
+        ));
+
+        return scrollable(col).width(Length::Fill).into();
+    }
+
     match selected_kind {
         Some(signex_types::schematic::SelectedKind::Symbol) => {
             let reference = get("Reference");
@@ -1122,38 +1493,110 @@ fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::Label) => {
             let label_text = get("Text");
             let position = get("Position");
-            let rotation = get("Rotation");
-            let text_size = get("Text Size");
-            let justify_h = get("Horizontal Justification");
+            let rotation_str = get("Rotation");
+            let text_size_str = get("Text Size");
+            let justify_h_str = get("Horizontal Justification");
+
+            // Parse numeric values for edit controls (with fallbacks).
+            let rotation_deg = rotation_str
+                .trim_end_matches('°')
+                .trim()
+                .parse::<f64>()
+                .unwrap_or(0.0);
+            let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
+            let justify_h = match justify_h_str.as_str() {
+                "Left" => signex_types::schematic::HAlign::Left,
+                "Right" => signex_types::schematic::HAlign::Right,
+                _ => signex_types::schematic::HAlign::Center,
+            };
 
             if let Some(id) = uuid {
+                // ── Location ──
+                let pos_clone = position.clone();
+                let rot_current = rotation_deg;
                 col = col.push(collapsible_section(
-                    "sel_basic",
-                    "Basic Properties",
+                    "sel_location",
+                    "Location",
                     &ctx.collapsed_sections,
-                    muted,
+                    primary,
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Text", &label_text, muted,
-                            move |s| PanelMsg::EditLabelText(id, s)));
-                        c = c.push(form_input_row("Label Type", elem_type, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row("(X/Y)", &pos_clone, muted, input_bg, input_bdr));
+                        let rotation_opts: Vec<String> = vec![
+                            "0 Degrees".into(),
+                            "90 Degrees".into(),
+                            "180 Degrees".into(),
+                            "270 Degrees".into(),
+                        ];
+                        let rot_label = format!("{:.0} Degrees", rot_current);
+                        c = c.push(form_pick_row(
+                            "Rotation",
+                            rotation_opts,
+                            rot_label,
+                            move |s| {
+                                let deg = s.split_whitespace().next()
+                                    .and_then(|n| n.parse::<f64>().ok()).unwrap_or(0.0);
+                                PanelMsg::EditLabelRotation(id, deg)
+                            },
+                            muted,
+                        ));
                         c
                     },
                 ));
 
+                // ── Properties (Net Name, Font, Justification) ──
+                let net_name = label_text.clone();
                 col = col.push(collapsible_section(
-                    "sel_text",
-                    "Text Properties",
+                    "sel_props",
+                    "Properties",
                     &ctx.collapsed_sections,
-                    muted,
+                    primary,
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
+                        c = c.push(form_edit_row("Net Name", &net_name, muted,
+                            move |s| PanelMsg::EditLabelText(id, s)));
+                        // Font family + size + color (color + family are cosmetic for now)
+                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
+                        let default_font = font_opts
+                            .iter()
+                            .find(|f| f.to_lowercase().contains("iosevka"))
+                            .cloned()
+                            .unwrap_or_else(|| font_opts.first().cloned().unwrap_or_default());
+                        c = c.push(form_pick_row(
+                            "Font",
+                            font_opts,
+                            default_font,
+                            |_| PanelMsg::Noop,
+                            muted,
+                        ));
+                        let size_opts: Vec<String> = [
+                            6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72,
+                        ]
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect();
+                        c = c.push(form_pick_row(
+                            "Font Size",
+                            size_opts,
+                            text_size_pt.to_string(),
+                            move |s| {
+                                let pt: u32 = s.parse().unwrap_or(10);
+                                PanelMsg::EditLabelFontSizePt(id, pt)
+                            },
+                            muted,
+                        ));
+                        // B/I/U/T row — cosmetic for now.
+                        c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                        // 3x3 Justification grid — Altium's 9-point anchor picker.
+                        c = c.push(form_label("Justification", muted));
+                        c = c.push(
+                            container(
+                                justification_grid(id, justify_h, input_bg, input_bdr, primary, muted),
+                            )
+                            .padding([4, 8]),
+                        );
                         c
                     },
                 ));
@@ -1338,7 +1781,6 @@ fn view_properties_general<'a>(
     // Derive button/input colors from tokens (Copy values captured in closures)
     let input_bg   = crate::styles::ti(ctx.tokens.selection); // deep blue tint
     let input_bdr  = crate::styles::ti(ctx.tokens.accent);
-    let tag_bg     = crate::styles::ti(ctx.tokens.accent);
     let tag_hover  = {
         let c = crate::styles::ti(ctx.tokens.accent);
         Color { r: (c.r * 1.3).min(1.0), g: (c.g * 1.3).min(1.0), b: (c.b * 1.3).min(1.0), ..c }
@@ -1347,38 +1789,76 @@ fn view_properties_general<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Selection Filter (collapsible)
-    col = col.push(collapsible_section(
-        "prop_sel_filter",
-        "Selection Filter",
-        &ctx.collapsed_sections,
-        primary,
-        border_c,
-        || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(
-                container(
-                    Wrap::new()
-                        .spacing(4.0)
-                        .line_spacing(4.0)
-                        .push(tag_btn("Components", tag_bg, tag_hover))
-                        .push(tag_btn("Wires", tag_bg, tag_hover))
-                        .push(tag_btn("Buses", tag_bg, tag_hover))
-                        .push(tag_btn("Sheet Symbols", tag_bg, tag_hover))
-                        .push(tag_btn("Sheet Entries", tag_bg, tag_hover))
-                        .push(tag_btn("Net Labels", tag_bg, tag_hover))
-                        .push(tag_btn("Parameters", tag_bg, tag_hover))
-                        .push(tag_btn("Ports", tag_bg, tag_hover))
-                        .push(tag_btn("Power Ports", tag_bg, tag_hover))
-                        .push(tag_btn("Texts", tag_bg, tag_hover))
-                        .push(tag_btn("Drawing Objects", tag_bg, tag_hover))
-                        .push(tag_btn("Other", tag_bg, tag_hover)),
+    // Selection Filter (collapsible) — shares state with the Active Bar filter dropdown.
+    {
+        use crate::active_bar::SelectionFilter;
+        let filters = ctx.selection_filters.clone();
+        let all_on = filters.len() == SelectionFilter::ALL.len();
+        col = col.push(collapsible_section(
+            "prop_sel_filter",
+            "Selection Filter",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                // All-On/Off toggle row
+                let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+                let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+                let all_active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
+                let all_inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
+                let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+                let all_text_on = Color::WHITE;
+                let all_label = if all_on { "All - On" } else { "All - Off" };
+                let all_toggle = iced::widget::button(
+                    text(all_label.to_string())
+                        .size(10)
+                        .color(if all_on { all_text_on } else { all_text_off })
+                        .align_x(iced::alignment::Horizontal::Center),
                 )
-                .padding([6, 8]),
-            );
-            c
-        },
-    ));
+                .padding([3, 10])
+                .on_press(PanelMsg::ToggleAllSelectionFilters)
+                .style(move |_: &Theme, status: iced::widget::button::Status| {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => Background::Color(tag_hover),
+                        _ => Background::Color(if all_on { all_active_bg } else { all_inactive_bg }),
+                    };
+                    iced::widget::button::Style {
+                        background: Some(bg),
+                        border: Border {
+                            width: 1.0,
+                            radius: 12.0.into(),
+                            color: if all_on { all_active_border } else { all_inactive_border },
+                        },
+                        text_color: if all_on { all_text_on } else { all_text_off },
+                        ..iced::widget::button::Style::default()
+                    }
+                });
+                let mut c = Column::new().spacing(4).width(Length::Fill);
+                c = c.push(container(all_toggle).padding([4, 8]));
+                c = c.push(
+                    container(
+                        Wrap::new()
+                            .spacing(4.0)
+                            .line_spacing(4.0)
+                            .push(tag_btn("Components", SelectionFilter::Components, filters.contains(&SelectionFilter::Components), tag_hover))
+                            .push(tag_btn("Wires", SelectionFilter::Wires, filters.contains(&SelectionFilter::Wires), tag_hover))
+                            .push(tag_btn("Buses", SelectionFilter::Buses, filters.contains(&SelectionFilter::Buses), tag_hover))
+                            .push(tag_btn("Sheet Symbols", SelectionFilter::SheetSymbols, filters.contains(&SelectionFilter::SheetSymbols), tag_hover))
+                            .push(tag_btn("Sheet Entries", SelectionFilter::SheetEntries, filters.contains(&SelectionFilter::SheetEntries), tag_hover))
+                            .push(tag_btn("Net Labels", SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels), tag_hover))
+                            .push(tag_btn("Parameters", SelectionFilter::Parameters, filters.contains(&SelectionFilter::Parameters), tag_hover))
+                            .push(tag_btn("Ports", SelectionFilter::Ports, filters.contains(&SelectionFilter::Ports), tag_hover))
+                            .push(tag_btn("Power Ports", SelectionFilter::PowerPorts, filters.contains(&SelectionFilter::PowerPorts), tag_hover))
+                            .push(tag_btn("Texts", SelectionFilter::Texts, filters.contains(&SelectionFilter::Texts), tag_hover))
+                            .push(tag_btn("Drawing Objects", SelectionFilter::DrawingObjects, filters.contains(&SelectionFilter::DrawingObjects), tag_hover))
+                            .push(tag_btn("Other", SelectionFilter::Other, filters.contains(&SelectionFilter::Other), tag_hover)),
+                    )
+                    .padding([6, 8]),
+                );
+                c
+            },
+        ));
+    }
 
     // General (collapsible)
     {
@@ -1393,6 +1873,7 @@ fn view_properties_general<'a>(
         let canvas_font_bold = ctx.canvas_font_bold;
         let canvas_font_italic = ctx.canvas_font_italic;
         let canvas_font_popup_open = ctx.canvas_font_popup_open;
+        let sheet_color = ctx.sheet_color;
         col = col.push(collapsible_section(
             "prop_general",
             "General",
@@ -1450,7 +1931,14 @@ fn view_properties_general<'a>(
                         }),
                     );
                 }
-                c = c.push(form_input_row("Sheet Color", "Black", muted, input_bg, input_bdr));
+                let sheet_colors: Vec<SheetColor> = SheetColor::ALL.to_vec();
+                c = c.push(form_pick_row(
+                    "Sheet Color",
+                    sheet_colors,
+                    sheet_color,
+                    PanelMsg::SetSheetColor,
+                    muted,
+                ));
                 c
             },
         ));
@@ -1459,6 +1947,12 @@ fn view_properties_general<'a>(
     // Page Options (collapsible)
     {
         let paper_size = ctx.paper_size.clone();
+        let format_mode = ctx.page_format_mode;
+        let margin_v = ctx.margin_vertical;
+        let margin_h = ctx.margin_horizontal;
+        let origin = ctx.page_origin;
+        let custom_w = ctx.custom_paper_w_mm;
+        let custom_h = ctx.custom_paper_h_mm;
         col = col.push(collapsible_section(
             "prop_page_opts",
             "Page Options",
@@ -1471,40 +1965,102 @@ fn view_properties_general<'a>(
                 c = c.push(
                     container(
                         row![
-                            seg_btn("Template", true, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
-                            seg_btn("Standard", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
-                            seg_btn("Custom", false, PanelMsg::Noop, input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn(
+                                "Template",
+                                format_mode == PageFormatMode::Template,
+                                PanelMsg::SetPageFormatMode(PageFormatMode::Template),
+                                input_bg, primary, muted, seg_hover, input_bdr,
+                            ),
+                            seg_btn(
+                                "Standard",
+                                format_mode == PageFormatMode::Standard,
+                                PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
+                                input_bg, primary, muted, seg_hover, input_bdr,
+                            ),
+                            seg_btn(
+                                "Custom",
+                                format_mode == PageFormatMode::Custom,
+                                PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
+                                input_bg, primary, muted, seg_hover, input_bdr,
+                            ),
                         ]
                         .spacing(0.0)
                         .width(Length::Fill),
                     )
                     .padding([2, 8]),
                 );
-                c = c.push(form_input_row("Paper", &paper_size, muted, input_bg, input_bdr));
-                let dims = match paper_size.as_str() {
-                    "A4" => "Width: 297mm  Height: 210mm",
-                    "A3" => "Width: 420mm  Height: 297mm",
-                    _ => "Width: 297mm  Height: 210mm",
-                };
-                c = c.push(container(text(dims.to_string()).size(10).color(muted)).padding([3, 8]));
+                // Standard + Template modes share the size picker. Custom mode replaces
+                // it with width/height inputs.
+                match format_mode {
+                    PageFormatMode::Standard | PageFormatMode::Template => {
+                        let paper_options: Vec<String> =
+                            PAPER_SIZES.iter().map(|s| (*s).to_string()).collect();
+                        c = c.push(form_pick_row(
+                            "Paper",
+                            paper_options,
+                            paper_size.clone(),
+                            PanelMsg::SetPaperSize,
+                            muted,
+                        ));
+                        let (w, h) = paper_dimensions(&paper_size);
+                        let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
+                        c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
+                        if matches!(format_mode, PageFormatMode::Template) {
+                            c = c.push(
+                                container(
+                                    text("Template: using A-series defaults")
+                                        .size(10)
+                                        .color(muted),
+                                )
+                                .padding([0, 8]),
+                            );
+                        }
+                    }
+                    PageFormatMode::Custom => {
+                        c = c.push(form_mm_edit_row(
+                            "Width",
+                            custom_w,
+                            PanelMsg::SetCustomPaperWidth,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_mm_edit_row(
+                            "Height",
+                            custom_h,
+                            PanelMsg::SetCustomPaperHeight,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                    }
+                }
                 c = c.push(form_label("Margin and Zones", muted));
-                c = c.push(form_number_row(
+                c = c.push(form_int_edit_row(
                     "Vertical",
-                    1_u32,
-                    0..=10,
-                    1,
+                    margin_v,
                     PanelMsg::SetMarginVertical,
                     muted,
+                    input_bg,
+                    input_bdr,
                 ));
-                c = c.push(form_number_row(
+                c = c.push(form_int_edit_row(
                     "Horizontal",
-                    1_u32,
-                    0..=10,
-                    1,
+                    margin_h,
                     PanelMsg::SetMarginHorizontal,
                     muted,
+                    input_bg,
+                    input_bdr,
                 ));
-                c = c.push(form_input_row("Origin", "Upper Left", muted, input_bg, input_bdr));
+                let origin_opts: Vec<PageOrigin> =
+                    vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
+                c = c.push(form_pick_row(
+                    "Origin",
+                    origin_opts,
+                    origin,
+                    PanelMsg::SetPageOrigin,
+                    muted,
+                ));
                 c
             },
         ));
@@ -1724,6 +2280,131 @@ fn form_input_row<'a, M: 'a>(
     .into()
 }
 
+/// Form row: label | integer text_input (no spinner buttons).
+fn form_int_edit_row<'a>(
+    label: &str,
+    value: u32,
+    on_change: impl Fn(u32) -> PanelMsg + 'a + Clone,
+    label_c: Color,
+    input_bg: Color,
+    input_border: Color,
+) -> Element<'a, PanelMsg> {
+    let text_value = value.to_string();
+    let on_change_cl = on_change.clone();
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::text_input("", &text_value)
+                .on_input(move |s| {
+                    let parsed: u32 = s.trim().parse().unwrap_or(0);
+                    (on_change_cl)(parsed.min(99))
+                })
+                .size(11)
+                .padding([3, 6])
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+                .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                    background: Background::Color(input_bg),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: input_border,
+                    },
+                    icon: Color::TRANSPARENT,
+                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
+                    value: Color::WHITE,
+                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
+                }),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | floating-point mm text_input (no spinner buttons).
+fn form_mm_edit_row<'a>(
+    label: &str,
+    value: f32,
+    on_change: impl Fn(f32) -> PanelMsg + 'a + Clone,
+    label_c: Color,
+    input_bg: Color,
+    input_border: Color,
+) -> Element<'a, PanelMsg> {
+    let text_value = format!("{value:.1}");
+    let on_change_cl = on_change.clone();
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::text_input("", &text_value)
+                .on_input(move |s| {
+                    let parsed: f32 = s.trim().parse().unwrap_or(0.0);
+                    (on_change_cl)(parsed.clamp(1.0, 2000.0))
+                })
+                .size(11)
+                .padding([3, 6])
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+                .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                    background: Background::Color(input_bg),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: input_border,
+                    },
+                    icon: Color::TRANSPARENT,
+                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
+                    value: Color::WHITE,
+                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
+                }),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Form row: label | pick_list (dropdown).
+fn form_pick_row<'a, T>(
+    label: &str,
+    options: Vec<T>,
+    selected: T,
+    on_change: impl Fn(T) -> PanelMsg + 'a,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: Clone + Eq + std::fmt::Display + 'static,
+{
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::pick_list(options, Some(selected), on_change)
+                .text_size(11)
+                .padding([2, 6])
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(8.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
 /// Form row: label | custom widget.
 #[allow(dead_code)]
 fn form_label_row<'a>(
@@ -1917,7 +2598,7 @@ fn form_check_row_shortcut<'a>(
                 .size(11)
                 .color(label_c)
                 .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::Word),
             row![
                 iced::widget::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
@@ -1925,8 +2606,9 @@ fn form_check_row_shortcut<'a>(
                     .spacing(4),
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
-                    .size(10)
-                    .color(label_c),
+                    .size(9)
+                    .color(label_c)
+                    .wrapping(iced::widget::text::Wrapping::None),
             ]
             .spacing(4)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -1936,6 +2618,7 @@ fn form_check_row_shortcut<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
+    .clip(true)
     .into()
 }
 
@@ -2168,23 +2851,353 @@ fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
         .into()
 }
 
-/// Selection filter tag button (Altium blue pill).
-fn tag_btn(label: &str, bg: Color, hover_bg: Color) -> Element<'static, PanelMsg> {
+/// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
+fn font_style_row<'a>(
+    label_c: Color,
+    primary: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    let btn = |glyph: &'static str, style: iced::font::Weight| -> Element<'static, PanelMsg> {
+        iced::widget::button(
+            text(glyph.to_string())
+                .size(12)
+                .color(primary)
+                .font(iced::Font { weight: style, ..iced::Font::DEFAULT })
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .width(Length::Fill)
+        .padding([4, 6])
+        .on_press(PanelMsg::Noop)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            iced::widget::button::Style {
+                background: Some(Background::Color(if hovered { input_bdr } else { input_bg })),
+                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                text_color: primary,
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    };
+    container(
+        row![
+            btn("B", iced::font::Weight::Bold),
+            btn("I", iced::font::Weight::Normal),
+            btn("U", iced::font::Weight::Normal),
+            btn("T", iced::font::Weight::Normal),
+        ]
+        .spacing(2.0)
+        .width(Length::Fill),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Net-attribute row: label | checkbox | text value | unit. Used for
+/// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".
+fn net_numeric_row<'a>(
+    label: &str,
+    value: &str,
+    unit: &str,
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text(label.to_string())
+                .size(11)
+                .color(label_c)
+                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+                .wrapping(iced::widget::text::Wrapping::None),
+            iced::widget::checkbox(false)
+                .on_toggle(|_| PanelMsg::Noop)
+                .size(12)
+                .spacing(4),
+            container(
+                text(value.to_string())
+                    .size(11)
+                    .color(label_c),
+            )
+            .padding([3, 6])
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(input_bg)),
+                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                ..container::Style::default()
+            }),
+            text(unit.to_string()).size(10).color(label_c),
+        ]
+        .spacing(6.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
+fn net_params_tabs<'a>(
+    primary: Color,
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    let tab = |label: &'static str, active: bool| -> Element<'static, PanelMsg> {
+        let bg_active = input_bdr;
+        let fg_active = Color::WHITE;
+        let fg_inactive = primary;
+        iced::widget::button(
+            text(label.to_string())
+                .size(11)
+                .color(if active { fg_active } else { fg_inactive })
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([3, 12])
+        .on_press(PanelMsg::Noop)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    bg_active
+                } else if hovered {
+                    input_bdr
+                } else {
+                    input_bg
+                })),
+                border: Border { width: 1.0, radius: 3.0.into(), color: input_bdr },
+                text_color: if active { fg_active } else { fg_inactive },
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    };
+    let _ = label_c;
+    container(
+        row![
+            tab("All", true),
+            tab("Parameters", false),
+            tab("Rules", false),
+            tab("Classes", false),
+        ]
+        .spacing(4.0),
+    )
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Two-column Name / Value header for the Parameters (Net) table.
+fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            text("Name".to_string()).size(10).color(label_c).width(Length::FillPortion(2)),
+            text("Value".to_string()).size(10).color(label_c).width(Length::FillPortion(3)),
+        ]
+        .spacing(4.0),
+    )
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        border: Border { width: 1.0, radius: 0.0.into(), color: border_c },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// Empty-state row — centered muted text spanning the whole row.
+fn empty_section_row<'a>(
+    label: &str,
+    label_c: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    container(
+        container(text(label.to_string()).size(10).color(label_c))
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding([6, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        border: Border { width: 1.0, radius: 0.0.into(), color: border_c },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// Add / edit / delete toolbar at the bottom of the Parameters table.
+fn net_params_add_bar<'a>(
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+) -> Element<'a, PanelMsg> {
+    let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
+        iced::widget::button(
+            text(label.to_string()).size(11).color(label_c),
+        )
+        .padding([4, 8])
+        .on_press(PanelMsg::Noop)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(Background::Color(input_bg)),
+            border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+            text_color: label_c,
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+    };
+    container(
+        row![
+            Space::new().width(Length::Fill),
+            iced::widget::button(text("Add \u{25BE}".to_string()).size(11).color(Color::WHITE))
+                .padding([4, 12])
+                .on_press(PanelMsg::Noop)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(Background::Color(input_bdr)),
+                    border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                    text_color: Color::WHITE,
+                    ..iced::widget::button::Style::default()
+                }),
+            icon_btn("\u{270E}"),
+            icon_btn("\u{1F5D1}"),
+        ]
+        .spacing(4.0)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([6, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Altium-style 3x3 justification picker with proper SVG arrow icons.
+/// Only horizontal is wired to state for now; vertical slots toggle visually
+/// but don't mutate the label.
+fn justification_grid(
+    id: uuid::Uuid,
+    h: signex_types::schematic::HAlign,
+    input_bg: Color,
+    input_bdr: Color,
+    primary: Color,
+    muted: Color,
+) -> Element<'static, PanelMsg> {
+    use std::sync::LazyLock;
+    use signex_types::schematic::HAlign;
+    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg")));
+    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg")));
+    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg")));
+    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg")));
+    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg")));
+    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg")));
+    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg")));
+    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg")));
+    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg")));
+    let _ = muted;
+
+    // Cell size mimics Altium's compact 24×24 px anchor picker.
+    const CELL_SIZE: f32 = 24.0;
+    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+                active: bool,
+                on_press: PanelMsg| -> Element<'static, PanelMsg> {
+        let bg_active = input_bdr;
+        let fg_active = Color::WHITE;
+        let fg_inactive = primary;
+        let svg_widget = iced::widget::svg((*handle).clone())
+            .width(12.0)
+            .height(12.0)
+            .style(move |_: &Theme, _| iced::widget::svg::Style {
+                color: Some(if active { fg_active } else { fg_inactive }),
+            });
+        iced::widget::button(
+            container(svg_widget)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center(Length::Fill),
+        )
+        .width(CELL_SIZE)
+        .height(CELL_SIZE)
+        .padding(0)
+        .on_press(on_press)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            let bg = if active { bg_active } else if hovered { input_bdr } else { input_bg };
+            iced::widget::button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                text_color: if active { fg_active } else { fg_inactive },
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    };
+    // Only the middle-row cell of the matching column lights up — labels in
+    // KiCad have no vertical-justify field, so the top/bottom rows of the
+    // 9-grid are visual controls only (a future addition).
+    let hl_mid = |target: HAlign| -> bool { h == target };
+    iced::widget::column![
+        iced::widget::row![
+            cell(&ICON_TL, false, PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
+            cell(&ICON_T,  false, PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
+            cell(&ICON_TR, false, PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
+        ].spacing(2),
+        iced::widget::row![
+            cell(&ICON_L,  hl_mid(HAlign::Left),   PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
+            cell(&ICON_C,  hl_mid(HAlign::Center), PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
+            cell(&ICON_R,  hl_mid(HAlign::Right),  PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
+        ].spacing(2),
+        iced::widget::row![
+            cell(&ICON_BL, false, PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
+            cell(&ICON_B,  false, PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
+            cell(&ICON_BR, false, PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
+        ].spacing(2),
+    ]
+    .spacing(2)
+    .into()
+}
+
+/// Selection filter tag button — Altium pill with active/inactive state.
+fn tag_btn(
+    label: &str,
+    filter: crate::active_bar::SelectionFilter,
+    enabled: bool,
+    hover_bg: Color,
+) -> Element<'static, PanelMsg> {
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
+    let inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     iced::widget::button(
         text(label.to_string())
             .size(10)
-            .color(Color::WHITE)
+            .color(if enabled { text_on } else { text_off })
             .align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3, 8])
+    .on_press(PanelMsg::ToggleSelectionFilter(filter))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let hovered = matches!(status, iced::widget::button::Status::Hovered);
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
+            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
+        };
         iced::widget::button::Style {
-            background: Some(Background::Color(if hovered { hover_bg } else { bg })),
+            background: Some(bg),
             border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
+                width: 1.0,
+                radius: 12.0.into(),
+                color: if enabled { active_border } else { inactive_border },
             },
+            text_color: if enabled { text_on } else { text_off },
             ..iced::widget::button::Style::default()
         }
     })

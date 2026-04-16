@@ -254,7 +254,7 @@ impl Signex {
                                 val_text: Some(signex_types::schematic::TextProp {
                                     position: signex_types::schematic::Point::new(wx, wy - 1.27),
                                     rotation: 0.0,
-                                    font_size: 1.27,
+                                    font_size: 1.8,
                                     justify_h: signex_types::schematic::HAlign::Center,
                                     justify_v: signex_types::schematic::VAlign::default(),
                                     hidden: false,
@@ -315,7 +315,7 @@ impl Signex {
                             text: note_text,
                             position: signex_types::schematic::Point::new(wx, wy),
                             rotation: 0.0,
-                            font_size: 1.27,
+                            font_size: 1.8,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         };
@@ -325,6 +325,48 @@ impl Signex {
                             false,
                         );
                         self.interaction_state.current_tool = Tool::Select;
+                    }
+                    Tool::Label => {
+                        // Place net / global / hierarchical label depending on
+                        // pending_port state. Default: net label named "NET".
+                        let (label_type, shape, default_text) =
+                            if let Some((lt, shape)) = self.interaction_state.pending_port.clone() {
+                                let default = match lt {
+                                    signex_types::schematic::LabelType::Global => "PORT",
+                                    signex_types::schematic::LabelType::Hierarchical => "SHEET",
+                                    _ => "NET",
+                                };
+                                (lt, shape, default.to_string())
+                            } else {
+                                (
+                                    signex_types::schematic::LabelType::Net,
+                                    String::new(),
+                                    "NET".to_string(),
+                                )
+                            };
+                        let text = self
+                            .document_state
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| pp.label_text.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or(default_text);
+                        let label = signex_types::schematic::Label {
+                            uuid: uuid::Uuid::new_v4(),
+                            text,
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            rotation: 0.0,
+                            label_type,
+                            shape,
+                            font_size: 1.8,
+                            justify: signex_types::schematic::HAlign::Left,
+                        };
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceLabel { label },
+                            false,
+                            false,
+                        );
                     }
                     _ => {
                         return self.handle_selection_request(selection_request::SelectionRequest::HitAt {
