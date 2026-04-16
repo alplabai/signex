@@ -48,7 +48,7 @@ impl Signex {
                     ContextAction::SmartPaste => self.dispatch_document_message(Message::SmartPaste),
                     ContextAction::Delete => self.dispatch_document_message(Message::DeleteSelected),
                     ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
-                        selection_message::SelectionMessage::SelectAll,
+                        selection_request::SelectionRequest::SelectAll,
                     )),
                     ContextAction::ZoomFit => self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll)),
                     ContextAction::RotateSelected => self.dispatch_document_message(Message::RotateSelected),

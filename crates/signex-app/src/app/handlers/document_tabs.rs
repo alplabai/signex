@@ -13,10 +13,10 @@ impl Signex {
             TabMessage::Close(idx) => {
                 if idx < self.document_state.tabs.len() {
                     if self.document_state.tabs[idx].dirty {
-                        eprintln!(
+                        crate::diagnostics::log_warning(format!(
                             "[tab] Close blocked: tab '{}' has unsaved changes",
                             self.document_state.tabs[idx].title
-                        );
+                        ));
                         return;
                     }
                     if idx == self.document_state.active_tab {
