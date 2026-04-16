@@ -75,24 +75,24 @@ fn valid_selection_items(
 }
 
 impl Signex {
-    pub(crate) fn handle_selection_message(
+    pub(crate) fn handle_selection_request(
         &mut self,
-        msg: selection_message::SelectionMessage,
+        request: selection_request::SelectionRequest,
     ) -> Task<Message> {
-        match msg {
-            selection_message::SelectionMessage::SelectAll => {
+        match request {
+            selection_request::SelectionRequest::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     self.interaction_state.canvas.selected = all_selectable_items(snapshot);
                     self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
-            selection_message::SelectionMessage::StoreSlot { slot } => {
+            selection_request::SelectionRequest::StoreSlot { slot } => {
                 if let Some(selection_slot) = self.interaction_state.selection_slots.get_mut(slot) {
                     *selection_slot = self.interaction_state.canvas.selected.clone();
                 }
             }
-            selection_message::SelectionMessage::RecallSlot { slot } => {
+            selection_request::SelectionRequest::RecallSlot { slot } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let recalled = self
                         .interaction_state
@@ -105,7 +105,7 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
-            selection_message::SelectionMessage::HitAt { world_x, world_y } => {
+            selection_request::SelectionRequest::HitAt { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = signex_render::schematic::hit_test::hit_test(
                         snapshot,
@@ -117,7 +117,7 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
-            selection_message::SelectionMessage::BoxSelect { x1, y1, x2, y2 } => {
+            selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
                     self.interaction_state.canvas.selected =

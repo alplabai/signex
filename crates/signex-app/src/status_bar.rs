@@ -5,7 +5,7 @@ use iced::{Element, Length};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 
-use crate::app::{StatusBarMsg, Tool};
+use crate::app::{StatusBarRequest, Tool};
 use crate::styles;
 
 pub const STATUS_BAR_HORIZONTAL_PADDING: u16 = 8;
@@ -21,7 +21,7 @@ pub fn view<'a>(
     tool: &Tool,
     grid_size_mm: f32,
     tokens: &ThemeTokens,
-) -> Element<'a, StatusBarMsg> {
+) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
         Unit::Mil => format!("X:{:.1} Y:{:.1}", x / 0.0254, y / 0.0254),
@@ -51,12 +51,12 @@ pub fn view<'a>(
         button(text(grid_text).size(11).color(text_c))
             .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::ToggleGrid),
+            .on_press(StatusBarRequest::ToggleGrid),
         sep(),
         button(text(snap_label).size(11).color(text_c))
             .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::ToggleSnap),
+            .on_press(StatusBarRequest::ToggleSnap),
         sep(),
         dim("E-Snap"),
         sep(),
@@ -67,12 +67,12 @@ pub fn view<'a>(
         button(text(format!("{unit}")).size(11).color(text_c))
             .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::CycleUnit),
+            .on_press(StatusBarRequest::CycleUnit),
         sep(),
         button(text("Panels").size(11).color(text_c))
             .padding([1, 6])
             .style(button::text)
-            .on_press(StatusBarMsg::TogglePanelList),
+            .on_press(StatusBarRequest::TogglePanelList),
     ]
     .spacing(4)
     .align_y(iced::Alignment::Center);

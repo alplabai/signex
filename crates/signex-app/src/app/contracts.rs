@@ -9,7 +9,7 @@ use crate::menu_bar::MenuMessage;
 use crate::tab_bar::TabMessage;
 use crate::toolbar::ToolMessage;
 
-use super::selection_message::SelectionMessage;
+use super::selection_request::SelectionRequest;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DragTarget {
@@ -26,7 +26,7 @@ pub enum Message {
     Tool(ToolMessage),
     Tab(TabMessage),
     Dock(DockMessage),
-    StatusBar(StatusBarMsg),
+    StatusBar(StatusBarRequest),
     CanvasEvent(CanvasEvent),
     #[allow(dead_code)]
     ThemeChanged(ThemeId),
@@ -45,7 +45,7 @@ pub enum Message {
     RotateSelected,
     MirrorSelectedX,
     MirrorSelectedY,
-    Selection(SelectionMessage),
+    Selection(SelectionRequest),
     Copy,
     Cut,
     Paste,
@@ -107,7 +107,7 @@ pub struct ContextMenuState {
 }
 
 #[derive(Debug, Clone)]
-pub enum StatusBarMsg {
+pub enum StatusBarRequest {
     CycleUnit,
     ToggleGrid,
     ToggleSnap,

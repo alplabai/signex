@@ -5,6 +5,7 @@
 mod active_bar;
 mod app;
 mod canvas;
+mod diagnostics;
 mod dock;
 mod find_replace;
 mod fonts;
@@ -25,6 +26,10 @@ const IOSEVKA_REGULAR: &[u8] = include_bytes!("../assets/fonts/Iosevka-Regular.t
 const IOSEVKA_BOLD: &[u8] = include_bytes!("../assets/fonts/Iosevka-Bold.ttf");
 
 fn main() -> iced::Result {
+    if let Err(error) = diagnostics::init_logging() {
+        eprintln!("[signex] failed to initialize logging: {error:#}");
+    }
+
     // Read the persisted UI font preference (defaults to "Roboto").
     let ui_font_name = fonts::read_ui_font_pref();
 
