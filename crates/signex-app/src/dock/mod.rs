@@ -30,9 +30,6 @@ static H_EXPAND_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
 static H_EXPAND_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_right.svg"))
 });
-static H_UNDOCK: LazyLock<svg::Handle> =
-    LazyLock::new(|| svg::Handle::from_memory(include_bytes!("../../assets/icons/undock.svg")));
-
 fn svg_icon(handle: &LazyLock<svg::Handle>) -> iced::widget::Svg<'static> {
     svg((*handle).clone()).width(10).height(10)
 }
@@ -285,48 +282,6 @@ impl DockArea {
             PanelPosition::Right => !self.right.panels.is_empty(),
             PanelPosition::Bottom => !self.bottom.panels.is_empty(),
         }
-    }
-
-    pub fn locate_panel(&self, kind: PanelKind) -> Option<&'static str> {
-        if self.left.panels.contains(&kind) {
-            Some("Left")
-        } else if self.right.panels.contains(&kind) {
-            Some("Right")
-        } else if self.bottom.panels.contains(&kind) {
-            Some("Bottom")
-        } else if self.floating.iter().any(|panel| panel.kind == kind) {
-            Some("Floating")
-        } else {
-            None
-        }
-    }
-
-    pub fn focus_panel(&mut self, kind: PanelKind) -> bool {
-        if let Some(index) = self.left.panels.iter().position(|panel| *panel == kind) {
-            self.left.active = index;
-            self.left.collapsed = false;
-            return true;
-        }
-
-        if let Some(index) = self.right.panels.iter().position(|panel| *panel == kind) {
-            self.right.active = index;
-            self.right.collapsed = false;
-            return true;
-        }
-
-        if let Some(index) = self.bottom.panels.iter().position(|panel| *panel == kind) {
-            self.bottom.active = index;
-            self.bottom.collapsed = false;
-            return true;
-        }
-
-        if let Some(index) = self.floating.iter().position(|panel| panel.kind == kind) {
-            let panel = self.floating.remove(index);
-            self.floating.push(panel);
-            return true;
-        }
-
-        false
     }
 
     pub fn view_region<'a>(

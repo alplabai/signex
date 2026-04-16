@@ -82,25 +82,26 @@ impl Signex {
         match msg {
             selection_message::SelectionMessage::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    self.canvas.selected = all_selectable_items(snapshot);
-                    self.canvas.clear_overlay_cache();
+                    self.interaction_state.canvas.selected = all_selectable_items(snapshot);
+                    self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
             selection_message::SelectionMessage::StoreSlot { slot } => {
-                if let Some(selection_slot) = self.selection_slots.get_mut(slot) {
-                    *selection_slot = self.canvas.selected.clone();
+                if let Some(selection_slot) = self.interaction_state.selection_slots.get_mut(slot) {
+                    *selection_slot = self.interaction_state.canvas.selected.clone();
                 }
             }
             selection_message::SelectionMessage::RecallSlot { slot } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let recalled = self
+                        .interaction_state
                         .selection_slots
                         .get(slot)
                         .map(|items| valid_selection_items(snapshot, items))
                         .unwrap_or_default();
-                    self.canvas.selected = recalled;
-                    self.canvas.clear_overlay_cache();
+                    self.interaction_state.canvas.selected = recalled;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -111,17 +112,17 @@ impl Signex {
                         world_x,
                         world_y,
                     );
-                    self.canvas.selected = hit.into_iter().collect();
-                    self.canvas.clear_overlay_cache();
+                    self.interaction_state.canvas.selected = hit.into_iter().collect();
+                    self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
             selection_message::SelectionMessage::BoxSelect { x1, y1, x2, y2 } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
-                    self.canvas.selected =
+                    self.interaction_state.canvas.selected =
                         signex_render::schematic::hit_test::hit_test_rect(snapshot, &rect);
-                    self.canvas.clear_overlay_cache();
+                    self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }

@@ -3,16 +3,16 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_open_find_replace(&mut self, replace_mode: bool) -> Task<Message> {
-        self.find_replace.open = true;
-        self.find_replace.replace_mode = replace_mode;
-        self.context_menu = None;
-        self.panel_list_open = false;
+    pub(crate) fn handle_find_replace_open_requested(&mut self, replace_mode: bool) -> Task<Message> {
+        self.ui_state.find_replace.open = true;
+        self.ui_state.find_replace.replace_mode = replace_mode;
+        self.interaction_state.context_menu = None;
+        self.ui_state.panel_list_open = false;
         self.refresh_find_matches();
         Task::none()
     }
 
-    pub(crate) fn handle_find_replace_msg(
+    pub(crate) fn handle_find_replace_message(
         &mut self,
         msg: crate::find_replace::FindReplaceMsg,
     ) -> Task<Message> {
@@ -20,31 +20,31 @@ impl Signex {
 
         match msg {
             FindReplaceMsg::Close => {
-                self.find_replace.open = false;
+                self.ui_state.find_replace.open = false;
             }
             FindReplaceMsg::QueryChanged(query) => {
-                self.find_replace.query = query;
+                self.ui_state.find_replace.query = query;
                 self.refresh_find_matches();
             }
             FindReplaceMsg::ReplacementChanged(value) => {
-                self.find_replace.replacement = value;
+                self.ui_state.find_replace.replacement = value;
             }
             FindReplaceMsg::SelectResult(index) => {
-                self.find_replace.selected_index = Some(index);
-                if let Some(hit) = self.find_replace.matches.get(index) {
-                    self.canvas.selected = vec![hit.item];
-                    self.canvas.clear_overlay_cache();
+                self.ui_state.find_replace.selected_index = Some(index);
+                if let Some(hit) = self.ui_state.find_replace.matches.get(index) {
+                    self.interaction_state.canvas.selected = vec![hit.item];
+                    self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
             FindReplaceMsg::ReplaceCurrent => {
-                if let Some(index) = self.find_replace.selected_index
-                    && let Some(hit) = self.find_replace.matches.get(index).cloned()
+                if let Some(index) = self.ui_state.find_replace.selected_index
+                    && let Some(hit) = self.ui_state.find_replace.matches.get(index).cloned()
                 {
                     self.apply_engine_command(
                         signex_engine::Command::UpdateText {
                             target: hit.target,
-                            value: self.find_replace.replacement.clone(),
+                            value: self.ui_state.find_replace.replacement.clone(),
                         },
                         true,
                         true,
@@ -53,14 +53,15 @@ impl Signex {
                 }
             }
             FindReplaceMsg::ReplaceAll => {
-                if !self.find_replace.matches.is_empty() {
+                if !self.ui_state.find_replace.matches.is_empty() {
                     let commands: Vec<_> = self
+                        .ui_state
                         .find_replace
                         .matches
                         .iter()
                         .map(|hit| signex_engine::Command::UpdateText {
                             target: hit.target,
-                            value: self.find_replace.replacement.clone(),
+                            value: self.ui_state.find_replace.replacement.clone(),
                         })
                         .collect();
                     self.apply_engine_commands(commands, true, true);
@@ -73,10 +74,10 @@ impl Signex {
     }
 
     fn refresh_find_matches(&mut self) {
-        let query = self.find_replace.query.trim();
+        let query = self.ui_state.find_replace.query.trim();
         if query.is_empty() {
-            self.find_replace.matches.clear();
-            self.find_replace.selected_index = None;
+            self.ui_state.find_replace.matches.clear();
+            self.ui_state.find_replace.selected_index = None;
             return;
         }
 
@@ -136,18 +137,24 @@ impl Signex {
             }
         }
 
-        self.find_replace.matches = matches;
-        self.find_replace.selected_index = if self.find_replace.matches.is_empty() {
+        self.ui_state.find_replace.matches = matches;
+        self.ui_state.find_replace.selected_index = if self.ui_state.find_replace.matches.is_empty() {
             None
         } else {
-            Some(self.find_replace.selected_index.unwrap_or(0).min(self.find_replace.matches.len() - 1))
+            Some(
+                self.ui_state
+                    .find_replace
+                    .selected_index
+                    .unwrap_or(0)
+                    .min(self.ui_state.find_replace.matches.len() - 1),
+            )
         };
 
-        if let Some(index) = self.find_replace.selected_index
-            && let Some(hit) = self.find_replace.matches.get(index)
+        if let Some(index) = self.ui_state.find_replace.selected_index
+            && let Some(hit) = self.ui_state.find_replace.matches.get(index)
         {
-            self.canvas.selected = vec![hit.item];
-            self.canvas.clear_overlay_cache();
+            self.interaction_state.canvas.selected = vec![hit.item];
+            self.interaction_state.canvas.clear_overlay_cache();
             self.update_selection_info();
         }
     }
