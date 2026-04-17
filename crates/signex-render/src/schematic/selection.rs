@@ -109,20 +109,28 @@ fn draw_text_prop_selection(
     sym: &Symbol,
     transform: &ScreenTransform,
 ) {
+    use signex_types::schematic::{HAlign, VAlign};
     let fs = crate::SCHEMATIC_TEXT_MM;
-    let tw = content.chars().count() as f64 * fs * 0.58;
+    // `visible_char_count` drops KiCad `{slash}`-style escapes; Iosevka's
+    // advance width is ≈0.55 em, so use the same coefficient the text
+    // renderer uses below so bbox and glyphs line up.
+    let tw = super::text::visible_char_count(content) as f64 * fs * 0.55;
     let th = fs;
     let (dx, dy) = field_display_pos(&prop.position, sym);
-    // Text is drawn with align_x/align_y from prop.justify_h/justify_v. The
-    // rendering functions default to center/center for symbol fields, so the
-    // bbox is centered on the anchor.
-    let aabb = Aabb::new(
-        dx - tw * 0.5,
-        dy - th * 0.5,
-        dx + tw * 0.5,
-        dy + th * 0.5,
-    )
-    .expand(0.15);
+    // Mirror the effective alignment the renderer computed so the outline
+    // wraps the glyphs instead of a theoretical center-aligned rect.
+    let (_, eff_h, eff_v) = super::field_effective_style(prop, sym);
+    let (x0, x1) = match eff_h {
+        HAlign::Left => (dx, dx + tw),
+        HAlign::Right => (dx - tw, dx),
+        HAlign::Center => (dx - tw * 0.5, dx + tw * 0.5),
+    };
+    let (y0, y1) = match eff_v {
+        VAlign::Top => (dy, dy + th),
+        VAlign::Bottom => (dy - th, dy),
+        VAlign::Center => (dy - th * 0.5, dy + th * 0.5),
+    };
+    let aabb = Aabb::new(x0, y0, x1, y1).expand(0.15);
     draw_rect_highlight(frame, &aabb, transform);
 }
 

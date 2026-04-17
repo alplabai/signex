@@ -18,9 +18,14 @@ pub fn display_text_content(input: &str) -> String {
         out
     }
 
-    let segments = parse_markup(input);
+    // KiCad escapes characters with path/markup significance as {name} tokens
+    // (e.g. `{slash}` for `/`). Expand before parsing markup so the literal
+    // characters appear in the rendered glyphs instead of the escape source.
+    let expanded = expand_char_escapes(input);
+
+    let segments = parse_markup(&expanded);
     if segments.is_empty() {
-        return input.to_string();
+        return expanded;
     }
 
     let mut out = String::new();
@@ -34,6 +39,67 @@ pub fn display_text_content(input: &str) -> String {
     }
     out
 }
+
+/// Count the number of glyphs that will actually render for `input` — char
+/// escapes resolved, markup braces stripped. Used for width estimation in
+/// label/port geometry so the body rectangle matches the visible text.
+pub fn visible_char_count(input: &str) -> usize {
+    let expanded = expand_char_escapes(input);
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return expanded.chars().count();
+    }
+    segments
+        .iter()
+        .map(|s| match s {
+            RichSegment::Normal(t)
+            | RichSegment::Subscript(t)
+            | RichSegment::Superscript(t)
+            | RichSegment::Overbar(t) => t.chars().count(),
+        })
+        .sum()
+}
+
+/// Replace KiCad `{name}` escape tokens with their literal character.
+///
+/// KiCad uses these so the raw `/` (hierarchical path separator) and a few
+/// other reserved characters don't have to appear in label/pin text streams.
+pub fn expand_char_escapes(input: &str) -> String {
+    if !input.contains('{') {
+        return input.to_string();
+    }
+    let mut out = input.to_string();
+    for (tok, ch) in ESCAPE_TABLE {
+        if out.contains(tok) {
+            out = out.replace(tok, ch);
+        }
+    }
+    out
+}
+
+/// Inverse of `expand_char_escapes` — replace literal reserved characters with
+/// their `{name}` KiCad escape tokens so the text round-trips through the
+/// S-expression writer unambiguously.
+pub fn escape_for_kicad(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '/' => out.push_str("{slash}"),
+            '\\' => out.push_str("{backslash}"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+const ESCAPE_TABLE: &[(&str, &str)] = &[
+    ("{slash}", "/"),
+    ("{backslash}", "\\"),
+    ("{tilde}", "~"),
+    ("{colon}", ":"),
+    ("{dollar}", "$"),
+    ("{space}", " "),
+];
 
 /// Draw a text note on the schematic.
 pub fn draw_text_note(
@@ -66,23 +132,28 @@ pub fn draw_text_note(
 
     let rad = -(note.rotation.to_radians() as f32);
 
-    frame.with_save(|f| {
-        f.translate(iced::Vector::new(sp.x, sp.y));
-        if rad.abs() > 0.001 {
-            f.rotate(rad);
-        }
-        let text = canvas::Text {
-            content: display_text_content(&note.text),
-            position: iced::Point::ORIGIN,
-            color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        f.fill_text(text);
-    });
+    let text = canvas::Text {
+        content: display_text_content(&note.text),
+        position: iced::Point::ORIGIN,
+        color,
+        size: iced::Pixels(screen_font),
+        font: crate::canvas_font(),
+        align_x: h_align.into(),
+        align_y: v_align,
+        ..canvas::Text::default()
+    };
+    if rad.abs() > 0.001 {
+        use iced::widget::canvas::path::lyon_path::math as lyon_math;
+        let t = lyon_math::Transform::identity()
+            .then_rotate(lyon_math::Angle::radians(rad))
+            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+        text.draw_with(|path, color| {
+            let rotated = path.transform(&t);
+            frame.fill(&rotated, color);
+        });
+    } else {
+        frame.fill_text(canvas::Text { position: sp, ..text });
+    }
 }
 
 /// Draw a property text (reference, value, or other field).
@@ -136,21 +207,26 @@ pub fn draw_text_prop(
     // Iced CW-positive, Y-down; KiCad field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
-    frame.with_save(|f| {
-        f.translate(iced::Vector::new(sp.x, sp.y));
-        if rad.abs() > 0.001 {
-            f.rotate(rad);
-        }
-        let text = canvas::Text {
-            content: display_text_content(content),
-            position: iced::Point::ORIGIN,
-            color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        f.fill_text(text);
-    });
+    let text = canvas::Text {
+        content: display_text_content(content),
+        position: iced::Point::ORIGIN,
+        color,
+        size: iced::Pixels(screen_font),
+        font: crate::canvas_font(),
+        align_x: h_align.into(),
+        align_y: v_align,
+        ..canvas::Text::default()
+    };
+    if rad.abs() > 0.001 {
+        use iced::widget::canvas::path::lyon_path::math as lyon_math;
+        let t = lyon_math::Transform::identity()
+            .then_rotate(lyon_math::Angle::radians(rad))
+            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+        text.draw_with(|path, color| {
+            let rotated = path.transform(&t);
+            frame.fill(&rotated, color);
+        });
+    } else {
+        frame.fill_text(canvas::Text { position: sp, ..text });
+    }
 }

@@ -371,20 +371,66 @@ impl Signex {
 
         if self.has_active_schematic() && let Some(ref edit_state) = interaction.editing_text {
             let text = edit_state.text.clone();
+            // Convert object world position → window-absolute screen position.
+            // The canvas Program publishes its latest camera into this Cell each
+            // frame — that's the only way to read it from outside the Program.
+            let (cam_off_x, cam_off_y, cam_scale) =
+                interaction.canvas.live_camera.get();
+            let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
+            let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
+            // Canvas top-left within the window: menu bar + tab bar above,
+            // left dock + left resize handle (5px when shown) to the side.
+            let tabs_h: f32 = if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let y_canvas_origin: f32 = crate::menu_bar::MENU_BAR_HEIGHT + tabs_h;
+            let has_left = document.dock.has_panels(PanelPosition::Left);
+            let left_col = document.dock.is_collapsed(PanelPosition::Left);
+            let left_dock_w: f32 = if !has_left {
+                0.0
+            } else if left_col {
+                28.0
+            } else {
+                ui.left_width
+            };
+            let left_handle_w: f32 = if has_left && !left_col { 5.0 } else { 0.0 };
+            let x_canvas_origin: f32 = left_dock_w + left_handle_w;
+            // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
+            let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
+            // Estimate width from text length to keep the input snug.
+            let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62)
+                .max(60.0);
+            // Offset the input so the baseline sits on top of the label text.
+            let abs_x = x_canvas_origin + canvas_local_x - 2.0;
+            let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
+            let paper_c = crate::styles::ti(document.panel_ctx.tokens.paper);
+            let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
+            let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
             layers.push(
                 column![
-                    iced::widget::Space::new().height(edit_state.screen_y - 12.0),
+                    iced::widget::Space::new().height(abs_y.max(0.0)),
                     row![
-                        iced::widget::Space::new().width(edit_state.screen_x - 4.0),
+                        iced::widget::Space::new().width(abs_x.max(0.0)),
                         container(
                             iced::widget::text_input("", &text)
                                 .on_input(Message::TextEditChanged)
                                 .on_submit(Message::TextEditSubmit)
-                                .size(13)
-                                .padding([4, 6])
-                                .width(180),
-                        )
-                        .style(crate::styles::context_menu(&document.panel_ctx.tokens)),
+                                .size(font_px)
+                                .padding([1, 2])
+                                .width(approx_w)
+                                .style(move |_: &iced::Theme, _status: iced::widget::text_input::Status| {
+                                    iced::widget::text_input::Style {
+                                        background: iced::Background::Color(paper_c),
+                                        border: iced::Border {
+                                            color: accent_c,
+                                            width: 1.0,
+                                            radius: 0.0.into(),
+                                        },
+                                        icon: text_c,
+                                        placeholder: text_c,
+                                        value: text_c,
+                                        selection: accent_c,
+                                    }
+                                }),
+                        ),
                     ],
                 ]
                 .into(),

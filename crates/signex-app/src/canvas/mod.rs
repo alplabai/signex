@@ -66,6 +66,10 @@ pub struct SchematicCanvas {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera state as of the most recent draw, updated every frame including
+    /// mid-pan. Overlays positioned relative to world coordinates (inline text
+    /// editor, measurements) read this so they track pan/zoom in real time.
+    pub live_camera: std::cell::Cell<(f32, f32, f32)>,
     pub grid_visible: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
@@ -124,6 +128,7 @@ impl SchematicCanvas {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            live_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             grid_visible: true,
             theme_bg: {
                 let c = &default_colors.background;
@@ -654,6 +659,13 @@ impl canvas::Program<Message> for SchematicCanvas {
             offset_y: state.camera.offset.y,
             scale: state.camera.scale,
         };
+        // Publish the live camera every frame so world-anchored overlays
+        // (inline editor) can track pan/zoom without waiting on cache rebuilds.
+        self.live_camera.set((
+            state.camera.offset.x,
+            state.camera.offset.y,
+            state.camera.scale,
+        ));
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
         let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
             && (cached_offset_y - state.camera.offset.y).abs() < 0.01
@@ -915,11 +927,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    let ghost_fill = Color::from_rgba(0.3, 0.8, 1.0, 0.15);
                     signex_render::schematic::label::draw_label(
                         &mut frame,
                         &preview_label,
                         &ghost_transform,
                         ghost_color,
+                        ghost_fill,
                     );
                 }
 

@@ -402,7 +402,7 @@ fn draw_graphic_text(
     sym: &Symbol,
     content: &str,
     position: &Point,
-    _rotation: f64,
+    lib_rotation: f64,
     font_size: f64,
     transform: &ScreenTransform,
     color: Color,
@@ -418,9 +418,23 @@ fn draw_graphic_text(
         return;
     }
 
+    // Combine the symbol instance rotation with the library text rotation
+    // and snap to the nearest 90° quadrant so labels embedded in the symbol
+    // (e.g. "GND" inside the power-port library symbol) turn with the
+    // symbol. Keep text right-side-up at 180° so we never render upside-down.
+    let combined = (sym.rotation + lib_rotation).rem_euclid(360.0);
+    let rot_deg = ((combined.round() as i32) % 360 + 360) % 360;
+    let (text_rot, keep_upright) = match rot_deg {
+        90 => (std::f32::consts::FRAC_PI_2, false),
+        180 => (0.0, true),
+        270 => (-std::f32::consts::FRAC_PI_2, false),
+        _ => (0.0, false),
+    };
+    let _ = keep_upright;
+
     let text = canvas::Text {
         content: display_text_content(content),
-        position: sp,
+        position: iced::Point::ORIGIN,
         color,
         size: iced::Pixels(size),
         font: crate::canvas_font(),
@@ -428,7 +442,24 @@ fn draw_graphic_text(
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()
     };
-    frame.fill_text(text);
+    if text_rot.abs() < 1e-4 {
+        frame.fill_text(canvas::Text {
+            position: sp,
+            ..text
+        });
+    } else {
+        // Pre-rotate glyph paths at the lyon level — iced 0.14's text path
+        // doesn't visibly honor `frame.rotate()` for canvas glyphs, so we
+        // bake the rotation into the path coordinates themselves.
+        use iced::widget::canvas::path::lyon_path::math as lyon_math;
+        let t = lyon_math::Transform::identity()
+            .then_rotate(lyon_math::Angle::radians(text_rot))
+            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+        text.draw_with(|path, color| {
+            let rotated = path.transform(&t);
+            frame.fill(&rotated, color);
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
