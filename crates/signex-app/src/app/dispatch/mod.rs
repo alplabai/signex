@@ -29,9 +29,11 @@ impl Signex {
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
             }
-            Message::PrePlacementTab | Message::CycleDrawMode | Message::CancelDrawing | Message::Tool(_) => {
-                self.dispatch_tool_message(message)
-            }
+            Message::PrePlacementTab
+            | Message::ResumePlacement
+            | Message::CycleDrawMode
+            | Message::CancelDrawing
+            | Message::Tool(_) => self.dispatch_tool_message(message),
             Message::FileOpened(_)
             | Message::DeleteSelected
             | Message::Undo
