@@ -21,6 +21,7 @@ pub fn draw_label(
     label: &Label,
     transform: &ScreenTransform,
     color: Color,
+    body_fill: Color,
 ) {
     // All schematic canvas text renders at 10 pt (1.8 mm, cap-height basis)
     // regardless of what the source file declares. Overriding here instead of
@@ -35,7 +36,7 @@ pub fn draw_label(
     match label.label_type {
         LabelType::Net => draw_net_label(frame, label, transform, color, screen_font),
         LabelType::Global => {
-            draw_global_label(frame, label, transform, color, screen_font, font_size_mm)
+            draw_global_label(frame, label, transform, color, body_fill, screen_font, font_size_mm)
         }
         LabelType::Hierarchical => {
             draw_hier_label(frame, label, transform, color, screen_font, font_size_mm)
@@ -62,6 +63,7 @@ fn draw_global_label(
     label: &Label,
     transform: &ScreenTransform,
     color: Color,
+    body_fill: Color,
     screen_font: f32,
     font_size_mm: f64,
 ) {
@@ -71,13 +73,12 @@ fn draw_global_label(
     let h = fs * 1.4;
     let arrow_w = h * 0.5;
     let pad = fs * 0.3;
-    let text_w = label.text.len() as f64 * fs * 0.6;
+    let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
     let lx = label.position.x;
     let ly = label.position.y;
     let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
-    // Altium port palette — pale cream-yellow fill (#FFFACD / lemon chiffon)
-    // with outline + text painted in the label's configured color (dark red).
-    let fill_color = Color::from_rgb8(0xFF, 0xFA, 0xCD);
+    // Port interior uses the same fill as component bodies in the active theme.
+    let fill_color = body_fill;
 
     if matches!(spin, SpinStyle::Left | SpinStyle::Right) {
         let conn_right = matches!(spin, SpinStyle::Right);
@@ -202,7 +203,7 @@ fn draw_hier_label(
     let h = fs * 1.4;
     let arrow_w = h * 0.5;
     let pad = fs * 0.3;
-    let text_w = label.text.len() as f64 * fs * 0.6;
+    let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
     let lx = label.position.x;
     let ly = label.position.y;
     let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
@@ -285,7 +286,7 @@ fn port_shape_aabb(label: &Label) -> signex_types::schematic::Aabb {
     let h = fs * 1.4;
     let arrow_w = h * 0.5;
     let pad = fs * 0.3;
-    let text_w = label.text.len() as f64 * fs * 0.6;
+    let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
     let body_w = text_w + pad * 2.0;
     let total_fw = arrow_w + body_w + arrow_w; // including tip
     let half_h = h * 0.5;
@@ -334,7 +335,7 @@ pub fn label_text_aabb(label: &Label) -> signex_types::schematic::Aabb {
     // glyphs including descenders; visible glyphs sit slightly inside that
     // metric (left bearing + small descender space). Use measurements tuned
     // against a real canvas font so the bbox wraps the *visible* text.
-    let tw = label.text.chars().count() as f64 * fs * 0.58;
+    let tw = super::text::visible_char_count(&label.text) as f64 * fs * 0.55;
     let baseline_off = pen_width_mm();
     let cap = baseline_off + fs * 1.05;
     // No inset — the visible first glyph actually aligns with the anchor,
@@ -399,7 +400,7 @@ fn pen_width_mm() -> f64 {
 }
 
 fn approx_text_width_mm(text: &str, font_size_mm: f64) -> f64 {
-    text.chars().count() as f64 * font_size_mm * 0.6
+    super::text::visible_char_count(text) as f64 * font_size_mm * 0.6
 }
 
 fn schematic_text_offset_net(label: &Label, _font_size_mm: f64) -> (f64, f64) {
@@ -485,19 +486,25 @@ fn draw_spin_text(
                 std::f32::consts::FRAC_PI_2
             };
 
-            frame.with_save(|f| {
-                f.translate(iced::Vector::new(sp.x, sp.y));
-                f.rotate(rad);
-                f.fill_text(canvas::Text {
-                    content: display_text_content(&label.text),
-                    position: iced::Point::ORIGIN,
-                    color,
-                    size: iced::Pixels(screen_font),
-                    font: crate::canvas_font(),
-                    align_x: h_align.into(),
-                    align_y: v_align,
-                    ..canvas::Text::default()
-                });
+            // iced 0.14 text ignores frame rotation; transform glyph paths
+            // at the lyon level so rotation is baked into coordinates.
+            use iced::widget::canvas::path::lyon_path::math as lyon_math;
+            let t = lyon_math::Transform::identity()
+                .then_rotate(lyon_math::Angle::radians(rad))
+                .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+            let text = canvas::Text {
+                content: display_text_content(&label.text),
+                position: iced::Point::ORIGIN,
+                color,
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: h_align.into(),
+                align_y: v_align,
+                ..canvas::Text::default()
+            };
+            text.draw_with(|path, color| {
+                let rotated = path.transform(&t);
+                frame.fill(&rotated, color);
             });
         }
     }

@@ -570,7 +570,7 @@ pub fn render_schematic(
             LabelType::Hierarchical => to_iced(&colors.hier_label),
             LabelType::Power => to_iced(&colors.power),
         };
-        label::draw_label(frame, lbl, transform, color);
+        label::draw_label(frame, lbl, transform, color, body_fill_color);
     }
 
     // Z=10-11: Symbol bodies + pins
@@ -855,47 +855,38 @@ fn draw_builtin_power(
             &signex_types::schematic::Point::new(0.0, label_y),
         );
         let sp = transform.to_screen_point(tx, ty);
-        // Align text with the symbol's rotation so rotated GND / VCC ports
-        // don't display their label horizontally under a sideways glyph.
-        // Normalize rotation + decide whether the label should flip so it
-        // never renders upside down (180° rotations read as 0° in practice).
-        let rot_deg = ((sym.rotation.round() as i32) % 360 + 360) % 360;
-        // Rotate text so it reads along the body, never upside-down. For
-        // rotation 90° the body points left and we want the label to read
-        // bottom-to-top (standard electrical-drawing convention for
-        // vertically-oriented labels); 270° reads top-to-bottom.
-        let text_rot: f32 = match rot_deg {
-            90 => std::f32::consts::FRAC_PI_2,
-            180 => 0.0,
-            270 => -std::f32::consts::FRAC_PI_2,
-            _ => 0.0,
-        };
-        if text_rot.abs() < 1e-4 {
-            frame.fill_text(canvas::Text {
-                content: net,
-                position: sp,
-                color: label_color,
-                size: iced::Pixels(screen_font),
-                font: crate::canvas_font(),
-                align_x: iced::alignment::Horizontal::Center.into(),
-                align_y: iced::alignment::Vertical::Top,
-                ..canvas::Text::default()
-            });
+        // Altium convention: the power-port label text is always drawn
+        // upright regardless of symbol rotation. Only the label's POSITION
+        // follows the rotation (via `instance_transform` above) so the text
+        // sits just past the symbol body on the side away from the pin.
+        let dx = tx - sym.position.x;
+        let dy = ty - sym.position.y;
+        let (align_x, align_y_v) = if dx.abs() > dy.abs() {
+            // Label is horizontally offset (rotation 90° / 270°).
+            let h = if dx > 0.0 {
+                iced::alignment::Horizontal::Left
+            } else {
+                iced::alignment::Horizontal::Right
+            };
+            (h, iced::alignment::Vertical::Center)
         } else {
-            frame.with_save(|f| {
-                f.translate(iced::Vector::new(sp.x, sp.y));
-                f.rotate(text_rot);
-                f.fill_text(canvas::Text {
-                    content: net,
-                    position: iced::Point::ORIGIN,
-                    color: label_color,
-                    size: iced::Pixels(screen_font),
-                    font: crate::canvas_font(),
-                    align_x: iced::alignment::Horizontal::Center.into(),
-                    align_y: iced::alignment::Vertical::Top,
-                    ..canvas::Text::default()
-                });
-            });
-        }
+            // Label is vertically offset (rotation 0° / 180°).
+            let v = if dy > 0.0 {
+                iced::alignment::Vertical::Top
+            } else {
+                iced::alignment::Vertical::Bottom
+            };
+            (iced::alignment::Horizontal::Center, v)
+        };
+        frame.fill_text(canvas::Text {
+            content: net,
+            position: sp,
+            color: label_color,
+            size: iced::Pixels(screen_font),
+            font: crate::canvas_font(),
+            align_x: align_x.into(),
+            align_y: align_y_v,
+            ..canvas::Text::default()
+        });
     }
 }

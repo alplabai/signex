@@ -96,8 +96,10 @@ pub struct TextEditState {
     pub kind: signex_types::schematic::SelectedKind,
     pub text: String,
     pub original_text: String,
-    pub screen_x: f32,
-    pub screen_y: f32,
+    /// World-space position of the object being edited (mm). Converted to
+    /// screen coords at render time so the inline editor tracks pan/zoom.
+    pub world_x: f64,
+    pub world_y: f64,
 }
 
 #[derive(Debug, Clone)]
