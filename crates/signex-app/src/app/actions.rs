@@ -167,7 +167,12 @@ impl Signex {
         self.interaction_state.pending_port = None;
         self.interaction_state.canvas.ghost_label = None;
         self.interaction_state.canvas.ghost_symbol = None;
+        self.interaction_state.canvas.ghost_text = None;
         self.interaction_state.canvas.tool_preview = None;
+        self.interaction_state.canvas.placement_paused = false;
+        // Drop any configured pre-placement defaults so the next tool
+        // session starts fresh instead of inheriting the previous one.
+        self.document_state.panel_ctx.pre_placement = None;
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
         self.clear_measurement();

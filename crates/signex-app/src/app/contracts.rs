@@ -59,6 +59,9 @@ pub enum Message {
     OpenPanel(crate::panels::PanelKind),
     ActiveBar(crate::active_bar::ActiveBarMsg),
     PrePlacementTab,
+    /// Resume placement after TAB paused it — clears `pre_placement` and
+    /// `placement_paused`. Wired to the big on-canvas "Resume" overlay.
+    ResumePlacement,
     TextEditChanged(String),
     TextEditSubmit,
     ShowContextMenu(f32, f32),

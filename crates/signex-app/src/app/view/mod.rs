@@ -216,6 +216,7 @@ impl Signex {
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
             || interaction.active_bar_menu.is_some()
+            || interaction.canvas.placement_paused
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
@@ -347,6 +348,61 @@ impl Signex {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
+
+        // Altium-style pause overlay: big centered "Placement Paused" card
+        // with a Resume button. Clicking Resume clears `pre_placement`,
+        // un-pauses the canvas, and drops back to the active placement tool
+        // so the user can keep dropping objects with the edited properties.
+        if interaction.canvas.placement_paused {
+            let tokens = &document.panel_ctx.tokens;
+            let panel_bg = crate::styles::ti(tokens.panel_bg);
+            let text_c = crate::styles::ti(tokens.text);
+            let accent_c = crate::styles::ti(tokens.accent);
+            let border_c = crate::styles::ti(tokens.border);
+            let card = container(
+                column![
+                    iced::widget::text("⏸").size(64).color(accent_c),
+                    iced::widget::text("Placement Paused")
+                        .size(16)
+                        .color(text_c),
+                    iced::widget::text("Editing properties in the panel. Click Resume to keep placing.")
+                        .size(11)
+                        .color(text_c),
+                    iced::widget::Space::new().height(6.0),
+                    iced::widget::button(
+                        iced::widget::text("Resume Placement")
+                            .size(12)
+                            .color(iced::Color::WHITE)
+                    )
+                    .padding([6, 18])
+                    .on_press(Message::ResumePlacement)
+                    .style(iced::widget::button::primary),
+                ]
+                .spacing(8)
+                .align_x(iced::Alignment::Center),
+            )
+            .padding(24)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(iced::Background::Color(iced::Color {
+                    a: 0.92,
+                    ..panel_bg
+                })),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..container::Style::default()
+            });
+            layers.push(
+                container(card)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .into(),
+            );
+        }
 
         if self.has_active_schematic() {
             let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT

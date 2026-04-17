@@ -51,6 +51,17 @@ impl Signex {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.label_text = text.clone();
                 }
+                // Mirror the edit to whichever ghost is armed so the live
+                // preview reflects the user's typed net/port/text name.
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                    g.text = text.clone();
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                    g.value = text.clone();
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                    g.text = text.clone();
+                }
             }
             crate::panels::PanelMsg::SetPrePlacementDesignator(text) => {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
@@ -61,9 +72,68 @@ impl Signex {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.rotation = *rotation;
                 }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                    g.rotation = *rotation;
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                    g.rotation = *rotation;
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                    g.rotation = *rotation;
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementFont(font) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.font = font.clone();
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementFontSize(pt) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.font_size_pt = *pt;
+                }
+                let fs_mm = *pt as f64 * 0.254;
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                    g.font_size = fs_mm;
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                    g.font_size = fs_mm;
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementJustifyH(h) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.justify_h = *h;
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                    g.justify = *h;
+                }
+                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                    g.justify_h = *h;
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementJustifyV(v) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.justify_v = *v;
+                }
+            }
+            crate::panels::PanelMsg::TogglePrePlacementBold => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.bold = !pp.bold;
+                }
+            }
+            crate::panels::PanelMsg::TogglePrePlacementItalic => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.italic = !pp.italic;
+                }
+            }
+            crate::panels::PanelMsg::TogglePrePlacementUnderline => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.underline = !pp.underline;
+                }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
-                self.document_state.panel_ctx.pre_placement = None;
+                // OK button: resume placement but keep pre_placement so the
+                // next click uses the values the user just edited.
+                self.interaction_state.canvas.placement_paused = false;
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;

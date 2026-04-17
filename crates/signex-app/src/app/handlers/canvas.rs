@@ -153,6 +153,16 @@ impl Signex {
                 }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Altium-style placement pause: while the ghost is frozen
+                // (TAB pressed, pre-placement form open), canvas clicks are
+                // suppressed so the user can edit properties without a
+                // stray click dropping an object. `pre_placement` lives on
+                // past Resume so the first click after Resume inherits the
+                // edited defaults — so key the gate on `placement_paused`,
+                // not on `pre_placement.is_some()`.
+                if self.interaction_state.canvas.placement_paused {
+                    return Task::none();
+                }
                 // A click outside the inline editor commits its current value
                 // and returns to normal selection — same convention as most
                 // IDEs (Escape cancels, click elsewhere confirms).
@@ -380,15 +390,25 @@ impl Signex {
                             .map(|pp| pp.label_text.trim().to_string())
                             .filter(|s| !s.is_empty())
                             .unwrap_or(default_text);
+                        // Pick up the rotation / font size / justification
+                        // the user edited in the TAB pre-placement form so
+                        // the first click matches what they configured.
+                        let (pp_rot, pp_fs_mm, pp_justify) = self
+                            .document_state
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| (pp.rotation, pp.font_size_pt as f64 * 0.254, pp.justify_h))
+                            .unwrap_or((0.0, 1.8, signex_types::schematic::HAlign::Left));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
                             text,
                             position: signex_types::schematic::Point::new(wx, wy),
-                            rotation: 0.0,
+                            rotation: pp_rot,
                             label_type,
                             shape,
-                            font_size: 1.8,
-                            justify: signex_types::schematic::HAlign::Left,
+                            font_size: pp_fs_mm,
+                            justify: pp_justify,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceLabel { label },
