@@ -1,6 +1,44 @@
 use iced::Task;
 
 use super::super::*;
+use crate::active_bar::SelectionFilter;
+
+/// Return `true` iff the currently active filter set allows selecting the
+/// given hit. When no filters are active (empty set), selection is blocked
+/// entirely — that matches the Altium "unselect all categories" behaviour.
+pub(crate) fn passes_filter(
+    item: &signex_types::schematic::SelectedItem,
+    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    filters: &std::collections::HashSet<SelectionFilter>,
+) -> bool {
+    use signex_types::schematic::SelectedKind;
+    let required = match item.kind {
+        SelectedKind::Symbol => {
+            let is_power = snapshot
+                .symbols
+                .iter()
+                .find(|s| s.uuid == item.uuid)
+                .map(|s| s.is_power)
+                .unwrap_or(false);
+            if is_power {
+                SelectionFilter::PowerPorts
+            } else {
+                SelectionFilter::Components
+            }
+        }
+        SelectedKind::Wire => SelectionFilter::Wires,
+        SelectedKind::Bus | SelectedKind::BusEntry => SelectionFilter::Buses,
+        SelectedKind::ChildSheet => SelectionFilter::SheetSymbols,
+        SelectedKind::Label => SelectionFilter::NetLabels,
+        SelectedKind::TextNote => SelectionFilter::Texts,
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
+            SelectionFilter::Parameters
+        }
+        SelectedKind::Drawing => SelectionFilter::DrawingObjects,
+        SelectedKind::Junction | SelectedKind::NoConnect => SelectionFilter::Other,
+    };
+    filters.contains(&required)
+}
 
 fn all_selectable_items(
     snapshot: &signex_render::schematic::SchematicRenderSnapshot,
@@ -112,6 +150,8 @@ impl Signex {
                         world_x,
                         world_y,
                     );
+                    let filters = &self.interaction_state.selection_filters;
+                    let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.canvas.selected = hit.into_iter().collect();
                     self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
@@ -120,8 +160,12 @@ impl Signex {
             selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
+                    let filters = self.interaction_state.selection_filters.clone();
                     self.interaction_state.canvas.selected =
-                        signex_render::schematic::hit_test::hit_test_rect(snapshot, &rect);
+                        signex_render::schematic::hit_test::hit_test_rect(snapshot, &rect)
+                            .into_iter()
+                            .filter(|h| passes_filter(h, snapshot, &filters))
+                            .collect();
                     self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
