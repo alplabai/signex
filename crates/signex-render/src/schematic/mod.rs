@@ -640,6 +640,17 @@ pub fn render_schematic(
 /// Draw a built-in power symbol when no lib_symbol definition exists.
 /// Renders Altium-style shapes: GND (3 horizontal lines), VCC (bar + arrow),
 /// Earth (diagonal hatch), Signal GND (triangle), generic (bar + label).
+/// Public preview wrapper — renders the built-in power glyph at a ghost
+/// color for placement previews (single color for both body and label).
+pub fn draw_power_port_preview(
+    frame: &mut canvas::Frame,
+    sym: &signex_types::schematic::Symbol,
+    transform: &ScreenTransform,
+    color: iced::Color,
+) {
+    draw_builtin_power(frame, sym, transform, color, color);
+}
+
 fn draw_builtin_power(
     frame: &mut canvas::Frame,
     sym: &signex_types::schematic::Symbol,
