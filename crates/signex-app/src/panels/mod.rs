@@ -661,16 +661,10 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 
     if !ctx.sheets.is_empty() {
         for sheet in &ctx.sheets {
-            let badge = format!("{}c {}w", sheet.sym_count, sheet.wire_count);
-            source_docs.push(
-                TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic).with_badge(badge),
-            );
+            source_docs.push(TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic));
         }
     } else if let Some(file) = &ctx.project_file {
-        source_docs.push(
-            TreeNode::leaf(file.clone(), TreeIcon::Schematic)
-                .with_badge(format!("{}c {}w", ctx.sym_count, ctx.wire_count)),
-        );
+        source_docs.push(TreeNode::leaf(file.clone(), TreeIcon::Schematic));
     }
 
     // PCB file
@@ -685,8 +679,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
     let lib_children = vec![
-        TreeNode::leaf(format!("{} symbols loaded", lib_count), TreeIcon::Component)
-            .with_badge(lib_count.to_string()),
+        TreeNode::leaf(format!("{} symbols loaded", lib_count), TreeIcon::Component),
     ];
 
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);

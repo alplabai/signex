@@ -184,25 +184,63 @@ fn draw_pin(
     let screen_font = transform.world_len(font_size_mm).abs();
 
     if screen_font >= 1.0 && lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
-        let vertical_gap = if dir_x.abs() < 0.1 { font_size_mm * 0.9 } else { 0.0 };
-        let name_offset = lib.pin_name_offset.max(0.5) + vertical_gap;
-        // Place the name just beyond the pin root toward the symbol side.
-        let name_pos = Point::new(
-            body_end.x + dir_x * name_offset,
-            body_end.y + dir_y * name_offset,
-        );
-        let (nwx, nwy) = instance_transform(sym, &name_pos);
-        let np = transform.to_screen_point(nwx, nwy);
-
-        // Determine text alignment from the symbol-facing direction.
-        let (wdx, _wdy) = instance_rotate_dir(sym, dir_x, dir_y);
-        let h_align = if wdx > 0.1 {
-            iced::alignment::Horizontal::Left
-        } else if wdx < -0.1 {
-            iced::alignment::Horizontal::Right
+        // KiCad pin-name placement has two modes keyed on `pin_name_offset`:
+        //
+        // * offset > 0  — name along the pin, INSIDE body, at
+        //   `body_end + dir * offset`. Used by Device:R, Device:C, ICs etc.
+        //   (typical 0.254–0.508 mm).
+        //
+        // * offset == 0 — name PERPENDICULAR to the pin at the tip, OUTSIDE
+        //   body. Common on discrete-transistor symbols (NMOS/PMOS G/D/S).
+        //   KiCad renders this with a small perpendicular gap so the
+        //   character sits beside the pin line, not on top of it.
+        let (np, h_align, v_align);
+        if lib.pin_name_offset.abs() < 0.01 {
+            // offset = 0: anchor at pin tip, text sits perpendicular
+            // above/beside the pin.
+            let perp_gap = 0.508; // KiCad default visual gap in mm
+            // World-space pin direction (body → tip) after instance transform.
+            let (wdx, wdy) = instance_rotate_dir(sym, -dir_x, -dir_y);
+            let (nwx, nwy) = instance_transform(sym, &pin.position);
+            if wdx.abs() > wdy.abs() {
+                // Horizontal pin on screen: name above the pin, centered on tip.
+                let gap_px = transform.world_len(perp_gap).abs();
+                np = iced::Point::new(
+                    transform.to_screen_point(nwx, nwy).x,
+                    transform.to_screen_point(nwx, nwy).y - gap_px,
+                );
+                h_align = iced::alignment::Horizontal::Center;
+                v_align = iced::alignment::Vertical::Bottom;
+            } else {
+                // Vertical pin on screen: name beside the pin tip.
+                // Put it on the RIGHT of the tip, vertically centered.
+                let gap_px = transform.world_len(perp_gap).abs();
+                np = iced::Point::new(
+                    transform.to_screen_point(nwx, nwy).x + gap_px,
+                    transform.to_screen_point(nwx, nwy).y,
+                );
+                h_align = iced::alignment::Horizontal::Left;
+                v_align = iced::alignment::Vertical::Center;
+            }
         } else {
-            iced::alignment::Horizontal::Center
-        };
+            // offset > 0: place name along the pin, just inside the body.
+            let name_offset = lib.pin_name_offset;
+            let name_pos = Point::new(
+                body_end.x + dir_x * name_offset,
+                body_end.y + dir_y * name_offset,
+            );
+            let (nwx, nwy) = instance_transform(sym, &name_pos);
+            np = transform.to_screen_point(nwx, nwy);
+            let (wdx, _wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+            h_align = if wdx > 0.1 {
+                iced::alignment::Horizontal::Left
+            } else if wdx < -0.1 {
+                iced::alignment::Horizontal::Right
+            } else {
+                iced::alignment::Horizontal::Center
+            };
+            v_align = iced::alignment::Vertical::Center;
+        }
 
         let text = canvas::Text {
             content: display_text_content(&pin.name),
@@ -211,7 +249,7 @@ fn draw_pin(
             size: iced::Pixels(screen_font),
             font: crate::canvas_font(),
             align_x: h_align.into(),
-            align_y: iced::alignment::Vertical::Center,
+            align_y: v_align,
             ..canvas::Text::default()
         };
         frame.fill_text(text);

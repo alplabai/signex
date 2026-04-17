@@ -181,12 +181,16 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 // ─── Button styles ────────────────────────────────────────────
 
 /// Container-based dock tab (used with mouse_area for drag-to-undock).
+///
+/// Altium-style flat tabs: active tab gets a hover background + accent
+/// underline (added by the caller via `tab_underline`). Inactive tabs are
+/// plain text — no border box. Iced 0.14 `Border` is uniform on all four
+/// sides, so any border here would draw the unwanted bottom edge too.
 pub fn dock_tab_container(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
-    let border = ti(tokens.border);
     move |_: &Theme| container::Style {
         background: if is_active { Some(Background::Color(tab_active)) } else { None },
-        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        border: Border::default(),
         ..container::Style::default()
     }
 }
