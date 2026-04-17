@@ -1453,9 +1453,8 @@ fn shift_snapshot_for_selection(
 
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
-    // Each btn=23px (22+1spacing), sep=2px (1+1spacing), pad=4px
-    // [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //   0     23  48   50    73    96     121  123   146   171  173    196   219   242   267  269   292    315
+    // Each btn=23px, sep=2px, pad=4px.
+    // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
     let x = x - 4.0;
     let b = 23; // button width
     let s = 2; // separator
@@ -1467,9 +1466,9 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     if xi < b {
         return Some(ActiveBarMenu::Filter);
     }
-    // btn 1: Add Component (no dropdown)
+    // btn 1: Move
     if xi < 2 * b {
-        return None;
+        return Some(ActiveBarMenu::Select);
     }
     // sep
     let off = 2 * b + s;
@@ -1477,53 +1476,49 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::SelectMode);
     }
-    // btn 3: Move
+    // btn 3: Align
     if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Select);
-    }
-    // btn 4: Align
-    if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::Align);
     }
     // sep
-    let off = off + 3 * b + s;
-    // btn 5: Wire
+    let off = off + 2 * b + s;
+    // btn 4: Wire
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::Wiring);
     }
-    // btn 6: Power
+    // btn 5: Power
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::Power);
     }
     // sep
     let off = off + 2 * b + s;
-    // btn 7: Harness
+    // btn 6: Harness
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::Harness);
     }
-    // btn 8: Sheet Symbol
+    // btn 7: Sheet Symbol
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::SheetSymbol);
     }
-    // btn 9: Port
+    // btn 8: Port
     if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::Port);
     }
-    // btn 10: Directives
+    // btn 9: Directives
     if xi >= off + 3 * b && xi < off + 4 * b {
         return Some(ActiveBarMenu::Directives);
     }
     // sep
     let off = off + 4 * b + s;
-    // btn 11: Text
+    // btn 10: Text
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::TextTools);
     }
-    // btn 12: Shapes
+    // btn 11: Shapes
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::Shapes);
     }
-    // btn 13: Net Color
+    // btn 12: Net Color
     if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::NetColor);
     }

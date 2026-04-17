@@ -415,10 +415,21 @@ pub(super) fn field_display_pos(
     (prop_pos.x, prop_pos.y)
 }
 
-/// Compute KiCad-like effective field draw properties under symbol TRANSFORM.
+/// Compute KiCad-like effective field draw properties under symbol transform.
 ///
-/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)` where
-/// alignment flips follow transform parity and reading direction.
+/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
+///
+/// KiCad stores `prop.rotation` in the symbol's lib frame. Compose with
+/// `sym.rotation` to get the on-screen angle, then fold so text is always
+/// drawn at 0° or 90° (readable — never upside-down or reversed):
+///
+/// * 180° → 0° with horizontal justify flipped
+/// * 270° → 90° with vertical justify flipped
+///
+/// Mirror state additionally flips the perpendicular axis:
+///
+/// * `mirror_y` flips the X axis → toggle horizontal justify
+/// * `mirror_x` flips the Y axis → toggle vertical justify
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,
@@ -429,58 +440,38 @@ pub(super) fn field_effective_style(
 ) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    let is_horiz = |angle: f64| {
-        let a = angle.rem_euclid(180.0);
-        a < 0.1 || (180.0 - a) < 0.1
+    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
+    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
+        0 => (0.0, false, false),
+        90 => (90.0, false, false),
+        180 => (0.0, true, false),
+        270 => (90.0, false, true),
+        _ => (total, false, false),
     };
 
-    let rad = sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let sx = if sym.mirror_x { -1.0 } else { 1.0 };
-    let sy = if sym.mirror_y { -1.0 } else { 1.0 };
+    let flip_h = fold_h ^ sym.mirror_y;
+    let flip_v = fold_v ^ sym.mirror_x;
 
-    // Matrix for field display transform:
-    // [tx]   [x1 x2] [rx]
-    // [ty] = [y1 y2] [ry]
-    let x1 = sy * cos;
-    let x2 = sy * sin;
-    let y1 = sx * sin;
-    let y2 = -sx * cos;
-
-    let orig_horiz = is_horiz(prop.rotation);
-    let screen_horiz = (x1.abs() > 1e-6) ^ !orig_horiz;
-
-    let flip_h = if orig_horiz {
-        if screen_horiz { x1 < 0.0 } else { x2 > 0.0 }
-    } else if screen_horiz {
-        y1 > 0.0
-    } else {
-        y2 < 0.0
-    };
-
-    let mut h = prop.justify_h;
-    if flip_h {
-        h = match h {
+    let h = if flip_h {
+        match prop.justify_h {
             HAlign::Left => HAlign::Right,
             HAlign::Right => HAlign::Left,
             HAlign::Center => HAlign::Center,
-        };
-    }
-
-    let mut v = prop.justify_v;
-    let det = x1 * y2 - x2 * y1;
-    if det < 0.0 && (orig_horiz == (x1 > 0.0)) {
-        v = match v {
+        }
+    } else {
+        prop.justify_h
+    };
+    let v = if flip_v {
+        match prop.justify_v {
             VAlign::Top => VAlign::Bottom,
             VAlign::Bottom => VAlign::Top,
             VAlign::Center => VAlign::Center,
-        };
-    }
+        }
+    } else {
+        prop.justify_v
+    };
 
-    // Keep symbol fields horizontally readable on-screen (Altium-style)
-    // even when the symbol body is rotated.
-    (0.0, h, v)
+    (draw_rot, h, v)
 }
 
 /// Transform a local library-space point through a symbol instance's
