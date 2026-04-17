@@ -153,6 +153,34 @@ impl Signex {
                 }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // A click outside the inline editor commits its current value
+                // and returns to normal selection — same convention as most
+                // IDEs (Escape cancels, click elsewhere confirms).
+                if let Some(state) = self.interaction_state.editing_text.take() {
+                    if state.text != state.original_text {
+                        let stored =
+                            signex_render::schematic::text::escape_for_kicad(&state.text);
+                        let cmd = match state.kind {
+                            signex_types::schematic::SelectedKind::Label => Some(
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::Label(state.uuid),
+                                    value: stored,
+                                },
+                            ),
+                            signex_types::schematic::SelectedKind::TextNote => Some(
+                                signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::TextNote(state.uuid),
+                                    value: stored,
+                                },
+                            ),
+                            _ => None,
+                        };
+                        if let Some(cmd) = cmd {
+                            self.apply_engine_command(cmd, false, true);
+                        }
+                    }
+                    return Task::none();
+                }
                 let (wx, wy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
                     ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
@@ -377,9 +405,31 @@ impl Signex {
                 }
             }
             CanvasEvent::MoveSelected { dx, dy } => {
+                // Snap so the PRIMARY selected item's connection point (its
+                // stored `position`) lands on a grid dot after the move, not
+                // just the drag delta. Snapping only the delta preserves an
+                // off-grid origin; users expect the endpoint to be on-grid
+                // like KiCad/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
-                    ((dx / gs).round() * gs, (dy / gs).round() * gs)
+                    let primary = self
+                        .interaction_state
+                        .canvas
+                        .selected
+                        .first()
+                        .and_then(|item| {
+                            let snap = self.active_render_snapshot()?;
+                            primary_anchor_world(snap, item)
+                        });
+                    if let Some((px, py)) = primary {
+                        let target_x = px + dx;
+                        let target_y = py + dy;
+                        let snapped_x = (target_x / gs).round() * gs;
+                        let snapped_y = (target_y / gs).round() * gs;
+                        (snapped_x - px, snapped_y - py)
+                    } else {
+                        ((dx / gs).round() * gs, (dy / gs).round() * gs)
+                    }
                 } else {
                     (dx, dy)
                 };
@@ -400,8 +450,8 @@ impl Signex {
             CanvasEvent::DoubleClicked {
                 world_x,
                 world_y,
-                screen_x,
-                screen_y,
+                screen_x: _,
+                screen_y: _,
             } => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
@@ -413,27 +463,41 @@ impl Signex {
                     if let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
                     {
+                        use signex_render::schematic::text::expand_char_escapes;
                         let edit_info = match hit.kind {
                             SelectedKind::Label => snapshot
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
-                                .map(|l| (l.text.clone(), SelectedKind::Label)),
+                                .map(|l| (
+                                    l.text.clone(),
+                                    SelectedKind::Label,
+                                    l.position.x,
+                                    l.position.y,
+                                )),
                             SelectedKind::TextNote => snapshot
                                 .text_notes
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
-                                .map(|t| (t.text.clone(), SelectedKind::TextNote)),
+                                .map(|t| (
+                                    t.text.clone(),
+                                    SelectedKind::TextNote,
+                                    t.position.x,
+                                    t.position.y,
+                                )),
                             _ => None,
                         };
-                        if let Some((text, kind)) = edit_info {
+                        if let Some((raw_text, kind, wx, wy)) = edit_info {
+                            // Show the user the visible form (e.g. "/OE"), not
+                            // the KiCad-escaped storage form ("{slash}OE").
+                            let display_text = expand_char_escapes(&raw_text);
                             self.interaction_state.editing_text = Some(TextEditState {
                                 uuid: hit.uuid,
                                 kind,
-                                original_text: text.clone(),
-                                text,
-                                screen_x,
-                                screen_y,
+                                original_text: display_text.clone(),
+                                text: display_text,
+                                world_x: wx,
+                                world_y: wy,
                             });
                         }
                     }
@@ -497,5 +561,57 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+    }
+}
+
+/// Resolve a selected item's primary anchor — the world point that should
+/// snap to the grid (connection point for labels/wires/symbols, etc.).
+fn primary_anchor_world(
+    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    item: &signex_types::schematic::SelectedItem,
+) -> Option<(f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    match item.kind {
+        SelectedKind::Label => snap
+            .labels
+            .iter()
+            .find(|l| l.uuid == item.uuid)
+            .map(|l| (l.position.x, l.position.y)),
+        SelectedKind::Symbol => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .map(|s| (s.position.x, s.position.y)),
+        SelectedKind::Wire => snap
+            .wires
+            .iter()
+            .find(|w| w.uuid == item.uuid)
+            .map(|w| (w.start.x, w.start.y)),
+        SelectedKind::Bus => snap
+            .buses
+            .iter()
+            .find(|b| b.uuid == item.uuid)
+            .map(|b| (b.start.x, b.start.y)),
+        SelectedKind::Junction => snap
+            .junctions
+            .iter()
+            .find(|j| j.uuid == item.uuid)
+            .map(|j| (j.position.x, j.position.y)),
+        SelectedKind::NoConnect => snap
+            .no_connects
+            .iter()
+            .find(|n| n.uuid == item.uuid)
+            .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::TextNote => snap
+            .text_notes
+            .iter()
+            .find(|t| t.uuid == item.uuid)
+            .map(|t| (t.position.x, t.position.y)),
+        SelectedKind::ChildSheet => snap
+            .child_sheets
+            .iter()
+            .find(|c| c.uuid == item.uuid)
+            .map(|c| (c.position.x, c.position.y)),
+        _ => None,
     }
 }

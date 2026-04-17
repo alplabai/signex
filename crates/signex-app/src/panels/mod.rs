@@ -1491,7 +1491,9 @@ fn view_selected_element_properties<'a>(
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
-            let label_text = get("Text");
+            // Net Name stored in KiCad escapes `/` as `{slash}`. Show the
+            // visible form in the panel; the edit handler re-escapes on save.
+            let label_text = signex_render::schematic::text::expand_char_escapes(&get("Text"));
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
