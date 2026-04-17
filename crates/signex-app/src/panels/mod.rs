@@ -333,12 +333,46 @@ pub fn paper_dimensions(size: &str) -> (f32, f32) {
 pub struct PrePlacementData {
     /// Which tool is being configured.
     pub tool_name: String,
+    /// Semantic kind so the panel can render the right field set.
+    pub kind: PrePlacementKind,
     /// Net label / text note text.
     pub label_text: String,
     /// Component designator override.
     pub designator: String,
     /// Rotation (degrees).
     pub rotation: f64,
+    /// Font family (cosmetic until font switching ships).
+    pub font: String,
+    /// Font size in points (10 pt = Altium default).
+    pub font_size_pt: u32,
+    /// Horizontal justification.
+    pub justify_h: signex_types::schematic::HAlign,
+    /// Vertical justification (TextNote / Component fields).
+    pub justify_v: signex_types::schematic::VAlign,
+    /// Style toggles (currently cosmetic — engine wiring tracks v0.7+).
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    /// Most-recent cursor world position (for the X/Y readout).
+    pub cursor_x_mm: f64,
+    pub cursor_y_mm: f64,
+}
+
+/// Distinguishes placement flavors so the pre-placement form only shows
+/// fields relevant to what the user is about to drop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrePlacementKind {
+    Wire,
+    Bus,
+    BusEntry,
+    NoConnect,
+    NetLabel,
+    GlobalPort,
+    HierPort,
+    PowerPort,
+    TextNote,
+    Component,
+    Other,
 }
 
 /// Panel-level message wrapping widget messages.
@@ -397,8 +431,19 @@ pub enum PanelMsg {
     /// Pre-placement: update designator field.
     SetPrePlacementDesignator(String),
     /// Pre-placement: update rotation.
-    #[allow(dead_code)]
     SetPrePlacementRotation(f64),
+    /// Pre-placement: update font family.
+    SetPrePlacementFont(String),
+    /// Pre-placement: update font size (pt).
+    SetPrePlacementFontSize(u32),
+    /// Pre-placement: set horizontal justification.
+    SetPrePlacementJustifyH(signex_types::schematic::HAlign),
+    /// Pre-placement: set vertical justification.
+    SetPrePlacementJustifyV(signex_types::schematic::VAlign),
+    /// Pre-placement: toggle bold / italic / underline.
+    TogglePrePlacementBold,
+    TogglePrePlacementItalic,
+    TogglePrePlacementUnderline,
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -1021,8 +1066,11 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     // ── Pre-placement properties (TAB pressed during tool) ──
+    // TAB pauses placement and edits the properties the NEXT click will
+    // commit with. We render a full Altium-style Location + Properties
+    // form bound to the pre_placement data — not the live engine.
     if let Some(ref pp) = ctx.pre_placement {
-        return view_pre_placement(pp, muted, primary, border_c, input_bg, input_bdr);
+        return view_pre_placement(pp, ctx, muted, primary, border_c, input_bg, input_bdr);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
@@ -1680,6 +1728,7 @@ fn view_selected_element_properties<'a>(
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
 fn view_pre_placement<'a>(
     pp: &PrePlacementData,
+    ctx: &'a PanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -1690,16 +1739,20 @@ fn view_pre_placement<'a>(
     let designator = pp.designator.clone();
     let rotation = pp.rotation;
     let tool_name = pp.tool_name.clone();
+    let kind = pp.kind;
+    let pos_str = format!("{:.2}, {:.2}", pp.cursor_x_mm, pp.cursor_y_mm);
+    let rot_label = format!("{:.0} Degrees", rotation);
+    let font = pp.font.clone();
+    let font_size_pt = pp.font_size_pt;
+    let justify_h = pp.justify_h;
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Header
+    // Header — kind-labelled, Altium style.
     col = col.push(
         container(
             row![
-                text(format!("{} Properties", tool_name))
-                    .size(12)
-                    .color(primary),
+                text(tool_name.clone()).size(12).color(primary),
                 Space::new().width(Length::Fill),
                 iced::widget::button(text("OK").size(10).color(Color::WHITE))
                     .padding([2, 10])
@@ -1712,7 +1765,6 @@ fn view_pre_placement<'a>(
         .width(Length::Fill),
     );
 
-    // Separator
     col = col.push(
         container(Space::new())
             .height(1)
@@ -1723,51 +1775,131 @@ fn view_pre_placement<'a>(
             }),
     );
 
-    // Fields based on tool type
-    col = col.push(
-        container(
-            column![
-                // Text / Net Name field
-                container(
-                    row![
-                            text("Text / Name")
-                                .size(11)
-                                .color(muted)
-                                .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
-                        iced::widget::text_input("Enter text...", &label_text)
-                            .on_input(PanelMsg::SetPrePlacementText)
-                            .size(11)
-                            .padding(4)
-                                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-                    ]
-                    .spacing(8)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([4, PROPERTY_ROW_PAD_X]),
-                // Designator field
-                container(
-                    row![
-                        text("Designator")
-                            .size(11)
-                            .color(muted)
-                            .width(Length::FillPortion(PROPERTY_LABEL_PORTION)),
-                        iced::widget::text_input("e.g. R1, U1", &designator)
-                            .on_input(PanelMsg::SetPrePlacementDesignator)
-                            .size(11)
-                            .padding(4)
-                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-                    ]
-                    .spacing(8)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([4, PROPERTY_ROW_PAD_X]),
-                // Rotation
-                form_input_row("Rotation", &format!("{rotation:.0}°"), muted, input_bg, input_bdr),
-            ]
-            .spacing(0),
-        )
-        .width(Length::Fill),
+    // ── Location ──
+    col = col.push(collapsible_section(
+        "preplace_location",
+        "Location",
+        &ctx.collapsed_sections,
+        primary,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg, input_bdr));
+            let rotation_opts: Vec<String> = vec![
+                "0 Degrees".into(),
+                "90 Degrees".into(),
+                "180 Degrees".into(),
+                "270 Degrees".into(),
+            ];
+            c = c.push(form_pick_row(
+                "Rotation",
+                rotation_opts,
+                rot_label.clone(),
+                |s| {
+                    let deg = s
+                        .split_whitespace()
+                        .next()
+                        .and_then(|n| n.parse::<f64>().ok())
+                        .unwrap_or(0.0);
+                    PanelMsg::SetPrePlacementRotation(deg)
+                },
+                muted,
+            ));
+            c
+        },
+    ));
+
+    // ── Properties (kind-specific) ──
+    let text_label_for_kind = match kind {
+        PrePlacementKind::NetLabel => "Net Name",
+        PrePlacementKind::GlobalPort => "Port Name",
+        PrePlacementKind::HierPort => "Sheet Name",
+        PrePlacementKind::PowerPort => "Net Name",
+        PrePlacementKind::TextNote => "Text",
+        PrePlacementKind::Component => "Value",
+        _ => "",
+    };
+
+    let show_text_field = !text_label_for_kind.is_empty();
+    let show_designator = matches!(kind, PrePlacementKind::Component);
+    let show_text_styling = matches!(
+        kind,
+        PrePlacementKind::NetLabel
+            | PrePlacementKind::GlobalPort
+            | PrePlacementKind::HierPort
+            | PrePlacementKind::PowerPort
+            | PrePlacementKind::TextNote
+            | PrePlacementKind::Component
     );
+
+    if show_text_field || show_text_styling {
+        col = col.push(collapsible_section(
+            "preplace_props",
+            "Properties",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                if show_text_field {
+                    c = c.push(form_edit_row(
+                        text_label_for_kind,
+                        &label_text,
+                        muted,
+                        PanelMsg::SetPrePlacementText,
+                    ));
+                }
+                if show_designator {
+                    c = c.push(form_edit_row(
+                        "Designator",
+                        &designator,
+                        muted,
+                        PanelMsg::SetPrePlacementDesignator,
+                    ));
+                }
+                if show_text_styling {
+                    let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
+                    c = c.push(form_pick_row(
+                        "Font",
+                        font_opts,
+                        font.clone(),
+                        PanelMsg::SetPrePlacementFont,
+                        muted,
+                    ));
+                    let size_opts: Vec<String> =
+                        [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                            .iter()
+                            .map(|n| n.to_string())
+                            .collect();
+                    c = c.push(form_pick_row(
+                        "Font Size",
+                        size_opts,
+                        font_size_pt.to_string(),
+                        |s| PanelMsg::SetPrePlacementFontSize(s.parse().unwrap_or(10)),
+                        muted,
+                    ));
+                    c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                    c = c.push(form_label("Justification", muted));
+                    c = c.push(
+                        container(preplacement_justification_grid(
+                            justify_h, input_bg, input_bdr, primary, muted,
+                        ))
+                        .padding([4, 8]),
+                    );
+                }
+                c
+            },
+        ));
+    } else {
+        col = col.push(
+            container(
+                text("Click to place. No per-instance options.")
+                    .size(10)
+                    .color(muted),
+            )
+            .padding([8, PROPERTY_ROW_PAD_X]),
+        );
+    }
 
     container(scrollable(col).width(Length::Fill))
         .width(Length::Fill)
@@ -3160,6 +3292,95 @@ fn justification_grid(
             cell(&ICON_BL, false, PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
             cell(&ICON_B,  false, PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
             cell(&ICON_BR, false, PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
+        ].spacing(2),
+    ]
+    .spacing(2)
+    .into()
+}
+
+/// Pre-placement 3x3 justification picker. Same visual grid as the
+/// selection-aware `justification_grid` but dispatches to the
+/// `SetPrePlacementJustifyH` message family (no UUID needed).
+fn preplacement_justification_grid(
+    h: signex_types::schematic::HAlign,
+    input_bg: Color,
+    input_bdr: Color,
+    primary: Color,
+    muted: Color,
+) -> Element<'static, PanelMsg> {
+    use std::sync::LazyLock;
+    use signex_types::schematic::HAlign;
+    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg")));
+    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg")));
+    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg")));
+    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg")));
+    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg")));
+    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg")));
+    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg")));
+    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg")));
+    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg")));
+    let _ = muted;
+
+    const CELL_SIZE: f32 = 24.0;
+    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+                active: bool,
+                on_press: PanelMsg| -> Element<'static, PanelMsg> {
+        let bg_active = input_bdr;
+        let fg_active = Color::WHITE;
+        let fg_inactive = primary;
+        let svg_widget = iced::widget::svg((*handle).clone())
+            .width(12.0)
+            .height(12.0)
+            .style(move |_: &Theme, _| iced::widget::svg::Style {
+                color: Some(if active { fg_active } else { fg_inactive }),
+            });
+        iced::widget::button(
+            container(svg_widget)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center(Length::Fill),
+        )
+        .width(CELL_SIZE)
+        .height(CELL_SIZE)
+        .padding(0)
+        .on_press(on_press)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            let bg = if active { bg_active } else if hovered { input_bdr } else { input_bg };
+            iced::widget::button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                text_color: if active { fg_active } else { fg_inactive },
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    };
+    let hl_mid = |target: HAlign| -> bool { h == target };
+    iced::widget::column![
+        iced::widget::row![
+            cell(&ICON_TL, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
+            cell(&ICON_T,  false, PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
+            cell(&ICON_TR, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
+        ].spacing(2),
+        iced::widget::row![
+            cell(&ICON_L,  hl_mid(HAlign::Left),   PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
+            cell(&ICON_C,  hl_mid(HAlign::Center), PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
+            cell(&ICON_R,  hl_mid(HAlign::Right),  PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
+        ].spacing(2),
+        iced::widget::row![
+            cell(&ICON_BL, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
+            cell(&ICON_B,  false, PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
+            cell(&ICON_BR, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
         ].spacing(2),
     ]
     .spacing(2)

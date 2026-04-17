@@ -93,6 +93,12 @@ pub struct SchematicCanvas {
     pub ghost_label: Option<signex_types::schematic::Label>,
     /// Ghost power-port / symbol preview for placement (follows cursor).
     pub ghost_symbol: Option<signex_types::schematic::Symbol>,
+    /// Ghost text-note preview for placement (follows cursor).
+    pub ghost_text: Option<signex_types::schematic::TextNote>,
+    /// When true, placement is paused (TAB pressed → pre-placement form
+    /// open). The ghost freezes and canvas clicks don't place — the user
+    /// interacts with the Properties panel until they confirm with OK.
+    pub placement_paused: bool,
     /// Measurement anchor point for the interactive measure tool.
     pub measure_start: Option<signex_types::schematic::Point>,
     /// Current or finalized measurement endpoint.
@@ -153,6 +159,8 @@ impl SchematicCanvas {
             tool_preview: None,
             ghost_label: None,
             ghost_symbol: None,
+            ghost_text: None,
+            placement_paused: false,
             measure_start: None,
             measure_end: None,
             measure_locked: false,
@@ -910,7 +918,12 @@ impl canvas::Program<Message> for SchematicCanvas {
                 }
 
                 // Ghost power-port symbol preview at cursor position.
-                if let Some(ref ghost_sym) = self.ghost_symbol {
+                // While placement is paused (TAB → properties form open),
+                // hide the ghosts so the user isn't distracted by a preview
+                // that can't be committed until they confirm.
+                if let Some(ref ghost_sym) = self.ghost_symbol
+                    && !self.placement_paused
+                {
                     let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
                     let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                         let g = self.snap_grid_mm;
@@ -937,8 +950,40 @@ impl canvas::Program<Message> for SchematicCanvas {
                     );
                 }
 
+                // Ghost text-note preview at cursor position.
+                if let Some(ref ghost_tn) = self.ghost_text
+                    && !self.placement_paused
+                {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let mut preview = ghost_tn.clone();
+                    preview.position = signex_types::schematic::Point::new(sx, sy);
+                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    signex_render::schematic::text::draw_text_note(
+                        &mut frame,
+                        &preview,
+                        &ghost_transform,
+                        ghost_color,
+                    );
+                }
+
                 // Ghost label/port preview at cursor position
-                if let Some(ref ghost) = self.ghost_label {
+                if let Some(ref ghost) = self.ghost_label
+                    && !self.placement_paused
+                {
                     let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
                     let snap_world = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                         let g = self.snap_grid_mm;
@@ -973,7 +1018,17 @@ impl canvas::Program<Message> for SchematicCanvas {
                 // enabled), so the user can see exactly where the wire/bus
                 // endpoint will land. Altium's placement tag follows the
                 // snapped point, not the raw cursor.
-                if let Some(ref label) = self.tool_preview {
+                //
+                // Only show the X for "line-drawing" tools (wire/bus/etc.)
+                // that DON'T already have a ghost preview of what's being
+                // placed — the ghost shows the click target for those,
+                // and doubling up with an X clutters the cursor.
+                let has_ghost = self.ghost_label.is_some()
+                    || self.ghost_symbol.is_some()
+                    || self.ghost_text.is_some();
+                if let Some(ref label) = self.tool_preview
+                    && !has_ghost
+                {
                     let snapped_screen = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                         let world = state.camera.screen_to_world(cursor_pos, bounds);
                         let g = self.snap_grid_mm as f32;

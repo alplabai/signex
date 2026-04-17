@@ -163,12 +163,12 @@ fn draw_power_port_selection(
         sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_MM * 0.55 * 0.5,
     );
 
-    // In lib-local Y (before Y-flip in instance_transform): body at positive
-    // pin_len+body_extent, label beyond that. Keep symmetric around ±half_w.
-    let near = 0.0_f64.min(pin_len * dir);
+    // In lib-local Y (before Y-flip in instance_transform): the pin stub
+    // starts at the anchor (y = 0) and extends toward the body. Keep the
+    // bbox anchored at 0 so the stub is covered, not just the body+label.
     let far = (pin_len + body_extent + label_extent + 0.4) * dir;
-    let y_min = near.min(far);
-    let y_max = near.max(far);
+    let y_min = 0.0_f64.min(far);
+    let y_max = 0.0_f64.max(far);
     let aabb = Aabb::new(-half_w, y_min, half_w, y_max).expand(0.25);
 
     // Transform the 4 lib-local corners through instance_transform and draw.
