@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::display_text_content;
+use super::text::{display_text_content, display_text_with_overbars};
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -224,6 +224,11 @@ fn draw_pin(
             }
         } else {
             // offset > 0: place name along the pin, just inside the body.
+            // Anchor sits at the body-side end of the pin shifted inward by
+            // `pin_name_offset`. The text then extends further inward from
+            // the anchor — so the alignment edge ("near" edge in screen)
+            // must face the pin tip. Otherwise the text's half-height would
+            // overrun the body border for vertical pins (VCC/GND on ICs).
             let name_offset = lib.pin_name_offset;
             let name_pos = Point::new(
                 body_end.x + dir_x * name_offset,
@@ -231,19 +236,38 @@ fn draw_pin(
             );
             let (nwx, nwy) = instance_transform(sym, &name_pos);
             np = transform.to_screen_point(nwx, nwy);
-            let (wdx, _wdy) = instance_rotate_dir(sym, dir_x, dir_y);
-            h_align = if wdx > 0.1 {
-                iced::alignment::Horizontal::Left
-            } else if wdx < -0.1 {
-                iced::alignment::Horizontal::Right
+            // Screen-space pin direction (tip → body), which is the
+            // direction text should extend in from its anchor.
+            let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+            if wdx.abs() > wdy.abs() {
+                // Horizontal pin on screen.
+                h_align = if wdx > 0.0 {
+                    iced::alignment::Horizontal::Left
+                } else {
+                    iced::alignment::Horizontal::Right
+                };
+                v_align = iced::alignment::Vertical::Center;
             } else {
-                iced::alignment::Horizontal::Center
-            };
-            v_align = iced::alignment::Vertical::Center;
+                // Vertical pin on screen. wdy is in screen Y-down after
+                // instance_rotate_dir (which returns lib-flipped Y). So
+                // wdy > 0 means the pin extends DOWN on screen (tip above)
+                // and the text must extend further down → align_y Top.
+                h_align = iced::alignment::Horizontal::Center;
+                v_align = if wdy > 0.0 {
+                    iced::alignment::Vertical::Top
+                } else {
+                    iced::alignment::Vertical::Bottom
+                };
+            }
         }
 
+        // Render plain glyphs (no combining overline chars — those sit
+        // flush against the cap-height). Any overbar segments are drawn as
+        // a separate stroke above the text with a small visible gap, which
+        // matches KiCad's look.
+        let (plain, overbars) = display_text_with_overbars(&pin.name);
         let text = canvas::Text {
-            content: display_text_content(&pin.name),
+            content: plain.clone(),
             position: np,
             color: pin_color,
             size: iced::Pixels(screen_font),
@@ -253,6 +277,19 @@ fn draw_pin(
             ..canvas::Text::default()
         };
         frame.fill_text(text);
+
+        if !overbars.is_empty() {
+            draw_overbars(
+                frame,
+                &plain,
+                &overbars,
+                np,
+                screen_font,
+                h_align,
+                v_align,
+                pin_color,
+            );
+        }
     }
 
     // Pin number (inside the body, along the pin line)
@@ -515,5 +552,61 @@ fn draw_pin_shape(
             });
             frame.stroke(&path, stroke);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Overbar rendering (horizontal text only)
+// ---------------------------------------------------------------------------
+
+/// Draw horizontal overbar strokes above the character ranges specified in
+/// `overbars` (`(start_char_idx, char_count)` pairs into `plain`). Assumes
+/// the backing text was rendered horizontally (0° rotation) — which is the
+/// case for all pin names today. Placement is Iosevka-calibrated: each
+/// character advances `0.55 × font_size`, cap-height is `~0.72 × font_size`,
+/// and the gap above the cap is `0.18 × font_size`.
+#[allow(clippy::too_many_arguments)]
+fn draw_overbars(
+    frame: &mut canvas::Frame,
+    plain: &str,
+    overbars: &[(usize, usize)],
+    anchor: iced::Point,
+    font_size_px: f32,
+    h_align: iced::alignment::Horizontal,
+    v_align: iced::alignment::Vertical,
+    color: Color,
+) {
+    let total_chars = plain.chars().count() as f32;
+    let char_w = font_size_px * 0.55;
+    let total_w = total_chars * char_w;
+    let cap = font_size_px * 0.72;
+    let gap = font_size_px * 0.24;
+    let line_w = (font_size_px * 0.06).max(0.8);
+
+    let text_left = match h_align {
+        iced::alignment::Horizontal::Left => anchor.x,
+        iced::alignment::Horizontal::Right => anchor.x - total_w,
+        iced::alignment::Horizontal::Center => anchor.x - total_w * 0.5,
+    };
+    // Cap-top = top of the tallest glyph. Overline sits `gap` above it.
+    let overline_y = match v_align {
+        iced::alignment::Vertical::Top => anchor.y + (font_size_px - cap) * 0.5 - gap,
+        iced::alignment::Vertical::Bottom => anchor.y - cap - gap,
+        iced::alignment::Vertical::Center => anchor.y - cap * 0.5 - gap,
+    };
+
+    let stroke = canvas::Stroke::default()
+        .with_color(color)
+        .with_width(line_w)
+        .with_line_cap(LineCap::Butt);
+
+    for (start, len) in overbars {
+        let x0 = text_left + (*start as f32) * char_w;
+        let x1 = x0 + (*len as f32) * char_w;
+        let path = canvas::Path::new(|b| {
+            b.move_to(iced::Point::new(x0, overline_y));
+            b.line_to(iced::Point::new(x1, overline_y));
+        });
+        frame.stroke(&path, stroke);
     }
 }

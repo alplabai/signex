@@ -553,6 +553,11 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                    && crate::app::handlers::selection_workflow::passes_filter(
+                        &hit,
+                        snapshot,
+                        &self.interaction_state.selection_filters,
+                    )
                 {
                     if let Some(pos) = self
                         .interaction_state
@@ -632,6 +637,16 @@ fn primary_anchor_world(
             .iter()
             .find(|c| c.uuid == item.uuid)
             .map(|c| (c.position.x, c.position.y)),
+        SelectedKind::SymbolRefField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.ref_text.as_ref().map(|rt| (rt.position.x, rt.position.y))),
+        SelectedKind::SymbolValField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.val_text.as_ref().map(|vt| (vt.position.x, vt.position.y))),
         _ => None,
     }
 }

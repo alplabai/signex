@@ -21,7 +21,9 @@ pub fn display_text_content(input: &str) -> String {
     // KiCad escapes characters with path/markup significance as {name} tokens
     // (e.g. `{slash}` for `/`). Expand before parsing markup so the literal
     // characters appear in the rendered glyphs instead of the escape source.
-    let expanded = expand_char_escapes(input);
+    // Also fold backslash-escapes (`\n` → newline, `\\` → backslash) that
+    // KiCad uses inside multi-line text notes.
+    let expanded = expand_backslash_escapes(&expand_char_escapes(input));
 
     let segments = parse_markup(&expanded);
     if segments.is_empty() {
@@ -38,6 +40,40 @@ pub fn display_text_content(input: &str) -> String {
         }
     }
     out
+}
+
+/// Plain display string + ordered list of `(start_char_idx, char_count)` pairs
+/// identifying overbar regions. Used by renderers that draw the overbar as a
+/// separate stroke (with a visible gap above the glyphs) instead of relying on
+/// the combining-overline U+0305 which sits flush to the cap-height.
+pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) {
+    let expanded = expand_char_escapes(input);
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return (expanded, Vec::new());
+    }
+
+    let mut plain = String::new();
+    let mut overbars: Vec<(usize, usize)> = Vec::new();
+    let mut char_cursor: usize = 0;
+    for segment in segments {
+        match segment {
+            RichSegment::Normal(text)
+            | RichSegment::Subscript(text)
+            | RichSegment::Superscript(text) => {
+                let n = text.chars().count();
+                plain.push_str(&text);
+                char_cursor += n;
+            }
+            RichSegment::Overbar(text) => {
+                let n = text.chars().count();
+                overbars.push((char_cursor, n));
+                plain.push_str(&text);
+                char_cursor += n;
+            }
+        }
+    }
+    (plain, overbars)
 }
 
 /// Count the number of glyphs that will actually render for `input` — char
@@ -58,6 +94,47 @@ pub fn visible_char_count(input: &str) -> usize {
             | RichSegment::Overbar(t) => t.chars().count(),
         })
         .sum()
+}
+
+/// Expand KiCad backslash escapes used inside text-note / multi-line fields:
+/// `\n` → newline, `\r` → CR (collapsed), `\t` → tab, `\\` → literal `\`.
+/// Unrecognised `\x` sequences are passed through unchanged.
+pub fn expand_backslash_escapes(input: &str) -> String {
+    if !input.contains('\\') {
+        return input.to_string();
+    }
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.peek() {
+                Some('n') => {
+                    chars.next();
+                    out.push('\n');
+                }
+                Some('r') => {
+                    chars.next();
+                    // Collapse `\r` to `\n` so CRLF in stored strings
+                    // doesn't produce blank double-spaced lines.
+                    if chars.peek() != Some(&'n') {
+                        out.push('\n');
+                    }
+                }
+                Some('t') => {
+                    chars.next();
+                    out.push('\t');
+                }
+                Some('\\') => {
+                    chars.next();
+                    out.push('\\');
+                }
+                _ => out.push(ch),
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 /// Replace KiCad `{name}` escape tokens with their literal character.

@@ -242,12 +242,15 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
     let dx = wx - disp_x;
     let dy = wy - disp_y;
 
-    // Rotate click into text-local space (KiCad CCW = negate in Y-down)
+    // Undo the render rotation to map the click into unrotated text-local
+    // space. `draw_text_prop` rotates by `-draw_rotation.to_radians()` (Iced
+    // Y-down), so the inverse is the same sign: rotate the click-to-anchor
+    // vector by `-(-θ) = +θ` in lyon math = `-θ` in Iced-visual. Either way,
+    // `(ldx, ldy) = R(-θ) · (dx, dy)`.
     let (ldx, ldy) = if draw_rotation.abs() > 0.1 {
-        let rad = draw_rotation.to_radians();
+        let rad = -draw_rotation.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
-        // Rotate by +rotation to undo the text rotation
         (dx * cos + dy * sin, -dx * sin + dy * cos)
     } else {
         (dx, dy)
