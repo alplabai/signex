@@ -117,18 +117,42 @@ fn draw_text_prop_selection(
     let tw = super::text::visible_char_count(content) as f64 * fs * 0.55;
     let th = fs;
     let (dx, dy) = field_display_pos(&prop.position, sym);
-    // Mirror the effective alignment the renderer computed so the outline
-    // wraps the glyphs instead of a theoretical center-aligned rect.
-    let (_, eff_h, eff_v) = super::field_effective_style(prop, sym);
-    let (x0, x1) = match eff_h {
-        HAlign::Left => (dx, dx + tw),
-        HAlign::Right => (dx - tw, dx),
-        HAlign::Center => (dx - tw * 0.5, dx + tw * 0.5),
-    };
-    let (y0, y1) = match eff_v {
-        VAlign::Top => (dy, dy + th),
-        VAlign::Bottom => (dy - th, dy),
-        VAlign::Center => (dy - th * 0.5, dy + th * 0.5),
+    // Mirror the effective alignment AND rotation the renderer computed so
+    // the outline wraps the glyphs instead of a theoretical center-aligned
+    // rect. For 90°-rotated text the reading and perpendicular axes swap:
+    // `eff_h` now positions along the vertical axis, `eff_v` along the
+    // horizontal axis.
+    let (dr, eff_h, eff_v) = super::field_effective_style(prop, sym);
+    let rotated = (dr - 90.0).abs() < 0.1;
+    let (x0, x1, y0, y1) = if rotated {
+        // Rotation -90° CCW on Iced canvas: reading direction maps from +X
+        // (original) to −Y (screen). Left-justify → anchor at reading start
+        // → bbox extends upward (smaller Y) by `tw`. Perpendicular extent is
+        // `th` across the anchor; `eff_v::Top` maps to the left side of the
+        // rotated glyph box, `Bottom` to the right.
+        let (y0, y1) = match eff_h {
+            HAlign::Left => (dy - tw, dy),
+            HAlign::Right => (dy, dy + tw),
+            HAlign::Center => (dy - tw * 0.5, dy + tw * 0.5),
+        };
+        let (x0, x1) = match eff_v {
+            VAlign::Top => (dx, dx + th),
+            VAlign::Bottom => (dx - th, dx),
+            VAlign::Center => (dx - th * 0.5, dx + th * 0.5),
+        };
+        (x0, x1, y0, y1)
+    } else {
+        let (x0, x1) = match eff_h {
+            HAlign::Left => (dx, dx + tw),
+            HAlign::Right => (dx - tw, dx),
+            HAlign::Center => (dx - tw * 0.5, dx + tw * 0.5),
+        };
+        let (y0, y1) = match eff_v {
+            VAlign::Top => (dy, dy + th),
+            VAlign::Bottom => (dy - th, dy),
+            VAlign::Center => (dy - th * 0.5, dy + th * 0.5),
+        };
+        (x0, x1, y0, y1)
     };
     let aabb = Aabb::new(x0, y0, x1, y1).expand(0.15);
     draw_rect_highlight(frame, &aabb, transform);

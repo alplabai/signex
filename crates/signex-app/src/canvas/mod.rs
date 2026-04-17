@@ -1146,13 +1146,6 @@ impl canvas::Program<Message> for SchematicCanvas {
             {
                 let dx = (current.0 - origin.0) as f32;
                 let dy = (current.1 - origin.1) as f32;
-                let wire_c = {
-                    let c = &self.canvas_colors.wire;
-                    Color::from_rgb8(c.r, c.g, c.b)
-                };
-                let move_stroke = canvas::Stroke::default()
-                    .with_color(wire_c)
-                    .with_width(1.5);
                 if let Some(render_cache) = self.active_render_cache() {
                     let preview = render_cache.prepared_preview();
                     for sel in &self.selected {
@@ -1194,12 +1187,6 @@ impl canvas::Program<Message> for SchematicCanvas {
 
                                 let anchor_circle = canvas::Path::circle(anchor, 3.0);
                                 frame.fill(&anchor_circle, Color::from_rgb(0.3, 0.7, 1.0));
-
-                                let rect = canvas::Path::rectangle(
-                                    iced::Point::new(moved.x - 7.0, moved.y - 7.0),
-                                    iced::Size::new(14.0, 14.0),
-                                );
-                                frame.stroke(&rect, move_stroke);
                             }
                         }
 
@@ -1384,13 +1371,7 @@ fn shift_snapshot_for_selection(
     use signex_types::schematic::{Point, SelectedKind};
 
     let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {
-        selection
-            .iter()
-            .any(|s| s.uuid == uuid && (s.kind == kind
-                // Symbol field selections should still shift the whole symbol
-                // visually while its ref/val text moves.
-                || (matches!(kind, SelectedKind::Symbol)
-                    && matches!(s.kind, SelectedKind::SymbolRefField | SelectedKind::SymbolValField))))
+        selection.iter().any(|s| s.uuid == uuid && s.kind == kind)
     };
     let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
 
@@ -1434,11 +1415,26 @@ fn shift_snapshot_for_selection(
     }
     for sym in out.symbols.iter_mut() {
         if is_selected(sym.uuid, SelectedKind::Symbol) {
+            // Whole-symbol drag: anchor + both fields travel together.
             sym.position = shift(sym.position);
             if let Some(rt) = &mut sym.ref_text {
                 rt.position = shift(rt.position);
             }
             if let Some(vt) = &mut sym.val_text {
+                vt.position = shift(vt.position);
+            }
+        } else {
+            // Field-only drag: shift just the selected field; the symbol
+            // body stays put so the user can reposition the label
+            // independently (Altium convention).
+            if is_selected(sym.uuid, SelectedKind::SymbolRefField)
+                && let Some(rt) = &mut sym.ref_text
+            {
+                rt.position = shift(rt.position);
+            }
+            if is_selected(sym.uuid, SelectedKind::SymbolValField)
+                && let Some(vt) = &mut sym.val_text
+            {
                 vt.position = shift(vt.position);
             }
         }
