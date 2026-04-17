@@ -49,11 +49,12 @@ const ICON_DIRECTIVES: &[u8] = include_bytes!("../assets/icons/directives.svg");
 const ICON_TEXT: &[u8] = include_bytes!("../assets/icons/text.svg");
 const ICON_SHAPES: &[u8] = include_bytes!("../assets/icons/shapes.svg");
 const ICON_NETCOLOR: &[u8] = include_bytes!("../assets/icons/netcolor.svg");
+#[allow(dead_code)]
 const ICON_ADDPART: &[u8] = include_bytes!("../assets/icons/addpart.svg");
 const ICON_SHEETSYM: &[u8] = include_bytes!("../assets/icons/sheetsym.svg");
 
-/// Active Bar total width in pixels (14 btns × 23px + 4 seps × 2px + 8px padding).
-pub const BAR_WIDTH_PX: f32 = 338.0;
+/// Active Bar total width in pixels (13 btns × 23px + 4 seps × 2px + 8px padding).
+pub const BAR_WIDTH_PX: f32 = 315.0;
 
 // ─── Dropdown item SVG icons (editable files in assets/icons/dropdown/) ──
 
@@ -390,11 +391,11 @@ pub fn view_bar(
         "Selection Filter",
     ));
     items.push(ab_icon_btn(
-        ICON_ADDPART,
-        current_tool == crate::app::Tool::Component,
-        ActiveBarMsg::Action(ActiveBarAction::PlaceComponent),
-        None,
-        "Place Component",
+        ICON_MOVE,
+        false,
+        ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
+        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
+        "Move / Transform",
     ));
     items.push(sep(ac.sep));
 
@@ -404,13 +405,6 @@ pub fn view_bar(
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode)),
         "Select",
-    ));
-    items.push(ab_icon_btn(
-        ICON_MOVE,
-        false,
-        ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
-        "Move / Transform",
     ));
     items.push(ab_icon_btn(
         ICON_ALIGN,
@@ -1001,25 +995,25 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
     // Each icon = 22px mouse_area + 1px spacing = 23px per button
     // Separator = 1px + 1px spacing = 2px
     // Bar padding = [3, 4] → 4px left padding
-    // Layout: [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //  btn:     0      1  s    2      3      4    s   5      6    s    7      8     9    10    s  11     12     13
+    // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
+    //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
     let btn = 23.0_f32;
     let s = 2.0_f32;
     let pad = 4.0_f32;
     pad + match menu {
         ActiveBarMenu::Filter => 0.0,
+        ActiveBarMenu::Select => btn,
         ActiveBarMenu::SelectMode => 2.0 * btn + s,
-        ActiveBarMenu::Select => 3.0 * btn + s,
-        ActiveBarMenu::Align => 4.0 * btn + s,
-        ActiveBarMenu::Wiring => 5.0 * btn + 2.0 * s,
-        ActiveBarMenu::Power => 6.0 * btn + 2.0 * s,
-        ActiveBarMenu::Harness => 7.0 * btn + 3.0 * s,
-        ActiveBarMenu::SheetSymbol => 8.0 * btn + 3.0 * s,
-        ActiveBarMenu::Port => 9.0 * btn + 3.0 * s,
-        ActiveBarMenu::Directives => 10.0 * btn + 3.0 * s,
-        ActiveBarMenu::TextTools => 11.0 * btn + 4.0 * s,
-        ActiveBarMenu::Shapes => 12.0 * btn + 4.0 * s,
-        ActiveBarMenu::NetColor => 13.0 * btn + 4.0 * s,
+        ActiveBarMenu::Align => 3.0 * btn + s,
+        ActiveBarMenu::Wiring => 4.0 * btn + 2.0 * s,
+        ActiveBarMenu::Power => 5.0 * btn + 2.0 * s,
+        ActiveBarMenu::Harness => 6.0 * btn + 3.0 * s,
+        ActiveBarMenu::SheetSymbol => 7.0 * btn + 3.0 * s,
+        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,
+        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,
+        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,
+        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,
+        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,
     }
 }
 
