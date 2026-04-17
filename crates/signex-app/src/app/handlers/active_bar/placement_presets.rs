@@ -145,5 +145,34 @@ impl Signex {
         self.interaction_state.pending_power = Some((net_name.to_string(), lib_id.to_string()));
         self.interaction_state.current_tool = Tool::Component;
         self.interaction_state.canvas.tool_preview = Some(net_name.to_string());
+        // Live preview: build a ghost power-port symbol that follows the
+        // cursor so the user sees the actual shape (bars / bar / triangle)
+        // before committing to a click.
+        self.interaction_state.canvas.ghost_symbol =
+            Some(signex_types::schematic::Symbol {
+                uuid: uuid::Uuid::new_v4(),
+                lib_id: lib_id.to_string(),
+                reference: String::new(),
+                value: net_name.to_string(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                position: signex_types::schematic::Point::new(0.0, 0.0),
+                rotation: 0.0,
+                mirror_x: false,
+                mirror_y: false,
+                unit: 1,
+                is_power: true,
+                ref_text: None,
+                val_text: None,
+                fields_autoplaced: false,
+                dnp: false,
+                in_bom: true,
+                on_board: true,
+                exclude_from_sim: false,
+                locked: false,
+                fields: std::collections::HashMap::new(),
+                pin_uuids: std::collections::HashMap::new(),
+                instances: Vec::new(),
+            });
     }
 }
