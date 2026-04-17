@@ -63,7 +63,18 @@ impl Signex {
             }
             Message::Tool(ToolMessage::SelectTool(tool)) => {
                 self.interaction_state.current_tool = tool;
-                self.interaction_state.canvas.tool_preview = None;
+                // Re-label the floating cursor tag so the user sees which
+                // placement mode they're in. Altium shows the tool name near
+                // the crosshair until the first click.
+                self.interaction_state.canvas.tool_preview = match tool {
+                    Tool::Wire => Some("Wire".to_string()),
+                    Tool::Bus => Some("Bus".to_string()),
+                    Tool::BusEntry => Some("Bus Entry".to_string()),
+                    Tool::Text => Some("Text".to_string()),
+                    Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::Measure => Some("Measure".to_string()),
+                    _ => None,
+                };
                 if tool == Tool::Measure {
                     self.clear_transient_schematic_tool_state();
                 } else {

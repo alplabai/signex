@@ -21,7 +21,23 @@ impl Signex {
             }
             ActiveBarAction::DrawBus => self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus))),
             ActiveBarAction::PlaceNetLabel => {
-                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)))
+                // Switch to the Label tool, clear any pending port state
+                // (so this is a plain Net label not a Global/Hier port),
+                // and arm a ghost preview that follows the cursor.
+                self.interaction_state.current_tool = Tool::Label;
+                self.interaction_state.pending_port = None;
+                self.interaction_state.canvas.ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "NET".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Net,
+                        shape: String::new(),
+                        font_size: 1.8,
+                        justify: signex_types::schematic::HAlign::Left,
+                    });
+                Task::none()
             }
             ActiveBarAction::PlaceComponent => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)))

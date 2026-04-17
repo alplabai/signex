@@ -166,6 +166,7 @@ impl Signex {
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
         self.interaction_state.canvas.ghost_label = None;
+        self.interaction_state.canvas.ghost_symbol = None;
         self.interaction_state.canvas.tool_preview = None;
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;

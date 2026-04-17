@@ -91,6 +91,8 @@ pub struct SchematicCanvas {
     pub tool_preview: Option<String>,
     /// Ghost label preview for port/label placement (follows cursor).
     pub ghost_label: Option<signex_types::schematic::Label>,
+    /// Ghost power-port / symbol preview for placement (follows cursor).
+    pub ghost_symbol: Option<signex_types::schematic::Symbol>,
     /// Measurement anchor point for the interactive measure tool.
     pub measure_start: Option<signex_types::schematic::Point>,
     /// Current or finalized measurement endpoint.
@@ -150,6 +152,7 @@ impl SchematicCanvas {
             drawing_mode: false,
             tool_preview: None,
             ghost_label: None,
+            ghost_symbol: None,
             measure_start: None,
             measure_end: None,
             measure_locked: false,
@@ -906,6 +909,34 @@ impl canvas::Program<Message> for SchematicCanvas {
                     }
                 }
 
+                // Ghost power-port symbol preview at cursor position.
+                if let Some(ref ghost_sym) = self.ghost_symbol {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let mut preview = ghost_sym.clone();
+                    preview.position = signex_types::schematic::Point::new(sx, sy);
+                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    signex_render::schematic::draw_power_port_preview(
+                        &mut frame,
+                        &preview,
+                        &ghost_transform,
+                        ghost_color,
+                    );
+                }
+
                 // Ghost label/port preview at cursor position
                 if let Some(ref ghost) = self.ghost_label {
                     let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
@@ -937,12 +968,56 @@ impl canvas::Program<Message> for SchematicCanvas {
                     );
                 }
 
-                // Tool preview text at cursor (for Label, Component placement)
+                // Tool-specific cursor marker: a bright X that locks onto
+                // the grid dot the next click will commit to (when snap is
+                // enabled), so the user can see exactly where the wire/bus
+                // endpoint will land. Altium's placement tag follows the
+                // snapped point, not the raw cursor.
                 if let Some(ref label) = self.tool_preview {
+                    let snapped_screen = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let g = self.snap_grid_mm as f32;
+                        let sx = (world.x / g).round() * g;
+                        let sy = (world.y / g).round() * g;
+                        state.camera.world_to_screen(iced::Point::new(sx, sy), bounds)
+                    } else {
+                        cursor_pos
+                    };
+                    let marker_color = Color::from_rgba(0.2, 0.85, 1.0, 0.95);
+                    let arm = 7.0;
+                    let stroke = canvas::Stroke::default()
+                        .with_color(marker_color)
+                        .with_width(1.8);
+                    // Diagonal X so it doesn't overlap the grid crosshair.
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y - arm),
+                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y + arm),
+                        ),
+                        stroke,
+                    );
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y - arm),
+                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y + arm),
+                        ),
+                        stroke,
+                    );
+                    // Tool-name tag beside the marker. Dark text on a
+                    // semi-opaque light chip so it reads on any canvas bg.
+                    let tag_x = snapped_screen.x + 14.0;
+                    let tag_y = snapped_screen.y - 16.0;
+                    let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
+                    let tag_h = 16.0;
+                    let chip = canvas::Path::rectangle(
+                        iced::Point::new(tag_x - 2.0, tag_y - 2.0),
+                        iced::Size::new(tag_w, tag_h),
+                    );
+                    frame.fill(&chip, Color::from_rgba(0.0, 0.0, 0.0, 0.65));
                     frame.fill_text(canvas::Text {
                         content: label.clone(),
-                        position: iced::Point::new(cursor_pos.x + 12.0, cursor_pos.y - 12.0),
-                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.7),
+                        position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
                         size: iced::Pixels(11.0),
                         font: signex_render::IOSEVKA,
                         ..canvas::Text::default()
