@@ -51,6 +51,16 @@ pub struct UiState {
     /// edits. While `Some`, an overlay modal blocks other interaction with
     /// Save / Discard / Cancel actions.
     pub close_tab_confirm: Option<usize>,
+    /// ERC results from the last Run-ERC pass. Displayed in the Messages
+    /// panel; clicking a row focuses the violation on the canvas.
+    pub erc_violations: Vec<signex_erc::Violation>,
+    /// Per-rule severity override — if empty, the rule's default is used.
+    pub erc_severity_override:
+        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// Net-color overrides (F5 palette). Maps net label text → color.
+    pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
+    /// AutoFocus mode — when true, non-selected items dim on the canvas.
+    pub auto_focus: bool,
 }
 
 pub struct DocumentState {

@@ -24,6 +24,13 @@ impl Signex {
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
+            Message::RunErc => self.handle_run_erc(),
+            Message::FocusAt {
+                world_x,
+                world_y,
+                select,
+            } => self.handle_focus_at(world_x, world_y, select),
+            Message::ToggleAutoFocus => self.handle_toggle_auto_focus(),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
             Message::ShowContextMenu(x, y) => {
                 // Altium convention: right-click during placement terminates

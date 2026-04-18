@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
+signex-erc = { workspace = true }
 rfd = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
