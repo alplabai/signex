@@ -58,6 +58,9 @@ pub struct UiState {
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Net-color overrides (F5 palette). Maps net label text → color.
+    /// Rendering hook wires in v0.7.1; the storage is in place so the
+    /// F5 palette widget (also v0.7.1) can mutate it.
+    #[allow(dead_code)]
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
