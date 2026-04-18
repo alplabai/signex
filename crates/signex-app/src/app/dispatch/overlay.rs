@@ -25,7 +25,19 @@ impl Signex {
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
             Message::ShowContextMenu(x, y) => {
-                if self.interaction_state.current_tool != Tool::Select {
+                // Altium convention: right-click during placement terminates
+                // the placement flow (tool-stuck OR ghost-armed OR pending
+                // power/port OR paused preview) instead of opening the
+                // context menu. Otherwise, open the menu.
+                let canvas = &self.interaction_state.canvas;
+                let placement_active = self.interaction_state.current_tool != Tool::Select
+                    || canvas.ghost_label.is_some()
+                    || canvas.ghost_symbol.is_some()
+                    || canvas.ghost_text.is_some()
+                    || canvas.placement_paused
+                    || self.interaction_state.pending_power.is_some()
+                    || self.interaction_state.pending_port.is_some();
+                if placement_active {
                     self.clear_transient_schematic_tool_state();
                     self.interaction_state.current_tool = Tool::Select;
                     return Task::none();
@@ -45,15 +57,27 @@ impl Signex {
                     ContextAction::Copy => self.dispatch_document_message(Message::Copy),
                     ContextAction::Cut => self.dispatch_document_message(Message::Cut),
                     ContextAction::Paste => self.dispatch_document_message(Message::Paste),
-                    ContextAction::SmartPaste => self.dispatch_document_message(Message::SmartPaste),
-                    ContextAction::Delete => self.dispatch_document_message(Message::DeleteSelected),
+                    ContextAction::SmartPaste => {
+                        self.dispatch_document_message(Message::SmartPaste)
+                    }
+                    ContextAction::Delete => {
+                        self.dispatch_document_message(Message::DeleteSelected)
+                    }
                     ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
                         selection_request::SelectionRequest::SelectAll,
                     )),
-                    ContextAction::ZoomFit => self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll)),
-                    ContextAction::RotateSelected => self.dispatch_document_message(Message::RotateSelected),
-                    ContextAction::MirrorX => self.dispatch_document_message(Message::MirrorSelectedY),
-                    ContextAction::MirrorY => self.dispatch_document_message(Message::MirrorSelectedX),
+                    ContextAction::ZoomFit => {
+                        self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll))
+                    }
+                    ContextAction::RotateSelected => {
+                        self.dispatch_document_message(Message::RotateSelected)
+                    }
+                    ContextAction::MirrorX => {
+                        self.dispatch_document_message(Message::MirrorSelectedY)
+                    }
+                    ContextAction::MirrorY => {
+                        self.dispatch_document_message(Message::MirrorSelectedX)
+                    }
                 }
             }
             _ => unreachable!("dispatch_overlay_message received non-overlay message"),

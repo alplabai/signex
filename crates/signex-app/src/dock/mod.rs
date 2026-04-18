@@ -48,6 +48,10 @@ pub enum DockMessage {
     ClosePanel(PanelPosition, usize),
     /// Undock a panel to floating (drag tab out).
     UndockPanel(PanelPosition, usize),
+    /// Mouse down on a tab — arms drag-to-undock detection.
+    TabDragStart(PanelPosition, usize),
+    /// Mouse released on a tab — if no undock happened, treat as click → select.
+    TabClick(PanelPosition, usize),
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Move a floating panel by delta.
@@ -174,6 +178,24 @@ impl DockArea {
                     }
                 }
             }
+            DockMessage::TabDragStart(pos, idx) => {
+                self.tab_drag = Some((pos, idx));
+            }
+            DockMessage::TabClick(pos, idx) => {
+                // Mouse-up on tab: if UndockPanel did not fire, treat as click → select.
+                if self.tab_drag.is_some() {
+                    self.tab_drag = None;
+                    let region = match pos {
+                        PanelPosition::Left => &mut self.left,
+                        PanelPosition::Right => &mut self.right,
+                        PanelPosition::Bottom => &mut self.bottom,
+                    };
+                    if idx < region.panels.len() {
+                        region.active = idx;
+                        region.collapsed = false;
+                    }
+                }
+            }
             DockMessage::UndockPanel(pos, idx) => {
                 self.tab_drag = None;
                 let region = match pos {
@@ -235,7 +257,11 @@ impl DockArea {
                     if !region.panels.contains(&fp.kind) {
                         region.panels.push(fp.kind);
                     }
-                    region.active = region.panels.iter().position(|k| *k == fp.kind).unwrap_or(0);
+                    region.active = region
+                        .panels
+                        .iter()
+                        .position(|k| *k == fp.kind)
+                        .unwrap_or(0);
                     region.collapsed = false;
                 }
             }
@@ -288,9 +314,7 @@ impl DockArea {
         let can_scroll_left = offset > 0;
         let can_scroll_right = offset + 3 < total_tabs;
 
-        let mut tab_row = row![]
-            .spacing(0.0)
-            .align_y(iced::Alignment::End);
+        let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
 
         // Left scroll arrow (only when tabs are scrolled)
         if has_overflow {
@@ -326,14 +350,18 @@ impl DockArea {
             let label_el = container(text(label).size(11).color(text_c))
                 .padding([5, 10])
                 .style(styles::dock_tab_container(&ctx.tokens, is_active));
-            let tab = button(
+            let tab = mouse_area(
                 container(label_el)
-                    .padding(iced::Padding { top: 0.0, right: 0.0, bottom: 2.0, left: 0.0 })
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: 0.0,
+                        bottom: 2.0,
+                        left: 0.0,
+                    })
                     .style(styles::tab_underline(line_c)),
             )
-            .padding(0)
-            .style(button::text)
-            .on_press(DockMessage::SelectTab(position, i));
+            .on_press(DockMessage::TabDragStart(position, i))
+            .on_release(DockMessage::TabClick(position, i));
 
             tab_row = tab_row.push(tab);
         }
@@ -397,7 +425,12 @@ impl DockArea {
         .into()
     }
 
-    fn view_rail<'a>(&'a self, position: PanelPosition, region: &'a DockRegion, ctx: &'a panels::PanelContext) -> Element<'a, DockMessage> {
+    fn view_rail<'a>(
+        &'a self,
+        position: PanelPosition,
+        region: &'a DockRegion,
+        ctx: &'a panels::PanelContext,
+    ) -> Element<'a, DockMessage> {
         // Altium-style collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);

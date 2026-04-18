@@ -31,7 +31,10 @@ impl Signex {
     }
 
     fn open_document_path(&mut self, path: PathBuf) -> Result<()> {
-        let ext = path.extension().and_then(|extension| extension.to_str()).unwrap_or("");
+        let ext = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("");
         match ext {
             "kicad_pro" | "snxprj" => self.open_project_file(path)?,
             "kicad_sch" | "snxsch" => self.open_schematic_file(path)?,
@@ -56,17 +59,19 @@ impl Signex {
             .with_context(|| format!("parse schematic {}", path.display()))?;
         self.document_state.project_path = Some(path.clone());
         if let Some(dir) = path.parent() {
-            let stem = path.file_stem().and_then(|segment| segment.to_str()).unwrap_or("");
+            let stem = path
+                .file_stem()
+                .and_then(|segment| segment.to_str())
+                .unwrap_or("");
             let project_path = dir.join(format!("{stem}.kicad_pro"));
             if project_path.exists() {
                 match kicad_parser::parse_project(&project_path)
                     .with_context(|| format!("parse companion project {}", project_path.display()))
                 {
                     Ok(project) => self.document_state.project_data = Some(project),
-                    Err(error) => crate::diagnostics::log_error(
-                        "Failed to parse companion project",
-                        &error,
-                    ),
+                    Err(error) => {
+                        crate::diagnostics::log_error("Failed to parse companion project", &error)
+                    }
                 }
             }
         }

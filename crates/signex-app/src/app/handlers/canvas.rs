@@ -70,7 +70,9 @@ impl Signex {
             let dx = x - ox;
             let dy = y - oy;
             if (dx * dx + dy * dy).sqrt() > 20.0 {
-                self.document_state.dock.update(DockMessage::UndockPanel(pos, idx));
+                self.document_state
+                    .dock
+                    .update(DockMessage::UndockPanel(pos, idx));
                 self.interaction_state.tab_drag_origin = None;
             }
         }
@@ -96,7 +98,12 @@ impl Signex {
         let (mx, my) = self.interaction_state.last_mouse_pos;
         let (ww, wh) = self.ui_state.window_size;
         let dock_zone = 120.0;
-        let has_dragging = self.document_state.dock.floating.iter().any(|fp| fp.dragging);
+        let has_dragging = self
+            .document_state
+            .dock
+            .floating
+            .iter()
+            .any(|fp| fp.dragging);
         crate::diagnostics::log_debug(format!(
             "[dock-end] mouse=({mx:.0},{my:.0}) win=({ww:.0},{wh:.0}) floating={} dragging={has_dragging}",
             self.document_state.dock.floating.len()
@@ -138,21 +145,45 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
-                if self.interaction_state.current_tool == Tool::Measure
-                    && self.interaction_state.canvas.measure_start.is_some()
-                    && !self.interaction_state.canvas.measure_locked
-                {
-                    let (mx, my) = if self.ui_state.snap_enabled {
-                        let gs = self.ui_state.grid_size_mm as f64;
-                        ((x as f64 / gs).round() * gs, (y as f64 / gs).round() * gs)
-                    } else {
-                        (x as f64, y as f64)
-                    };
-                    self.interaction_state.canvas.measure_end =
-                        Some(signex_types::schematic::Point::new(mx, my));
-                }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Altium-style placement pause: while the ghost is frozen
+                // (TAB pressed, pre-placement form open), canvas clicks are
+                // suppressed so the user can edit properties without a
+                // stray click dropping an object. `pre_placement` lives on
+                // past Resume so the first click after Resume inherits the
+                // edited defaults — so key the gate on `placement_paused`,
+                // not on `pre_placement.is_some()`.
+                if self.interaction_state.canvas.placement_paused {
+                    return Task::none();
+                }
+                // A click outside the inline editor commits its current value
+                // and returns to normal selection — same convention as most
+                // IDEs (Escape cancels, click elsewhere confirms).
+                if let Some(state) = self.interaction_state.editing_text.take() {
+                    if state.text != state.original_text {
+                        let stored = signex_render::schematic::text::escape_for_kicad(&state.text);
+                        let cmd = match state.kind {
+                            signex_types::schematic::SelectedKind::Label => {
+                                Some(signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::Label(state.uuid),
+                                    value: stored,
+                                })
+                            }
+                            signex_types::schematic::SelectedKind::TextNote => {
+                                Some(signex_engine::Command::UpdateText {
+                                    target: signex_engine::TextTarget::TextNote(state.uuid),
+                                    value: stored,
+                                })
+                            }
+                            _ => None,
+                        };
+                        if let Some(cmd) = cmd {
+                            self.apply_engine_command(cmd, false, true);
+                        }
+                    }
+                    return Task::none();
+                }
                 let (wx, wy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
                     ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
@@ -161,19 +192,6 @@ impl Signex {
                 };
 
                 match self.interaction_state.current_tool {
-                    Tool::Measure => {
-                        let point = signex_types::schematic::Point::new(wx, wy);
-                        if self.interaction_state.canvas.measure_start.is_some()
-                            && !self.interaction_state.canvas.measure_locked
-                        {
-                            self.interaction_state.canvas.measure_end = Some(point);
-                            self.interaction_state.canvas.measure_locked = true;
-                        } else {
-                            self.interaction_state.canvas.measure_start = Some(point);
-                            self.interaction_state.canvas.measure_end = Some(point);
-                            self.interaction_state.canvas.measure_locked = false;
-                        }
-                    }
                     Tool::Wire => {
                         let pt = signex_types::schematic::Point::new(wx, wy);
                         if !self.interaction_state.wire_drawing {
@@ -183,10 +201,12 @@ impl Signex {
                             self.interaction_state.canvas.wire_preview =
                                 self.interaction_state.wire_points.clone();
                             self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode = self.interaction_state.draw_mode;
+                            self.interaction_state.canvas.draw_mode =
+                                self.interaction_state.draw_mode;
                             self.interaction_state.canvas.tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                            let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
+                            let segments =
+                                constrain_segments(start, pt, self.interaction_state.draw_mode);
                             let mut wire_commands = Vec::new();
                             for seg in &segments {
                                 let wire = signex_types::schematic::Wire {
@@ -195,7 +215,8 @@ impl Signex {
                                     end: seg.1,
                                     stroke_width: 0.0,
                                 };
-                                wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
+                                wire_commands
+                                    .push(signex_engine::Command::PlaceWireSegment { wire });
                             }
                             if !wire_commands.is_empty() {
                                 self.apply_engine_commands(wire_commands, false, false);
@@ -214,10 +235,12 @@ impl Signex {
                             self.interaction_state.canvas.wire_preview =
                                 self.interaction_state.wire_points.clone();
                             self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode = self.interaction_state.draw_mode;
+                            self.interaction_state.canvas.draw_mode =
+                                self.interaction_state.draw_mode;
                             self.interaction_state.canvas.tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                            let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
+                            let segments =
+                                constrain_segments(start, pt, self.interaction_state.draw_mode);
                             let mut bus_commands = Vec::new();
                             for seg in &segments {
                                 let bus = signex_types::schematic::Bus {
@@ -236,13 +259,16 @@ impl Signex {
                         }
                     }
                     Tool::Component if self.interaction_state.pending_power.is_some() => {
-                        if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
+                        if let Some((ref net_name, ref lib_id)) =
+                            self.interaction_state.pending_power
+                        {
                             let sym = signex_types::schematic::Symbol {
                                 uuid: uuid::Uuid::new_v4(),
                                 lib_id: lib_id.clone(),
                                 reference: "#PWR?".to_string(),
                                 value: net_name.clone(),
                                 footprint: String::new(),
+                                datasheet: String::new(),
                                 position: signex_types::schematic::Point::new(wx, wy),
                                 rotation: 0.0,
                                 mirror_x: false,
@@ -253,7 +279,7 @@ impl Signex {
                                 val_text: Some(signex_types::schematic::TextProp {
                                     position: signex_types::schematic::Point::new(wx, wy - 1.27),
                                     rotation: 0.0,
-                                    font_size: 1.27,
+                                    font_size: 1.8,
                                     justify_h: signex_types::schematic::HAlign::Center,
                                     justify_v: signex_types::schematic::VAlign::default(),
                                     hidden: false,
@@ -265,6 +291,8 @@ impl Signex {
                                 exclude_from_sim: false,
                                 locked: false,
                                 fields: std::collections::HashMap::new(),
+                                pin_uuids: std::collections::HashMap::new(),
+                                instances: Vec::new(),
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSymbol { symbol: sym },
@@ -312,7 +340,7 @@ impl Signex {
                             text: note_text,
                             position: signex_types::schematic::Point::new(wx, wy),
                             rotation: 0.0,
-                            font_size: 1.27,
+                            font_size: 1.8,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         };
@@ -323,18 +351,92 @@ impl Signex {
                         );
                         self.interaction_state.current_tool = Tool::Select;
                     }
+                    Tool::Label => {
+                        // Place net / global / hierarchical label depending on
+                        // pending_port state. Default: net label named "NET".
+                        let (label_type, shape, default_text) = if let Some((lt, shape)) =
+                            self.interaction_state.pending_port.clone()
+                        {
+                            let default = match lt {
+                                signex_types::schematic::LabelType::Global => "PORT",
+                                signex_types::schematic::LabelType::Hierarchical => "SHEET",
+                                _ => "NET",
+                            };
+                            (lt, shape, default.to_string())
+                        } else {
+                            (
+                                signex_types::schematic::LabelType::Net,
+                                String::new(),
+                                "NET".to_string(),
+                            )
+                        };
+                        let text = self
+                            .document_state
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| pp.label_text.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or(default_text);
+                        // Pick up the rotation / font size / justification
+                        // the user edited in the TAB pre-placement form so
+                        // the first click matches what they configured.
+                        let (pp_rot, pp_fs_mm, pp_justify) = self
+                            .document_state
+                            .panel_ctx
+                            .pre_placement
+                            .as_ref()
+                            .map(|pp| (pp.rotation, pp.font_size_pt as f64 * 0.254, pp.justify_h))
+                            .unwrap_or((0.0, 1.8, signex_types::schematic::HAlign::Left));
+                        let label = signex_types::schematic::Label {
+                            uuid: uuid::Uuid::new_v4(),
+                            text,
+                            position: signex_types::schematic::Point::new(wx, wy),
+                            rotation: pp_rot,
+                            label_type,
+                            shape,
+                            font_size: pp_fs_mm,
+                            justify: pp_justify,
+                        };
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceLabel { label },
+                            false,
+                            false,
+                        );
+                    }
                     _ => {
-                        return self.handle_selection_request(selection_request::SelectionRequest::HitAt {
-                            world_x,
-                            world_y,
-                        });
+                        return self.handle_selection_request(
+                            selection_request::SelectionRequest::HitAt { world_x, world_y },
+                        );
                     }
                 }
             }
             CanvasEvent::MoveSelected { dx, dy } => {
+                // Snap so the PRIMARY selected item's connection point (its
+                // stored `position`) lands on a grid dot after the move, not
+                // just the drag delta. Snapping only the delta preserves an
+                // off-grid origin; users expect the endpoint to be on-grid
+                // like KiCad/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
-                    ((dx / gs).round() * gs, (dy / gs).round() * gs)
+                    let primary = self
+                        .interaction_state
+                        .canvas
+                        .selected
+                        .first()
+                        .and_then(|item| {
+                            let snap = self.active_render_snapshot()?;
+                            primary_anchor_world(snap, item)
+                        });
+                    if let Some((px, py)) = primary {
+                        let target_x = px + dx;
+                        let target_y = py + dy;
+                        let snapped_x = (target_x / gs).round() * gs;
+                        let snapped_y = (target_y / gs).round() * gs;
+                        (snapped_x - px, snapped_y - py)
+                    } else {
+                        ((dx / gs).round() * gs, (dy / gs).round() * gs)
+                    }
                 } else {
                     (dx, dy)
                 };
@@ -355,8 +457,8 @@ impl Signex {
             CanvasEvent::DoubleClicked {
                 world_x,
                 world_y,
-                screen_x,
-                screen_y,
+                screen_x: _,
+                screen_y: _,
             } => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
@@ -368,46 +470,59 @@ impl Signex {
                     if let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
                     {
+                        use signex_render::schematic::text::expand_char_escapes;
                         let edit_info = match hit.kind {
                             SelectedKind::Label => snapshot
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
-                                .map(|l| (l.text.clone(), SelectedKind::Label)),
+                                .map(|l| {
+                                    (
+                                        l.text.clone(),
+                                        SelectedKind::Label,
+                                        l.position.x,
+                                        l.position.y,
+                                    )
+                                }),
                             SelectedKind::TextNote => snapshot
                                 .text_notes
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
-                                .map(|t| (t.text.clone(), SelectedKind::TextNote)),
+                                .map(|t| {
+                                    (
+                                        t.text.clone(),
+                                        SelectedKind::TextNote,
+                                        t.position.x,
+                                        t.position.y,
+                                    )
+                                }),
                             _ => None,
                         };
-                        if let Some((text, kind)) = edit_info {
+                        if let Some((raw_text, kind, wx, wy)) = edit_info {
+                            // Show the user the visible form (e.g. "/OE"), not
+                            // the KiCad-escaped storage form ("{slash}OE").
+                            let display_text = expand_char_escapes(&raw_text);
                             self.interaction_state.editing_text = Some(TextEditState {
                                 uuid: hit.uuid,
                                 kind,
-                                original_text: text.clone(),
-                                text,
-                                screen_x,
-                                screen_y,
+                                original_text: display_text.clone(),
+                                text: display_text,
+                                world_x: wx,
+                                world_y: wy,
                             });
                         }
                     }
                 }
             }
             CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
-                return self.handle_selection_request(selection_request::SelectionRequest::BoxSelect {
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                });
+                return self.handle_selection_request(
+                    selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 },
+                );
             }
             CanvasEvent::CursorMoved => {
                 self.interaction_state.canvas.clear_bg_cache();
-                self.interaction_state.canvas.clear_content_cache();
                 self.interaction_state.canvas.clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.pcb_canvas.clear_content_cache();
                 self.interaction_state.canvas.pending_fit.set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
@@ -426,6 +541,11 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                    && crate::app::handlers::selection_workflow::passes_filter(
+                        &hit,
+                        snapshot,
+                        &self.interaction_state.selection_filters,
+                    )
                 {
                     if let Some(pos) = self
                         .interaction_state
@@ -454,5 +574,67 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+    }
+}
+
+/// Resolve a selected item's primary anchor — the world point that should
+/// snap to the grid (connection point for labels/wires/symbols, etc.).
+fn primary_anchor_world(
+    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    item: &signex_types::schematic::SelectedItem,
+) -> Option<(f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    match item.kind {
+        SelectedKind::Label => snap
+            .labels
+            .iter()
+            .find(|l| l.uuid == item.uuid)
+            .map(|l| (l.position.x, l.position.y)),
+        SelectedKind::Symbol => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .map(|s| (s.position.x, s.position.y)),
+        SelectedKind::Wire => snap
+            .wires
+            .iter()
+            .find(|w| w.uuid == item.uuid)
+            .map(|w| (w.start.x, w.start.y)),
+        SelectedKind::Bus => snap
+            .buses
+            .iter()
+            .find(|b| b.uuid == item.uuid)
+            .map(|b| (b.start.x, b.start.y)),
+        SelectedKind::Junction => snap
+            .junctions
+            .iter()
+            .find(|j| j.uuid == item.uuid)
+            .map(|j| (j.position.x, j.position.y)),
+        SelectedKind::NoConnect => snap
+            .no_connects
+            .iter()
+            .find(|n| n.uuid == item.uuid)
+            .map(|n| (n.position.x, n.position.y)),
+        SelectedKind::TextNote => snap
+            .text_notes
+            .iter()
+            .find(|t| t.uuid == item.uuid)
+            .map(|t| (t.position.x, t.position.y)),
+        SelectedKind::ChildSheet => snap
+            .child_sheets
+            .iter()
+            .find(|c| c.uuid == item.uuid)
+            .map(|c| (c.position.x, c.position.y)),
+        SelectedKind::SymbolRefField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.ref_text.as_ref().map(|rt| (rt.position.x, rt.position.y))),
+        SelectedKind::SymbolValField => snap
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(|s| s.val_text.as_ref().map(|vt| (vt.position.x, vt.position.y))),
+        _ => None,
     }
 }

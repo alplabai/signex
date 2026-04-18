@@ -13,7 +13,10 @@ impl Signex {
                         .add_filter("Signex Schematic", &["snxsch"])
                         .add_filter("KiCad Schematic", &["kicad_sch"])
                         .add_filter("KiCad Project", &["kicad_pro"])
-                        .add_filter("All Supported", &["snxprj", "snxsch", "kicad_sch", "kicad_pro"])
+                        .add_filter(
+                            "All Supported",
+                            &["snxprj", "snxsch", "kicad_sch", "kicad_pro"],
+                        )
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await

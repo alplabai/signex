@@ -25,10 +25,16 @@ pub fn draw_selection_overlay(
     for item in selected {
         match item.kind {
             SelectedKind::Symbol => {
-                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
-                    && let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
-                {
-                    draw_symbol_selection(frame, sym, lib_sym, transform);
+                if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid) {
+                    // Power ports render via the built-in power glyph even when
+                    // a lib_sym exists, so their selection rectangle must come
+                    // from the built-in geometry too — not the (possibly stale)
+                    // library graphics.
+                    if sym.is_power {
+                        draw_power_port_selection(frame, sym, transform);
+                    } else if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
+                        draw_symbol_selection(frame, sym, lib_sym, transform);
+                    }
                 }
             }
             SelectedKind::Wire => {
@@ -76,23 +82,148 @@ pub fn draw_selection_overlay(
             }
             SelectedKind::Drawing => {}
             SelectedKind::SymbolRefField => {
-                // Highlight just the ref text anchor point
                 if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
                     && let Some(ref rt) = sym.ref_text
                 {
-                    let (dx, dy) = field_display_pos(&rt.position, sym);
-                    draw_point_selection(frame, dx, dy, transform);
+                    draw_text_prop_selection(frame, &sym.reference, rt, sym, transform);
                 }
             }
             SelectedKind::SymbolValField => {
                 if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
                     && let Some(ref vt) = sym.val_text
                 {
-                    let (dx, dy) = field_display_pos(&vt.position, sym);
-                    draw_point_selection(frame, dx, dy, transform);
+                    draw_text_prop_selection(frame, &sym.value, vt, sym, transform);
                 }
             }
         }
+    }
+}
+
+/// Draw a tight selection rectangle around a symbol's reference/value text
+/// property. Uses the same glyph metrics as the renderer so the box matches
+/// the visible text bounds.
+fn draw_text_prop_selection(
+    frame: &mut canvas::Frame,
+    content: &str,
+    prop: &TextProp,
+    sym: &Symbol,
+    transform: &ScreenTransform,
+) {
+    use signex_types::schematic::{HAlign, VAlign};
+    let fs = crate::SCHEMATIC_TEXT_MM;
+    // `visible_char_count` drops KiCad `{slash}`-style escapes; Iosevka's
+    // advance width is ≈0.55 em, so use the same coefficient the text
+    // renderer uses below so bbox and glyphs line up.
+    let tw = super::text::visible_char_count(content) as f64 * fs * 0.55;
+    let th = fs;
+    let (dx, dy) = field_display_pos(&prop.position, sym);
+    // Mirror the effective alignment AND rotation the renderer computed so
+    // the outline wraps the glyphs instead of a theoretical center-aligned
+    // rect. For 90°-rotated text the reading and perpendicular axes swap:
+    // `eff_h` now positions along the vertical axis, `eff_v` along the
+    // horizontal axis.
+    let (dr, eff_h, eff_v) = super::field_effective_style(prop, sym);
+    let rotated = (dr - 90.0).abs() < 0.1;
+    let (x0, x1, y0, y1) = if rotated {
+        // Rotation -90° CCW on Iced canvas: reading direction maps from +X
+        // (original) to −Y (screen). Left-justify → anchor at reading start
+        // → bbox extends upward (smaller Y) by `tw`. Perpendicular extent is
+        // `th` across the anchor; `eff_v::Top` maps to the left side of the
+        // rotated glyph box, `Bottom` to the right.
+        let (y0, y1) = match eff_h {
+            HAlign::Left => (dy - tw, dy),
+            HAlign::Right => (dy, dy + tw),
+            HAlign::Center => (dy - tw * 0.5, dy + tw * 0.5),
+        };
+        let (x0, x1) = match eff_v {
+            VAlign::Top => (dx, dx + th),
+            VAlign::Bottom => (dx - th, dx),
+            VAlign::Center => (dx - th * 0.5, dx + th * 0.5),
+        };
+        (x0, x1, y0, y1)
+    } else {
+        let (x0, x1) = match eff_h {
+            HAlign::Left => (dx, dx + tw),
+            HAlign::Right => (dx - tw, dx),
+            HAlign::Center => (dx - tw * 0.5, dx + tw * 0.5),
+        };
+        let (y0, y1) = match eff_v {
+            VAlign::Top => (dy, dy + th),
+            VAlign::Bottom => (dy - th, dy),
+            VAlign::Center => (dy - th * 0.5, dy + th * 0.5),
+        };
+        (x0, x1, y0, y1)
+    };
+    let aabb = Aabb::new(x0, y0, x1, y1).expand(0.15);
+    draw_rect_highlight(frame, &aabb, transform);
+}
+
+/// Selection rectangle for built-in power ports (lib_sym may be absent).
+/// Wraps the pin stub, body glyph, and value label together.
+fn draw_power_port_selection(frame: &mut canvas::Frame, sym: &Symbol, transform: &ScreenTransform) {
+    let id = sym.lib_id.to_lowercase();
+    let is_gnd_like = id.contains("gnd");
+    let dir: f64 = if is_gnd_like { -1.0 } else { 1.0 };
+    let pin_len = 1.27_f64;
+    let body_extent = if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
+        1.2
+    } else if id.contains("gndref") {
+        1.27
+    } else if id.contains("earth") {
+        0.9
+    } else if id.contains("arrow") {
+        1.4
+    } else if id.contains("circle") {
+        1.2
+    } else {
+        0.0
+    };
+    let label_extent = crate::SCHEMATIC_TEXT_MM * 1.2; // cap + descender
+    let half_w =
+        1.8_f64.max(sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_MM * 0.55 * 0.5);
+
+    // In lib-local Y (before Y-flip in instance_transform): the pin stub
+    // starts at the anchor (y = 0) and extends toward the body. Keep the
+    // bbox anchored at 0 so the stub is covered, not just the body+label.
+    let far = (pin_len + body_extent + label_extent + 0.4) * dir;
+    let y_min = 0.0_f64.min(far);
+    let y_max = 0.0_f64.max(far);
+    let aabb = Aabb::new(-half_w, y_min, half_w, y_max).expand(0.25);
+
+    // Transform the 4 lib-local corners through instance_transform and draw.
+    let corners_lib = [
+        (aabb.min_x, aabb.min_y),
+        (aabb.max_x, aabb.min_y),
+        (aabb.max_x, aabb.max_y),
+        (aabb.min_x, aabb.max_y),
+    ];
+    let corners_screen: Vec<iced::Point> = corners_lib
+        .iter()
+        .map(|&(lx, ly)| {
+            let (wx, wy) = lib_to_world(sym, lx, ly);
+            transform.to_screen_point(wx, wy)
+        })
+        .collect();
+    let path = canvas::Path::new(|b| {
+        b.move_to(corners_screen[0]);
+        for c in &corners_screen[1..] {
+            b.line_to(*c);
+        }
+        b.close();
+    });
+    frame.stroke(
+        &path,
+        canvas::Stroke::default()
+            .with_color(SEL_COLOR)
+            .with_width(1.0),
+    );
+    let dot_sz = 2.0;
+    for c in &corners_screen {
+        let grip = canvas::Path::rectangle(
+            iced::Point::new(c.x - dot_sz, c.y - dot_sz),
+            iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
+        );
+        frame.fill(&grip, SEL_COLOR);
     }
 }
 
@@ -167,6 +298,9 @@ fn draw_symbol_selection(
             continue;
         }
         let p = &lp.pin;
+        if !p.visible {
+            continue;
+        }
         ext(
             &mut min_x,
             &mut min_y,
@@ -200,13 +334,60 @@ fn draw_symbol_selection(
         (min_x - margin, max_y + margin),
     ];
 
-    let corners_screen: Vec<iced::Point> = corners_lib
+    let mut corners_screen: Vec<iced::Point> = corners_lib
         .iter()
         .map(|&(lx, ly)| {
             let (wx, wy) = lib_to_world(sym, lx, ly);
             transform.to_screen_point(wx, wy)
         })
         .collect();
+
+    // For power ports the net-name label (val_text) is the *subject* of the
+    // selection, so it gets included. For regular components the designator
+    // ("R13") and value ("10k") texts stay *outside* the selection rectangle
+    // — matching Altium's behavior where the body-only bbox is the anchor.
+    let include_val = if sym.is_power {
+        sym.val_text.as_ref().filter(|t| !t.hidden)
+    } else {
+        None
+    };
+    let include_ref: Option<&signex_types::schematic::TextProp> = None;
+    let text_boxes = [include_val, include_ref];
+    if text_boxes.iter().any(|t| t.is_some()) {
+        let mut bx_min_x = corners_screen.iter().map(|p| p.x).fold(f32::MAX, f32::min);
+        let mut bx_max_x = corners_screen.iter().map(|p| p.x).fold(f32::MIN, f32::max);
+        let mut bx_min_y = corners_screen.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+        let mut bx_max_y = corners_screen.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+        let text_display = |t: &signex_types::schematic::TextProp, content: &str| {
+            let fs = t.font_size.max(1.27);
+            let tw = content.chars().count() as f64 * fs * 0.6;
+            let th = fs * 1.2;
+            let anchor = transform.to_screen_point(t.position.x, t.position.y);
+            let half_w = transform.world_len(tw) * 0.5;
+            let half_h = transform.world_len(th) * 0.5;
+            (anchor, half_w, half_h)
+        };
+        if let Some(vt) = include_val {
+            let (p, hw, hh) = text_display(vt, &sym.value);
+            bx_min_x = bx_min_x.min(p.x - hw);
+            bx_max_x = bx_max_x.max(p.x + hw);
+            bx_min_y = bx_min_y.min(p.y - hh);
+            bx_max_y = bx_max_y.max(p.y + hh);
+        }
+        if let Some(rt) = include_ref {
+            let (p, hw, hh) = text_display(rt, &sym.reference);
+            bx_min_x = bx_min_x.min(p.x - hw);
+            bx_max_x = bx_max_x.max(p.x + hw);
+            bx_min_y = bx_min_y.min(p.y - hh);
+            bx_max_y = bx_max_y.max(p.y + hh);
+        }
+        corners_screen = vec![
+            iced::Point::new(bx_min_x, bx_min_y),
+            iced::Point::new(bx_max_x, bx_min_y),
+            iced::Point::new(bx_max_x, bx_max_y),
+            iced::Point::new(bx_min_x, bx_max_y),
+        ];
+    }
 
     // Draw the transformed rectangle
     let path = canvas::Path::new(|b| {
@@ -279,15 +460,7 @@ fn draw_bus_selection(frame: &mut canvas::Frame, b: &Bus, transform: &ScreenTran
 }
 
 fn draw_label_selection(frame: &mut canvas::Frame, l: &Label, transform: &ScreenTransform) {
-    let tw = l.text.chars().count() as f64 * l.font_size.max(1.27) * 0.7;
-    let th = l.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(
-        l.position.x,
-        l.position.y - th,
-        l.position.x + tw,
-        l.position.y + th * 0.5,
-    )
-    .expand(0.5);
+    let aabb = super::label::label_text_aabb(l);
     draw_rect_highlight(frame, &aabb, transform);
 }
 
