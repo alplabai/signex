@@ -10,19 +10,23 @@ impl Signex {
         let canvas = &self.interaction_state.canvas;
         let panel_ctx = &self.document_state.panel_ctx;
 
+        // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
+        // U+25B6, which Windows renders via the color emoji font).
+        const SUBMENU_ARROW: &str = "›";
+
         items.push(self.ctx_menu_item_disabled("Find Similar Objects...", None));
-        items.push(self.ctx_menu_item_disabled("Find Text...", Some("Ctrl+F")));
+        items.push(self.ctx_menu_item_msg("Find Text...", "Ctrl+F", Message::OpenFind));
         items.push(self.ctx_menu_item_disabled("Clear Filter", Some("Shift+C")));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_disabled("Place", Some("\u{25B6}")));
-        items.push(self.ctx_menu_item_disabled("Part Actions", Some("\u{25B6}")));
-        items.push(self.ctx_menu_item_disabled("Sheet Actions", Some("\u{25B6}")));
+        items.push(self.ctx_menu_item_disabled("Place", Some(SUBMENU_ARROW)));
+        items.push(self.ctx_menu_item_disabled("Part Actions", Some(SUBMENU_ARROW)));
+        items.push(self.ctx_menu_item_disabled("Sheet Actions", Some(SUBMENU_ARROW)));
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("References", Some("\u{25B6}")));
-            items.push(self.ctx_menu_item_disabled("Align", Some("\u{25B6}")));
-            items.push(self.ctx_menu_item_disabled("Unions", Some("\u{25B6}")));
-            items.push(self.ctx_menu_item_disabled("Snippets", Some("\u{25B6}")));
+            items.push(self.ctx_menu_item_disabled("References", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled("Align", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled("Unions", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled("Snippets", Some(SUBMENU_ARROW)));
         }
 
         items.push(self.ctx_menu_item_disabled("Cross Probe", None));
@@ -44,11 +48,18 @@ impl Signex {
         items.push(self.ctx_menu_item_disabled("Comment...", None));
         items.push(self.ctx_menu_item_disabled("Pin Mapping...", None));
         items.push(self.ctx_menu_item_disabled("Project Options...", None));
-        items.push(self.ctx_menu_item_disabled("Preferences...", None));
+        items.push(self.ctx_menu_item_msg("Preferences...", "", Message::OpenPreferences));
 
         if !canvas.selected.is_empty() {
             items.push(self.ctx_menu_item_disabled("Supplier Links...", None));
-            items.push(self.ctx_menu_item_disabled("Properties...", None));
+            // Properties → ensure the Properties panel is visible. The
+            // panel already tracks the current selection, so it populates
+            // with the right-clicked item's fields once shown.
+            items.push(self.ctx_menu_item_msg(
+                "Properties...",
+                "F11",
+                Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
+            ));
         }
 
         container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
@@ -97,6 +108,46 @@ impl Signex {
         .into()
     }
 
+    fn ctx_menu_item_msg<'a>(
+        &self,
+        label: &str,
+        shortcut: &str,
+        message: Message,
+    ) -> Element<'a, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let hover_c = crate::styles::ti(tokens.hover);
+        iced::widget::button(
+            iced::widget::row![
+                iced::widget::text(label.to_string()).size(11).color(text_c),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(shortcut.to_string())
+                    .size(10)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            ]
+            .spacing(12)
+            .width(Length::Fill),
+        )
+        .width(Self::CONTEXT_MENU_WIDTH)
+        .padding([4, 12])
+        .on_press(message)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        )
+        .into()
+    }
+
     fn ctx_menu_item_disabled<'a>(&self, label: &str, right: Option<&str>) -> Element<'a, Message> {
         let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
         let mut row = iced::widget::row![
@@ -109,9 +160,12 @@ impl Signex {
         .width(Length::Fill);
 
         if let Some(right_text) = right {
+            // Submenu/shortcut column. Bigger than the label so the arrow
+            // (›) is readable at a glance. Non-emoji glyph so Windows does
+            // not render it through the color emoji font.
             row = row.push(
                 iced::widget::text(right_text.to_string())
-                    .size(10)
+                    .size(14)
                     .color(text_secondary),
             );
         }
