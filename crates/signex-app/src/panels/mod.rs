@@ -1466,6 +1466,8 @@ fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::Symbol) => {
             let reference = get("Reference");
             let value = get("Value");
+            let description = get("Description");
+            let datasheet = get("Datasheet");
             let footprint = get("Footprint");
             let lib_id = get("Library ID");
             let position = get("Position");
@@ -1480,6 +1482,15 @@ fn view_selected_element_properties<'a>(
                 .selection_info
                 .iter()
                 .any(|(k, v)| k == "Mirror" && v == "Y");
+            // Custom parameters: every ("Param: NAME", value) tuple.
+            let params: Vec<(String, String)> = ctx
+                .selection_info
+                .iter()
+                .filter_map(|(k, v)| {
+                    k.strip_prefix("Param: ")
+                        .map(|name| (name.to_string(), v.clone()))
+                })
+                .collect();
 
             if let Some(id) = uuid {
                 // General section — editable
@@ -1497,9 +1508,27 @@ fn view_selected_element_properties<'a>(
                         c = c.push(form_edit_row("Value", &value, muted, move |s| {
                             PanelMsg::EditSymbolValue(id, s)
                         }));
+                        if !description.is_empty() {
+                            c = c.push(form_input_row(
+                                "Description",
+                                &description,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                        }
                         c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
                             PanelMsg::EditSymbolFootprint(id, s)
                         }));
+                        if !datasheet.is_empty() {
+                            c = c.push(form_input_row(
+                                "Datasheet",
+                                &datasheet,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                        }
                         c = c.push(form_input_row(
                             "Library ID",
                             &lib_id,
@@ -1563,6 +1592,43 @@ fn view_selected_element_properties<'a>(
                             PanelMsg::ToggleSymbolDnp(id),
                             muted,
                         ));
+                        c
+                    },
+                ));
+
+                // Parameters section — custom fields carried on the symbol
+                // instance. Read-only for v0.6; editing per-field lands in
+                // v0.7 with the parameter-manager dialog.
+                let header_label = if params.is_empty() {
+                    "Parameters (none)".to_string()
+                } else {
+                    format!("Parameters ({})", params.len())
+                };
+                let section_params = params.clone();
+                col = col.push(collapsible_section(
+                    "sel_parameters",
+                    &header_label,
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        if section_params.is_empty() {
+                            c = c.push(
+                                container(
+                                    text("No custom parameters".to_string())
+                                        .size(11)
+                                        .color(muted),
+                                )
+                                .padding([6, 8]),
+                            );
+                        } else {
+                            for (name, value) in &section_params {
+                                c = c.push(form_input_row(
+                                    name, value, muted, input_bg, input_bdr,
+                                ));
+                            }
+                        }
                         c
                     },
                 ));
