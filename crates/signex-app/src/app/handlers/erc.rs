@@ -78,4 +78,17 @@ impl Signex {
         self.interaction_state.canvas.clear_overlay_cache();
         Task::none()
     }
+
+    pub(crate) fn handle_annotate(
+        &mut self,
+        mode: signex_engine::AnnotateMode,
+    ) -> Task<Message> {
+        self.apply_engine_command(
+            signex_engine::Command::AnnotateAll { mode },
+            false,
+            true,
+        );
+        crate::diagnostics::log_info(&format!("Annotated symbols ({:?})", mode));
+        Task::none()
+    }
 }

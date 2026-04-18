@@ -25,6 +25,7 @@ impl Signex {
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
             Message::RunErc => self.handle_run_erc(),
+            Message::Annotate(mode) => self.handle_annotate(mode),
             Message::FocusAt {
                 world_x,
                 world_y,

@@ -4,7 +4,7 @@ mod patch;
 
 use std::path::{Path, PathBuf};
 
-pub use command::{Command, CommandKind, MirrorAxis, SymbolTextField, TextTarget};
+pub use command::{AnnotateMode, Command, CommandKind, MirrorAxis, SymbolTextField, TextTarget};
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
@@ -601,6 +601,97 @@ impl Engine {
 
                 self.record_history(before, patch_pair);
 
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::AnnotateAll { mode } => {
+                use crate::command::AnnotateMode;
+                // Phase 1: optionally reset existing numbers back to '?'.
+                if matches!(mode, AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber) {
+                    for symbol in self.document.symbols.iter_mut() {
+                        // Keep the alphabetic prefix; drop the digit tail.
+                        let prefix: String = symbol
+                            .reference
+                            .chars()
+                            .take_while(|c| c.is_ascii_alphabetic())
+                            .collect();
+                        if !prefix.is_empty() {
+                            symbol.reference = format!("{prefix}?");
+                        }
+                    }
+                }
+                if matches!(mode, AnnotateMode::ResetOnly) {
+                    let patch_pair = PatchPair {
+                        semantic: SemanticPatch::SymbolFieldsUpdated,
+                        document: DocumentPatch::SYMBOLS,
+                    };
+                    self.record_history(before, patch_pair);
+                    return Ok(CommandResult::changed(patch_pair));
+                }
+
+                // Phase 2: find the max number per prefix from already-annotated
+                // symbols so Incremental doesn't collide.
+                let mut next_by_prefix: std::collections::HashMap<String, u32> =
+                    std::collections::HashMap::new();
+                for symbol in &self.document.symbols {
+                    let prefix: String = symbol
+                        .reference
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphabetic())
+                        .collect();
+                    if prefix.is_empty() {
+                        continue;
+                    }
+                    let rest = &symbol.reference[prefix.len()..];
+                    if let Ok(n) = rest.parse::<u32>() {
+                        let entry = next_by_prefix.entry(prefix).or_insert(0);
+                        if n > *entry {
+                            *entry = n;
+                        }
+                    }
+                }
+
+                // Phase 3: iterate symbols in a stable order (by position,
+                // then uuid) and assign sequential numbers to any '?' tails.
+                let mut order: Vec<usize> = (0..self.document.symbols.len()).collect();
+                order.sort_by(|a, b| {
+                    let sa = &self.document.symbols[*a];
+                    let sb = &self.document.symbols[*b];
+                    sa.position
+                        .y
+                        .partial_cmp(&sb.position.y)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then(
+                            sa.position
+                                .x
+                                .partial_cmp(&sb.position.x)
+                                .unwrap_or(std::cmp::Ordering::Equal),
+                        )
+                        .then(sa.uuid.cmp(&sb.uuid))
+                });
+
+                for idx in order {
+                    let symbol = &mut self.document.symbols[idx];
+                    if !symbol.reference.ends_with('?') {
+                        continue;
+                    }
+                    let prefix: String = symbol
+                        .reference
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphabetic())
+                        .collect();
+                    if prefix.is_empty() {
+                        continue;
+                    }
+                    let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
+                    *next += 1;
+                    symbol.reference = format!("{prefix}{next}");
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+                self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
         }
