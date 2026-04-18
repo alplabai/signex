@@ -22,13 +22,24 @@ impl Signex {
 
         // Compute preview: walk current snapshot, propose new refs per order.
         let mut proposed: Vec<(String, String)> = Vec::new();
+        let mut current_sheet_name = String::from("Current Sheet");
+        let mut total_symbols = 0usize;
         if let Some(snapshot) = self.active_render_snapshot() {
             proposed = preview_annotations(snapshot, self.ui_state.annotate_order);
+            total_symbols = snapshot.symbols.len();
+        }
+        if let Some(tab) = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+        {
+            current_sheet_name = tab.title.clone();
         }
 
+        // ── Header ──
         let header = container(
             row![
-                text("Annotate Schematics").size(14).color(text_c),
+                text("Annotate").size(14).color(text_c),
                 Space::new().width(Length::Fill),
                 close_button("Close", Message::CloseAnnotateDialog, text_muted, border_c),
             ]
@@ -37,88 +48,237 @@ impl Signex {
         .padding([10, 14])
         .style(crate::styles::toolbar_strip(tokens));
 
-        let order_pick = row![
-            text("Order of Processing").size(11).color(text_muted).width(180),
-            order_radio(
-                "Across then Up",
-                AnnotateOrder::AcrossThenUp,
-                self.ui_state.annotate_order,
-                text_c,
-                border_c,
-            ),
-            Space::new().width(8),
-            order_radio(
-                "Up then Across",
-                AnnotateOrder::UpThenAcross,
-                self.ui_state.annotate_order,
-                text_c,
-                border_c,
-            ),
+        // ── Left column: Schematic Annotation Configuration ──
+        let left_title = text("Schematic Annotation Configuration")
+            .size(12)
+            .color(text_c);
+
+        let order_row = column![
+            text("Order of Processing").size(10).color(text_muted),
+            row![
+                order_radio(
+                    "Across then Up",
+                    AnnotateOrder::AcrossThenUp,
+                    self.ui_state.annotate_order,
+                    text_c,
+                    border_c,
+                ),
+                Space::new().width(6),
+                order_radio(
+                    "Up then Across",
+                    AnnotateOrder::UpThenAcross,
+                    self.ui_state.annotate_order,
+                    text_c,
+                    border_c,
+                ),
+            ]
+            .align_y(iced::Alignment::Center)
+            .spacing(0),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(0);
+        .spacing(4);
 
-        let summary = text(if proposed.is_empty() {
-            "No unannotated symbols — every reference already has a number. Use Reset & Renumber below to start over."
-                .to_string()
-        } else {
-            format!(
-                "{} symbol(s) will receive new designators. Review below, or use Reset All to clear every number.",
-                proposed.len()
+        let process_location = column![
+            text("Process Location of").size(10).color(text_muted),
+            container(
+                text("Designator")
+                    .size(11)
+                    .color(text_c),
             )
-        })
-        .size(11)
-        .color(text_muted);
+            .padding([5, 10])
+            .width(Length::Fill)
+            .style(bordered_style(border_c)),
+        ]
+        .spacing(4);
 
-        let mut preview: iced::widget::Column<'_, Message> =
-            column![].spacing(0).width(Length::Fill);
-        if !proposed.is_empty() {
-            preview = preview.push(
+        let replace_sub = column![
+            text("Replace Sub-Parts").size(10).color(text_muted),
+            container(text("Off").size(11).color(text_muted))
+                .padding([5, 10])
+                .width(Length::Fill)
+                .style(bordered_style(border_c)),
+        ]
+        .spacing(4);
+
+        let matching = column![
+            text("Matching Options").size(12).color(text_c),
+            Space::new().height(4),
+            row![
+                text("Complete Existing Packages")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(2)),
+                container(text("None").size(11).color(text_muted))
+                    .padding([4, 8])
+                    .width(Length::FillPortion(3))
+                    .style(bordered_style(border_c)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .spacing(6),
+            Space::new().height(6),
+            text("Parameter-matching options (accuracy, body finish, tolerance…) ship in v0.7.1 with the full parameter manager.")
+                .size(10)
+                .color(text_muted),
+        ]
+        .spacing(4);
+
+        let sheets_table = column![
+            text("Schematic Sheets To Annotate").size(12).color(text_c),
+            Space::new().height(4),
+            row![
+                text("Sheet").size(10).color(text_muted).width(Length::FillPortion(3)),
+                text("Scope").size(10).color(text_muted).width(Length::FillPortion(1)),
+                text("Start").size(10).color(text_muted).width(Length::FillPortion(1)),
+            ]
+            .padding([2, 8]),
+            container(
                 row![
-                    text("Current").size(10).color(text_muted).width(Length::FillPortion(1)),
-                    text("Proposed").size(10).color(text_muted).width(Length::FillPortion(1)),
+                    text(current_sheet_name.clone())
+                        .size(11)
+                        .color(text_c)
+                        .width(Length::FillPortion(3)),
+                    text("All").size(11).color(text_muted).width(Length::FillPortion(1)),
+                    text("1").size(11).color(text_muted).width(Length::FillPortion(1)),
                 ]
-                .padding([4, 8]),
+                .padding([3, 8]),
+            )
+            .style(bordered_style(border_c)),
+            Space::new().height(4),
+            text("Multi-sheet annotation (hierarchical + scope) lands with v1.1 Advanced Schematic.")
+                .size(10)
+                .color(text_muted),
+        ]
+        .spacing(4);
+
+        let left_col = column![
+            left_title,
+            Space::new().height(6),
+            order_row,
+            Space::new().height(8),
+            process_location,
+            Space::new().height(8),
+            replace_sub,
+            Space::new().height(10),
+            matching,
+            Space::new().height(10),
+            sheets_table,
+        ]
+        .spacing(0)
+        .width(Length::FillPortion(10));
+
+        // ── Right column: Proposed Change List ──
+        let right_title = text("Proposed Change List").size(12).color(text_c);
+
+        // Column headers
+        let list_headers = row![
+            text("Current").size(10).color(text_muted).width(Length::FillPortion(2)),
+            text("Proposed").size(10).color(text_muted).width(Length::FillPortion(2)),
+            text("Location").size(10).color(text_muted).width(Length::FillPortion(3)),
+        ]
+        .padding([4, 8]);
+
+        let mut rows_col: iced::widget::Column<'_, Message> =
+            column![].spacing(0).width(Length::Fill);
+        if proposed.is_empty() {
+            rows_col = rows_col.push(
+                container(
+                    text("No symbols need annotation — every reference has a number.")
+                        .size(11)
+                        .color(text_muted),
+                )
+                .padding([10, 12]),
             );
-            for (current, new) in &proposed {
-                preview = preview.push(
+        } else {
+            for (cur, new) in &proposed {
+                rows_col = rows_col.push(
                     row![
-                        text(current.clone())
+                        text(cur.clone())
                             .size(11)
                             .color(text_muted)
-                            .width(Length::FillPortion(1)),
+                            .width(Length::FillPortion(2)),
                         text(new.clone())
                             .size(11)
                             .color(text_c)
-                            .width(Length::FillPortion(1)),
+                            .width(Length::FillPortion(2)),
+                        text(current_sheet_name.clone())
+                            .size(11)
+                            .color(text_muted)
+                            .width(Length::FillPortion(3)),
                     ]
                     .padding([2, 8]),
                 );
             }
         }
 
-        // Footer action row — four buttons so the user can reset + renumber
-        // from this dialog without closing and reopening via the Design
-        // menu. Mirrors Altium's Annotate dialog layout.
+        let right_list = container(scrollable(rows_col).height(360))
+            .padding(4)
+            .style(bordered_style(border_c));
+
+        let summary_text = if proposed.is_empty() {
+            format!(
+                "Annotation has nothing to do — all {total_symbols} symbols on '{current_sheet_name}' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch."
+            )
+        } else {
+            format!(
+                "Annotation will assign new designators to {} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
+                proposed.len(),
+            )
+        };
+        let summary = container(
+            text(summary_text).size(10).color(text_muted),
+        )
+        .padding([4, 4]);
+
+        let right_col = column![
+            right_title,
+            Space::new().height(6),
+            list_headers,
+            right_list,
+            Space::new().height(6),
+            text("Annotation Summary").size(10).color(text_c),
+            summary,
+        ]
+        .spacing(0)
+        .width(Length::FillPortion(11));
+
+        // ── Footer ──
         let footer = row![
-            secondary_button("Cancel", Message::CloseAnnotateDialog, text_c, border_c),
+            secondary_button(
+                "All On",
+                Message::CloseAnnotateDialog, // placeholder — multi-sheet v1.1
+                text_c,
+                border_c,
+            ),
+            Space::new().width(4),
+            secondary_button(
+                "All Off",
+                Message::CloseAnnotateDialog, // placeholder — multi-sheet v1.1
+                text_c,
+                border_c,
+            ),
             Space::new().width(Length::Fill),
+            secondary_button(
+                "Update Changes List",
+                Message::CloseAnnotateDialog, // preview is already live; close = cheap redraw
+                text_c,
+                border_c,
+            ),
+            Space::new().width(4),
             secondary_button(
                 "Reset All",
                 Message::Annotate(signex_engine::AnnotateMode::ResetOnly),
                 text_c,
                 border_c,
             ),
-            Space::new().width(6),
+            Space::new().width(4),
             secondary_button(
                 "Reset & Renumber",
                 Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber),
                 text_c,
                 border_c,
             ),
-            Space::new().width(6),
+            Space::new().width(4),
             primary_button(
-                "Apply",
+                "Accept Changes",
                 if proposed.is_empty() {
                     None
                 } else {
@@ -126,35 +286,31 @@ impl Signex {
                 },
                 border_c,
             ),
+            Space::new().width(4),
+            secondary_button("Close", Message::CloseAnnotateDialog, text_c, border_c),
         ]
         .align_y(iced::Alignment::Center);
+
+        let body_row = row![
+            container(left_col).padding([14, 14]),
+            container(
+                iced::widget::Space::new().width(1).height(Length::Fill),
+            )
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            }),
+            container(right_col).padding([14, 14]),
+        ]
+        .spacing(0);
 
         let dialog = container(
             column![
                 header,
-                container(
-                    column![
-                        order_pick,
-                        Space::new().height(8),
-                        summary,
-                        Space::new().height(6),
-                        container(scrollable(preview).height(260))
-                            .padding(4)
-                            .style(move |_: &Theme| container::Style {
-                                border: Border {
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                    color: border_c,
-                                },
-                                ..container::Style::default()
-                            }),
-                    ]
-                    .spacing(4),
-                )
-                .padding([14, 14]),
+                body_row,
                 container(footer).padding([10, 14]),
             ]
-            .width(540),
+            .width(1080),
         )
         .style(crate::styles::context_menu(tokens));
 
@@ -297,6 +453,18 @@ impl Signex {
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
+
+fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'static {
+    move |_: &Theme| container::Style {
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.02))),
+        ..container::Style::default()
+    }
+}
 
 fn wrap_modal(inner: Element<'_, Message>) -> Element<'_, Message> {
     container(
