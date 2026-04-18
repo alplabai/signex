@@ -52,7 +52,12 @@ pub enum MenuMessage {
     PlaceComponent,
     // Design
     Annotate,
+    AnnotateQuietly,
     AnnotateReset,
+    AnnotateResetDuplicates,
+    AnnotateForceAll,
+    AnnotateBack,
+    AnnotateSheets,
     Erc,
     ToggleAutoFocus,
     GenerateBom,
@@ -191,16 +196,52 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
         ]),
     );
 
+    // Design → Annotation submenu mirrors Altium's Annotation cascade.
+    let annotation_submenu: Item<'static, MenuMessage, Theme, iced::Renderer> =
+        Item::with_menu(
+            submenu_item_btn("Annotation", mc),
+            menu_template(vec![
+                leaf(
+                    "Annotate Schematics...",
+                    None,
+                    MenuMessage::Annotate,
+                    mc,
+                ),
+                leaf(
+                    "Reset Schematic Designators...",
+                    None,
+                    MenuMessage::AnnotateReset,
+                    mc,
+                ),
+                leaf(
+                    "Reset Duplicate Schematic Designators...",
+                    None,
+                    MenuMessage::AnnotateResetDuplicates,
+                    mc,
+                ),
+                separator(mc),
+                leaf(
+                    "Annotate Schematics Quietly",
+                    Some("Alt+A"),
+                    MenuMessage::AnnotateQuietly,
+                    mc,
+                ),
+                leaf(
+                    "Force Annotate All Schematics",
+                    Some("Shift+Alt+A"),
+                    MenuMessage::AnnotateForceAll,
+                    mc,
+                ),
+                separator(mc),
+                leaf_stub("Back Annotate Schematics...", None, mc),
+                leaf_stub("Number Schematic Sheets...", None, mc),
+            ]),
+        );
+
     let design_menu = Item::with_menu(
         root_btn("Design", mc),
         menu_template(vec![
-            leaf("Annotate Schematics", Some("Alt+A"), MenuMessage::Annotate, mc),
-            leaf(
-                "Reset & Renumber Annotations",
-                Some("Shift+Alt+A"),
-                MenuMessage::AnnotateReset,
-                mc,
-            ),
+            annotation_submenu,
             separator(mc),
             leaf("Electrical Rules Check", Some("F8"), MenuMessage::Erc, mc),
             separator(mc),
@@ -313,6 +354,38 @@ fn leaf_stub(
     mc: MenuColors,
 ) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(menu_item_btn(label, shortcut, None, mc))
+}
+
+/// Menu row that acts as a submenu header — label on the left, right
+/// chevron on the right, no shortcut. Does not dispatch on click; the
+/// menu framework opens the nested submenu on hover.
+fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    let label = label.to_owned();
+    let r = row![
+        text(label).size(12).color(mc.text),
+        iced::widget::Space::new().width(Length::Fill),
+        text("›".to_string()).size(14).color(mc.text_muted),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+    button(r)
+        .padding([4, 10])
+        .width(Length::Fill)
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => {
+                    Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
+                }
+                _ => None,
+            };
+            button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: mc.text,
+                ..button::Style::default()
+            }
+        })
+        .into()
 }
 
 /// Separator line between menu sections.
