@@ -358,11 +358,21 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::Label => Some("Label".to_string()),
+                    Tool::Component => Some("Component".to_string()),
+                    Tool::Line => Some("Line".to_string()),
+                    Tool::Rectangle => Some("Rectangle".to_string()),
+                    Tool::Circle => Some("Circle".to_string()),
                     _ => None,
                 };
-                // Arm a ghost text-note preview for the Text tool so the
-                // user sees a sample "Text" glyph that will be placed on
-                // the next click. Cleared on tool switch / Escape.
+                // Clear every cursor-following ghost so a leftover from a
+                // previous tool can't linger on the canvas. Placement
+                // presets (Label/Power port/etc.) re-arm their specific
+                // ghost after the dispatch.
+                self.clear_ghost_previews();
+                // Arm a default ghost text-note preview for the Text tool so
+                // the user sees a sample "Text" glyph at the cursor. Other
+                // tools with ghosts arm them from their placement preset.
                 if tool == Tool::Text {
                     self.interaction_state.canvas.ghost_text =
                         Some(signex_types::schematic::TextNote {
@@ -374,8 +384,6 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         });
-                } else {
-                    self.interaction_state.canvas.ghost_text = None;
                 }
                 if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();
