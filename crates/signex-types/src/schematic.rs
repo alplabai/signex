@@ -127,17 +127,92 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SymbolInstance {
+    #[serde(default)]
+    pub project: String,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub reference: String,
+    #[serde(default = "default_unit")]
+    pub unit: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SheetInstance {
+    #[serde(default)]
+    pub project: String,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub page: String,
+}
+
 // ---------------------------------------------------------------------------
 // LibSymbol & graphics
 // ---------------------------------------------------------------------------
+
+/// A graphic primitive inside a library symbol, tagged with unit and body-style
+/// so the renderer can filter to only draw the correct unit for each instance.
+///
+/// - `unit == 0`       → common to ALL units (always rendered)
+/// - `unit == N`       → only rendered for symbol instances with `unit = N`
+/// - `body_style == 0` → common to all body styles (normal + De Morgan)
+/// - `body_style == 1` → normal body style (default)
+/// - `body_style == 2` → De Morgan body style
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibGraphic {
+    #[serde(default)]
+    pub unit: u32,
+    #[serde(default = "default_body_style")]
+    pub body_style: u32,
+    pub graphic: Graphic,
+}
+
+/// A pin inside a library symbol, tagged with unit and body-style.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibPin {
+    #[serde(default)]
+    pub unit: u32,
+    #[serde(default = "default_body_style")]
+    pub body_style: u32,
+    pub pin: Pin,
+}
+
+fn default_body_style() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
     #[serde(default)]
-    pub graphics: Vec<Graphic>,
+    pub reference: String,
     #[serde(default)]
-    pub pins: Vec<Pin>,
+    pub value: String,
+    #[serde(default)]
+    pub footprint: String,
+    #[serde(default)]
+    pub datasheet: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: String,
+    #[serde(default)]
+    pub fp_filters: String,
+    #[serde(default = "default_true")]
+    pub in_bom: bool,
+    #[serde(default = "default_true")]
+    pub on_board: bool,
+    #[serde(default = "default_true")]
+    pub in_pos_files: bool,
+    #[serde(default)]
+    pub duplicate_pin_numbers_are_jumpers: bool,
+    #[serde(default)]
+    pub graphics: Vec<LibGraphic>,
+    #[serde(default)]
+    pub pins: Vec<LibPin>,
     #[serde(default = "default_true")]
     pub show_pin_numbers: bool,
     #[serde(default = "default_true")]
@@ -218,6 +293,15 @@ pub enum Graphic {
         #[serde(default)]
         fill: FillType,
     },
+    /// Cubic bezier: control points [p0, c1, c2, p3]
+    Bezier {
+        /// Exactly 4 control points: start, cp1, cp2, end
+        points: Vec<Point>,
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        fill: FillType,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +322,8 @@ pub struct Pin {
     #[serde(default)]
     pub number: String,
     #[serde(default = "default_true")]
+    pub visible: bool,
+    #[serde(default = "default_true")]
     pub name_visible: bool,
     #[serde(default = "default_true")]
     pub number_visible: bool,
@@ -257,6 +343,8 @@ pub struct Symbol {
     pub value: String,
     #[serde(default)]
     pub footprint: String,
+    #[serde(default)]
+    pub datasheet: String,
     pub position: Point,
     #[serde(default)]
     pub rotation: f64,
@@ -284,6 +372,10 @@ pub struct Symbol {
     pub locked: bool,
     #[serde(default)]
     pub fields: HashMap<String, String>,
+    #[serde(default)]
+    pub pin_uuids: HashMap<String, Uuid>,
+    #[serde(default)]
+    pub instances: Vec<SymbolInstance>,
 }
 
 fn default_unit() -> u32 {
@@ -299,12 +391,18 @@ pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
+    /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
+    #[serde(default)]
+    pub stroke_width: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Junction {
     pub uuid: Uuid,
     pub position: Point,
+    /// 0.0 means use the theme default size.
+    #[serde(default)]
+    pub diameter: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,15 +436,10 @@ pub struct TextNote {
     pub rotation: f64,
     #[serde(default)]
     pub font_size: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchRectangle {
-    pub uuid: Uuid,
-    pub start: Point,
-    pub end: Point,
     #[serde(default)]
-    pub stroke_type: String,
+    pub justify_h: HAlign,
+    #[serde(default)]
+    pub justify_v: VAlign,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -386,7 +479,15 @@ pub struct ChildSheet {
     pub position: Point,
     pub size: (f64, f64),
     #[serde(default)]
+    pub stroke_width: f64,
+    #[serde(default)]
+    pub fill: FillType,
+    #[serde(default)]
+    pub fields_autoplaced: bool,
+    #[serde(default)]
     pub pins: Vec<SheetPin>,
+    #[serde(default)]
+    pub instances: Vec<SheetInstance>,
 }
 
 // ---------------------------------------------------------------------------
@@ -428,6 +529,8 @@ pub enum SchDrawing {
         end: Point,
         #[serde(default)]
         width: f64,
+        #[serde(default)]
+        fill: FillType,
     },
     Polyline {
         uuid: Uuid,
@@ -435,7 +538,7 @@ pub enum SchDrawing {
         #[serde(default)]
         width: f64,
         #[serde(default)]
-        fill: bool,
+        fill: FillType,
     },
 }
 
@@ -454,6 +557,8 @@ pub struct SchematicSheet {
     pub generator_version: String,
     #[serde(default)]
     pub paper_size: String,
+    #[serde(default = "default_root_sheet_page")]
+    pub root_sheet_page: String,
     #[serde(default)]
     pub symbols: Vec<Symbol>,
     #[serde(default)]
@@ -469,8 +574,6 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub text_notes: Vec<TextNote>,
     #[serde(default)]
-    pub rectangles: Vec<SchRectangle>,
-    #[serde(default)]
     pub buses: Vec<Bus>,
     #[serde(default)]
     pub bus_entries: Vec<BusEntry>,
@@ -482,4 +585,161 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+}
+
+fn default_root_sheet_page() -> String {
+    "1".to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Selection -- identifies what the user has selected on the canvas
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SelectedKind {
+    Symbol,
+    Wire,
+    Bus,
+    BusEntry,
+    Junction,
+    NoConnect,
+    Label,
+    TextNote,
+    ChildSheet,
+    Drawing,
+    /// Symbol reference field ("C39", "R1", …). UUID = symbol UUID.
+    SymbolRefField,
+    /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
+    SymbolValField,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SelectedItem {
+    pub uuid: Uuid,
+    pub kind: SelectedKind,
+}
+
+impl SelectedItem {
+    pub fn new(uuid: Uuid, kind: SelectedKind) -> Self {
+        Self { uuid, kind }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bounding box helpers
+// ---------------------------------------------------------------------------
+
+/// Axis-aligned bounding box in world (mm) coordinates.
+#[derive(Debug, Clone, Copy)]
+pub struct Aabb {
+    pub min_x: f64,
+    pub min_y: f64,
+    pub max_x: f64,
+    pub max_y: f64,
+}
+
+impl Aabb {
+    pub fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+        Self {
+            min_x: x1.min(x2),
+            min_y: y1.min(y2),
+            max_x: x1.max(x2),
+            max_y: y1.max(y2),
+        }
+    }
+
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
+    }
+
+    pub fn expand(&self, margin: f64) -> Self {
+        Self {
+            min_x: self.min_x - margin,
+            min_y: self.min_y - margin,
+            max_x: self.max_x + margin,
+            max_y: self.max_y + margin,
+        }
+    }
+
+    pub fn union(&self, other: &Aabb) -> Self {
+        Self {
+            min_x: self.min_x.min(other.min_x),
+            min_y: self.min_y.min(other.min_y),
+            max_x: self.max_x.max(other.max_x),
+            max_y: self.max_y.max(other.max_y),
+        }
+    }
+
+    pub fn width(&self) -> f64 {
+        self.max_x - self.min_x
+    }
+
+    pub fn height(&self) -> f64 {
+        self.max_y - self.min_y
+    }
+}
+
+impl SchematicSheet {
+    /// Compute the bounding box of all elements in the sheet.
+    pub fn content_bounds(&self) -> Option<Aabb> {
+        let mut aabb: Option<Aabb> = None;
+
+        let mut extend = |x: f64, y: f64| {
+            aabb = Some(match aabb {
+                Some(a) => Aabb {
+                    min_x: a.min_x.min(x),
+                    min_y: a.min_y.min(y),
+                    max_x: a.max_x.max(x),
+                    max_y: a.max_y.max(y),
+                },
+                None => Aabb::new(x, y, x, y),
+            });
+        };
+
+        for s in &self.symbols {
+            extend(s.position.x, s.position.y);
+        }
+        for w in &self.wires {
+            extend(w.start.x, w.start.y);
+            extend(w.end.x, w.end.y);
+        }
+        for b in &self.buses {
+            extend(b.start.x, b.start.y);
+            extend(b.end.x, b.end.y);
+        }
+        for j in &self.junctions {
+            extend(j.position.x, j.position.y);
+        }
+        for l in &self.labels {
+            extend(l.position.x, l.position.y);
+        }
+        for n in &self.no_connects {
+            extend(n.position.x, n.position.y);
+        }
+        for t in &self.text_notes {
+            extend(t.position.x, t.position.y);
+        }
+        for c in &self.child_sheets {
+            extend(c.position.x, c.position.y);
+            extend(c.position.x + c.size.0, c.position.y + c.size.1);
+        }
+
+        // Add margin around content
+        aabb.map(|a| a.expand(10.0))
+    }
+}
+
+/// Distance from a point to a line segment.
+pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-12 {
+        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let proj_x = ax + t * dx;
+    let proj_y = ay + t * dy;
+    ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }

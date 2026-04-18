@@ -1,5 +1,9 @@
 //! KiCad S-expression parser -- .kicad_sch, .kicad_pcb, .kicad_sym files.
-#![allow(clippy::collapsible_if, clippy::redundant_closure, clippy::unnecessary_lazy_evaluations)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::redundant_closure,
+    clippy::unnecessary_lazy_evaluations
+)]
 
 pub mod error;
 pub mod pcb;
