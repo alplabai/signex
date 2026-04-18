@@ -38,7 +38,7 @@ impl Signex {
                 self.set_pending_power_port("Earth", "power:Earth");
             }
             ActiveBarAction::PlacePort => {
-                self.interaction_state.current_tool = Tool::Label;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Global,
                     "bidirectional".to_string(),
@@ -55,7 +55,7 @@ impl Signex {
                 });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
-                self.interaction_state.current_tool = Tool::Label;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Hierarchical,
                     String::new(),
@@ -72,39 +72,36 @@ impl Signex {
                 });
             }
             ActiveBarAction::PlaceBusEntry => {
-                self.interaction_state.current_tool = Tool::BusEntry;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
             // No-ERC directive reuses the existing No-Connect tool (Altium's
             // "Place No ERC" also drops an X marker at the clicked pin).
             ActiveBarAction::PlaceNoERC => {
-                self.interaction_state.current_tool = Tool::NoConnect;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
             }
-            // Sheet-symbol / frame / rounded rect — all rectangle-dragged shapes
-            // in Altium. Until each has a bespoke tool, use the rectangle tool
-            // so the drag-to-size gesture matches and produces a visible shape.
+            // Sheet-symbol / rounded rect / graphic — all rectangle-dragged
+            // shapes in Altium. Until each has a bespoke tool, use the
+            // rectangle tool so the drag-to-size gesture produces a visible
+            // shape. (Text Frame is handled in action_groups so the ghost
+            // text preview kicks in.)
             ActiveBarAction::PlaceSheetSymbol
             | ActiveBarAction::PlaceSheetEntry
             | ActiveBarAction::PlaceDeviceSheetSymbol
             | ActiveBarAction::PlaceReuseBlock
-            | ActiveBarAction::PlaceTextFrame
             | ActiveBarAction::DrawRoundRectangle
             | ActiveBarAction::PlaceGraphic => {
-                self.interaction_state.current_tool = Tool::Rectangle;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Arcs / ellipses fall back to the circle tool.
             ActiveBarAction::DrawArc
             | ActiveBarAction::DrawEllipticalArc
             | ActiveBarAction::DrawEllipse => {
-                self.interaction_state.current_tool = Tool::Circle;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
             }
             // Polygon / bezier — multi-click line approximation.
             ActiveBarAction::DrawPolygon | ActiveBarAction::DrawBezier => {
-                self.interaction_state.current_tool = Tool::Line;
-            }
-            // "Place Note" is Altium's sticky-note text.
-            ActiveBarAction::PlaceNote => {
-                self.interaction_state.current_tool = Tool::Text;
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
             }
             // Harness + signal integrity directives — not yet implemented.
             // Log so the user sees the click registered and knows it's pending.
@@ -146,8 +143,11 @@ impl Signex {
     }
 
     fn set_pending_power_port(&mut self, net_name: &str, lib_id: &str) {
+        // Go through the normal tool-switch path first so previous ghosts
+        // and tool_preview get cleaned up; then override tool_preview to
+        // the specific power-port name and arm the ghost_symbol.
+        let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
         self.interaction_state.pending_power = Some((net_name.to_string(), lib_id.to_string()));
-        self.interaction_state.current_tool = Tool::Component;
         self.interaction_state.canvas.tool_preview = Some(net_name.to_string());
         // Live preview: build a ghost power-port symbol that follows the
         // cursor so the user sees the actual shape (bars / bar / triangle)

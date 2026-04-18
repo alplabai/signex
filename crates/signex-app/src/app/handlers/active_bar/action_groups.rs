@@ -23,10 +23,10 @@ impl Signex {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus)))
             }
             ActiveBarAction::PlaceNetLabel => {
-                // Switch to the Label tool, clear any pending port state
-                // (so this is a plain Net label not a Global/Hier port),
-                // and arm a ghost preview that follows the cursor.
-                self.interaction_state.current_tool = Tool::Label;
+                // Dispatch SelectTool so tool_preview, previous ghosts, and
+                // other transient state get cleaned up centrally. Then arm
+                // the label-specific ghost + clear any Global/Hier pending.
+                let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
                 self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
@@ -38,12 +38,17 @@ impl Signex {
                     font_size: 1.8,
                     justify: signex_types::schematic::HAlign::Left,
                 });
-                Task::none()
+                task
             }
             ActiveBarAction::PlaceComponent => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)))
             }
-            ActiveBarAction::PlaceTextString => {
+            ActiveBarAction::PlaceTextString
+            | ActiveBarAction::PlaceNote
+            | ActiveBarAction::PlaceTextFrame => {
+                // All three arm the Text tool so the ghost-text preview
+                // follows the cursor. Text Frame collapses to Text for
+                // v0.6; the bounded-frame variant is a v0.7 feature.
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)))
             }
             ActiveBarAction::DrawLine => {
