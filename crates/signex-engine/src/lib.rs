@@ -4,7 +4,9 @@ mod patch;
 
 use std::path::{Path, PathBuf};
 
-pub use command::{AnnotateMode, Command, CommandKind, MirrorAxis, SymbolTextField, TextTarget};
+pub use command::{
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SymbolTextField, TextTarget,
+};
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
@@ -690,6 +692,124 @@ impl Engine {
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
                     document: DocumentPatch::SYMBOLS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::MoveSymbolAbsolute { symbol_id, x, y } => {
+                let Some(symbol) = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                else {
+                    return Ok(CommandResult::unchanged());
+                };
+                let dx = x - symbol.position.x;
+                let dy = y - symbol.position.y;
+                if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
+                    return Ok(CommandResult::unchanged());
+                }
+                symbol.position.x = x;
+                symbol.position.y = y;
+                if let Some(rt) = symbol.ref_text.as_mut() {
+                    rt.position.x += dx;
+                    rt.position.y += dy;
+                }
+                if let Some(vt) = symbol.val_text.as_mut() {
+                    vt.position.x += dx;
+                    vt.position.y += dy;
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SelectionMoved,
+                    document: DocumentPatch::SYMBOLS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::ReorderObjects { items, direction } => {
+                use crate::command::ReorderDirection;
+                use signex_types::schematic::SelectedKind;
+                if items.is_empty() {
+                    return Ok(CommandResult::unchanged());
+                }
+                let mut changed = false;
+                for item in &items {
+                    match item.kind {
+                        SelectedKind::Symbol => {
+                            if let Some(idx) =
+                                self.document.symbols.iter().position(|s| s.uuid == item.uuid)
+                            {
+                                let sym = self.document.symbols.remove(idx);
+                                match direction {
+                                    ReorderDirection::ToFront => {
+                                        self.document.symbols.push(sym);
+                                    }
+                                    ReorderDirection::ToBack => {
+                                        self.document.symbols.insert(0, sym);
+                                    }
+                                }
+                                changed = true;
+                            }
+                        }
+                        SelectedKind::Wire => {
+                            if let Some(idx) =
+                                self.document.wires.iter().position(|w| w.uuid == item.uuid)
+                            {
+                                let w = self.document.wires.remove(idx);
+                                match direction {
+                                    ReorderDirection::ToFront => self.document.wires.push(w),
+                                    ReorderDirection::ToBack => {
+                                        self.document.wires.insert(0, w)
+                                    }
+                                }
+                                changed = true;
+                            }
+                        }
+                        SelectedKind::Label => {
+                            if let Some(idx) =
+                                self.document.labels.iter().position(|l| l.uuid == item.uuid)
+                            {
+                                let l = self.document.labels.remove(idx);
+                                match direction {
+                                    ReorderDirection::ToFront => self.document.labels.push(l),
+                                    ReorderDirection::ToBack => {
+                                        self.document.labels.insert(0, l)
+                                    }
+                                }
+                                changed = true;
+                            }
+                        }
+                        SelectedKind::TextNote => {
+                            if let Some(idx) = self
+                                .document
+                                .text_notes
+                                .iter()
+                                .position(|t| t.uuid == item.uuid)
+                            {
+                                let t = self.document.text_notes.remove(idx);
+                                match direction {
+                                    ReorderDirection::ToFront => {
+                                        self.document.text_notes.push(t)
+                                    }
+                                    ReorderDirection::ToBack => {
+                                        self.document.text_notes.insert(0, t)
+                                    }
+                                }
+                                changed = true;
+                            }
+                        }
+                        // Drawings, junctions, NC, bus entries — omit for v0.7;
+                        // add in v0.7.1 if users request them.
+                        _ => {}
+                    }
+                }
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SelectionMoved,
+                    document: DocumentPatch::FULL,
                 };
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))

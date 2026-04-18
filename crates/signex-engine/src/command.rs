@@ -47,6 +47,8 @@ pub enum CommandKind {
     PlaceBusEntry,
     PlaceTextNote,
     AnnotateAll,
+    MoveSymbolAbsolute,
+    ReorderObjects,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +142,29 @@ pub enum Command {
     AnnotateAll {
         mode: AnnotateMode,
     },
+    /// Absolute positioning of a single symbol. Used by the Properties
+    /// panel's future X/Y edit fields and by scripted moves; distinct from
+    /// MoveSelection which takes a delta.
+    MoveSymbolAbsolute {
+        symbol_id: Uuid,
+        x: f64,
+        y: f64,
+    },
+    /// File-order reorder — moves the given selection to the start or end
+    /// of each type vector. KiCad schematic has no explicit z-order, so
+    /// render order is file order; this command mutates that.
+    ReorderObjects {
+        items: Vec<SelectedItem>,
+        direction: ReorderDirection,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReorderDirection {
+    /// Move to the end of the vector so it renders on top (Bring To Front).
+    ToFront,
+    /// Move to the start of the vector so it renders behind (Send To Back).
+    ToBack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,6 +201,8 @@ impl Command {
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
+            Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
+            Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
         }
     }
 }
