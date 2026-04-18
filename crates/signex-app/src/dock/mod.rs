@@ -257,7 +257,11 @@ impl DockArea {
                     if !region.panels.contains(&fp.kind) {
                         region.panels.push(fp.kind);
                     }
-                    region.active = region.panels.iter().position(|k| *k == fp.kind).unwrap_or(0);
+                    region.active = region
+                        .panels
+                        .iter()
+                        .position(|k| *k == fp.kind)
+                        .unwrap_or(0);
                     region.collapsed = false;
                 }
             }
@@ -310,9 +314,7 @@ impl DockArea {
         let can_scroll_left = offset > 0;
         let can_scroll_right = offset + 3 < total_tabs;
 
-        let mut tab_row = row![]
-            .spacing(0.0)
-            .align_y(iced::Alignment::End);
+        let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
 
         // Left scroll arrow (only when tabs are scrolled)
         if has_overflow {
@@ -350,7 +352,12 @@ impl DockArea {
                 .style(styles::dock_tab_container(&ctx.tokens, is_active));
             let tab = mouse_area(
                 container(label_el)
-                    .padding(iced::Padding { top: 0.0, right: 0.0, bottom: 2.0, left: 0.0 })
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: 0.0,
+                        bottom: 2.0,
+                        left: 0.0,
+                    })
                     .style(styles::tab_underline(line_c)),
             )
             .on_press(DockMessage::TabDragStart(position, i))
@@ -418,7 +425,12 @@ impl DockArea {
         .into()
     }
 
-    fn view_rail<'a>(&'a self, position: PanelPosition, region: &'a DockRegion, ctx: &'a panels::PanelContext) -> Element<'a, DockMessage> {
+    fn view_rail<'a>(
+        &'a self,
+        position: PanelPosition,
+        region: &'a DockRegion,
+        ctx: &'a panels::PanelContext,
+    ) -> Element<'a, DockMessage> {
         // Altium-style collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);

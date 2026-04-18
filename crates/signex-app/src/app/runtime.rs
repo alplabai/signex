@@ -45,10 +45,10 @@ impl Signex {
             .as_ref()
             .map(|project| project.name.clone())
             .or_else(|| {
-                self.document_state
-                    .project_path
-                    .as_ref()
-                    .and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().to_string()))
+                self.document_state.project_path.as_ref().and_then(|path| {
+                    path.file_stem()
+                        .map(|stem| stem.to_string_lossy().to_string())
+                })
             });
 
         let active_schematic_snapshot = self.active_render_snapshot();
@@ -86,10 +86,10 @@ impl Signex {
                 .as_ref()
                 .and_then(|project| project.schematic_root.clone())
                 .or_else(|| {
-                    self.document_state
-                        .project_path
-                        .as_ref()
-                        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().to_string()))
+                    self.document_state.project_path.as_ref().and_then(|path| {
+                        path.file_name()
+                            .map(|name| name.to_string_lossy().to_string())
+                    })
                 }),
             pcb_file: self
                 .document_state
@@ -114,13 +114,22 @@ impl Signex {
                 .or_else(|| active_pcb_snapshot.map(|snapshot| snapshot.vias.len()))
                 .unwrap_or(0),
             child_sheets: active_schematic_snapshot
-                .map(|snapshot| snapshot.child_sheets.iter().map(|child| child.name.clone()).collect())
+                .map(|snapshot| {
+                    snapshot
+                        .child_sheets
+                        .iter()
+                        .map(|child| child.name.clone())
+                        .collect()
+                })
                 .unwrap_or_default(),
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             paper_size: active_schematic_snapshot
                 .map(|snapshot| snapshot.paper_size.clone())
-                .or_else(|| active_pcb_snapshot.map(|snapshot| format!("PCB • {} layers", snapshot.layers.len())))
+                .or_else(|| {
+                    active_pcb_snapshot
+                        .map(|snapshot| format!("PCB • {} layers", snapshot.layers.len()))
+                })
                 .unwrap_or_else(|| "A4".to_string()),
             lib_symbol_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.lib_symbols.len())

@@ -22,13 +22,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use signex_types::schematic::{
-    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect,
-    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
+    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect, SchDrawing,
+    SchematicSheet, Symbol, TextNote, Wire,
 };
 use signex_types::theme::CanvasColors;
 
-use crate::colors::to_iced;
 use crate::PowerPortStyle;
+use crate::colors::to_iced;
 
 // ---------------------------------------------------------------------------
 // ScreenTransform -- decouples rendering from the app-layer Camera
@@ -168,7 +168,8 @@ impl PreparedPreviewGeometry {
 
     fn refresh(&mut self, snapshot: &SchematicRenderSnapshot, invalidation: RenderInvalidation) {
         if invalidation.contains(RenderInvalidation::FULL)
-            || invalidation.intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
+            || invalidation
+                .intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
         {
             self.symbol_positions = snapshot
                 .symbols
@@ -184,20 +185,24 @@ impl PreparedPreviewGeometry {
                 .symbols
                 .iter()
                 .filter_map(|symbol| {
-                    symbol
-                        .ref_text
-                        .as_ref()
-                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                    symbol.ref_text.as_ref().map(|prop| {
+                        (
+                            symbol.uuid,
+                            (prop.position.x as f32, prop.position.y as f32),
+                        )
+                    })
                 })
                 .collect();
             self.symbol_value_positions = snapshot
                 .symbols
                 .iter()
                 .filter_map(|symbol| {
-                    symbol
-                        .val_text
-                        .as_ref()
-                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                    symbol.val_text.as_ref().map(|prop| {
+                        (
+                            symbol.uuid,
+                            (prop.position.x as f32, prop.position.y as f32),
+                        )
+                    })
                 })
                 .collect();
         }
@@ -226,7 +231,12 @@ impl PreparedPreviewGeometry {
             self.label_positions = snapshot
                 .labels
                 .iter()
-                .map(|label| (label.uuid, (label.position.x as f32, label.position.y as f32)))
+                .map(|label| {
+                    (
+                        label.uuid,
+                        (label.position.x as f32, label.position.y as f32),
+                    )
+                })
                 .collect();
         }
     }
@@ -271,11 +281,7 @@ impl SchematicRenderCache {
         }
     }
 
-    pub fn update_from_sheet(
-        &mut self,
-        sheet: &SchematicSheet,
-        invalidation: RenderInvalidation,
-    ) {
+    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
         if invalidation.contains(RenderInvalidation::FULL) {
             *self = Self::from_sheet(sheet);
             return;
@@ -595,7 +601,15 @@ pub fn render_schematic(
                 && !sym.is_power
             {
                 let dpos = field_display_pos(&ref_text.position, sym);
-                text::draw_text_prop(frame, &sym.reference, ref_text, sym, dpos, transform, reference_color);
+                text::draw_text_prop(
+                    frame,
+                    &sym.reference,
+                    ref_text,
+                    sym,
+                    dpos,
+                    transform,
+                    reference_color,
+                );
             }
 
             // Value text
@@ -603,7 +617,15 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_color);
+                text::draw_text_prop(
+                    frame,
+                    &sym.value,
+                    val_text,
+                    sym,
+                    dpos,
+                    transform,
+                    value_color,
+                );
             }
         } else if sym.is_power {
             // Built-in Altium-style power symbol rendering (no lib_symbol needed)
@@ -727,10 +749,8 @@ fn draw_builtin_power(
         // Diagonal hatch lines below bar
         for i in 0..3 {
             let x_off = -hw + (i as f64 + 0.5) * (bar_w / 3.0);
-            let (hx1, hy1) = instance_transform(
-                sym,
-                &signex_types::schematic::Point::new(x_off, base_y),
-            );
+            let (hx1, hy1) =
+                instance_transform(sym, &signex_types::schematic::Point::new(x_off, base_y));
             let (hx2, hy2) = instance_transform(
                 sym,
                 &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8 * dir),
@@ -798,10 +818,8 @@ fn draw_builtin_power(
         let bar_w = 2.54;
         let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
-        let (lx, ly) =
-            instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
-        let (rx, ry) =
-            instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
         frame.stroke(
             &canvas::Path::line(
                 transform.to_screen_point(lx, ly),
@@ -852,10 +870,7 @@ fn draw_builtin_power(
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
     let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font >= 1.0 {
-        let (tx, ty) = instance_transform(
-            sym,
-            &signex_types::schematic::Point::new(0.0, label_y),
-        );
+        let (tx, ty) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, label_y));
         let sp = transform.to_screen_point(tx, ty);
         // Altium convention: the power-port label text is always drawn
         // upright regardless of symbol rotation. Only the label's POSITION

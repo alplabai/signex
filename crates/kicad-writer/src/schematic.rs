@@ -470,7 +470,11 @@ fn write_symbol_instances(out: &mut String, instances: &[SymbolInstance]) {
         sorted_instances.sort_by(|left, right| left.path.cmp(&right.path));
         for instance in sorted_instances {
             wln!(out, "        (path \"{}\"", escape(&instance.path));
-            wln!(out, "          (reference \"{}\")", escape(&instance.reference));
+            wln!(
+                out,
+                "          (reference \"{}\")",
+                escape(&instance.reference)
+            );
             wln!(out, "          (unit {})", instance.unit);
             wln!(out, "        )");
         }
@@ -834,8 +838,16 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     }
 
     let base_name = lib.id.split(':').next_back().unwrap_or(&lib.id);
-    let reference = if lib.reference.is_empty() { "U" } else { &lib.reference };
-    let value = if lib.value.is_empty() { base_name } else { &lib.value };
+    let reference = if lib.reference.is_empty() {
+        "U"
+    } else {
+        &lib.reference
+    };
+    let value = if lib.value.is_empty() {
+        base_name
+    } else {
+        &lib.value
+    };
     write_lib_symbol_property(out, "Reference", reference, 0);
     write_lib_symbol_property(out, "Value", value, 1);
     write_lib_symbol_property(out, "Footprint", &lib.footprint, 2);
@@ -1107,7 +1119,10 @@ mod tests {
 
     #[test]
     fn writes_not_connected_pins_as_no_connect() {
-        assert_eq!(pin_electrical_str(PinElectricalType::NotConnected), "no_connect");
+        assert_eq!(
+            pin_electrical_str(PinElectricalType::NotConnected),
+            "no_connect"
+        );
     }
 
     #[test]
@@ -1189,7 +1204,9 @@ mod tests {
             exclude_from_sim: false,
             locked: false,
             fields: std::collections::HashMap::new(),
-            pin_uuids: [("1".to_string(), Default::default())].into_iter().collect(),
+            pin_uuids: [("1".to_string(), Default::default())]
+                .into_iter()
+                .collect(),
             instances: vec![SymbolInstance {
                 project: "GateMagic".to_string(),
                 path: "/root".to_string(),

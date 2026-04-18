@@ -19,24 +19,25 @@ impl Signex {
             ActiveBarAction::DrawWire => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)))
             }
-            ActiveBarAction::DrawBus => self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus))),
+            ActiveBarAction::DrawBus => {
+                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bus)))
+            }
             ActiveBarAction::PlaceNetLabel => {
                 // Switch to the Label tool, clear any pending port state
                 // (so this is a plain Net label not a Global/Hier port),
                 // and arm a ghost preview that follows the cursor.
                 self.interaction_state.current_tool = Tool::Label;
                 self.interaction_state.pending_port = None;
-                self.interaction_state.canvas.ghost_label =
-                    Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "NET".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: 1.8,
-                        justify: signex_types::schematic::HAlign::Left,
-                    });
+                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                    uuid: uuid::Uuid::new_v4(),
+                    text: "NET".to_string(),
+                    position: signex_types::schematic::Point::new(0.0, 0.0),
+                    rotation: 0.0,
+                    label_type: signex_types::schematic::LabelType::Net,
+                    shape: String::new(),
+                    font_size: 1.8,
+                    justify: signex_types::schematic::HAlign::Left,
+                });
                 Task::none()
             }
             ActiveBarAction::PlaceComponent => {
@@ -45,7 +46,9 @@ impl Signex {
             ActiveBarAction::PlaceTextString => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)))
             }
-            ActiveBarAction::DrawLine => self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line))),
+            ActiveBarAction::DrawLine => {
+                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)))
+            }
             ActiveBarAction::DrawRectangle => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)))
             }

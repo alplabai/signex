@@ -97,7 +97,9 @@ impl canvas::Program<Message> for PcbCanvas {
 
         if let Some(target) = state.pending_fit.take() {
             state.camera.fit_rect(target, bounds);
-            return Some(canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved)));
+            return Some(canvas::Action::publish(Message::CanvasEvent(
+                CanvasEvent::CursorMoved,
+            )));
         }
 
         match event {
@@ -130,8 +132,12 @@ impl canvas::Program<Message> for PcbCanvas {
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
-                    if state.panning && let Some(last_pan_pos) = state.last_pan_pos {
-                        state.camera.pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
+                    if state.panning
+                        && let Some(last_pan_pos) = state.last_pan_pos
+                    {
+                        state
+                            .camera
+                            .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
                         state.last_pan_pos = Some(cursor_pos);
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
@@ -140,11 +146,13 @@ impl canvas::Program<Message> for PcbCanvas {
                     }
 
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
-                    return Some(canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorAt {
-                        x: world.x,
-                        y: world.y,
-                        zoom_pct: state.camera.zoom_percent(),
-                    })));
+                    return Some(canvas::Action::publish(Message::CanvasEvent(
+                        CanvasEvent::CursorAt {
+                            x: world.x,
+                            y: world.y,
+                            zoom_pct: state.camera.zoom_percent(),
+                        },
+                    )));
                 }
             }
             _ => {}
@@ -175,7 +183,10 @@ impl canvas::Program<Message> for PcbCanvas {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(Color { a: 0.18, ..self.theme_grid })
+                            .with_color(Color {
+                                a: 0.18,
+                                ..self.theme_grid
+                            })
                             .with_width(0.5),
                     );
                     x += step;
@@ -190,7 +201,10 @@ impl canvas::Program<Message> for PcbCanvas {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(Color { a: 0.18, ..self.theme_grid })
+                            .with_color(Color {
+                                a: 0.18,
+                                ..self.theme_grid
+                            })
                             .with_width(0.5),
                     );
                     y += step;

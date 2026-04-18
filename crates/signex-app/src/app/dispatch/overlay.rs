@@ -57,15 +57,27 @@ impl Signex {
                     ContextAction::Copy => self.dispatch_document_message(Message::Copy),
                     ContextAction::Cut => self.dispatch_document_message(Message::Cut),
                     ContextAction::Paste => self.dispatch_document_message(Message::Paste),
-                    ContextAction::SmartPaste => self.dispatch_document_message(Message::SmartPaste),
-                    ContextAction::Delete => self.dispatch_document_message(Message::DeleteSelected),
+                    ContextAction::SmartPaste => {
+                        self.dispatch_document_message(Message::SmartPaste)
+                    }
+                    ContextAction::Delete => {
+                        self.dispatch_document_message(Message::DeleteSelected)
+                    }
                     ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
                         selection_request::SelectionRequest::SelectAll,
                     )),
-                    ContextAction::ZoomFit => self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll)),
-                    ContextAction::RotateSelected => self.dispatch_document_message(Message::RotateSelected),
-                    ContextAction::MirrorX => self.dispatch_document_message(Message::MirrorSelectedY),
-                    ContextAction::MirrorY => self.dispatch_document_message(Message::MirrorSelectedX),
+                    ContextAction::ZoomFit => {
+                        self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll))
+                    }
+                    ContextAction::RotateSelected => {
+                        self.dispatch_document_message(Message::RotateSelected)
+                    }
+                    ContextAction::MirrorX => {
+                        self.dispatch_document_message(Message::MirrorSelectedY)
+                    }
+                    ContextAction::MirrorY => {
+                        self.dispatch_document_message(Message::MirrorSelectedX)
+                    }
                 }
             }
             _ => unreachable!("dispatch_overlay_message received non-overlay message"),

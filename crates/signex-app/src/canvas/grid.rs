@@ -83,7 +83,6 @@ pub fn draw_grid(
     page_h: f32,
 ) {
     // Page bounds provided by caller so the grid follows the active paper size.
-    let grid_mm = grid_mm;
     let grid_screen = grid_mm * camera.scale;
 
     // Don't draw grid if dots would be too dense (< 4px apart)
@@ -189,10 +188,8 @@ pub fn draw_grid(
         while mx <= wx_max {
             let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
             if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
-                let line = canvas::Path::line(
-                    Point::new(sx, line_y_top),
-                    Point::new(sx, line_y_bot),
-                );
+                let line =
+                    canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
                 frame.stroke(&line, stroke);
             }
             mx += major_mm;
@@ -203,10 +200,8 @@ pub fn draw_grid(
         while my <= wy_max {
             let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
             if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
-                let line = canvas::Path::line(
-                    Point::new(line_x_left, sy),
-                    Point::new(line_x_right, sy),
-                );
+                let line =
+                    canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
                 frame.stroke(&line, stroke);
             }
             my += major_mm;

@@ -116,6 +116,7 @@ pub struct SheetInfo {
     pub name: String,
     pub filename: String,
     pub sym_count: usize,
+    #[allow(dead_code)]
     pub wire_count: usize,
     #[allow(dead_code)]
     pub label_count: usize,
@@ -222,19 +223,14 @@ pub struct PanelContext {
 }
 
 /// Sheet background colour presets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SheetColor {
+    #[default]
     Black,
     White,
     DarkGray,
     LightGray,
     Cream,
-}
-
-impl Default for SheetColor {
-    fn default() -> Self {
-        Self::Black
-    }
 }
 
 impl SheetColor {
@@ -269,30 +265,20 @@ impl std::fmt::Display for SheetColor {
 }
 
 /// Altium-style page formatting mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PageFormatMode {
     Template,
+    #[default]
     Standard,
     Custom,
 }
 
-impl Default for PageFormatMode {
-    fn default() -> Self {
-        Self::Standard
-    }
-}
-
 /// Altium-style page coordinate origin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PageOrigin {
     UpperLeft,
+    #[default]
     LowerLeft,
-}
-
-impl Default for PageOrigin {
-    fn default() -> Self {
-        Self::LowerLeft
-    }
 }
 
 impl std::fmt::Display for PageOrigin {
@@ -306,9 +292,7 @@ impl std::fmt::Display for PageOrigin {
 
 /// Supported paper sizes (Altium-compatible subset).
 pub const PAPER_SIZES: &[&str] = &[
-    "A0", "A1", "A2", "A3", "A4", "A5",
-    "B5",
-    "Letter", "Legal", "Tabloid",
+    "A0", "A1", "A2", "A3", "A4", "A5", "B5", "Letter", "Legal", "Tabloid",
 ];
 
 /// (width_mm, height_mm) for a paper size string.
@@ -377,6 +361,7 @@ pub enum PrePlacementKind {
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
@@ -583,9 +568,7 @@ fn collapsible_section<'a>(
         .on_press(PanelMsg::ToggleSection(key_owned))
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    Some(iced::Background::Color(border_c))
-                }
+                iced::widget::button::Status::Hovered => Some(iced::Background::Color(border_c)),
                 _ => None,
             };
             iced::widget::button::Style {
@@ -678,9 +661,10 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     } else {
         ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
-    let lib_children = vec![
-        TreeNode::leaf(format!("{} symbols loaded", lib_count), TreeIcon::Component),
-    ];
+    let lib_children = vec![TreeNode::leaf(
+        format!("{} symbols loaded", lib_count),
+        TreeIcon::Component,
+    )];
 
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
     settings.expanded = false;
@@ -898,8 +882,16 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .find(|entry| entry.lib_id == *comp_id)
             .map(|entry| entry.pin_count)
             .unwrap_or(0);
-        detail_col = detail_col.push(form_input_row("Symbol", comp_name, muted, input_bg, input_bdr));
-        detail_col = detail_col.push(form_input_row("Pins", &pin_count.to_string(), muted, input_bg, input_bdr));
+        detail_col = detail_col.push(form_input_row(
+            "Symbol", comp_name, muted, input_bg, input_bdr,
+        ));
+        detail_col = detail_col.push(form_input_row(
+            "Pins",
+            &pin_count.to_string(),
+            muted,
+            input_bg,
+            input_bdr,
+        ));
         detail_col = detail_col.push(form_input_row(
             "Library",
             selected_entry
@@ -1124,8 +1116,24 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         container(
             row![
-                props_tab_btn("General", tab == 0, PanelMsg::PropertiesTab(0), primary, text_inactive, tab_hover, border_c),
-                props_tab_btn("Parameters", tab == 1, PanelMsg::PropertiesTab(1), primary, text_inactive, tab_hover, border_c),
+                props_tab_btn(
+                    "General",
+                    tab == 0,
+                    PanelMsg::PropertiesTab(0),
+                    primary,
+                    text_inactive,
+                    tab_hover,
+                    border_c
+                ),
+                props_tab_btn(
+                    "Parameters",
+                    tab == 1,
+                    PanelMsg::PropertiesTab(1),
+                    primary,
+                    text_inactive,
+                    tab_hover,
+                    border_c
+                ),
             ]
             .spacing(2.0),
         )
@@ -1138,7 +1146,9 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(view_properties_general(ctx, muted, primary, border_c));
     } else {
         col = col.push(view_properties_parameters(
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
             crate::styles::ti(ctx.tokens.selection),
             crate::styles::ti(ctx.tokens.accent),
             crate::styles::ti(ctx.tokens.hover),
@@ -1165,7 +1175,7 @@ fn view_selected_element_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let input_bg  = crate::styles::ti(ctx.tokens.selection);
+    let input_bg = crate::styles::ti(ctx.tokens.selection);
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
@@ -1212,17 +1222,34 @@ fn view_selected_element_properties<'a>(
         // Pick a Style token by looking inside the lib_id (same logic the
         // built-in power renderer uses).
         let lid = lib_id.to_lowercase();
-        let current_style = if lid.contains("gnd") && !lid.contains("earth") && !lid.contains("gndref") { "Power Ground" }
-            else if lid.contains("gndref") { "Signal Ground" }
-            else if lid.contains("earth") { "Earth" }
-            else if lid.contains("arrow") { "Arrow" }
-            else if lid.contains("wave") { "Wave" }
-            else if lid.contains("circle") { "Circle" }
-            else if lid.contains("bar") { "Bar" }
-            else { "Bar" };
+        let current_style =
+            if lid.contains("gnd") && !lid.contains("earth") && !lid.contains("gndref") {
+                "Power Ground"
+            } else if lid.contains("gndref") {
+                "Signal Ground"
+            } else if lid.contains("earth") {
+                "Earth"
+            } else if lid.contains("arrow") {
+                "Arrow"
+            } else if lid.contains("wave") {
+                "Wave"
+            } else if lid.contains("circle") {
+                "Circle"
+            } else {
+                "Bar"
+            };
         let style_options: Vec<String> = [
-            "Bar", "Arrow", "Wave", "Circle", "Power Ground", "Signal Ground", "Earth",
-        ].iter().map(|s| (*s).to_string()).collect();
+            "Bar",
+            "Arrow",
+            "Wave",
+            "Circle",
+            "Power Ground",
+            "Signal Ground",
+            "Earth",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
 
         // ── Location ──
         let pos_loc = position.clone();
@@ -1235,7 +1262,9 @@ fn view_selected_element_properties<'a>(
             border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row("(X/Y)", &pos_loc, muted, input_bg, input_bdr));
+                c = c.push(form_input_row(
+                    "(X/Y)", &pos_loc, muted, input_bg, input_bdr,
+                ));
                 let rotation_opts: Vec<String> = vec![
                     "0 Degrees".into(),
                     "90 Degrees".into(),
@@ -1248,8 +1277,11 @@ fn view_selected_element_properties<'a>(
                     rotation_opts,
                     rot_label,
                     move |s| {
-                        let deg = s.split_whitespace().next()
-                            .and_then(|n| n.parse::<f64>().ok()).unwrap_or(0.0);
+                        let deg = s
+                            .split_whitespace()
+                            .next()
+                            .and_then(|n| n.parse::<f64>().ok())
+                            .unwrap_or(0.0);
                         PanelMsg::EditSymbolRotation(id, deg)
                     },
                     muted,
@@ -1269,8 +1301,9 @@ fn view_selected_element_properties<'a>(
             border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row("Name", &name_val, muted,
-                    move |s| PanelMsg::EditSymbolValue(id, s)));
+                c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
+                    PanelMsg::EditSymbolValue(id, s)
+                }));
                 let base_lib = base_lib.clone();
                 let current_rot = rot_current;
                 c = c.push(form_pick_row(
@@ -1340,11 +1373,10 @@ fn view_selected_element_properties<'a>(
                     |_| PanelMsg::Noop,
                     muted,
                 ));
-                let size_opts: Vec<String> =
-                    [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                        .iter()
-                        .map(|n| n.to_string())
-                        .collect();
+                let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect();
                 c = c.push(form_pick_row(
                     "Size",
                     size_opts,
@@ -1370,10 +1402,32 @@ fn view_selected_element_properties<'a>(
             border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row("Physical Name", &phys_name, muted, input_bg, input_bdr));
-                c = c.push(form_input_row("Net Name", &phys_name, muted, input_bg, input_bdr));
-                c = c.push(net_numeric_row("Power Net", "0.000", "V", muted, input_bg, input_bdr));
-                c = c.push(net_numeric_row("High Speed", "0.000", "Hz", muted, input_bg, input_bdr));
+                c = c.push(form_input_row(
+                    "Physical Name",
+                    &phys_name,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                ));
+                c = c.push(form_input_row(
+                    "Net Name", &phys_name, muted, input_bg, input_bdr,
+                ));
+                c = c.push(net_numeric_row(
+                    "Power Net",
+                    "0.000",
+                    "V",
+                    muted,
+                    input_bg,
+                    input_bdr,
+                ));
+                c = c.push(net_numeric_row(
+                    "High Speed",
+                    "0.000",
+                    "Hz",
+                    muted,
+                    input_bg,
+                    input_bdr,
+                ));
                 let dp_opts: Vec<String> = vec!["None".into()];
                 c = c.push(form_pick_row(
                     "Differential Pair",
@@ -1418,8 +1472,14 @@ fn view_selected_element_properties<'a>(
             let rotation = get("Rotation");
             let locked = get("Locked") == "Yes";
             let dnp = get("DNP") == "Yes";
-            let has_mirror_x = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "X");
-            let has_mirror_y = ctx.selection_info.iter().any(|(k, v)| k == "Mirror" && v == "Y");
+            let has_mirror_x = ctx
+                .selection_info
+                .iter()
+                .any(|(k, v)| k == "Mirror" && v == "X");
+            let has_mirror_y = ctx
+                .selection_info
+                .iter()
+                .any(|(k, v)| k == "Mirror" && v == "Y");
 
             if let Some(id) = uuid {
                 // General section — editable
@@ -1431,13 +1491,22 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Designator", &reference, muted,
-                            move |s| PanelMsg::EditSymbolDesignator(id, s)));
-                        c = c.push(form_edit_row("Value", &value, muted,
-                            move |s| PanelMsg::EditSymbolValue(id, s)));
-                        c = c.push(form_edit_row("Footprint", &footprint, muted,
-                            move |s| PanelMsg::EditSymbolFootprint(id, s)));
-                        c = c.push(form_input_row("Library ID", &lib_id, muted, input_bg, input_bdr));
+                        c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
+                            PanelMsg::EditSymbolDesignator(id, s)
+                        }));
+                        c = c.push(form_edit_row("Value", &value, muted, move |s| {
+                            PanelMsg::EditSymbolValue(id, s)
+                        }));
+                        c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
+                            PanelMsg::EditSymbolFootprint(id, s)
+                        }));
+                        c = c.push(form_input_row(
+                            "Library ID",
+                            &lib_id,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
                         c
                     },
                 ));
@@ -1451,8 +1520,12 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row(
+                            "Position", &position, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Rotation", &rotation, muted, input_bg, input_bdr,
+                        ));
                         c
                     },
                 ));
@@ -1466,14 +1539,30 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_check_row("Mirror X", has_mirror_x,
-                            PanelMsg::ToggleSymbolMirrorX(id), muted));
-                        c = c.push(form_check_row("Mirror Y", has_mirror_y,
-                            PanelMsg::ToggleSymbolMirrorY(id), muted));
-                        c = c.push(form_check_row("Locked", locked,
-                            PanelMsg::ToggleSymbolLocked(id), muted));
-                        c = c.push(form_check_row("DNP", dnp,
-                            PanelMsg::ToggleSymbolDnp(id), muted));
+                        c = c.push(form_check_row(
+                            "Mirror X",
+                            has_mirror_x,
+                            PanelMsg::ToggleSymbolMirrorX(id),
+                            muted,
+                        ));
+                        c = c.push(form_check_row(
+                            "Mirror Y",
+                            has_mirror_y,
+                            PanelMsg::ToggleSymbolMirrorY(id),
+                            muted,
+                        ));
+                        c = c.push(form_check_row(
+                            "Locked",
+                            locked,
+                            PanelMsg::ToggleSymbolLocked(id),
+                            muted,
+                        ));
+                        c = c.push(form_check_row(
+                            "DNP",
+                            dnp,
+                            PanelMsg::ToggleSymbolDnp(id),
+                            muted,
+                        ));
                         c
                     },
                 ));
@@ -1489,7 +1578,10 @@ fn view_selected_element_properties<'a>(
             let justify_v = get("Vertical Justification");
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
-            let is_reference = matches!(selected_kind, Some(signex_types::schematic::SelectedKind::SymbolRefField));
+            let is_reference = matches!(
+                selected_kind,
+                Some(signex_types::schematic::SelectedKind::SymbolRefField)
+            );
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
@@ -1500,15 +1592,30 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Field", if is_reference { "Reference" } else { "Value" }, muted, input_bg, input_bdr));
-                        c = c.push(form_edit_row("Text", &text_value, muted,
-                            move |s| if is_reference {
+                        c = c.push(form_input_row(
+                            "Field",
+                            if is_reference { "Reference" } else { "Value" },
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_edit_row("Text", &text_value, muted, move |s| {
+                            if is_reference {
                                 PanelMsg::EditSymbolDesignator(id, s)
                             } else {
                                 PanelMsg::EditSymbolValue(id, s)
-                            }));
-                        c = c.push(form_input_row("Visible", &visible, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Fields Autoplaced", &fields_autoplaced, muted, input_bg, input_bdr));
+                            }
+                        }));
+                        c = c.push(form_input_row(
+                            "Visible", &visible, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Fields Autoplaced",
+                            &fields_autoplaced,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
                         c
                     },
                 ));
@@ -1521,11 +1628,33 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Vertical Justification", &justify_v, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row(
+                            "Position", &position, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Rotation", &rotation, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Horizontal Justification",
+                            &justify_h,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Vertical Justification",
+                            &justify_v,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Text Size",
+                            &text_size,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
                         c
                     },
                 ));
@@ -1565,7 +1694,9 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("(X/Y)", &pos_clone, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row(
+                            "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
+                        ));
                         let rotation_opts: Vec<String> = vec![
                             "0 Degrees".into(),
                             "90 Degrees".into(),
@@ -1578,8 +1709,11 @@ fn view_selected_element_properties<'a>(
                             rotation_opts,
                             rot_label,
                             move |s| {
-                                let deg = s.split_whitespace().next()
-                                    .and_then(|n| n.parse::<f64>().ok()).unwrap_or(0.0);
+                                let deg = s
+                                    .split_whitespace()
+                                    .next()
+                                    .and_then(|n| n.parse::<f64>().ok())
+                                    .unwrap_or(0.0);
                                 PanelMsg::EditLabelRotation(id, deg)
                             },
                             muted,
@@ -1598,8 +1732,9 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Net Name", &net_name, muted,
-                            move |s| PanelMsg::EditLabelText(id, s)));
+                        c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
+                            PanelMsg::EditLabelText(id, s)
+                        }));
                         // Font family + size + color (color + family are cosmetic for now)
                         let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
                         let default_font = font_opts
@@ -1614,12 +1749,11 @@ fn view_selected_element_properties<'a>(
                             |_| PanelMsg::Noop,
                             muted,
                         ));
-                        let size_opts: Vec<String> = [
-                            6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72,
-                        ]
-                        .iter()
-                        .map(|n| n.to_string())
-                        .collect();
+                        let size_opts: Vec<String> =
+                            [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                                .iter()
+                                .map(|n| n.to_string())
+                                .collect();
                         c = c.push(form_pick_row(
                             "Font Size",
                             size_opts,
@@ -1635,9 +1769,9 @@ fn view_selected_element_properties<'a>(
                         // 3x3 Justification grid — Altium's 9-point anchor picker.
                         c = c.push(form_label("Justification", muted));
                         c = c.push(
-                            container(
-                                justification_grid(id, justify_h, input_bg, input_bdr, primary, muted),
-                            )
+                            container(justification_grid(
+                                id, justify_h, input_bg, input_bdr, primary, muted,
+                            ))
                             .padding([4, 8]),
                         );
                         c
@@ -1662,8 +1796,9 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Text", &note_text, muted,
-                            move |s| PanelMsg::EditTextNoteText(id, s)));
+                        c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
+                            PanelMsg::EditTextNoteText(id, s)
+                        }));
                         c
                     },
                 ));
@@ -1676,11 +1811,33 @@ fn view_selected_element_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row("Position", &position, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Rotation", &rotation, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Horizontal Justification", &justify_h, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Vertical Justification", &justify_v, muted, input_bg, input_bdr));
-                        c = c.push(form_input_row("Text Size", &text_size, muted, input_bg, input_bdr));
+                        c = c.push(form_input_row(
+                            "Position", &position, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Rotation", &rotation, muted, input_bg, input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Horizontal Justification",
+                            &justify_h,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Vertical Justification",
+                            &justify_v,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
+                        c = c.push(form_input_row(
+                            "Text Size",
+                            &text_size,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        ));
                         c
                     },
                 ));
@@ -1688,7 +1845,8 @@ fn view_selected_element_properties<'a>(
         }
         _ => {
             // Generic read-only properties for other types
-            let info: Vec<(String, String)> = ctx.selection_info
+            let info: Vec<(String, String)> = ctx
+                .selection_info
                 .iter()
                 .filter(|(k, _)| k != "Type")
                 .cloned()
@@ -1758,15 +1916,12 @@ fn view_pre_placement<'a>(
         .width(Length::Fill),
     );
 
-    col = col.push(
-        container(Space::new())
-            .height(1)
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            }),
-    );
+    col = col.push(container(Space::new()).height(1).width(Length::Fill).style(
+        move |_: &Theme| container::Style {
+            background: Some(Background::Color(border_c)),
+            ..container::Style::default()
+        },
+    ));
 
     // ── Location ──
     col = col.push(collapsible_section(
@@ -1777,7 +1932,9 @@ fn view_pre_placement<'a>(
         border_c,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg, input_bdr));
+            c = c.push(form_input_row(
+                "(X/Y)", &pos_str, muted, input_bg, input_bdr,
+            ));
             let rotation_opts: Vec<String> = vec![
                 "0 Degrees".into(),
                 "90 Degrees".into(),
@@ -1859,11 +2016,10 @@ fn view_pre_placement<'a>(
                         PanelMsg::SetPrePlacementFont,
                         muted,
                     ));
-                    let size_opts: Vec<String> =
-                        [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                            .iter()
-                            .map(|n| n.to_string())
-                            .collect();
+                    let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect();
                     c = c.push(form_pick_row(
                         "Font Size",
                         size_opts,
@@ -1906,13 +2062,18 @@ fn view_properties_general<'a>(
     border_c: Color,
 ) -> Column<'a, PanelMsg> {
     // Derive button/input colors from tokens (Copy values captured in closures)
-    let input_bg   = crate::styles::ti(ctx.tokens.selection); // deep blue tint
-    let input_bdr  = crate::styles::ti(ctx.tokens.accent);
-    let tag_hover  = {
+    let input_bg = crate::styles::ti(ctx.tokens.selection); // deep blue tint
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
+    let tag_hover = {
         let c = crate::styles::ti(ctx.tokens.accent);
-        Color { r: (c.r * 1.3).min(1.0), g: (c.g * 1.3).min(1.0), b: (c.b * 1.3).min(1.0), ..c }
+        Color {
+            r: (c.r * 1.3).min(1.0),
+            g: (c.g * 1.3).min(1.0),
+            b: (c.b * 1.3).min(1.0),
+            ..c
+        }
     };
-    let seg_hover  = crate::styles::ti(ctx.tokens.hover);
+    let seg_hover = crate::styles::ti(ctx.tokens.hover);
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
@@ -1947,14 +2108,22 @@ fn view_properties_general<'a>(
                 .style(move |_: &Theme, status: iced::widget::button::Status| {
                     let bg = match status {
                         iced::widget::button::Status::Hovered => Background::Color(tag_hover),
-                        _ => Background::Color(if all_on { all_active_bg } else { all_inactive_bg }),
+                        _ => Background::Color(if all_on {
+                            all_active_bg
+                        } else {
+                            all_inactive_bg
+                        }),
                     };
                     iced::widget::button::Style {
                         background: Some(bg),
                         border: Border {
                             width: 1.0,
                             radius: 12.0.into(),
-                            color: if all_on { all_active_border } else { all_inactive_border },
+                            color: if all_on {
+                                all_active_border
+                            } else {
+                                all_inactive_border
+                            },
                         },
                         text_color: if all_on { all_text_on } else { all_text_off },
                         ..iced::widget::button::Style::default()
@@ -1967,18 +2136,78 @@ fn view_properties_general<'a>(
                         Wrap::new()
                             .spacing(4.0)
                             .line_spacing(4.0)
-                            .push(tag_btn("Components", SelectionFilter::Components, filters.contains(&SelectionFilter::Components), tag_hover))
-                            .push(tag_btn("Wires", SelectionFilter::Wires, filters.contains(&SelectionFilter::Wires), tag_hover))
-                            .push(tag_btn("Buses", SelectionFilter::Buses, filters.contains(&SelectionFilter::Buses), tag_hover))
-                            .push(tag_btn("Sheet Symbols", SelectionFilter::SheetSymbols, filters.contains(&SelectionFilter::SheetSymbols), tag_hover))
-                            .push(tag_btn("Sheet Entries", SelectionFilter::SheetEntries, filters.contains(&SelectionFilter::SheetEntries), tag_hover))
-                            .push(tag_btn("Net Labels", SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels), tag_hover))
-                            .push(tag_btn("Parameters", SelectionFilter::Parameters, filters.contains(&SelectionFilter::Parameters), tag_hover))
-                            .push(tag_btn("Ports", SelectionFilter::Ports, filters.contains(&SelectionFilter::Ports), tag_hover))
-                            .push(tag_btn("Power Ports", SelectionFilter::PowerPorts, filters.contains(&SelectionFilter::PowerPorts), tag_hover))
-                            .push(tag_btn("Texts", SelectionFilter::Texts, filters.contains(&SelectionFilter::Texts), tag_hover))
-                            .push(tag_btn("Drawing Objects", SelectionFilter::DrawingObjects, filters.contains(&SelectionFilter::DrawingObjects), tag_hover))
-                            .push(tag_btn("Other", SelectionFilter::Other, filters.contains(&SelectionFilter::Other), tag_hover)),
+                            .push(tag_btn(
+                                "Components",
+                                SelectionFilter::Components,
+                                filters.contains(&SelectionFilter::Components),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Wires",
+                                SelectionFilter::Wires,
+                                filters.contains(&SelectionFilter::Wires),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Buses",
+                                SelectionFilter::Buses,
+                                filters.contains(&SelectionFilter::Buses),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Sheet Symbols",
+                                SelectionFilter::SheetSymbols,
+                                filters.contains(&SelectionFilter::SheetSymbols),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Sheet Entries",
+                                SelectionFilter::SheetEntries,
+                                filters.contains(&SelectionFilter::SheetEntries),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Net Labels",
+                                SelectionFilter::NetLabels,
+                                filters.contains(&SelectionFilter::NetLabels),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Parameters",
+                                SelectionFilter::Parameters,
+                                filters.contains(&SelectionFilter::Parameters),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Ports",
+                                SelectionFilter::Ports,
+                                filters.contains(&SelectionFilter::Ports),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Power Ports",
+                                SelectionFilter::PowerPorts,
+                                filters.contains(&SelectionFilter::PowerPorts),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Texts",
+                                SelectionFilter::Texts,
+                                filters.contains(&SelectionFilter::Texts),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Drawing Objects",
+                                SelectionFilter::DrawingObjects,
+                                filters.contains(&SelectionFilter::DrawingObjects),
+                                tag_hover,
+                            ))
+                            .push(tag_btn(
+                                "Other",
+                                SelectionFilter::Other,
+                                filters.contains(&SelectionFilter::Other),
+                                tag_hover,
+                            )),
                     )
                     .padding([6, 8]),
                 );
@@ -2013,8 +2242,26 @@ fn view_properties_general<'a>(
                 c = c.push(
                     container(
                         row![
-                            seg_btn("mm", unit == Unit::Mm, PanelMsg::SetUnit(Unit::Mm), input_bg, primary, muted, seg_hover, input_bdr),
-                            seg_btn("mils", unit == Unit::Mil, PanelMsg::SetUnit(Unit::Mil), input_bg, primary, muted, seg_hover, input_bdr),
+                            seg_btn(
+                                "mm",
+                                unit == Unit::Mm,
+                                PanelMsg::SetUnit(Unit::Mm),
+                                input_bg,
+                                primary,
+                                muted,
+                                seg_hover,
+                                input_bdr
+                            ),
+                            seg_btn(
+                                "mils",
+                                unit == Unit::Mil,
+                                PanelMsg::SetUnit(Unit::Mil),
+                                input_bg,
+                                primary,
+                                muted,
+                                seg_hover,
+                                input_bdr
+                            ),
                         ]
                         .spacing(0.0)
                         .width(Length::Fill),
@@ -2022,8 +2269,26 @@ fn view_properties_general<'a>(
                     .padding([2, 8]),
                 );
                 // Altium-style: Visible Grid and Snap Grid are independent
-                c = c.push(form_grid_row("Visible Grid", visible_grid_mm, unit, false, PanelMsg::SetVisibleGridSize, muted, grid_visible, PanelMsg::ToggleGrid));
-                c = c.push(form_grid_row("Snap Grid", grid_size_mm, unit, true, PanelMsg::SetGridSize, muted, snap_enabled, PanelMsg::ToggleSnap));
+                c = c.push(form_grid_row(
+                    "Visible Grid",
+                    visible_grid_mm,
+                    unit,
+                    false,
+                    PanelMsg::SetVisibleGridSize,
+                    muted,
+                    grid_visible,
+                    PanelMsg::ToggleGrid,
+                ));
+                c = c.push(form_grid_row(
+                    "Snap Grid",
+                    grid_size_mm,
+                    unit,
+                    true,
+                    PanelMsg::SetGridSize,
+                    muted,
+                    snap_enabled,
+                    PanelMsg::ToggleSnap,
+                ));
                 c = c.push(form_check_row_shortcut(
                     "Snap to Hotspots",
                     snap_hotspots,
@@ -2096,19 +2361,31 @@ fn view_properties_general<'a>(
                                 "Template",
                                 format_mode == PageFormatMode::Template,
                                 PanelMsg::SetPageFormatMode(PageFormatMode::Template),
-                                input_bg, primary, muted, seg_hover, input_bdr,
+                                input_bg,
+                                primary,
+                                muted,
+                                seg_hover,
+                                input_bdr,
                             ),
                             seg_btn(
                                 "Standard",
                                 format_mode == PageFormatMode::Standard,
                                 PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
-                                input_bg, primary, muted, seg_hover, input_bdr,
+                                input_bg,
+                                primary,
+                                muted,
+                                seg_hover,
+                                input_bdr,
                             ),
                             seg_btn(
                                 "Custom",
                                 format_mode == PageFormatMode::Custom,
                                 PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
-                                input_bg, primary, muted, seg_hover, input_bdr,
+                                input_bg,
+                                primary,
+                                muted,
+                                seg_hover,
+                                input_bdr,
                             ),
                         ]
                         .spacing(0.0)
@@ -2212,9 +2489,36 @@ fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                seg_btn("All", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
-                seg_btn("Parameters", true, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
-                seg_btn("Rules", false, PanelMsg::PropertiesTab(1), input_bg, primary, muted, seg_hover, input_bdr),
+                seg_btn(
+                    "All",
+                    false,
+                    PanelMsg::PropertiesTab(1),
+                    input_bg,
+                    primary,
+                    muted,
+                    seg_hover,
+                    input_bdr
+                ),
+                seg_btn(
+                    "Parameters",
+                    true,
+                    PanelMsg::PropertiesTab(1),
+                    input_bg,
+                    primary,
+                    muted,
+                    seg_hover,
+                    input_bdr
+                ),
+                seg_btn(
+                    "Rules",
+                    false,
+                    PanelMsg::PropertiesTab(1),
+                    input_bg,
+                    primary,
+                    muted,
+                    seg_hover,
+                    input_bdr
+                ),
             ]
             .spacing(0.0)
             .width(Length::Fill),
@@ -2607,20 +2911,16 @@ fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, Panel
                 .color(label_c)
                 .width(LABEL_W)
                 .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::pick_list(
-                GRID_SIZE_LABELS,
-                selected,
-                |lbl: &'static str| {
-                    // Map label back to mm value
-                    let mm = GRID_SIZES_MM
-                        .iter()
-                        .zip(GRID_SIZE_LABELS.iter())
-                        .find(|(_, l)| **l == lbl)
-                        .map(|(v, _)| *v)
-                        .unwrap_or(2.54);
-                    PanelMsg::SetGridSize(mm)
-                },
-            )
+            iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
+                // Map label back to mm value
+                let mm = GRID_SIZES_MM
+                    .iter()
+                    .zip(GRID_SIZE_LABELS.iter())
+                    .find(|(_, l)| **l == lbl)
+                    .map(|(v, _)| *v)
+                    .unwrap_or(2.54);
+                PanelMsg::SetGridSize(mm)
+            },)
             .text_size(11)
             .width(Length::Fill),
         ]
@@ -2635,6 +2935,7 @@ fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, Panel
 /// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
 /// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
 /// Labels and values are shown in the current `unit` (mm or mil).
+#[allow(clippy::too_many_arguments)]
 fn form_grid_row(
     label: &'static str,
     current_mm: f32,
@@ -2659,21 +2960,17 @@ fn form_grid_row(
         .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
         .map(|(_, lbl)| *lbl);
 
-    let pick = iced::widget::pick_list(
-        labels,
-        selected,
-        move |lbl: &'static str| {
-            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
-            let mm = GRID_SIZE_LABELS
-                .iter()
-                .chain(GRID_SIZE_LABELS_MIL.iter())
-                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-                .find(|(l, _)| **l == lbl)
-                .map(|(_, v)| *v)
-                .unwrap_or(2.54);
-            on_size(mm)
-        },
-    )
+    let pick = iced::widget::pick_list(labels, selected, move |lbl: &'static str| {
+        // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
+        let mm = GRID_SIZE_LABELS
+            .iter()
+            .chain(GRID_SIZE_LABELS_MIL.iter())
+            .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
+            .find(|(l, _)| **l == lbl)
+            .map(|(_, v)| *v)
+            .unwrap_or(2.54);
+        on_size(mm)
+    })
     .text_size(11)
     .width(Length::Fill);
 
@@ -2698,10 +2995,13 @@ fn form_grid_row(
         .into()
     } else {
         // Visible Grid row: no checkbox
-        row![label_widget, container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))]
-            .spacing(4)
-            .align_y(iced::Alignment::Center)
-            .into()
+        row![
+            label_widget,
+            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center)
+        .into()
     };
 
     container(content)
@@ -2776,10 +3076,7 @@ fn form_font_link_row<'a>(
             .padding([1, 0])
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
             .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let underline = match status {
-                    iced::widget::button::Status::Hovered => true,
-                    _ => false,
-                };
+                let underline = matches!(status, iced::widget::button::Status::Hovered);
                 iced::widget::button::Style {
                     background: None,
                     text_color: if underline {
@@ -2820,14 +3117,10 @@ fn canvas_font_popup<'a>(
     .text_size(11)
     .width(Length::Fill);
 
-    let size_input = NumberInput::new(
-        &current_size_px,
-        6.0..=36.0,
-        PanelMsg::SetCanvasFontSize,
-    )
-    .step(1.0)
-    .width(Length::Fill)
-    .padding(4);
+    let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)
+        .step(1.0)
+        .width(Length::Fill)
+        .padding(4);
 
     container(
         column![
@@ -2840,28 +3133,16 @@ fn canvas_font_popup<'a>(
             ]
             .align_y(iced::Alignment::Center),
             row![
-                text("Family")
-                    .size(10)
-                    .color(label_c)
-                    .width(56),
+                text("Family").size(10).color(label_c).width(56),
                 family_pick,
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
+            row![text("Size").size(10).color(label_c).width(56), size_input,]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
             row![
-                text("Size")
-                    .size(10)
-                    .color(label_c)
-                    .width(56),
-                size_input,
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Style")
-                    .size(10)
-                    .color(label_c)
-                    .width(56),
+                text("Style").size(10).color(label_c).width(56),
                 row![
                     iced::widget::checkbox(bold)
                         .on_toggle(PanelMsg::SetCanvasFontBold)
@@ -2904,6 +3185,7 @@ fn canvas_font_popup<'a>(
 }
 
 /// Form row: label | NumberInput (iced_aw) with step/bounds.
+#[allow(dead_code)]
 fn form_number_row<'a, T>(
     label: &str,
     value: T,
@@ -2980,7 +3262,7 @@ fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
 
 /// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
 fn font_style_row<'a>(
-    label_c: Color,
+    _label_c: Color,
     primary: Color,
     input_bg: Color,
     input_bdr: Color,
@@ -2990,7 +3272,10 @@ fn font_style_row<'a>(
             text(glyph.to_string())
                 .size(12)
                 .color(primary)
-                .font(iced::Font { weight: style, ..iced::Font::DEFAULT })
+                .font(iced::Font {
+                    weight: style,
+                    ..iced::Font::DEFAULT
+                })
                 .align_x(iced::alignment::Horizontal::Center),
         )
         .width(Length::Fill)
@@ -2999,8 +3284,16 @@ fn font_style_row<'a>(
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
             iced::widget::button::Style {
-                background: Some(Background::Color(if hovered { input_bdr } else { input_bg })),
-                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                background: Some(Background::Color(if hovered {
+                    input_bdr
+                } else {
+                    input_bg
+                })),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: input_bdr,
+                },
                 text_color: primary,
                 ..iced::widget::button::Style::default()
             }
@@ -3043,18 +3336,18 @@ fn net_numeric_row<'a>(
                 .on_toggle(|_| PanelMsg::Noop)
                 .size(12)
                 .spacing(4),
-            container(
-                text(value.to_string())
-                    .size(11)
-                    .color(label_c),
-            )
-            .padding([3, 6])
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(input_bg)),
-                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
-                ..container::Style::default()
-            }),
+            container(text(value.to_string()).size(11).color(label_c),)
+                .padding([3, 6])
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(input_bg)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: input_bdr
+                    },
+                    ..container::Style::default()
+                }),
             text(unit.to_string()).size(10).color(label_c),
         ]
         .spacing(6.0)
@@ -3094,7 +3387,11 @@ fn net_params_tabs<'a>(
                 } else {
                     input_bg
                 })),
-                border: Border { width: 1.0, radius: 3.0.into(), color: input_bdr },
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: input_bdr,
+                },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
@@ -3120,26 +3417,32 @@ fn net_params_tabs<'a>(
 fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
     container(
         row![
-            text("Name".to_string()).size(10).color(label_c).width(Length::FillPortion(2)),
-            text("Value".to_string()).size(10).color(label_c).width(Length::FillPortion(3)),
+            text("Name".to_string())
+                .size(10)
+                .color(label_c)
+                .width(Length::FillPortion(2)),
+            text("Value".to_string())
+                .size(10)
+                .color(label_c)
+                .width(Length::FillPortion(3)),
         ]
         .spacing(4.0),
     )
     .padding([4, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .style(move |_: &Theme| container::Style {
-        border: Border { width: 1.0, radius: 0.0.into(), color: border_c },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border_c,
+        },
         ..container::Style::default()
     })
     .into()
 }
 
 /// Empty-state row — centered muted text spanning the whole row.
-fn empty_section_row<'a>(
-    label: &str,
-    label_c: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
+fn empty_section_row<'a>(label: &str, label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
     container(
         container(text(label.to_string()).size(10).color(label_c))
             .width(Length::Fill)
@@ -3148,7 +3451,11 @@ fn empty_section_row<'a>(
     .padding([6, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .style(move |_: &Theme| container::Style {
-        border: Border { width: 1.0, radius: 0.0.into(), color: border_c },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border_c,
+        },
         ..container::Style::default()
     })
     .into()
@@ -3161,31 +3468,41 @@ fn net_params_add_bar<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(
-            text(label.to_string()).size(11).color(label_c),
-        )
-        .padding([4, 8])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(Background::Color(input_bg)),
-            border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
-            text_color: label_c,
-            ..iced::widget::button::Style::default()
-        })
-        .into()
+        iced::widget::button(text(label.to_string()).size(11).color(label_c))
+            .padding([4, 8])
+            .on_press(PanelMsg::Noop)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(input_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: input_bdr,
+                },
+                text_color: label_c,
+                ..iced::widget::button::Style::default()
+            })
+            .into()
     };
     container(
         row![
             Space::new().width(Length::Fill),
-            iced::widget::button(text("Add \u{25BE}".to_string()).size(11).color(Color::WHITE))
-                .padding([4, 12])
-                .on_press(PanelMsg::Noop)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(Background::Color(input_bdr)),
-                    border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
-                    text_color: Color::WHITE,
-                    ..iced::widget::button::Style::default()
-                }),
+            iced::widget::button(
+                text("Add \u{25BE}".to_string())
+                    .size(11)
+                    .color(Color::WHITE)
+            )
+            .padding([4, 12])
+            .on_press(PanelMsg::Noop)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(input_bdr)),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: input_bdr
+                },
+                text_color: Color::WHITE,
+                ..iced::widget::button::Style::default()
+            }),
             icon_btn("\u{270E}"),
             icon_btn("\u{1F5D1}"),
         ]
@@ -3208,33 +3525,43 @@ fn justification_grid(
     primary: Color,
     muted: Color,
 ) -> Element<'static, PanelMsg> {
-    use std::sync::LazyLock;
     use signex_types::schematic::HAlign;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg")));
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg")));
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg")));
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg")));
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg")));
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg")));
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg")));
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg")));
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg")));
+    use std::sync::LazyLock;
+    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
+    });
+    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
+    });
+    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
+    });
+    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
+    });
+    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
+    });
+    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
+    });
+    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
+    });
+    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
+    });
+    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
+    });
     let _ = muted;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;
     let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
                 active: bool,
-                on_press: PanelMsg| -> Element<'static, PanelMsg> {
+                on_press: PanelMsg|
+     -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
@@ -3256,10 +3583,20 @@ fn justification_grid(
         .on_press(on_press)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let bg = if active { bg_active } else if hovered { input_bdr } else { input_bg };
+            let bg = if active {
+                bg_active
+            } else if hovered {
+                input_bdr
+            } else {
+                input_bg
+            };
             iced::widget::button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: input_bdr,
+                },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
@@ -3272,20 +3609,59 @@ fn justification_grid(
     let hl_mid = |target: HAlign| -> bool { h == target };
     iced::widget::column![
         iced::widget::row![
-            cell(&ICON_TL, false, PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
-            cell(&ICON_T,  false, PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
-            cell(&ICON_TR, false, PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_TL,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
+            ),
+            cell(
+                &ICON_T,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
+            ),
+            cell(
+                &ICON_TR,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
+            ),
+        ]
+        .spacing(2),
         iced::widget::row![
-            cell(&ICON_L,  hl_mid(HAlign::Left),   PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
-            cell(&ICON_C,  hl_mid(HAlign::Center), PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
-            cell(&ICON_R,  hl_mid(HAlign::Right),  PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_L,
+                hl_mid(HAlign::Left),
+                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
+            ),
+            cell(
+                &ICON_C,
+                hl_mid(HAlign::Center),
+                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
+            ),
+            cell(
+                &ICON_R,
+                hl_mid(HAlign::Right),
+                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
+            ),
+        ]
+        .spacing(2),
         iced::widget::row![
-            cell(&ICON_BL, false, PanelMsg::EditLabelJustifyH(id, HAlign::Left)),
-            cell(&ICON_B,  false, PanelMsg::EditLabelJustifyH(id, HAlign::Center)),
-            cell(&ICON_BR, false, PanelMsg::EditLabelJustifyH(id, HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_BL,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
+            ),
+            cell(
+                &ICON_B,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
+            ),
+            cell(
+                &ICON_BR,
+                false,
+                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
+            ),
+        ]
+        .spacing(2),
     ]
     .spacing(2)
     .into()
@@ -3301,32 +3677,42 @@ fn preplacement_justification_grid(
     primary: Color,
     muted: Color,
 ) -> Element<'static, PanelMsg> {
-    use std::sync::LazyLock;
     use signex_types::schematic::HAlign;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg")));
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg")));
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg")));
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg")));
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg")));
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg")));
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg")));
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg")));
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(||
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg")));
+    use std::sync::LazyLock;
+    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
+    });
+    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
+    });
+    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
+    });
+    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
+    });
+    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
+    });
+    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
+    });
+    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
+    });
+    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
+    });
+    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
+        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
+    });
     let _ = muted;
 
     const CELL_SIZE: f32 = 24.0;
     let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
                 active: bool,
-                on_press: PanelMsg| -> Element<'static, PanelMsg> {
+                on_press: PanelMsg|
+     -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
@@ -3348,10 +3734,20 @@ fn preplacement_justification_grid(
         .on_press(on_press)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let bg = if active { bg_active } else if hovered { input_bdr } else { input_bg };
+            let bg = if active {
+                bg_active
+            } else if hovered {
+                input_bdr
+            } else {
+                input_bg
+            };
             iced::widget::button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { width: 1.0, radius: 2.0.into(), color: input_bdr },
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: input_bdr,
+                },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
@@ -3361,20 +3757,59 @@ fn preplacement_justification_grid(
     let hl_mid = |target: HAlign| -> bool { h == target };
     iced::widget::column![
         iced::widget::row![
-            cell(&ICON_TL, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
-            cell(&ICON_T,  false, PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
-            cell(&ICON_TR, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_TL,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
+            ),
+            cell(
+                &ICON_T,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
+            ),
+            cell(
+                &ICON_TR,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
+            ),
+        ]
+        .spacing(2),
         iced::widget::row![
-            cell(&ICON_L,  hl_mid(HAlign::Left),   PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
-            cell(&ICON_C,  hl_mid(HAlign::Center), PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
-            cell(&ICON_R,  hl_mid(HAlign::Right),  PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_L,
+                hl_mid(HAlign::Left),
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
+            ),
+            cell(
+                &ICON_C,
+                hl_mid(HAlign::Center),
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
+            ),
+            cell(
+                &ICON_R,
+                hl_mid(HAlign::Right),
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
+            ),
+        ]
+        .spacing(2),
         iced::widget::row![
-            cell(&ICON_BL, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Left)),
-            cell(&ICON_B,  false, PanelMsg::SetPrePlacementJustifyH(HAlign::Center)),
-            cell(&ICON_BR, false, PanelMsg::SetPrePlacementJustifyH(HAlign::Right)),
-        ].spacing(2),
+            cell(
+                &ICON_BL,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
+            ),
+            cell(
+                &ICON_B,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
+            ),
+            cell(
+                &ICON_BR,
+                false,
+                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
+            ),
+        ]
+        .spacing(2),
     ]
     .spacing(2)
     .into()
@@ -3411,7 +3846,11 @@ fn tag_btn(
             border: Border {
                 width: 1.0,
                 radius: 12.0.into(),
-                color: if enabled { active_border } else { inactive_border },
+                color: if enabled {
+                    active_border
+                } else {
+                    inactive_border
+                },
             },
             text_color: if enabled { text_on } else { text_off },
             ..iced::widget::button::Style::default()
@@ -3421,6 +3860,7 @@ fn tag_btn(
 }
 
 /// Segmented button (for units toggle etc).
+#[allow(clippy::too_many_arguments)]
 fn seg_btn<'a>(
     label: &str,
     active: bool,
@@ -3431,7 +3871,11 @@ fn seg_btn<'a>(
     hover_bg: Color,
     seg_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let bg = if active { active_bg } else { Color::TRANSPARENT };
+    let bg = if active {
+        active_bg
+    } else {
+        Color::TRANSPARENT
+    };
     let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(
         text(label.to_string())
@@ -3491,9 +3935,7 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     } else {
         for entry in ctx.diagnostics.iter().rev() {
             let level_color = match entry.level {
-                crate::diagnostics::DiagnosticLevel::Error => {
-                    theme_ext::error_color(&ctx.tokens)
-                }
+                crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
                 crate::diagnostics::DiagnosticLevel::Warning => {
                     theme_ext::warning_color(&ctx.tokens)
                 }
@@ -3512,9 +3954,7 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                                 .size(9)
                                 .color(theme_ext::text_secondary(&ctx.tokens)),
                             Space::new().width(6).height(Length::Shrink),
-                            text(entry.level.label())
-                                .size(9)
-                                .color(level_color),
+                            text(entry.level.label()).size(9).color(level_color),
                             Space::new().width(6).height(Length::Shrink),
                             text(entry.code.as_str())
                                 .size(9)
