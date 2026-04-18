@@ -3,7 +3,10 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_find_replace_open_requested(&mut self, replace_mode: bool) -> Task<Message> {
+    pub(crate) fn handle_find_replace_open_requested(
+        &mut self,
+        replace_mode: bool,
+    ) -> Task<Message> {
         self.ui_state.find_replace.open = true;
         self.ui_state.find_replace.replace_mode = replace_mode;
         self.interaction_state.context_menu = None;
@@ -138,7 +141,8 @@ impl Signex {
         }
 
         self.ui_state.find_replace.matches = matches;
-        self.ui_state.find_replace.selected_index = if self.ui_state.find_replace.matches.is_empty() {
+        self.ui_state.find_replace.selected_index = if self.ui_state.find_replace.matches.is_empty()
+        {
             None
         } else {
             Some(

@@ -3,8 +3,16 @@ use crate::dock::{DockMessage, PanelPosition};
 use super::super::super::*;
 
 impl Signex {
-    pub(super) fn handle_dock_floating_layout_message(&mut self, dock_message: &DockMessage) -> bool {
+    pub(super) fn handle_dock_floating_layout_message(
+        &mut self,
+        dock_message: &DockMessage,
+    ) -> bool {
         match dock_message {
+            DockMessage::TabDragStart(..) => {
+                self.interaction_state.tab_drag_origin =
+                    Some(self.interaction_state.last_mouse_pos);
+                false
+            }
             DockMessage::FloatingDragEnd(index) => {
                 let index = *index;
                 if let Some(panel) = self.document_state.dock.floating.get(index) {

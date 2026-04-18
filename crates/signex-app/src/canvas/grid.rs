@@ -79,12 +79,10 @@ pub fn draw_grid(
     grid_mm: f32,
     bounds: iced::Rectangle,
     color: Color,
+    page_w: f32,
+    page_h: f32,
 ) {
-    // Page bounds in world space (A4 landscape, mm).
-    const PAGE_W: f32 = 297.0;
-    const PAGE_H: f32 = 210.0;
-
-    let grid_mm = grid_mm;
+    // Page bounds provided by caller so the grid follows the active paper size.
     let grid_screen = grid_mm * camera.scale;
 
     // Don't draw grid if dots would be too dense (< 4px apart)
@@ -110,8 +108,8 @@ pub fn draw_grid(
     // Clamp to page bounds — only draw grid inside the page rectangle
     let wx_min = tl.x.max(0.0);
     let wy_min = tl.y.max(0.0);
-    let wx_max = br.x.min(PAGE_W);
-    let wy_max = br.y.min(PAGE_H);
+    let wx_max = br.x.min(page_w);
+    let wy_max = br.y.min(page_h);
 
     // Page not visible at all — nothing to draw
     if wx_min >= wx_max || wy_min >= wy_max {
@@ -175,9 +173,9 @@ pub fn draw_grid(
 
         // Page edges in screen space — major lines don't extend beyond these
         let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
-        let page_bot = camera.world_to_screen(Point::new(0.0, PAGE_H), bounds).y;
+        let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
         let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
-        let page_right = camera.world_to_screen(Point::new(PAGE_W, 0.0), bounds).x;
+        let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
 
         // Clamp line extent to both viewport and page
         let line_y_top = page_top.max(0.0);
@@ -190,10 +188,8 @@ pub fn draw_grid(
         while mx <= wx_max {
             let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
             if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
-                let line = canvas::Path::line(
-                    Point::new(sx, line_y_top),
-                    Point::new(sx, line_y_bot),
-                );
+                let line =
+                    canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
                 frame.stroke(&line, stroke);
             }
             mx += major_mm;
@@ -204,10 +200,8 @@ pub fn draw_grid(
         while my <= wy_max {
             let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
             if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
-                let line = canvas::Path::line(
-                    Point::new(line_x_left, sy),
-                    Point::new(line_x_right, sy),
-                );
+                let line =
+                    canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
                 frame.stroke(&line, stroke);
             }
             my += major_mm;

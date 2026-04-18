@@ -1,8 +1,13 @@
 use super::*;
 
 impl Signex {
-    pub(crate) fn clear_measurement(&mut self) {
-        self.interaction_state.canvas.reset_measurement();
+    /// Clear every cursor-following ghost preview. Call before arming a new
+    /// ghost or switching to a tool that doesn't have one, so a previously
+    /// armed ghost from another tool doesn't linger on the canvas.
+    pub(crate) fn clear_ghost_previews(&mut self) {
+        self.interaction_state.canvas.ghost_label = None;
+        self.interaction_state.canvas.ghost_symbol = None;
+        self.interaction_state.canvas.ghost_text = None;
     }
 
     fn component_value_from_lib_id(lib_id: &str) -> String {
@@ -35,7 +40,11 @@ impl Signex {
         let prefix = &reference[..digit_start];
         let digits = &reference[digit_start..];
         let value = digits.parse::<u32>().ok()?;
-        Some(format!("{prefix}{:0width$}", value + 1, width = digits.len()))
+        Some(format!(
+            "{prefix}{:0width$}",
+            value + 1,
+            width = digits.len()
+        ))
     }
 
     fn next_designator_for_prefix(&self, prefix: &str) -> String {
@@ -115,6 +124,7 @@ impl Signex {
             reference: reference.clone(),
             value,
             footprint: String::new(),
+            datasheet: String::new(),
             position: signex_types::schematic::Point::new(wx, wy),
             rotation,
             mirror_x: false,
@@ -124,7 +134,7 @@ impl Signex {
             ref_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy - 2.54),
                 rotation,
-                font_size: 1.27,
+                font_size: 1.8,
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
@@ -132,7 +142,7 @@ impl Signex {
             val_text: Some(signex_types::schematic::TextProp {
                 position: signex_types::schematic::Point::new(wx, wy + 2.54),
                 rotation,
-                font_size: 1.27,
+                font_size: 1.8,
                 justify_h: signex_types::schematic::HAlign::Center,
                 justify_v: signex_types::schematic::VAlign::default(),
                 hidden: false,
@@ -144,6 +154,8 @@ impl Signex {
             exclude_from_sim: false,
             locked: false,
             fields: std::collections::HashMap::new(),
+            pin_uuids: std::collections::HashMap::new(),
+            instances: Vec::new(),
         };
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 
@@ -163,10 +175,15 @@ impl Signex {
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
         self.interaction_state.canvas.ghost_label = None;
+        self.interaction_state.canvas.ghost_symbol = None;
+        self.interaction_state.canvas.ghost_text = None;
         self.interaction_state.canvas.tool_preview = None;
+        self.interaction_state.canvas.placement_paused = false;
+        // Drop any configured pre-placement defaults so the next tool
+        // session starts fresh instead of inheriting the previous one.
+        self.document_state.panel_ctx.pre_placement = None;
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
-        self.clear_measurement();
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;
@@ -194,12 +211,18 @@ impl Signex {
             return;
         }
 
-        let min_x = positions.iter().map(|anchor| anchor.x).fold(f64::INFINITY, f64::min);
+        let min_x = positions
+            .iter()
+            .map(|anchor| anchor.x)
+            .fold(f64::INFINITY, f64::min);
         let max_x = positions
             .iter()
             .map(|anchor| anchor.x)
             .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = positions.iter().map(|anchor| anchor.y).fold(f64::INFINITY, f64::min);
+        let min_y = positions
+            .iter()
+            .map(|anchor| anchor.y)
+            .fold(f64::INFINITY, f64::min);
         let max_y = positions
             .iter()
             .map(|anchor| anchor.y)
@@ -225,7 +248,10 @@ impl Signex {
             let dx = target_x - anchor.x;
             let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                let items = vec![signex_types::schematic::SelectedItem::new(
+                    anchor.uuid,
+                    anchor.kind,
+                )];
                 engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
             }
         }
@@ -246,7 +272,10 @@ impl Signex {
                         let target_x = min_x + step * index as f64;
                         let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(
+                                anchor.uuid,
+                                anchor.kind,
+                            )];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx,
@@ -262,7 +291,10 @@ impl Signex {
                         let target_y = min_y + step * index as f64;
                         let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(
+                                anchor.uuid,
+                                anchor.kind,
+                            )];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx: 0.0,

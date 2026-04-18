@@ -42,7 +42,10 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize, tokens: &ThemeTokens) -> Elemen
                 };
                 button::Style {
                     background: bg,
-                    border: Border { radius: 2.0.into(), ..Border::default() },
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
                     ..button::Style::default()
                 }
             })
@@ -63,7 +66,11 @@ pub fn view<'a>(tabs: &[TabInfo], active: usize, tokens: &ThemeTokens) -> Elemen
             };
             button::Style {
                 background: bg,
-                border: Border { width: 1.0, radius: 0.0.into(), color: border },
+                border: Border {
+                    width: 1.0,
+                    radius: 0.0.into(),
+                    color: border,
+                },
                 ..button::Style::default()
             }
         });
