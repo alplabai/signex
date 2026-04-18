@@ -64,6 +64,27 @@ pub struct UiState {
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
+    /// Annotate dialog open flag. When true, the Annotate-Schematics modal
+    /// covers the canvas with its preview + confirm-apply UI.
+    pub annotate_dialog_open: bool,
+    /// Annotate dialog: order-of-processing choice. Controls the iteration
+    /// order used to assign sequential numbers.
+    pub annotate_order: AnnotateOrder,
+    /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
+    pub erc_dialog_open: bool,
+    /// Reset-and-renumber confirmation modal. When true, the Design →
+    /// Reset menu item shows a confirm before discarding every number.
+    pub annotate_reset_confirm: bool,
+}
+
+/// Order in which symbols are visited during Annotate. Mirrors Altium's
+/// "Order of Processing" drop-down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnotateOrder {
+    /// Top-to-bottom within each column, left-to-right across columns.
+    UpThenAcross,
+    /// Left-to-right within each row, top-to-bottom across rows.
+    AcrossThenUp,
 }
 
 pub struct DocumentState {
