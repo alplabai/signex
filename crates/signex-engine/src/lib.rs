@@ -842,8 +842,19 @@ impl Engine {
                 info.push(("Type".into(), type_label.into()));
                 info.push(("Reference".into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
+                // Description is pulled from the library entry — gives users
+                // the Altium-style "IC XLTR VL BIDIR 8-X2SON" line without a
+                // roundtrip to the datasheet.
+                if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
+                    && !lib_sym.description.is_empty()
+                {
+                    info.push(("Description".into(), lib_sym.description.clone()));
+                }
                 info.push(("Library ID".into(), symbol.lib_id.clone()));
                 info.push(("Footprint".into(), symbol.footprint.clone()));
+                if !symbol.datasheet.is_empty() {
+                    info.push(("Datasheet".into(), symbol.datasheet.clone()));
+                }
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", symbol.position.x, symbol.position.y),
@@ -863,6 +874,12 @@ impl Engine {
                     if symbol.locked { "Yes" } else { "No" }.into(),
                 ));
                 info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
+                // Custom parameters (deterministic order by key).
+                let mut custom: Vec<(&String, &String)> = symbol.fields.iter().collect();
+                custom.sort_by(|a, b| a.0.cmp(b.0));
+                for (name, value) in custom {
+                    info.push((format!("Param: {name}"), value.clone()));
+                }
             }
             SelectedKind::Wire => {
                 let wire = self
