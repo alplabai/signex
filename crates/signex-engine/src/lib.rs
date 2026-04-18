@@ -607,9 +607,19 @@ impl Engine {
             }
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
+                // Power ports (is_power == true, or reference starting with '#')
+                // are KiCad net anchors, not components. Their references
+                // carry the net name, not a designator. Skip them in every
+                // phase so annotation only touches real parts.
+                let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
+                    !sym.is_power && !sym.reference.starts_with('#')
+                };
                 // Phase 1: optionally reset existing numbers back to '?'.
                 if matches!(mode, AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber) {
                     for symbol in self.document.symbols.iter_mut() {
+                        if !is_designator_target(symbol) {
+                            continue;
+                        }
                         // Keep the alphabetic prefix; drop the digit tail.
                         let prefix: String = symbol
                             .reference
@@ -631,10 +641,14 @@ impl Engine {
                 }
 
                 // Phase 2: find the max number per prefix from already-annotated
-                // symbols so Incremental doesn't collide.
+                // symbols so Incremental doesn't collide. Skip power ports
+                // — their numbers use a different (#PWR) namespace.
                 let mut next_by_prefix: std::collections::HashMap<String, u32> =
                     std::collections::HashMap::new();
                 for symbol in &self.document.symbols {
+                    if !is_designator_target(symbol) {
+                        continue;
+                    }
                     let prefix: String = symbol
                         .reference
                         .chars()
@@ -673,6 +687,9 @@ impl Engine {
 
                 for idx in order {
                     let symbol = &mut self.document.symbols[idx];
+                    if !is_designator_target(symbol) {
+                        continue;
+                    }
                     if !symbol.reference.ends_with('?') {
                         continue;
                     }
