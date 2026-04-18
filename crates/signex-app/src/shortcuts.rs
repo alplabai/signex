@@ -75,11 +75,6 @@ pub const SHORTCUTS: &[Shortcut] = &[
         description: "Select all",
     },
     Shortcut {
-        key: "M",
-        modifiers: "Ctrl",
-        description: "Measure distance",
-    },
-    Shortcut {
         key: "W",
         modifiers: "",
         description: "Draw wire",

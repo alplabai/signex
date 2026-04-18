@@ -1,7 +1,7 @@
 //! Wire, bus, and bus-entry rendering.
 
 use iced::Color;
-use iced::widget::canvas::{self, path, LineCap, LineJoin};
+use iced::widget::canvas::{self, LineCap, LineJoin, path};
 
 use signex_types::schematic::{Bus, BusEntry, Wire};
 
@@ -22,13 +22,19 @@ pub fn draw_wire(
     let p1 = transform.to_screen_point(wire.start.x, wire.start.y);
     let p2 = transform.to_screen_point(wire.end.x, wire.end.y);
 
-    let mm = if wire.stroke_width > 0.0 { wire.stroke_width } else { WIRE_DEFAULT_WIDTH_MM };
+    let mm = if wire.stroke_width > 0.0 {
+        wire.stroke_width
+    } else {
+        WIRE_DEFAULT_WIDTH_MM
+    };
     let width = transform.world_len(mm).max(1.0);
     let line = canvas::Path::line(p1, p2);
     let stroke = canvas::Stroke {
         line_cap: LineCap::Square,
         line_join: LineJoin::Miter,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     };
     frame.stroke(&line, stroke);
 }
@@ -43,7 +49,9 @@ pub fn draw_bus(frame: &mut canvas::Frame, bus: &Bus, transform: &ScreenTransfor
     let stroke = canvas::Stroke {
         line_cap: LineCap::Square,
         line_join: LineJoin::Miter,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     };
     frame.stroke(&line, stroke);
 }
@@ -70,7 +78,9 @@ pub fn draw_bus_entry(
     let stroke = canvas::Stroke {
         line_cap: LineCap::Square,
         line_join: LineJoin::Miter,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     };
     frame.stroke(&path, stroke);
 }

@@ -7,6 +7,7 @@ use iced::widget::canvas::{self, path};
 use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 
 use super::ScreenTransform;
+use super::text::display_text_content;
 
 /// Draw a schematic drawing primitive.
 pub fn draw_sch_drawing(
@@ -226,12 +227,12 @@ pub fn draw_child_sheet(
     frame.stroke(&rect, stroke);
 
     // Sheet name text
-    let font_size = (transform.world_len(1.5) * crate::canvas_font_size_scale()).abs();
+    let font_size = transform.world_len(1.5).abs();
     if font_size < 1.0 {
         return;
     }
     let text = canvas::Text {
-        content: child.name.clone(),
+        content: display_text_content(&child.name),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
         color: body_color,
         size: iced::Pixels(font_size),
@@ -246,7 +247,7 @@ pub fn draw_child_sheet(
         return;
     }
     let file_text = canvas::Text {
-        content: child.filename.clone(),
+        content: display_text_content(&child.filename),
         position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
         color: Color {
             a: body_color.a * 0.7,
@@ -265,7 +266,7 @@ pub fn draw_child_sheet(
         frame.fill(&dot, body_color);
 
         let pin_text = canvas::Text {
-            content: pin.name.clone(),
+            content: display_text_content(&pin.name),
             position: iced::Point::new(pp.x + 4.0, pp.y),
             color: body_color,
             size: iced::Pixels(small_font),

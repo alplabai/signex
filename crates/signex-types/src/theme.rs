@@ -251,24 +251,24 @@ const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
 
 const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     // Classic Altium Designer schematic palette — cream sheet, dark elements
-    background: c(0x50, 0x50, 0x50),   // Medium gray workspace outside sheet
-    paper:      c(0xFF, 0xFF, 0xE0),   // Pale cream/yellow sheet (255,255,224)
-    wire:       c(0x00, 0x00, 0x80),   // Navy blue wires
-    junction:   c(0x00, 0x00, 0x80),   // Navy blue junction dots
-    body:       c(0x80, 0x60, 0x00),   // Brown component body border
-    body_fill:  c(0xFF, 0xFF, 0x80),   // Light yellow component fill
-    pin:        c(0x00, 0x00, 0x00),   // Black pin lines
-    reference:  c(0x80, 0x00, 0x00),   // Dark red designator (R1, C1…)
-    value:      c(0x00, 0x00, 0x80),   // Navy blue value/comment text
-    net_label:  c(0x80, 0x00, 0x00),   // Dark red / burgundy net labels
-    global_label: c(0x00, 0x80, 0x00), // Green global labels
-    hier_label: c(0x00, 0xAA, 0x00),   // Virulent green hierarchical blocks
-    no_connect: c(0x80, 0x00, 0x00),   // Dark red X marks
-    power:      c(0x80, 0x00, 0x00),   // Dark red power ports (VCC/GND)
-    selection:  c(0x00, 0x78, 0xD4),   // Windows blue selection highlight
-    bus:        c(0x00, 0x00, 0x80),   // Navy blue bus (rendered thicker)
-    grid:       c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
-    cursor:     c(0x00, 0x00, 0x00),   // Black cursor crosshair
+    background: c(0x50, 0x50, 0x50), // Medium gray workspace outside sheet
+    paper: c(0xFF, 0xFF, 0xE0),      // Pale cream/yellow sheet (255,255,224)
+    wire: c(0x00, 0x00, 0x80),       // Navy blue wires
+    junction: c(0x00, 0x00, 0x80),   // Navy blue junction dots
+    body: c(0x80, 0x60, 0x00),       // Brown component body border
+    body_fill: c(0xFF, 0xFF, 0x80),  // Light yellow component fill
+    pin: c(0x00, 0x00, 0x00),        // Black pin lines
+    reference: c(0x80, 0x00, 0x00),  // Dark red designator (R1, C1…)
+    value: c(0x00, 0x00, 0x80),      // Navy blue value/comment text
+    net_label: c(0x80, 0x00, 0x00),  // Dark red / burgundy net labels
+    global_label: c(0x80, 0x00, 0x00), // Altium maroon port outline/text
+    hier_label: c(0x80, 0x00, 0x00), // Altium maroon hierarchical port outline/text
+    no_connect: c(0x80, 0x00, 0x00), // Dark red X marks
+    power: c(0x80, 0x00, 0x00),      // Dark red power ports (VCC/GND)
+    selection: c(0x00, 0x78, 0xD4),  // Windows blue selection highlight
+    bus: c(0x00, 0x00, 0x80),        // Navy blue bus (rendered thicker)
+    grid: c(0xC0, 0xC0, 0xC0),       // Light gray grid dots/lines
+    cursor: c(0x00, 0x00, 0x00),     // Black cursor crosshair
 };
 
 // ===== GitHub Dark =====

@@ -4,12 +4,12 @@ mod patch;
 
 use std::path::{Path, PathBuf};
 
-pub use command::{Command, CommandKind, MirrorAxis, TextTarget};
+pub use command::{Command, CommandKind, MirrorAxis, SymbolTextField, TextTarget};
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, SchematicSheet, SelectedItem, SelectedKind, Symbol,
-    TextNote, Wire,
+    Bus, Junction, Label, NoConnect, SchematicSheet, SelectedItem, SelectedKind, Symbol, TextNote,
+    Wire,
 };
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -60,7 +60,10 @@ impl Engine {
         Self::new_with_path(document, None)
     }
 
-    pub fn new_with_path(document: SchematicSheet, path: Option<PathBuf>) -> Result<Self, EngineError> {
+    pub fn new_with_path(
+        document: SchematicSheet,
+        path: Option<PathBuf>,
+    ) -> Result<Self, EngineError> {
         Ok(Self {
             document,
             path,
@@ -187,6 +190,155 @@ impl Engine {
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::TextUpdated,
                     document: document_patch,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateLabelProps {
+                label_id,
+                font_size_mm,
+                justify,
+                rotation_degrees,
+            } => {
+                let changed = self
+                    .document
+                    .labels
+                    .iter_mut()
+                    .find(|l| l.uuid == label_id)
+                    .map(|l| {
+                        let mut any = false;
+                        if let Some(fs) = font_size_mm
+                            && (l.font_size - fs).abs() > 1e-6
+                        {
+                            l.font_size = fs;
+                            any = true;
+                        }
+                        if let Some(j) = justify
+                            && l.justify != j
+                        {
+                            l.justify = j;
+                            any = true;
+                        }
+                        if let Some(r) = rotation_degrees
+                            && (l.rotation - r).abs() > 1e-6
+                        {
+                            l.rotation = r;
+                            any = true;
+                        }
+                        any
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::LabelsMutated,
+                    document: DocumentPatch::LABELS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetSymbolRotation {
+                symbol_id,
+                rotation_degrees,
+            } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        if (s.rotation - rotation_degrees).abs() < 1e-6 {
+                            false
+                        } else {
+                            s.rotation = rotation_degrees;
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SelectionRotated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateSymbolTextSize {
+                symbol_id,
+                field,
+                font_size_mm,
+            } => {
+                use command::SymbolTextField;
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        let tp = match field {
+                            SymbolTextField::Reference => s.ref_text.as_mut(),
+                            SymbolTextField::Value => s.val_text.as_mut(),
+                        };
+                        if let Some(tp) = tp
+                            && (tp.font_size - font_size_mm).abs() > 1e-6
+                        {
+                            tp.font_size = font_size_mm;
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::UpdateSymbolLibId { symbol_id, lib_id } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|s| {
+                        if s.lib_id == lib_id {
+                            false
+                        } else {
+                            s.lib_id = lib_id;
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
                 };
 
                 self.record_history(before, patch_pair);
@@ -387,7 +539,9 @@ impl Engine {
                 self.document.wires.push(wire.clone());
 
                 for point in [wire.start, wire.end] {
-                    if let Some(junction) = needed_junction(point, &self.document, JUNCTION_TOLERANCE_MM) {
+                    if let Some(junction) =
+                        needed_junction(point, &self.document, JUNCTION_TOLERANCE_MM)
+                    {
                         self.document.junctions.push(junction);
                     }
                 }
@@ -510,23 +664,37 @@ impl Engine {
         for item in items {
             match item.kind {
                 SelectedKind::Wire => {
-                    if let Some(wire) = self.document.wires.iter().find(|wire| wire.uuid == item.uuid) {
+                    if let Some(wire) = self
+                        .document
+                        .wires
+                        .iter()
+                        .find(|wire| wire.uuid == item.uuid)
+                    {
                         clipboard.wires.push(wire.clone());
                     }
                 }
                 SelectedKind::Bus => {
-                    if let Some(bus) = self.document.buses.iter().find(|bus| bus.uuid == item.uuid) {
+                    if let Some(bus) = self.document.buses.iter().find(|bus| bus.uuid == item.uuid)
+                    {
                         clipboard.buses.push(bus.clone());
                     }
                 }
                 SelectedKind::Label => {
-                    if let Some(label) = self.document.labels.iter().find(|label| label.uuid == item.uuid)
+                    if let Some(label) = self
+                        .document
+                        .labels
+                        .iter()
+                        .find(|label| label.uuid == item.uuid)
                     {
                         clipboard.labels.push(label.clone());
                     }
                 }
                 SelectedKind::Symbol => {
-                    if let Some(symbol) = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)
+                    if let Some(symbol) = self
+                        .document
+                        .symbols
+                        .iter()
+                        .find(|symbol| symbol.uuid == item.uuid)
                     {
                         clipboard.symbols.push(symbol.clone());
                     }
@@ -608,13 +776,23 @@ impl Engine {
                     .wires
                     .iter()
                     .find(|wire| wire.uuid == item.uuid)
-                    .map(|wire| ((wire.start.x + wire.end.x) / 2.0, (wire.start.y + wire.end.y) / 2.0)),
+                    .map(|wire| {
+                        (
+                            (wire.start.x + wire.end.x) / 2.0,
+                            (wire.start.y + wire.end.y) / 2.0,
+                        )
+                    }),
                 SelectedKind::Bus => self
                     .document
                     .buses
                     .iter()
                     .find(|bus| bus.uuid == item.uuid)
-                    .map(|bus| ((bus.start.x + bus.end.x) / 2.0, (bus.start.y + bus.end.y) / 2.0)),
+                    .map(|bus| {
+                        (
+                            (bus.start.x + bus.end.x) / 2.0,
+                            (bus.start.y + bus.end.y) / 2.0,
+                        )
+                    }),
                 _ => None,
             };
 
@@ -636,16 +814,47 @@ impl Engine {
             return None;
         };
 
+        let h_align_label = |align| match align {
+            signex_types::schematic::HAlign::Left => "Left",
+            signex_types::schematic::HAlign::Center => "Center",
+            signex_types::schematic::HAlign::Right => "Right",
+        };
+        let v_align_label = |align| match align {
+            signex_types::schematic::VAlign::Top => "Top",
+            signex_types::schematic::VAlign::Center => "Center",
+            signex_types::schematic::VAlign::Bottom => "Bottom",
+        };
+
         let mut info = Vec::new();
 
         match item.kind {
             SelectedKind::Symbol => {
-                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
-                info.push(("Type".into(), "Symbol".into()));
+                let symbol = self
+                    .document
+                    .symbols
+                    .iter()
+                    .find(|symbol| symbol.uuid == item.uuid)?;
+                let type_label = if symbol.is_power {
+                    "Power Port"
+                } else {
+                    "Symbol"
+                };
+                info.push(("Type".into(), type_label.into()));
                 info.push(("Reference".into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
+                // Description is pulled from the library entry — gives users
+                // the Altium-style "IC XLTR VL BIDIR 8-X2SON" line without a
+                // roundtrip to the datasheet.
+                if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
+                    && !lib_sym.description.is_empty()
+                {
+                    info.push(("Description".into(), lib_sym.description.clone()));
+                }
                 info.push(("Library ID".into(), symbol.lib_id.clone()));
                 info.push(("Footprint".into(), symbol.footprint.clone()));
+                if !symbol.datasheet.is_empty() {
+                    info.push(("Datasheet".into(), symbol.datasheet.clone()));
+                }
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", symbol.position.x, symbol.position.y),
@@ -660,24 +869,59 @@ impl Engine {
                 if symbol.unit > 1 {
                     info.push(("Unit".into(), symbol.unit.to_string()));
                 }
+                info.push((
+                    "Locked".into(),
+                    if symbol.locked { "Yes" } else { "No" }.into(),
+                ));
+                info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
+                // Custom parameters (deterministic order by key).
+                let mut custom: Vec<(&String, &String)> = symbol.fields.iter().collect();
+                custom.sort_by(|a, b| a.0.cmp(b.0));
+                for (name, value) in custom {
+                    info.push((format!("Param: {name}"), value.clone()));
+                }
             }
             SelectedKind::Wire => {
-                let wire = self.document.wires.iter().find(|wire| wire.uuid == item.uuid)?;
+                let wire = self
+                    .document
+                    .wires
+                    .iter()
+                    .find(|wire| wire.uuid == item.uuid)?;
                 let dx = wire.end.x - wire.start.x;
                 let dy = wire.end.y - wire.start.y;
                 let len = (dx * dx + dy * dy).sqrt();
                 info.push(("Type".into(), "Wire".into()));
-                info.push(("Start".into(), format!("{:.2}, {:.2}", wire.start.x, wire.start.y)));
-                info.push(("End".into(), format!("{:.2}, {:.2}", wire.end.x, wire.end.y)));
+                info.push((
+                    "Start".into(),
+                    format!("{:.2}, {:.2}", wire.start.x, wire.start.y),
+                ));
+                info.push((
+                    "End".into(),
+                    format!("{:.2}, {:.2}", wire.end.x, wire.end.y),
+                ));
                 info.push(("Length".into(), format!("{:.2} mm", len)));
             }
             SelectedKind::Label => {
-                let label = self.document.labels.iter().find(|label| label.uuid == item.uuid)?;
+                let label = self
+                    .document
+                    .labels
+                    .iter()
+                    .find(|label| label.uuid == item.uuid)?;
                 info.push(("Type".into(), format!("{:?} Label", label.label_type)));
+                info.push(("Text".into(), label.text.clone()));
                 info.push(("Net Name".into(), label.text.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", label.position.x, label.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
+                info.push((
+                    "Text Size".into(),
+                    format!("{}", (label.font_size.max(0.0) / 0.18).round() as i32),
+                ));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(label.justify).into(),
                 ));
             }
             SelectedKind::Junction => {
@@ -716,6 +960,19 @@ impl Engine {
                     "Position".into(),
                     format!("{:.2}, {:.2}", text_note.position.x, text_note.position.y),
                 ));
+                info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
+                info.push((
+                    "Text Size".into(),
+                    format!("{}", (text_note.font_size.max(0.0) / 0.18).round() as i32),
+                ));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(text_note.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(text_note.justify_v).into(),
+                ));
             }
             SelectedKind::ChildSheet => {
                 let child_sheet = self
@@ -728,7 +985,10 @@ impl Engine {
                 info.push(("File".into(), child_sheet.filename.clone()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", child_sheet.position.x, child_sheet.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        child_sheet.position.x, child_sheet.position.y
+                    ),
                 ));
                 info.push((
                     "Size".into(),
@@ -736,35 +996,105 @@ impl Engine {
                 ));
             }
             SelectedKind::Bus => {
-                let bus = self.document.buses.iter().find(|bus| bus.uuid == item.uuid)?;
+                let bus = self
+                    .document
+                    .buses
+                    .iter()
+                    .find(|bus| bus.uuid == item.uuid)?;
                 info.push(("Type".into(), "Bus".into()));
-                info.push(("Start".into(), format!("{:.2}, {:.2}", bus.start.x, bus.start.y)));
+                info.push((
+                    "Start".into(),
+                    format!("{:.2}, {:.2}", bus.start.x, bus.start.y),
+                ));
                 info.push(("End".into(), format!("{:.2}, {:.2}", bus.end.x, bus.end.y)));
             }
             SelectedKind::BusEntry | SelectedKind::Drawing => {
                 info.push(("Type".into(), format!("{:?}", item.kind)));
             }
             SelectedKind::SymbolRefField => {
-                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                let symbol = self
+                    .document
+                    .symbols
+                    .iter()
+                    .find(|symbol| symbol.uuid == item.uuid)?;
+                let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
+                info.push(("Text".into(), symbol.reference.clone()));
                 info.push(("Reference".into(), symbol.reference.clone()));
-                if let Some(ref_text) = symbol.ref_text.as_ref() {
-                    info.push((
-                        "Position".into(),
-                        format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
-                    ));
-                }
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
+                info.push((
+                    "Text Size".into(),
+                    format!("{}", (ref_text.font_size.max(0.0) / 0.18).round() as i32),
+                ));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(ref_text.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(ref_text.justify_v).into(),
+                ));
+                info.push((
+                    "Visible".into(),
+                    if ref_text.hidden { "No" } else { "Yes" }.into(),
+                ));
+                info.push((
+                    "Fields Autoplaced".into(),
+                    if symbol.fields_autoplaced {
+                        "Yes"
+                    } else {
+                        "No"
+                    }
+                    .into(),
+                ));
             }
             SelectedKind::SymbolValField => {
-                let symbol = self.document.symbols.iter().find(|symbol| symbol.uuid == item.uuid)?;
+                let symbol = self
+                    .document
+                    .symbols
+                    .iter()
+                    .find(|symbol| symbol.uuid == item.uuid)?;
+                let value_text = symbol.val_text.as_ref()?;
                 info.push(("Type".into(), "Value Field".into()));
+                info.push(("Text".into(), symbol.value.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
-                if let Some(value_text) = symbol.val_text.as_ref() {
-                    info.push((
-                        "Position".into(),
-                        format!("{:.2}, {:.2} mm", value_text.position.x, value_text.position.y),
-                    ));
-                }
+                info.push((
+                    "Position".into(),
+                    format!(
+                        "{:.2}, {:.2} mm",
+                        value_text.position.x, value_text.position.y
+                    ),
+                ));
+                info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
+                info.push((
+                    "Text Size".into(),
+                    format!("{}", (value_text.font_size.max(0.0) / 0.18).round() as i32),
+                ));
+                info.push((
+                    "Horizontal Justification".into(),
+                    h_align_label(value_text.justify_h).into(),
+                ));
+                info.push((
+                    "Vertical Justification".into(),
+                    v_align_label(value_text.justify_v).into(),
+                ));
+                info.push((
+                    "Visible".into(),
+                    if value_text.hidden { "No" } else { "Yes" }.into(),
+                ));
+                info.push((
+                    "Fields Autoplaced".into(),
+                    if symbol.fields_autoplaced {
+                        "Yes"
+                    } else {
+                        "No"
+                    }
+                    .into(),
+                ));
             }
         }
 
@@ -788,9 +1118,17 @@ impl Engine {
 
     fn contains_selected_item(&self, item: &SelectedItem) -> bool {
         match item.kind {
-            SelectedKind::Wire => self.document.wires.iter().any(|wire| wire.uuid == item.uuid),
+            SelectedKind::Wire => self
+                .document
+                .wires
+                .iter()
+                .any(|wire| wire.uuid == item.uuid),
             SelectedKind::Bus => self.document.buses.iter().any(|bus| bus.uuid == item.uuid),
-            SelectedKind::Label => self.document.labels.iter().any(|label| label.uuid == item.uuid),
+            SelectedKind::Label => self
+                .document
+                .labels
+                .iter()
+                .any(|label| label.uuid == item.uuid),
             SelectedKind::Junction => self
                 .document
                 .junctions
@@ -801,7 +1139,11 @@ impl Engine {
                 .no_connects
                 .iter()
                 .any(|no_connect| no_connect.uuid == item.uuid),
-            SelectedKind::Symbol => self.document.symbols.iter().any(|symbol| symbol.uuid == item.uuid),
+            SelectedKind::Symbol => self
+                .document
+                .symbols
+                .iter()
+                .any(|symbol| symbol.uuid == item.uuid),
             SelectedKind::TextNote => self
                 .document
                 .text_notes

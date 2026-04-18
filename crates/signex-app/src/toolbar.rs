@@ -24,7 +24,9 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
         .style(move |_: &Theme, status: button::Status| {
             let bg = match (is_active, status) {
                 (true, _) => Some(Background::Color(Color::from_rgb(0.18, 0.19, 0.25))),
-                (false, button::Status::Hovered) => Some(Background::Color(Color::from_rgb(0.18, 0.19, 0.25))),
+                (false, button::Status::Hovered) => {
+                    Some(Background::Color(Color::from_rgb(0.18, 0.19, 0.25)))
+                }
                 _ => None,
             };
             button::Style {

@@ -74,7 +74,8 @@ impl Signex {
                     Ok(result) => {
                         if let Some(patch_pair) = result.patch_pair {
                             changed_steps += 1;
-                            invalidation |= Self::render_invalidation_for_patch(patch_pair.document);
+                            invalidation |=
+                                Self::render_invalidation_for_patch(patch_pair.document);
                         }
                     }
                     Err(error) => {
@@ -86,18 +87,16 @@ impl Signex {
             }
 
             if changed_steps > 0 {
-                self.interaction_state.undo_stack.record_engine_marker(changed_steps);
+                self.interaction_state
+                    .undo_stack
+                    .record_engine_marker(changed_steps);
                 invalidation
             } else {
                 signex_render::schematic::RenderInvalidation::NONE
             }
         };
 
-        self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
-            update_selection_info,
-        )
+        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
     }
 
     pub(crate) fn apply_engine_command(
@@ -127,11 +126,7 @@ impl Signex {
             }
         };
 
-        self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
-            update_selection_info,
-        )
+        self.finish_schematic_mutation(invalidation, clear_overlay_cache, update_selection_info)
     }
 
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {

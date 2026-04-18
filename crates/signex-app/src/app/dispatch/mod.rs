@@ -12,10 +12,9 @@ mod ui;
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Menu(_)
-            | Message::Tab(_)
-            | Message::Dock(_)
-            | Message::Selection(_) => self.dispatch_routed_message(message),
+            Message::Menu(_) | Message::Tab(_) | Message::Dock(_) | Message::Selection(_) => {
+                self.dispatch_routed_message(message)
+            }
             Message::ThemeChanged(_)
             | Message::UnitCycled
             | Message::GridToggle
@@ -29,9 +28,11 @@ impl Signex {
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
             }
-            Message::PrePlacementTab | Message::CycleDrawMode | Message::CancelDrawing | Message::Tool(_) => {
-                self.dispatch_tool_message(message)
-            }
+            Message::PrePlacementTab
+            | Message::ResumePlacement
+            | Message::CycleDrawMode
+            | Message::CancelDrawing
+            | Message::Tool(_) => self.dispatch_tool_message(message),
             Message::FileOpened(_)
             | Message::DeleteSelected
             | Message::Undo

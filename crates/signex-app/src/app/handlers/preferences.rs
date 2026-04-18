@@ -10,6 +10,7 @@ impl Signex {
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
+        self.interaction_state.context_menu = None;
         Task::none()
     }
 
@@ -49,7 +50,8 @@ impl Signex {
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
@@ -67,7 +69,8 @@ impl Signex {
                 self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
                 self.update_canvas_theme();
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
@@ -84,7 +87,8 @@ impl Signex {
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
                 let tokens = if id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
@@ -93,7 +97,8 @@ impl Signex {
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 let canvas_colors = if id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.canvas)
                         .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
@@ -107,23 +112,29 @@ impl Signex {
                 );
                 self.interaction_state.canvas.canvas_colors = canvas_colors;
                 self.interaction_state.canvas.clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
+                    != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
+                    || self.ui_state.preferences_draft_power_port_style
+                        != self.ui_state.power_port_style;
             }
             PrefMsg::DraftFont(name) => {
                 self.ui_state.preferences_draft_font = name;
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
+                    != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
+                    || self.ui_state.preferences_draft_power_port_style
+                        != self.ui_state.power_port_style;
             }
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
                 signex_render::set_power_port_style(style);
                 self.interaction_state.canvas.clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme != self.ui_state.theme_id
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
+                    != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style != self.ui_state.power_port_style;
+                    || self.ui_state.preferences_draft_power_port_style
+                        != self.ui_state.power_port_style;
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
@@ -144,7 +155,8 @@ impl Signex {
             PrefMsg::ExportTheme => {
                 let id = self.ui_state.preferences_draft_theme;
                 let name = if id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.name.clone())
                         .unwrap_or_else(|| "Custom".to_string())
@@ -152,7 +164,8 @@ impl Signex {
                     id.label().to_string()
                 };
                 let tokens = if id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.tokens)
                         .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
@@ -160,7 +173,8 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 let canvas = if id == ThemeId::Custom {
-                    self.ui_state.custom_theme
+                    self.ui_state
+                        .custom_theme
                         .as_ref()
                         .map(|c| c.canvas)
                         .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
