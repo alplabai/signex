@@ -43,13 +43,38 @@ impl Signex {
             ActiveBarAction::PlaceComponent => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)))
             }
-            ActiveBarAction::PlaceTextString
-            | ActiveBarAction::PlaceNote
-            | ActiveBarAction::PlaceTextFrame => {
-                // All three arm the Text tool so the ghost-text preview
-                // follows the cursor. Text Frame collapses to Text for
-                // v0.6; the bounded-frame variant is a v0.7 feature.
+            ActiveBarAction::PlaceTextString => {
+                // Single-point text. Altium semantics = point glyphs.
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)))
+            }
+            ActiveBarAction::PlaceNote | ActiveBarAction::PlaceTextFrame => {
+                // Altium: Text Frame = drag-rect bounded text (wraps),
+                // Note = Text Frame with a default fill / border.
+                // KiCad stores these as `(text_box ...)` (Graphic::TextBox),
+                // which is parsed/written today but not yet rendered or
+                // placeable interactively — see MASTER_PLAN.md v0.7 entry.
+                // For now we fall back to placing a plain TextNote so the
+                // user still gets something visible, and log the limitation.
+                let default_text = if matches!(action, ActiveBarAction::PlaceNote) {
+                    "Note"
+                } else {
+                    "Text Frame"
+                };
+                crate::diagnostics::log_info(&format!(
+                    "{default_text}: bounded text box (text_box) lands in v0.7 — placing a plain text note for now",
+                ));
+                let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                self.interaction_state.canvas.ghost_text =
+                    Some(signex_types::schematic::TextNote {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: default_text.to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        font_size: 1.8,
+                        justify_h: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::default(),
+                    });
+                task
             }
             ActiveBarAction::DrawLine => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)))
