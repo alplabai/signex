@@ -1,6 +1,8 @@
 use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length};
 
+mod dialogs;
+
 use super::*;
 
 impl Signex {
@@ -278,6 +280,9 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.close_tab_confirm.is_some()
+            || ui.annotate_dialog_open
+            || ui.annotate_reset_confirm
+            || ui.erc_dialog_open
             || !document.dock.floating.is_empty();
 
         if needs_overlay {
@@ -760,6 +765,16 @@ impl Signex {
             if let Some(tab) = document.tabs.get(idx) {
                 layers.push(self.view_close_tab_confirm(&tab.title));
             }
+        }
+
+        if ui.annotate_dialog_open {
+            layers.push(self.view_annotate_dialog());
+        }
+        if ui.annotate_reset_confirm {
+            layers.push(self.view_annotate_reset_confirm());
+        }
+        if ui.erc_dialog_open {
+            layers.push(self.view_erc_dialog());
         }
 
         layers

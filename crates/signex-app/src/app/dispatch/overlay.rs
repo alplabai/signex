@@ -26,6 +26,20 @@ impl Signex {
             Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
             Message::RunErc => self.handle_run_erc(),
             Message::Annotate(mode) => self.handle_annotate(mode),
+            Message::OpenAnnotateDialog => self.handle_open_annotate_dialog(),
+            Message::CloseAnnotateDialog => self.handle_close_annotate_dialog(),
+            Message::AnnotateOrderChanged(order) => {
+                self.handle_annotate_order_changed(order)
+            }
+            Message::OpenErcDialog => self.handle_open_erc_dialog(),
+            Message::CloseErcDialog => self.handle_close_erc_dialog(),
+            Message::ErcSeverityChanged(rule, sev) => {
+                self.handle_erc_severity_changed(rule, sev)
+            }
+            Message::OpenAnnotateResetConfirm => self.handle_open_annotate_reset_confirm(),
+            Message::CloseAnnotateResetConfirm => {
+                self.handle_close_annotate_reset_confirm()
+            }
             Message::FocusAt {
                 world_x,
                 world_y,
