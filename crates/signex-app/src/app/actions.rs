@@ -35,7 +35,11 @@ impl Signex {
         let prefix = &reference[..digit_start];
         let digits = &reference[digit_start..];
         let value = digits.parse::<u32>().ok()?;
-        Some(format!("{prefix}{:0width$}", value + 1, width = digits.len()))
+        Some(format!(
+            "{prefix}{:0width$}",
+            value + 1,
+            width = digits.len()
+        ))
     }
 
     fn next_designator_for_prefix(&self, prefix: &str) -> String {
@@ -203,12 +207,18 @@ impl Signex {
             return;
         }
 
-        let min_x = positions.iter().map(|anchor| anchor.x).fold(f64::INFINITY, f64::min);
+        let min_x = positions
+            .iter()
+            .map(|anchor| anchor.x)
+            .fold(f64::INFINITY, f64::min);
         let max_x = positions
             .iter()
             .map(|anchor| anchor.x)
             .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = positions.iter().map(|anchor| anchor.y).fold(f64::INFINITY, f64::min);
+        let min_y = positions
+            .iter()
+            .map(|anchor| anchor.y)
+            .fold(f64::INFINITY, f64::min);
         let max_y = positions
             .iter()
             .map(|anchor| anchor.y)
@@ -234,7 +244,10 @@ impl Signex {
             let dx = target_x - anchor.x;
             let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                let items = vec![signex_types::schematic::SelectedItem::new(
+                    anchor.uuid,
+                    anchor.kind,
+                )];
                 engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
             }
         }
@@ -255,7 +268,10 @@ impl Signex {
                         let target_x = min_x + step * index as f64;
                         let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(
+                                anchor.uuid,
+                                anchor.kind,
+                            )];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx,
@@ -271,7 +287,10 @@ impl Signex {
                         let target_y = min_y + step * index as f64;
                         let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind)];
+                            let items = vec![signex_types::schematic::SelectedItem::new(
+                                anchor.uuid,
+                                anchor.kind,
+                            )];
                             engine_commands.push(signex_engine::Command::MoveSelection {
                                 items,
                                 dx: 0.0,

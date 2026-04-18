@@ -35,9 +35,15 @@ pub fn draw_label(
 
     match label.label_type {
         LabelType::Net => draw_net_label(frame, label, transform, color, screen_font),
-        LabelType::Global => {
-            draw_global_label(frame, label, transform, color, body_fill, screen_font, font_size_mm)
-        }
+        LabelType::Global => draw_global_label(
+            frame,
+            label,
+            transform,
+            color,
+            body_fill,
+            screen_font,
+            font_size_mm,
+        ),
         LabelType::Hierarchical => {
             draw_hier_label(frame, label, transform, color, screen_font, font_size_mm)
         }
@@ -124,7 +130,6 @@ fn draw_global_label(
             }
         };
         draw_shape_closed_filled(frame, &pts, transform, color, sw, Some(fill_color));
-
     } else {
         let (sx, sy) = transform.world_to_screen(lx, ly);
         let ra = if matches!(spin, SpinStyle::Up) {
@@ -187,7 +192,15 @@ fn draw_global_label(
     }
 
     let text_offset = schematic_text_offset_global(label, spin, font_size_mm);
-    draw_spin_text(frame, label, transform, color, screen_font, text_offset, true);
+    draw_spin_text(
+        frame,
+        label,
+        transform,
+        color,
+        screen_font,
+        text_offset,
+        true,
+    );
 }
 
 fn draw_hier_label(
@@ -265,7 +278,15 @@ fn draw_hier_label(
     }
 
     let text_offset = schematic_text_offset_hier(label, spin, font_size_mm);
-    draw_spin_text(frame, label, transform, color, screen_font, text_offset, true);
+    draw_spin_text(
+        frame,
+        label,
+        transform,
+        color,
+        screen_font,
+        text_offset,
+        true,
+    );
 }
 
 #[derive(Clone, Copy)]

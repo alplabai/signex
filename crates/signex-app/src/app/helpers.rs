@@ -37,12 +37,12 @@ pub(super) fn find_standard_symbols_dir() -> Option<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
-    for ver in &["9.0", "8.0", "7.0"] {
-        let p = PathBuf::from(format!("C:/Program Files/Standard/{ver}/share/standard/symbols"));
-        if p.exists() {
-            return Some(p);
+        for ver in &["9.0", "8.0", "7.0"] {
+            let p = PathBuf::from(format!("C:/Program Files/Standard/{ver}/share/standard/symbols"));
+            if p.exists() {
+                return Some(p);
+            }
         }
-    }
     }
     None
 }
@@ -138,4 +138,3 @@ pub(super) fn constrain_segments(
         }
     }
 }
-

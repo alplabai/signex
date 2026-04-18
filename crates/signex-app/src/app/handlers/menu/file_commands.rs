@@ -13,7 +13,10 @@ impl Signex {
                         .add_filter("Signex Schematic", &["snxsch"])
                         .add_filter("Standard Schematic", &["standard_sch"])
                         .add_filter("Standard Project", &["standard_pro"])
-                        .add_filter("All Supported", &["snxprj", "snxsch", "standard_sch", "standard_pro"])
+                        .add_filter(
+                            "All Supported",
+                            &["snxprj", "snxsch", "standard_sch", "standard_pro"],
+                        )
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await

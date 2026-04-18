@@ -160,11 +160,7 @@ fn draw_text_prop_selection(
 
 /// Selection rectangle for built-in power ports (lib_sym may be absent).
 /// Wraps the pin stub, body glyph, and value label together.
-fn draw_power_port_selection(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    transform: &ScreenTransform,
-) {
+fn draw_power_port_selection(frame: &mut canvas::Frame, sym: &Symbol, transform: &ScreenTransform) {
     let id = sym.lib_id.to_lowercase();
     let is_gnd_like = id.contains("gnd");
     let dir: f64 = if is_gnd_like { -1.0 } else { 1.0 };
@@ -183,9 +179,8 @@ fn draw_power_port_selection(
         0.0
     };
     let label_extent = crate::SCHEMATIC_TEXT_MM * 1.2; // cap + descender
-    let half_w = 1.8_f64.max(
-        sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_MM * 0.55 * 0.5,
-    );
+    let half_w =
+        1.8_f64.max(sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_MM * 0.55 * 0.5);
 
     // In lib-local Y (before Y-flip in instance_transform): the pin stub
     // starts at the anchor (y = 0) and extends toward the body. Keep the

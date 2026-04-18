@@ -6,9 +6,7 @@ impl Signex {
     fn apply_page_dimensions_to_canvas(&mut self) {
         let ctx = &self.document_state.panel_ctx;
         let (w, h) = match ctx.page_format_mode {
-            crate::panels::PageFormatMode::Custom => {
-                (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm)
-            }
+            crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
             _ => crate::panels::paper_dimensions(&ctx.paper_size),
         };
         self.interaction_state.canvas.paper_width_mm = w;
@@ -43,7 +41,12 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
-                if !self.document_state.panel_ctx.collapsed_sections.remove(&key) {
+                if !self
+                    .document_state
+                    .panel_ctx
+                    .collapsed_sections
+                    .remove(&key)
+                {
                     self.document_state.panel_ctx.collapsed_sections.insert(key);
                 }
             }
@@ -236,7 +239,8 @@ impl Signex {
             crate::panels::PanelMsg::DragComponentsSplit => {
                 self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);
                 self.interaction_state.drag_start_pos = None;
-                self.interaction_state.drag_start_size = self.document_state.panel_ctx.components_split;
+                self.interaction_state.drag_start_size =
+                    self.document_state.panel_ctx.components_split;
             }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 let _ = self.handle_active_bar_filter_toggle(*filter);

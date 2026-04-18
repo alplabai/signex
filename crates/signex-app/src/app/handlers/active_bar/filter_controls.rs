@@ -23,8 +23,10 @@ impl Signex {
         {
             self.interaction_state.selection_filters.clear();
         } else {
-            self.interaction_state.selection_filters =
-                crate::active_bar::SelectionFilter::ALL.iter().copied().collect();
+            self.interaction_state.selection_filters = crate::active_bar::SelectionFilter::ALL
+                .iter()
+                .copied()
+                .collect();
         }
         self.document_state.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();
