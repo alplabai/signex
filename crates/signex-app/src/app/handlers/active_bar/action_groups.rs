@@ -168,18 +168,52 @@ impl Signex {
                     selection_request::SelectionRequest::ArmDrag,
                 ))
             }
-            // Other move / z-order variants not yet implemented — fall
-            // through to Select tool so at least the user can move with the
-            // mouse.
-            ActiveBarAction::MoveSelection
-            | ActiveBarAction::MoveSelectionXY
-            | ActiveBarAction::MoveToFront
-            | ActiveBarAction::BringToFront
-            | ActiveBarAction::SendToBack
-            | ActiveBarAction::BringToFrontOf
-            | ActiveBarAction::SendToBackOf => {
+            // Z-order: reorder the selection within its type vector.
+            // Schematic render order = file order, so Bring-To-Front pushes
+            // items to the end of their Vec; Send-To-Back moves them to the
+            // front.
+            ActiveBarAction::BringToFront | ActiveBarAction::MoveToFront => {
+                if !self.interaction_state.canvas.selected.is_empty() {
+                    let items = self.interaction_state.canvas.selected.clone();
+                    self.apply_engine_command(
+                        signex_engine::Command::ReorderObjects {
+                            items,
+                            direction: signex_engine::ReorderDirection::ToFront,
+                        },
+                        false,
+                        true,
+                    );
+                }
+                Task::none()
+            }
+            ActiveBarAction::SendToBack => {
+                if !self.interaction_state.canvas.selected.is_empty() {
+                    let items = self.interaction_state.canvas.selected.clone();
+                    self.apply_engine_command(
+                        signex_engine::Command::ReorderObjects {
+                            items,
+                            direction: signex_engine::ReorderDirection::ToBack,
+                        },
+                        false,
+                        true,
+                    );
+                }
+                Task::none()
+            }
+            // BringToFrontOf / SendToBackOf need a reference-picker UI
+            // (click a second item). Deferred to v0.7.1.
+            ActiveBarAction::BringToFrontOf | ActiveBarAction::SendToBackOf => {
                 crate::diagnostics::log_info(
-                    "Move / z-order variants are deferred — using plain Select for now",
+                    "Bring/Send-*-Of need a reference-picker UI — deferred to v0.7.1",
+                );
+                Task::none()
+            }
+            // MoveSelection / MoveSelectionXY are dialog-driven translates.
+            // Engine supports MoveSymbolAbsolute today; the dialog lands in
+            // v0.7.1.
+            ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
+                crate::diagnostics::log_info(
+                    "Move-Selection dialog lands in v0.7.1 — use click-drag for now",
                 );
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
             }
