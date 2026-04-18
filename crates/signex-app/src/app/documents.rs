@@ -43,6 +43,10 @@ impl SchematicTabSession {
         self.engine.document()
     }
 
+    pub fn engine_mut(&mut self) -> &mut signex_engine::Engine {
+        &mut self.engine
+    }
+
     pub fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
     }
