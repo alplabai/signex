@@ -74,6 +74,7 @@ impl Signex {
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
+                close_tab_confirm: None,
             },
             document_state: DocumentState {
                 dock,
