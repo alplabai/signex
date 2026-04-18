@@ -101,6 +101,15 @@ pub enum Message {
     OpenAnnotateResetConfirm,
     /// Dismiss the Reset-Annotations confirm modal.
     CloseAnnotateResetConfirm,
+    /// User pressed the title bar of a modal at window-space (x, y) — begin
+    /// dragging it. The next DragMove events update its offset.
+    ModalDragStart {
+        modal: super::state::ModalId,
+        x: f32,
+        y: f32,
+    },
+    /// Modal drag released (mouse-up). Clears `modal_dragging`.
+    ModalDragEnd,
     /// Navigate to a world-space point on the canvas; optionally replace the
     /// current selection with the given item. Used for click-to-zoom in the
     /// Messages panel.

@@ -150,4 +150,19 @@ impl Signex {
         self.ui_state.annotate_reset_confirm = false;
         Task::none()
     }
+
+    pub(crate) fn handle_modal_drag_start(
+        &mut self,
+        modal: super::super::state::ModalId,
+        x: f32,
+        y: f32,
+    ) -> Task<Message> {
+        self.ui_state.modal_dragging = Some((modal, x, y));
+        Task::none()
+    }
+
+    pub(crate) fn handle_modal_drag_end(&mut self) -> Task<Message> {
+        self.ui_state.modal_dragging = None;
+        Task::none()
+    }
 }
