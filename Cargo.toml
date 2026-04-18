@@ -2,39 +2,50 @@
 resolver = "2"
 members = [
     "crates/signex-app",
+    "crates/signex-engine",
     "crates/signex-types",
     "crates/kicad-parser",
     "crates/kicad-writer",
     "crates/signex-render",
+    "crates/signex-widgets",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-only"
-repository = "https://github.com/alplabai/signex-iced"
+license = "Apache-2.0"
+repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.14", features = ["wgpu", "canvas", "advanced"] }
-iced_aw = { version = "0.13", default-features = false, features = ["tabs", "card"] }
+iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg"] }
+iced_aw = { version = "0.13", default-features = false, features = [
+    "tabs", "tab_bar", "card", "context_menu", "number_input",
+    "color_picker", "menu", "drop_down", "selection_list",
+    "wrap", "spinner", "sidebar", "labeled_frame", "badge",
+] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Identity
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
 
 # Error handling
 thiserror = "2"
 anyhow = "1"
 
+# File dialogs
+rfd = "0.17.2"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
+signex-engine = { path = "crates/signex-engine" }
 kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
+signex-widgets = { path = "crates/signex-widgets" }
 
 [profile.release]
 lto = "thin"

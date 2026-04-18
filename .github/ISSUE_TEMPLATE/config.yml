@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Migration Plan
-    url: https://github.com/alplabai/signex/blob/main/docs/signex-iced-migration-plan.md
-    about: Full migration plan and architecture decisions
+    url: https://github.com/alplabai/signex/blob/main/docs/master-plan.md
+    about: Full migration plan and architecture decisions for Signex
   - name: Gap Analysis
     url: https://github.com/alplabai/signex/blob/main/docs/altium-gap-analysis.md
     about: Altium Designer feature gap analysis with 67 critical gaps
