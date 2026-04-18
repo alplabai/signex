@@ -83,17 +83,92 @@ impl Signex {
         &mut self,
         mode: signex_engine::AnnotateMode,
     ) -> Task<Message> {
-        self.apply_engine_command(
-            signex_engine::Command::AnnotateAll { mode },
-            false,
-            true,
+        // Share one per-prefix counter across every open sheet so designators
+        // don't collide across sheets of the same project.
+        let mut next_by_prefix: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        let tab_count = self.document_state.tabs.len();
+
+        // Pass A: seed the shared counter from every sheet's already-
+        // annotated symbols (cached + active). This happens inside
+        // annotate_with_seed's phase 2, but running a separate seed pass
+        // first ensures order-independence — without this, sheet B could
+        // reuse numbers it considers free that sheet A actually claims.
+        let mut all_existing: Vec<String> = Vec::new();
+        if let Some(eng) = self.document_state.engine.as_ref() {
+            for sym in &eng.document().symbols {
+                if !sym.is_power && !sym.reference.starts_with('#') {
+                    all_existing.push(sym.reference.clone());
+                }
+            }
+        }
+        for tab in &self.document_state.tabs {
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+                for sym in &session.document().symbols {
+                    if !sym.is_power && !sym.reference.starts_with('#') {
+                        all_existing.push(sym.reference.clone());
+                    }
+                }
+            }
+        }
+        for refstr in &all_existing {
+            let prefix: String = refstr
+                .chars()
+                .take_while(|c| c.is_ascii_alphabetic())
+                .collect();
+            if prefix.is_empty() {
+                continue;
+            }
+            if let Ok(n) = refstr[prefix.len()..].parse::<u32>() {
+                let e = next_by_prefix.entry(prefix).or_insert(0);
+                if n > *e {
+                    *e = n;
+                }
+            }
+        }
+
+        // Pass B: apply to cached (non-active) tabs via the shared counter.
+        let mut any_cached_changed = false;
+        for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
+            if idx == self.document_state.active_tab {
+                continue;
+            }
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut() {
+                if let Ok(changed) = session
+                    .engine_mut()
+                    .annotate_with_seed(mode, &mut next_by_prefix)
+                {
+                    if changed {
+                        session.set_dirty(true);
+                        tab.dirty = true;
+                        any_cached_changed = true;
+                    }
+                }
+            }
+        }
+
+        // Pass C: apply to the active engine so the canvas, Properties
+        // panel, and render cache all refresh. Run through the raw engine
+        // method (not Command) so it shares the same counter.
+        if let Some(engine) = self.document_state.engine.as_mut() {
+            let _ = engine.annotate_with_seed(mode, &mut next_by_prefix);
+        }
+        // Force a render + panel refresh as if a command had fired.
+        self.interaction_state.canvas.clear_content_cache();
+        self.sync_canvas_from_visible_schematic(
+            signex_render::schematic::RenderInvalidation::FULL,
         );
-        // The main Annotate dialog stays open so the user can review the
-        // result and run additional actions (Altium convention). The small
-        // reset-confirm dialog — if it triggered this action — is a Y/N
-        // prompt and closes on confirm.
+        self.update_selection_info();
+        if any_cached_changed || self.document_state.engine.is_some() {
+            self.refresh_panel_ctx();
+        }
+
         self.ui_state.annotate_reset_confirm = false;
-        crate::diagnostics::log_info(&format!("Annotated symbols ({:?})", mode));
+        crate::diagnostics::log_info(&format!(
+            "Annotated symbols across {} sheet(s) ({:?})",
+            tab_count.max(1),
+            mode,
+        ));
         Task::none()
     }
 
