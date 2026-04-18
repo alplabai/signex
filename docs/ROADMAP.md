@@ -105,7 +105,7 @@ complete on their own schedules.
 | **WS-U**  | UI Shell + Schematic Canvas | `signex-app` (shell, panels, schematic)      |
 | **WS-V**  | Validation (ERC/DRC)        | `signex-erc`, `signex-drc`                   |
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
-| **WS-P**  | PCB Geometry                | `pcb-geom`                                   |
+| **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
 | **WS-3D** | 3D Viewer                   | `signex-render-3d`, `step-loader`            |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
 | **WS-AI** | Signal AI (Pro)             | `signex-signal`                              |
@@ -457,31 +457,52 @@ continues to receive bug fixes and refinement during v2.0 development.
 - A PCB can be modified (components moved, zones edited, outline changed)
 - All edits round-trip cleanly through KiCad
 
-### Phase 9 — Routing (v1.3)
+### Phase 9 — Routing (v2.1)
 
-**Active workstreams:** WS-P (primary, router algorithms), WS-E (routing
-commands), WS-U (routing tools).
+**Active workstreams:** WS-P (primary, router algorithms), WS-V
+(router-facing incremental DRC), WS-E (router commit command), WS-U
+(routing tools, net-class editor).
 
-**Duration:** 12–16 weeks. *(Routing is the hardest single feature in EDA.)*
+**Duration:** 25–36 weeks total across five stage releases.
+*(Routing is the hardest single feature in EDA. See
+`docs/internal/docs/PCB_ROUTER_PLAN.md` for the authoritative detailed
+plan including crate layout, algorithms, library choices, and quality
+gates.)*
 
-**Goal:** Interactive routing comparable to KiCad 9's interactive router.
+**Goal:** Interactive routing comparable to KiCad 9's PNS, implemented
+clean-room under Apache-2.0.
 
-**Deliverables:**
+**Sub-phases (each is its own shippable release):**
 
-- Walkaround routing
-- Push-and-shove routing
-- 45° / 90° / arc corner styles
-- Via placement during routing
-- Track width from net class rules
-- Differential pair routing with gap control
-- Length tuning (accordion, sawtooth, trombone meanders)
-- BGA fanout, via stitching
-- Multi-track routing
+- **9.1 Greedy (v2.1.0, 4–6 weeks)** — single-trace routing with
+  correct corners, vias, and net-class-driven widths. Obstacle
+  detection at the "refuse to cross" level (no walkaround yet).
+- **9.2 Walkaround (v2.1.1, 6–8 weeks)** — A* pathfinding over a
+  Minkowski-inflated obstacle graph, with live incremental DRC.
+- **9.3 Push-and-shove (v2.1.2, 8–12 weeks)** — topology-preserving
+  shove solver with rigidity heuristics. The gate to professional
+  credibility.
+- **9.4 Diff pair + length tuning (v2.1.3, 4–6 weeks)** — coupled
+  two-net routing, accordion / trombone / sawtooth meanders, length
+  and skew reporting.
+- **9.5 Copper pour (v2.1.4, 3–4 weeks)** — zone fill with thermal
+  relief and island removal, using the same geometry core as the
+  router.
+
+**Deferred:**
+
+- Multi-track (bus) routing, BGA fanout, via stitching — v2.2 candidates
+- Autorouting — not scoped; v2.5+ if ever
 
 **Exit criteria:**
 
-- A complete PCB can be routed using only the interactive router
-- Push-and-shove behavior matches KiCad's quality on standard test cases
+- Fixture corpus of 50 open-source PCBs routes end-to-end with no
+  panic, stuck-state, or geometry corruption across 10 000 random
+  routing actions per board
+- Shove converges in ≤ 8 iterations on 95% of actions
+- Median action latency ≤ 16 ms (one frame at 60 Hz); 95th percentile
+  ≤ 33 ms
+- Push-and-shove quality matches KiCad on the standard PNS test cases
 
 ### Phase 10 — DRC and Design Rules (v1.4)
 
