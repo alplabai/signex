@@ -813,20 +813,18 @@ fn wrap_modal<'a>(
         })
         .into();
 
-    // Explicit top/left Space pushes the modal to its absolute position.
-    // Trailing Fill absorbs remaining space so the modal can overhang the
-    // window on the right/bottom without compressing.
+    // Place the modal inside a column+row whose outer size is exactly
+    // `top + modal_h` × `left + modal_w` (no Fill padding). That makes the
+    // total laid-out size grow to fit the modal + its leading padding,
+    // exceeding the viewport when the user drags far enough — iced places
+    // the over-sized column at origin and the parent Stack clips anything
+    // that falls outside the viewport WITHOUT shrinking the modal's fixed
+    // width/height. The backdrop is a separate Stack child so it dims the
+    // full viewport regardless.
     let positioned: Element<'a, Message> = column![
         Space::new().height(top),
-        row![
-            Space::new().width(left),
-            inner,
-            Space::new().width(Length::Fill),
-        ],
-        Space::new().height(Length::Fill),
+        row![Space::new().width(left), inner,],
     ]
-    .width(Length::Fill)
-    .height(Length::Fill)
     .into();
 
     iced::widget::stack![backdrop, positioned].into()
@@ -1016,10 +1014,19 @@ fn preview_annotations(
     snapshot: &signex_render::schematic::SchematicRenderSnapshot,
     _order: AnnotateOrder,
 ) -> Vec<(String, String)> {
+    // Power ports (#PWR, #FLG, `is_power`) aren't designators — they're
+    // net anchors whose "reference" is the net name. Skip them from the
+    // annotate preview and the change list entirely.
+    let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
+        !sym.is_power && !sym.reference.starts_with('#')
+    };
     // Collect existing per-prefix counters.
     let mut next: std::collections::HashMap<String, u32> =
         std::collections::HashMap::new();
     for sym in &snapshot.symbols {
+        if !is_designator_target(sym) {
+            continue;
+        }
         let prefix: String = sym
             .reference
             .chars()
@@ -1058,7 +1065,7 @@ fn preview_annotations(
     let mut out = Vec::new();
     for i in idx {
         let sym = &snapshot.symbols[i];
-        if sym.reference.is_empty() {
+        if sym.reference.is_empty() || !is_designator_target(sym) {
             continue;
         }
         let prefix: String = sym
