@@ -79,6 +79,10 @@ impl Signex {
                 erc_severity_override: std::collections::HashMap::new(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
+                annotate_dialog_open: false,
+                annotate_order: crate::app::state::AnnotateOrder::AcrossThenUp,
+                erc_dialog_open: false,
+                annotate_reset_confirm: false,
             },
             document_state: DocumentState {
                 dock,

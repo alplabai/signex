@@ -64,6 +64,14 @@ impl Signex {
             | Message::CloseTabConfirm(_)
             | Message::RunErc
             | Message::Annotate(_)
+            | Message::OpenAnnotateDialog
+            | Message::CloseAnnotateDialog
+            | Message::AnnotateOrderChanged(_)
+            | Message::OpenErcDialog
+            | Message::CloseErcDialog
+            | Message::ErcSeverityChanged(_, _)
+            | Message::OpenAnnotateResetConfirm
+            | Message::CloseAnnotateResetConfirm
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
             Message::Noop => Task::none(),
