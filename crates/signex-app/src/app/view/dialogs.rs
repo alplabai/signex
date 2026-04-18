@@ -36,8 +36,8 @@ impl Signex {
             current_sheet_name = tab.title.clone();
         }
 
-        // ── Header ──
-        let header = container(
+        // ── Header (draggable title bar) ──
+        let header_content: Element<'_, Message> = container(
             row![
                 text("Annotate").size(14).color(text_c),
                 Space::new().width(Length::Fill),
@@ -46,7 +46,13 @@ impl Signex {
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens));
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::AnnotateDialog,
+            self.interaction_state.last_mouse_pos,
+        );
 
         // ── Left column: Schematic Annotation Configuration ──
         let left_title = text("Schematic Annotation Configuration")
@@ -56,23 +62,51 @@ impl Signex {
         let order_row = column![
             text("Order of Processing").size(10).color(text_muted),
             row![
-                order_radio(
-                    "Across then Up",
-                    AnnotateOrder::AcrossThenUp,
-                    self.ui_state.annotate_order,
-                    text_c,
-                    border_c,
-                ),
-                Space::new().width(6),
-                order_radio(
-                    "Up then Across",
-                    AnnotateOrder::UpThenAcross,
-                    self.ui_state.annotate_order,
-                    text_c,
-                    border_c,
-                ),
+                column![
+                    row![
+                        order_radio(
+                            "Up Then Across",
+                            AnnotateOrder::UpThenAcross,
+                            self.ui_state.annotate_order,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(4),
+                        order_radio(
+                            "Across Then Down",
+                            AnnotateOrder::AcrossThenDown,
+                            self.ui_state.annotate_order,
+                            text_c,
+                            border_c,
+                        ),
+                    ]
+                    .spacing(0),
+                    Space::new().height(4),
+                    row![
+                        order_radio(
+                            "Down Then Across",
+                            AnnotateOrder::DownThenAcross,
+                            self.ui_state.annotate_order,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(4),
+                        order_radio(
+                            "Across Then Up",
+                            AnnotateOrder::AcrossThenUp,
+                            self.ui_state.annotate_order,
+                            text_c,
+                            border_c,
+                        ),
+                    ]
+                    .spacing(0),
+                ]
+                .spacing(0)
+                .width(Length::FillPortion(3)),
+                Space::new().width(8),
+                order_preview(self.ui_state.annotate_order, text_c, text_muted, border_c),
             ]
-            .align_y(iced::Alignment::Center)
+            .align_y(iced::Alignment::Start)
             .spacing(0),
         ]
         .spacing(4);
@@ -99,6 +133,71 @@ impl Signex {
         ]
         .spacing(4);
 
+        // Component-parameter matching list. Altium shows every parameter
+        // name that appears on any symbol in the project, with a "Strictly"
+        // toggle per row. We pull the set from the active snapshot's
+        // Symbol.fields HashMap so what the user sees matches what their
+        // schematic actually carries — no hard-coded IntLib catalogue.
+        let param_names: Vec<String> = {
+            let mut set: std::collections::BTreeSet<String> =
+                std::collections::BTreeSet::new();
+            // Always include the three built-in fields so the list isn't
+            // empty on a fresh schematic.
+            set.insert("Reference".to_string());
+            set.insert("Value".to_string());
+            set.insert("Footprint".to_string());
+            if let Some(snapshot) = self.active_render_snapshot() {
+                for sym in &snapshot.symbols {
+                    for key in sym.fields.keys() {
+                        set.insert(key.clone());
+                    }
+                }
+            }
+            set.into_iter().collect()
+        };
+        let mut param_rows: iced::widget::Column<'_, Message> = column![
+            row![
+                text("Component Parameter")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(5)),
+                text("Strictly")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(1)),
+            ]
+            .padding([4, 8]),
+        ]
+        .spacing(0);
+        for name in &param_names {
+            param_rows = param_rows.push(
+                row![
+                    row![
+                        check_pip(false, border_c),
+                        Space::new().width(6),
+                        text(name.clone()).size(11).color(text_c),
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .width(Length::FillPortion(5)),
+                    container(check_pip(true, border_c))
+                        .align_x(iced::alignment::Horizontal::Right)
+                        .width(Length::FillPortion(1)),
+                ]
+                .padding([3, 8])
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        if param_names.is_empty() {
+            param_rows = param_rows.push(
+                container(
+                    text("No custom parameters on any symbol yet.")
+                        .size(11)
+                        .color(text_muted),
+                )
+                .padding([10, 8]),
+            );
+        }
+
         let matching = column![
             text("Matching Options").size(12).color(text_c),
             Space::new().height(4),
@@ -115,35 +214,98 @@ impl Signex {
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            text("Parameter-matching options (accuracy, body finish, tolerance…) ship in v0.7.1 with the full parameter manager.")
+            container(scrollable(param_rows).height(200))
+                .padding(2)
+                .style(bordered_style(border_c)),
+            Space::new().height(4),
+            text("Parameter-matching wires into the annotation engine in v0.7.1 — the list above reflects the intended grouping today.")
                 .size(10)
                 .color(text_muted),
         ]
         .spacing(4);
 
+        // Sheets list: include every open tab so the multi-sheet view is
+        // visible. All but the active sheet render greyed because only the
+        // active snapshot feeds the preview for v0.7.
+        let mut sheet_rows: iced::widget::Column<'_, Message> = column![].spacing(0);
+        let active_title = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| t.title.clone());
+        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+            let is_active = Some(&tab.title) == active_title.as_ref();
+            let row_color = if is_active { text_c } else { text_muted };
+            let suffix_placeholder = if is_active { "" } else { "—" };
+            sheet_rows = sheet_rows.push(
+                row![
+                    row![
+                        check_pip(is_active, border_c),
+                        Space::new().width(6),
+                        text(tab.title.clone()).size(11).color(row_color),
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .width(Length::FillPortion(6)),
+                    text("All").size(11).color(row_color).width(Length::FillPortion(1)),
+                    text(format!("{idx}"))
+                        .size(11)
+                        .color(row_color)
+                        .width(Length::FillPortion(1)),
+                    text(format!("{}", idx + 1))
+                        .size(11)
+                        .color(row_color)
+                        .width(Length::FillPortion(1)),
+                    row![
+                        check_pip(false, border_c),
+                        Space::new().width(6),
+                        text(suffix_placeholder.to_string()).size(11).color(row_color),
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .width(Length::FillPortion(2)),
+                ]
+                .padding([3, 8])
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        if self.document_state.tabs.is_empty() {
+            sheet_rows = sheet_rows.push(
+                container(
+                    text("No schematic tab open.").size(11).color(text_muted),
+                )
+                .padding([6, 8]),
+            );
+        }
+
         let sheets_table = column![
             text("Schematic Sheets To Annotate").size(12).color(text_c),
             Space::new().height(4),
             row![
-                text("Sheet").size(10).color(text_muted).width(Length::FillPortion(3)),
-                text("Scope").size(10).color(text_muted).width(Length::FillPortion(1)),
-                text("Start").size(10).color(text_muted).width(Length::FillPortion(1)),
+                text("Schematic Sheet")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(6)),
+                text("Scope")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(1)),
+                text("Ord...")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(1)),
+                text("Start")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(1)),
+                text("Add Suffix")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(2)),
             ]
             .padding([2, 8]),
-            container(
-                row![
-                    text(current_sheet_name.clone())
-                        .size(11)
-                        .color(text_c)
-                        .width(Length::FillPortion(3)),
-                    text("All").size(11).color(text_muted).width(Length::FillPortion(1)),
-                    text("1").size(11).color(text_muted).width(Length::FillPortion(1)),
-                ]
-                .padding([3, 8]),
-            )
-            .style(bordered_style(border_c)),
+            container(scrollable(sheet_rows).height(140))
+                .style(bordered_style(border_c)),
             Space::new().height(4),
-            text("Multi-sheet annotation (hierarchical + scope) lands with v1.1 Advanced Schematic.")
+            text("Scope / Start / Suffix columns are visual for v0.7 — multi-sheet wiring lands in v1.1.")
                 .size(10)
                 .color(text_muted),
         ]
@@ -189,15 +351,24 @@ impl Signex {
             );
         } else {
             for (cur, new) in &proposed {
+                // Rows that actually change highlight in the accent color;
+                // unchanged rows fade into the muted palette.
+                let changing = cur != new;
+                let cur_color = if changing { text_c } else { text_muted };
+                let new_color = if changing {
+                    Color::from_rgb(0.25, 0.75, 0.35)
+                } else {
+                    text_muted
+                };
                 rows_col = rows_col.push(
                     row![
                         text(cur.clone())
                             .size(11)
-                            .color(text_muted)
+                            .color(cur_color)
                             .width(Length::FillPortion(2)),
                         text(new.clone())
                             .size(11)
-                            .color(text_c)
+                            .color(new_color)
                             .width(Length::FillPortion(2)),
                         text(current_sheet_name.clone())
                             .size(11)
@@ -213,14 +384,15 @@ impl Signex {
             .padding(4)
             .style(bordered_style(border_c));
 
-        let summary_text = if proposed.is_empty() {
+        // Count only rows where proposed != current (actual changes).
+        let changes: usize = proposed.iter().filter(|(c, n)| c != n).count();
+        let summary_text = if changes == 0 {
             format!(
                 "Annotation has nothing to do — all {total_symbols} symbols on '{current_sheet_name}' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch."
             )
         } else {
             format!(
-                "Annotation will assign new designators to {} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
-                proposed.len(),
+                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
             )
         };
         let summary = container(
@@ -279,7 +451,7 @@ impl Signex {
             Space::new().width(4),
             primary_button(
                 "Accept Changes",
-                if proposed.is_empty() {
+                if changes == 0 {
                     None
                 } else {
                     Some(Message::Annotate(signex_engine::AnnotateMode::Incremental))
@@ -314,7 +486,13 @@ impl Signex {
         )
         .style(crate::styles::context_menu(tokens));
 
-        wrap_modal(dialog.into())
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::AnnotateDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog.into(), offset)
     }
 
     pub(super) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
@@ -323,11 +501,19 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
+        let header_content: Element<'_, Message> =
+            container(text("Reset All Annotations").size(14).color(text_c))
+                .padding([10, 14])
+                .style(crate::styles::toolbar_strip(tokens))
+                .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::AnnotateResetConfirm,
+            self.interaction_state.last_mouse_pos,
+        );
         let dialog = container(
             column![
-                container(text("Reset All Annotations").size(14).color(text_c))
-                    .padding([10, 14])
-                    .style(crate::styles::toolbar_strip(tokens)),
+                header,
                 container(
                     text(
                         "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.\nThis cannot be undone through Ctrl+Z alone — consider saving first.",
@@ -356,7 +542,13 @@ impl Signex {
             .width(420),
         )
         .style(crate::styles::context_menu(tokens));
-        wrap_modal(dialog.into())
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::AnnotateResetConfirm)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog.into(), offset)
     }
 
     pub(super) fn view_erc_dialog(&self) -> Element<'_, Message> {
@@ -365,7 +557,7 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        let header = container(
+        let header_content: Element<'_, Message> = container(
             row![
                 text("Electrical Rules Check").size(14).color(text_c),
                 Space::new().width(Length::Fill),
@@ -374,7 +566,13 @@ impl Signex {
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens));
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::ErcDialog,
+            self.interaction_state.last_mouse_pos,
+        );
 
         // Per-rule severity grid. 11 rules × 4 severities.
         let mut rule_rows = column![
@@ -446,13 +644,124 @@ impl Signex {
             .width(640),
         )
         .style(crate::styles::context_menu(tokens));
-        wrap_modal(dialog.into())
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::ErcDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog.into(), offset)
     }
 }
 
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
+
+/// Tiny inline checkbox pip — read-only indicator used inside the Annotate
+/// dialog's parameter list and sheet table. The boxes are visual only for
+/// v0.7; v0.7.1 makes them interactive.
+fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
+    let inner = if on {
+        text("✓").size(9).color(Color::WHITE)
+    } else {
+        text(" ").size(9).color(Color::WHITE)
+    };
+    let bg = if on {
+        Color::from_rgb(0.00, 0.47, 0.84)
+    } else {
+        Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+    };
+    container(inner)
+        .width(12)
+        .height(12)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border,
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// Compact visual *legend* of the annotate order — this is intentionally a
+/// static R1..R4 diagram that illustrates how four parts arranged in a 2×2
+/// grid would be numbered under the selected traversal. It does NOT reflect
+/// the user's actual components; it's the same convention Altium uses.
+fn order_preview(
+    order: AnnotateOrder,
+    text_c: Color,
+    text_muted: Color,
+    border: Color,
+) -> Element<'static, Message> {
+    // Pick labels for each of the four slots (top-left, top-right, bottom-left,
+    // bottom-right) matching the selected order.
+    // Slot layout:
+    //   (0,0) tl   (0,1) tr
+    //   (1,0) bl   (1,1) br
+    let slots = match order {
+        // Column-major, ascending within the column:
+        //  1 3
+        //  2 4
+        AnnotateOrder::UpThenAcross => ("R1", "R3", "R2", "R4"),
+        // Column-major, descending within the column:
+        //  2 4
+        //  1 3
+        AnnotateOrder::DownThenAcross => ("R2", "R4", "R1", "R3"),
+        // Row-major, descending rows:
+        //  1 2
+        //  3 4
+        AnnotateOrder::AcrossThenDown => ("R1", "R2", "R3", "R4"),
+        // Row-major, ascending rows:
+        //  3 4
+        //  1 2
+        AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
+    };
+    let cell = |label: &'static str| -> Element<'static, Message> {
+        container(text(label.to_string()).size(10).color(text_c))
+            .width(34)
+            .height(20)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: border,
+                },
+                ..container::Style::default()
+            })
+            .into()
+    };
+    let arrow = match order {
+        AnnotateOrder::UpThenAcross => "↑→",
+        AnnotateOrder::DownThenAcross => "↓→",
+        AnnotateOrder::AcrossThenDown => "→↓",
+        AnnotateOrder::AcrossThenUp => "→↑",
+    };
+    container(
+        column![
+            text("Preview").size(9).color(text_muted),
+            Space::new().height(2),
+            row![cell(slots.0), Space::new().width(4), cell(slots.1),].spacing(0),
+            Space::new().height(4),
+            row![cell(slots.2), Space::new().width(4), cell(slots.3),].spacing(0),
+            Space::new().height(2),
+            text(arrow).size(11).color(text_muted),
+        ]
+        .spacing(0)
+        .align_x(iced::Alignment::Center),
+    )
+    .padding(6)
+    .style(bordered_style(border))
+    .into()
+}
 
 fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'static {
     move |_: &Theme| container::Style {
@@ -466,16 +775,32 @@ fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'stati
     }
 }
 
-fn wrap_modal(inner: Element<'_, Message>) -> Element<'_, Message> {
+fn wrap_modal<'a>(
+    inner: Element<'a, Message>,
+    offset: (f32, f32),
+) -> Element<'a, Message> {
+    // Start centered via Length::Fill on all sides, then bias with explicit
+    // Space elements carrying the accumulated drag offset. dx > 0 pushes
+    // right, dy > 0 pushes down.
+    let (dx, dy) = offset;
+    let top_fill_px = dy.max(0.0);
+    let bottom_fill_px = (-dy).max(0.0);
+    let left_fill_px = dx.max(0.0);
+    let right_fill_px = (-dx).max(0.0);
+
     container(
         column![
+            Space::new().height(top_fill_px),
             Space::new().height(Length::Fill),
             row![
+                Space::new().width(left_fill_px),
                 Space::new().width(Length::Fill),
                 inner,
                 Space::new().width(Length::Fill),
+                Space::new().width(right_fill_px),
             ],
             Space::new().height(Length::Fill),
+            Space::new().height(bottom_fill_px),
         ]
         .width(Length::Fill)
         .height(Length::Fill),
@@ -487,6 +812,22 @@ fn wrap_modal(inner: Element<'_, Message>) -> Element<'_, Message> {
         ..container::Style::default()
     })
     .into()
+}
+
+/// Wrap a header element in a mouse_area so pressing on it begins a modal
+/// drag. Uses the last known mouse position as the drag anchor.
+fn draggable_header<'a>(
+    header_content: Element<'a, Message>,
+    modal: super::super::state::ModalId,
+    last_mouse: (f32, f32),
+) -> Element<'a, Message> {
+    iced::widget::mouse_area(header_content)
+        .on_press(Message::ModalDragStart {
+            modal,
+            x: last_mouse.0,
+            y: last_mouse.1,
+        })
+        .into()
 }
 
 fn close_button(
@@ -693,10 +1034,13 @@ fn preview_annotations(
             )
             .then(sa.uuid.cmp(&sb.uuid))
     });
+    // Emit a row for every symbol so the user sees the full project — rows
+    // where current == proposed indicate "no change". Only symbols whose
+    // reference ends in '?' will actually be renumbered.
     let mut out = Vec::new();
     for i in idx {
         let sym = &snapshot.symbols[i];
-        if !sym.reference.ends_with('?') {
+        if sym.reference.is_empty() {
             continue;
         }
         let prefix: String = sym
@@ -704,12 +1048,14 @@ fn preview_annotations(
             .chars()
             .take_while(|c| c.is_ascii_alphabetic())
             .collect();
-        if prefix.is_empty() {
-            continue;
+        if sym.reference.ends_with('?') && !prefix.is_empty() {
+            let n = next.entry(prefix.clone()).or_insert(0);
+            *n += 1;
+            out.push((sym.reference.clone(), format!("{prefix}{n}")));
+        } else {
+            // Already annotated — propose keeping the same designator.
+            out.push((sym.reference.clone(), sym.reference.clone()));
         }
-        let n = next.entry(prefix.clone()).or_insert(0);
-        *n += 1;
-        out.push((sym.reference.clone(), format!("{prefix}{n}")));
     }
     out
 }

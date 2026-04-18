@@ -21,6 +21,20 @@ impl Signex {
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
+        // Modal drag — accumulate delta into the per-modal offset so the
+        // dialog slides under the cursor.
+        if let Some((modal, last_x, last_y)) = self.ui_state.modal_dragging {
+            let dx = x - last_x;
+            let dy = y - last_y;
+            let entry = self
+                .ui_state
+                .modal_offsets
+                .entry(modal)
+                .or_insert((0.0, 0.0));
+            entry.0 += dx;
+            entry.1 += dy;
+            self.ui_state.modal_dragging = Some((modal, x, y));
+        }
         if let Some(target) = self.interaction_state.dragging {
             let pos = match target {
                 DragTarget::LeftPanel | DragTarget::RightPanel => x,

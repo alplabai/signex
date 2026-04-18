@@ -75,15 +75,39 @@ pub struct UiState {
     /// Reset-and-renumber confirmation modal. When true, the Design →
     /// Reset menu item shows a confirm before discarding every number.
     pub annotate_reset_confirm: bool,
+    /// Per-modal offset in window pixels from the centered position.
+    /// Updated when the user drags the title bar. Persists until the app
+    /// closes so reopening a dialog lands where it was last placed.
+    pub modal_offsets: std::collections::HashMap<ModalId, (f32, f32)>,
+    /// Active modal drag: which modal is being dragged + the last mouse
+    /// position so the delta can be computed from the next DragMove event.
+    pub modal_dragging: Option<(ModalId, f32, f32)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum ModalId {
+    AnnotateDialog,
+    AnnotateResetConfirm,
+    ErcDialog,
+    // Reserved for future draggable modals — wired in when each dialog's
+    // header gets a drag hook.
+    Preferences,
+    FindReplace,
+    CloseTabConfirm,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
-/// "Order of Processing" drop-down.
+/// "Order of Processing" drop-down (four variants).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnotateOrder {
     /// Top-to-bottom within each column, left-to-right across columns.
     UpThenAcross,
+    /// Bottom-to-top within each column, left-to-right across columns.
+    DownThenAcross,
     /// Left-to-right within each row, top-to-bottom across rows.
+    AcrossThenDown,
+    /// Left-to-right within each row, bottom-to-top across rows.
     AcrossThenUp,
 }
 
