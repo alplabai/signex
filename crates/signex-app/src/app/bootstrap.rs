@@ -462,7 +462,14 @@ impl Signex {
                 _ => Message::Noop,
             })
         } else {
+            // Always track the cursor so `last_mouse_pos` is fresh when the
+            // user starts a modal drag — otherwise the first delta is huge
+            // and the dialog jumps. DragMove is a no-op when no drag is
+            // active (it just updates last_mouse_pos).
             iced::event::listen().map(|event| match event {
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Message::DragMove(position.x, position.y)
+                }
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,

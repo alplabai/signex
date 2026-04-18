@@ -214,7 +214,7 @@ impl Signex {
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            container(scrollable(param_rows).height(200))
+            container(scrollable(param_rows).height(280))
                 .padding(2)
                 .style(bordered_style(border_c)),
             Space::new().height(4),
@@ -302,7 +302,7 @@ impl Signex {
                     .width(Length::FillPortion(2)),
             ]
             .padding([2, 8]),
-            container(scrollable(sheet_rows).height(140))
+            container(scrollable(sheet_rows).height(180))
                 .style(bordered_style(border_c)),
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual for v0.7 — multi-sheet wiring lands in v1.1.")
@@ -380,7 +380,7 @@ impl Signex {
             }
         }
 
-        let right_list = container(scrollable(rows_col).height(360))
+        let right_list = container(scrollable(rows_col).height(520))
             .padding(4)
             .style(bordered_style(border_c));
 
@@ -779,39 +779,47 @@ fn wrap_modal<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
 ) -> Element<'a, Message> {
-    // Start centered via Length::Fill on all sides, then bias with explicit
-    // Space elements carrying the accumulated drag offset. dx > 0 pushes
-    // right, dy > 0 pushes down.
+    // Layer 1: full-window dim backdrop. Layer 2: the modal positioned with
+    // Space padding. Using a Stack so the backdrop fills the viewport while
+    // the inner column is allowed to overflow — the user can drag the modal
+    // past any edge without the layout engine compressing it.
+    //
+    // We centre via Length::Fill on both sides, then bias that centre with
+    // the accumulated drag offset. Negative offsets fall through to zero-
+    // sized Space on that side (Space widths must be >= 0), so drag-past-
+    // the-left-edge is the point where the modal stops sliding left; right
+    // and bottom edges can be dragged arbitrarily far because iced renders
+    // the modal at its intrinsic size even when the trailing Fill goes to
+    // zero.
     let (dx, dy) = offset;
-    let top_fill_px = dy.max(0.0);
-    let bottom_fill_px = (-dy).max(0.0);
-    let left_fill_px = dx.max(0.0);
-    let right_fill_px = (-dx).max(0.0);
+    let top = dy.max(0.0);
+    let left = dx.max(0.0);
 
-    container(
-        column![
-            Space::new().height(top_fill_px),
-            Space::new().height(Length::Fill),
-            row![
-                Space::new().width(left_fill_px),
-                Space::new().width(Length::Fill),
-                inner,
-                Space::new().width(Length::Fill),
-                Space::new().width(right_fill_px),
-            ],
-            Space::new().height(Length::Fill),
-            Space::new().height(bottom_fill_px),
-        ]
+    let backdrop: Element<'a, Message> = container(iced::widget::Space::new())
         .width(Length::Fill)
-        .height(Length::Fill),
-    )
+        .height(Length::Fill)
+        .style(|_: &Theme| container::Style {
+            background: Some(Background::Color(BACKDROP)),
+            ..container::Style::default()
+        })
+        .into();
+
+    let positioned: Element<'a, Message> = column![
+        Space::new().height(top),
+        Space::new().height(Length::Fill),
+        row![
+            Space::new().width(left),
+            Space::new().width(Length::Fill),
+            inner,
+            Space::new().width(Length::Fill),
+        ],
+        Space::new().height(Length::Fill),
+    ]
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(BACKDROP)),
-        ..container::Style::default()
-    })
-    .into()
+    .into();
+
+    iced::widget::stack![backdrop, positioned].into()
 }
 
 /// Wrap a header element in a mouse_area so pressing on it begins a modal
