@@ -2,13 +2,6 @@ use super::*;
 
 impl Signex {
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
-        if self.interaction_state.current_tool != Tool::Measure
-            && (self.interaction_state.canvas.measure_start.is_some()
-                || self.interaction_state.canvas.measure_end.is_some())
-        {
-            self.clear_measurement();
-        }
-
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;

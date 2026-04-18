@@ -242,7 +242,6 @@ impl Signex {
         self.interaction_state.canvas.set_render_cache(None);
         self.interaction_state.canvas.selected.clear();
         self.interaction_state.canvas.wire_preview.clear();
-        self.interaction_state.canvas.reset_measurement();
         self.interaction_state.canvas.drawing_mode = false;
         self.interaction_state.canvas.clear_content_cache();
         self.interaction_state.canvas.clear_overlay_cache();

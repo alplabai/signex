@@ -60,28 +60,97 @@ impl Signex {
             }
             ActiveBarAction::FlipSelectedX => self.update(Message::MirrorSelectedX),
             ActiveBarAction::FlipSelectedY => self.update(Message::MirrorSelectedY),
-            // Select-mode variants all currently enter the normal Select tool;
-            // distinct box/lasso modes will land with a later selection rewrite.
+            // "Select → Connection": if a wire/bus/junction/label is already
+            // selected, expand immediately. Otherwise fall through to Select
+            // tool so the next click triggers the net walk via the hit-test
+            // dispatched with SelectConnected.
+            ActiveBarAction::SelectConnection => {
+                use signex_types::schematic::SelectedKind;
+                let has_net_seed = self
+                    .interaction_state
+                    .canvas
+                    .selected
+                    .iter()
+                    .any(|i| matches!(i.kind,
+                        SelectedKind::Wire | SelectedKind::Bus
+                        | SelectedKind::Junction | SelectedKind::Label));
+                if has_net_seed {
+                    if let (Some(snapshot), Some(seed)) = (
+                        self.active_render_snapshot(),
+                        self.interaction_state.canvas.selected.first().cloned(),
+                    ) {
+                        let (wx, wy) = match seed.kind {
+                            SelectedKind::Wire => snapshot
+                                .wires
+                                .iter()
+                                .find(|w| w.uuid == seed.uuid)
+                                .map(|w| (w.start.x, w.start.y))
+                                .unwrap_or((0.0, 0.0)),
+                            SelectedKind::Bus => snapshot
+                                .buses
+                                .iter()
+                                .find(|b| b.uuid == seed.uuid)
+                                .map(|b| (b.start.x, b.start.y))
+                                .unwrap_or((0.0, 0.0)),
+                            SelectedKind::Junction => snapshot
+                                .junctions
+                                .iter()
+                                .find(|j| j.uuid == seed.uuid)
+                                .map(|j| (j.position.x, j.position.y))
+                                .unwrap_or((0.0, 0.0)),
+                            SelectedKind::Label => snapshot
+                                .labels
+                                .iter()
+                                .find(|l| l.uuid == seed.uuid)
+                                .map(|l| (l.position.x, l.position.y))
+                                .unwrap_or((0.0, 0.0)),
+                            _ => (0.0, 0.0),
+                        };
+                        self.update(Message::Selection(
+                            selection_request::SelectionRequest::SelectConnected {
+                                world_x: wx,
+                                world_y: wy,
+                            },
+                        ))
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+                }
+            }
+            // Other select-mode variants currently enter the normal Select
+            // tool; distinct box/lasso modes land with a later selection
+            // rewrite.
             ActiveBarAction::LassoSelect
             | ActiveBarAction::InsideArea
             | ActiveBarAction::OutsideArea
             | ActiveBarAction::TouchingRectangle
             | ActiveBarAction::TouchingLine
-            | ActiveBarAction::SelectConnection
             | ActiveBarAction::ToggleSelection => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
             }
-            // Drag / Move actions — for now, simply switch to the Select tool so
-            // the user can grab and move the current selection with the mouse.
-            ActiveBarAction::Drag
-            | ActiveBarAction::MoveSelection
+            // "Drag" / "Drag Selection" — arm the next canvas click so it
+            // begins a move-drag whether or not it lands on an already-
+            // selected item. Requires a prior selection.
+            ActiveBarAction::Drag | ActiveBarAction::DragSelection => {
+                self.update(Message::Selection(
+                    selection_request::SelectionRequest::ArmDrag,
+                ))
+            }
+            // Other move / z-order variants not yet implemented — fall
+            // through to Select tool so at least the user can move with the
+            // mouse.
+            ActiveBarAction::MoveSelection
             | ActiveBarAction::MoveSelectionXY
-            | ActiveBarAction::DragSelection
             | ActiveBarAction::MoveToFront
             | ActiveBarAction::BringToFront
             | ActiveBarAction::SendToBack
             | ActiveBarAction::BringToFrontOf
             | ActiveBarAction::SendToBackOf => {
+                crate::diagnostics::log_info(
+                    "Move / z-order variants are deferred — using plain Select for now",
+                );
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
             }
             ActiveBarAction::AlignLeft

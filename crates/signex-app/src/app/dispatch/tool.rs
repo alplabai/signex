@@ -148,9 +148,7 @@ impl Signex {
     pub(super) fn dispatch_tool_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::PrePlacementTab => {
-                if self.interaction_state.current_tool != Tool::Select
-                    && self.interaction_state.current_tool != Tool::Measure
-                {
+                if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
                     use signex_types::schematic::LabelType;
                     // Figure out the exact placement flavor so the form
@@ -360,7 +358,6 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
-                    Tool::Measure => Some("Measure".to_string()),
                     _ => None,
                 };
                 // Arm a ghost text-note preview for the Text tool so the
@@ -380,13 +377,8 @@ impl Signex {
                 } else {
                     self.interaction_state.canvas.ghost_text = None;
                 }
-                if tool == Tool::Measure {
+                if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();
-                } else {
-                    self.clear_measurement();
-                    if tool == Tool::Select {
-                        self.clear_transient_schematic_tool_state();
-                    }
                 }
                 self.finish_update()
             }
