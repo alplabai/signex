@@ -63,6 +63,7 @@ impl Signex {
             | Message::ContextAction(_)
             | Message::CloseTabConfirm(_)
             | Message::RunErc
+            | Message::Annotate(_)
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
             Message::Noop => Task::none(),

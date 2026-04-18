@@ -82,6 +82,9 @@ pub enum Message {
     /// Run the ERC engine against the active schematic snapshot and populate
     /// `ui_state.erc_violations`. Bound to F8.
     RunErc,
+    /// Auto-annotate every unannotated symbol (reference ends in `?`).
+    /// Three modes: incremental, reset+renumber, reset-only.
+    Annotate(signex_engine::AnnotateMode),
     /// Navigate to a world-space point on the canvas; optionally replace the
     /// current selection with the given item. Used for click-to-zoom in the
     /// Messages panel.
