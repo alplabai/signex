@@ -1,6 +1,15 @@
 use super::*;
 
 impl Signex {
+    /// Clear every cursor-following ghost preview. Call before arming a new
+    /// ghost or switching to a tool that doesn't have one, so a previously
+    /// armed ghost from another tool doesn't linger on the canvas.
+    pub(crate) fn clear_ghost_previews(&mut self) {
+        self.interaction_state.canvas.ghost_label = None;
+        self.interaction_state.canvas.ghost_symbol = None;
+        self.interaction_state.canvas.ghost_text = None;
+    }
+
     fn component_value_from_lib_id(lib_id: &str) -> String {
         lib_id
             .rsplit(':')
