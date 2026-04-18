@@ -1,10 +1,6 @@
 use super::*;
 
 impl Signex {
-    pub(crate) fn clear_measurement(&mut self) {
-        self.interaction_state.canvas.reset_measurement();
-    }
-
     fn component_value_from_lib_id(lib_id: &str) -> String {
         lib_id
             .rsplit(':')
@@ -179,7 +175,6 @@ impl Signex {
         self.document_state.panel_ctx.pre_placement = None;
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
-        self.clear_measurement();
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;

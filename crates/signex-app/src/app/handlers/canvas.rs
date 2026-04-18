@@ -145,19 +145,6 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
-                if self.interaction_state.current_tool == Tool::Measure
-                    && self.interaction_state.canvas.measure_start.is_some()
-                    && !self.interaction_state.canvas.measure_locked
-                {
-                    let (mx, my) = if self.ui_state.snap_enabled {
-                        let gs = self.ui_state.grid_size_mm as f64;
-                        ((x as f64 / gs).round() * gs, (y as f64 / gs).round() * gs)
-                    } else {
-                        (x as f64, y as f64)
-                    };
-                    self.interaction_state.canvas.measure_end =
-                        Some(signex_types::schematic::Point::new(mx, my));
-                }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
                 // Altium-style placement pause: while the ghost is frozen
@@ -205,19 +192,6 @@ impl Signex {
                 };
 
                 match self.interaction_state.current_tool {
-                    Tool::Measure => {
-                        let point = signex_types::schematic::Point::new(wx, wy);
-                        if self.interaction_state.canvas.measure_start.is_some()
-                            && !self.interaction_state.canvas.measure_locked
-                        {
-                            self.interaction_state.canvas.measure_end = Some(point);
-                            self.interaction_state.canvas.measure_locked = true;
-                        } else {
-                            self.interaction_state.canvas.measure_start = Some(point);
-                            self.interaction_state.canvas.measure_end = Some(point);
-                            self.interaction_state.canvas.measure_locked = false;
-                        }
-                    }
                     Tool::Wire => {
                         let pt = signex_types::schematic::Point::new(wx, wy);
                         if !self.interaction_state.wire_drawing {

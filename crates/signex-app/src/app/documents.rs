@@ -105,7 +105,6 @@ pub struct TabInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
     Select,
-    Measure,
     Wire,
     Bus,
     Label,
@@ -124,7 +123,6 @@ impl std::fmt::Display for Tool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Tool::Select => write!(f, "Select"),
-            Tool::Measure => write!(f, "Measure"),
             Tool::Wire => write!(f, "Draw Wire"),
             Tool::Bus => write!(f, "Draw Bus"),
             Tool::Label => write!(f, "Place Label"),
