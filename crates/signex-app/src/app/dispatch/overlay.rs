@@ -23,6 +23,7 @@ impl Signex {
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
+            Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
             Message::ShowContextMenu(x, y) => {
                 // Altium convention: right-click during placement terminates

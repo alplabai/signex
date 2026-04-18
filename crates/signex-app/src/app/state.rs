@@ -47,6 +47,10 @@ pub struct UiState {
     pub preferences_draft_power_port_style: PowerPortStyle,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
+    /// Index of a tab queued for close-confirmation because it has unsaved
+    /// edits. While `Some`, an overlay modal blocks other interaction with
+    /// Save / Discard / Cancel actions.
+    pub close_tab_confirm: Option<usize>,
 }
 
 pub struct DocumentState {
