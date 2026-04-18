@@ -61,7 +61,10 @@ impl Signex {
             | Message::ShowContextMenu(_, _)
             | Message::CloseContextMenu
             | Message::ContextAction(_)
-            | Message::CloseTabConfirm(_) => self.dispatch_overlay_message(message),
+            | Message::CloseTabConfirm(_)
+            | Message::RunErc
+            | Message::FocusAt { .. }
+            | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
             Message::Noop => Task::none(),
         }
     }
