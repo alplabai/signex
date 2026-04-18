@@ -20,21 +20,17 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        // Compute preview: walk current snapshot, propose new refs per order.
-        let mut proposed: Vec<(String, String)> = Vec::new();
-        let mut current_sheet_name = String::from("Current Sheet");
-        let mut total_symbols = 0usize;
-        if let Some(snapshot) = self.active_render_snapshot() {
-            proposed = preview_annotations(snapshot, self.ui_state.annotate_order);
-            total_symbols = snapshot.symbols.len();
-        }
-        if let Some(tab) = self
+        // Compute preview: walk *every* open sheet, share one counter so
+        // the proposed designators line up with what the engine will do
+        // across the project.
+        let proposed = self.preview_project_annotations();
+        let total_symbols: usize = proposed.len();
+        let current_sheet_name = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-        {
-            current_sheet_name = tab.title.clone();
-        }
+            .map(|t| t.title.clone())
+            .unwrap_or_else(|| "Current Sheet".to_string());
 
         // ── Header (draggable title bar) ──
         let header_content: Element<'_, Message> = container(
@@ -350,10 +346,10 @@ impl Signex {
                 .padding([10, 12]),
             );
         } else {
-            for (cur, new) in &proposed {
+            for entry in &proposed {
                 // Rows that actually change highlight in the accent color;
                 // unchanged rows fade into the muted palette.
-                let changing = cur != new;
+                let changing = entry.current != entry.proposed;
                 let cur_color = if changing { text_c } else { text_muted };
                 let new_color = if changing {
                     Color::from_rgb(0.25, 0.75, 0.35)
@@ -362,15 +358,15 @@ impl Signex {
                 };
                 rows_col = rows_col.push(
                     row![
-                        text(cur.clone())
+                        text(entry.current.clone())
                             .size(11)
                             .color(cur_color)
                             .width(Length::FillPortion(2)),
-                        text(new.clone())
+                        text(entry.proposed.clone())
                             .size(11)
                             .color(new_color)
                             .width(Length::FillPortion(2)),
-                        text(current_sheet_name.clone())
+                        text(entry.sheet.clone())
                             .size(11)
                             .color(text_muted)
                             .width(Length::FillPortion(3)),
@@ -385,7 +381,10 @@ impl Signex {
             .style(bordered_style(border_c));
 
         // Count only rows where proposed != current (actual changes).
-        let changes: usize = proposed.iter().filter(|(c, n)| c != n).count();
+        let changes: usize = proposed
+            .iter()
+            .filter(|e| e.current != e.proposed)
+            .count();
         let summary_text = if changes == 0 {
             format!(
                 "Annotation has nothing to do — all {total_symbols} symbols on '{current_sheet_name}' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch."
@@ -790,19 +789,20 @@ fn wrap_modal<'a>(
     window_size: (f32, f32),
     modal_size: (f32, f32),
 ) -> Element<'a, Message> {
-    // Compute absolute top-left of the modal = (centre + drag offset).
-    // Drags up/left push the top-left toward zero; drags down/right push
-    // past the viewport edge (trailing Fill collapses so the modal can
-    // overhang). Space widgets can't be negative-sized, so up/left
-    // saturate at zero — genuinely crossing the top/left edge needs a
-    // custom widget with transform support (v0.7.1 or later).
+    // Absolute top-left = centre + drag offset, clamped within the window.
+    // iced's Space widget can't be negative-sized, so we keep the modal
+    // visible but allow the user to snap it against any of the four edges
+    // — fully off-screen positioning needs a custom widget and lands in
+    // v0.7.1.
     let (dx, dy) = offset;
     let (ww, wh) = window_size;
     let (mw, mh) = modal_size;
     let centre_x = ((ww - mw) * 0.5).max(0.0);
     let centre_y = ((wh - mh) * 0.5).max(0.0);
-    let top = (centre_y + dy).max(0.0);
-    let left = (centre_x + dx).max(0.0);
+    let max_left = (ww - mw).max(0.0);
+    let max_top = (wh - mh).max(0.0);
+    let left = (centre_x + dx).clamp(0.0, max_left);
+    let top = (centre_y + dy).clamp(0.0, max_top);
 
     let backdrop: Element<'a, Message> = container(iced::widget::Space::new())
         .width(Length::Fill)
@@ -813,14 +813,8 @@ fn wrap_modal<'a>(
         })
         .into();
 
-    // Place the modal inside a column+row whose outer size is exactly
-    // `top + modal_h` × `left + modal_w` (no Fill padding). That makes the
-    // total laid-out size grow to fit the modal + its leading padding,
-    // exceeding the viewport when the user drags far enough — iced places
-    // the over-sized column at origin and the parent Stack clips anything
-    // that falls outside the viewport WITHOUT shrinking the modal's fixed
-    // width/height. The backdrop is a separate Stack child so it dims the
-    // full viewport regardless.
+    // Column+row with explicit top/left Space and no trailing Fill means
+    // the inner modal keeps its fixed width/height regardless of viewport.
     let positioned: Element<'a, Message> = column![
         Space::new().height(top),
         row![Space::new().width(left), inner,],
@@ -1010,6 +1004,115 @@ const ALL_RULES: &[signex_erc::RuleKind] = &[
 /// the engine's ordering logic (by y,x,uuid) — but the dialog currently only
 /// offers one order because the engine hard-codes that; adding UpThenAcross
 /// wiring ships in v0.7.1 when the engine learns about the order flag.
+/// One row of the project-wide proposed change list.
+#[derive(Debug, Clone)]
+pub(super) struct AnnotatePreviewEntry {
+    pub sheet: String,
+    pub current: String,
+    pub proposed: String,
+}
+
+impl super::super::Signex {
+    /// Walk every open sheet (active engine + cached tabs) and compute the
+    /// proposed designator per symbol. One shared per-prefix counter keeps
+    /// numbering unique across the project.
+    pub(super) fn preview_project_annotations(&self) -> Vec<AnnotatePreviewEntry> {
+        use crate::app::documents::TabDocument;
+        let is_target = |sym: &signex_types::schematic::Symbol| -> bool {
+            !sym.is_power && !sym.reference.starts_with('#')
+        };
+
+        // Snapshot each sheet as (title, &SchematicSheet).
+        let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = Vec::new();
+        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+            if idx == self.document_state.active_tab {
+                if let Some(eng) = self.document_state.engine.as_ref() {
+                    sheets.push((tab.title.clone(), eng.document()));
+                }
+            } else if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+                sheets.push((tab.title.clone(), session.document()));
+            }
+        }
+        // Fallback when no tabs are open but an engine still holds a doc.
+        if sheets.is_empty() {
+            if let Some(eng) = self.document_state.engine.as_ref() {
+                sheets.push(("(untitled)".to_string(), eng.document()));
+            }
+        }
+
+        // Pass 1: global max per prefix.
+        let mut next: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        for (_, sheet) in &sheets {
+            for sym in &sheet.symbols {
+                if !is_target(sym) {
+                    continue;
+                }
+                let prefix: String = sym
+                    .reference
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphabetic())
+                    .collect();
+                if prefix.is_empty() {
+                    continue;
+                }
+                if let Ok(n) = sym.reference[prefix.len()..].parse::<u32>() {
+                    let e = next.entry(prefix).or_insert(0);
+                    if n > *e {
+                        *e = n;
+                    }
+                }
+            }
+        }
+
+        // Pass 2: iterate sheets, assigning proposed designators to '?' tails.
+        let mut out = Vec::new();
+        for (title, sheet) in &sheets {
+            let mut idx: Vec<usize> = (0..sheet.symbols.len()).collect();
+            idx.sort_by(|a, b| {
+                let sa = &sheet.symbols[*a];
+                let sb = &sheet.symbols[*b];
+                sa.position
+                    .y
+                    .partial_cmp(&sb.position.y)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(
+                        sa.position
+                            .x
+                            .partial_cmp(&sb.position.x)
+                            .unwrap_or(std::cmp::Ordering::Equal),
+                    )
+                    .then(sa.uuid.cmp(&sb.uuid))
+            });
+            for i in idx {
+                let sym = &sheet.symbols[i];
+                if sym.reference.is_empty() || !is_target(sym) {
+                    continue;
+                }
+                let prefix: String = sym
+                    .reference
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphabetic())
+                    .collect();
+                let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() {
+                    let n = next.entry(prefix.clone()).or_insert(0);
+                    *n += 1;
+                    format!("{prefix}{n}")
+                } else {
+                    sym.reference.clone()
+                };
+                out.push(AnnotatePreviewEntry {
+                    sheet: title.clone(),
+                    current: sym.reference.clone(),
+                    proposed,
+                });
+            }
+        }
+        out
+    }
+}
+
+#[allow(dead_code)]
 fn preview_annotations(
     snapshot: &signex_render::schematic::SchematicRenderSnapshot,
     _order: AnnotateOrder,
