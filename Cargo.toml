@@ -8,6 +8,7 @@ members = [
     "crates/kicad-writer",
     "crates/signex-render",
     "crates/signex-widgets",
+    "crates/signex-erc",
 ]
 
 [workspace.package]
@@ -46,6 +47,7 @@ kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
 signex-widgets = { path = "crates/signex-widgets" }
+signex-erc = { path = "crates/signex-erc" }
 
 [profile.release]
 lto = "thin"

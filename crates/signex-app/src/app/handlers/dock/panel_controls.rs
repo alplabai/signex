@@ -22,6 +22,20 @@ impl Signex {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
             }
+            crate::panels::PanelMsg::RunErc => {
+                let _ = self.handle_run_erc();
+            }
+            crate::panels::PanelMsg::FocusErcViolation(idx) => {
+                if let Some(entry) =
+                    self.document_state.panel_ctx.erc_violations.get(*idx).cloned()
+                {
+                    let _ = self.handle_focus_at(
+                        entry.world_x,
+                        entry.world_y,
+                        entry.select,
+                    );
+                }
+            }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
                 self.interaction_state.canvas.grid_visible = self.ui_state.grid_visible;

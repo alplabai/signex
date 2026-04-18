@@ -75,6 +75,10 @@ impl Signex {
                 preferences_dirty: false,
                 custom_theme: None,
                 close_tab_confirm: None,
+                erc_violations: Vec::new(),
+                erc_severity_override: std::collections::HashMap::new(),
+                net_colors: std::collections::HashMap::new(),
+                auto_focus: false,
             },
             document_state: DocumentState {
                 dock,
@@ -128,6 +132,7 @@ impl Signex {
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
+                    erc_violations: Vec::new(),
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL
@@ -312,6 +317,10 @@ impl Signex {
                     }
                     (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                         Message::CanvasEvent(CanvasEvent::FitAll)
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
+                    (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
+                        Message::ToggleAutoFocus
                     }
                     // Delete selected
                     (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {

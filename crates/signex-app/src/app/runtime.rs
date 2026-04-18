@@ -190,6 +190,23 @@ impl Signex {
             component_filter,
             collapsed_sections,
             pre_placement,
+            erc_violations: self
+                .ui_state
+                .erc_violations
+                .iter()
+                .map(|v| crate::panels::ErcViolationEntry {
+                    severity: match v.severity {
+                        signex_erc::Severity::Error => crate::panels::ErcSeverityLite::Error,
+                        signex_erc::Severity::Warning => crate::panels::ErcSeverityLite::Warning,
+                        _ => crate::panels::ErcSeverityLite::Info,
+                    },
+                    rule_label: v.rule.label(),
+                    message: v.message.clone(),
+                    world_x: v.location.x,
+                    world_y: v.location.y,
+                    select: v.primary,
+                })
+                .collect(),
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
