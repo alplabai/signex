@@ -60,7 +60,8 @@ impl Signex {
             | Message::ActiveBar(_)
             | Message::ShowContextMenu(_, _)
             | Message::CloseContextMenu
-            | Message::ContextAction(_) => self.dispatch_overlay_message(message),
+            | Message::ContextAction(_)
+            | Message::CloseTabConfirm(_) => self.dispatch_overlay_message(message),
             Message::Noop => Task::none(),
         }
     }

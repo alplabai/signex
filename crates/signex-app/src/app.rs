@@ -26,7 +26,8 @@ mod state;
 mod view;
 
 pub use contracts::{
-    ContextAction, ContextMenuState, DragTarget, Message, StatusBarRequest, TextEditState,
+    CloseTabChoice, ContextAction, ContextMenuState, DragTarget, Message, StatusBarRequest,
+    TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
 pub use state::{DocumentState, InteractionState, Signex, UiState};
