@@ -2949,6 +2949,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signex-engine",
+ "signex-erc",
  "signex-render",
  "signex-types",
  "signex-widgets",
@@ -2964,6 +2965,16 @@ dependencies = [
  "kicad-writer",
  "signex-types",
  "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
+name = "signex-erc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "signex-render",
+ "signex-types",
  "uuid",
 ]
 

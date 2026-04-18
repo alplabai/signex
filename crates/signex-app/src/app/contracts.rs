@@ -79,6 +79,19 @@ pub enum Message {
     /// try to close a tab with unsaved changes. Drives the modal via
     /// `ui_state.close_tab_confirm`.
     CloseTabConfirm(CloseTabChoice),
+    /// Run the ERC engine against the active schematic snapshot and populate
+    /// `ui_state.erc_violations`. Bound to F8.
+    RunErc,
+    /// Navigate to a world-space point on the canvas; optionally replace the
+    /// current selection with the given item. Used for click-to-zoom in the
+    /// Messages panel.
+    FocusAt {
+        world_x: f64,
+        world_y: f64,
+        select: Option<signex_types::schematic::SelectedItem>,
+    },
+    /// Toggle AutoFocus — dim everything not in the current selection.
+    ToggleAutoFocus,
     Noop,
 }
 
