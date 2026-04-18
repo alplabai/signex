@@ -10,6 +10,7 @@ impl Signex {
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
+        self.interaction_state.context_menu = None;
         Task::none()
     }
 

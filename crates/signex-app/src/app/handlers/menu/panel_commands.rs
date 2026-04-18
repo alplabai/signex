@@ -31,6 +31,7 @@ impl Signex {
                     crate::dock::PanelPosition::Right,
                     crate::panels::PanelKind::Properties,
                 );
+                self.interaction_state.context_menu = None;
                 Some(Task::none())
             }
             MenuMessage::OpenMessagesPanel => {

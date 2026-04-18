@@ -32,8 +32,8 @@ pub enum FindReplaceMsg {
     ReplaceAll,
 }
 
-const DIALOG_W: f32 = 720.0;
-const DIALOG_H: f32 = 500.0;
+const DIALOG_W: f32 = 440.0;
+const DIALOG_H: f32 = 320.0;
 
 pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a, FindReplaceMsg> {
     let text_primary = crate::styles::ti(tokens.text);
