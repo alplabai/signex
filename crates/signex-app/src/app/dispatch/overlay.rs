@@ -40,6 +40,10 @@ impl Signex {
             Message::CloseAnnotateResetConfirm => {
                 self.handle_close_annotate_reset_confirm()
             }
+            Message::ModalDragStart { modal, x, y } => {
+                self.handle_modal_drag_start(modal, x, y)
+            }
+            Message::ModalDragEnd => self.handle_modal_drag_end(),
             Message::FocusAt {
                 world_x,
                 world_y,

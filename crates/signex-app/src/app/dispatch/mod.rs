@@ -72,6 +72,8 @@ impl Signex {
             | Message::ErcSeverityChanged(_, _)
             | Message::OpenAnnotateResetConfirm
             | Message::CloseAnnotateResetConfirm
+            | Message::ModalDragStart { .. }
+            | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
             Message::Noop => Task::none(),

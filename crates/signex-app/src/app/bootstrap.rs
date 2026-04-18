@@ -80,9 +80,11 @@ impl Signex {
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
-                annotate_order: crate::app::state::AnnotateOrder::AcrossThenUp,
+                annotate_order: crate::app::state::AnnotateOrder::AcrossThenDown,
                 erc_dialog_open: false,
                 annotate_reset_confirm: false,
+                modal_offsets: std::collections::HashMap::new(),
+                modal_dragging: None,
             },
             document_state: DocumentState {
                 dock,
@@ -420,13 +422,30 @@ impl Signex {
         // app updates when idle, which noticeably hurts smoothness on macOS.
         let drag_active = self.interaction_state.dragging.is_some()
             || self.document_state.dock.tab_drag.is_some()
+            || self.ui_state.modal_dragging.is_some()
             || self
                 .document_state
                 .dock
                 .floating
                 .iter()
                 .any(|fp| fp.dragging);
-        let mouse_sub = if drag_active {
+        let modal_drag_active = self.ui_state.modal_dragging.is_some();
+        let mouse_sub = if modal_drag_active {
+            // Modal drag takes priority — release ends the modal drag
+            // specifically (not the generic DragEnd).
+            iced::event::listen().map(|event| match event {
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Message::DragMove(position.x, position.y)
+                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )) => Message::ModalDragEnd,
+                iced::Event::Window(iced::window::Event::Resized(size)) => {
+                    Message::WindowResized(size.width, size.height)
+                }
+                _ => Message::Noop,
+            })
+        } else if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                     Message::DragMove(position.x, position.y)
@@ -434,7 +453,6 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                     iced::mouse::Button::Left,
                 )) => Message::DragEnd,
-                // Any click dismisses context menu
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
@@ -445,7 +463,6 @@ impl Signex {
             })
         } else {
             iced::event::listen().map(|event| match event {
-                // Any click dismisses context menu
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
