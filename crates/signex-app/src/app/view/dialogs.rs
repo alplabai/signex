@@ -1013,31 +1013,73 @@ pub(super) struct AnnotatePreviewEntry {
 }
 
 impl super::super::Signex {
-    /// Walk every open sheet (active engine + cached tabs) and compute the
-    /// proposed designator per symbol. One shared per-prefix counter keeps
-    /// numbering unique across the project.
+    /// Walk every schematic in the project — open tabs (live engine or
+    /// cached session) plus every sheet listed in project_data.sheets that
+    /// hasn't been opened yet. Unopened sheets are parsed on-the-fly so
+    /// the change list reflects the whole project, not just what the user
+    /// has active.
     pub(super) fn preview_project_annotations(&self) -> Vec<AnnotatePreviewEntry> {
         use crate::app::documents::TabDocument;
         let is_target = |sym: &signex_types::schematic::Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#')
         };
 
-        // Snapshot each sheet as (title, &SchematicSheet).
-        let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = Vec::new();
+        // Owned sheets (parsed from disk) are boxed so we can hold them in
+        // the same vector as the borrowed ones and still use slice APIs.
+        let mut owned_sheets: Vec<(String, signex_types::schematic::SchematicSheet)> =
+            Vec::new();
+        let mut open_paths: std::collections::HashSet<std::path::PathBuf> =
+            std::collections::HashSet::new();
+
+        // Pass 1: collect open tabs.
+        let mut borrowed: Vec<(String, &signex_types::schematic::SchematicSheet)> =
+            Vec::new();
         for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+            open_paths.insert(tab.path.clone());
             if idx == self.document_state.active_tab {
                 if let Some(eng) = self.document_state.engine.as_ref() {
-                    sheets.push((tab.title.clone(), eng.document()));
+                    borrowed.push((tab.title.clone(), eng.document()));
                 }
             } else if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                sheets.push((tab.title.clone(), session.document()));
+                borrowed.push((tab.title.clone(), session.document()));
             }
         }
         // Fallback when no tabs are open but an engine still holds a doc.
-        if sheets.is_empty() {
+        if borrowed.is_empty() && open_paths.is_empty() {
             if let Some(eng) = self.document_state.engine.as_ref() {
-                sheets.push(("(untitled)".to_string(), eng.document()));
+                borrowed.push(("(untitled)".to_string(), eng.document()));
             }
+        }
+
+        // Pass 2: parse every remaining project sheet from disk so the
+        // change list spans sheets the user hasn't opened yet.
+        if let (Some(project), Some(project_path)) = (
+            self.document_state.project_data.as_ref(),
+            self.document_state.project_path.as_ref(),
+        ) {
+            let project_dir = project_path
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
+            for sheet_entry in &project.sheets {
+                let file_path = project_dir.join(&sheet_entry.filename);
+                if open_paths.contains(&file_path) {
+                    continue;
+                }
+                if let Ok(parsed) = kicad_parser::parse_schematic_file(&file_path) {
+                    let title = sheet_entry
+                        .name
+                        .trim_end_matches(".kicad_sch")
+                        .to_string();
+                    owned_sheets.push((title, parsed));
+                }
+            }
+        }
+
+        // Merge into a single Vec of borrowed references.
+        let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = borrowed;
+        for (title, sheet) in &owned_sheets {
+            sheets.push((title.clone(), sheet));
         }
 
         // Pass 1: global max per prefix.
