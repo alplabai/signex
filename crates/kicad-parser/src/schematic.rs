@@ -8,8 +8,8 @@ use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
     LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
-    SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp,
-    VAlign, Wire,
+    SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign,
+    Wire,
 };
 
 use crate::error::ParseError;
@@ -218,9 +218,18 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let value = symbol_node.property("Value").unwrap_or("").to_string();
     let footprint = symbol_node.property("Footprint").unwrap_or("").to_string();
     let datasheet = symbol_node.property("Datasheet").unwrap_or("").to_string();
-    let description = symbol_node.property("Description").unwrap_or("").to_string();
-    let keywords = symbol_node.property("ki_keywords").unwrap_or("").to_string();
-    let fp_filters = symbol_node.property("ki_fp_filters").unwrap_or("").to_string();
+    let description = symbol_node
+        .property("Description")
+        .unwrap_or("")
+        .to_string();
+    let keywords = symbol_node
+        .property("ki_keywords")
+        .unwrap_or("")
+        .to_string();
+    let fp_filters = symbol_node
+        .property("ki_fp_filters")
+        .unwrap_or("")
+        .to_string();
     let in_bom = symbol_node
         .find("in_bom")
         .and_then(|node| node.first_arg())
@@ -1727,10 +1736,10 @@ mod tests {
         assert!(!parsed.duplicate_pin_numbers_are_jumpers);
     }
 
-        #[test]
-        fn parse_lib_symbol_preserves_pin_hide_flag() {
-                let symbol = sexpr::parse(
-                        r#"(symbol "Interface_Ethernet:W5500"
+    #[test]
+    fn parse_lib_symbol_preserves_pin_hide_flag() {
+        let symbol = sexpr::parse(
+            r#"(symbol "Interface_Ethernet:W5500"
     (symbol "W5500_1_1"
         (pin no_connect line
             (at 20.32 0 0)
@@ -1741,17 +1750,17 @@ mod tests {
         )
     )
 )"#,
-                )
-                .unwrap();
+        )
+        .unwrap();
 
-                let parsed = parse_lib_symbol(&symbol);
-                assert_eq!(parsed.pins.len(), 1);
-                assert!(!parsed.pins[0].pin.visible);
-        }
+        let parsed = parse_lib_symbol(&symbol);
+        assert_eq!(parsed.pins.len(), 1);
+        assert!(!parsed.pins[0].pin.visible);
+    }
 
     #[test]
     fn parse_symbol_and_sheet_instances_and_root_page() {
-                let content = r#"(kicad_sch
+        let content = r#"(kicad_sch
     (version 20231120)
     (generator "test")
     (uuid "00000000-0000-0000-0000-000000000001")
@@ -1801,15 +1810,15 @@ mod tests {
     )
 )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                assert_eq!(sheet.root_sheet_page, "7");
-                assert_eq!(sheet.symbols[0].datasheet, "https://example.invalid/r1");
-                assert_eq!(sheet.symbols[0].pin_uuids.len(), 1);
-                assert_eq!(sheet.symbols[0].instances.len(), 1);
-                assert_eq!(sheet.symbols[0].instances[0].project, "GateMagic");
-                assert_eq!(sheet.child_sheets[0].stroke_width, 0.2);
-                assert!(matches!(sheet.child_sheets[0].fill, FillType::Background));
-                assert!(sheet.child_sheets[0].fields_autoplaced);
-                assert_eq!(sheet.child_sheets[0].instances[0].page, "2");
-            }
+        let sheet = parse_schematic(content).unwrap();
+        assert_eq!(sheet.root_sheet_page, "7");
+        assert_eq!(sheet.symbols[0].datasheet, "https://example.invalid/r1");
+        assert_eq!(sheet.symbols[0].pin_uuids.len(), 1);
+        assert_eq!(sheet.symbols[0].instances.len(), 1);
+        assert_eq!(sheet.symbols[0].instances[0].project, "GateMagic");
+        assert_eq!(sheet.child_sheets[0].stroke_width, 0.2);
+        assert!(matches!(sheet.child_sheets[0].fill, FillType::Background));
+        assert!(sheet.child_sheets[0].fields_autoplaced);
+        assert_eq!(sheet.child_sheets[0].instances[0].page, "2");
+    }
 }

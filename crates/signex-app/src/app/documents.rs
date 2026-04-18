@@ -71,7 +71,7 @@ impl SchematicTabSession {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(dead_code, clippy::large_enum_variant)]
 pub enum TabDocument {
     Schematic(SchematicTabSession),
     Pcb(PcbBoard),

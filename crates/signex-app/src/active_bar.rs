@@ -203,6 +203,7 @@ impl SelectionFilter {
 
 /// All actions available from Active Bar buttons and dropdown items.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum ActiveBarAction {
     // Selection modes
     ToolSelect,
@@ -554,11 +555,11 @@ pub fn view_dropdown(
                 let inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
                 let text_on = text_primary;
                 let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-                button(
-                    text(label.to_string())
-                        .size(11)
-                        .color(if enabled { text_on } else { text_off }),
-                )
+                button(text(label.to_string()).size(11).color(if enabled {
+                    text_on
+                } else {
+                    text_off
+                }))
                 .padding([4, 10])
                 .on_press(ActiveBarMsg::ToggleFilter(filter))
                 .style(move |_: &Theme, status: button::Status| {
@@ -571,7 +572,11 @@ pub fn view_dropdown(
                         border: Border {
                             width: 1.0,
                             radius: 12.0.into(),
-                            color: if enabled { active_border } else { inactive_border },
+                            color: if enabled {
+                                active_border
+                            } else {
+                                inactive_border
+                            },
                         },
                         text_color: if enabled { text_on } else { text_off },
                         ..button::Style::default()
@@ -586,24 +591,32 @@ pub fn view_dropdown(
             let all_active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
             let all_inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
             let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-            let all_toggle = button(
-                text(all_label.to_string())
-                    .size(11)
-                    .color(if all_on { text_primary } else { all_text_off }),
-            )
+            let all_toggle = button(text(all_label.to_string()).size(11).color(if all_on {
+                text_primary
+            } else {
+                all_text_off
+            }))
             .padding([4, 12])
             .on_press(ActiveBarMsg::ToggleAllFilters)
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
                     button::Status::Hovered => Background::Color(hover_c),
-                    _ => Background::Color(if all_on { all_active_bg } else { all_inactive_bg }),
+                    _ => Background::Color(if all_on {
+                        all_active_bg
+                    } else {
+                        all_inactive_bg
+                    }),
                 };
                 button::Style {
                     background: Some(bg),
                     border: Border {
                         width: 1.0,
                         radius: 12.0.into(),
-                        color: if all_on { all_active_border } else { all_inactive_border },
+                        color: if all_on {
+                            all_active_border
+                        } else {
+                            all_inactive_border
+                        },
                     },
                     text_color: if all_on { text_primary } else { all_text_off },
                     ..button::Style::default()
@@ -615,21 +628,57 @@ pub fn view_dropdown(
                 container(
                     column![
                         row![
-                            tag(SelectionFilter::Components, filters.contains(&SelectionFilter::Components)),
-                            tag(SelectionFilter::Wires, filters.contains(&SelectionFilter::Wires)),
-                            tag(SelectionFilter::Buses, filters.contains(&SelectionFilter::Buses)),
-                            tag(SelectionFilter::SheetSymbols, filters.contains(&SelectionFilter::SheetSymbols)),
-                            tag(SelectionFilter::SheetEntries, filters.contains(&SelectionFilter::SheetEntries)),
-                            tag(SelectionFilter::NetLabels, filters.contains(&SelectionFilter::NetLabels)),
+                            tag(
+                                SelectionFilter::Components,
+                                filters.contains(&SelectionFilter::Components)
+                            ),
+                            tag(
+                                SelectionFilter::Wires,
+                                filters.contains(&SelectionFilter::Wires)
+                            ),
+                            tag(
+                                SelectionFilter::Buses,
+                                filters.contains(&SelectionFilter::Buses)
+                            ),
+                            tag(
+                                SelectionFilter::SheetSymbols,
+                                filters.contains(&SelectionFilter::SheetSymbols)
+                            ),
+                            tag(
+                                SelectionFilter::SheetEntries,
+                                filters.contains(&SelectionFilter::SheetEntries)
+                            ),
+                            tag(
+                                SelectionFilter::NetLabels,
+                                filters.contains(&SelectionFilter::NetLabels)
+                            ),
                         ]
                         .spacing(4),
                         row![
-                            tag(SelectionFilter::Parameters, filters.contains(&SelectionFilter::Parameters)),
-                            tag(SelectionFilter::Ports, filters.contains(&SelectionFilter::Ports)),
-                            tag(SelectionFilter::PowerPorts, filters.contains(&SelectionFilter::PowerPorts)),
-                            tag(SelectionFilter::Texts, filters.contains(&SelectionFilter::Texts)),
-                            tag(SelectionFilter::DrawingObjects, filters.contains(&SelectionFilter::DrawingObjects)),
-                            tag(SelectionFilter::Other, filters.contains(&SelectionFilter::Other)),
+                            tag(
+                                SelectionFilter::Parameters,
+                                filters.contains(&SelectionFilter::Parameters)
+                            ),
+                            tag(
+                                SelectionFilter::Ports,
+                                filters.contains(&SelectionFilter::Ports)
+                            ),
+                            tag(
+                                SelectionFilter::PowerPorts,
+                                filters.contains(&SelectionFilter::PowerPorts)
+                            ),
+                            tag(
+                                SelectionFilter::Texts,
+                                filters.contains(&SelectionFilter::Texts)
+                            ),
+                            tag(
+                                SelectionFilter::DrawingObjects,
+                                filters.contains(&SelectionFilter::DrawingObjects)
+                            ),
+                            tag(
+                                SelectionFilter::Other,
+                                filters.contains(&SelectionFilter::Other)
+                            ),
                         ]
                         .spacing(4),
                     ]
@@ -642,260 +691,514 @@ pub fn view_dropdown(
             vec![filter_content]
         }
         ActiveBarMenu::SelectMode => vec![
-            dd_item("Lasso Select", ActiveBarAction::LassoSelect, ac.text, ac.hover),
-            dd_item("Inside Area", ActiveBarAction::InsideArea, ac.text, ac.hover),
-            dd_item("Outside Area", ActiveBarAction::OutsideArea, ac.text, ac.hover),
-            dd_item("Touching Rectangle", ActiveBarAction::TouchingRectangle, ac.text, ac.hover),
-            dd_item("Touching Line", ActiveBarAction::TouchingLine, ac.text, ac.hover),
+            dd_item(
+                "Lasso Select",
+                ActiveBarAction::LassoSelect,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item(
+                "Inside Area",
+                ActiveBarAction::InsideArea,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item(
+                "Outside Area",
+                ActiveBarAction::OutsideArea,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item(
+                "Touching Rectangle",
+                ActiveBarAction::TouchingRectangle,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item(
+                "Touching Line",
+                ActiveBarAction::TouchingLine,
+                ac.text,
+                ac.hover,
+            ),
             dd_item("All", ActiveBarAction::SelectAll, ac.text, ac.hover),
-            dd_item("Connection", ActiveBarAction::SelectConnection, ac.text, ac.hover),
+            dd_item(
+                "Connection",
+                ActiveBarAction::SelectConnection,
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
-            dd_item("Toggle Selection", ActiveBarAction::ToggleSelection, ac.text, ac.hover),
+            dd_item(
+                "Toggle Selection",
+                ActiveBarAction::ToggleSelection,
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Select => vec![
             dd_item_svg(DD_DRAG, "Drag", ActiveBarAction::Drag, ac.text, ac.hover),
-            dd_item_svg(DD_DRAG, "Move", ActiveBarAction::MoveSelection, ac.text, ac.hover),
+            dd_item_svg(
+                DD_DRAG,
+                "Move",
+                ActiveBarAction::MoveSelection,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_MOVE_SEL,
                 "Move Selection",
                 ActiveBarAction::MoveSelection,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_MOVE_XY,
                 "Move Selection by X, Y...",
                 ActiveBarAction::MoveSelectionXY,
-            ac.text, ac.hover),
-            dd_item_svg(DD_DRAG, "Drag Selection", ActiveBarAction::DragSelection, ac.text, ac.hover),
-            dd_item("Move To Front", ActiveBarAction::MoveToFront, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_DRAG,
+                "Drag Selection",
+                ActiveBarAction::DragSelection,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item(
+                "Move To Front",
+                ActiveBarAction::MoveToFront,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ROTATE,
                 "Rotate Selection",
                 ActiveBarAction::RotateSelection,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ROTATE_CW,
                 "Rotate Selection Clockwise",
                 ActiveBarAction::RotateSelectionCW,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
             dd_item_svg(
                 DD_BRING_FRONT,
                 "Bring To Front",
                 ActiveBarAction::BringToFront,
-            ac.text, ac.hover),
-            dd_item_svg(DD_SEND_BACK, "Send To Back", ActiveBarAction::SendToBack, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_SEND_BACK,
+                "Send To Back",
+                ActiveBarAction::SendToBack,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_BRING_FRONT,
                 "Bring To Front Of",
                 ActiveBarAction::BringToFrontOf,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_SEND_BACK,
                 "Send To Back Of",
                 ActiveBarAction::SendToBackOf,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
             dd_item_svg(
                 DD_FLIP_X,
                 "Flip Selected Sheet Symbols Along X",
                 ActiveBarAction::FlipSelectedX,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_FLIP_Y,
                 "Flip Selected Sheet Symbols Along Y",
                 ActiveBarAction::FlipSelectedY,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Align => vec![
-            dd_item_svg(DD_ALIGN_LEFT, "Align Left", ActiveBarAction::AlignLeft, ac.text, ac.hover),
-            dd_item_svg(DD_ALIGN_RIGHT, "Align Right", ActiveBarAction::AlignRight, ac.text, ac.hover),
+            dd_item_svg(
+                DD_ALIGN_LEFT,
+                "Align Left",
+                ActiveBarAction::AlignLeft,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_ALIGN_RIGHT,
+                "Align Right",
+                ActiveBarAction::AlignRight,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ALIGN_HCENTER,
                 "Align Horizontal Centers",
                 ActiveBarAction::AlignHorizontalCenters,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_DIST_HORIZ,
                 "Distribute Horizontally",
                 ActiveBarAction::DistributeHorizontally,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
-            dd_item_svg(DD_ALIGN_TOP, "Align Top", ActiveBarAction::AlignTop, ac.text, ac.hover),
+            dd_item_svg(
+                DD_ALIGN_TOP,
+                "Align Top",
+                ActiveBarAction::AlignTop,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ALIGN_BOTTOM,
                 "Align Bottom",
                 ActiveBarAction::AlignBottom,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ALIGN_VCENTER,
                 "Align Vertical Centers",
                 ActiveBarAction::AlignVerticalCenters,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_DIST_VERT,
                 "Distribute Vertically",
                 ActiveBarAction::DistributeVertically,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
-            dd_item_svg(DD_ALIGN_GRID, "Align To Grid", ActiveBarAction::AlignToGrid, ac.text, ac.hover),
+            dd_item_svg(
+                DD_ALIGN_GRID,
+                "Align To Grid",
+                ActiveBarAction::AlignToGrid,
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Wiring => vec![
-            dd_item_svg(DD_WIRE, "Wire", ActiveBarAction::DrawWire, ac.text, ac.hover),
+            dd_item_svg(
+                DD_WIRE,
+                "Wire",
+                ActiveBarAction::DrawWire,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(DD_BUS, "Bus", ActiveBarAction::DrawBus, ac.text, ac.hover),
-            dd_item_svg(DD_BUS_ENTRY, "Bus Entry", ActiveBarAction::PlaceBusEntry, ac.text, ac.hover),
-            dd_item_svg(DD_NET_LABEL, "Net Label", ActiveBarAction::PlaceNetLabel, ac.text, ac.hover),
+            dd_item_svg(
+                DD_BUS_ENTRY,
+                "Bus Entry",
+                ActiveBarAction::PlaceBusEntry,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_NET_LABEL,
+                "Net Label",
+                ActiveBarAction::PlaceNetLabel,
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Power => vec![
             dd_item_svg(
                 DD_GND,
                 "Place GND power port",
                 ActiveBarAction::PlacePowerGND,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_VCC,
                 "Place VCC power port",
                 ActiveBarAction::PlacePowerVCC,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_PLUS12,
                 "Place +12 power port",
                 ActiveBarAction::PlacePowerPlus12,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_PLUS5,
                 "Place +5 power port",
                 ActiveBarAction::PlacePowerPlus5,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_MINUS5,
                 "Place -5 power port",
                 ActiveBarAction::PlacePowerMinus5,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
             dd_item_svg(
                 DD_PWR_ARROW,
                 "Place Arrow style power port",
                 ActiveBarAction::PlacePowerArrow,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_WAVE,
                 "Place Wave style power port",
                 ActiveBarAction::PlacePowerWave,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_BAR,
                 "Place Bar style power port",
                 ActiveBarAction::PlacePowerBar,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_CIRCLE,
                 "Place Circle style power port",
                 ActiveBarAction::PlacePowerCircle,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
             dd_item_svg(
                 DD_PWR_SIG_GND,
                 "Place Signal Ground power port",
                 ActiveBarAction::PlacePowerSignalGND,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_PWR_EARTH,
                 "Place Earth power port",
                 ActiveBarAction::PlacePowerEarth,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Harness => vec![
             dd_item_svg(
                 DD_HARNESS,
                 "Signal Harness",
                 ActiveBarAction::PlaceSignalHarness,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_HARNESS_CONN,
                 "Harness Connector",
                 ActiveBarAction::PlaceHarnessConnector,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_HARNESS,
                 "Harness Entry",
                 ActiveBarAction::PlaceHarnessEntry,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::SheetSymbol => vec![
             dd_item_svg(
                 DD_SHEET_SYM,
                 "Sheet Symbol",
                 ActiveBarAction::PlaceSheetSymbol,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_SHEET_ENTRY,
                 "Sheet Entry",
                 ActiveBarAction::PlaceSheetEntry,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_DEVICE_SHEET,
                 "Device Sheet Symbol",
                 ActiveBarAction::PlaceDeviceSheetSymbol,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_REUSE_BLOCK,
                 "Reuse Block...",
                 ActiveBarAction::PlaceReuseBlock,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Port => vec![
-            dd_item_svg(DD_PORT, "Port", ActiveBarAction::PlacePort, ac.text, ac.hover),
+            dd_item_svg(
+                DD_PORT,
+                "Port",
+                ActiveBarAction::PlacePort,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_OFF_SHEET,
                 "Off Sheet Connector",
                 ActiveBarAction::PlaceOffSheetConnector,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Directives => vec![
             dd_item_svg(
                 DD_PARAM_SET,
                 "Parameter Set",
                 ActiveBarAction::PlaceParameterSet,
-            ac.text, ac.hover),
-            dd_item_svg(DD_NO_ERC, "Generic No ERC", ActiveBarAction::PlaceNoERC, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_NO_ERC,
+                "Generic No ERC",
+                ActiveBarAction::PlaceNoERC,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_DIFF_PAIR,
                 "Differential Pair",
                 ActiveBarAction::PlaceDiffPair,
-            ac.text, ac.hover),
-            dd_item_svg(DD_BLANKET, "Blanket", ActiveBarAction::PlaceBlanket, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_BLANKET,
+                "Blanket",
+                ActiveBarAction::PlaceBlanket,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_BLANKET,
                 "Compile Mask",
                 ActiveBarAction::PlaceCompileMask,
-            ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::TextTools => vec![
             dd_item_svg(
                 DD_TEXT_STRING,
                 "Text String",
                 ActiveBarAction::PlaceTextString,
-            ac.text, ac.hover),
-            dd_item_svg(DD_TEXT_FRAME, "Text Frame", ActiveBarAction::PlaceTextFrame, ac.text, ac.hover),
-            dd_item_svg(DD_NOTE, "Note", ActiveBarAction::PlaceNote, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_TEXT_FRAME,
+                "Text Frame",
+                ActiveBarAction::PlaceTextFrame,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_NOTE,
+                "Note",
+                ActiveBarAction::PlaceNote,
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::Shapes => vec![
             dd_item_svg(DD_ARC, "Arc", ActiveBarAction::DrawArc, ac.text, ac.hover),
-            dd_item_svg(DD_CIRCLE, "Full Circle", ActiveBarAction::DrawFullCircle, ac.text, ac.hover),
-            dd_item_svg(DD_ARC, "Elliptical Arc", ActiveBarAction::DrawEllipticalArc, ac.text, ac.hover),
-            dd_item_svg(DD_ELLIPSE, "Ellipse", ActiveBarAction::DrawEllipse, ac.text, ac.hover),
+            dd_item_svg(
+                DD_CIRCLE,
+                "Full Circle",
+                ActiveBarAction::DrawFullCircle,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_ARC,
+                "Elliptical Arc",
+                ActiveBarAction::DrawEllipticalArc,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_ELLIPSE,
+                "Ellipse",
+                ActiveBarAction::DrawEllipse,
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
-            dd_item_svg(DD_LINE, "Line", ActiveBarAction::DrawLine, ac.text, ac.hover),
-            dd_item_svg(DD_RECT, "Rectangle", ActiveBarAction::DrawRectangle, ac.text, ac.hover),
+            dd_item_svg(
+                DD_LINE,
+                "Line",
+                ActiveBarAction::DrawLine,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_RECT,
+                "Rectangle",
+                ActiveBarAction::DrawRectangle,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 DD_ROUND_RECT,
                 "Round Rectangle",
                 ActiveBarAction::DrawRoundRectangle,
-            ac.text, ac.hover),
-            dd_item_svg(DD_POLYGON, "Polygon", ActiveBarAction::DrawPolygon, ac.text, ac.hover),
-            dd_item_svg(DD_BEZIER, "Bezier", ActiveBarAction::DrawBezier, ac.text, ac.hover),
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_POLYGON,
+                "Polygon",
+                ActiveBarAction::DrawPolygon,
+                ac.text,
+                ac.hover,
+            ),
+            dd_item_svg(
+                DD_BEZIER,
+                "Bezier",
+                ActiveBarAction::DrawBezier,
+                ac.text,
+                ac.hover,
+            ),
             dd_sep(ac.sep),
-            dd_item_svg(DD_GRAPHIC, "Graphic...", ActiveBarAction::PlaceGraphic, ac.text, ac.hover),
+            dd_item_svg(
+                DD_GRAPHIC,
+                "Graphic...",
+                ActiveBarAction::PlaceGraphic,
+                ac.text,
+                ac.hover,
+            ),
         ],
         ActiveBarMenu::NetColor => {
             let color_item = |label: &str,
@@ -963,8 +1266,18 @@ pub fn view_dropdown(
                     ActiveBarAction::NetColorDarkGreen,
                 ),
                 dd_sep(ac.sep),
-                dd_item("Clear Net Color", ActiveBarAction::ClearNetColor, ac.text, ac.hover),
-                dd_item("Clear All Net Colors", ActiveBarAction::ClearAllNetColors, ac.text, ac.hover),
+                dd_item(
+                    "Clear Net Color",
+                    ActiveBarAction::ClearNetColor,
+                    ac.text,
+                    ac.hover,
+                ),
+                dd_item(
+                    "Clear All Net Colors",
+                    ActiveBarAction::ClearAllNetColors,
+                    ac.text,
+                    ac.hover,
+                ),
             ]
         }
     };
@@ -1065,10 +1378,8 @@ fn ab_icon_btn(
     // Use a button for left-click (reliable event delivery) and wrap
     // with mouse_area for right-click (dropdown toggle).
     let left_msg = left_click;
-    let btn = button(icon_content)
-        .padding(0)
-        .on_press(left_msg)
-        .style(move |_: &Theme, status: button::Status| {
+    let btn = button(icon_content).padding(0).on_press(left_msg).style(
+        move |_: &Theme, status: button::Status| {
             let bg = match status {
                 button::Status::Hovered => Color::from_rgb(0.26, 0.27, 0.34),
                 _ if active => Color::from_rgb(0.22, 0.23, 0.30),
@@ -1083,7 +1394,8 @@ fn ab_icon_btn(
                 },
                 ..button::Style::default()
             }
-        });
+        },
+    );
 
     let widget: Element<'static, ActiveBarMsg> = if let Some(rc) = right_click {
         iced::widget::mouse_area(btn).on_right_press(rc).into()
@@ -1091,17 +1403,21 @@ fn ab_icon_btn(
         btn.into()
     };
 
-    let tip = container(text(tooltip_text).size(11).color(Color::from_rgb(0.85, 0.85, 0.88)))
-        .padding([4, 8])
-        .style(|_: &Theme| container::Style {
-            background: Some(Color::from_rgb(0.14, 0.14, 0.18).into()),
-            border: Border {
-                width: 1.0,
-                radius: 4.0.into(),
-                color: Color::from_rgb(0.24, 0.25, 0.30),
-            },
-            ..container::Style::default()
-        });
+    let tip = container(
+        text(tooltip_text)
+            .size(11)
+            .color(Color::from_rgb(0.85, 0.85, 0.88)),
+    )
+    .padding([4, 8])
+    .style(|_: &Theme| container::Style {
+        background: Some(Color::from_rgb(0.14, 0.14, 0.18).into()),
+        border: Border {
+            width: 1.0,
+            radius: 4.0.into(),
+            color: Color::from_rgb(0.24, 0.25, 0.30),
+        },
+        ..container::Style::default()
+    });
 
     iced::widget::tooltip(widget, tip, iced::widget::tooltip::Position::Bottom)
         .gap(4)
@@ -1120,7 +1436,12 @@ fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
 }
 
 /// Dropdown item with optional inline SVG icon (Altium-style).
-fn dd_item(label: &str, action: ActiveBarAction, text_c: Color, hover_c: Color) -> Element<'static, ActiveBarMsg> {
+fn dd_item(
+    label: &str,
+    action: ActiveBarAction,
+    text_c: Color,
+    hover_c: Color,
+) -> Element<'static, ActiveBarMsg> {
     dd_item_icon(None, label, text_c, hover_c, action)
 }
 
@@ -1173,7 +1494,12 @@ fn dd_sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
     // (same approach as tab underlines) to avoid Length::Fill.
     container(Space::new())
         .height(1)
-        .padding(iced::Padding { top: 3.0, right: 8.0, bottom: 3.0, left: 8.0 })
+        .padding(iced::Padding {
+            top: 3.0,
+            right: 8.0,
+            bottom: 3.0,
+            left: 8.0,
+        })
         .style(move |_: &Theme| container::Style {
             background: Some(sep_c.into()),
             ..container::Style::default()
@@ -1181,7 +1507,10 @@ fn dd_sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
         .into()
 }
 
-fn dd_btn_style_f(text_c: Color, hover_c: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
+fn dd_btn_style_f(
+    text_c: Color,
+    hover_c: Color,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_: &Theme, status: button::Status| {
         let bg = match status {
             button::Status::Hovered => Some(Background::Color(hover_c)),

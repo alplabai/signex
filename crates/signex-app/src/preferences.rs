@@ -4,7 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_render::PowerPortStyle;
 use signex_types::theme::ThemeId;
@@ -150,9 +150,7 @@ fn build_dialog<'a>(
     // ── Header ──
     let header = container(
         row![
-            text("Preferences")
-                .size(14)
-                .color(TEXT_PRI),
+            text("Preferences").size(14).color(TEXT_PRI),
             Space::new().width(Length::Fill),
             close_btn(),
         ]
@@ -253,46 +251,42 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         if group != last_group {
             last_group = group;
             col = col.push(
-                container(
-                    text(group.to_uppercase())
-                        .size(9)
-                        .color(TEXT_MUT),
-                )
-                .padding(iced::Padding { top: 10.0, right: 12.0, bottom: 4.0, left: 12.0 })
-                .width(Length::Fill),
+                container(text(group.to_uppercase()).size(9).color(TEXT_MUT))
+                    .padding(iced::Padding {
+                        top: 10.0,
+                        right: 12.0,
+                        bottom: 4.0,
+                        left: 12.0,
+                    })
+                    .width(Length::Fill),
             );
         }
         col = col.push(nav_item(item, active));
     }
 
-    container(
-        scrollable(col).width(Length::Fill),
-    )
-    .width(NAV_W)
-    .height(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(NAV_BG)),
-        ..container::Style::default()
-    })
-    .into()
+    container(scrollable(col).width(Length::Fill))
+        .width(NAV_W)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(NAV_BG)),
+            ..container::Style::default()
+        })
+        .into()
 }
 
 fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
     let is_active = item == active;
-    let bg = if is_active { Some(Background::Color(ROW_ACTIVE)) } else { None };
+    let bg = if is_active {
+        Some(Background::Color(ROW_ACTIVE))
+    } else {
+        None
+    };
     let tc = if is_active { Color::WHITE } else { TEXT_PRI };
 
     button(
-        container(
-            row![
-                text(item.label())
-                    .size(12)
-                    .color(tc),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([6, 12])
-        .width(Length::Fill),
+        container(row![text(item.label()).size(12).color(tc),].align_y(iced::Alignment::Center))
+            .padding([6, 12])
+            .width(Length::Fill),
     )
     .padding(0)
     .width(Length::Fill)
@@ -361,12 +355,32 @@ fn content_appearance<'a>(
 
     // Built-in theme data: (id, display name, description)
     let builtins: &[(ThemeId, &str, &str)] = &[
-        (ThemeId::Signex,          "Signex",               "Default Signex schematic palette"),
-        (ThemeId::VsCodeDark,      "VS Code Dark",     "VS Code inspired dark theme"),
-        (ThemeId::CatppuccinMocha, "Catppuccin Mocha", "Warm soft dark with pastels"),
-        (ThemeId::GitHubDark,      "GitHub Dark",      "GitHub's dark mode colors"),
-        (ThemeId::SolarizedLight,  "Solarized Light",  "Warm light tone-on-tone"),
-        (ThemeId::Nord,            "Nord",             "Arctic blue cool dark theme"),
+        (
+            ThemeId::Signex,
+            "Signex",
+            "Default Signex schematic palette",
+        ),
+        (
+            ThemeId::VsCodeDark,
+            "VS Code Dark",
+            "VS Code inspired dark theme",
+        ),
+        (
+            ThemeId::CatppuccinMocha,
+            "Catppuccin Mocha",
+            "Warm soft dark with pastels",
+        ),
+        (
+            ThemeId::GitHubDark,
+            "GitHub Dark",
+            "GitHub's dark mode colors",
+        ),
+        (
+            ThemeId::SolarizedLight,
+            "Solarized Light",
+            "Warm light tone-on-tone",
+        ),
+        (ThemeId::Nord, "Nord", "Arctic blue cool dark theme"),
     ];
 
     // Build list of all theme entries including optional custom
@@ -375,7 +389,11 @@ fn content_appearance<'a>(
         .map(|&(id, name, desc)| (id, name.to_string(), desc))
         .collect();
     if let Some(name) = custom_name {
-        entries.push((ThemeId::Custom, format!("\u{2728} {name}"), "Custom imported theme"));
+        entries.push((
+            ThemeId::Custom,
+            format!("\u{2728} {name}"),
+            "Custom imported theme",
+        ));
     }
 
     // Rows of 2
@@ -516,9 +534,17 @@ fn theme_card<'a>(
     current: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let is_active = id == current;
-    let border_c = if is_active { Color::from_rgb(0.30, 0.55, 0.90) } else { SEP };
+    let border_c = if is_active {
+        Color::from_rgb(0.30, 0.55, 0.90)
+    } else {
+        SEP
+    };
     let label = format!("{}{name}", if is_active { "✓ " } else { "" });
-    let card_bg = if is_active { Color::from_rgb(0.13, 0.21, 0.35) } else { Color::from_rgb(0.17, 0.17, 0.20) };
+    let card_bg = if is_active {
+        Color::from_rgb(0.13, 0.21, 0.35)
+    } else {
+        Color::from_rgb(0.17, 0.17, 0.20)
+    };
     let text_color = if is_active { Color::WHITE } else { TEXT_PRI };
     let hover_bg = Color::from_rgb(0.20, 0.20, 0.24);
     let msg = PrefMsg::DraftTheme(id);
@@ -547,7 +573,11 @@ fn theme_card<'a>(
         };
         button::Style {
             background: Some(bg),
-            border: Border { width: 1.0, radius: 4.0.into(), color: border_c },
+            border: Border {
+                width: 1.0,
+                radius: 4.0.into(),
+                color: border_c,
+            },
             ..button::Style::default()
         }
     })
@@ -563,7 +593,10 @@ fn close_btn<'a>() -> Element<'a, PrefMsg> {
                 button::Status::Hovered => Color::WHITE,
                 _ => TEXT_MUT,
             };
-            button::Style { text_color: tc, ..button::Style::default() }
+            button::Style {
+                text_color: tc,
+                ..button::Style::default()
+            }
         })
         .into()
 }
@@ -581,12 +614,9 @@ fn build_footer<'a>(dirty: bool) -> Element<'a, PrefMsg> {
         .align_y(iced::Alignment::Center)
         .into()
     } else {
-        row![
-            Space::new().width(Length::Fill),
-            close_footer_btn(),
-        ]
-        .align_y(iced::Alignment::Center)
-        .into()
+        row![Space::new().width(Length::Fill), close_footer_btn(),]
+            .align_y(iced::Alignment::Center)
+            .into()
     };
 
     container(footer_row)
@@ -595,7 +625,11 @@ fn build_footer<'a>(dirty: bool) -> Element<'a, PrefMsg> {
         .padding([0, 16])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(HDR_BG)),
-            border: Border { width: 1.0, color: SEP, radius: 0.0.into() },
+            border: Border {
+                width: 1.0,
+                color: SEP,
+                radius: 0.0.into(),
+            },
             ..container::Style::default()
         })
         .into()
@@ -612,7 +646,10 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
             };
             button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { radius: 3.0.into(), ..Border::default() },
+                border: Border {
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
                 text_color: Color::WHITE,
                 ..button::Style::default()
             }
@@ -621,22 +658,29 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Discard & Close").size(12).color(Color::from_rgb(0.85, 0.60, 0.60)))
-        .padding([6, 16])
-        .on_press(PrefMsg::DiscardAndClose)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => BTN_DANGER_HOV,
-                _ => BTN_DANGER,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border { radius: 3.0.into(), ..Border::default() },
-                text_color: Color::from_rgb(0.90, 0.70, 0.70),
-                ..button::Style::default()
-            }
-        })
-        .into()
+    button(
+        text("Discard & Close")
+            .size(12)
+            .color(Color::from_rgb(0.85, 0.60, 0.60)),
+    )
+    .padding([6, 16])
+    .on_press(PrefMsg::DiscardAndClose)
+    .style(|_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered => BTN_DANGER_HOV,
+            _ => BTN_DANGER,
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            text_color: Color::from_rgb(0.90, 0.70, 0.70),
+            ..button::Style::default()
+        }
+    })
+    .into()
 }
 
 fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
@@ -650,7 +694,10 @@ fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
             };
             button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { radius: 3.0.into(), ..Border::default() },
+                border: Border {
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
                 text_color: Color::WHITE,
                 ..button::Style::default()
             }
@@ -669,7 +716,11 @@ fn import_btn<'a>() -> Element<'a, PrefMsg> {
             };
             button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { width: 1.0, radius: 3.0.into(), color: SEP },
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: SEP,
+                },
                 text_color: TEXT_PRI,
                 ..button::Style::default()
             }
@@ -688,7 +739,11 @@ fn export_btn<'a>() -> Element<'a, PrefMsg> {
             };
             button::Style {
                 background: Some(Background::Color(bg)),
-                border: Border { width: 1.0, radius: 3.0.into(), color: SEP },
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: SEP,
+                },
                 text_color: TEXT_MUT,
                 ..button::Style::default()
             }

@@ -111,13 +111,17 @@ impl Signex {
             ActiveBarAction::PlaceSignalHarness
             | ActiveBarAction::PlaceHarnessConnector
             | ActiveBarAction::PlaceHarnessEntry => {
-                crate::diagnostics::log_info("Harness tools are planned for v1.1 (Advanced Schematic)");
+                crate::diagnostics::log_info(
+                    "Harness tools are planned for v1.1 (Advanced Schematic)",
+                );
             }
             ActiveBarAction::PlaceParameterSet
             | ActiveBarAction::PlaceDiffPair
             | ActiveBarAction::PlaceBlanket
             | ActiveBarAction::PlaceCompileMask => {
-                crate::diagnostics::log_info("Directive tool not yet implemented — coming with v0.7 ERC");
+                crate::diagnostics::log_info(
+                    "Directive tool not yet implemented — coming with v0.7 ERC",
+                );
             }
             // Net-color palette (F5 / sidebar). The underlying net-color model
             // isn't in place yet, but surface feedback so clicks don't silently
@@ -148,31 +152,30 @@ impl Signex {
         // Live preview: build a ghost power-port symbol that follows the
         // cursor so the user sees the actual shape (bars / bar / triangle)
         // before committing to a click.
-        self.interaction_state.canvas.ghost_symbol =
-            Some(signex_types::schematic::Symbol {
-                uuid: uuid::Uuid::new_v4(),
-                lib_id: lib_id.to_string(),
-                reference: String::new(),
-                value: net_name.to_string(),
-                footprint: String::new(),
-                datasheet: String::new(),
-                position: signex_types::schematic::Point::new(0.0, 0.0),
-                rotation: 0.0,
-                mirror_x: false,
-                mirror_y: false,
-                unit: 1,
-                is_power: true,
-                ref_text: None,
-                val_text: None,
-                fields_autoplaced: false,
-                dnp: false,
-                in_bom: true,
-                on_board: true,
-                exclude_from_sim: false,
-                locked: false,
-                fields: std::collections::HashMap::new(),
-                pin_uuids: std::collections::HashMap::new(),
-                instances: Vec::new(),
-            });
+        self.interaction_state.canvas.ghost_symbol = Some(signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::new_v4(),
+            lib_id: lib_id.to_string(),
+            reference: String::new(),
+            value: net_name.to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: true,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: std::collections::HashMap::new(),
+            pin_uuids: std::collections::HashMap::new(),
+            instances: Vec::new(),
+        });
     }
 }

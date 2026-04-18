@@ -18,16 +18,27 @@ fn clipboard_bounds(app: &Signex) -> Option<signex_types::schematic::Aabb> {
     let mut bounds = None;
 
     for wire in &app.interaction_state.clipboard_wires {
-        bounds = union_bounds(bounds, Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y));
+        bounds = union_bounds(
+            bounds,
+            Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y),
+        );
     }
     for bus in &app.interaction_state.clipboard_buses {
-        bounds = union_bounds(bounds, Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y));
+        bounds = union_bounds(
+            bounds,
+            Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y),
+        );
     }
     for label in &app.interaction_state.clipboard_labels {
         bounds = union_bounds(
             bounds,
-            Aabb::new(label.position.x, label.position.y, label.position.x, label.position.y)
-                .expand(1.27),
+            Aabb::new(
+                label.position.x,
+                label.position.y,
+                label.position.x,
+                label.position.y,
+            )
+            .expand(1.27),
         );
     }
     for symbol in &app.interaction_state.clipboard_symbols {

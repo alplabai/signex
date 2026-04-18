@@ -7,7 +7,7 @@
 //! 3. The pin number (inside the body) if `show_pin_numbers` is true.
 
 use iced::Color;
-use iced::widget::canvas::{self, path, LineCap, LineJoin};
+use iced::widget::canvas::{self, LineCap, LineJoin, path};
 use std::collections::HashMap;
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
@@ -160,7 +160,9 @@ fn draw_pin(
     let stroke = canvas::Stroke {
         line_cap: LineCap::Square,
         line_join: LineJoin::Miter,
-        ..canvas::Stroke::default().with_color(pin_color).with_width(stroke_width)
+        ..canvas::Stroke::default()
+            .with_color(pin_color)
+            .with_width(stroke_width)
     };
 
     // INVERTED / INVERTED_CLOCK draw their own (shortened) line inside draw_pin_shape.
@@ -183,7 +185,12 @@ fn draw_pin(
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
     let screen_font = transform.world_len(font_size_mm).abs();
 
-    if screen_font >= 1.0 && lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
+    if screen_font >= 1.0
+        && lib.show_pin_names
+        && pin.name_visible
+        && !pin.name.is_empty()
+        && pin.name != "~"
+    {
         // KiCad pin-name placement has two modes keyed on `pin_name_offset`:
         //
         // * offset > 0  — name along the pin, INSIDE body, at

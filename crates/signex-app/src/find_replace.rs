@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
+use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_engine::TextTarget;
 use signex_types::schematic::SelectedItem;
@@ -97,10 +97,12 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
     );
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
-        vec![container(text("No matches").size(11).color(text_secondary))
-            .padding([10, 12])
-            .width(Length::Fill)
-            .into()]
+        vec![
+            container(text("No matches").size(11).color(text_secondary))
+                .padding([10, 12])
+                .width(Length::Fill)
+                .into(),
+        ]
     } else {
         state
             .matches
@@ -108,7 +110,11 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
             .enumerate()
             .map(|(idx, hit)| {
                 let is_active = state.selected_index == Some(idx);
-                let row_bg = if is_active { Some(Background::Color(hover)) } else { None };
+                let row_bg = if is_active {
+                    Some(Background::Color(hover))
+                } else {
+                    None
+                };
                 button(
                     row![
                         column![
@@ -144,30 +150,36 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
             .collect()
     };
 
-    let replace_current: Element<'a, FindReplaceMsg> = if state.replace_mode && state.selected_index.is_some() {
-        button(text("Replace Current").size(11).color(text_primary))
-            .on_press(FindReplaceMsg::ReplaceCurrent)
-            .style(crate::styles::menu_item(tokens))
-            .into()
-    } else {
-        container(text("Replace Current").size(11).color(text_secondary))
-            .padding([6, 10])
-            .into()
-    };
+    let replace_current: Element<'a, FindReplaceMsg> =
+        if state.replace_mode && state.selected_index.is_some() {
+            button(text("Replace Current").size(11).color(text_primary))
+                .on_press(FindReplaceMsg::ReplaceCurrent)
+                .style(crate::styles::menu_item(tokens))
+                .into()
+        } else {
+            container(text("Replace Current").size(11).color(text_secondary))
+                .padding([6, 10])
+                .into()
+        };
 
-    let replace_all: Element<'a, FindReplaceMsg> = if state.replace_mode && !state.matches.is_empty() {
-        button(text("Replace All").size(11).color(text_primary))
-            .on_press(FindReplaceMsg::ReplaceAll)
-            .style(crate::styles::menu_item(tokens))
-            .into()
-    } else {
-        container(text("Replace All").size(11).color(text_secondary))
-            .padding([6, 10])
-            .into()
-    };
+    let replace_all: Element<'a, FindReplaceMsg> =
+        if state.replace_mode && !state.matches.is_empty() {
+            button(text("Replace All").size(11).color(text_primary))
+                .on_press(FindReplaceMsg::ReplaceAll)
+                .style(crate::styles::menu_item(tokens))
+                .into()
+        } else {
+            container(text("Replace All").size(11).color(text_secondary))
+                .padding([6, 10])
+                .into()
+        };
 
     let footer = row![
-        container(text("Targets: labels, notes, designators, values").size(10).color(text_secondary)),
+        container(
+            text("Targets: labels, notes, designators, values")
+                .size(10)
+                .color(text_secondary)
+        ),
         Space::new().width(Length::Fill),
         replace_current,
         replace_all,

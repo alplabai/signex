@@ -197,7 +197,9 @@ fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
 fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
     // Small hit tolerance so clicks near the glyph edges still register,
     // without bloating the visible selection rectangle.
-    super::label::label_text_aabb(lbl).expand(0.3).contains(wx, wy)
+    super::label::label_text_aabb(lbl)
+        .expand(0.3)
+        .contains(wx, wy)
 }
 
 fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
@@ -258,8 +260,8 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
 
     // Text-local bounding box (depends on justification)
     let (x_lo, x_hi) = match justify_h {
-        HAlign::Left   => (-margin, text_w + margin),
-        HAlign::Right  => (-(text_w + margin), margin),
+        HAlign::Left => (-margin, text_w + margin),
+        HAlign::Right => (-(text_w + margin), margin),
         HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),
     };
 
@@ -309,7 +311,9 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
         }
         match &lg.graphic {
             Graphic::Rectangle { start, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_body = true;
             }
@@ -320,12 +324,30 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                 }
             }
             Graphic::Circle { center, radius, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x - radius, center.y - radius);
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, center.x + radius, center.y + radius);
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x - radius,
+                    center.y - radius,
+                );
+                ext(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    center.x + radius,
+                    center.y + radius,
+                );
                 has_body = true;
             }
-            Graphic::Arc { start, mid, end, .. } => {
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y);
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                ext(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
+                );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
                 has_body = true;
@@ -349,7 +371,10 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
     let (lx, ly) = world_to_lib_space(sym, wx, wy);
 
     // Primary: click inside the body rectangle (minimal padding).
-    if Aabb::new(min_x, min_y, max_x, max_y).expand(0.25).contains(lx, ly) {
+    if Aabb::new(min_x, min_y, max_x, max_y)
+        .expand(0.25)
+        .contains(lx, ly)
+    {
         return true;
     }
 

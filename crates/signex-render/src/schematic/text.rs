@@ -114,11 +114,15 @@ pub fn expand_backslash_escapes(input: &str) -> String {
                 }
                 Some('r') => {
                     chars.next();
-                    // Collapse `\r` to `\n` so CRLF in stored strings
+                    // Collapse `\r\n` (backslash-escape form: four chars
+                    // `\`, `r`, `\`, `n`) into a single newline so CRLF
                     // doesn't produce blank double-spaced lines.
-                    if chars.peek() != Some(&'n') {
-                        out.push('\n');
+                    let mut la = chars.clone();
+                    if la.next() == Some('\\') && la.next() == Some('n') {
+                        chars.next();
+                        chars.next();
                     }
+                    out.push('\n');
                 }
                 Some('t') => {
                     chars.next();
@@ -229,7 +233,10 @@ pub fn draw_text_note(
             frame.fill(&rotated, color);
         });
     } else {
-        frame.fill_text(canvas::Text { position: sp, ..text });
+        frame.fill_text(canvas::Text {
+            position: sp,
+            ..text
+        });
     }
 }
 
@@ -304,6 +311,9 @@ pub fn draw_text_prop(
             frame.fill(&rotated, color);
         });
     } else {
-        frame.fill_text(canvas::Text { position: sp, ..text });
+        frame.fill_text(canvas::Text {
+            position: sp,
+            ..text
+        });
     }
 }

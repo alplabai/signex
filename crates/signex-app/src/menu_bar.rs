@@ -98,8 +98,12 @@ impl MenuColors {
 pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
 
-    let menu_template =
-        |items| Menu::new(items).max_width(DROPDOWN_WIDTH).offset(4.0).spacing(2.0);
+    let menu_template = |items| {
+        Menu::new(items)
+            .max_width(DROPDOWN_WIDTH)
+            .offset(4.0)
+            .spacing(2.0)
+    };
 
     let file_menu = Item::with_menu(
         root_btn("File", mc),
@@ -123,7 +127,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf("Cut", Some("Ctrl+X"), MenuMessage::Cut, mc),
             leaf("Copy", Some("Ctrl+C"), MenuMessage::Copy, mc),
             leaf("Paste", Some("Ctrl+V"), MenuMessage::Paste, mc),
-            leaf("Smart Paste", Some("Shift+Ctrl+V"), MenuMessage::SmartPaste, mc),
+            leaf(
+                "Smart Paste",
+                Some("Shift+Ctrl+V"),
+                MenuMessage::SmartPaste,
+                mc,
+            ),
             leaf("Duplicate", Some("Ctrl+D"), MenuMessage::Duplicate, mc),
             leaf("Delete", Some("Del"), MenuMessage::Delete, mc),
             separator(mc),
@@ -141,7 +150,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf_stub("Zoom Out", Some("Ctrl+-"), mc),
             leaf("Fit All", Some("Home"), MenuMessage::ZoomFit, mc),
             separator(mc),
-            leaf("Toggle Grid", Some("Shift+Ctrl+G"), MenuMessage::ToggleGrid, mc),
+            leaf(
+                "Toggle Grid",
+                Some("Shift+Ctrl+G"),
+                MenuMessage::ToggleGrid,
+                mc,
+            ),
             leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid, mc),
             separator(mc),
             leaf("Projects", None, MenuMessage::OpenProjectsPanel, mc),
@@ -189,7 +203,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf_stub("Design Rule Check", None, mc),
             leaf_stub("Net Inspector", None, mc),
             separator(mc),
-            leaf("Preferences...", Some("Ctrl+,"), MenuMessage::OpenPreferences, mc),
+            leaf(
+                "Preferences...",
+                Some("Ctrl+,"),
+                MenuMessage::OpenPreferences,
+                mc,
+            ),
         ]),
     );
 
@@ -245,13 +264,10 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
         path_border: Border::default(),
     });
 
-    container(
-        row![mb]
-            .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .style(styles::toolbar_strip(tokens))
-    .into()
+    container(row![mb].align_y(iced::Alignment::Center))
+        .width(Length::Fill)
+        .style(styles::toolbar_strip(tokens))
+        .into()
 }
 
 // ─── Private helpers ─────────────────────────────────────────
@@ -266,12 +282,21 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
 }
 
 /// Leaf menu item with an action.
-fn leaf(label: &str, shortcut: Option<&str>, msg: MenuMessage, mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+fn leaf(
+    label: &str,
+    shortcut: Option<&str>,
+    msg: MenuMessage,
+    mc: MenuColors,
+) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(menu_item_btn(label, shortcut, Some(msg), mc))
 }
 
 /// Leaf menu item — disabled/stub (no action yet).
-fn leaf_stub(label: &str, shortcut: Option<&str>, mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+fn leaf_stub(
+    label: &str,
+    shortcut: Option<&str>,
+    mc: MenuColors,
+) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(menu_item_btn(label, shortcut, None, mc))
 }
 
@@ -337,7 +362,10 @@ fn menu_item_btn(
             button::Style {
                 background: bg,
                 text_color: text_c,
-                border: Border { radius: 2.0.into(), ..Border::default() },
+                border: Border {
+                    radius: 2.0.into(),
+                    ..Border::default()
+                },
                 ..button::Style::default()
             }
         },

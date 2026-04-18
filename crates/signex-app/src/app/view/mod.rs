@@ -30,11 +30,7 @@ impl Signex {
         items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
         items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
         items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
-        items.push(self.ctx_menu_item_kb(
-            "Smart Paste",
-            "Shift+Ctrl+V",
-            ContextAction::SmartPaste,
-        ));
+        items.push(self.ctx_menu_item_kb("Smart Paste", "Shift+Ctrl+V", ContextAction::SmartPaste));
         items.push(self.ctx_menu_sep());
 
         if !canvas.selected.is_empty() {
@@ -84,26 +80,25 @@ impl Signex {
         .width(Self::CONTEXT_MENU_WIDTH)
         .padding([4, 12])
         .on_press(Message::ContextAction(action))
-        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    Some(iced::Background::Color(hover_c))
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
                 }
-                _ => None,
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: iced::Border::default(),
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
+            },
+        )
         .into()
     }
 
     fn ctx_menu_item_disabled<'a>(&self, label: &str, right: Option<&str>) -> Element<'a, Message> {
-        let text_secondary =
-            crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
+        let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
         let mut row = iced::widget::row![
             iced::widget::text(label.to_string())
                 .size(11)
@@ -205,11 +200,19 @@ impl Signex {
         let mut main = column![menu];
         if !document.tabs.is_empty() {
             main = main.push(
-                tab_bar::view(&document.tabs, document.active_tab, &document.panel_ctx.tokens)
-                    .map(Message::Tab),
+                tab_bar::view(
+                    &document.tabs,
+                    document.active_tab,
+                    &document.panel_ctx.tokens,
+                )
+                .map(Message::Tab),
             );
         }
-        let main = main.push(center_row).push(bottom_handle).push(bottom).push(status);
+        let main = main
+            .push(center_row)
+            .push(bottom_handle)
+            .push(bottom)
+            .push(status);
 
         let has_active_bar = self.has_active_schematic();
         let needs_overlay = has_active_bar
@@ -246,11 +249,19 @@ impl Signex {
             .dock
             .view_region(pos, &self.document_state.panel_ctx)
             .map(Message::Dock);
-        let width = if !has_panels { 0.0 } else if collapsed { 28.0 } else { size };
+        let width = if !has_panels {
+            0.0
+        } else if collapsed {
+            28.0
+        } else {
+            size
+        };
         container(panel)
             .width(width)
             .height(Length::Fill)
-            .style(crate::styles::panel_region(&self.document_state.panel_ctx.tokens))
+            .style(crate::styles::panel_region(
+                &self.document_state.panel_ctx.tokens,
+            ))
             .into()
     }
 
@@ -266,11 +277,19 @@ impl Signex {
             .dock
             .view_region(pos, &self.document_state.panel_ctx)
             .map(Message::Dock);
-        let height = if !has_panels { 0.0 } else if collapsed { 28.0 } else { size };
+        let height = if !has_panels {
+            0.0
+        } else if collapsed {
+            28.0
+        } else {
+            size
+        };
         container(panel)
             .width(Length::Fill)
             .height(height)
-            .style(crate::styles::panel_region(&self.document_state.panel_ctx.tokens))
+            .style(crate::styles::panel_region(
+                &self.document_state.panel_ctx.tokens,
+            ))
             .into()
     }
 
@@ -285,12 +304,16 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(size)
                 .height(Length::Fill)
-                .style(crate::styles::resize_handle(&self.document_state.panel_ctx.tokens))
+                .style(crate::styles::resize_handle(
+                    &self.document_state.panel_ctx.tokens,
+                ))
         } else {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(size)
-                .style(crate::styles::resize_handle(&self.document_state.panel_ctx.tokens))
+                .style(crate::styles::resize_handle(
+                    &self.document_state.panel_ctx.tokens,
+                ))
         };
         let interaction = if horizontal {
             iced::mouse::Interaction::ResizingHorizontally
@@ -319,16 +342,22 @@ impl Signex {
                 column![
                     iced::widget::text("No document open")
                         .size(14)
-                        .color(crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary)),
+                        .color(crate::styles::ti(
+                            self.document_state.panel_ctx.tokens.text_secondary
+                        )),
                     iced::widget::text("Open a project with File > Open or Ctrl+O")
                         .size(11)
-                        .color(crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary)),
+                        .color(crate::styles::ti(
+                            self.document_state.panel_ctx.tokens.text_secondary
+                        )),
                 ]
                 .spacing(8)
                 .align_x(iced::Alignment::Center),
             )
             .center(Length::Fill)
-            .style(crate::styles::panel_region(&self.document_state.panel_ctx.tokens))
+            .style(crate::styles::panel_region(
+                &self.document_state.panel_ctx.tokens,
+            ))
             .into()
         }
     }
@@ -365,9 +394,11 @@ impl Signex {
                     iced::widget::text("Placement Paused")
                         .size(16)
                         .color(text_c),
-                    iced::widget::text("Editing properties in the panel. Click Resume to keep placing.")
-                        .size(11)
-                        .color(text_c),
+                    iced::widget::text(
+                        "Editing properties in the panel. Click Resume to keep placing."
+                    )
+                    .size(11)
+                    .color(text_c),
                     iced::widget::Space::new().height(6.0),
                     iced::widget::button(
                         iced::widget::text("Resume Placement")
@@ -425,13 +456,14 @@ impl Signex {
             );
         }
 
-        if self.has_active_schematic() && let Some(ref edit_state) = interaction.editing_text {
+        if self.has_active_schematic()
+            && let Some(ref edit_state) = interaction.editing_text
+        {
             let text = edit_state.text.clone();
             // Convert object world position → window-absolute screen position.
             // The canvas Program publishes its latest camera into this Cell each
             // frame — that's the only way to read it from outside the Program.
-            let (cam_off_x, cam_off_y, cam_scale) =
-                interaction.canvas.live_camera.get();
+            let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera.get();
             let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
             let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
             // Canvas top-left within the window: menu bar + tab bar above,
@@ -452,8 +484,8 @@ impl Signex {
             // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
             let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
             // Estimate width from text length to keep the input snug.
-            let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62)
-                .max(60.0);
+            let approx_w =
+                ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
             // Offset the input so the baseline sits on top of the label text.
             let abs_x = x_canvas_origin + canvas_local_x - 2.0;
             let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
@@ -548,7 +580,9 @@ impl Signex {
             let has_pcb = document.panel_ctx.has_pcb;
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
-                .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
+                .filter(|&&kind| {
+                    (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
+                })
                 .map(|&kind| {
                     iced::widget::button(
                         iced::widget::text(kind.label().to_string())

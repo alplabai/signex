@@ -43,6 +43,8 @@ fn main() -> iced::Result {
         .font(IOSEVKA_BOLD)
         // UI default font: use whatever is configured (falls back to system
         // sans-serif if the named font is not installed).
-        .default_font(iced::Font::with_name(Box::leak(ui_font_name.into_boxed_str())))
+        .default_font(iced::Font::with_name(Box::leak(
+            ui_font_name.into_boxed_str(),
+        )))
         .run()
 }

@@ -18,17 +18,20 @@ impl Signex {
                     // User typed the visible form (e.g. "/OE"). Re-escape
                     // reserved characters back to KiCad tokens before the
                     // engine persists the change.
-                    let stored =
-                        signex_render::schematic::text::escape_for_kicad(&state.text);
+                    let stored = signex_render::schematic::text::escape_for_kicad(&state.text);
                     let engine_command = match state.kind {
-                        signex_types::schematic::SelectedKind::Label => signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: stored,
-                        },
-                        signex_types::schematic::SelectedKind::TextNote => signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: stored,
-                        },
+                        signex_types::schematic::SelectedKind::Label => {
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::Label(state.uuid),
+                                value: stored,
+                            }
+                        }
+                        signex_types::schematic::SelectedKind::TextNote => {
+                            signex_engine::Command::UpdateText {
+                                target: signex_engine::TextTarget::TextNote(state.uuid),
+                                value: stored,
+                            }
+                        }
                         _ => return Task::none(),
                     };
                     self.apply_engine_command(engine_command, false, true);

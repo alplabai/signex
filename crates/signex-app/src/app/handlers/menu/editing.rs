@@ -3,7 +3,10 @@ use iced::Task;
 use super::super::super::*;
 
 impl Signex {
-    pub(super) fn handle_menu_editing_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
+    pub(super) fn handle_menu_editing_command(
+        &mut self,
+        msg: &MenuMessage,
+    ) -> Option<Task<Message>> {
         match msg {
             MenuMessage::Undo => Some(self.update(Message::Undo)),
             MenuMessage::Redo => Some(self.update(Message::Redo)),

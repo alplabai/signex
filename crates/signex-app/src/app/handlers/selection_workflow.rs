@@ -31,9 +31,7 @@ pub(crate) fn passes_filter(
         SelectedKind::ChildSheet => SelectionFilter::SheetSymbols,
         SelectedKind::Label => SelectionFilter::NetLabels,
         SelectedKind::TextNote => SelectionFilter::Texts,
-        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
-            SelectionFilter::Parameters
-        }
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => SelectionFilter::Parameters,
         SelectedKind::Drawing => SelectionFilter::DrawingObjects,
         SelectedKind::Junction | SelectedKind::NoConnect => SelectionFilter::Other,
     };
@@ -68,7 +66,10 @@ fn all_selectable_items(
         items.push(SelectedItem::new(text_note.uuid, SelectedKind::TextNote));
     }
     for child_sheet in &snapshot.child_sheets {
-        items.push(SelectedItem::new(child_sheet.uuid, SelectedKind::ChildSheet));
+        items.push(SelectedItem::new(
+            child_sheet.uuid,
+            SelectedKind::ChildSheet,
+        ));
     }
     for bus_entry in &snapshot.bus_entries {
         items.push(SelectedItem::new(bus_entry.uuid, SelectedKind::BusEntry));
@@ -145,11 +146,8 @@ impl Signex {
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    let hit = signex_render::schematic::hit_test::hit_test(
-                        snapshot,
-                        world_x,
-                        world_y,
-                    );
+                    let hit =
+                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.canvas.selected = hit.into_iter().collect();
