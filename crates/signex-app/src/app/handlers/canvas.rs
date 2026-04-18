@@ -70,7 +70,9 @@ impl Signex {
             let dx = x - ox;
             let dy = y - oy;
             if (dx * dx + dy * dy).sqrt() > 20.0 {
-                self.document_state.dock.update(DockMessage::UndockPanel(pos, idx));
+                self.document_state
+                    .dock
+                    .update(DockMessage::UndockPanel(pos, idx));
                 self.interaction_state.tab_drag_origin = None;
             }
         }
@@ -96,7 +98,12 @@ impl Signex {
         let (mx, my) = self.interaction_state.last_mouse_pos;
         let (ww, wh) = self.ui_state.window_size;
         let dock_zone = 120.0;
-        let has_dragging = self.document_state.dock.floating.iter().any(|fp| fp.dragging);
+        let has_dragging = self
+            .document_state
+            .dock
+            .floating
+            .iter()
+            .any(|fp| fp.dragging);
         crate::diagnostics::log_debug(format!(
             "[dock-end] mouse=({mx:.0},{my:.0}) win=({ww:.0},{wh:.0}) floating={} dragging={has_dragging}",
             self.document_state.dock.floating.len()
@@ -168,21 +175,20 @@ impl Signex {
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
                     if state.text != state.original_text {
-                        let stored =
-                            signex_render::schematic::text::escape_for_kicad(&state.text);
+                        let stored = signex_render::schematic::text::escape_for_kicad(&state.text);
                         let cmd = match state.kind {
-                            signex_types::schematic::SelectedKind::Label => Some(
-                                signex_engine::Command::UpdateText {
+                            signex_types::schematic::SelectedKind::Label => {
+                                Some(signex_engine::Command::UpdateText {
                                     target: signex_engine::TextTarget::Label(state.uuid),
                                     value: stored,
-                                },
-                            ),
-                            signex_types::schematic::SelectedKind::TextNote => Some(
-                                signex_engine::Command::UpdateText {
+                                })
+                            }
+                            signex_types::schematic::SelectedKind::TextNote => {
+                                Some(signex_engine::Command::UpdateText {
                                     target: signex_engine::TextTarget::TextNote(state.uuid),
                                     value: stored,
-                                },
-                            ),
+                                })
+                            }
                             _ => None,
                         };
                         if let Some(cmd) = cmd {
@@ -221,10 +227,12 @@ impl Signex {
                             self.interaction_state.canvas.wire_preview =
                                 self.interaction_state.wire_points.clone();
                             self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode = self.interaction_state.draw_mode;
+                            self.interaction_state.canvas.draw_mode =
+                                self.interaction_state.draw_mode;
                             self.interaction_state.canvas.tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                            let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
+                            let segments =
+                                constrain_segments(start, pt, self.interaction_state.draw_mode);
                             let mut wire_commands = Vec::new();
                             for seg in &segments {
                                 let wire = signex_types::schematic::Wire {
@@ -233,7 +241,8 @@ impl Signex {
                                     end: seg.1,
                                     stroke_width: 0.0,
                                 };
-                                wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
+                                wire_commands
+                                    .push(signex_engine::Command::PlaceWireSegment { wire });
                             }
                             if !wire_commands.is_empty() {
                                 self.apply_engine_commands(wire_commands, false, false);
@@ -252,10 +261,12 @@ impl Signex {
                             self.interaction_state.canvas.wire_preview =
                                 self.interaction_state.wire_points.clone();
                             self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode = self.interaction_state.draw_mode;
+                            self.interaction_state.canvas.draw_mode =
+                                self.interaction_state.draw_mode;
                             self.interaction_state.canvas.tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                            let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
+                            let segments =
+                                constrain_segments(start, pt, self.interaction_state.draw_mode);
                             let mut bus_commands = Vec::new();
                             for seg in &segments {
                                 let bus = signex_types::schematic::Bus {
@@ -274,7 +285,9 @@ impl Signex {
                         }
                     }
                     Tool::Component if self.interaction_state.pending_power.is_some() => {
-                        if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
+                        if let Some((ref net_name, ref lib_id)) =
+                            self.interaction_state.pending_power
+                        {
                             let sym = signex_types::schematic::Symbol {
                                 uuid: uuid::Uuid::new_v4(),
                                 lib_id: lib_id.clone(),
@@ -367,21 +380,22 @@ impl Signex {
                     Tool::Label => {
                         // Place net / global / hierarchical label depending on
                         // pending_port state. Default: net label named "NET".
-                        let (label_type, shape, default_text) =
-                            if let Some((lt, shape)) = self.interaction_state.pending_port.clone() {
-                                let default = match lt {
-                                    signex_types::schematic::LabelType::Global => "PORT",
-                                    signex_types::schematic::LabelType::Hierarchical => "SHEET",
-                                    _ => "NET",
-                                };
-                                (lt, shape, default.to_string())
-                            } else {
-                                (
-                                    signex_types::schematic::LabelType::Net,
-                                    String::new(),
-                                    "NET".to_string(),
-                                )
+                        let (label_type, shape, default_text) = if let Some((lt, shape)) =
+                            self.interaction_state.pending_port.clone()
+                        {
+                            let default = match lt {
+                                signex_types::schematic::LabelType::Global => "PORT",
+                                signex_types::schematic::LabelType::Hierarchical => "SHEET",
+                                _ => "NET",
                             };
+                            (lt, shape, default.to_string())
+                        } else {
+                            (
+                                signex_types::schematic::LabelType::Net,
+                                String::new(),
+                                "NET".to_string(),
+                            )
+                        };
                         let text = self
                             .document_state
                             .panel_ctx
@@ -417,10 +431,9 @@ impl Signex {
                         );
                     }
                     _ => {
-                        return self.handle_selection_request(selection_request::SelectionRequest::HitAt {
-                            world_x,
-                            world_y,
-                        });
+                        return self.handle_selection_request(
+                            selection_request::SelectionRequest::HitAt { world_x, world_y },
+                        );
                     }
                 }
             }
@@ -489,22 +502,26 @@ impl Signex {
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
-                                .map(|l| (
-                                    l.text.clone(),
-                                    SelectedKind::Label,
-                                    l.position.x,
-                                    l.position.y,
-                                )),
+                                .map(|l| {
+                                    (
+                                        l.text.clone(),
+                                        SelectedKind::Label,
+                                        l.position.x,
+                                        l.position.y,
+                                    )
+                                }),
                             SelectedKind::TextNote => snapshot
                                 .text_notes
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
-                                .map(|t| (
-                                    t.text.clone(),
-                                    SelectedKind::TextNote,
-                                    t.position.x,
-                                    t.position.y,
-                                )),
+                                .map(|t| {
+                                    (
+                                        t.text.clone(),
+                                        SelectedKind::TextNote,
+                                        t.position.x,
+                                        t.position.y,
+                                    )
+                                }),
                             _ => None,
                         };
                         if let Some((raw_text, kind, wx, wy)) = edit_info {
@@ -524,12 +541,9 @@ impl Signex {
                 }
             }
             CanvasEvent::BoxSelect { x1, y1, x2, y2 } => {
-                return self.handle_selection_request(selection_request::SelectionRequest::BoxSelect {
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                });
+                return self.handle_selection_request(
+                    selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 },
+                );
             }
             CanvasEvent::CursorMoved => {
                 self.interaction_state.canvas.clear_bg_cache();

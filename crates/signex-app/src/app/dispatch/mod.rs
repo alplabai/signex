@@ -12,10 +12,9 @@ mod ui;
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Menu(_)
-            | Message::Tab(_)
-            | Message::Dock(_)
-            | Message::Selection(_) => self.dispatch_routed_message(message),
+            Message::Menu(_) | Message::Tab(_) | Message::Dock(_) | Message::Selection(_) => {
+                self.dispatch_routed_message(message)
+            }
             Message::ThemeChanged(_)
             | Message::UnitCycled
             | Message::GridToggle

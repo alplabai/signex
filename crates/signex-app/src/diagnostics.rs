@@ -145,14 +145,22 @@ fn push_entry(entry: DiagnosticEntry) {
 fn resolve_configured_level() -> LevelFilter {
     ["SIGNEX_LOG", "RUST_LOG"]
         .into_iter()
-        .find_map(|key| std::env::var(key).ok().and_then(|value| parse_level_filter(&value)))
+        .find_map(|key| {
+            std::env::var(key)
+                .ok()
+                .and_then(|value| parse_level_filter(&value))
+        })
         .unwrap_or(LevelFilter::Info)
 }
 
 fn parse_level_filter(value: &str) -> Option<LevelFilter> {
     let mut global_level = None;
 
-    for directive in value.split(',').map(str::trim).filter(|directive| !directive.is_empty()) {
+    for directive in value
+        .split(',')
+        .map(str::trim)
+        .filter(|directive| !directive.is_empty())
+    {
         if let Some((target, level)) = directive.split_once('=') {
             let target = target.trim();
             if matches!(target, "signex" | "signex_app") {
@@ -193,8 +201,10 @@ fn summarize_record(target: &str, rendered: &str) -> (String, String) {
 
 fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
     if rendered.contains("Selected: AdapterInfo") {
-        let adapter = extract_named_field(rendered, "name").unwrap_or_else(|| "Unknown adapter".to_string());
-        let backend = extract_named_field(rendered, "backend").unwrap_or_else(|| "Unknown backend".to_string());
+        let adapter =
+            extract_named_field(rendered, "name").unwrap_or_else(|| "Unknown adapter".to_string());
+        let backend = extract_named_field(rendered, "backend")
+            .unwrap_or_else(|| "Unknown backend".to_string());
         return Some((
             "GPU-ADAPTER-SELECTED".to_string(),
             format!("Graphics adapter selected: {adapter} ({backend})"),

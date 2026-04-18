@@ -8,6 +8,7 @@ impl Signex {
     /// selection-aware Properties panel (with full per-kind fields) renders.
     /// Returns without committing for kinds that have no in-place properties
     /// (wire / bus / bus entry / no-connect / component fallback).
+    #[allow(dead_code)]
     fn commit_ghost_for_pre_placement(
         &mut self,
         kind: crate::panels::PrePlacementKind,
@@ -17,8 +18,8 @@ impl Signex {
         use signex_types::schematic as sch;
         // Snap the cursor to grid so the new object lands on a grid dot.
         let (wx, wy) = {
-            let x = self.ui_state.cursor_x as f64;
-            let y = self.ui_state.cursor_y as f64;
+            let x = self.ui_state.cursor_x;
+            let y = self.ui_state.cursor_y;
             if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
                 let g = self.ui_state.grid_size_mm as f64;
                 ((x / g).round() * g, (y / g).round() * g)
@@ -31,7 +32,9 @@ impl Signex {
             | PrePlacementKind::GlobalPort
             | PrePlacementKind::HierPort => {
                 let (label_type, shape) = match kind {
-                    PrePlacementKind::GlobalPort => (sch::LabelType::Global, "bidirectional".to_string()),
+                    PrePlacementKind::GlobalPort => {
+                        (sch::LabelType::Global, "bidirectional".to_string())
+                    }
                     PrePlacementKind::HierPort => (sch::LabelType::Hierarchical, String::new()),
                     _ => (sch::LabelType::Net, String::new()),
                 };
@@ -50,7 +53,11 @@ impl Signex {
                     font_size: 1.8,
                     justify: sch::HAlign::Left,
                 };
-                self.apply_engine_command(signex_engine::Command::PlaceLabel { label }, false, false);
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceLabel { label },
+                    false,
+                    false,
+                );
                 self.interaction_state.canvas.selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::Label,
@@ -86,11 +93,7 @@ impl Signex {
                 self.update_selection_info();
             }
             PrePlacementKind::PowerPort => {
-                let Some((net_name, lib_id)) = self
-                    .interaction_state
-                    .pending_power
-                    .clone()
-                else {
+                let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() else {
                     return;
                 };
                 let uuid = uuid::Uuid::new_v4();
@@ -98,7 +101,11 @@ impl Signex {
                     uuid,
                     lib_id,
                     reference: String::new(),
-                    value: if label_text.is_empty() { net_name } else { label_text.to_string() },
+                    value: if label_text.is_empty() {
+                        net_name
+                    } else {
+                        label_text.to_string()
+                    },
                     footprint: String::new(),
                     datasheet: String::new(),
                     position: sch::Point::new(wx, wy),
@@ -138,7 +145,6 @@ impl Signex {
         }
     }
 
-
     pub(super) fn dispatch_tool_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::PrePlacementTab => {
@@ -152,84 +158,89 @@ impl Signex {
                     // Tool::Label with `pending_port` = Global is NOT the
                     // same as a plain net label; a Tool::Component with
                     // `pending_power` is a power port, not a regular part.
-                    let (kind, tool_name, default_label_text, default_designator) = match self
-                        .interaction_state
-                        .current_tool
-                    {
-                        Tool::Wire => (PrePlacementKind::Wire, "Wire".to_string(), String::new(), String::new()),
-                        Tool::Bus => (PrePlacementKind::Bus, "Bus".to_string(), String::new(), String::new()),
-                        Tool::BusEntry => (
-                            PrePlacementKind::BusEntry,
-                            "Bus Entry".to_string(),
-                            String::new(),
-                            String::new(),
-                        ),
-                        Tool::NoConnect => (
-                            PrePlacementKind::NoConnect,
-                            "No Connect".to_string(),
-                            String::new(),
-                            String::new(),
-                        ),
-                        Tool::Text => (
-                            PrePlacementKind::TextNote,
-                            "Text".to_string(),
-                            "Text".to_string(),
-                            String::new(),
-                        ),
-                        Tool::Component => {
-                            // Power port — armed via Active Bar — lives under
-                            // Tool::Component but has `pending_power` set.
-                            if let Some((net, _)) = self
-                                .interaction_state
-                                .pending_power
-                                .as_ref()
-                                .cloned()
-                            {
-                                (
-                                    PrePlacementKind::PowerPort,
-                                    format!("Power Port ({})", net),
-                                    net,
-                                    String::new(),
-                                )
-                            } else {
-                                let (label, designator) = self
-                                    .current_component_defaults()
-                                    .unwrap_or_else(|| ("NET".to_string(), String::new()));
-                                (
-                                    PrePlacementKind::Component,
-                                    "Component".to_string(),
-                                    label,
-                                    designator,
-                                )
+                    let (kind, tool_name, default_label_text, default_designator) =
+                        match self.interaction_state.current_tool {
+                            Tool::Wire => (
+                                PrePlacementKind::Wire,
+                                "Wire".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Bus => (
+                                PrePlacementKind::Bus,
+                                "Bus".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::BusEntry => (
+                                PrePlacementKind::BusEntry,
+                                "Bus Entry".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::NoConnect => (
+                                PrePlacementKind::NoConnect,
+                                "No Connect".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Text => (
+                                PrePlacementKind::TextNote,
+                                "Text".to_string(),
+                                "Text".to_string(),
+                                String::new(),
+                            ),
+                            Tool::Component => {
+                                // Power port — armed via Active Bar — lives under
+                                // Tool::Component but has `pending_power` set.
+                                if let Some((net, _)) =
+                                    self.interaction_state.pending_power.as_ref().cloned()
+                                {
+                                    (
+                                        PrePlacementKind::PowerPort,
+                                        format!("Power Port ({})", net),
+                                        net,
+                                        String::new(),
+                                    )
+                                } else {
+                                    let (label, designator) = self
+                                        .current_component_defaults()
+                                        .unwrap_or_else(|| ("NET".to_string(), String::new()));
+                                    (
+                                        PrePlacementKind::Component,
+                                        "Component".to_string(),
+                                        label,
+                                        designator,
+                                    )
+                                }
                             }
-                        }
-                        Tool::Label => match self.interaction_state.pending_port.as_ref() {
-                            Some((LabelType::Global, _)) => (
-                                PrePlacementKind::GlobalPort,
-                                "Global Port".to_string(),
-                                "PORT".to_string(),
-                                String::new(),
-                            ),
-                            Some((LabelType::Hierarchical, _)) => (
-                                PrePlacementKind::HierPort,
-                                "Hierarchical Port".to_string(),
-                                "SHEET".to_string(),
-                                String::new(),
-                            ),
+                            Tool::Label => match self.interaction_state.pending_port.as_ref() {
+                                Some((LabelType::Global, _)) => (
+                                    PrePlacementKind::GlobalPort,
+                                    "Global Port".to_string(),
+                                    "PORT".to_string(),
+                                    String::new(),
+                                ),
+                                Some((LabelType::Hierarchical, _)) => (
+                                    PrePlacementKind::HierPort,
+                                    "Hierarchical Port".to_string(),
+                                    "SHEET".to_string(),
+                                    String::new(),
+                                ),
+                                _ => (
+                                    PrePlacementKind::NetLabel,
+                                    "Net Label".to_string(),
+                                    "NET".to_string(),
+                                    String::new(),
+                                ),
+                            },
                             _ => (
-                                PrePlacementKind::NetLabel,
-                                "Net Label".to_string(),
-                                "NET".to_string(),
+                                PrePlacementKind::Other,
+                                format!("{}", self.interaction_state.current_tool),
+                                String::new(),
                                 String::new(),
                             ),
-                        },
-                        _ => (
-                            PrePlacementKind::Other,
-                            format!("{}", self.interaction_state.current_tool),
-                            String::new(),
-                            String::new(),
-                        ),
-                    };
+                        };
                     let label_text = self
                         .document_state
                         .panel_ctx
@@ -280,24 +291,25 @@ impl Signex {
                         .pre_placement
                         .as_ref()
                         .map(|pp| pp.justify_v)
-                        .unwrap_or(signex_types::schematic::VAlign::default());
+                        .unwrap_or_default();
                     let label_text_for_commit = label_text.clone();
-                    self.document_state.panel_ctx.pre_placement = Some(crate::panels::PrePlacementData {
-                        tool_name,
-                        kind,
-                        label_text,
-                        designator,
-                        rotation: prev_rotation,
-                        font: prev_font,
-                        font_size_pt: prev_font_size,
-                        justify_h: prev_jh,
-                        justify_v: prev_jv,
-                        bold: false,
-                        italic: false,
-                        underline: false,
-                        cursor_x_mm: self.ui_state.cursor_x as f64,
-                        cursor_y_mm: self.ui_state.cursor_y as f64,
-                    });
+                    self.document_state.panel_ctx.pre_placement =
+                        Some(crate::panels::PrePlacementData {
+                            tool_name,
+                            kind,
+                            label_text,
+                            designator,
+                            rotation: prev_rotation,
+                            font: prev_font,
+                            font_size_pt: prev_font_size,
+                            justify_h: prev_jh,
+                            justify_v: prev_jv,
+                            bold: false,
+                            italic: false,
+                            underline: false,
+                            cursor_x_mm: self.ui_state.cursor_x,
+                            cursor_y_mm: self.ui_state.cursor_y,
+                        });
                     self.document_state
                         .dock
                         .add_panel(PanelPosition::Right, crate::panels::PanelKind::Properties);

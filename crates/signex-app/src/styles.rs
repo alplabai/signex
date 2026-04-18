@@ -26,7 +26,11 @@ pub fn panel_region(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
-        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -39,7 +43,11 @@ pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
-        border: Border { width: 0.0, radius: 0.0.into(), color: border },
+        border: Border {
+            width: 0.0,
+            radius: 0.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -62,7 +70,11 @@ pub fn status_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
-        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -75,7 +87,11 @@ pub fn tab_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
-        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -86,7 +102,11 @@ pub fn collapsed_rail(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Sty
     let border = ti(tokens.border);
     move |_| container::Style {
         background: Some(bg.into()),
-        border: Border { width: 1.0, radius: 0.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -121,7 +141,11 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
-        border: Border { width: 1.0, radius: 4.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 4.0.into(),
+            color: border,
+        },
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
             offset: iced::Vector::new(2.0, 3.0),
@@ -137,7 +161,11 @@ pub fn floating_title_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
     let border = ti(tokens.border);
     move |_| container::Style {
         background: Some(bg.into()),
-        border: Border { width: 1.0, radius: 6.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 6.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
@@ -148,13 +176,19 @@ pub fn floating_panel_body(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
     let border = ti(tokens.border);
     move |_| container::Style {
         background: Some(bg.into()),
-        border: Border { width: 1.0, radius: 6.0.into(), color: border },
+        border: Border {
+            width: 1.0,
+            radius: 6.0.into(),
+            color: border,
+        },
         ..container::Style::default()
     }
 }
 
 /// Floating panel outer wrapper (shadow only)
-pub fn floating_panel_shadow(_tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+pub fn floating_panel_shadow(
+    _tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
     move |_| container::Style {
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
@@ -173,7 +207,11 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
         background: Some(Background::Color(Color::from_rgba(
             accent.r, accent.g, accent.b, 0.15,
         ))),
-        border: Border { width: 2.0, radius: 4.0.into(), color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4) },
+        border: Border {
+            width: 2.0,
+            radius: 4.0.into(),
+            color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4),
+        },
         ..container::Style::default()
     }
 }
@@ -186,17 +224,27 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 /// underline (added by the caller via `tab_underline`). Inactive tabs are
 /// plain text — no border box. Iced 0.14 `Border` is uniform on all four
 /// sides, so any border here would draw the unwanted bottom edge too.
-pub fn dock_tab_container(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme) -> container::Style + 'static {
+pub fn dock_tab_container(
+    tokens: &ThemeTokens,
+    is_active: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
     move |_: &Theme| container::Style {
-        background: if is_active { Some(Background::Color(tab_active)) } else { None },
+        background: if is_active {
+            Some(Background::Color(tab_active))
+        } else {
+            None
+        },
         border: Border::default(),
         ..container::Style::default()
     }
 }
 
 /// Rail tab button (collapsed dock) — rounded corners.
-pub fn rail_tab(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+pub fn rail_tab(
+    tokens: &ThemeTokens,
+    is_active: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
     let tab_active = ti(tokens.hover);
     let border = ti(tokens.border);
     move |_: &Theme, status: button::Status| {
@@ -207,14 +255,20 @@ pub fn rail_tab(tokens: &ThemeTokens, is_active: bool) -> impl Fn(&Theme, button
         };
         button::Style {
             background: bg,
-            border: Border { width: 1.0, radius: 3.0.into(), color: border },
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
             ..button::Style::default()
         }
     }
 }
 
 /// Menu item / popup list button — full-width hover highlight.
-pub fn menu_item(tokens: &ThemeTokens) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+pub fn menu_item(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
     let hover = ti(tokens.hover);
     let text = ti(tokens.text);
     move |_: &Theme, status: button::Status| {
@@ -238,4 +292,3 @@ pub fn tab_underline(color: Color) -> impl Fn(&Theme) -> container::Style + 'sta
         ..container::Style::default()
     }
 }
-

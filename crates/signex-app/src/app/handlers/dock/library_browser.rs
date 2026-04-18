@@ -24,7 +24,9 @@ impl Signex {
 
     fn load_library_browser_state(&mut self, selected_library: String) -> Result<()> {
         let Some(library_root) = self.document_state.kicad_lib_dir.clone() else {
-            crate::diagnostics::log_warning("Library selection ignored because no KiCad library directory is configured");
+            crate::diagnostics::log_warning(
+                "Library selection ignored because no KiCad library directory is configured",
+            );
             return Ok(());
         };
 

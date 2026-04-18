@@ -83,61 +83,64 @@ impl Signex {
                 project_path: None,
                 project_data: None,
                 panel_ctx: crate::panels::PanelContext {
-                project_name: None,
-                project_file: None,
-                pcb_file: None,
-                sheets: vec![],
-                sym_count: 0,
-                wire_count: 0,
-                label_count: 0,
-                junction_count: 0,
-                child_sheets: vec![],
-                has_schematic: false,
-                has_pcb: false,
-                paper_size: "A4".to_string(),
-                lib_symbol_count: 0,
-                lib_symbol_names: vec![],
-                placed_symbols: vec![],
-                tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
-                unit: Unit::Mm,
-                grid_visible: true,
-                snap_enabled: true,
-                grid_size_mm: 2.54,
-                visible_grid_mm: 2.54,
-                snap_hotspots: true,
-                ui_font_name: crate::fonts::read_ui_font_pref(),
-                canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
-                canvas_font_size: 11.0,
-                canvas_font_bold: false,
-                canvas_font_italic: false,
-                canvas_font_popup_open: false,
-                properties_tab: 0,
-                kicad_libraries,
-                active_library: None,
-                library_symbols: vec![],
-                selected_component: None,
-                selected_pins: vec![],
-                selected_lib_symbol: None,
-                components_split: 250.0,
-                project_tree: vec![],
-                selection_count: 0,
-                selected_uuid: None,
-                selected_kind: None,
-                selection_info: vec![],
-                component_filter: String::new(),
-                collapsed_sections: std::collections::HashSet::new(),
-                pre_placement: None,
-                diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
-                diagnostics: crate::diagnostics::recent_entries(),
-                selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
-                page_format_mode: crate::panels::PageFormatMode::default(),
-                margin_vertical: 1,
-                margin_horizontal: 1,
-                page_origin: crate::panels::PageOrigin::default(),
-                custom_paper_w_mm: 297.0,
-                custom_paper_h_mm: 210.0,
-                sheet_color: crate::panels::SheetColor::default(),
-            },
+                    project_name: None,
+                    project_file: None,
+                    pcb_file: None,
+                    sheets: vec![],
+                    sym_count: 0,
+                    wire_count: 0,
+                    label_count: 0,
+                    junction_count: 0,
+                    child_sheets: vec![],
+                    has_schematic: false,
+                    has_pcb: false,
+                    paper_size: "A4".to_string(),
+                    lib_symbol_count: 0,
+                    lib_symbol_names: vec![],
+                    placed_symbols: vec![],
+                    tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
+                    unit: Unit::Mm,
+                    grid_visible: true,
+                    snap_enabled: true,
+                    grid_size_mm: 2.54,
+                    visible_grid_mm: 2.54,
+                    snap_hotspots: true,
+                    ui_font_name: crate::fonts::read_ui_font_pref(),
+                    canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
+                    canvas_font_size: 11.0,
+                    canvas_font_bold: false,
+                    canvas_font_italic: false,
+                    canvas_font_popup_open: false,
+                    properties_tab: 0,
+                    kicad_libraries,
+                    active_library: None,
+                    library_symbols: vec![],
+                    selected_component: None,
+                    selected_pins: vec![],
+                    selected_lib_symbol: None,
+                    components_split: 250.0,
+                    project_tree: vec![],
+                    selection_count: 0,
+                    selected_uuid: None,
+                    selected_kind: None,
+                    selection_info: vec![],
+                    component_filter: String::new(),
+                    collapsed_sections: std::collections::HashSet::new(),
+                    pre_placement: None,
+                    diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
+                    diagnostics: crate::diagnostics::recent_entries(),
+                    selection_filters: crate::active_bar::SelectionFilter::ALL
+                        .iter()
+                        .copied()
+                        .collect(),
+                    page_format_mode: crate::panels::PageFormatMode::default(),
+                    margin_vertical: 1,
+                    margin_horizontal: 1,
+                    page_origin: crate::panels::PageOrigin::default(),
+                    custom_paper_w_mm: 297.0,
+                    custom_paper_h_mm: 210.0,
+                    sheet_color: crate::panels::SheetColor::default(),
+                },
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
             },
@@ -164,7 +167,10 @@ impl Signex {
                 context_menu: None,
                 last_mouse_pos: (0.0, 0.0),
                 active_bar_menu: None,
-                selection_filters: crate::active_bar::SelectionFilter::ALL.iter().copied().collect(),
+                selection_filters: crate::active_bar::SelectionFilter::ALL
+                    .iter()
+                    .copied()
+                    .collect(),
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
@@ -208,11 +214,11 @@ impl Signex {
                         c.name.clone(),
                         iced::theme::Palette {
                             background: to_iced(&t.bg),
-                            text:       to_iced(&t.text),
-                            primary:    to_iced(&t.accent),
-                            success:    to_iced(&t.success),
-                            danger:     to_iced(&t.error),
-                            warning:    to_iced(&t.warning),
+                            text: to_iced(&t.text),
+                            primary: to_iced(&t.accent),
+                            success: to_iced(&t.success),
+                            danger: to_iced(&t.error),
+                            warning: to_iced(&t.warning),
                         },
                     )
                 } else {
@@ -224,33 +230,33 @@ impl Signex {
                 "VS Code Dark".to_string(),
                 iced::theme::Palette {
                     background: iced::Color::from_rgb(0.118, 0.118, 0.118),
-                    text:       iced::Color::from_rgb(0.831, 0.831, 0.831),
-                    primary:    iced::Color::from_rgb(0.000, 0.478, 0.800),
-                    success:    iced::Color::from_rgb(0.416, 0.600, 0.333),
-                    danger:     iced::Color::from_rgb(0.957, 0.267, 0.278),
-                    warning:    iced::Color::from_rgb(1.000, 0.549, 0.000),
+                    text: iced::Color::from_rgb(0.831, 0.831, 0.831),
+                    primary: iced::Color::from_rgb(0.000, 0.478, 0.800),
+                    success: iced::Color::from_rgb(0.416, 0.600, 0.333),
+                    danger: iced::Color::from_rgb(0.957, 0.267, 0.278),
+                    warning: iced::Color::from_rgb(1.000, 0.549, 0.000),
                 },
             ),
             ThemeId::Signex => Theme::custom(
                 "Altium Dark".to_string(),
                 iced::theme::Palette {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
-                    text:       iced::Color::from_rgb(0.86, 0.86, 0.86),
-                    primary:    iced::Color::from_rgb(0.91, 0.57, 0.18),
-                    success:    iced::Color::from_rgb(0.34, 0.65, 0.29),
-                    danger:     iced::Color::from_rgb(0.96, 0.31, 0.31),
-                    warning:    iced::Color::from_rgb(0.91, 0.57, 0.18),
+                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
+                    primary: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
+                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
+                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
                 },
             ),
             ThemeId::GitHubDark => Theme::custom(
                 "GitHub Dark".to_string(),
                 iced::theme::Palette {
                     background: iced::Color::from_rgb(0.051, 0.067, 0.090),
-                    text:       iced::Color::from_rgb(0.902, 0.929, 0.953),
-                    primary:    iced::Color::from_rgb(0.345, 0.651, 1.000),
-                    success:    iced::Color::from_rgb(0.247, 0.725, 0.314),
-                    danger:     iced::Color::from_rgb(1.000, 0.482, 0.447),
-                    warning:    iced::Color::from_rgb(0.824, 0.604, 0.133),
+                    text: iced::Color::from_rgb(0.902, 0.929, 0.953),
+                    primary: iced::Color::from_rgb(0.345, 0.651, 1.000),
+                    success: iced::Color::from_rgb(0.247, 0.725, 0.314),
+                    danger: iced::Color::from_rgb(1.000, 0.482, 0.447),
+                    warning: iced::Color::from_rgb(0.824, 0.604, 0.133),
                 },
             ),
             ThemeId::SolarizedLight => Theme::Light,
@@ -261,144 +267,159 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
-        let kbd = keyboard::listen().with(self.ui_state.find_replace.open).map(|(find_replace_open, event)| match event {
-            keyboard::Event::KeyPressed {
-                key, modifiers: m, ..
-            } => match (key.as_ref(), m) {
-                (keyboard::Key::Character(c), m) if c == "q" && m.command() => Message::UnitCycled,
-                (keyboard::Key::Character(c), m) if c == "g" && !m.command() && !m.shift() => {
-                    Message::GridCycle
-                }
-                (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Wire))
-                }
-                (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Bus))
-                }
-                (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Label))
-                }
-                (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Component))
-                }
-                // Ctrl+, open Preferences
-                (keyboard::Key::Character(c), m) if c == "," && m.command() => {
-                    Message::OpenPreferences
-                }
-                (keyboard::Key::Character(c), m) if c == "f" && m.command() => Message::OpenFind,
-                (keyboard::Key::Character(c), m) if c == "h" && m.command() => Message::OpenReplace,
-                (keyboard::Key::Named(keyboard::key::Named::Escape), _) if find_replace_open => {
-                    Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
-                }
-                (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Select))
-                }
-                (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
-                    Message::CanvasEvent(CanvasEvent::FitAll)
-                }
-                // Delete selected
-                (keyboard::Key::Named(keyboard::key::Named::Delete), _) => Message::DeleteSelected,
-                // Undo/Redo
-                (keyboard::Key::Character(c), m) if c == "z" && m.command() && !m.shift() => {
-                    Message::Undo
-                }
-                (keyboard::Key::Character(c), m) if c == "y" && m.command() => Message::Redo,
-                (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
-                    Message::Redo
-                }
-                // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
-                (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
-                    Message::CycleDrawMode
-                }
-                // Space: rotate selected symbol (Altium convention)
-                (keyboard::Key::Named(keyboard::key::Named::Space), _) => Message::RotateSelected,
-                // Mirror: X key = horizontal flip (left-right) = KiCad mirror_y
-                //         Y key = vertical flip (top-bottom) = KiCad mirror_x
-                (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                    Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
-                }
-                (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                    Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
-                }
-                // Ctrl+S save
-                (keyboard::Key::Character(c), m) if c == "s" && m.command() => Message::SaveFile,
-                // Ctrl+A select all
-                (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
-                    Message::Selection(selection_request::SelectionRequest::SelectAll)
-                }
-                // Ctrl+M measure tool
-                (keyboard::Key::Character(c), m) if c == "m" && m.command() => {
-                    Message::Tool(ToolMessage::SelectTool(Tool::Measure))
-                }
-                // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
-                (keyboard::Key::Character(c), m)
-                    if m.command() && !m.alt() =>
-                {
-                    match selection_slot_from_key(c) {
-                        Some(slot) => {
-                            Message::Selection(selection_request::SelectionRequest::StoreSlot {
-                                slot,
-                            })
-                        }
-                        _ => Message::Noop,
+        let kbd = keyboard::listen()
+            .with(self.ui_state.find_replace.open)
+            .map(|(find_replace_open, event)| match event {
+                keyboard::Event::KeyPressed {
+                    key, modifiers: m, ..
+                } => match (key.as_ref(), m) {
+                    (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
+                        Message::UnitCycled
                     }
-                }
-                (keyboard::Key::Character(c), m)
-                    if m.alt() && !m.command() =>
-                {
-                    match selection_slot_from_key(c) {
-                        Some(slot) => {
-                            Message::Selection(selection_request::SelectionRequest::RecallSlot {
-                                slot,
-                            })
-                        }
-                        _ => Message::Noop,
+                    (keyboard::Key::Character(c), m) if c == "g" && !m.command() && !m.shift() => {
+                        Message::GridCycle
                     }
-                }
-                // Ctrl+C copy, Ctrl+X cut
-                (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,
-                (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
-                // Shift+Ctrl+V smart paste
-                (keyboard::Key::Character(c), m) if c == "v" && m.command() && m.shift() => {
-                    Message::SmartPaste
-                }
-                // Ctrl+V paste
-                (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
-                // Ctrl+D duplicate
-                (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
-                    Message::Duplicate
-                }
-                // Shift+Ctrl+G -- toggle grid visibility
-                (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
-                    Message::GridToggle
-                }
-                // Tab -- pre-placement properties (only during active tool)
-                (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
-                    Message::PrePlacementTab
-                }
+                    (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Wire))
+                    }
+                    (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Bus))
+                    }
+                    (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Label))
+                    }
+                    (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Component))
+                    }
+                    // Ctrl+, open Preferences
+                    (keyboard::Key::Character(c), m) if c == "," && m.command() => {
+                        Message::OpenPreferences
+                    }
+                    (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
+                        Message::OpenFind
+                    }
+                    (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
+                        Message::OpenReplace
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                        if find_replace_open =>
+                    {
+                        Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Select))
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
+                        Message::CanvasEvent(CanvasEvent::FitAll)
+                    }
+                    // Delete selected
+                    (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
+                        Message::DeleteSelected
+                    }
+                    // Undo/Redo
+                    (keyboard::Key::Character(c), m) if c == "z" && m.command() && !m.shift() => {
+                        Message::Undo
+                    }
+                    (keyboard::Key::Character(c), m) if c == "y" && m.command() => Message::Redo,
+                    (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
+                        Message::Redo
+                    }
+                    // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
+                    (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
+                        Message::CycleDrawMode
+                    }
+                    // Space: rotate selected symbol (Altium convention)
+                    (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
+                        Message::RotateSelected
+                    }
+                    // Mirror: X key = horizontal flip (left-right) = KiCad mirror_y
+                    //         Y key = vertical flip (top-bottom) = KiCad mirror_x
+                    (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
+                        Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
+                    }
+                    (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
+                        Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
+                    }
+                    // Ctrl+S save
+                    (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
+                        Message::SaveFile
+                    }
+                    // Ctrl+A select all
+                    (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
+                        Message::Selection(selection_request::SelectionRequest::SelectAll)
+                    }
+                    // Ctrl+M measure tool
+                    (keyboard::Key::Character(c), m) if c == "m" && m.command() => {
+                        Message::Tool(ToolMessage::SelectTool(Tool::Measure))
+                    }
+                    // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
+                    (keyboard::Key::Character(c), m) if m.command() && !m.alt() => {
+                        match selection_slot_from_key(c) {
+                            Some(slot) => {
+                                Message::Selection(selection_request::SelectionRequest::StoreSlot {
+                                    slot,
+                                })
+                            }
+                            _ => Message::Noop,
+                        }
+                    }
+                    (keyboard::Key::Character(c), m) if m.alt() && !m.command() => {
+                        match selection_slot_from_key(c) {
+                            Some(slot) => Message::Selection(
+                                selection_request::SelectionRequest::RecallSlot { slot },
+                            ),
+                            _ => Message::Noop,
+                        }
+                    }
+                    // Ctrl+C copy, Ctrl+X cut
+                    (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,
+                    (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
+                    // Shift+Ctrl+V smart paste
+                    (keyboard::Key::Character(c), m) if c == "v" && m.command() && m.shift() => {
+                        Message::SmartPaste
+                    }
+                    // Ctrl+V paste
+                    (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
+                    // Ctrl+D duplicate
+                    (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
+                        Message::Duplicate
+                    }
+                    // Shift+Ctrl+G -- toggle grid visibility
+                    (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
+                        Message::GridToggle
+                    }
+                    // Tab -- pre-placement properties (only during active tool)
+                    (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
+                        Message::PrePlacementTab
+                    }
+                    _ => Message::Noop,
+                },
                 _ => Message::Noop,
-            },
-            _ => Message::Noop,
-        });
+            });
 
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame
         // app updates when idle, which noticeably hurts smoothness on macOS.
         let drag_active = self.interaction_state.dragging.is_some()
             || self.document_state.dock.tab_drag.is_some()
-            || self.document_state.dock.floating.iter().any(|fp| fp.dragging);
+            || self
+                .document_state
+                .dock
+                .floating
+                .iter()
+                .any(|fp| fp.dragging);
         let mouse_sub = if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                     Message::DragMove(position.x, position.y)
                 }
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
-                    Message::DragEnd
-                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )) => Message::DragEnd,
                 // Any click dismisses context menu
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
-                    Message::CloseContextMenu
-                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                    iced::mouse::Button::Left,
+                )) => Message::CloseContextMenu,
                 iced::Event::Window(iced::window::Event::Resized(size)) => {
                     Message::WindowResized(size.width, size.height)
                 }
@@ -407,9 +428,9 @@ impl Signex {
         } else {
             iced::event::listen().map(|event| match event {
                 // Any click dismisses context menu
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
-                    Message::CloseContextMenu
-                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                    iced::mouse::Button::Left,
+                )) => Message::CloseContextMenu,
                 iced::Event::Window(iced::window::Event::Resized(size)) => {
                     Message::WindowResized(size.width, size.height)
                 }
