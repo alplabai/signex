@@ -59,10 +59,11 @@ impl Signex {
         .spacing(0);
 
         let summary = text(if proposed.is_empty() {
-            "No unannotated symbols — every reference already has a number.".to_string()
+            "No unannotated symbols — every reference already has a number. Use Reset & Renumber below to start over."
+                .to_string()
         } else {
             format!(
-                "{} symbol(s) will receive new designators. Review below.",
+                "{} symbol(s) will receive new designators. Review below, or use Reset All to clear every number.",
                 proposed.len()
             )
         })
@@ -96,8 +97,26 @@ impl Signex {
             }
         }
 
+        // Footer action row — four buttons so the user can reset + renumber
+        // from this dialog without closing and reopening via the Design
+        // menu. Mirrors Altium's Annotate dialog layout.
         let footer = row![
+            secondary_button("Cancel", Message::CloseAnnotateDialog, text_c, border_c),
             Space::new().width(Length::Fill),
+            secondary_button(
+                "Reset All",
+                Message::Annotate(signex_engine::AnnotateMode::ResetOnly),
+                text_c,
+                border_c,
+            ),
+            Space::new().width(6),
+            secondary_button(
+                "Reset & Renumber",
+                Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber),
+                text_c,
+                border_c,
+            ),
+            Space::new().width(6),
             primary_button(
                 "Apply",
                 if proposed.is_empty() {
@@ -107,8 +126,6 @@ impl Signex {
                 },
                 border_c,
             ),
-            Space::new().width(8),
-            secondary_button("Cancel", Message::CloseAnnotateDialog, text_c, border_c),
         ]
         .align_y(iced::Alignment::Center);
 
