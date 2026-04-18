@@ -1,0 +1,131 @@
+use std::path::PathBuf;
+
+use signex_types::schematic::SchematicSheet;
+use signex_types::theme::ThemeId;
+
+use crate::canvas::CanvasEvent;
+use crate::dock::DockMessage;
+use crate::menu_bar::MenuMessage;
+use crate::tab_bar::TabMessage;
+use crate::toolbar::ToolMessage;
+
+use super::selection_request::SelectionRequest;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragTarget {
+    LeftPanel,
+    RightPanel,
+    BottomPanel,
+    ComponentsSplit,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum Message {
+    Menu(MenuMessage),
+    Tool(ToolMessage),
+    Tab(TabMessage),
+    Dock(DockMessage),
+    StatusBar(StatusBarRequest),
+    CanvasEvent(CanvasEvent),
+    #[allow(dead_code)]
+    ThemeChanged(ThemeId),
+    UnitCycled,
+    GridToggle,
+    GridCycle,
+    DragStart(DragTarget),
+    DragMove(f32, f32),
+    DragEnd,
+    FileOpened(Option<PathBuf>),
+    #[allow(dead_code)]
+    SchematicLoaded(Box<SchematicSheet>),
+    DeleteSelected,
+    Undo,
+    Redo,
+    RotateSelected,
+    MirrorSelectedX,
+    MirrorSelectedY,
+    Selection(SelectionRequest),
+    Copy,
+    Cut,
+    Paste,
+    SmartPaste,
+    Duplicate,
+    SaveFile,
+    SaveFileAs(PathBuf),
+    CycleDrawMode,
+    CancelDrawing,
+    TogglePanelList,
+    OpenPanel(crate::panels::PanelKind),
+    ActiveBar(crate::active_bar::ActiveBarMsg),
+    PrePlacementTab,
+    /// Resume placement after TAB paused it — clears `pre_placement` and
+    /// `placement_paused`. Wired to the big on-canvas "Resume" overlay.
+    ResumePlacement,
+    TextEditChanged(String),
+    TextEditSubmit,
+    ShowContextMenu(f32, f32),
+    CloseContextMenu,
+    ContextAction(ContextAction),
+    OpenPreferences,
+    OpenFind,
+    OpenReplace,
+    ClosePreferences,
+    PreferencesNav(crate::preferences::PrefNav),
+    PreferencesMsg(crate::preferences::PrefMsg),
+    FindReplaceMsg(crate::find_replace::FindReplaceMsg),
+    WindowResized(f32, f32),
+    /// User picked an option in the close-confirmation modal shown when they
+    /// try to close a tab with unsaved changes. Drives the modal via
+    /// `ui_state.close_tab_confirm`.
+    CloseTabConfirm(CloseTabChoice),
+    Noop,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CloseTabChoice {
+    SaveAndClose,
+    DiscardAndClose,
+    Cancel,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ContextAction {
+    Copy,
+    Cut,
+    Paste,
+    SmartPaste,
+    Delete,
+    SelectAll,
+    ZoomFit,
+    RotateSelected,
+    MirrorX,
+    MirrorY,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextEditState {
+    pub uuid: uuid::Uuid,
+    pub kind: signex_types::schematic::SelectedKind,
+    pub text: String,
+    pub original_text: String,
+    /// World-space position of the object being edited (mm). Converted to
+    /// screen coords at render time so the inline editor tracks pan/zoom.
+    pub world_x: f64,
+    pub world_y: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextMenuState {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Clone)]
+pub enum StatusBarRequest {
+    CycleUnit,
+    ToggleGrid,
+    ToggleSnap,
+    TogglePanelList,
+}

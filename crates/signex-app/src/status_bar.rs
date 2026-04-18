@@ -1,13 +1,16 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
-use iced::widget::{button, container, row, text};
-use iced::widget::space;
+use iced::widget::{button, container, row, space, text};
 use iced::{Element, Length};
 use signex_types::coord::Unit;
+use signex_types::theme::ThemeTokens;
 
-use crate::app::{StatusBarMsg, Tool};
+use crate::app::{StatusBarRequest, Tool};
+use crate::styles;
 
-/// Render the status bar.
+pub const STATUS_BAR_HORIZONTAL_PADDING: u16 = 8;
+
+#[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     x: f64,
     y: f64,
@@ -16,47 +19,67 @@ pub fn view<'a>(
     zoom: f64,
     unit: Unit,
     tool: &Tool,
-) -> Element<'a, StatusBarMsg> {
+    grid_size_mm: f32,
+    tokens: &ThemeTokens,
+) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
         Unit::Mil => format!("X:{:.1} Y:{:.1}", x / 0.0254, y / 0.0254),
         Unit::Inch => format!("X:{:.4} Y:{:.4}", x / 25.4, y / 25.4),
-        Unit::Micrometer => format!("X:{:.0}µm Y:{:.0}µm", x * 1000.0, y * 1000.0),
+        Unit::Micrometer => format!("X:{:.0} Y:{:.0}", x * 1000.0, y * 1000.0),
     };
 
-    let grid_label = if grid_visible { "Grid" } else { "Grid OFF" };
+    let grid_text = if grid_visible {
+        format!("{grid_size_mm:.3}mm")
+    } else {
+        "OFF".to_string()
+    };
+
     let snap_label = if snap_enabled { "Snap" } else { "Free" };
+    let border_c = styles::ti(tokens.border);
+    let text_c = styles::ti(tokens.text);
+    let muted_c = styles::ti(tokens.text_secondary);
+
+    let sep = move || text("|").size(10).color(border_c);
+    let lbl = move |s: String| text(s).size(11).color(text_c);
+    let dim = move |s: &'static str| text(s).size(11).color(muted_c);
 
     let bar = row![
-        text(coord_text).size(12),
-        text(" | ").size(12),
-        button(text(grid_label).size(12))
-            .padding([2, 6])
+        lbl(coord_text),
+        sep(),
+        dim("Grid:"),
+        button(text(grid_text).size(11).color(text_c))
+            .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::ToggleGrid),
-        text(" | ").size(12),
-        button(text(snap_label).size(12))
-            .padding([2, 6])
+            .on_press(StatusBarRequest::ToggleGrid),
+        sep(),
+        button(text(snap_label).size(11).color(text_c))
+            .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::ToggleSnap),
-        text(" | ").size(12),
-        text("E-Snap").size(12),
-        text(" | ").size(12),
-        text(format!("{tool}")).size(12),
+            .on_press(StatusBarRequest::ToggleSnap),
+        sep(),
+        dim("E-Snap"),
+        sep(),
+        lbl(format!("{tool}")),
         space::horizontal(),
-        text(format!("{zoom:.0}%")).size(12),
-        text(" | ").size(12),
-        button(text(format!("{unit}")).size(12))
-            .padding([2, 6])
+        lbl(format!("{zoom:.0}%")),
+        sep(),
+        button(text(format!("{unit}")).size(11).color(text_c))
+            .padding([1, 4])
             .style(button::text)
-            .on_press(StatusBarMsg::CycleUnit),
+            .on_press(StatusBarRequest::CycleUnit),
+        sep(),
+        button(text("Panels").size(11).color(text_c))
+            .padding([1, 6])
+            .style(button::text)
+            .on_press(StatusBarRequest::TogglePanelList),
     ]
     .spacing(4)
     .align_y(iced::Alignment::Center);
 
     container(bar)
         .width(Length::Fill)
-        .padding([3, 8])
-        .style(container::bordered_box)
+        .padding([2, STATUS_BAR_HORIZONTAL_PADDING])
+        .style(styles::status_bar(tokens))
         .into()
 }

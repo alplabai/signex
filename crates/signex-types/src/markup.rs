@@ -99,7 +99,10 @@ mod tests {
 
     #[test]
     fn plain_text() {
-        assert_eq!(parse_markup("Hello"), vec![RichSegment::Normal("Hello".into())]);
+        assert_eq!(
+            parse_markup("Hello"),
+            vec![RichSegment::Normal("Hello".into())]
+        );
     }
 
     #[test]

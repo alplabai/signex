@@ -116,8 +116,18 @@ pub fn write_pcb(board: &PcbBoard) -> String {
     // Segments (traces)
     for seg in &board.segments {
         wln!(out, "  (segment");
-        wln!(out, "    (start {} {})", fmt_f64(seg.start.x), fmt_f64(seg.start.y));
-        wln!(out, "    (end {} {})", fmt_f64(seg.end.x), fmt_f64(seg.end.y));
+        wln!(
+            out,
+            "    (start {} {})",
+            fmt_f64(seg.start.x),
+            fmt_f64(seg.start.y)
+        );
+        wln!(
+            out,
+            "    (end {} {})",
+            fmt_f64(seg.end.x),
+            fmt_f64(seg.end.y)
+        );
         wln!(out, "    (width {})", fmt_f64(seg.width));
         wln!(out, "    (layer \"{}\")", escape(&seg.layer));
         wln!(out, "    (net {})", seg.net);
@@ -149,7 +159,9 @@ fn write_layers(out: &mut String, layers: &[LayerDef]) {
         wln!(
             out,
             "    ({} \"{}\" {})",
-            l.id, escape(&l.name), escape(&l.layer_type)
+            l.id,
+            escape(&l.name),
+            escape(&l.layer_type)
         );
     }
     wln!(out, "  )");
@@ -160,7 +172,10 @@ fn write_setup(out: &mut String, setup: &PcbSetup) {
     wln!(out, "    (pad_to_mask_clearance 0)");
     wln!(out, "    (pcbplotparams");
     wln!(out, "      (layerselection 0x00010fc_ffffffff)");
-    wln!(out, "      (plot_on_all_layers_selection 0x0000000_00000000)");
+    wln!(
+        out,
+        "      (plot_on_all_layers_selection 0x0000000_00000000)"
+    );
     wln!(out, "    )");
     wln!(out, "  )");
     // Net classes with defaults from setup
@@ -181,14 +196,29 @@ fn write_footprint(out: &mut String, fp: &Footprint) {
     }
     wln!(out, "    (layer \"{}\")", escape(&fp.layer));
     if fp.rotation != 0.0 {
-        wln!(out, "    (at {} {} {})", fmt_f64(fp.position.x), fmt_f64(fp.position.y), fmt_f64(fp.rotation));
+        wln!(
+            out,
+            "    (at {} {} {})",
+            fmt_f64(fp.position.x),
+            fmt_f64(fp.position.y),
+            fmt_f64(fp.rotation)
+        );
     } else {
-        wln!(out, "    (at {} {})", fmt_f64(fp.position.x), fmt_f64(fp.position.y));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(fp.position.x),
+            fmt_f64(fp.position.y)
+        );
     }
     wln!(out, "    (uuid \"{}\")", fp.uuid);
 
     // Reference property
-    wln!(out, "    (property \"Reference\" \"{}\"", escape(&fp.reference));
+    wln!(
+        out,
+        "    (property \"Reference\" \"{}\"",
+        escape(&fp.reference)
+    );
     wln!(out, "      (at 0 -2)");
     wln!(out, "      (layer \"F.SilkS\")");
     wln!(out, "      (effects (font (size 1 1) (thickness 0.15)))");
@@ -221,7 +251,11 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(out, "    (fp_line");
                 wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "      (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "      (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "      (layer \"{}\")", escape(&g.layer));
                 wln!(out, "    )");
             }
@@ -231,7 +265,11 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(out, "    (fp_rect");
                 wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "      (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "      (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 if g.fill == "solid" {
                     wln!(out, "      (fill solid)");
                 }
@@ -245,7 +283,11 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(out, "    (fp_circle");
                 wln!(out, "      (center {} {})", fmt_f64(c.x), fmt_f64(c.y));
                 wln!(out, "      (end {} {})", fmt_f64(c.x + r), fmt_f64(c.y));
-                wln!(out, "      (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "      (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 if g.fill == "solid" {
                     wln!(out, "      (fill solid)");
                 }
@@ -259,7 +301,11 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "      (mid {} {})", fmt_f64(m.x), fmt_f64(m.y));
                 wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "      (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "      (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "      (layer \"{}\")", escape(&g.layer));
                 wln!(out, "    )");
             }
@@ -272,7 +318,11 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                     w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
                 }
                 wln!(out, ")");
-                wln!(out, "      (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "      (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 if g.fill == "solid" {
                     wln!(out, "      (fill solid)");
                 }
@@ -285,7 +335,13 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 let fs = if g.font_size != 0.0 { g.font_size } else { 1.0 };
                 wln!(out, "    (fp_text user \"{}\"", escape(&g.text));
                 if g.rotation != 0.0 {
-                    wln!(out, "      (at {} {} {})", fmt_f64(pos.x), fmt_f64(pos.y), fmt_f64(g.rotation));
+                    wln!(
+                        out,
+                        "      (at {} {} {})",
+                        fmt_f64(pos.x),
+                        fmt_f64(pos.y),
+                        fmt_f64(g.rotation)
+                    );
                 } else {
                     wln!(out, "      (at {} {})", fmt_f64(pos.x), fmt_f64(pos.y));
                 }
@@ -293,7 +349,8 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(
                     out,
                     "      (effects (font (size {} {}) (thickness 0.15)))",
-                    fmt_f64(fs), fmt_f64(fs)
+                    fmt_f64(fs),
+                    fmt_f64(fs)
                 );
                 wln!(out, "    )");
             }
@@ -311,12 +368,27 @@ fn write_fp_pad(out: &mut String, p: &Pad) {
         pad_shape_str(p.shape)
     );
     wln!(out, "");
-    wln!(out, "      (at {} {})", fmt_f64(p.position.x), fmt_f64(p.position.y));
-    wln!(out, "      (size {} {})", fmt_f64(p.size.x), fmt_f64(p.size.y));
+    wln!(
+        out,
+        "      (at {} {})",
+        fmt_f64(p.position.x),
+        fmt_f64(p.position.y)
+    );
+    wln!(
+        out,
+        "      (size {} {})",
+        fmt_f64(p.size.x),
+        fmt_f64(p.size.y)
+    );
 
     if let Some(ref drill) = p.drill {
         if !drill.shape.is_empty() {
-            wln!(out, "      (drill {} {})", escape(&drill.shape), fmt_f64(drill.diameter));
+            wln!(
+                out,
+                "      (drill {} {})",
+                escape(&drill.shape),
+                fmt_f64(drill.diameter)
+            );
         } else {
             wln!(out, "      (drill {})", fmt_f64(drill.diameter));
         }
@@ -329,7 +401,11 @@ fn write_fp_pad(out: &mut String, p: &Pad) {
     wln!(out, ")");
 
     if p.roundrect_ratio != 0.0 {
-        wln!(out, "      (roundrect_rratio {})", fmt_f64(p.roundrect_ratio));
+        wln!(
+            out,
+            "      (roundrect_rratio {})",
+            fmt_f64(p.roundrect_ratio)
+        );
     }
 
     if let Some(ref net) = p.net {
@@ -343,7 +419,12 @@ fn write_fp_pad(out: &mut String, p: &Pad) {
 fn write_via(out: &mut String, v: &Via) {
     let kw = via_type_str(v.via_type);
     wln!(out, "  ({}", kw);
-    wln!(out, "    (at {} {})", fmt_f64(v.position.x), fmt_f64(v.position.y));
+    wln!(
+        out,
+        "    (at {} {})",
+        fmt_f64(v.position.x),
+        fmt_f64(v.position.y)
+    );
     wln!(out, "    (size {})", fmt_f64(v.diameter));
     wln!(out, "    (drill {})", fmt_f64(v.drill));
     if v.layers.len() >= 2 {
@@ -373,7 +454,11 @@ fn write_zone(out: &mut String, z: &Zone) {
     if z.thermal_relief {
         wln!(out, "      (thermal_relief)");
         wln!(out, "      (thermal_gap {})", fmt_f64(z.thermal_gap));
-        wln!(out, "      (thermal_bridge_width {})", fmt_f64(z.thermal_width));
+        wln!(
+            out,
+            "      (thermal_bridge_width {})",
+            fmt_f64(z.thermal_width)
+        );
     }
     wln!(out, "    )");
     wln!(out, "    (min_thickness {})", fmt_f64(z.min_thickness));
@@ -400,7 +485,11 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
                 wln!(out, "  (gr_line");
                 wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "    (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "    (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "    (layer \"{}\")", escape(&g.layer));
                 wln!(out, "  )");
             }
@@ -410,7 +499,11 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
                 wln!(out, "  (gr_rect");
                 wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "    (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "    (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "    (layer \"{}\")", escape(&g.layer));
                 wln!(out, "  )");
             }
@@ -421,7 +514,11 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
                 wln!(out, "  (gr_circle");
                 wln!(out, "    (center {} {})", fmt_f64(c.x), fmt_f64(c.y));
                 wln!(out, "    (end {} {})", fmt_f64(c.x + r), fmt_f64(c.y));
-                wln!(out, "    (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "    (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "    (layer \"{}\")", escape(&g.layer));
                 wln!(out, "  )");
             }
@@ -431,7 +528,11 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
                 wln!(out, "  (gr_arc");
                 wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
                 wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(out, "    (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "    (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "    (layer \"{}\")", escape(&g.layer));
                 wln!(out, "  )");
             }
@@ -444,7 +545,11 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
                     w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
                 }
                 wln!(out, ")");
-                wln!(out, "    (stroke (width {}) (type default))", fmt_f64(g.width));
+                wln!(
+                    out,
+                    "    (stroke (width {}) (type default))",
+                    fmt_f64(g.width)
+                );
                 wln!(out, "    (layer \"{}\")", escape(&g.layer));
                 wln!(out, "  )");
             }
@@ -459,16 +564,24 @@ fn write_board_text(out: &mut String, t: &BoardText) {
         wln!(
             out,
             "    (at {} {} {})",
-            fmt_f64(t.position.x), fmt_f64(t.position.y), fmt_f64(t.rotation)
+            fmt_f64(t.position.x),
+            fmt_f64(t.position.y),
+            fmt_f64(t.rotation)
         );
     } else {
-        wln!(out, "    (at {} {})", fmt_f64(t.position.x), fmt_f64(t.position.y));
+        wln!(
+            out,
+            "    (at {} {})",
+            fmt_f64(t.position.x),
+            fmt_f64(t.position.y)
+        );
     }
     wln!(out, "    (layer \"{}\")", escape(&t.layer));
     wln!(
         out,
         "    (effects (font (size {} {}) (thickness 0.15)))",
-        fmt_f64(t.font_size), fmt_f64(t.font_size)
+        fmt_f64(t.font_size),
+        fmt_f64(t.font_size)
     );
     wln!(out, "    (uuid \"{}\")", t.uuid);
     wln!(out, "  )");
