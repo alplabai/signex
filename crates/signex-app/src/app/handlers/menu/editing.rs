@@ -21,7 +21,18 @@ impl Signex {
             MenuMessage::Duplicate => Some(self.update(Message::Duplicate)),
             MenuMessage::Find => Some(self.update(Message::OpenFind)),
             MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
-            MenuMessage::Annotate | MenuMessage::Erc | MenuMessage::GenerateBom => {
+            MenuMessage::Annotate => Some(
+                self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)),
+            ),
+            MenuMessage::AnnotateReset => Some(
+                self.update(Message::Annotate(
+                    signex_engine::AnnotateMode::ResetAndRenumber,
+                )),
+            ),
+            MenuMessage::Erc => Some(self.update(Message::RunErc)),
+            MenuMessage::ToggleAutoFocus => Some(self.update(Message::ToggleAutoFocus)),
+            MenuMessage::GenerateBom => {
+                crate::diagnostics::log_info("Generate BOM is v0.8 scope");
                 Some(Task::none())
             }
             _ => None,

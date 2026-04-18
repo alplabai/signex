@@ -52,7 +52,9 @@ pub enum MenuMessage {
     PlaceComponent,
     // Design
     Annotate,
+    AnnotateReset,
     Erc,
+    ToggleAutoFocus,
     GenerateBom,
     // Tools
     /// Open the Preferences dialog.
@@ -157,6 +159,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
                 mc,
             ),
             leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid, mc),
+            leaf(
+                "AutoFocus (dim unselected)",
+                Some("F9"),
+                MenuMessage::ToggleAutoFocus,
+                mc,
+            ),
             separator(mc),
             leaf("Projects", None, MenuMessage::OpenProjectsPanel, mc),
             leaf("Components", None, MenuMessage::OpenComponentsPanel, mc),
@@ -186,9 +194,16 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
     let design_menu = Item::with_menu(
         root_btn("Design", mc),
         menu_template(vec![
-            leaf_stub("Annotate Schematics", None, mc),
+            leaf("Annotate Schematics", Some("Alt+A"), MenuMessage::Annotate, mc),
+            leaf(
+                "Reset & Renumber Annotations",
+                Some("Shift+Alt+A"),
+                MenuMessage::AnnotateReset,
+                mc,
+            ),
             separator(mc),
-            leaf_stub("Electrical Rules Check", None, mc),
+            leaf("Electrical Rules Check", Some("F8"), MenuMessage::Erc, mc),
+            separator(mc),
             leaf_stub("Generate BOM", None, mc),
             leaf_stub("Generate Netlist", None, mc),
         ]),
