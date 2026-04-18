@@ -112,13 +112,47 @@ impl Signex {
                     "Harness tools are planned for v1.1 (Advanced Schematic)",
                 );
             }
-            ActiveBarAction::PlaceParameterSet
-            | ActiveBarAction::PlaceDiffPair
-            | ActiveBarAction::PlaceBlanket
-            | ActiveBarAction::PlaceCompileMask => {
-                crate::diagnostics::log_info(
-                    "Directive tool not yet implemented — coming with v0.7 ERC",
-                );
+            ActiveBarAction::PlaceParameterSet => {
+                // Parameter Set — attaches named params to a net. Arm a
+                // label-tool ghost with a "PARAM=VALUE" default so the user
+                // drops + edits inline. Full parameter-manager dialog lands
+                // in v0.7.1.
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                self.interaction_state.pending_port = None;
+                self.interaction_state.canvas.ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "PARAM=VALUE".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Net,
+                        shape: String::new(),
+                        font_size: 1.8,
+                        justify: signex_types::schematic::HAlign::Left,
+                    });
+            }
+            ActiveBarAction::PlaceDiffPair => {
+                // DiffPair directive — attaches a differential-pair rule.
+                // Ships as a text note until the PCB router's constraint
+                // model lands in v2.1.
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                self.interaction_state.canvas.ghost_text =
+                    Some(signex_types::schematic::TextNote {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "DIFF_PAIR".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        font_size: 1.8,
+                        justify_h: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::default(),
+                    });
+            }
+            ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
+                // Blanket / Compile Mask — rectangular rule areas. Placement
+                // is Tool::Rectangle for v0.7; the rule/mask semantics wire
+                // into ERC in v0.7.1.
+                let _ =
+                    self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Net-color palette (F5 / sidebar). The underlying net-color model
             // isn't in place yet, but surface feedback so clicks don't silently

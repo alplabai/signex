@@ -46,6 +46,7 @@ pub enum CommandKind {
     PlaceNoConnect,
     PlaceBusEntry,
     PlaceTextNote,
+    AnnotateAll,
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +134,22 @@ pub enum Command {
     PlaceTextNote {
         text_note: TextNote,
     },
+    /// Auto-annotate every symbol whose reference ends in `?` with a unique
+    /// sequential designator per prefix (R?, C?, U?, …). Applied in a
+    /// deterministic order so re-running produces the same layout.
+    AnnotateAll {
+        mode: AnnotateMode,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnotateMode {
+    /// Only assign a number when the reference ends in `?`.
+    Incremental,
+    /// Reset every reference to `<prefix>?` then renumber from 1.
+    ResetAndRenumber,
+    /// Drop every reference number back to `?`. Useful before Reset.
+    ResetOnly,
 }
 
 impl Command {
@@ -158,6 +175,7 @@ impl Command {
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
+            Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
         }
     }
 }

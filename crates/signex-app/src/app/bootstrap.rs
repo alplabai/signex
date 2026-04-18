@@ -322,6 +322,14 @@ impl Signex {
                     (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
                         Message::ToggleAutoFocus
                     }
+                    // Alt+A: annotate (Altium convention, incremental)
+                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
+                        Message::Annotate(signex_engine::AnnotateMode::Incremental)
+                    }
+                    // Shift+Alt+A: reset and renumber
+                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() && m.shift() => {
+                        Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
+                    }
                     // Delete selected
                     (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
                         Message::DeleteSelected
