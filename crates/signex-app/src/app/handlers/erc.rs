@@ -88,7 +88,64 @@ impl Signex {
             false,
             true,
         );
+        // Close any open dialogs that triggered this action.
+        self.ui_state.annotate_dialog_open = false;
+        self.ui_state.annotate_reset_confirm = false;
         crate::diagnostics::log_info(&format!("Annotated symbols ({:?})", mode));
+        Task::none()
+    }
+
+    pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
+        self.ui_state.annotate_dialog_open = true;
+        self.interaction_state.context_menu = None;
+        Task::none()
+    }
+
+    pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
+        self.ui_state.annotate_dialog_open = false;
+        Task::none()
+    }
+
+    pub(crate) fn handle_annotate_order_changed(
+        &mut self,
+        order: super::super::state::AnnotateOrder,
+    ) -> Task<Message> {
+        self.ui_state.annotate_order = order;
+        Task::none()
+    }
+
+    pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
+        self.ui_state.erc_dialog_open = true;
+        self.interaction_state.context_menu = None;
+        Task::none()
+    }
+
+    pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
+        self.ui_state.erc_dialog_open = false;
+        Task::none()
+    }
+
+    pub(crate) fn handle_erc_severity_changed(
+        &mut self,
+        rule: signex_erc::RuleKind,
+        severity: signex_erc::Severity,
+    ) -> Task<Message> {
+        if severity == rule.default_severity() {
+            // Match default → remove override so the map stays minimal.
+            self.ui_state.erc_severity_override.remove(&rule);
+        } else {
+            self.ui_state.erc_severity_override.insert(rule, severity);
+        }
+        Task::none()
+    }
+
+    pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
+        self.ui_state.annotate_reset_confirm = true;
+        Task::none()
+    }
+
+    pub(crate) fn handle_close_annotate_reset_confirm(&mut self) -> Task<Message> {
+        self.ui_state.annotate_reset_confirm = false;
         Task::none()
     }
 }

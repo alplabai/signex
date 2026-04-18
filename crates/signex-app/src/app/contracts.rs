@@ -85,6 +85,22 @@ pub enum Message {
     /// Auto-annotate every unannotated symbol (reference ends in `?`).
     /// Three modes: incremental, reset+renumber, reset-only.
     Annotate(signex_engine::AnnotateMode),
+    /// Show the Annotate Schematics modal with preview of proposed changes.
+    OpenAnnotateDialog,
+    /// Dismiss the Annotate dialog without applying.
+    CloseAnnotateDialog,
+    /// Change the Annotate dialog's order-of-processing choice.
+    AnnotateOrderChanged(super::state::AnnotateOrder),
+    /// Show the ERC modal (severity matrix + pin-compatibility matrix).
+    OpenErcDialog,
+    /// Dismiss the ERC dialog.
+    CloseErcDialog,
+    /// Override the severity for a single rule from within the ERC dialog.
+    ErcSeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
+    /// Show the Reset-Annotations confirm modal.
+    OpenAnnotateResetConfirm,
+    /// Dismiss the Reset-Annotations confirm modal.
+    CloseAnnotateResetConfirm,
     /// Navigate to a world-space point on the canvas; optionally replace the
     /// current selection with the given item. Used for click-to-zoom in the
     /// Messages panel.
