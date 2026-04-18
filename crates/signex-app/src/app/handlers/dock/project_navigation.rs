@@ -11,11 +11,15 @@ impl Signex {
 
         match panel_msg {
             crate::panels::PanelMsg::Tree(TreeMsg::Toggle(path)) => {
-                signex_widgets::tree_view::toggle(&mut self.document_state.panel_ctx.project_tree, path);
+                signex_widgets::tree_view::toggle(
+                    &mut self.document_state.panel_ctx.project_tree,
+                    path,
+                );
                 true
             }
             crate::panels::PanelMsg::Tree(TreeMsg::Select(path)) => {
-                let selected_node = get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
+                let selected_node =
+                    get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
                 if let Some(node) = selected_node
                     && matches!(node.icon, TreeIcon::Schematic | TreeIcon::Pcb)
                     && let Err(error) = self.open_project_tree_document(node.label.clone())
@@ -40,7 +44,12 @@ impl Signex {
             anyhow::bail!("project tree file does not exist: {}", file_path.display());
         }
 
-        if let Some(index) = self.document_state.tabs.iter().position(|tab| tab.path == file_path) {
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == file_path)
+        {
             if index != self.document_state.active_tab {
                 self.park_active_schematic_session();
                 self.document_state.active_tab = index;

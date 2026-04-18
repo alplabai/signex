@@ -14,14 +14,16 @@ impl Signex {
     }
 
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
-        self.document_state.engine
+        self.document_state
+            .engine
             .as_ref()
             .map(|engine| engine.document())
             .or_else(|| self.active_tab_cached_schematic())
     }
 
     pub(crate) fn active_pcb(&self) -> Option<&PcbBoard> {
-        self.active_tab_cached_document().and_then(TabDocument::as_pcb)
+        self.active_tab_cached_document()
+            .and_then(TabDocument::as_pcb)
     }
 
     pub(crate) fn has_active_schematic(&self) -> bool {
@@ -43,7 +45,8 @@ impl Signex {
     }
 
     fn active_tab_cached_schematic(&self) -> Option<&SchematicSheet> {
-        self.active_tab_cached_document().and_then(TabDocument::as_schematic)
+        self.active_tab_cached_document()
+            .and_then(TabDocument::as_schematic)
     }
 
     pub(crate) fn with_active_schematic_session_mut<R>(
@@ -144,8 +147,9 @@ impl Signex {
     }
 
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
-        self.document_state.engine = schematic
-            .and_then(|sheet| signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok());
+        self.document_state.engine = schematic.and_then(|sheet| {
+            signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok()
+        });
     }
 
     pub(crate) fn sync_canvas_from_visible_schematic(
@@ -238,7 +242,6 @@ impl Signex {
         self.interaction_state.canvas.set_render_cache(None);
         self.interaction_state.canvas.selected.clear();
         self.interaction_state.canvas.wire_preview.clear();
-        self.interaction_state.canvas.reset_measurement();
         self.interaction_state.canvas.drawing_mode = false;
         self.interaction_state.canvas.clear_content_cache();
         self.interaction_state.canvas.clear_overlay_cache();
@@ -282,7 +285,8 @@ impl Signex {
         commit_to_active_tab: bool,
         refresh_panel_ctx: bool,
     ) {
-        if let Some(schematic) = schematic {
+        if let Some(mut schematic) = schematic {
+            normalize_font_sizes(&mut schematic);
             self.sync_engine_from_schematic(Some(schematic));
         }
         if self.document_state.engine.is_none() {
@@ -367,5 +371,36 @@ impl Signex {
         self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
         self.document_state.panel_ctx.placed_symbols = document_summary.6;
         self.document_state.panel_ctx.paper_size = document_summary.7;
+    }
+}
+
+/// Bump font sizes that are at KiCad's default (0 or 1.27 mm) up to Signex's
+/// Altium-style 10 pt (`SCHEMATIC_TEXT_MM`). Keeps user-set sizes intact.
+/// Applied once on load so the Properties panel shows the effective size
+/// rather than the stored default.
+fn normalize_font_sizes(sheet: &mut SchematicSheet) {
+    let default_mm = signex_render::SCHEMATIC_TEXT_MM;
+    let is_default = |f: f64| f <= 0.0 || (f - 1.27).abs() < 0.01;
+    for l in sheet.labels.iter_mut() {
+        if is_default(l.font_size) {
+            l.font_size = default_mm;
+        }
+    }
+    for tn in sheet.text_notes.iter_mut() {
+        if is_default(tn.font_size) {
+            tn.font_size = default_mm;
+        }
+    }
+    for sym in sheet.symbols.iter_mut() {
+        if let Some(tp) = sym.ref_text.as_mut()
+            && is_default(tp.font_size)
+        {
+            tp.font_size = default_mm;
+        }
+        if let Some(tp) = sym.val_text.as_mut()
+            && is_default(tp.font_size)
+        {
+            tp.font_size = default_mm;
+        }
     }
 }

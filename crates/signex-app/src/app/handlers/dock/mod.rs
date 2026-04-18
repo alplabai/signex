@@ -12,14 +12,13 @@ mod property_editor;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {
-        if let DockMessage::Panel(panel_msg) = &msg {
-            if self.handle_dock_panel_control_message(panel_msg)
+        if let DockMessage::Panel(panel_msg) = &msg
+            && (self.handle_dock_panel_control_message(panel_msg)
                 || self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
-                || self.handle_dock_project_navigation_panel_message(panel_msg)
-            {
-                return self.finish_update();
-            }
+                || self.handle_dock_project_navigation_panel_message(panel_msg))
+        {
+            return self.finish_update();
         }
 
         if self.handle_dock_floating_layout_message(&msg) {

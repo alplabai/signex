@@ -83,8 +83,14 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 
 ### PCB Phase
 - v2.0.0 — PCB Viewer (Shader widget, layer stack, ratsnest, cross-probe)
-- v2.1.0 — PCB Routing (interactive routing, DRC, copper pour, diff pair)
+- v2.1.0 — Router Stage 1: Greedy single-trace (corners, vias, net-class widths, live DRC)
+- v2.1.1 — Router Stage 2: Walkaround (A* + obstacle graph, incremental DRC)
+- v2.1.2 — Router Stage 3: Push-and-shove (topology-preserving convergence)
+- v2.1.3 — Router Stage 4: Diff pair + length tuning (accordion/trombone/sawtooth)
+- v2.1.4 — Copper pour (zone fill, thermal relief, island removal)
 - v2.2.0 — PCB Output (Gerber, drill, ODB++, STEP) — Community Release
+
+See `docs/internal/docs/PCB_ROUTER_PLAN.md` for the detailed router plan.
 
 ### Post-v2.2 (see MASTER_PLAN.md for full detail)
 - v2.3–v2.5 — 3D viewer, advanced PCB, high-speed design

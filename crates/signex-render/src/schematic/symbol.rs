@@ -3,11 +3,12 @@
 //! transform applied.
 
 use iced::Color;
-use iced::widget::canvas::{self, path, LineCap, LineJoin};
+use iced::widget::canvas::{self, LineCap, LineJoin, path};
 
 use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
 
 use super::ScreenTransform;
+use super::text::display_text_content;
 
 // ---------------------------------------------------------------------------
 // Instance transform: position + rotation + mirror
@@ -23,7 +24,11 @@ const BODY_DEFAULT_WIDTH_MM: f64 = 0.15;
 
 /// Get the stroke width in screen pixels for a graphic element.
 fn graphic_stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
-    let mm = if world_width > 0.0 { world_width } else { BODY_DEFAULT_WIDTH_MM };
+    let mm = if world_width > 0.0 {
+        world_width
+    } else {
+        BODY_DEFAULT_WIDTH_MM
+    };
     transform.world_len(mm).max(0.5)
 }
 
@@ -32,7 +37,9 @@ fn body_stroke(color: Color, width: f32) -> canvas::Stroke<'static> {
     canvas::Stroke {
         line_cap: LineCap::Square,
         line_join: LineJoin::Miter,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     }
 }
 
@@ -260,7 +267,10 @@ fn draw_polyline(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
+    frame.stroke(
+        &path,
+        body_stroke(body_color, graphic_stroke_width(transform, width)),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -294,7 +304,10 @@ fn draw_rectangle(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
+    frame.stroke(
+        &path,
+        body_stroke(body_color, graphic_stroke_width(transform, width)),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -316,7 +329,10 @@ fn draw_circle(
     let circle = canvas::Path::circle(screen_center, screen_radius);
 
     apply_fill(frame, &circle, fill, body_color, body_fill_color);
-    frame.stroke(&circle, body_stroke(body_color, graphic_stroke_width(transform, width)));
+    frame.stroke(
+        &circle,
+        body_stroke(body_color, graphic_stroke_width(transform, width)),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -385,13 +401,19 @@ fn draw_arc(
         });
 
         apply_fill(frame, &path, fill, body_color, body_fill_color);
-        frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
+        frame.stroke(
+            &path,
+            body_stroke(body_color, graphic_stroke_width(transform, width)),
+        );
     } else {
         // Degenerate: just draw a line from start to end
         let p1 = transform.to_screen_point(sx, sy);
         let p2 = transform.to_screen_point(ex, ey);
         let line = canvas::Path::line(p1, p2);
-        frame.stroke(&line, body_stroke(body_color, graphic_stroke_width(transform, width)));
+        frame.stroke(
+            &line,
+            body_stroke(body_color, graphic_stroke_width(transform, width)),
+        );
     }
 }
 
@@ -401,7 +423,7 @@ fn draw_graphic_text(
     sym: &Symbol,
     content: &str,
     position: &Point,
-    _rotation: f64,
+    lib_rotation: f64,
     font_size: f64,
     transform: &ScreenTransform,
     color: Color,
@@ -409,19 +431,31 @@ fn draw_graphic_text(
     let (wx, wy) = instance_transform(sym, position);
     let sp = transform.to_screen_point(wx, wy);
 
-    let base_size = if font_size > 0.0 {
-        transform.world_len(font_size)
-    } else {
-        transform.world_len(1.27)
-    };
-    let size = (base_size * crate::canvas_font_size_scale()).abs();
+    // Force 10 pt (1.8 mm) for all symbol-embedded graphic text.
+    let _stored = font_size;
+    let base_size = transform.world_len(crate::SCHEMATIC_TEXT_MM);
+    let size = base_size.abs();
     if size < 1.0 {
         return;
     }
 
+    // Combine the symbol instance rotation with the library text rotation
+    // and snap to the nearest 90° quadrant so labels embedded in the symbol
+    // (e.g. "GND" inside the power-port library symbol) turn with the
+    // symbol. Keep text right-side-up at 180° so we never render upside-down.
+    let combined = (sym.rotation + lib_rotation).rem_euclid(360.0);
+    let rot_deg = ((combined.round() as i32) % 360 + 360) % 360;
+    let (text_rot, keep_upright) = match rot_deg {
+        90 => (std::f32::consts::FRAC_PI_2, false),
+        180 => (0.0, true),
+        270 => (-std::f32::consts::FRAC_PI_2, false),
+        _ => (0.0, false),
+    };
+    let _ = keep_upright;
+
     let text = canvas::Text {
-        content: content.to_string(),
-        position: sp,
+        content: display_text_content(content),
+        position: iced::Point::ORIGIN,
         color,
         size: iced::Pixels(size),
         font: crate::canvas_font(),
@@ -429,7 +463,24 @@ fn draw_graphic_text(
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()
     };
-    frame.fill_text(text);
+    if text_rot.abs() < 1e-4 {
+        frame.fill_text(canvas::Text {
+            position: sp,
+            ..text
+        });
+    } else {
+        // Pre-rotate glyph paths at the lyon level — iced 0.14's text path
+        // doesn't visibly honor `frame.rotate()` for canvas glyphs, so we
+        // bake the rotation into the path coordinates themselves.
+        use iced::widget::canvas::path::lyon_path::math as lyon_math;
+        let t = lyon_math::Transform::identity()
+            .then_rotate(lyon_math::Angle::radians(text_rot))
+            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+        text.draw_with(|path, color| {
+            let rotated = path.transform(&t);
+            frame.fill(&rotated, color);
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -466,7 +517,10 @@ fn draw_bezier(
     });
 
     apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(&path, body_stroke(body_color, graphic_stroke_width(transform, width)));
+    frame.stroke(
+        &path,
+        body_stroke(body_color, graphic_stroke_width(transform, width)),
+    );
 }
 
 // ---------------------------------------------------------------------------

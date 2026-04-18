@@ -22,13 +22,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use signex_types::schematic::{
-    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect,
-    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
+    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect, SchDrawing,
+    SchematicSheet, Symbol, TextNote, Wire,
 };
 use signex_types::theme::CanvasColors;
 
-use crate::colors::to_iced;
 use crate::PowerPortStyle;
+use crate::colors::to_iced;
 
 // ---------------------------------------------------------------------------
 // ScreenTransform -- decouples rendering from the app-layer Camera
@@ -168,7 +168,8 @@ impl PreparedPreviewGeometry {
 
     fn refresh(&mut self, snapshot: &SchematicRenderSnapshot, invalidation: RenderInvalidation) {
         if invalidation.contains(RenderInvalidation::FULL)
-            || invalidation.intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
+            || invalidation
+                .intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
         {
             self.symbol_positions = snapshot
                 .symbols
@@ -184,20 +185,24 @@ impl PreparedPreviewGeometry {
                 .symbols
                 .iter()
                 .filter_map(|symbol| {
-                    symbol
-                        .ref_text
-                        .as_ref()
-                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                    symbol.ref_text.as_ref().map(|prop| {
+                        (
+                            symbol.uuid,
+                            (prop.position.x as f32, prop.position.y as f32),
+                        )
+                    })
                 })
                 .collect();
             self.symbol_value_positions = snapshot
                 .symbols
                 .iter()
                 .filter_map(|symbol| {
-                    symbol
-                        .val_text
-                        .as_ref()
-                        .map(|prop| (symbol.uuid, (prop.position.x as f32, prop.position.y as f32)))
+                    symbol.val_text.as_ref().map(|prop| {
+                        (
+                            symbol.uuid,
+                            (prop.position.x as f32, prop.position.y as f32),
+                        )
+                    })
                 })
                 .collect();
         }
@@ -226,7 +231,12 @@ impl PreparedPreviewGeometry {
             self.label_positions = snapshot
                 .labels
                 .iter()
-                .map(|label| (label.uuid, (label.position.x as f32, label.position.y as f32)))
+                .map(|label| {
+                    (
+                        label.uuid,
+                        (label.position.x as f32, label.position.y as f32),
+                    )
+                })
                 .collect();
         }
     }
@@ -271,11 +281,7 @@ impl SchematicRenderCache {
         }
     }
 
-    pub fn update_from_sheet(
-        &mut self,
-        sheet: &SchematicSheet,
-        invalidation: RenderInvalidation,
-    ) {
+    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
         if invalidation.contains(RenderInvalidation::FULL) {
             *self = Self::from_sheet(sheet);
             return;
@@ -415,10 +421,21 @@ pub(super) fn field_display_pos(
     (prop_pos.x, prop_pos.y)
 }
 
-/// Compute KiCad-like effective field draw properties under symbol TRANSFORM.
+/// Compute KiCad-like effective field draw properties under symbol transform.
 ///
-/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)` where
-/// alignment flips follow transform parity and reading direction.
+/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
+///
+/// KiCad stores `prop.rotation` in the symbol's lib frame. Compose with
+/// `sym.rotation` to get the on-screen angle, then fold so text is always
+/// drawn at 0° or 90° (readable — never upside-down or reversed):
+///
+/// * 180° → 0° with horizontal justify flipped
+/// * 270° → 90° with vertical justify flipped
+///
+/// Mirror state additionally flips the perpendicular axis:
+///
+/// * `mirror_y` flips the X axis → toggle horizontal justify
+/// * `mirror_x` flips the Y axis → toggle vertical justify
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,
@@ -429,63 +446,43 @@ pub(super) fn field_effective_style(
 ) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    let is_horiz = |angle: f64| {
-        let a = angle.rem_euclid(180.0);
-        a < 0.1 || (180.0 - a) < 0.1
+    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
+    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
+        0 => (0.0, false, false),
+        90 => (90.0, false, false),
+        180 => (0.0, true, false),
+        270 => (90.0, false, true),
+        _ => (total, false, false),
     };
 
-    let rad = sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let sx = if sym.mirror_x { -1.0 } else { 1.0 };
-    let sy = if sym.mirror_y { -1.0 } else { 1.0 };
+    let flip_h = fold_h ^ sym.mirror_y;
+    let flip_v = fold_v ^ sym.mirror_x;
 
-    // Matrix for field display transform:
-    // [tx]   [x1 x2] [rx]
-    // [ty] = [y1 y2] [ry]
-    let x1 = sy * cos;
-    let x2 = sy * sin;
-    let y1 = sx * sin;
-    let y2 = -sx * cos;
-
-    let orig_horiz = is_horiz(prop.rotation);
-    let screen_horiz = (x1.abs() > 1e-6) ^ !orig_horiz;
-
-    let flip_h = if orig_horiz {
-        if screen_horiz { x1 < 0.0 } else { x2 > 0.0 }
-    } else if screen_horiz {
-        y1 > 0.0
-    } else {
-        y2 < 0.0
-    };
-
-    let mut h = prop.justify_h;
-    if flip_h {
-        h = match h {
+    let h = if flip_h {
+        match prop.justify_h {
             HAlign::Left => HAlign::Right,
             HAlign::Right => HAlign::Left,
             HAlign::Center => HAlign::Center,
-        };
-    }
-
-    let mut v = prop.justify_v;
-    let det = x1 * y2 - x2 * y1;
-    if det < 0.0 && (orig_horiz == (x1 > 0.0)) {
-        v = match v {
+        }
+    } else {
+        prop.justify_h
+    };
+    let v = if flip_v {
+        match prop.justify_v {
             VAlign::Top => VAlign::Bottom,
             VAlign::Bottom => VAlign::Top,
             VAlign::Center => VAlign::Center,
-        };
-    }
+        }
+    } else {
+        prop.justify_v
+    };
 
-    // Keep symbol fields horizontally readable on-screen (Altium-style)
-    // even when the symbol body is rotated.
-    (0.0, h, v)
+    (draw_rot, h, v)
 }
 
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
-pub(super) fn instance_transform(
+pub fn instance_transform(
     sym: &signex_types::schematic::Symbol,
     local: &signex_types::schematic::Point,
 ) -> (f64, f64) {
@@ -570,7 +567,7 @@ pub fn render_schematic(
             LabelType::Hierarchical => to_iced(&colors.hier_label),
             LabelType::Power => to_iced(&colors.power),
         };
-        label::draw_label(frame, lbl, transform, color);
+        label::draw_label(frame, lbl, transform, color, body_fill_color);
     }
 
     // Z=10-11: Symbol bodies + pins
@@ -578,7 +575,9 @@ pub fn render_schematic(
         if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
             // Altium mode: always render the built-in power marker style,
             // independent of library symbol body details.
-            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            // Power-port label uses the same color as the symbol body —
+            // Altium convention.
+            draw_builtin_power(frame, sym, transform, power_color, power_color);
             continue;
         }
 
@@ -602,7 +601,15 @@ pub fn render_schematic(
                 && !sym.is_power
             {
                 let dpos = field_display_pos(&ref_text.position, sym);
-                text::draw_text_prop(frame, &sym.reference, ref_text, sym, dpos, transform, reference_color);
+                text::draw_text_prop(
+                    frame,
+                    &sym.reference,
+                    ref_text,
+                    sym,
+                    dpos,
+                    transform,
+                    reference_color,
+                );
             }
 
             // Value text
@@ -610,11 +617,21 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_color);
+                text::draw_text_prop(
+                    frame,
+                    &sym.value,
+                    val_text,
+                    sym,
+                    dpos,
+                    transform,
+                    value_color,
+                );
             }
         } else if sym.is_power {
             // Built-in Altium-style power symbol rendering (no lib_symbol needed)
-            draw_builtin_power(frame, sym, transform, power_color, value_color);
+            // Power-port label uses the same color as the symbol body —
+            // Altium convention.
+            draw_builtin_power(frame, sym, transform, power_color, power_color);
         }
     }
 
@@ -636,6 +653,17 @@ pub fn render_schematic(
 /// Draw a built-in power symbol when no lib_symbol definition exists.
 /// Renders Altium-style shapes: GND (3 horizontal lines), VCC (bar + arrow),
 /// Earth (diagonal hatch), Signal GND (triangle), generic (bar + label).
+/// Public preview wrapper — renders the built-in power glyph at a ghost
+/// color for placement previews (single color for both body and label).
+pub fn draw_power_port_preview(
+    frame: &mut canvas::Frame,
+    sym: &signex_types::schematic::Symbol,
+    transform: &ScreenTransform,
+    color: iced::Color,
+) {
+    draw_builtin_power(frame, sym, transform, color, color);
+}
+
 fn draw_builtin_power(
     frame: &mut canvas::Frame,
     sym: &signex_types::schematic::Symbol,
@@ -649,7 +677,7 @@ fn draw_builtin_power(
     let sw = transform.world_len(0.15).max(1.0);
     let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
 
-    // GND-like symbols should point downward from anchor, VCC-like upward.
+    // GND-like symbols point downward from anchor, VCC-like upward.
     let id = sym.lib_id.to_lowercase();
     let is_gnd_like = id.contains("gnd");
     let dir = if is_gnd_like { -1.0 } else { 1.0 };
@@ -669,7 +697,7 @@ fn draw_builtin_power(
     let net = sym.value.to_uppercase();
 
     if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
-        // GND: 3 horizontal lines of decreasing width
+        // GND: 3 horizontal lines of decreasing width (Altium uses 2.54 mm)
         let bar_w = 2.54;
         for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
             let dy = (pin_len + 0.4 * i as f64) * dir;
@@ -705,7 +733,7 @@ fn draw_builtin_power(
         });
         frame.stroke(&tri, stroke);
     } else if id.contains("earth") {
-        // Earth: horizontal bar + 3 diagonal hatch lines
+        // Earth: horizontal bar + 3 diagonal hatch lines (Altium 2.54 mm)
         let bar_w = 2.54;
         let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
@@ -721,10 +749,8 @@ fn draw_builtin_power(
         // Diagonal hatch lines below bar
         for i in 0..3 {
             let x_off = -hw + (i as f64 + 0.5) * (bar_w / 3.0);
-            let (hx1, hy1) = instance_transform(
-                sym,
-                &signex_types::schematic::Point::new(x_off, base_y),
-            );
+            let (hx1, hy1) =
+                instance_transform(sym, &signex_types::schematic::Point::new(x_off, base_y));
             let (hx2, hy2) = instance_transform(
                 sym,
                 &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8 * dir),
@@ -737,8 +763,72 @@ fn draw_builtin_power(
                 stroke,
             );
         }
+    } else if id.contains("arrow") {
+        // Arrow: upward-pointing triangle at top of pin (Altium 2.54 mm base).
+        let base_y = pin_len * dir;
+        let tip_y = base_y + 1.4 * dir;
+        let pts = [
+            signex_types::schematic::Point::new(-1.27, base_y),
+            signex_types::schematic::Point::new(1.27, base_y),
+            signex_types::schematic::Point::new(0.0, tip_y),
+        ];
+        let screen_pts: Vec<iced::Point> = pts
+            .iter()
+            .map(|p| {
+                let (wx, wy) = instance_transform(sym, p);
+                transform.to_screen_point(wx, wy)
+            })
+            .collect();
+        let tri = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(screen_pts[0]);
+            b.line_to(screen_pts[2]);
+            b.line_to(screen_pts[1]);
+        });
+        frame.stroke(&tri, stroke);
+    } else if id.contains("wave") {
+        // Wave: sinusoidal cap
+        let base_y = pin_len * dir;
+        let steps = 24_i32;
+        let span = 2.6_f64;
+        let amp = 0.5_f64;
+        let mut pts: Vec<iced::Point> = Vec::with_capacity(steps as usize + 1);
+        for i in 0..=steps {
+            let t = i as f64 / steps as f64;
+            let x = -span / 2.0 + t * span;
+            let y = base_y + dir * amp * (t * std::f64::consts::PI * 2.0).sin();
+            let (wx, wy) = instance_transform(sym, &signex_types::schematic::Point::new(x, y));
+            pts.push(transform.to_screen_point(wx, wy));
+        }
+        let path = canvas::Path::new(|b: &mut path::Builder| {
+            b.move_to(pts[0]);
+            for p in &pts[1..] {
+                b.line_to(*p);
+            }
+        });
+        frame.stroke(&path, stroke);
+    } else if id.contains("circle") {
+        // Circle: small open circle at pin top
+        let base_y = pin_len * dir + 0.6 * dir;
+        let (cx, cy) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, base_y));
+        let center = transform.to_screen_point(cx, cy);
+        let r = transform.world_len(0.6).max(2.0);
+        frame.stroke(&canvas::Path::circle(center, r), stroke);
+    } else if id.contains("bar") {
+        // Explicit "Bar" style — single horizontal bar (Altium convention).
+        let bar_w = 2.54;
+        let base_y = pin_len * dir;
+        let hw = bar_w * 0.5;
+        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
+        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
+        frame.stroke(
+            &canvas::Path::line(
+                transform.to_screen_point(lx, ly),
+                transform.to_screen_point(rx, ry),
+            ),
+            stroke,
+        );
     } else {
-        // VCC / generic power: horizontal bar at top of pin
+        // VCC / generic power: horizontal bar at top of pin (Altium 2.54 mm)
         let bar_w = 2.54;
         let base_y = pin_len * dir;
         let hw = bar_w * 0.5;
@@ -753,24 +843,66 @@ fn draw_builtin_power(
         );
     }
 
-    // Draw value label on the same side as symbol body.
-    let label_y = (pin_len + 1.5) * dir;
-    let font_size_mm = 1.27;
-    let screen_font = (transform.world_len(font_size_mm) * crate::canvas_font_size_scale()).abs();
+    // Draw value label immediately below the *visible body* of the symbol.
+    // Each style has a different body extent beyond the pin stub, so the
+    // offset is computed per-shape rather than a single constant.
+    let body_extent = if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
+        // 3 decreasing GND bars span ~1.2 mm from top bar to bottom bar.
+        1.2
+    } else if id.contains("gndref") {
+        // Triangle height 1.27.
+        1.27
+    } else if id.contains("earth") {
+        // Bar + hatch ~0.8 mm.
+        0.9
+    } else if id.contains("arrow") {
+        // Triangle height 1.4.
+        1.4
+    } else if id.contains("circle") {
+        // Circle diameter ~1.2 mm.
+        1.2
+    } else {
+        // VCC / Bar: single bar has effectively zero extent beyond the pin.
+        0.0
+    };
+    let label_y = (pin_len + body_extent + 0.25) * dir;
+    // 10 pt — the canvas-wide default — matching Altium.
+    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font >= 1.0 {
-        let (tx, ty) = instance_transform(
-            sym,
-            &signex_types::schematic::Point::new(0.0, label_y),
-        );
+        let (tx, ty) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, label_y));
         let sp = transform.to_screen_point(tx, ty);
+        // Altium convention: the power-port label text is always drawn
+        // upright regardless of symbol rotation. Only the label's POSITION
+        // follows the rotation (via `instance_transform` above) so the text
+        // sits just past the symbol body on the side away from the pin.
+        let dx = tx - sym.position.x;
+        let dy = ty - sym.position.y;
+        let (align_x, align_y_v) = if dx.abs() > dy.abs() {
+            // Label is horizontally offset (rotation 90° / 270°).
+            let h = if dx > 0.0 {
+                iced::alignment::Horizontal::Left
+            } else {
+                iced::alignment::Horizontal::Right
+            };
+            (h, iced::alignment::Vertical::Center)
+        } else {
+            // Label is vertically offset (rotation 0° / 180°).
+            let v = if dy > 0.0 {
+                iced::alignment::Vertical::Top
+            } else {
+                iced::alignment::Vertical::Bottom
+            };
+            (iced::alignment::Horizontal::Center, v)
+        };
         frame.fill_text(canvas::Text {
             content: net,
             position: sp,
             color: label_color,
             size: iced::Pixels(screen_font),
             font: crate::canvas_font(),
-            align_x: iced::alignment::Horizontal::Center.into(),
-            align_y: iced::alignment::Vertical::Top,
+            align_x: align_x.into(),
+            align_y: align_y_v,
             ..canvas::Text::default()
         });
     }

@@ -49,10 +49,16 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
     }
 
     // Symbol field texts (tested before symbol body so clicking a label
-    // selects the field, not the whole symbol)
+    // selects the field, not the whole symbol). Power ports are an exception:
+    // their val_text is rendered as part of the port by the built-in power
+    // renderer, so clicking anywhere on the glyph should select the whole
+    // port — not a phantom val_text hit region tracking KiCad's stored text
+    // position (often offset below the visible body).
     for sym in &sheet.symbols {
+        if sym.is_power {
+            continue;
+        }
         if let Some(ref ref_text) = sym.ref_text
-            && !sym.is_power
             && !ref_text.hidden
             && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
         {
@@ -71,6 +77,14 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
             && hit_symbol(sym, lib_sym, wx, wy)
         {
+            return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+        }
+        // Power ports always rely on the built-in renderer for their glyph,
+        // even when a matching lib_sym exists in the sheet's `lib_symbols`.
+        // So the hit region has to come from the built-in geometry — without
+        // this second pass, a power port whose Style was swapped (lib_id now
+        // points at a non-existent library symbol) would be unselectable.
+        if sym.is_power && hit_power_symbol(sym, wx, wy) {
             return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
         }
     }
@@ -181,16 +195,11 @@ fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
-    let text_width = lbl.text.chars().count() as f64 * lbl.font_size.max(1.27) * 0.7;
-    let text_height = lbl.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(
-        lbl.position.x,
-        lbl.position.y - text_height,
-        lbl.position.x + text_width,
-        lbl.position.y + text_height * 0.5,
-    )
-    .expand(0.5);
-    aabb.contains(wx, wy)
+    // Small hit tolerance so clicks near the glyph edges still register,
+    // without bloating the visible selection rectangle.
+    super::label::label_text_aabb(lbl)
+        .expand(0.3)
+        .contains(wx, wy)
 }
 
 fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
@@ -235,12 +244,15 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
     let dx = wx - disp_x;
     let dy = wy - disp_y;
 
-    // Rotate click into text-local space (KiCad CCW = negate in Y-down)
+    // Undo the render rotation to map the click into unrotated text-local
+    // space. `draw_text_prop` rotates by `-draw_rotation.to_radians()` (Iced
+    // Y-down), so the inverse is the same sign: rotate the click-to-anchor
+    // vector by `-(-θ) = +θ` in lyon math = `-θ` in Iced-visual. Either way,
+    // `(ldx, ldy) = R(-θ) · (dx, dy)`.
     let (ldx, ldy) = if draw_rotation.abs() > 0.1 {
-        let rad = draw_rotation.to_radians();
+        let rad = -draw_rotation.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
-        // Rotate by +rotation to undo the text rotation
         (dx * cos + dy * sin, -dx * sin + dy * cos)
     } else {
         (dx, dy)
@@ -248,20 +260,47 @@ fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64)
 
     // Text-local bounding box (depends on justification)
     let (x_lo, x_hi) = match justify_h {
-        HAlign::Left   => (-margin, text_w + margin),
-        HAlign::Right  => (-(text_w + margin), margin),
+        HAlign::Left => (-margin, text_w + margin),
+        HAlign::Right => (-(text_w + margin), margin),
         HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),
     };
 
     ldx >= x_lo && ldx <= x_hi && ldy >= -(half_h + margin) && ldy <= half_h + margin
 }
 
+/// Bounding-box hit test for built-in power ports (no lib_sym required).
+/// Matches the rough extents drawn by `draw_builtin_power` — pin stub + bar.
+fn hit_power_symbol(sym: &Symbol, wx: f64, wy: f64) -> bool {
+    // Direction mirrors draw_builtin_power's logic.
+    let id = sym.lib_id.to_lowercase();
+    let is_gnd_like = id.contains("gnd");
+    let dir: f64 = if is_gnd_like { -1.0 } else { 1.0 };
+    let pin_len = 1.27;
+    // Generous bounding region — a power port is a small glyph, and Altium
+    // picks it even with a coarse click; we match that feel.
+    let body_extent = 2.8;
+    let half_w = 2.2;
+    // In symbol-local coords: the body extends from 0 to (pin_len + body_extent) * dir
+    // on the Y axis (after Y-flip), and ±half_w on X.
+    let (lx, ly) = world_to_lib_space(sym, wx, wy);
+    let y_min = 0.0_f64.min((pin_len + body_extent) * dir);
+    let y_max = 0.0_f64.max((pin_len + body_extent) * dir);
+    Aabb::new(-half_w, y_min, half_w, y_max)
+        .expand(0.4)
+        .contains(lx, ly)
+}
+
 fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
+    // Body-only AABB. Pins extend outward from the body; including them in
+    // the hit region lets clicks on wires (which share the pin endpoints)
+    // select the whole symbol. We test pins separately with line-distance so
+    // clicking *on* a pin still selects the symbol, but clicking on a wire
+    // beyond the pin tip falls through to wire hit-testing.
     let mut min_x = f64::MAX;
     let mut min_y = f64::MAX;
     let mut max_x = f64::MIN;
     let mut max_y = f64::MIN;
-    let mut has_points = false;
+    let mut has_body = false;
 
     for lg in &lib_sym.graphics {
         if lg.unit != 0 && lg.unit != sym.unit {
@@ -276,12 +315,12 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                     &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
                 );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
-                has_points = true;
+                has_body = true;
             }
             Graphic::Polyline { points, .. } => {
                 for p in points {
                     ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.x, p.y);
-                    has_points = true;
+                    has_body = true;
                 }
             }
             Graphic::Circle { center, radius, .. } => {
@@ -301,7 +340,7 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                     center.x + radius,
                     center.y + radius,
                 );
-                has_points = true;
+                has_body = true;
             }
             Graphic::Arc {
                 start, mid, end, ..
@@ -311,47 +350,68 @@ fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
                 );
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
                 ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
-                has_points = true;
+                has_body = true;
             }
             _ => {}
         }
     }
 
+    // No body graphics at all (rare): fall back to small AABB around anchor.
+    if !has_body {
+        let aabb = Aabb::new(
+            sym.position.x - 2.54,
+            sym.position.y - 2.54,
+            sym.position.x + 2.54,
+            sym.position.y + 2.54,
+        );
+        return aabb.contains(wx, wy);
+    }
+
+    // Click in lib-local space.
+    let (lx, ly) = world_to_lib_space(sym, wx, wy);
+
+    // Primary: click inside the body rectangle (minimal padding).
+    if Aabb::new(min_x, min_y, max_x, max_y)
+        .expand(0.25)
+        .contains(lx, ly)
+    {
+        return true;
+    }
+
+    // Secondary: click near a pin line (stub between pin body-side point and
+    // pin tip). This keeps pin selection working without swallowing wires
+    // that simply share the pin endpoint.
     for lp in &lib_sym.pins {
         if lp.unit != 0 && lp.unit != sym.unit {
             continue;
         }
         let p = &lp.pin;
-        ext(
-            &mut min_x,
-            &mut min_y,
-            &mut max_x,
-            &mut max_y,
-            p.position.x,
-            p.position.y,
-        );
+        if !p.visible {
+            continue;
+        }
         let angle_rad = p.rotation.to_radians();
         let end_x = p.position.x + p.length * angle_rad.cos();
         let end_y = p.position.y + p.length * angle_rad.sin();
-        ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end_x, end_y);
-        has_points = true;
+        if point_to_segment_dist(lx, ly, p.position.x, p.position.y, end_x, end_y) <= 0.6 {
+            return true;
+        }
     }
 
-    if !has_points {
-        let aabb = Aabb::new(
-            sym.position.x - 5.0,
-            sym.position.y - 5.0,
-            sym.position.x + 5.0,
-            sym.position.y + 5.0,
-        );
-        return aabb.contains(wx, wy);
-    }
+    false
+}
 
-    // Transform click into lib-local space
-    let (lx, ly) = world_to_lib_space(sym, wx, wy);
-    Aabb::new(min_x, min_y, max_x, max_y)
-        .expand(1.0)
-        .contains(lx, ly)
+fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-9 {
+        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let cx = ax + t * dx;
+    let cy = ay + t * dy;
+    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
 }
 
 /// Transform a world point into symbol library-local coordinate space.

@@ -4,6 +4,7 @@ use signex_types::schematic::{SelectedItem, SelectedKind};
 pub enum SemanticPatch {
     DocumentReplaced,
     TextUpdated,
+    LabelsMutated,
     SymbolFieldsUpdated,
     SelectionDeleted,
     SelectionMoved,
@@ -41,9 +42,9 @@ impl DocumentPatch {
 
     pub fn from_selected_kind(kind: SelectedKind) -> Self {
         match kind {
-            SelectedKind::Symbol
-            | SelectedKind::SymbolRefField
-            | SelectedKind::SymbolValField => Self::SYMBOLS,
+            SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
+                Self::SYMBOLS
+            }
             SelectedKind::Wire => Self::WIRES,
             SelectedKind::Bus => Self::BUSES,
             SelectedKind::BusEntry => Self::BUS_ENTRIES,

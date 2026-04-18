@@ -32,8 +32,10 @@ pub struct CanvasState {
     last_pan_pos: Option<iced::Point>,
     /// Pending fit target — consumed on next update.
     pub pending_fit: Option<Rectangle>,
-    /// Whether Ctrl is currently held (for multi-select).
+    /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
+    /// Whether Shift is currently held (for multi-select add).
+    pub shift_held: bool,
     /// Drag-to-select: start position in world coordinates.
     select_drag_start: Option<(f64, f64)>,
     /// Drag-to-select: current end position in world coordinates.
@@ -64,6 +66,10 @@ pub struct SchematicCanvas {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera state as of the most recent draw, updated every frame including
+    /// mid-pan. Overlays positioned relative to world coordinates (inline text
+    /// editor, measurements) read this so they track pan/zoom in real time.
+    pub live_camera: std::cell::Cell<(f32, f32, f32)>,
     pub grid_visible: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
@@ -85,12 +91,14 @@ pub struct SchematicCanvas {
     pub tool_preview: Option<String>,
     /// Ghost label preview for port/label placement (follows cursor).
     pub ghost_label: Option<signex_types::schematic::Label>,
-    /// Measurement anchor point for the interactive measure tool.
-    pub measure_start: Option<signex_types::schematic::Point>,
-    /// Current or finalized measurement endpoint.
-    pub measure_end: Option<signex_types::schematic::Point>,
-    /// True after the second click locks the current measurement.
-    pub measure_locked: bool,
+    /// Ghost power-port / symbol preview for placement (follows cursor).
+    pub ghost_symbol: Option<signex_types::schematic::Symbol>,
+    /// Ghost text-note preview for placement (follows cursor).
+    pub ghost_text: Option<signex_types::schematic::TextNote>,
+    /// When true, placement is paused (TAB pressed → pre-placement form
+    /// open). The ghost freezes and canvas clicks don't place — the user
+    /// interacts with the Properties panel until they confirm with OK.
+    pub placement_paused: bool,
     /// Current draw mode for wire preview constraint (90°, 45°, free).
     pub draw_mode: crate::app::DrawMode,
     /// Whether snap-to-grid is enabled (for rubber-band cursor snapping).
@@ -99,6 +107,10 @@ pub struct SchematicCanvas {
     pub snap_grid_mm: f64,
     /// Visible grid dot spacing in mm (independent of snap grid).
     pub visible_grid_mm: f64,
+    /// Active paper width in mm (world units).
+    pub paper_width_mm: f32,
+    /// Active paper height in mm (world units).
+    pub paper_height_mm: f32,
 }
 
 impl SchematicCanvas {
@@ -118,6 +130,7 @@ impl SchematicCanvas {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            live_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             grid_visible: true,
             theme_bg: {
                 let c = &default_colors.background;
@@ -139,24 +152,20 @@ impl SchematicCanvas {
             drawing_mode: false,
             tool_preview: None,
             ghost_label: None,
-            measure_start: None,
-            measure_end: None,
-            measure_locked: false,
+            ghost_symbol: None,
+            ghost_text: None,
+            placement_paused: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
             snap_grid_mm: 2.54,
             visible_grid_mm: 2.54,
+            paper_width_mm: 297.0,
+            paper_height_mm: 210.0,
         }
     }
 
     pub fn clear_overlay_cache(&mut self) {
         self.overlay_cache.clear();
-    }
-
-    pub fn reset_measurement(&mut self) {
-        self.measure_start = None;
-        self.measure_end = None;
-        self.measure_locked = false;
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -271,22 +280,27 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.last_click_time = Some(now);
                     state.last_click_world = Some((wx, wy));
 
-                    // Check: did we click on an already-selected item?
-                    // If yes, prepare for drag-to-move (defer the Clicked event).
-                    let on_selected = if !self.drawing_mode && !self.selected.is_empty() {
+                    // Classify the click target:
+                    //   - hit an already-selected item  → defer click, prepare drag
+                    //   - hit an unselected item       → publish click (selects it), prepare drag
+                    //   - hit empty space              → publish click, start box-select
+                    // Altium-style: clicking and dragging on an unselected item
+                    // should immediately select-and-drag in one gesture.
+                    let (on_selected, on_unselected_item) = if !self.drawing_mode {
                         if let Some(snapshot) = self.active_snapshot() {
                             if let Some(hit) =
                                 signex_render::schematic::hit_test::hit_test(snapshot, wx, wy)
                             {
-                                self.selected.iter().any(|s| s.uuid == hit.uuid)
+                                let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
+                                (sel, !sel)
                             } else {
-                                false
+                                (false, false)
                             }
                         } else {
-                            false
+                            (false, false)
                         }
                     } else {
-                        false
+                        (false, false)
                     };
 
                     if on_selected && !state.ctrl_held {
@@ -297,6 +311,27 @@ impl canvas::Program<Message> for SchematicCanvas {
                         state.move_current = None;
                         state.select_drag_start = None;
                         return Some(canvas::Action::capture());
+                    }
+
+                    if on_unselected_item && !state.ctrl_held {
+                        // Publish the click (which selects the item via HitAt)
+                        // AND prepare drag state. If the user crosses the drag
+                        // threshold before mouse-up, the motion handler promotes
+                        // this into a move gesture without a second click.
+                        // `and_capture()` keeps subsequent mouse events flowing
+                        // through this program so the drag detection stays live.
+                        state.click_on_selected = true;
+                        state.move_origin = Some((wx, wy));
+                        state.move_dragging = false;
+                        state.move_current = None;
+                        state.select_drag_start = None;
+                        return Some(
+                            canvas::Action::publish(Message::CanvasEvent(CanvasEvent::Clicked {
+                                world_x: wx,
+                                world_y: wy,
+                            }))
+                            .and_capture(),
+                        );
                     }
 
                     // Normal click — publish immediately, start potential box-select
@@ -311,7 +346,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                         state.select_drag_start = None;
                         state.select_drag_end = None;
                     }
-                    let evt = if state.ctrl_held {
+                    // Ctrl+Click toggles selection (add if missing, remove if
+                    // present). Shift+Click adds to selection (Altium-style).
+                    let evt = if state.ctrl_held || state.shift_held {
                         CanvasEvent::CtrlClicked {
                             world_x: wx,
                             world_y: wy,
@@ -385,19 +422,44 @@ impl canvas::Program<Message> for SchematicCanvas {
             // ── Keyboard events for Ctrl detection ──
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.ctrl_held = mods.command();
+                state.shift_held = mods.shift();
                 None
             }
 
-            // ── Right-click press → start pan or Active Bar dropdown ──
+            // ── Escape cancels any in-progress drag ──
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                ..
+            }) => {
+                if state.move_dragging || state.click_on_selected {
+                    state.move_dragging = false;
+                    state.click_on_selected = false;
+                    state.move_origin = None;
+                    state.move_current = None;
+                    return Some(canvas::Action::capture());
+                }
+                None
+            }
+
+            // ── Right-click press → cancel drag, else start pan or Active Bar dropdown ──
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                // Abort an in-progress drag — matches Altium / Esc behavior.
+                if state.move_dragging || state.click_on_selected {
+                    state.move_dragging = false;
+                    state.click_on_selected = false;
+                    state.move_origin = None;
+                    state.move_current = None;
+                    return Some(canvas::Action::capture());
+                }
                 if let Some(pos) = cursor.position_in(bounds) {
-                    // Active Bar zone: top ~40px, centered
-                    if pos.y < 40.0 {
+                    // Active Bar zone: top ~46px, centered (bar 36px + 4 top margin + slack)
+                    if pos.y < 46.0 {
                         // Calculate which Active Bar button was right-clicked
                         let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
                         let bar_x = (bounds.width - bar_width) / 2.0;
                         let rel_x = pos.x - bar_x;
-                        if rel_x >= 0.0 && rel_x < bar_width
+                        if rel_x >= 0.0
+                            && rel_x < bar_width
                             && let Some(menu) = active_bar_hit(rel_x)
                         {
                             return Some(canvas::Action::publish(Message::ActiveBar(
@@ -467,10 +529,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                         }
                         state.last_pan_pos = Some(cursor_pos);
                         return Some(
-                            canvas::Action::publish(Message::CanvasEvent(
-                                CanvasEvent::CursorMoved,
-                            ))
-                            .and_capture(),
+                            canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
+                                .and_capture(),
                         );
                     }
 
@@ -487,9 +547,18 @@ impl canvas::Program<Message> for SchematicCanvas {
                             }
                         }
                         if state.move_dragging {
-                            let (mx, my) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                            // Snap the *delta*, not the absolute cursor. This keeps
+                            // the dragged item on-grid during the live preview
+                            // (origin may be off-grid, but offset stays a grid
+                            // multiple so object_start + offset stays on grid).
+                            let (mx, my) = if let (Some(origin), true) = (
+                                state.move_origin,
+                                self.snap_enabled && self.snap_grid_mm > 0.0,
+                            ) {
                                 let g = self.snap_grid_mm;
-                                ((wx / g).round() * g, (wy / g).round() * g)
+                                let dx = ((wx - origin.0) / g).round() * g;
+                                let dy = ((wy - origin.1) / g).round() * g;
+                                (origin.0 + dx, origin.1 + dy)
                             } else {
                                 (wx, wy)
                             };
@@ -536,13 +605,14 @@ impl canvas::Program<Message> for SchematicCanvas {
             // Fill background
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            // Draw paper rectangle (A4 landscape: 297x210mm)
+            // Draw paper rectangle using active paper size.
             let paper_tl = state
                 .camera
                 .world_to_screen(iced::Point::new(0.0, 0.0), bounds);
-            let paper_br = state
-                .camera
-                .world_to_screen(iced::Point::new(297.0, 210.0), bounds);
+            let paper_br = state.camera.world_to_screen(
+                iced::Point::new(self.paper_width_mm, self.paper_height_mm),
+                bounds,
+            );
             let paper_w = paper_br.x - paper_tl.x;
             let paper_h = paper_br.y - paper_tl.y;
 
@@ -565,46 +635,107 @@ impl canvas::Program<Message> for SchematicCanvas {
 
             // Draw grid — use visible_grid_mm so snap and visual grid are independent
             if self.grid_visible {
-                grid::draw_grid(frame, &state.camera, self.visible_grid_mm as f32, bounds, self.theme_grid);
+                grid::draw_grid(
+                    frame,
+                    &state.camera,
+                    self.visible_grid_mm as f32,
+                    bounds,
+                    self.theme_grid,
+                    self.paper_width_mm,
+                    self.paper_height_mm,
+                );
             }
         });
         layers.push(bg);
 
         // Layer 2: content (schematic elements)
-        // Content is rendered with the CURRENT camera and cached. On pan/zoom, the
-        // cache is NOT cleared — we only clear it when schematic data changes.
-        // This means during active pan the content uses stale camera, but the grid
-        // (bg) and overlay always redraw. Content re-renders when pan/zoom stops
-        // via the CursorMoved handler clearing bg_cache which triggers a full redraw.
-        let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
-            // Store camera state for this cache generation
-            self.content_cache_camera.set((
-                state.camera.offset.x,
-                state.camera.offset.y,
-                state.camera.scale,
-            ));
-            if let Some(snapshot) = self.active_snapshot() {
-                let transform = signex_render::schematic::ScreenTransform {
-                    offset_x: state.camera.offset.x,
-                    offset_y: state.camera.offset.y,
-                    scale: state.camera.scale,
-                };
+        let live_transform = signex_render::schematic::ScreenTransform {
+            offset_x: state.camera.offset.x,
+            offset_y: state.camera.offset.y,
+            scale: state.camera.scale,
+        };
+        // Publish the live camera every frame so world-anchored overlays
+        // (inline editor) can track pan/zoom without waiting on cache rebuilds.
+        self.live_camera.set((
+            state.camera.offset.x,
+            state.camera.offset.y,
+            state.camera.scale,
+        ));
+        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
+        let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
+            && (cached_offset_y - state.camera.offset.y).abs() < 0.01
+            && (cached_scale - state.camera.scale).abs() < 0.0001;
+
+        // If mid-drag, build a snapshot with selected items shifted so the
+        // "move" visually lifts the originals out of place and places them at
+        // the cursor — matches Altium's behavior where the dragged objects
+        // travel with the mouse and nothing stays behind at the old location.
+        let drag_offset = if state.move_dragging {
+            state
+                .move_origin
+                .zip(state.move_current)
+                .map(|((ox, oy), (cx, cy))| (cx - ox, cy - oy))
+        } else {
+            None
+        };
+
+        let shifted_snapshot =
+            if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
+                if !self.selected.is_empty() {
+                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+        let effective_snapshot: Option<&signex_render::schematic::SchematicRenderSnapshot> =
+            shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
+
+        let content = if state.panning || drag_offset.is_some() {
+            let mut frame = canvas::Frame::new(renderer, bounds.size());
+            if let Some(snapshot) = effective_snapshot {
                 signex_render::schematic::render_schematic(
-                    frame,
+                    &mut frame,
                     snapshot,
-                    &transform,
+                    &live_transform,
                     &self.canvas_colors,
                     bounds,
                 );
             }
-        });
+            frame.into_geometry()
+        } else {
+            if !camera_matches_cache {
+                self.content_cache.clear();
+            }
+            self.content_cache.draw(renderer, bounds.size(), |frame| {
+                self.content_cache_camera.set((
+                    state.camera.offset.x,
+                    state.camera.offset.y,
+                    state.camera.scale,
+                ));
+                if let Some(snapshot) = effective_snapshot {
+                    signex_render::schematic::render_schematic(
+                        frame,
+                        snapshot,
+                        &live_transform,
+                        &self.canvas_colors,
+                        bounds,
+                    );
+                }
+            })
+        };
         layers.push(content);
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
+        // During drag we use the shifted snapshot so the selection rectangle
+        // travels with the dragged items instead of staying behind.
         if !self.selected.is_empty()
-            && let Some(snapshot) = self.active_snapshot()
+            && let Some(snapshot) = effective_snapshot
         {
-            let sel_overlay = self.overlay_cache.draw(renderer, bounds.size(), |frame| {
+            // During a drag we can't rely on overlay_cache — it must redraw
+            // with the shifted positions every frame.
+            let draw_overlay = |frame: &mut canvas::Frame| {
                 let transform = signex_render::schematic::ScreenTransform {
                     offset_x: state.camera.offset.x,
                     offset_y: state.camera.offset.y,
@@ -616,8 +747,17 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.selected,
                     &transform,
                 );
-            });
-            layers.push(sel_overlay);
+            };
+            if drag_offset.is_some() {
+                let mut frame = canvas::Frame::new(renderer, bounds.size());
+                draw_overlay(&mut frame);
+                layers.push(frame.into_geometry());
+            } else {
+                let sel_overlay = self
+                    .overlay_cache
+                    .draw(renderer, bounds.size(), draw_overlay);
+                layers.push(sel_overlay);
+            }
         }
 
         // Layer 4: overlay (cursor crosshair — redrawn every frame)
@@ -644,9 +784,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                 if self.drawing_mode && !self.wire_preview.is_empty() {
                     let wire_color = self.canvas_colors.wire;
                     let wire_color_iced = signex_render::colors::to_iced(&wire_color);
+                    // Match the placed-wire stroke width (0.15 mm in world),
+                    // scaled by camera. Previously fixed 1.5 px which looked
+                    // thin at higher zooms.
+                    let placed_width = (state.camera.scale * 0.15).max(1.0);
                     let preview_stroke = canvas::Stroke::default()
                         .with_color(wire_color_iced)
-                        .with_width(1.5);
+                        .with_width(placed_width);
 
                     // Draw placed segments
                     for pair in self.wire_preview.windows(2) {
@@ -679,10 +823,10 @@ impl canvas::Program<Message> for SchematicCanvas {
                         let end = signex_types::schematic::Point::new(snap_x, snap_y);
                         let rubber_stroke = canvas::Stroke::default()
                             .with_color(Color {
-                                a: 0.6,
+                                a: 0.7,
                                 ..wire_color_iced
                             })
-                            .with_width(1.0);
+                            .with_width(placed_width);
 
                         // Compute constrained segments based on draw mode
                         let segments = match self.draw_mode {
@@ -758,8 +902,73 @@ impl canvas::Program<Message> for SchematicCanvas {
                     }
                 }
 
+                // Ghost power-port symbol preview at cursor position.
+                // While placement is paused (TAB → properties form open),
+                // hide the ghosts so the user isn't distracted by a preview
+                // that can't be committed until they confirm.
+                if let Some(ref ghost_sym) = self.ghost_symbol
+                    && !self.placement_paused
+                {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let mut preview = ghost_sym.clone();
+                    preview.position = signex_types::schematic::Point::new(sx, sy);
+                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    signex_render::schematic::draw_power_port_preview(
+                        &mut frame,
+                        &preview,
+                        &ghost_transform,
+                        ghost_color,
+                    );
+                }
+
+                // Ghost text-note preview at cursor position.
+                if let Some(ref ghost_tn) = self.ghost_text
+                    && !self.placement_paused
+                {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let mut preview = ghost_tn.clone();
+                    preview.position = signex_types::schematic::Point::new(sx, sy);
+                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                        offset_x: state.camera.offset.x,
+                        offset_y: state.camera.offset.y,
+                        scale: state.camera.scale,
+                    };
+                    let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    signex_render::schematic::text::draw_text_note(
+                        &mut frame,
+                        &preview,
+                        &ghost_transform,
+                        ghost_color,
+                    );
+                }
+
                 // Ghost label/port preview at cursor position
-                if let Some(ref ghost) = self.ghost_label {
+                if let Some(ref ghost) = self.ghost_label
+                    && !self.placement_paused
+                {
                     let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
                     let snap_world = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                         let g = self.snap_grid_mm;
@@ -779,77 +988,78 @@ impl canvas::Program<Message> for SchematicCanvas {
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+                    let ghost_fill = Color::from_rgba(0.3, 0.8, 1.0, 0.15);
                     signex_render::schematic::label::draw_label(
                         &mut frame,
                         &preview_label,
                         &ghost_transform,
                         ghost_color,
+                        ghost_fill,
                     );
                 }
 
-                // Tool preview text at cursor (for Label, Component placement)
-                if let Some(ref label) = self.tool_preview {
+                // Tool-specific cursor marker: a bright X that locks onto
+                // the grid dot the next click will commit to (when snap is
+                // enabled), so the user can see exactly where the wire/bus
+                // endpoint will land. Altium's placement tag follows the
+                // snapped point, not the raw cursor.
+                //
+                // Only show the X for "line-drawing" tools (wire/bus/etc.)
+                // that DON'T already have a ghost preview of what's being
+                // placed — the ghost shows the click target for those,
+                // and doubling up with an X clutters the cursor.
+                let has_ghost = self.ghost_label.is_some()
+                    || self.ghost_symbol.is_some()
+                    || self.ghost_text.is_some();
+                if let Some(ref label) = self.tool_preview
+                    && !has_ghost
+                {
+                    let snapped_screen = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let g = self.snap_grid_mm as f32;
+                        let sx = (world.x / g).round() * g;
+                        let sy = (world.y / g).round() * g;
+                        state
+                            .camera
+                            .world_to_screen(iced::Point::new(sx, sy), bounds)
+                    } else {
+                        cursor_pos
+                    };
+                    let marker_color = Color::from_rgba(0.2, 0.85, 1.0, 0.95);
+                    let arm = 7.0;
+                    let stroke = canvas::Stroke::default()
+                        .with_color(marker_color)
+                        .with_width(1.8);
+                    // Diagonal X so it doesn't overlap the grid crosshair.
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y - arm),
+                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y + arm),
+                        ),
+                        stroke,
+                    );
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y - arm),
+                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y + arm),
+                        ),
+                        stroke,
+                    );
+                    // Tool-name tag beside the marker. Dark text on a
+                    // semi-opaque light chip so it reads on any canvas bg.
+                    let tag_x = snapped_screen.x + 14.0;
+                    let tag_y = snapped_screen.y - 16.0;
+                    let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
+                    let tag_h = 16.0;
+                    let chip = canvas::Path::rectangle(
+                        iced::Point::new(tag_x - 2.0, tag_y - 2.0),
+                        iced::Size::new(tag_w, tag_h),
+                    );
+                    frame.fill(&chip, Color::from_rgba(0.0, 0.0, 0.0, 0.65));
                     frame.fill_text(canvas::Text {
                         content: label.clone(),
-                        position: iced::Point::new(cursor_pos.x + 12.0, cursor_pos.y - 12.0),
-                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.7),
-                        size: iced::Pixels(11.0),
-                        font: signex_render::IOSEVKA,
-                        ..canvas::Text::default()
-                    });
-                }
-
-                if let (Some(start), Some(end)) = (self.measure_start, self.measure_end) {
-                    let start_screen = state.camera.world_to_screen(
-                        iced::Point::new(start.x as f32, start.y as f32),
-                        bounds,
-                    );
-                    let end_screen = state.camera.world_to_screen(
-                        iced::Point::new(end.x as f32, end.y as f32),
-                        bounds,
-                    );
-                    let measure_color = Color::from_rgba(0.98, 0.82, 0.25, 0.95);
-                    let helper_color = Color::from_rgba(0.98, 0.82, 0.25, 0.45);
-                    let main_stroke = canvas::Stroke::default()
-                        .with_color(measure_color)
-                        .with_width(1.5);
-                    let helper_stroke = canvas::Stroke::default()
-                        .with_color(helper_color)
-                        .with_width(1.0);
-
-                    frame.stroke(&canvas::Path::line(start_screen, end_screen), main_stroke);
-
-                    let horizontal_guide = canvas::Path::line(
-                        start_screen,
-                        iced::Point::new(end_screen.x, start_screen.y),
-                    );
-                    let vertical_guide = canvas::Path::line(
-                        iced::Point::new(end_screen.x, start_screen.y),
-                        end_screen,
-                    );
-                    frame.stroke(&horizontal_guide, helper_stroke);
-                    frame.stroke(&vertical_guide, helper_stroke);
-
-                    frame.fill(&canvas::Path::circle(start_screen, 3.0), measure_color);
-                    frame.fill(&canvas::Path::circle(end_screen, 3.0), measure_color);
-
-                    let dx = end.x - start.x;
-                    let dy = end.y - start.y;
-                    let distance = (dx * dx + dy * dy).sqrt();
-                    let label = format!(
-                        "D {:.2} mm | dX {:.2} | dY {:.2}",
-                        distance,
-                        dx.abs(),
-                        dy.abs()
-                    );
-                    let label_pos = iced::Point::new(
-                        ((start_screen.x + end_screen.x) * 0.5) + 10.0,
-                        ((start_screen.y + end_screen.y) * 0.5) - 12.0,
-                    );
-                    frame.fill_text(canvas::Text {
-                        content: label,
-                        position: label_pos,
-                        color: measure_color,
+                        position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
                         size: iced::Pixels(11.0),
                         font: signex_render::IOSEVKA,
                         ..canvas::Text::default()
@@ -857,16 +1067,15 @@ impl canvas::Program<Message> for SchematicCanvas {
                 }
             }
 
-            // Drag-to-move preview: show translucent outlines at offset
+            // Drag-to-move: the content layer already renders selected items
+            // at the dragged offset (via shifted_snapshot). Here we just handle
+            // the symbol-field anchor→moved guide line, which the content
+            // render doesn't draw on its own.
             if state.move_dragging
                 && let (Some(origin), Some(current)) = (state.move_origin, state.move_current)
             {
                 let dx = (current.0 - origin.0) as f32;
                 let dy = (current.1 - origin.1) as f32;
-                let move_color = Color::from_rgba(0.3, 0.7, 1.0, 0.5);
-                let move_stroke = canvas::Stroke::default()
-                    .with_color(move_color)
-                    .with_width(1.5);
                 if let Some(render_cache) = self.active_render_cache() {
                     let preview = render_cache.prepared_preview();
                     for sel in &self.selected {
@@ -889,10 +1098,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                             if let (Some((anchor_x, anchor_y)), Some((field_x, field_y))) =
                                 (anchor_pos, moved_pos)
                             {
-                                let anchor = state.camera.world_to_screen(
-                                    iced::Point::new(anchor_x, anchor_y),
-                                    bounds,
-                                );
+                                let anchor = state
+                                    .camera
+                                    .world_to_screen(iced::Point::new(anchor_x, anchor_y), bounds);
                                 let moved = state.camera.world_to_screen(
                                     iced::Point::new(field_x + dx, field_y + dy),
                                     bounds,
@@ -902,45 +1110,141 @@ impl canvas::Program<Message> for SchematicCanvas {
                                 frame.stroke(
                                     &guide,
                                     canvas::Stroke::default()
-                                        .with_color(Color::from_rgba(0.3, 0.7, 1.0, 0.35))
+                                        .with_color(Color::from_rgb(0.3, 0.7, 1.0))
                                         .with_width(1.0),
                                 );
 
                                 let anchor_circle = canvas::Path::circle(anchor, 3.0);
-                                frame.fill(&anchor_circle, Color::from_rgba(0.3, 0.7, 1.0, 0.65));
-
-                                let rect = canvas::Path::rectangle(
-                                    iced::Point::new(moved.x - 7.0, moved.y - 7.0),
-                                    iced::Size::new(14.0, 14.0),
-                                );
-                                frame.stroke(&rect, move_stroke);
-                                continue;
+                                frame.fill(&anchor_circle, Color::from_rgb(0.3, 0.7, 1.0));
                             }
                         }
+                    }
+                }
 
-                        // Draw a simple marker at the moved position
-                        let pos = match sel.kind {
-                            signex_types::schematic::SelectedKind::Symbol => {
-                                preview.symbol_position(sel.uuid)
+                // Altium-style connection-point markers: small thin X at every
+                // pin / wire-end / junction position of the dragged objects.
+                let snapshot_live = self.active_snapshot();
+                if let Some(snap) = snapshot_live {
+                    let x_color = Color::from_rgb(1.0, 0.3, 0.3);
+                    let x_stroke = canvas::Stroke::default()
+                        .with_color(x_color)
+                        .with_width(1.0);
+                    let draw_x = |frame: &mut canvas::Frame, screen: iced::Point| {
+                        let r = 4.0;
+                        frame.stroke(
+                            &canvas::Path::line(
+                                iced::Point::new(screen.x - r, screen.y - r),
+                                iced::Point::new(screen.x + r, screen.y + r),
+                            ),
+                            x_stroke,
+                        );
+                        frame.stroke(
+                            &canvas::Path::line(
+                                iced::Point::new(screen.x - r, screen.y + r),
+                                iced::Point::new(screen.x + r, screen.y - r),
+                            ),
+                            x_stroke,
+                        );
+                    };
+                    for sel in &self.selected {
+                        use signex_types::schematic::{Point, SelectedKind};
+                        let dxf = dx as f64;
+                        let dyf = dy as f64;
+                        match sel.kind {
+                            SelectedKind::Wire => {
+                                if let Some(w) = snap.wires.iter().find(|w| w.uuid == sel.uuid) {
+                                    for p in [w.start, w.end] {
+                                        let s = state.camera.world_to_screen(
+                                            iced::Point::new(
+                                                (p.x + dxf) as f32,
+                                                (p.y + dyf) as f32,
+                                            ),
+                                            bounds,
+                                        );
+                                        draw_x(&mut frame, s);
+                                    }
+                                }
                             }
-                            signex_types::schematic::SelectedKind::Wire => {
-                                preview.wire_midpoint(sel.uuid)
+                            SelectedKind::Bus => {
+                                if let Some(b) = snap.buses.iter().find(|b| b.uuid == sel.uuid) {
+                                    for p in [b.start, b.end] {
+                                        let s = state.camera.world_to_screen(
+                                            iced::Point::new(
+                                                (p.x + dxf) as f32,
+                                                (p.y + dyf) as f32,
+                                            ),
+                                            bounds,
+                                        );
+                                        draw_x(&mut frame, s);
+                                    }
+                                }
                             }
-                            signex_types::schematic::SelectedKind::Label => {
-                                preview.label_position(sel.uuid)
+                            SelectedKind::Junction => {
+                                if let Some(j) = snap.junctions.iter().find(|j| j.uuid == sel.uuid)
+                                {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new(
+                                            (j.position.x + dxf) as f32,
+                                            (j.position.y + dyf) as f32,
+                                        ),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
                             }
-                            _ => None,
-                        };
-                        if let Some((px, py)) = pos {
-                            let screen =
-                                state
-                                    .camera
-                                    .world_to_screen(iced::Point::new(px + dx, py + dy), bounds);
-                            let rect = canvas::Path::rectangle(
-                                iced::Point::new(screen.x - 6.0, screen.y - 6.0),
-                                iced::Size::new(12.0, 12.0),
-                            );
-                            frame.stroke(&rect, move_stroke);
+                            SelectedKind::Label => {
+                                if let Some(l) = snap.labels.iter().find(|l| l.uuid == sel.uuid) {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new(
+                                            (l.position.x + dxf) as f32,
+                                            (l.position.y + dyf) as f32,
+                                        ),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
+                            SelectedKind::NoConnect => {
+                                if let Some(nc) =
+                                    snap.no_connects.iter().find(|n| n.uuid == sel.uuid)
+                                {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new(
+                                            (nc.position.x + dxf) as f32,
+                                            (nc.position.y + dyf) as f32,
+                                        ),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
+                            SelectedKind::Symbol => {
+                                if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
+                                    && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
+                                {
+                                    // Build a shifted copy so instance_transform
+                                    // uses the dragged position.
+                                    let mut shifted = sym.clone();
+                                    shifted.position =
+                                        Point::new(sym.position.x + dxf, sym.position.y + dyf);
+                                    for lp in &lib_sym.pins {
+                                        if lp.unit != 0 && lp.unit != sym.unit {
+                                            continue;
+                                        }
+                                        let p = &lp.pin;
+                                        let (wx, wy) = signex_render::schematic::instance_transform(
+                                            &shifted,
+                                            &p.position,
+                                        );
+                                        let s = state.camera.world_to_screen(
+                                            iced::Point::new(wx as f32, wy as f32),
+                                            bounds,
+                                        );
+                                        draw_x(&mut frame, s);
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -1004,13 +1308,101 @@ impl canvas::Program<Message> for SchematicCanvas {
 
 /// Map a relative x position within the Active Bar to a dropdown menu.
 /// Returns None for buttons without dropdowns (Select, Add Component).
+/// Clone the snapshot and translate the world position of every item that
+/// appears in `selection` by `(dx, dy)`. Used during drag-to-move so the live
+/// render shows selected objects at the cursor position while the originals
+/// are not drawn at their pre-drag location.
+fn shift_snapshot_for_selection(
+    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    selection: &[signex_types::schematic::SelectedItem],
+    dx: f64,
+    dy: f64,
+) -> signex_render::schematic::SchematicRenderSnapshot {
+    use signex_types::schematic::{Point, SelectedKind};
+
+    let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {
+        selection.iter().any(|s| s.uuid == uuid && s.kind == kind)
+    };
+    let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
+
+    let mut out = snap.clone();
+    for w in out.wires.iter_mut() {
+        if is_selected(w.uuid, SelectedKind::Wire) {
+            w.start = shift(w.start);
+            w.end = shift(w.end);
+        }
+    }
+    for b in out.buses.iter_mut() {
+        if is_selected(b.uuid, SelectedKind::Bus) {
+            b.start = shift(b.start);
+            b.end = shift(b.end);
+        }
+    }
+    for be in out.bus_entries.iter_mut() {
+        if is_selected(be.uuid, SelectedKind::BusEntry) {
+            be.position = shift(be.position);
+        }
+    }
+    for j in out.junctions.iter_mut() {
+        if is_selected(j.uuid, SelectedKind::Junction) {
+            j.position = shift(j.position);
+        }
+    }
+    for nc in out.no_connects.iter_mut() {
+        if is_selected(nc.uuid, SelectedKind::NoConnect) {
+            nc.position = shift(nc.position);
+        }
+    }
+    for l in out.labels.iter_mut() {
+        if is_selected(l.uuid, SelectedKind::Label) {
+            l.position = shift(l.position);
+        }
+    }
+    for tn in out.text_notes.iter_mut() {
+        if is_selected(tn.uuid, SelectedKind::TextNote) {
+            tn.position = shift(tn.position);
+        }
+    }
+    for sym in out.symbols.iter_mut() {
+        if is_selected(sym.uuid, SelectedKind::Symbol) {
+            // Whole-symbol drag: anchor + both fields travel together.
+            sym.position = shift(sym.position);
+            if let Some(rt) = &mut sym.ref_text {
+                rt.position = shift(rt.position);
+            }
+            if let Some(vt) = &mut sym.val_text {
+                vt.position = shift(vt.position);
+            }
+        } else {
+            // Field-only drag: shift just the selected field; the symbol
+            // body stays put so the user can reposition the label
+            // independently (Altium convention).
+            if is_selected(sym.uuid, SelectedKind::SymbolRefField)
+                && let Some(rt) = &mut sym.ref_text
+            {
+                rt.position = shift(rt.position);
+            }
+            if is_selected(sym.uuid, SelectedKind::SymbolValField)
+                && let Some(vt) = &mut sym.val_text
+            {
+                vt.position = shift(vt.position);
+            }
+        }
+    }
+    for cs in out.child_sheets.iter_mut() {
+        if is_selected(cs.uuid, SelectedKind::ChildSheet) {
+            cs.position = shift(cs.position);
+        }
+    }
+    out
+}
+
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
-    // Each btn=23px (22+1spacing), sep=2px (1+1spacing), pad=4px
-    // [Filter][+] | [Select][Move][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //   0     23  48   50    73    96     121  123   146   171  173    196   219   242   267  269   292    315
+    // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
+    // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
     let x = x - 4.0;
-    let b = 23; // button width
+    let b = 29; // button width (cell + spacing)
     let s = 2; // separator
     let xi = x as i32;
     if xi < 0 {
@@ -1020,9 +1412,9 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     if xi < b {
         return Some(ActiveBarMenu::Filter);
     }
-    // btn 1: Add Component (no dropdown)
+    // btn 1: Move
     if xi < 2 * b {
-        return None;
+        return Some(ActiveBarMenu::Select);
     }
     // sep
     let off = 2 * b + s;
@@ -1030,53 +1422,49 @@ fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::SelectMode);
     }
-    // btn 3: Move
+    // btn 3: Align
     if xi >= off + b && xi < off + 2 * b {
-        return Some(ActiveBarMenu::Select);
-    }
-    // btn 4: Align
-    if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::Align);
     }
     // sep
-    let off = off + 3 * b + s;
-    // btn 5: Wire
+    let off = off + 2 * b + s;
+    // btn 4: Wire
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::Wiring);
     }
-    // btn 6: Power
+    // btn 5: Power
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::Power);
     }
     // sep
     let off = off + 2 * b + s;
-    // btn 7: Harness
+    // btn 6: Harness
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::Harness);
     }
-    // btn 8: Sheet Symbol
+    // btn 7: Sheet Symbol
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::SheetSymbol);
     }
-    // btn 9: Port
+    // btn 8: Port
     if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::Port);
     }
-    // btn 10: Directives
+    // btn 9: Directives
     if xi >= off + 3 * b && xi < off + 4 * b {
         return Some(ActiveBarMenu::Directives);
     }
     // sep
     let off = off + 4 * b + s;
-    // btn 11: Text
+    // btn 10: Text
     if xi >= off && xi < off + b {
         return Some(ActiveBarMenu::TextTools);
     }
-    // btn 12: Shapes
+    // btn 11: Shapes
     if xi >= off + b && xi < off + 2 * b {
         return Some(ActiveBarMenu::Shapes);
     }
-    // btn 13: Net Color
+    // btn 12: Net Color
     if xi >= off + 2 * b && xi < off + 3 * b {
         return Some(ActiveBarMenu::NetColor);
     }

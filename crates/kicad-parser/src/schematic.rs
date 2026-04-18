@@ -8,7 +8,8 @@ use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
     LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
-    SchematicSheet, SheetPin, Symbol, TextNote, TextProp, VAlign, Wire,
+    SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign,
+    Wire,
 };
 
 use crate::error::ParseError;
@@ -188,7 +189,7 @@ fn parse_pin_electrical_type(s: &str) -> PinElectricalType {
         "power_out" => PinElectricalType::PowerOut,
         "open_collector" => PinElectricalType::OpenCollector,
         "open_emitter" => PinElectricalType::OpenEmitter,
-        "no_connect" => PinElectricalType::NotConnected,
+        "no_connect" | "not_connected" => PinElectricalType::NotConnected,
         _ => PinElectricalType::Unspecified,
     }
 }
@@ -213,6 +214,42 @@ fn parse_pin_shape(s: &str) -> PinShape {
 
 pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let id = symbol_node.first_arg().unwrap_or("").to_string();
+    let reference = symbol_node.property("Reference").unwrap_or("").to_string();
+    let value = symbol_node.property("Value").unwrap_or("").to_string();
+    let footprint = symbol_node.property("Footprint").unwrap_or("").to_string();
+    let datasheet = symbol_node.property("Datasheet").unwrap_or("").to_string();
+    let description = symbol_node
+        .property("Description")
+        .unwrap_or("")
+        .to_string();
+    let keywords = symbol_node
+        .property("ki_keywords")
+        .unwrap_or("")
+        .to_string();
+    let fp_filters = symbol_node
+        .property("ki_fp_filters")
+        .unwrap_or("")
+        .to_string();
+    let in_bom = symbol_node
+        .find("in_bom")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(true);
+    let on_board = symbol_node
+        .find("on_board")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(true);
+    let in_pos_files = symbol_node
+        .find("in_pos_files")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(true);
+    let duplicate_pin_numbers_are_jumpers = symbol_node
+        .find("duplicate_pin_numbers_are_jumpers")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes")
+        .unwrap_or(false);
     let mut graphics = Vec::new();
     let mut pins = Vec::new();
 
@@ -556,6 +593,10 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                 .find("length")
                 .and_then(|l| l.arg_f64(0))
                 .unwrap_or(2.54);
+            let visible = !pin
+                .find("hide")
+                .map(|hide| hide.first_arg().map(|value| value == "yes").unwrap_or(true))
+                .unwrap_or(false);
 
             let name_node = pin.find("name");
             let name = name_node
@@ -582,6 +623,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                     length,
                     name,
                     number,
+                    visible,
                     name_visible,
                     number_visible,
                 },
@@ -591,6 +633,17 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
 
     LibSymbol {
         id,
+        reference,
+        value,
+        footprint,
+        datasheet,
+        description,
+        keywords,
+        fp_filters,
+        in_bom,
+        on_board,
+        in_pos_files,
+        duplicate_pin_numbers_are_jumpers,
         graphics,
         pins,
         show_pin_numbers,
@@ -627,6 +680,79 @@ fn parse_title_block(root: &SExpr) -> HashMap<String, String> {
         }
     }
     title_block
+}
+
+fn parse_symbol_instances(symbol_node: &SExpr) -> Vec<SymbolInstance> {
+    let mut instances = Vec::new();
+
+    if let Some(instances_node) = symbol_node.find("instances") {
+        for project_node in instances_node.find_all("project") {
+            let project = project_node.first_arg().unwrap_or("").to_string();
+            for path_node in project_node.find_all("path") {
+                instances.push(SymbolInstance {
+                    project: project.clone(),
+                    path: path_node.first_arg().unwrap_or("").to_string(),
+                    reference: path_node
+                        .find("reference")
+                        .and_then(|r| r.first_arg())
+                        .unwrap_or("")
+                        .to_string(),
+                    unit: path_node
+                        .find("unit")
+                        .and_then(|u| u.first_arg())
+                        .and_then(|u| u.parse::<u32>().ok())
+                        .unwrap_or(1),
+                });
+            }
+        }
+    }
+
+    instances
+}
+
+fn parse_sheet_instances(sheet_node: &SExpr) -> Vec<SheetInstance> {
+    let mut instances = Vec::new();
+
+    if let Some(instances_node) = sheet_node.find("instances") {
+        for project_node in instances_node.find_all("project") {
+            let project = project_node.first_arg().unwrap_or("").to_string();
+            for path_node in project_node.find_all("path") {
+                instances.push(SheetInstance {
+                    project: project.clone(),
+                    path: path_node.first_arg().unwrap_or("").to_string(),
+                    page: path_node
+                        .find("page")
+                        .and_then(|p| p.first_arg())
+                        .unwrap_or("1")
+                        .to_string(),
+                });
+            }
+        }
+    }
+
+    instances
+}
+
+fn parse_root_sheet_page(root: &SExpr) -> String {
+    if let Some(sheet_instances) = root.find("sheet_instances") {
+        for path_node in sheet_instances.find_all("path") {
+            if path_node.first_arg() == Some("/") {
+                return path_node
+                    .find("page")
+                    .and_then(|p| p.first_arg())
+                    .unwrap_or("1")
+                    .to_string();
+            }
+        }
+    }
+
+    root.children()
+        .iter()
+        .find(|child| child.keyword() == Some("path") && child.first_arg() == Some("/"))
+        .and_then(|path_node| path_node.find("page"))
+        .and_then(|page| page.first_arg())
+        .unwrap_or("1")
+        .to_string()
 }
 
 fn parse_wire(node: &SExpr) -> Wire {
@@ -700,6 +826,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
     let reference = s.property("Reference").unwrap_or("?").to_string();
     let value = s.property("Value").unwrap_or("").to_string();
     let footprint = s.property("Footprint").unwrap_or("").to_string();
+    let datasheet = s.property("Datasheet").unwrap_or("").to_string();
     let unit = s
         .find("unit")
         .and_then(|u| u.first_arg())
@@ -722,6 +849,18 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .find("fields_autoplaced")
         .map(|f| f.first_arg().map(|v| v == "yes").unwrap_or(true))
         .unwrap_or(false);
+
+    let pin_uuids = s
+        .children()
+        .iter()
+        .filter(|child| child.keyword() == Some("pin"))
+        .filter_map(|pin| {
+            pin.first_arg()
+                .map(|number| (number.to_string(), parse_uuid(pin)))
+        })
+        .collect();
+
+    let instances = parse_symbol_instances(s);
 
     // KiCad 10 fields
     let dnp = s
@@ -796,6 +935,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         reference,
         value,
         footprint,
+        datasheet,
         position,
         rotation,
         mirror_x,
@@ -811,6 +951,8 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         exclude_from_sim,
         locked,
         fields,
+        pin_uuids,
+        instances,
     }
 }
 
@@ -820,6 +962,10 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
         .find("size")
         .map(|sz| (sz.arg_f64(0).unwrap_or(20.0), sz.arg_f64(1).unwrap_or(15.0)))
         .unwrap_or((20.0, 15.0));
+    let fields_autoplaced = s
+        .find("fields_autoplaced")
+        .map(|f| f.first_arg().map(|v| v == "yes").unwrap_or(true))
+        .unwrap_or(false);
     // Parse sheet pins (entries): (pin "name" direction (at x y angle) ...)
     let pins: Vec<SheetPin> = s
         .find_all("pin")
@@ -853,7 +999,11 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
             .to_string(),
         position,
         size,
+        stroke_width: parse_stroke_width(s),
+        fill: parse_fill_type(s),
+        fields_autoplaced,
         pins,
+        instances: parse_sheet_instances(s),
     }
 }
 
@@ -1018,6 +1168,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .and_then(|v| v.first_arg())
         .unwrap_or("A4")
         .to_string();
+    let root_sheet_page = parse_root_sheet_page(&root);
     let uuid = parse_uuid(&root);
 
     // Parse library symbols
@@ -1174,6 +1325,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         generator,
         generator_version,
         paper_size,
+        root_sheet_page,
         symbols,
         wires,
         junctions,
@@ -1499,6 +1651,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_legacy_not_connected_pin_type() {
+        assert_eq!(
+            parse_pin_electrical_type("not_connected"),
+            PinElectricalType::NotConnected
+        );
+    }
+
+    #[test]
     fn parse_kicad10_fields_default() {
         // KiCad 10 fields should default correctly when absent
         let content = r#"(kicad_sch
@@ -1545,5 +1705,120 @@ mod tests {
         assert!(sym.on_board);
         assert!(!sym.exclude_from_sim);
         assert!(!sym.locked);
+    }
+
+    #[test]
+    fn parse_lib_symbol_preserves_parent_metadata() {
+        let symbol = sexpr::parse(
+            r#"(symbol "Interface_Ethernet:W5500"
+  (in_bom yes)
+  (on_board yes)
+  (in_pos_files yes)
+  (duplicate_pin_numbers_are_jumpers no)
+  (property "Reference" "U" (id 0) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Value" "W5500" (id 1) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Footprint" "Package_QFP:LQFP-48_7x7mm_P0.5mm" (id 2) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Datasheet" "http://example.invalid/ds.pdf" (id 3) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "Description" "Ethernet controller" (id 4) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "ki_keywords" "WIZnet Ethernet" (id 5) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (property "ki_fp_filters" "LQFP*" (id 6) (at 0 0 0) (effects (font (size 1.27 1.27))))
+  (symbol "W5500_0_1")
+  (symbol "W5500_1_1")
+)"#,
+        )
+        .unwrap();
+
+        let parsed = parse_lib_symbol(&symbol);
+        assert_eq!(parsed.description, "Ethernet controller");
+        assert_eq!(parsed.keywords, "WIZnet Ethernet");
+        assert_eq!(parsed.fp_filters, "LQFP*");
+        assert!(parsed.in_pos_files);
+        assert!(!parsed.duplicate_pin_numbers_are_jumpers);
+    }
+
+    #[test]
+    fn parse_lib_symbol_preserves_pin_hide_flag() {
+        let symbol = sexpr::parse(
+            r#"(symbol "Interface_Ethernet:W5500"
+    (symbol "W5500_1_1"
+        (pin no_connect line
+            (at 20.32 0 0)
+            (length 0)
+            (hide yes)
+            (name "NC" (effects (font (size 1.27 1.27))))
+            (number "7" (effects (font (size 1.27 1.27))))
+        )
+    )
+)"#,
+        )
+        .unwrap();
+
+        let parsed = parse_lib_symbol(&symbol);
+        assert_eq!(parsed.pins.len(), 1);
+        assert!(!parsed.pins[0].pin.visible);
+    }
+
+    #[test]
+    fn parse_symbol_and_sheet_instances_and_root_page() {
+        let content = r#"(kicad_sch
+    (version 20231120)
+    (generator "test")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 10 10 0)
+        (unit 1)
+        (in_bom yes)
+        (on_board yes)
+        (uuid "00000000-0000-0000-0000-000000000010")
+        (property "Reference" "R1" (at 10 8 0) (effects (font (size 1.27 1.27))))
+        (property "Value" "10k" (at 10 12 0) (effects (font (size 1.27 1.27))))
+        (property "Footprint" "Resistor_SMD:R_0402" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+        (property "Datasheet" "https://example.invalid/r1" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+        (pin "1" (uuid "00000000-0000-0000-0000-000000000011"))
+        (instances
+            (project "GateMagic"
+                (path "/00000000-0000-0000-0000-000000000001"
+                    (reference "R1")
+                    (unit 1)
+                )
+            )
+        )
+    )
+    (sheet
+        (at 20 20)
+        (size 30 20)
+        (fields_autoplaced)
+        (stroke (width 0.2) (type default))
+        (fill (type background))
+        (uuid "00000000-0000-0000-0000-000000000020")
+        (property "Sheet name" "Child" (at 20 19 0) (effects (font (size 1.27 1.27))))
+        (property "Sheet file" "child.kicad_sch" (at 20 41 0) (effects (font (size 1.27 1.27))))
+        (instances
+            (project "GateMagic"
+                (path "/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000020"
+                    (page "2")
+                )
+            )
+        )
+    )
+    (sheet_instances
+        (path "/"
+            (page "7")
+        )
+    )
+)"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        assert_eq!(sheet.root_sheet_page, "7");
+        assert_eq!(sheet.symbols[0].datasheet, "https://example.invalid/r1");
+        assert_eq!(sheet.symbols[0].pin_uuids.len(), 1);
+        assert_eq!(sheet.symbols[0].instances.len(), 1);
+        assert_eq!(sheet.symbols[0].instances[0].project, "GateMagic");
+        assert_eq!(sheet.child_sheets[0].stroke_width, 0.2);
+        assert!(matches!(sheet.child_sheets[0].fill, FillType::Background));
+        assert!(sheet.child_sheets[0].fields_autoplaced);
+        assert_eq!(sheet.child_sheets[0].instances[0].page, "2");
     }
 }

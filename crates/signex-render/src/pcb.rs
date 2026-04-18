@@ -132,7 +132,9 @@ fn draw_vias(
 ) {
     for via in vias {
         let center = transform.world_to_screen(via.position);
-        let radius = transform.scalar_to_screen((via.diameter / 2.0).max(0.15)).max(2.0);
+        let radius = transform
+            .scalar_to_screen((via.diameter / 2.0).max(0.15))
+            .max(2.0);
         let path = canvas::Path::circle(center, radius);
         frame.fill(&path, to_iced(&colors.junction));
         frame.stroke(
@@ -192,7 +194,9 @@ fn draw_graphics(
                         &path,
                         canvas::Stroke::default()
                             .with_color(to_iced(&colors.reference))
-                            .with_width(transform.scalar_to_screen(graphic.width.max(0.1)).max(1.0)),
+                            .with_width(
+                                transform.scalar_to_screen(graphic.width.max(0.1)).max(1.0),
+                            ),
                     );
                 }
             }
@@ -201,7 +205,10 @@ fn draw_graphics(
                     let top_left = transform.world_to_screen(start);
                     let bottom_right = transform.world_to_screen(end);
                     let rect = iced::Rectangle::new(
-                        iced::Point::new(top_left.x.min(bottom_right.x), top_left.y.min(bottom_right.y)),
+                        iced::Point::new(
+                            top_left.x.min(bottom_right.x),
+                            top_left.y.min(bottom_right.y),
+                        ),
                         iced::Size::new(
                             (bottom_right.x - top_left.x).abs(),
                             (bottom_right.y - top_left.y).abs(),
@@ -212,7 +219,9 @@ fn draw_graphics(
                         &path,
                         canvas::Stroke::default()
                             .with_color(to_iced(&colors.reference))
-                            .with_width(transform.scalar_to_screen(graphic.width.max(0.1)).max(1.0)),
+                            .with_width(
+                                transform.scalar_to_screen(graphic.width.max(0.1)).max(1.0),
+                            ),
                     );
                 }
             }
@@ -276,7 +285,9 @@ fn draw_texts(
             content: text.text.clone(),
             position: transform.world_to_screen(text.position),
             color: to_iced(&colors.value),
-            size: iced::Pixels((text.font_size.max(0.8) as f32 * 6.0 * canvas_font_size_scale()).max(9.0)),
+            size: iced::Pixels(
+                (text.font_size.max(0.8) as f32 * 6.0 * canvas_font_size_scale()).max(9.0),
+            ),
             font: canvas_font(),
             ..canvas::Text::default()
         });

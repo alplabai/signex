@@ -17,6 +17,7 @@ pub struct PcbCanvasState {
 pub struct PcbCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
+    pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
     pub grid_visible: bool,
     pub theme_bg: Color,
@@ -32,6 +33,7 @@ impl PcbCanvas {
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
+            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             pending_fit: std::cell::Cell::new(None),
             grid_visible: true,
             theme_bg: signex_render::colors::to_iced(&colors.background),
@@ -95,7 +97,9 @@ impl canvas::Program<Message> for PcbCanvas {
 
         if let Some(target) = state.pending_fit.take() {
             state.camera.fit_rect(target, bounds);
-            return Some(canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved)));
+            return Some(canvas::Action::publish(Message::CanvasEvent(
+                CanvasEvent::CursorMoved,
+            )));
         }
 
         match event {
@@ -128,8 +132,12 @@ impl canvas::Program<Message> for PcbCanvas {
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
-                    if state.panning && let Some(last_pan_pos) = state.last_pan_pos {
-                        state.camera.pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
+                    if state.panning
+                        && let Some(last_pan_pos) = state.last_pan_pos
+                    {
+                        state
+                            .camera
+                            .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
                         state.last_pan_pos = Some(cursor_pos);
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
@@ -138,11 +146,13 @@ impl canvas::Program<Message> for PcbCanvas {
                     }
 
                     let world = state.camera.screen_to_world(cursor_pos, bounds);
-                    return Some(canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorAt {
-                        x: world.x,
-                        y: world.y,
-                        zoom_pct: state.camera.zoom_percent(),
-                    })));
+                    return Some(canvas::Action::publish(Message::CanvasEvent(
+                        CanvasEvent::CursorAt {
+                            x: world.x,
+                            y: world.y,
+                            zoom_pct: state.camera.zoom_percent(),
+                        },
+                    )));
                 }
             }
             _ => {}
@@ -173,7 +183,10 @@ impl canvas::Program<Message> for PcbCanvas {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(Color { a: 0.18, ..self.theme_grid })
+                            .with_color(Color {
+                                a: 0.18,
+                                ..self.theme_grid
+                            })
                             .with_width(0.5),
                     );
                     x += step;
@@ -188,7 +201,10 @@ impl canvas::Program<Message> for PcbCanvas {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(Color { a: 0.18, ..self.theme_grid })
+                            .with_color(Color {
+                                a: 0.18,
+                                ..self.theme_grid
+                            })
                             .with_width(0.5),
                     );
                     y += step;
@@ -196,18 +212,26 @@ impl canvas::Program<Message> for PcbCanvas {
             }
         });
 
+        let transform = signex_render::pcb::ScreenTransform {
+            offset_x: state.camera.offset.x,
+            offset_y: state.camera.offset.y,
+            scale: state.camera.scale,
+        };
+        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
+        let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
+            && (cached_offset_y - state.camera.offset.y).abs() < 0.01
+            && (cached_scale - state.camera.scale).abs() < 0.0001;
+        if !camera_matches_cache {
+            self.content_cache.clear();
+        }
         let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
+            self.content_cache_camera.set((
+                state.camera.offset.x,
+                state.camera.offset.y,
+                state.camera.scale,
+            ));
             if let Some(snapshot) = self.active_snapshot() {
-                signex_render::pcb::render_pcb(
-                    frame,
-                    snapshot,
-                    signex_render::pcb::ScreenTransform {
-                        offset_x: state.camera.offset.x,
-                        offset_y: state.camera.offset.y,
-                        scale: state.camera.scale,
-                    },
-                    &self.canvas_colors,
-                );
+                signex_render::pcb::render_pcb(frame, snapshot, transform, &self.canvas_colors);
             }
         });
 

@@ -279,6 +279,12 @@ The most likely additions are:
 - `signex-model` — semantic model layer
 - `kicad-document` — raw KiCad document representation with node identity and
   preservation of unknown constructs
+- `signex-erc` — schematic rule check engine (v0.7+)
+- `signex-drc` — PCB design rule check engine (v2.0+)
+- `pcb-geom` — geometry primitives for PCB (polygon offset, R-tree,
+  Delaunay, boolean ops) shared by router, DRC, and render. Added in v2.0.
+- `pcb-router` — interactive router (walkaround, shove, diff pair,
+  tuning, pour). Added in v2.1. See `internal/docs/PCB_ROUTER_PLAN.md`.
 
 These should be added only when their responsibility is real and clear, not as
 speculative abstraction.

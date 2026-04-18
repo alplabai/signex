@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{collections::BTreeMap, fmt::Write};
 
 use signex_types::schematic::*;
 
@@ -59,7 +59,7 @@ fn pin_electrical_str(t: PinElectricalType) -> &'static str {
         PinElectricalType::PowerOut => "power_out",
         PinElectricalType::OpenCollector => "open_collector",
         PinElectricalType::OpenEmitter => "open_emitter",
-        PinElectricalType::NotConnected => "not_connected",
+        PinElectricalType::NotConnected => "no_connect",
     }
 }
 
@@ -257,6 +257,12 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
         write_child_sheet(&mut out, cs);
     }
 
+    wln!(out, "  (sheet_instances");
+    wln!(out, "    (path \"/\"");
+    wln!(out, "      (page \"{}\")", escape(&sheet.root_sheet_page));
+    wln!(out, "    )");
+    wln!(out, "  )");
+
     wln!(out, ")");
     out
 }
@@ -360,7 +366,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     );
     wln!(out, "    (dnp {})", if sym.dnp { "yes" } else { "no" });
     if sym.fields_autoplaced {
-        wln!(out, "    (fields_autoplaced yes)");
+        wln!(out, "    (fields_autoplaced)");
     }
     wln!(out, "    (uuid \"{}\")", sym.uuid);
 
@@ -384,6 +390,24 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         fmt_f64(sym.position.x),
         fmt_f64(sym.position.y)
     );
+    wln!(out, "      (show_name no)");
+    wln!(out, "      (do_not_autoplace no)");
+    wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+    wln!(out, "    )");
+
+    wln!(
+        out,
+        "    (property \"Datasheet\" \"{}\"",
+        escape(&sym.datasheet)
+    );
+    wln!(
+        out,
+        "      (at {} {} 0)",
+        fmt_f64(sym.position.x),
+        fmt_f64(sym.position.y)
+    );
+    wln!(out, "      (show_name no)");
+    wln!(out, "      (do_not_autoplace no)");
     wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
     wln!(out, "    )");
 
@@ -404,11 +428,87 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
             fmt_f64(sym.position.x),
             fmt_f64(sym.position.y)
         );
+        wln!(out, "      (show_name no)");
+        wln!(out, "      (do_not_autoplace no)");
         wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
         wln!(out, "    )");
     }
 
+    let mut pin_entries: Vec<_> = sym.pin_uuids.iter().collect();
+    pin_entries.sort_by(|left, right| left.0.cmp(right.0));
+    for (pin_number, pin_uuid) in pin_entries {
+        wln!(
+            out,
+            "    (pin \"{}\" (uuid \"{}\"))",
+            escape(pin_number),
+            pin_uuid
+        );
+    }
+
+    write_symbol_instances(out, &sym.instances);
+
     wln!(out, "  )");
+}
+
+fn write_symbol_instances(out: &mut String, instances: &[SymbolInstance]) {
+    if instances.is_empty() {
+        return;
+    }
+
+    let mut grouped: BTreeMap<&str, Vec<&SymbolInstance>> = BTreeMap::new();
+    for instance in instances {
+        grouped
+            .entry(instance.project.as_str())
+            .or_default()
+            .push(instance);
+    }
+
+    wln!(out, "    (instances");
+    for (project, project_instances) in grouped {
+        wln!(out, "      (project \"{}\"", escape(project));
+        let mut sorted_instances = project_instances;
+        sorted_instances.sort_by(|left, right| left.path.cmp(&right.path));
+        for instance in sorted_instances {
+            wln!(out, "        (path \"{}\"", escape(&instance.path));
+            wln!(
+                out,
+                "          (reference \"{}\")",
+                escape(&instance.reference)
+            );
+            wln!(out, "          (unit {})", instance.unit);
+            wln!(out, "        )");
+        }
+        wln!(out, "      )");
+    }
+    wln!(out, "    )");
+}
+
+fn write_sheet_instances(out: &mut String, instances: &[SheetInstance]) {
+    if instances.is_empty() {
+        return;
+    }
+
+    let mut grouped: BTreeMap<&str, Vec<&SheetInstance>> = BTreeMap::new();
+    for instance in instances {
+        grouped
+            .entry(instance.project.as_str())
+            .or_default()
+            .push(instance);
+    }
+
+    wln!(out, "    (instances");
+    for (project, project_instances) in grouped {
+        wln!(out, "      (project \"{}\"", escape(project));
+        let mut sorted_instances = project_instances;
+        sorted_instances.sort_by(|left, right| left.path.cmp(&right.path));
+        for instance in sorted_instances {
+            wln!(out, "        (path \"{}\"", escape(&instance.path));
+            wln!(out, "          (page \"{}\")", escape(&instance.page));
+            wln!(out, "        )");
+        }
+        wln!(out, "      )");
+    }
+    wln!(out, "    )");
 }
 
 fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym_rot: f64) {
@@ -428,6 +528,8 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym
         fmt_f64(text.position.y),
         fmt_f64(stored_rot)
     );
+    wln!(out, "      (show_name no)");
+    wln!(out, "      (do_not_autoplace no)");
     w!(
         out,
         "      (effects (font (size {} {}))",
@@ -606,18 +708,26 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
         fmt_f64(cs.size.0),
         fmt_f64(cs.size.1)
     );
+    if cs.fields_autoplaced {
+        wln!(out, "    (fields_autoplaced)");
+    }
+    wln!(
+        out,
+        "    (stroke (width {}) (type default))",
+        fmt_f64(cs.stroke_width)
+    );
+    wln!(out, "    (fill (type {}))", fill_type_str(cs.fill));
     wln!(out, "    (uuid \"{}\")", cs.uuid);
-    // "Sheetname" (one word, no space) is the legacy KiCad 5/6 token that most
-    // KiCad versions accept for backward compatibility.  The parser reads both
-    // this form and the KiCad 7+ "Sheet name" (two words) form; we intentionally
-    // write the legacy form here so exported files open cleanly in older tools.
-    wln!(out, "    (property \"Sheetname\" \"{}\"", escape(&cs.name));
+    wln!(out, "    (property \"Sheet name\" \"{}\"", escape(&cs.name));
+    wln!(out, "      (id 0)");
     wln!(
         out,
         "      (at {} {} 0)",
         fmt_f64(cs.position.x),
         fmt_f64(cs.position.y - 1.0)
     );
+    wln!(out, "      (show_name no)");
+    wln!(out, "      (do_not_autoplace no)");
     wln!(
         out,
         "      (effects (font (size 1.27 1.27)) (justify left bottom))"
@@ -626,15 +736,18 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
     // Sheetfile property
     wln!(
         out,
-        "    (property \"Sheetfile\" \"{}\"",
+        "    (property \"Sheet file\" \"{}\"",
         escape(&cs.filename)
     );
+    wln!(out, "      (id 1)");
     wln!(
         out,
         "      (at {} {} 0)",
         fmt_f64(cs.position.x),
         fmt_f64(cs.position.y + cs.size.1 + 1.0)
     );
+    wln!(out, "      (show_name no)");
+    wln!(out, "      (do_not_autoplace no)");
     wln!(
         out,
         "      (effects (font (size 1.27 1.27)) (justify left top))"
@@ -657,7 +770,24 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
         wln!(out, "      (uuid \"{}\")", pin.uuid);
         wln!(out, "    )");
     }
+    write_sheet_instances(out, &cs.instances);
     wln!(out, "  )");
+}
+
+fn write_lib_symbol_property(out: &mut String, key: &str, value: &str, id: u32) {
+    wln!(out, "      (property \"{}\" \"{}\"", key, escape(value));
+    wln!(out, "        (id {})", id);
+    wln!(out, "        (at 0 0 0)");
+    wln!(out, "        (effects (font (size 1.27 1.27)))");
+    wln!(out, "      )");
+}
+
+fn write_optional_lib_symbol_property(out: &mut String, key: &str, value: &str, id: u32) {
+    if value.is_empty() {
+        return;
+    }
+
+    write_lib_symbol_property(out, key, value, id);
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +796,30 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
 
 fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     wln!(out, "    (symbol \"{}\"", escape(&lib.id));
+    wln!(
+        out,
+        "      (in_bom {})",
+        if lib.in_bom { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "      (on_board {})",
+        if lib.on_board { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "      (in_pos_files {})",
+        if lib.in_pos_files { "yes" } else { "no" }
+    );
+    wln!(
+        out,
+        "      (duplicate_pin_numbers_are_jumpers {})",
+        if lib.duplicate_pin_numbers_are_jumpers {
+            "yes"
+        } else {
+            "no"
+        }
+    );
     if !lib.show_pin_numbers {
         wln!(out, "      (pin_numbers hide)");
     }
@@ -683,8 +837,26 @@ fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
         );
     }
 
-    // Sub-symbol for graphics
     let base_name = lib.id.split(':').next_back().unwrap_or(&lib.id);
+    let reference = if lib.reference.is_empty() {
+        "U"
+    } else {
+        &lib.reference
+    };
+    let value = if lib.value.is_empty() {
+        base_name
+    } else {
+        &lib.value
+    };
+    write_lib_symbol_property(out, "Reference", reference, 0);
+    write_lib_symbol_property(out, "Value", value, 1);
+    write_lib_symbol_property(out, "Footprint", &lib.footprint, 2);
+    write_lib_symbol_property(out, "Datasheet", &lib.datasheet, 3);
+    write_optional_lib_symbol_property(out, "Description", &lib.description, 4);
+    write_optional_lib_symbol_property(out, "ki_keywords", &lib.keywords, 5);
+    write_optional_lib_symbol_property(out, "ki_fp_filters", &lib.fp_filters, 6);
+
+    // Sub-symbol for graphics
     wln!(out, "      (symbol \"{}_0_1\"", base_name);
     for lg in &lib.graphics {
         write_lib_graphic(out, &lg.graphic);
@@ -800,7 +972,7 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
             justify_h,
             justify_v,
         } => {
-            wln!(out, "        (text {:?}", text);
+            wln!(out, "        (text \"{}\"", escape(text));
             wln!(
                 out,
                 "          (at {} {} {})",
@@ -815,10 +987,10 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
                 fmt_f64(*font_size)
             );
             if *bold {
-                w!(out, " (bold yes)");
+                w!(out, " bold");
             }
             if *italic {
-                w!(out, " (italic yes)");
+                w!(out, " italic");
             }
             w!(out, ")");
             if *justify_h != HAlign::Center || *justify_v != VAlign::Center {
@@ -845,7 +1017,7 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
             width,
             fill,
         } => {
-            wln!(out, "        (text_box {:?}", text);
+            wln!(out, "        (text_box \"{}\"", escape(text));
             wln!(
                 out,
                 "          (at {} {} {})",
@@ -872,10 +1044,10 @@ fn write_lib_graphic(out: &mut String, g: &Graphic) {
                 fmt_f64(*font_size)
             );
             if *bold {
-                w!(out, " (bold yes)");
+                w!(out, " bold");
             }
             if *italic {
-                w!(out, " (italic yes)");
+                w!(out, " italic");
             }
             wln!(out, "))");
             wln!(out, "        )");
@@ -917,15 +1089,190 @@ fn write_lib_pin(out: &mut String, pin: &Pin) {
         fmt_f64(pin.rotation)
     );
     wln!(out, "          (length {})", fmt_f64(pin.length));
-    wln!(
+    if !pin.visible {
+        wln!(out, "          (hide yes)");
+    }
+    w!(
         out,
-        "          (name \"{}\" (effects (font (size 1.27 1.27))))",
+        "          (name \"{}\" (effects (font (size 1.27 1.27))",
         escape(&pin.name)
     );
-    wln!(
+    if !pin.name_visible {
+        w!(out, " (hide yes)");
+    }
+    wln!(out, "))");
+    w!(
         out,
-        "          (number \"{}\" (effects (font (size 1.27 1.27))))",
+        "          (number \"{}\" (effects (font (size 1.27 1.27))",
         escape(&pin.number)
     );
+    if !pin.number_visible {
+        w!(out, " (hide yes)");
+    }
+    wln!(out, "))");
     wln!(out, "        )");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn writes_not_connected_pins_as_no_connect() {
+        assert_eq!(
+            pin_electrical_str(PinElectricalType::NotConnected),
+            "no_connect"
+        );
+    }
+
+    #[test]
+    fn writes_property_metadata_in_kicad_order() {
+        let mut out = String::new();
+        let text = TextProp {
+            position: Point { x: 10.0, y: 20.0 },
+            rotation: 0.0,
+            font_size: 1.27,
+            justify_h: HAlign::Center,
+            justify_v: VAlign::Center,
+            hidden: false,
+        };
+
+        write_property(&mut out, "Reference", "R1", &text, 0.0);
+
+        assert!(out.contains("(show_name no)"));
+        assert!(out.contains("(do_not_autoplace no)"));
+        assert!(out.contains("(effects (font (size 1.27 1.27)))"));
+    }
+
+    #[test]
+    fn writes_sheet_instances_root_page_and_symbol_instances() {
+        let mut sheet = SchematicSheet {
+            uuid: Default::default(),
+            version: 20231120,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: "A4".to_string(),
+            root_sheet_page: "7".to_string(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: BTreeMap::new().into_iter().collect(),
+            lib_symbols: BTreeMap::new().into_iter().collect(),
+        };
+
+        sheet.symbols.push(Symbol {
+            uuid: Default::default(),
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: "https://example.invalid/r1".to_string(),
+            position: Point { x: 10.0, y: 10.0 },
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: Some(TextProp {
+                position: Point { x: 10.0, y: 8.0 },
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: HAlign::Center,
+                justify_v: VAlign::Center,
+                hidden: false,
+            }),
+            val_text: Some(TextProp {
+                position: Point { x: 10.0, y: 12.0 },
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: HAlign::Center,
+                justify_v: VAlign::Center,
+                hidden: false,
+            }),
+            fields_autoplaced: true,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: std::collections::HashMap::new(),
+            pin_uuids: [("1".to_string(), Default::default())]
+                .into_iter()
+                .collect(),
+            instances: vec![SymbolInstance {
+                project: "GateMagic".to_string(),
+                path: "/root".to_string(),
+                reference: "R1".to_string(),
+                unit: 1,
+            }],
+        });
+
+        let rendered = write_schematic(&sheet);
+        assert!(rendered.contains("(sheet_instances"));
+        assert!(rendered.contains("(page \"7\")"));
+        assert!(rendered.contains("(property \"Datasheet\" \"https://example.invalid/r1\""));
+        assert!(rendered.contains("(pin \"1\" (uuid \"00000000-0000-0000-0000-000000000000\"))"));
+        assert!(rendered.contains("(instances"));
+        assert!(rendered.contains("(project \"GateMagic\""));
+    }
+
+    #[test]
+    fn writes_lib_symbol_parent_metadata() {
+        let mut out = String::new();
+        let lib = LibSymbol {
+            id: "Interface_Ethernet:W5500".to_string(),
+            reference: "U".to_string(),
+            value: "W5500".to_string(),
+            footprint: "Package_QFP:LQFP-48_7x7mm_P0.5mm".to_string(),
+            datasheet: "http://example.invalid/ds.pdf".to_string(),
+            description: "Ethernet controller".to_string(),
+            keywords: "WIZnet Ethernet".to_string(),
+            fp_filters: "LQFP*".to_string(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.508,
+        };
+
+        write_lib_symbol(&mut out, &lib.id, &lib);
+
+        assert!(out.contains("(in_pos_files yes)"));
+        assert!(out.contains("(duplicate_pin_numbers_are_jumpers no)"));
+        assert!(out.contains("(property \"Description\" \"Ethernet controller\""));
+        assert!(out.contains("(property \"ki_keywords\" \"WIZnet Ethernet\""));
+        assert!(out.contains("(property \"ki_fp_filters\" \"LQFP*\""));
+    }
+
+    #[test]
+    fn writes_hidden_lib_pin_flag() {
+        let mut out = String::new();
+        let pin = Pin {
+            pin_type: PinElectricalType::NotConnected,
+            shape: PinShape::Line,
+            position: Point { x: 20.32, y: 0.0 },
+            rotation: 0.0,
+            length: 0.0,
+            name: "NC".to_string(),
+            number: "7".to_string(),
+            visible: false,
+            name_visible: true,
+            number_visible: true,
+        };
+
+        write_lib_pin(&mut out, &pin);
+        assert!(out.contains("(hide yes)"));
+    }
 }

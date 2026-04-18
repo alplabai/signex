@@ -127,6 +127,28 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SymbolInstance {
+    #[serde(default)]
+    pub project: String,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub reference: String,
+    #[serde(default = "default_unit")]
+    pub unit: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SheetInstance {
+    #[serde(default)]
+    pub project: String,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub page: String,
+}
+
 // ---------------------------------------------------------------------------
 // LibSymbol & graphics
 // ---------------------------------------------------------------------------
@@ -165,6 +187,28 @@ fn default_body_style() -> u32 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
+    #[serde(default)]
+    pub reference: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub footprint: String,
+    #[serde(default)]
+    pub datasheet: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: String,
+    #[serde(default)]
+    pub fp_filters: String,
+    #[serde(default = "default_true")]
+    pub in_bom: bool,
+    #[serde(default = "default_true")]
+    pub on_board: bool,
+    #[serde(default = "default_true")]
+    pub in_pos_files: bool,
+    #[serde(default)]
+    pub duplicate_pin_numbers_are_jumpers: bool,
     #[serde(default)]
     pub graphics: Vec<LibGraphic>,
     #[serde(default)]
@@ -278,6 +322,8 @@ pub struct Pin {
     #[serde(default)]
     pub number: String,
     #[serde(default = "default_true")]
+    pub visible: bool,
+    #[serde(default = "default_true")]
     pub name_visible: bool,
     #[serde(default = "default_true")]
     pub number_visible: bool,
@@ -297,6 +343,8 @@ pub struct Symbol {
     pub value: String,
     #[serde(default)]
     pub footprint: String,
+    #[serde(default)]
+    pub datasheet: String,
     pub position: Point,
     #[serde(default)]
     pub rotation: f64,
@@ -324,6 +372,10 @@ pub struct Symbol {
     pub locked: bool,
     #[serde(default)]
     pub fields: HashMap<String, String>,
+    #[serde(default)]
+    pub pin_uuids: HashMap<String, Uuid>,
+    #[serde(default)]
+    pub instances: Vec<SymbolInstance>,
 }
 
 fn default_unit() -> u32 {
@@ -427,7 +479,15 @@ pub struct ChildSheet {
     pub position: Point,
     pub size: (f64, f64),
     #[serde(default)]
+    pub stroke_width: f64,
+    #[serde(default)]
+    pub fill: FillType,
+    #[serde(default)]
+    pub fields_autoplaced: bool,
+    #[serde(default)]
     pub pins: Vec<SheetPin>,
+    #[serde(default)]
+    pub instances: Vec<SheetInstance>,
 }
 
 // ---------------------------------------------------------------------------
@@ -497,6 +557,8 @@ pub struct SchematicSheet {
     pub generator_version: String,
     #[serde(default)]
     pub paper_size: String,
+    #[serde(default = "default_root_sheet_page")]
+    pub root_sheet_page: String,
     #[serde(default)]
     pub symbols: Vec<Symbol>,
     #[serde(default)]
@@ -523,6 +585,10 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+}
+
+fn default_root_sheet_page() -> String {
+    "1".to_string()
 }
 
 // ---------------------------------------------------------------------------
