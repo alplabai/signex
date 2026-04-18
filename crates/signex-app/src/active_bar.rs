@@ -53,8 +53,10 @@ const ICON_NETCOLOR: &[u8] = include_bytes!("../assets/icons/netcolor.svg");
 const ICON_ADDPART: &[u8] = include_bytes!("../assets/icons/addpart.svg");
 const ICON_SHEETSYM: &[u8] = include_bytes!("../assets/icons/sheetsym.svg");
 
-/// Active Bar total width in pixels (13 btns × 23px + 4 seps × 2px + 8px padding).
-pub const BAR_WIDTH_PX: f32 = 315.0;
+/// Active Bar total width in pixels (13 btns × 29px + 4 seps × 2px + 8px padding).
+/// Each button cell is 28 px + 1 px row spacing. Each separator is 1 px wide
+/// + 1 px spacing on each side. Container padding adds 4 px per horizontal edge.
+pub const BAR_WIDTH_PX: f32 = 393.0;
 
 // ─── Dropdown item SVG icons (editable files in assets/icons/dropdown/) ──
 
@@ -496,8 +498,8 @@ pub fn view_bar(
             crate::app::DrawMode::FreeAngle => "Any",
         };
         items.push(
-            button(text(mode_label.to_string()).size(10).color(Color::WHITE))
-                .padding([3, 5])
+            button(text(mode_label.to_string()).size(12).color(Color::WHITE))
+                .padding([5, 7])
                 .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire)) // cycles draw mode
                 .style(|_: &Theme, _| button::Style {
                     background: Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
@@ -1305,12 +1307,12 @@ pub fn view_dropdown(
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Each icon = 22px mouse_area + 1px spacing = 23px per button
+    // Each icon = 28px mouse_area + 1px spacing = 29px per button
     // Separator = 1px + 1px spacing = 2px
     // Bar padding = [3, 4] → 4px left padding
     // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
     //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
-    let btn = 23.0_f32;
+    let btn = 29.0_f32;
     let s = 2.0_f32;
     let pad = 4.0_f32;
     pad + match menu {
@@ -1349,27 +1351,27 @@ fn ab_icon_btn(
 
     // Icon with optional chevron indicator
     let icon_content: Element<'static, ActiveBarMsg> = if has_dropdown {
-        let chevron = svg(svg::Handle::from_memory(CHEVRON_45)).width(6).height(6);
+        let chevron = svg(svg::Handle::from_memory(CHEVRON_45)).width(8).height(8);
         iced::widget::Stack::new()
             .push(
-                container(svg(handle).width(16).height(16))
-                    .width(22)
-                    .height(22)
+                container(svg(handle).width(20).height(20))
+                    .width(28)
+                    .height(28)
                     .align_x(iced::alignment::Horizontal::Center)
                     .align_y(iced::alignment::Vertical::Center),
             )
             .push(
                 container(chevron)
-                    .width(22)
-                    .height(22)
+                    .width(28)
+                    .height(28)
                     .align_x(iced::alignment::Horizontal::Right)
                     .align_y(iced::alignment::Vertical::Bottom),
             )
             .into()
     } else {
-        container(svg(handle).width(16).height(16))
-            .width(22)
-            .height(22)
+        container(svg(handle).width(20).height(20))
+            .width(28)
+            .height(28)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
             .into()
@@ -1427,7 +1429,7 @@ fn ab_icon_btn(
 fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
     container(Space::new())
         .width(1)
-        .height(18)
+        .height(22)
         .style(move |_: &Theme| container::Style {
             background: Some(sep_c.into()),
             ..container::Style::default()
@@ -1469,14 +1471,14 @@ fn dd_item_icon(
 
     if let Some(icon_bytes) = icon {
         let handle = svg::Handle::from_memory(icon_bytes);
-        r = r.push(svg(handle).width(14).height(14));
+        r = r.push(svg(handle).width(18).height(18));
     } else {
-        r = r.push(Space::new().width(14).height(14));
+        r = r.push(Space::new().width(18).height(18));
     }
 
     r = r.push(
         text(label.to_string())
-            .size(12)
+            .size(13)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
     );

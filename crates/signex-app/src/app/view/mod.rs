@@ -533,11 +533,12 @@ impl Signex {
             )
             .map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
-            // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + ~28 bar-height ≈ bottom of bar.
-            // Add a small gap so the dropdown visually touches the bar.
+            // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
+            // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
+            // top margin = 40. Add a small gap so the dropdown visually touches.
             let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 }
-                + 34.0;
+                + 40.0;
             let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
             let (ww, _) = ui.window_size;
             let adjusted_x = x_off + (ww - bar_w) / 2.0;
