@@ -476,13 +476,16 @@ impl Signex {
         ]
         .spacing(0);
 
+        let modal_w = 1100.0_f32;
+        let modal_h = 760.0_f32;
         let dialog = container(
             column![
                 header,
                 body_row,
                 container(footer).padding([10, 14]),
             ]
-            .width(1080),
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::context_menu(tokens));
 
@@ -492,7 +495,12 @@ impl Signex {
             .get(&super::super::state::ModalId::AnnotateDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog.into(), offset)
+        wrap_modal(
+            dialog.into(),
+            offset,
+            self.ui_state.window_size,
+            (modal_w, modal_h),
+        )
     }
 
     pub(super) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
@@ -548,7 +556,7 @@ impl Signex {
             .get(&super::super::state::ModalId::AnnotateResetConfirm)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog.into(), offset)
+        wrap_modal(dialog.into(), offset, self.ui_state.window_size, (420.0, 180.0))
     }
 
     pub(super) fn view_erc_dialog(&self) -> Element<'_, Message> {
@@ -641,7 +649,8 @@ impl Signex {
                 .padding([14, 14]),
                 container(footer).padding([10, 14]),
             ]
-            .width(640),
+            .width(680)
+            .height(680),
         )
         .style(crate::styles::context_menu(tokens));
         let offset = self
@@ -650,7 +659,7 @@ impl Signex {
             .get(&super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog.into(), offset)
+        wrap_modal(dialog.into(), offset, self.ui_state.window_size, (680.0, 680.0))
     }
 }
 
@@ -778,22 +787,22 @@ fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'stati
 fn wrap_modal<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
+    window_size: (f32, f32),
+    modal_size: (f32, f32),
 ) -> Element<'a, Message> {
-    // Layer 1: full-window dim backdrop. Layer 2: the modal positioned with
-    // Space padding. Using a Stack so the backdrop fills the viewport while
-    // the inner column is allowed to overflow — the user can drag the modal
-    // past any edge without the layout engine compressing it.
-    //
-    // We centre via Length::Fill on both sides, then bias that centre with
-    // the accumulated drag offset. Negative offsets fall through to zero-
-    // sized Space on that side (Space widths must be >= 0), so drag-past-
-    // the-left-edge is the point where the modal stops sliding left; right
-    // and bottom edges can be dragged arbitrarily far because iced renders
-    // the modal at its intrinsic size even when the trailing Fill goes to
-    // zero.
+    // Compute absolute top-left of the modal = (centre + drag offset).
+    // Drags up/left push the top-left toward zero; drags down/right push
+    // past the viewport edge (trailing Fill collapses so the modal can
+    // overhang). Space widgets can't be negative-sized, so up/left
+    // saturate at zero — genuinely crossing the top/left edge needs a
+    // custom widget with transform support (v0.7.1 or later).
     let (dx, dy) = offset;
-    let top = dy.max(0.0);
-    let left = dx.max(0.0);
+    let (ww, wh) = window_size;
+    let (mw, mh) = modal_size;
+    let centre_x = ((ww - mw) * 0.5).max(0.0);
+    let centre_y = ((wh - mh) * 0.5).max(0.0);
+    let top = (centre_y + dy).max(0.0);
+    let left = (centre_x + dx).max(0.0);
 
     let backdrop: Element<'a, Message> = container(iced::widget::Space::new())
         .width(Length::Fill)
@@ -804,12 +813,13 @@ fn wrap_modal<'a>(
         })
         .into();
 
+    // Explicit top/left Space pushes the modal to its absolute position.
+    // Trailing Fill absorbs remaining space so the modal can overhang the
+    // window on the right/bottom without compressing.
     let positioned: Element<'a, Message> = column![
         Space::new().height(top),
-        Space::new().height(Length::Fill),
         row![
             Space::new().width(left),
-            Space::new().width(Length::Fill),
             inner,
             Space::new().width(Length::Fill),
         ],
