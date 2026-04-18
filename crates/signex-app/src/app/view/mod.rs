@@ -277,6 +277,7 @@ impl Signex {
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
+            || ui.close_tab_confirm.is_some()
             || !document.dock.floating.is_empty();
 
         if needs_overlay {
@@ -755,6 +756,106 @@ impl Signex {
             layers.push(dialog);
         }
 
+        if let Some(idx) = ui.close_tab_confirm {
+            if let Some(tab) = document.tabs.get(idx) {
+                layers.push(self.view_close_tab_confirm(&tab.title));
+            }
+        }
+
         layers
+    }
+
+    fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
+        use iced::widget::{button, text, Space};
+        use iced::{Background, Border, Color, Theme};
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let message = format!(
+            "'{}' has unsaved changes. Do you want to save before closing?",
+            tab_title,
+        );
+
+        let btn = |label: &'static str, msg: Message, primary: bool| -> Element<'_, Message> {
+            let label_color = if primary { Color::WHITE } else { text_c };
+            let bg = if primary {
+                Color::from_rgb(0.00, 0.47, 0.84)
+            } else {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+            };
+            button(
+                container(text(label.to_string()).size(12).color(label_color))
+                    .padding([5, 14]),
+            )
+            .on_press(msg)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border_c,
+                },
+                text_color: label_color,
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
+
+        let dialog = container(
+            column![
+                container(text("Unsaved Changes").size(14).color(text_c))
+                    .padding([10, 14])
+                    .style(crate::styles::toolbar_strip(tokens)),
+                container(text(message).size(11).color(text_muted)).padding([14, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        btn(
+                            "Cancel",
+                            Message::CloseTabConfirm(CloseTabChoice::Cancel),
+                            false,
+                        ),
+                        btn(
+                            "Don't Save",
+                            Message::CloseTabConfirm(CloseTabChoice::DiscardAndClose),
+                            false,
+                        ),
+                        btn(
+                            "Save",
+                            Message::CloseTabConfirm(CloseTabChoice::SaveAndClose),
+                            true,
+                        ),
+                    ]
+                    .spacing(8),
+                )
+                .padding([10, 14]),
+            ]
+            .width(420),
+        )
+        .style(crate::styles::context_menu(tokens));
+
+        container(
+            column![
+                Space::new().height(Length::Fill),
+                row![
+                    Space::new().width(Length::Fill),
+                    dialog,
+                    Space::new().width(Length::Fill),
+                ],
+                Space::new().height(Length::Fill),
+            ]
+            .width(Length::Fill)
+            .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
+            ..container::Style::default()
+        })
+        .into()
     }
 }

@@ -75,7 +75,18 @@ pub enum Message {
     PreferencesMsg(crate::preferences::PrefMsg),
     FindReplaceMsg(crate::find_replace::FindReplaceMsg),
     WindowResized(f32, f32),
+    /// User picked an option in the close-confirmation modal shown when they
+    /// try to close a tab with unsaved changes. Drives the modal via
+    /// `ui_state.close_tab_confirm`.
+    CloseTabConfirm(CloseTabChoice),
     Noop,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CloseTabChoice {
+    SaveAndClose,
+    DiscardAndClose,
+    Cancel,
 }
 
 #[derive(Debug, Clone)]
