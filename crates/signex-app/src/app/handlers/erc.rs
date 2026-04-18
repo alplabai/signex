@@ -88,8 +88,10 @@ impl Signex {
             false,
             true,
         );
-        // Close any open dialogs that triggered this action.
-        self.ui_state.annotate_dialog_open = false;
+        // The main Annotate dialog stays open so the user can review the
+        // result and run additional actions (Altium convention). The small
+        // reset-confirm dialog — if it triggered this action — is a Y/N
+        // prompt and closes on confirm.
         self.ui_state.annotate_reset_confirm = false;
         crate::diagnostics::log_info(&format!("Annotated symbols ({:?})", mode));
         Task::none()
