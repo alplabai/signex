@@ -467,8 +467,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     return Some(canvas::Action::capture());
                 }
                 if let Some(pos) = cursor.position_in(bounds) {
-                    // Active Bar zone: top ~40px, centered
-                    if pos.y < 40.0 {
+                    // Active Bar zone: top ~46px, centered (bar 36px + 4 top margin + slack)
+                    if pos.y < 46.0 {
                         // Calculate which Active Bar button was right-clicked
                         let bar_width: f32 = crate::active_bar::BAR_WIDTH_PX;
                         let bar_x = (bounds.width - bar_width) / 2.0;
@@ -1469,10 +1469,10 @@ fn shift_snapshot_for_selection(
 
 fn active_bar_hit(x: f32) -> Option<crate::active_bar::ActiveBarMenu> {
     use crate::active_bar::ActiveBarMenu;
-    // Each btn=23px, sep=2px, pad=4px.
+    // Each btn=29px (28 cell + 1 spacing), sep=2px, pad=4px.
     // [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
     let x = x - 4.0;
-    let b = 23; // button width
+    let b = 29; // button width (cell + spacing)
     let s = 2; // separator
     let xi = x as i32;
     if xi < 0 {
