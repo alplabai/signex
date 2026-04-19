@@ -82,6 +82,41 @@ pub struct UiState {
     /// Active modal drag: which modal is being dragged + the last mouse
     /// position so the delta can be computed from the next DragMove event.
     pub modal_dragging: Option<(ModalId, f32, f32)>,
+    /// Active tab drag: which document tab is being dragged + the last
+    /// mouse position. Used by auto-detach — when the cursor crosses the
+    /// main window edge the tab undocks into its own OS window.
+    pub tab_dragging: Option<(usize, f32, f32)>,
+    /// Id of the primary app window — set once `iced::window::open` for
+    /// the main window resolves. Every `view(id)` call checks this to
+    /// decide whether it's rendering the main shell or a secondary
+    /// (detached modal / undocked tab) window.
+    pub main_window_id: Option<iced::window::Id>,
+    /// Every non-main window Signex owns, keyed by its iced id. Lets
+    /// `view(id)` dispatch between the main shell, detached modals, and
+    /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
+    /// the detached content reattaches to the main window.
+    pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+}
+
+/// Role of a non-main window opened by Signex. Phase 2 adds detached
+/// modals; Phase 3 adds `UndockedTab(tab_index)` so a schematic sheet
+/// can live in its own OS window.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum WindowKind {
+    DetachedModal(ModalId),
+    /// Undocked document tab. Stores the tab's file path (unique per
+    /// open tab in Signex) so the mapping survives tab reordering or
+    /// unrelated tabs closing. The `title` copy is used as the OS
+    /// window title without re-reading tabs.
+    UndockedTab {
+        path: std::path::PathBuf,
+        title: String,
+    },
+    /// Detached dock panel. Opened automatically when the user drags a
+    /// floating panel past the main window edge. Closing the OS window
+    /// reattaches the panel to its last dock region.
+    DetachedPanel(crate::panels::PanelKind),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

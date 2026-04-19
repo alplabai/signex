@@ -120,6 +120,55 @@ pub enum Message {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// Fired once `iced::window::open` completes for the initial main
+    /// window — lets us stash the id so `view(id)` knows which window is
+    /// the primary app shell versus a detached modal / undocked tab.
+    MainWindowOpened(iced::window::Id),
+    /// Fired when any secondary (non-main) window closes. Cleans up the
+    /// corresponding entry in `ui_state.windows` so the app can re-attach
+    /// the modal or tab to the main window's overlay stack.
+    SecondaryWindowClosed(iced::window::Id),
+    /// Pop a modal out of the main window into its own OS window. Altium
+    /// triggers this when the user drags the modal's title bar past the
+    /// main window edge, or clicks the pop-out icon in the title bar.
+    DetachModal(super::state::ModalId),
+    /// Fired after `window::open` resolves for a detached modal — stores
+    /// the new window's id in `ui_state.windows` so `view(id)` can render
+    /// it and `SecondaryWindowClosed` can reattach when the user dismisses
+    /// the window.
+    DetachedModalOpened {
+        modal: super::state::ModalId,
+        id: iced::window::Id,
+    },
+    /// Pop a document tab into its own OS window (Altium-style tab
+    /// undocking). Fires from the tab bar's ↗ button or when a tab drag
+    /// crosses the main window edge.
+    UndockTab(usize),
+    /// `iced::window::open` resolved for an undocked tab — records the
+    /// window id so the tab bar hides the tab while its window lives.
+    UndockedTabOpened {
+        path: std::path::PathBuf,
+        id: iced::window::Id,
+    },
+    /// Reattach an undocked tab to the main window's tab bar. Closing
+    /// the secondary window triggers this implicitly via
+    /// `SecondaryWindowClosed`; the in-window "Reattach" button emits it
+    /// directly.
+    ReattachTab(iced::window::Id),
+    /// Convert a floating in-app panel into its own OS window. Fires
+    /// when the floating panel's drag crosses the main window edge.
+    DetachFloatingPanel(usize),
+    /// `iced::window::open` resolved for a detached panel — records its
+    /// id + panel kind so `view(id)` can render the panel's content.
+    DetachedPanelOpened {
+        kind: crate::panels::PanelKind,
+        id: iced::window::Id,
+    },
+    /// User pressed on the borderless modal's header — start an OS-level
+    /// window drag for the window hosting this modal. Lets the user move
+    /// the detached modal even though `decorations: false` removed the
+    /// native title bar.
+    StartDetachedWindowDrag(super::state::ModalId),
     Noop,
 }
 

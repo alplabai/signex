@@ -3,7 +3,7 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_document_tab_message(&mut self, msg: TabMessage) {
+    pub(crate) fn handle_document_tab_message(&mut self, msg: TabMessage) -> Task<Message> {
         match msg {
             TabMessage::Select(idx) => {
                 if idx < self.document_state.tabs.len() && idx != self.document_state.active_tab {
@@ -11,6 +11,7 @@ impl Signex {
                     self.document_state.active_tab = idx;
                     self.sync_active_tab();
                 }
+                Task::none()
             }
             TabMessage::Close(idx) => {
                 if idx < self.document_state.tabs.len() {
@@ -18,10 +19,21 @@ impl Signex {
                         // Ask the user before discarding edits. Modal is
                         // rendered as an overlay by `view_close_tab_confirm`.
                         self.ui_state.close_tab_confirm = Some(idx);
-                        return;
+                        return Task::none();
                     }
                     self.close_tab_now(idx);
                 }
+                Task::none()
+            }
+            TabMessage::Undock(idx) => Task::done(Message::UndockTab(idx)),
+            TabMessage::StartDrag(idx, x, y) => {
+                // Seed last_mouse_pos as (x, y) = (0, 0) wasn't real;
+                // pull the live cursor from interaction_state so the
+                // next DragMove delivers a correct position check.
+                let (mx, my) = self.interaction_state.last_mouse_pos;
+                let _ = (x, y);
+                self.ui_state.tab_dragging = Some((idx, mx, my));
+                Task::none()
             }
         }
     }

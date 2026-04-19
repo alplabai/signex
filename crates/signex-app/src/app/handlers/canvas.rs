@@ -99,16 +99,101 @@ impl Signex {
         }
     }
 
+    /// Returns the tab index to undock when the user is dragging a
+    /// document tab and the cursor crosses the main window boundary.
+    pub(crate) fn check_tab_auto_detach(
+        &self,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) -> Option<usize> {
+        let (idx, _, _) = self.ui_state.tab_dragging?;
+        // Skip if this tab is already undocked (owned by another window).
+        let tab = self.document_state.tabs.get(idx)?;
+        if self.ui_state.windows.values().any(
+            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path, .. } if path == &tab.path),
+        ) {
+            return None;
+        }
+        let (ww, wh) = self.ui_state.window_size;
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past = cursor_x < -EDGE_THRESHOLD
+            || cursor_x > ww + EDGE_THRESHOLD
+            || cursor_y < -EDGE_THRESHOLD
+            || cursor_y > wh + EDGE_THRESHOLD;
+        if past { Some(idx) } else { None }
+    }
+
+    /// Scan the floating-panel list for one whose drag just crossed the
+    /// main window boundary. Returns the index into `dock.floating` so
+    /// the dispatcher can chain a `DetachFloatingPanel(idx)` task.
+    pub(crate) fn check_floating_panel_auto_detach(
+        &self,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) -> Option<usize> {
+        let (ww, wh) = self.ui_state.window_size;
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past =
+            cursor_x < -EDGE_THRESHOLD
+                || cursor_x > ww + EDGE_THRESHOLD
+                || cursor_y < -EDGE_THRESHOLD
+                || cursor_y > wh + EDGE_THRESHOLD;
+        if !past {
+            return None;
+        }
+        self.document_state
+            .dock
+            .floating
+            .iter()
+            .position(|fp| fp.dragging)
+    }
+
+    /// Altium-style auto-detach. While the user drags a modal's title
+    /// bar, watch the cursor; if it crosses the main window boundary by
+    /// more than `EDGE_THRESHOLD`, pop the modal out into its own OS
+    /// window. Returns the modal that should detach, if any, so the
+    /// dispatcher can chain a `DetachModal` task onto the DragMove path.
+    pub(crate) fn check_modal_auto_detach(
+        &self,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) -> Option<super::super::state::ModalId> {
+        let (modal, _, _) = self.ui_state.modal_dragging?;
+        // Skip if it's already detached — another path owns it now.
+        if self
+            .ui_state
+            .windows
+            .values()
+            .any(|k| matches!(k, super::super::state::WindowKind::DetachedModal(m) if *m == modal))
+        {
+            return None;
+        }
+        let (ww, wh) = self.ui_state.window_size;
+        // Dead zone so a brief accidental graze doesn't flip the modal out.
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past_left = cursor_x < -EDGE_THRESHOLD;
+        let past_right = cursor_x > ww + EDGE_THRESHOLD;
+        let past_top = cursor_y < -EDGE_THRESHOLD;
+        let past_bottom = cursor_y > wh + EDGE_THRESHOLD;
+        if past_left || past_right || past_top || past_bottom {
+            Some(modal)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn handle_layout_drag_finished(&mut self) {
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;
             self.interaction_state.drag_start_pos = None;
+            self.ui_state.tab_dragging = None;
             return;
         }
 
         self.document_state.dock.tab_drag = None;
         self.interaction_state.tab_drag_origin = None;
+        self.ui_state.tab_dragging = None;
         let (mx, my) = self.interaction_state.last_mouse_pos;
         let (ww, wh) = self.ui_state.window_size;
         let dock_zone = 120.0;
