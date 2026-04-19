@@ -11,7 +11,7 @@
 
 use iced::advanced::layout::{Limits, Node};
 use iced::advanced::widget::{self, Tree, Widget};
-use iced::advanced::{overlay, renderer, Clipboard, Layout, Shell};
+use iced::advanced::{Clipboard, Layout, Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
@@ -66,12 +66,7 @@ where
         }
     }
 
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &Limits,
-    ) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         // Child gets the full parent limits — no shrinkage like Pin does.
         let child = self
             .content
@@ -181,13 +176,9 @@ where
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
         let mut children = layout.children();
         let child_layout = children.next()?;
-        self.content.as_widget_mut().overlay(
-            tree,
-            child_layout,
-            renderer,
-            viewport,
-            translation,
-        )
+        self.content
+            .as_widget_mut()
+            .overlay(tree, child_layout, renderer, viewport, translation)
     }
 }
 

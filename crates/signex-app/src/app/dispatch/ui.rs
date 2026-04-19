@@ -38,10 +38,7 @@ impl Signex {
                 if let Some(modal) = modal_detach {
                     Task::batch([finish, Task::done(Message::DetachModal(modal))])
                 } else if let Some(idx) = panel_detach {
-                    Task::batch([
-                        finish,
-                        Task::done(Message::DetachFloatingPanel(idx)),
-                    ])
+                    Task::batch([finish, Task::done(Message::DetachFloatingPanel(idx))])
                 } else if let Some(idx) = tab_detach {
                     Task::batch([finish, Task::done(Message::UndockTab(idx))])
                 } else {

@@ -60,10 +60,8 @@ pub struct UiState {
     /// file path. Run ERC populates this for every sheet in the
     /// project; tab switches point `erc_violations` at the matching
     /// entry without rerunning the analysis.
-    pub erc_violations_by_path: std::collections::HashMap<
-        std::path::PathBuf,
-        Vec<signex_erc::Violation>,
-    >,
+    pub erc_violations_by_path:
+        std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -113,8 +111,7 @@ pub struct UiState {
     /// for that pair; missing entries fall back to the hard-coded
     /// baseline in `pin_matrix_view`. Persisted alongside the ERC
     /// severity map.
-    pub pin_matrix_overrides:
-        std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+    pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
     /// Symbols whose designator the user locked against reannotation.
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
@@ -130,8 +127,7 @@ pub struct UiState {
     pub pending_net_color: Option<signex_types::theme::Color>,
     /// Per-wire color overrides keyed by wire uuid. Populated by the
     /// net-color click; consulted when drawing wires. Not serialised.
-    pub wire_color_overrides:
-        std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Altium-style lasso in flight. `Some(points)` means the user
     /// started a lasso — each canvas click appends a vertex; a
     /// double-click or a click on the first vertex closes the polygon
@@ -142,9 +138,7 @@ pub struct UiState {
     /// popping one restores the previous state. This is separate from
     /// the engine's undo because net colours are render-only and
     /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<
-        std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    >,
+    pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
@@ -274,6 +268,12 @@ pub struct InteractionState {
     pub undo_stack: crate::undo::UndoStack,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// 3-click arc placement buffer. Holds the first two clicks
+    /// (start, mid); the third click commits as SchDrawing::Arc.
+    pub arc_points: Vec<signex_types::schematic::Point>,
+    /// Freehand polygon placement buffer. Accumulates clicks until
+    /// the user presses Enter / double-clicks / right-clicks.
+    pub polyline_points: Vec<signex_types::schematic::Point>,
     pub clipboard_wires: Vec<signex_types::schematic::Wire>,
     pub clipboard_buses: Vec<signex_types::schematic::Bus>,
     pub clipboard_labels: Vec<signex_types::schematic::Label>,

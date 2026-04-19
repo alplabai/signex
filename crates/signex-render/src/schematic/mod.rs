@@ -546,9 +546,7 @@ pub fn render_schematic(
             _ => 1.0,
         }
     };
-    let dim = |c: iced::Color, a: f32| -> iced::Color {
-        iced::Color { a: c.a * a, ..c }
-    };
+    let dim = |c: iced::Color, a: f32| -> iced::Color { iced::Color { a: c.a * a, ..c } };
 
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
@@ -572,12 +570,7 @@ pub fn render_schematic(
 
     // Z=4: Bus entries
     for be in &sheet.bus_entries {
-        wire::draw_bus_entry(
-            frame,
-            be,
-            transform,
-            dim(bus_color, alpha_for(&be.uuid)),
-        );
+        wire::draw_bus_entry(frame, be, transform, dim(bus_color, alpha_for(&be.uuid)));
     }
 
     // Z=5: Junctions — honour per-uuid colour overrides so a junction
@@ -587,12 +580,7 @@ pub fn render_schematic(
             .and_then(|o| o.get(&j.uuid))
             .map(to_iced)
             .unwrap_or(junction_color);
-        junction::draw_junction(
-            frame,
-            j,
-            transform,
-            dim(base, alpha_for(&j.uuid)),
-        );
+        junction::draw_junction(frame, j, transform, dim(base, alpha_for(&j.uuid)));
     }
 
     // Z=6: No-connect markers
@@ -637,15 +625,7 @@ pub fn render_schematic(
         }
 
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-            symbol::draw_symbol(
-                frame,
-                sym,
-                lib_sym,
-                transform,
-                body_c,
-                body_fill_c,
-                pin_c,
-            );
+            symbol::draw_symbol(frame, sym, lib_sym, transform, body_c, body_fill_c, pin_c);
 
             // Pins
             pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_c);
@@ -672,15 +652,7 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(
-                    frame,
-                    &sym.value,
-                    val_text,
-                    sym,
-                    dpos,
-                    transform,
-                    value_c,
-                );
+                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_c);
             }
         } else if sym.is_power {
             draw_builtin_power(frame, sym, transform, power_c, power_c);

@@ -372,4 +372,3 @@ impl Signex {
         self.document_state.panel_ctx.paper_size = document_summary.7;
     }
 }
-

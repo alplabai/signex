@@ -217,9 +217,7 @@ impl DockArea {
                             PanelPosition::Right => &mut self.right,
                             PanelPosition::Bottom => &mut self.bottom,
                         };
-                        if from < region.panels.len()
-                            && idx < region.panels.len()
-                        {
+                        if from < region.panels.len() && idx < region.panels.len() {
                             let panel = region.panels.remove(from);
                             region.panels.insert(idx, panel);
                             region.active = idx;

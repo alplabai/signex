@@ -60,7 +60,7 @@ impl Signex {
                 } else {
                     "Text Frame"
                 };
-                crate::diagnostics::log_info(&format!(
+                crate::diagnostics::log_info(format!(
                     "{default_text}: bounded text box (text_box) lands in v0.7 — placing a plain text note for now",
                 ));
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
@@ -96,14 +96,15 @@ impl Signex {
             // dispatched with SelectConnected.
             ActiveBarAction::SelectConnection => {
                 use signex_types::schematic::SelectedKind;
-                let has_net_seed = self
-                    .interaction_state
-                    .canvas
-                    .selected
-                    .iter()
-                    .any(|i| matches!(i.kind,
-                        SelectedKind::Wire | SelectedKind::Bus
-                        | SelectedKind::Junction | SelectedKind::Label));
+                let has_net_seed = self.interaction_state.canvas.selected.iter().any(|i| {
+                    matches!(
+                        i.kind,
+                        SelectedKind::Wire
+                            | SelectedKind::Bus
+                            | SelectedKind::Junction
+                            | SelectedKind::Label
+                    )
+                });
                 if has_net_seed {
                     if let (Some(snapshot), Some(seed)) = (
                         self.active_render_snapshot(),
@@ -154,19 +155,16 @@ impl Signex {
             // each click and commits on double-click / first-vertex
             // click. Escape / right-click cancels.
             ActiveBarAction::LassoSelect => {
-                // Don't fire Tool::Select here — that calls
-                // clear_transient_schematic_tool_state which would
-                // wipe `lasso_polygon` right after we arm it. Clear
-                // any ghost previews from a previous tool inline,
-                // set Select as the current tool, arm the lasso.
+                // Cleanly drop every prior tool's armed state (wire
+                // drawing, pending power / port / net-colour, ghost
+                // previews, editing_text, pre_placement) before
+                // arming the lasso, THEN set lasso_polygon. The
+                // helper also nulls lasso_polygon, so ordering
+                // matters — arm after clearing.
+                self.clear_transient_schematic_tool_state();
                 self.interaction_state.current_tool = Tool::Select;
-                self.clear_ghost_previews();
-                self.interaction_state.canvas.tool_preview = None;
-                self.interaction_state.pending_power = None;
-                self.interaction_state.pending_port = None;
                 self.ui_state.lasso_polygon = Some(Vec::new());
-                self.interaction_state.canvas.lasso_polygon = Some(Vec::new());
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.sync_lasso_polygon_to_canvas();
                 crate::diagnostics::log_info(
                     "Lasso: click to anchor, move freely, click again to close (Enter / Esc shortcuts)",
                 );
@@ -185,11 +183,9 @@ impl Signex {
             // "Drag" / "Drag Selection" — arm the next canvas click so it
             // begins a move-drag whether or not it lands on an already-
             // selected item. Requires a prior selection.
-            ActiveBarAction::Drag | ActiveBarAction::DragSelection => {
-                self.update(Message::Selection(
-                    selection_request::SelectionRequest::ArmDrag,
-                ))
-            }
+            ActiveBarAction::Drag | ActiveBarAction::DragSelection => self.update(
+                Message::Selection(selection_request::SelectionRequest::ArmDrag),
+            ),
             // Z-order: reorder the selection within its type vector.
             // Schematic render order = file order, so Bring-To-Front pushes
             // items to the end of their Vec; Send-To-Back moves them to the

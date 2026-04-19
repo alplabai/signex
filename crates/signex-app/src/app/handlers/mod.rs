@@ -1,11 +1,11 @@
 pub mod active_bar;
 pub mod canvas;
-pub mod erc;
 pub mod clipboard_workflows;
 pub mod dock;
 pub mod document_files;
 pub mod document_tabs;
 pub mod editing_commands;
+pub mod erc;
 pub mod find_replace;
 pub mod menu;
 pub mod preferences;

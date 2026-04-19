@@ -146,9 +146,10 @@ fn point_in_polygon(px: f64, py: f64, poly: &[(f64, f64)]) -> bool {
     for i in 0..n {
         let (xi, yi) = poly[i];
         let (xj, yj) = poly[j];
-        if ((yi > py) != (yj > py))
-            && (px < (xj - xi) * (py - yi) / (yj - yi + 1e-12) + xi)
-        {
+        // Even-odd ray cast. The `(yi > py) != (yj > py)` guard
+        // guarantees `py` lies strictly between yi and yj, so
+        // `yj - yi != 0` — no epsilon needed.
+        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
             inside = !inside;
         }
         j = i;
@@ -159,12 +160,7 @@ fn point_in_polygon(px: f64, py: f64, poly: &[(f64, f64)]) -> bool {
 /// Segment-segment intersection test (ignoring endpoint-touch since
 /// lasso polygons don't usually touch wire endpoints exactly — if
 /// they do, the containment test covers it).
-fn segments_intersect(
-    p1: (f64, f64),
-    p2: (f64, f64),
-    p3: (f64, f64),
-    p4: (f64, f64),
-) -> bool {
+fn segments_intersect(p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), p4: (f64, f64)) -> bool {
     let d = (p4.0 - p3.0) * (p1.1 - p3.1) - (p4.1 - p3.1) * (p1.0 - p3.0);
     let e = (p2.0 - p1.0) * (p1.1 - p3.1) - (p2.1 - p1.1) * (p1.0 - p3.0);
     let f = (p4.0 - p3.0) * (p2.1 - p1.1) - (p4.1 - p3.1) * (p2.0 - p1.0);
@@ -242,11 +238,41 @@ pub fn hit_test_polygon(
             result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
         }
     }
+    // Child sheets have real extent — a lasso that clips through
+    // a sheet symbol should pick it up even when the center is
+    // outside. Test every corner + every edge against the lasso.
     for cs in &sheet.child_sheets {
-        let cx = cs.position.x + cs.size.0 / 2.0;
-        let cy = cs.position.y + cs.size.1 / 2.0;
-        if point_in_polygon(cx, cy, polygon) {
+        let x0 = cs.position.x;
+        let y0 = cs.position.y;
+        let x1 = x0 + cs.size.0;
+        let y1 = y0 + cs.size.1;
+        let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+        let any_corner_in = corners
+            .iter()
+            .any(|&(x, y)| point_in_polygon(x, y, polygon));
+        let any_edge_crosses = corners
+            .iter()
+            .zip(corners.iter().cycle().skip(1))
+            .any(|(&a, &b)| segment_crosses_polygon(a, b));
+        if any_corner_in || any_edge_crosses {
             result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
+        }
+    }
+    // Symbol ref/val fields — lasso independently picks detached
+    // fields dragged away from their body so rename workflows
+    // aren't stranded when the field has moved.
+    for sym in &sheet.symbols {
+        if let Some(ref tp) = sym.ref_text
+            && !tp.hidden
+            && point_in_polygon(tp.position.x, tp.position.y, polygon)
+        {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
+        }
+        if let Some(ref tp) = sym.val_text
+            && !tp.hidden
+            && point_in_polygon(tp.position.x, tp.position.y, polygon)
+        {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
         }
     }
     result
@@ -372,7 +398,6 @@ pub fn hit_test_rect_mode(
     }
     result
 }
-
 
 fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {
     point_to_segment_dist(wx, wy, w.start.x, w.start.y, w.end.x, w.end.y) < HIT_TOLERANCE
