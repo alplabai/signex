@@ -118,22 +118,68 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SelectionMode {
     /// Only items fully contained within the rectangle are selected
-    /// (Altium's Inside / default left-to-right drag).
+    /// (Altium's "Window" / default left-to-right drag).
     #[default]
     Inside,
-    /// Only items fully OUTSIDE the rectangle are selected. Useful for
-    /// "select everything but this region" deletes.
-    Outside,
-    /// Wires/buses that *cross* the rectangle boundary (one endpoint
-    /// inside, one outside) are selected alongside fully-contained
-    /// items. Altium's right-to-left "touching" drag.
-    TouchingLine,
+    /// Any item that the rectangle touches is selected — point items
+    /// at least partially inside the box and segments (wires/buses)
+    /// that cross the box boundary. Matches Altium's "Crossing" /
+    /// right-to-left drag semantics.
+    Touching,
 }
 
 /// Find all elements within a rectangular region (rubber-band
 /// selection). Uses `SelectionMode::Inside` for backwards compatibility.
 pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
     hit_test_rect_mode(sheet, rect, SelectionMode::Inside)
+}
+
+/// Returns true if a segment from `(x1,y1)` to `(x2,y2)` overlaps
+/// the rectangle at all — either endpoint inside, or the segment
+/// crossing any of the four edges.
+fn seg_overlaps_rect(rect: &Aabb, x1: f64, y1: f64, x2: f64, y2: f64) -> bool {
+    if rect.contains(x1, y1) || rect.contains(x2, y2) {
+        return true;
+    }
+    // Liang-Barsky line-clipping: solve the parametric line against
+    // each rect edge; segment crosses when the accepted t-range is
+    // non-empty within [0,1].
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let p = [-dx, dx, -dy, dy];
+    let q = [
+        x1 - rect.min_x,
+        rect.max_x - x1,
+        y1 - rect.min_y,
+        rect.max_y - y1,
+    ];
+    let mut u1 = 0.0_f64;
+    let mut u2 = 1.0_f64;
+    for i in 0..4 {
+        if p[i] == 0.0 {
+            if q[i] < 0.0 {
+                return false;
+            }
+        } else {
+            let t = q[i] / p[i];
+            if p[i] < 0.0 {
+                if t > u2 {
+                    return false;
+                }
+                if t > u1 {
+                    u1 = t;
+                }
+            } else {
+                if t < u1 {
+                    return false;
+                }
+                if t < u2 {
+                    u2 = t;
+                }
+            }
+        }
+    }
+    u1 <= u2
 }
 
 /// Mode-aware rubber-band selection.
@@ -143,20 +189,16 @@ pub fn hit_test_rect_mode(
     mode: SelectionMode,
 ) -> Vec<SelectedItem> {
     let pt_match = |inside: bool| -> bool {
-        match mode {
-            SelectionMode::Inside | SelectionMode::TouchingLine => inside,
-            SelectionMode::Outside => !inside,
-        }
+        // Both modes treat point items the same — inside the box.
+        // `Touching` differs from `Inside` only for segments, where
+        // crossing the boundary counts.
+        let _ = mode;
+        inside
     };
-    let seg_match = |a_in: bool, b_in: bool| -> bool {
+    let seg_match = |a_in: bool, b_in: bool, crosses: bool| -> bool {
         match mode {
             SelectionMode::Inside => a_in && b_in,
-            SelectionMode::Outside => !a_in && !b_in,
-            // Any endpoint touching the rectangle counts. A segment that
-            // passes fully across without touching corners is rare on a
-            // grid-snapped schematic, so we don't compute line-vs-rect
-            // intersection here.
-            SelectionMode::TouchingLine => a_in || b_in,
+            SelectionMode::Touching => a_in || b_in || crosses,
         }
     };
     let mut result = Vec::new();
@@ -168,14 +210,18 @@ pub fn hit_test_rect_mode(
     for w in &sheet.wires {
         let a = rect.contains(w.start.x, w.start.y);
         let b = rect.contains(w.end.x, w.end.y);
-        if seg_match(a, b) {
+        let crosses = matches!(mode, SelectionMode::Touching)
+            && seg_overlaps_rect(rect, w.start.x, w.start.y, w.end.x, w.end.y);
+        if seg_match(a, b, crosses) {
             result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
         }
     }
     for bus in &sheet.buses {
         let a = rect.contains(bus.start.x, bus.start.y);
         let b = rect.contains(bus.end.x, bus.end.y);
-        if seg_match(a, b) {
+        let crosses = matches!(mode, SelectionMode::Touching)
+            && seg_overlaps_rect(rect, bus.start.x, bus.start.y, bus.end.x, bus.end.y);
+        if seg_match(a, b, crosses) {
             result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
         }
     }

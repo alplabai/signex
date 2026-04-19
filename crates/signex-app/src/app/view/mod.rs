@@ -741,6 +741,264 @@ impl Signex {
         .into()
     }
 
+    /// Custom net-colour picker modal. Grid of quick-pick swatches on
+    /// the left, precise R / G / B / hex on the right, live preview
+    /// and OK / Cancel at the bottom. Ships with a 24-color palette
+    /// matching the common Altium net-colour presets plus a handful of
+    /// EDA-specific diagnostic colours.
+    fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
+        use super::contracts::Channel;
+        use iced::widget::{button, column, container, row, text, text_input, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let draft = self.ui_state.net_color_custom.draft;
+
+        // Expanded 48-swatch palette arranged as 6 cols × 8 rows so
+        // the Quick Pick grid fills the modal's left column. First
+        // three rows are "standard" hues, next three rows are shade
+        // variants, and the last two rows hold greys / light pastels /
+        // schematic-specific high-contrast hues.
+        const PALETTE: &[(u8, u8, u8)] = &[
+            // Row 1 — primaries (bright)
+            (0xEF, 0x44, 0x44), // Red
+            (0xF9, 0x73, 0x16), // Orange
+            (0xEA, 0xB3, 0x08), // Yellow
+            (0x22, 0xC5, 0x5E), // Green
+            (0x06, 0xB6, 0xD4), // Cyan
+            (0x3B, 0x82, 0xF6), // Blue
+            // Row 2 — pinks + magentas + purples
+            (0xF4, 0x72, 0xB6), // Pink 400
+            (0xE1, 0x14, 0x8C), // Hot Pink
+            (0xD9, 0x46, 0xEF), // Fuchsia
+            (0xA8, 0x55, 0xF7), // Purple
+            (0x8B, 0x5C, 0xF6), // Violet
+            (0x6D, 0x28, 0xD9), // Indigo
+            // Row 3 — greens + teals + lime
+            (0x84, 0xCC, 0x16), // Lime
+            (0x10, 0xB9, 0x81), // Emerald
+            (0x14, 0xB8, 0xA6), // Teal
+            (0x0E, 0xA5, 0xE9), // Sky
+            (0x60, 0xA5, 0xFA), // Light Blue
+            (0x2D, 0xD4, 0xBF), // Turquoise
+            // Row 4 — dark variants
+            (0x9F, 0x12, 0x39), // Wine
+            (0xB4, 0x53, 0x09), // Rust
+            (0xA1, 0x6A, 0x3C), // Brown
+            (0x16, 0xA3, 0x4A), // Dark Green
+            (0x15, 0x5E, 0x75), // Deep Cyan
+            (0x1E, 0x40, 0xAF), // Deep Blue
+            // Row 5 — extra dark / night hues
+            (0x7F, 0x1D, 0x1D), // Deep Red
+            (0x78, 0x35, 0x0F), // Auburn
+            (0x5B, 0x21, 0xB6), // Royal Purple
+            (0x3B, 0x0A, 0x45), // Eggplant
+            (0x1E, 0x3A, 0x8A), // Navy
+            (0x0F, 0x17, 0x2A), // Midnight
+            // Row 6 — pastels
+            (0xFE, 0xCA, 0xCA), // Pastel Red
+            (0xFE, 0xD7, 0xAA), // Pastel Orange
+            (0xFE, 0xF0, 0x8A), // Pastel Yellow
+            (0xBB, 0xF7, 0xD0), // Pastel Green
+            (0xA5, 0xF3, 0xFC), // Pastel Cyan
+            (0xBF, 0xDB, 0xFE), // Pastel Blue
+            // Row 7 — muted + desaturated
+            (0x64, 0x74, 0x8B), // Slate
+            (0x78, 0x71, 0x6C), // Stone
+            (0x4B, 0x55, 0x63), // Dark Slate
+            (0x9C, 0xA3, 0xAF), // Gray
+            (0xD1, 0xD5, 0xDB), // Light Gray
+            (0xFF, 0xFF, 0xFF), // White
+            // Row 8 — schematic diagnostic colors
+            (0xFF, 0x00, 0xFF), // Bright Magenta
+            (0x00, 0xFF, 0xFF), // Bright Cyan
+            (0xFF, 0xFF, 0x00), // Bright Yellow
+            (0x00, 0xFF, 0x00), // Bright Green
+            (0xFF, 0xA5, 0x00), // Bright Orange
+            (0x1F, 0x23, 0x2A), // Ink
+        ];
+
+        let swatch_btn = |r: u8, g: u8, b: u8| -> Element<'_, Message> {
+            let col = iced::Color::from_rgb8(r, g, b);
+            let is_current = (draft.r - col.r).abs() < 0.01
+                && (draft.g - col.g).abs() < 0.01
+                && (draft.b - col.b).abs() < 0.01;
+            let sw = iced::Color::from_rgb8(r, g, b);
+            let border_w = if is_current { 2.0 } else { 1.0 };
+            let border_col = if is_current {
+                iced::Color::WHITE
+            } else {
+                iced::Color::from_rgba(0.2, 0.2, 0.22, 0.9)
+            };
+            button(
+                container(Space::new().width(24).height(20))
+                    .style(move |_: &iced::Theme| container::Style {
+                        background: Some(iced::Background::Color(sw)),
+                        border: iced::Border {
+                            width: border_w,
+                            radius: 3.0.into(),
+                            color: border_col,
+                        },
+                        ..container::Style::default()
+                    }),
+            )
+            .padding(0)
+            .on_press(Message::NetColorCustomDraft(col))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                border: iced::Border::default(),
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
+
+        // Build the 6 × 4 palette grid row by row.
+        let mut palette_col = column![].spacing(6);
+        for chunk in PALETTE.chunks(6) {
+            let mut r_el = row![].spacing(6);
+            for (r, g, b) in chunk {
+                r_el = r_el.push(swatch_btn(*r, *g, *b));
+            }
+            palette_col = palette_col.push(r_el);
+        }
+
+        // RGB inputs — parse as u8, clamp on submit. Uses the
+        // `draft` colour as the current value so swatch clicks and
+        // text edits stay in sync.
+        let channel_row = |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
+            let v255 = (value * 255.0).round() as i32;
+            row![
+                text(label).size(11).color(text_muted).width(iced::Length::Fixed(16.0)),
+                text_input("0", &v255.to_string())
+                    .size(11)
+                    .padding([3, 8])
+                    .width(iced::Length::Fixed(70.0))
+                    .on_input(move |s| Message::NetColorCustomChannel(chan, s)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .spacing(6)
+            .into()
+        };
+
+        let preview_hex = format!(
+            "#{:02X}{:02X}{:02X}",
+            (draft.r * 255.0).round() as u8,
+            (draft.g * 255.0).round() as u8,
+            (draft.b * 255.0).round() as u8,
+        );
+        let preview_box = container(Space::new().width(iced::Length::Fill).height(32))
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(iced::Background::Color(draft)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..container::Style::default()
+            });
+
+        let rgb_col = column![
+            text("Custom RGB").size(11).color(text_c),
+            Space::new().height(6),
+            channel_row("R", draft.r, Channel::R),
+            channel_row("G", draft.g, Channel::G),
+            channel_row("B", draft.b, Channel::B),
+            Space::new().height(10),
+            preview_box,
+            Space::new().height(4),
+            text(preview_hex).size(10).color(text_muted),
+        ]
+        .spacing(4)
+        .width(iced::Length::Fixed(150.0));
+
+        let body = row![
+            column![
+                text("Quick Pick").size(11).color(text_c),
+                Space::new().height(6),
+                palette_col,
+            ]
+            .spacing(0)
+            .width(iced::Length::Fill),
+            Space::new().width(16),
+            rgb_col,
+        ];
+
+        let footer = row![
+            Space::new().width(iced::Length::Fill),
+            button(
+                container(text("Cancel").size(11).color(text_c)).padding([4, 14]),
+            )
+            .on_press(Message::NetColorCustomShow(false))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
+            }),
+            Space::new().width(8),
+            button(
+                container(text("Use Color").size(11).color(iced::Color::WHITE))
+                    .padding([4, 14]),
+            )
+            .on_press(Message::NetColorCustomSubmit(draft))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.00, 0.47, 0.84,
+                ))),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..iced::Border::default()
+                },
+                text_color: iced::Color::WHITE,
+                ..iced::widget::button::Style::default()
+            }),
+        ]
+        .align_y(iced::Alignment::Center);
+
+        let card = container(
+            column![
+                container(
+                    row![
+                        text("Pick Net Color").size(13).color(text_c),
+                        Space::new().width(iced::Length::Fill),
+                        self.view_close_x(Message::NetColorCustomShow(false)),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14])
+                .style(crate::styles::toolbar_strip(&self.document_state.panel_ctx.tokens)),
+                container(body).padding([14, 14]),
+                container(footer).padding([10, 14]),
+            ]
+            .width(iced::Length::Fixed(430.0)),
+        )
+        .style(crate::styles::context_menu(
+            &self.document_state.panel_ctx.tokens,
+        ));
+
+        // Anchor below the Active Bar Net Color button (rightmost icon).
+        let (ww, _wh) = self.ui_state.window_size;
+        let card_w = 430.0;
+        let x = ((ww - card_w) * 0.5).max(0.0);
+        let y = crate::menu_bar::MENU_BAR_HEIGHT
+            + if self.document_state.tabs.is_empty() { 0.0 } else { 28.0 }
+            + 80.0;
+        // Wrap in a mouse_area with on_press(Noop) so clicks inside the
+        // card are captured and DON'T fall through to the dismiss
+        // layer sitting beneath. Without this, clicking on the card's
+        // background / between swatches closes the picker.
+        let card_capturing = iced::widget::mouse_area(card).on_press(Message::Noop);
+        super::view::translate::Translate::new(card_capturing, (x, y)).into()
+    }
+
     fn view_detached_modal(
         &self,
         modal: super::state::ModalId,
@@ -890,7 +1148,8 @@ impl Signex {
             || ui.annotate_reset_confirm
             || ui.erc_dialog_open
             || !document.dock.floating.is_empty()
-            || dragging_tab;
+            || dragging_tab
+            || ui.net_color_custom.show;
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -1055,6 +1314,14 @@ impl Signex {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
+
+        // Custom net-colour picker. Bespoke modal (not the iced_aw
+        // ColorPicker) because the user needs a quick-pick palette +
+        // precise RGB inputs side-by-side.
+        if ui.net_color_custom.show {
+            layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
+            layers.push(self.view_net_color_custom_picker());
+        }
 
         // Altium-style pause overlay: big centered "Placement Paused" card
         // with a Resume button. Clicking Resume clears `pre_placement`,

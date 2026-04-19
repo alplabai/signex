@@ -24,12 +24,25 @@ impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
 
     pub fn new() -> (Self, Task<Message>) {
-        let mut dock = DockArea::new();
-        dock.add_panel(PanelPosition::Left, PanelKind::Projects);
-        dock.add_panel(PanelPosition::Left, PanelKind::Components);
-        dock.add_panel(PanelPosition::Right, PanelKind::Properties);
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Messages);
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
+        // Default panel layout — restored from disk if a previous
+        // session persisted one, otherwise seeded with the Altium-ish
+        // defaults: Projects + Components + Signal on the left,
+        // Properties + Messages on the right, nothing on the bottom
+        // (user's request — bottom is reserved for future log tails).
+        let mut dock = match crate::fonts::read_dock_layout() {
+            Some(saved) => saved,
+            None => {
+                let mut d = DockArea::new();
+                d.add_panel(PanelPosition::Left, PanelKind::Projects);
+                d.add_panel(PanelPosition::Left, PanelKind::Components);
+                d.add_panel(PanelPosition::Left, PanelKind::Signal);
+                d.add_panel(PanelPosition::Right, PanelKind::Properties);
+                d.add_panel(PanelPosition::Right, PanelKind::Messages);
+                d
+            }
+        };
+        // Silence unused-mut when read_dock_layout returns Some.
+        let _ = &mut dock;
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -76,6 +89,7 @@ impl Signex {
                 custom_theme: None,
                 close_tab_confirm: None,
                 erc_violations: Vec::new(),
+                erc_violations_by_path: std::collections::HashMap::new(),
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
@@ -99,6 +113,7 @@ impl Signex {
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
                 net_color_undo: Vec::new(),
+                net_color_custom: crate::app::state::NetColorCustomState::default(),
             },
             document_state: DocumentState {
                 dock,
@@ -480,9 +495,11 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                     iced::mouse::Button::Left,
                 )) => Message::ModalDragEnd,
-                iced::Event::Window(iced::window::Event::Resized(size)) => {
-                    Message::WindowResized(size.width, size.height)
-                }
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
                 _ => Message::Noop,
             })
         } else if drag_active {
@@ -496,9 +513,11 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
-                iced::Event::Window(iced::window::Event::Resized(size)) => {
-                    Message::WindowResized(size.width, size.height)
-                }
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
                 _ => Message::Noop,
             })
         } else {
@@ -513,16 +532,31 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
-                iced::Event::Window(iced::window::Event::Resized(size)) => {
-                    Message::WindowResized(size.width, size.height)
-                }
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
                 _ => Message::Noop,
             })
         };
         // Window-close events from winit: routed so Phase 2/3 can drop
         // detached-modal / undocked-tab entries from ui_state.windows.
         let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
+        // Window-resize subscription. `iced::event::listen()`'s
+        // Window::Resized event doesn't fire on the very first frame —
+        // subscribing to `window::resize_events()` directly gets the
+        // initial physical size so dropdowns position correctly without
+        // a manual resize.
+        // Fire a WindowResizedFor for every OS resize event, carrying
+        // the window id so the dispatcher can ignore resizes of
+        // detached modal / undocked-tab windows. A plain WindowResized
+        // without the id would clobber `ui_state.window_size` with
+        // e.g. the 420x240 size of the Move dialog, which then shifts
+        // the Active-Bar dropdowns on the main window.
+        let window_resize = iced::window::resize_events()
+            .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
 
-        Subscription::batch([kbd, mouse_sub, window_close])
+        Subscription::batch([kbd, mouse_sub, window_close, window_resize])
     }
 }

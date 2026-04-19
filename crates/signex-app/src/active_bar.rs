@@ -299,6 +299,8 @@ pub enum ActiveBarAction {
     NetColorFuchsia,
     NetColorYellow,
     NetColorDarkGreen,
+    /// Open the custom-colour picker modal for net-colour arming.
+    NetColorCustom,
     ClearNetColor,
     ClearAllNetColors,
     // Component
@@ -1269,6 +1271,13 @@ pub fn view_dropdown(
                     "Dark Green",
                     Color::from_rgb(0.13, 0.55, 0.13),
                     ActiveBarAction::NetColorDarkGreen,
+                ),
+                dd_sep(ac.sep),
+                dd_item(
+                    "Custom Color...",
+                    ActiveBarAction::NetColorCustom,
+                    ac.text,
+                    ac.hover,
                 ),
                 dd_sep(ac.sep),
                 dd_item(

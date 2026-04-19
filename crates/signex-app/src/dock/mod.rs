@@ -403,16 +403,36 @@ impl DockArea {
             .style(button::text)
             .on_press(DockMessage::ToggleCollapse(position));
 
-        // Header: [tabs (shrink)] [spacer (fill)] [buttons (shrink)]
-        let header = row![
-            tab_row,
+        // Title of the currently active panel — drawn in the top bar
+        // so the user can see the panel name without scanning the tab
+        // row.
+        let active_title = region
+            .panels
+            .get(region.active)
+            .map(|p| p.label().to_string())
+            .unwrap_or_default();
+        let title_bar = row![
+            container(
+                text(active_title)
+                    .size(11)
+                    .color(styles::ti(ctx.tokens.text)),
+            )
+            .padding([5, 10]),
             Space::new().width(Length::Fill),
             collapse_btn,
             close_btn,
         ]
         .spacing(0)
-        .align_y(iced::Alignment::End)
+        .align_y(iced::Alignment::Center)
         .width(Length::Fill);
+
+        // Bottom tab strip — just the tab buttons + overflow arrows.
+        // Collapse / close moved up to the title bar so they're always
+        // visible alongside the active panel name.
+        let tab_strip = row![tab_row, Space::new().width(Length::Fill),]
+            .spacing(0)
+            .align_y(iced::Alignment::End)
+            .width(Length::Fill);
 
         // Panel content
         let content: Element<'_, DockMessage> =
@@ -422,8 +442,10 @@ impl DockArea {
                 text("").into()
             };
 
+        // Altium parity: title + collapse/close on top, tabs on the
+        // bottom. Content grows between them.
         column![
-            container(header)
+            container(title_bar)
                 .width(Length::Fill)
                 .padding([0, 4])
                 .style(styles::tab_bar_strip(&ctx.tokens)),
@@ -431,6 +453,10 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),
+            container(tab_strip)
+                .width(Length::Fill)
+                .padding([0, 4])
+                .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
         .into()
     }
