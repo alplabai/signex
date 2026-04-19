@@ -285,8 +285,7 @@ impl Signex {
         commit_to_active_tab: bool,
         refresh_panel_ctx: bool,
     ) {
-        if let Some(mut schematic) = schematic {
-            normalize_font_sizes(&mut schematic);
+        if let Some(schematic) = schematic {
             self.sync_engine_from_schematic(Some(schematic));
         }
         if self.document_state.engine.is_none() {
@@ -374,33 +373,3 @@ impl Signex {
     }
 }
 
-/// Bump font sizes that are at KiCad's default (0 or 1.27 mm) up to Signex's
-/// Altium-style 10 pt (`SCHEMATIC_TEXT_MM`). Keeps user-set sizes intact.
-/// Applied once on load so the Properties panel shows the effective size
-/// rather than the stored default.
-fn normalize_font_sizes(sheet: &mut SchematicSheet) {
-    let default_mm = signex_render::SCHEMATIC_TEXT_MM;
-    let is_default = |f: f64| f <= 0.0 || (f - 1.27).abs() < 0.01;
-    for l in sheet.labels.iter_mut() {
-        if is_default(l.font_size) {
-            l.font_size = default_mm;
-        }
-    }
-    for tn in sheet.text_notes.iter_mut() {
-        if is_default(tn.font_size) {
-            tn.font_size = default_mm;
-        }
-    }
-    for sym in sheet.symbols.iter_mut() {
-        if let Some(tp) = sym.ref_text.as_mut()
-            && is_default(tp.font_size)
-        {
-            tp.font_size = default_mm;
-        }
-        if let Some(tp) = sym.val_text.as_mut()
-            && is_default(tp.font_size)
-        {
-            tp.font_size = default_mm;
-        }
-    }
-}
