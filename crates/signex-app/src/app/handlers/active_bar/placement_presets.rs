@@ -93,14 +93,20 @@ impl Signex {
             | ActiveBarAction::PlaceGraphic => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
-            // Arcs / ellipses fall back to the circle tool.
-            ActiveBarAction::DrawArc
-            | ActiveBarAction::DrawEllipticalArc
-            | ActiveBarAction::DrawEllipse => {
+            // Arc — dedicated 3-click tool. Elliptical / ellipse still
+            // fall back to Circle until v1.2 curves land.
+            ActiveBarAction::DrawArc => {
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
+            }
+            ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
             }
-            // Polygon / bezier — multi-click line approximation.
-            ActiveBarAction::DrawPolygon | ActiveBarAction::DrawBezier => {
+            // Polygon — click-by-click freeform. Bezier still falls back
+            // to Line until v1.2 curves.
+            ActiveBarAction::DrawPolygon => {
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
+            }
+            ActiveBarAction::DrawBezier => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
             }
             // Harness + signal integrity directives — not yet implemented.
@@ -119,17 +125,16 @@ impl Signex {
                 // Parameter Manager (Design menu).
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
-                self.interaction_state.canvas.ghost_label =
-                    Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "PARAM=VALUE".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: 1.8,
-                        justify: signex_types::schematic::HAlign::Left,
-                    });
+                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                    uuid: uuid::Uuid::new_v4(),
+                    text: "PARAM=VALUE".to_string(),
+                    position: signex_types::schematic::Point::new(0.0, 0.0),
+                    rotation: 0.0,
+                    label_type: signex_types::schematic::LabelType::Net,
+                    shape: String::new(),
+                    font_size: 1.8,
+                    justify: signex_types::schematic::HAlign::Left,
+                });
             }
             ActiveBarAction::PlaceDiffPair => {
                 // DiffPair directive — attaches a differential-pair rule.
@@ -151,8 +156,7 @@ impl Signex {
                 // Blanket / Compile Mask — rectangular rule areas.
                 // Placement is Tool::Rectangle for v0.7; rule/mask
                 // semantics are a v1.1 (Advanced Schematic) item.
-                let _ =
-                    self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
@@ -176,20 +180,16 @@ impl Signex {
                     ActiveBarAction::NetColorDarkGreen => (0x16, 0xA3, 0x4A),
                     _ => (0xFF, 0xFF, 0xFF),
                 };
-                self.ui_state.pending_net_color =
-                    Some(signex_types::theme::Color {
-                        r: c.0,
-                        g: c.1,
-                        b: c.2,
-                        a: 255,
-                    });
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
+                    r: c.0,
+                    g: c.1,
+                    b: c.2,
+                    a: 255,
+                });
                 // Sync to canvas so mouse_interaction can show a pen
                 // cursor while armed.
-                self.interaction_state.canvas.pending_net_color =
-                    self.ui_state.pending_net_color;
-                crate::diagnostics::log_info(
-                    "Net-color armed — click a wire to flood its net",
-                );
+                self.interaction_state.canvas.pending_net_color = self.ui_state.pending_net_color;
+                crate::diagnostics::log_info("Net-color armed — click a wire to flood its net");
             }
             ActiveBarAction::NetColorCustom => {
                 // Open the custom colour picker modal. Pre-seed the
@@ -212,13 +212,14 @@ impl Signex {
                 // A distinct armed state: use a sentinel color (alpha 0)
                 // to mean "clear mode". Simpler than a second enum — we
                 // still read pending_net_color at click time.
-                self.ui_state.pending_net_color =
-                    Some(signex_types::theme::Color { r: 0, g: 0, b: 0, a: 0 });
-                self.interaction_state.canvas.pending_net_color =
-                    self.ui_state.pending_net_color;
-                crate::diagnostics::log_info(
-                    "Click a wire to clear its net-color override",
-                );
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                });
+                self.interaction_state.canvas.pending_net_color = self.ui_state.pending_net_color;
+                crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
                 if !self.ui_state.wire_color_overrides.is_empty() {

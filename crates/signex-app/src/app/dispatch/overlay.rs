@@ -29,21 +29,13 @@ impl Signex {
             Message::Annotate(mode) => self.handle_annotate(mode),
             Message::OpenAnnotateDialog => self.handle_open_annotate_dialog(),
             Message::CloseAnnotateDialog => self.handle_close_annotate_dialog(),
-            Message::AnnotateOrderChanged(order) => {
-                self.handle_annotate_order_changed(order)
-            }
+            Message::AnnotateOrderChanged(order) => self.handle_annotate_order_changed(order),
             Message::OpenErcDialog => self.handle_open_erc_dialog(),
             Message::CloseErcDialog => self.handle_close_erc_dialog(),
-            Message::ErcSeverityChanged(rule, sev) => {
-                self.handle_erc_severity_changed(rule, sev)
-            }
+            Message::ErcSeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
             Message::OpenAnnotateResetConfirm => self.handle_open_annotate_reset_confirm(),
-            Message::CloseAnnotateResetConfirm => {
-                self.handle_close_annotate_reset_confirm()
-            }
-            Message::ModalDragStart { modal, x, y } => {
-                self.handle_modal_drag_start(modal, x, y)
-            }
+            Message::CloseAnnotateResetConfirm => self.handle_close_annotate_reset_confirm(),
+            Message::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             Message::ModalDragEnd => self.handle_modal_drag_end(),
             Message::FocusAt {
                 world_x,

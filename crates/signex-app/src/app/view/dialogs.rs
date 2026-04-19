@@ -5,7 +5,7 @@
 //! - ERC — per-rule severity override grid + pin-connection matrix
 //! - Reset-Annotations confirm — simple Yes/No
 
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
@@ -38,10 +38,7 @@ impl Signex {
         self.view_annotate_dialog_body_inner(false)
     }
 
-    fn view_annotate_dialog_body_inner(
-        &self,
-        draggable: bool,
-    ) -> Element<'_, Message> {
+    fn view_annotate_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -141,14 +138,10 @@ impl Signex {
 
         let process_location = column![
             text("Process Location of").size(10).color(text_muted),
-            container(
-                text("Designator")
-                    .size(11)
-                    .color(text_c),
-            )
-            .padding([5, 10])
-            .width(Length::Fill)
-            .style(bordered_style(border_c)),
+            container(text("Designator").size(11).color(text_c),)
+                .padding([5, 10])
+                .width(Length::Fill)
+                .style(bordered_style(border_c)),
         ]
         .spacing(4);
 
@@ -167,8 +160,7 @@ impl Signex {
         // Symbol.fields HashMap so what the user sees matches what their
         // schematic actually carries — no hard-coded IntLib catalogue.
         let param_names: Vec<String> = {
-            let mut set: std::collections::BTreeSet<String> =
-                std::collections::BTreeSet::new();
+            let mut set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
             // Always include the three built-in fields so the list isn't
             // empty on a fresh schematic.
             set.insert("Reference".to_string());
@@ -274,7 +266,10 @@ impl Signex {
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(6)),
-                    text("All").size(11).color(row_color).width(Length::FillPortion(1)),
+                    text("All")
+                        .size(11)
+                        .color(row_color)
+                        .width(Length::FillPortion(1)),
                     text(format!("{idx}"))
                         .size(11)
                         .color(row_color)
@@ -286,7 +281,9 @@ impl Signex {
                     row![
                         check_pip(false, border_c),
                         Space::new().width(6),
-                        text(suffix_placeholder.to_string()).size(11).color(row_color),
+                        text(suffix_placeholder.to_string())
+                            .size(11)
+                            .color(row_color),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(2)),
@@ -297,10 +294,8 @@ impl Signex {
         }
         if self.document_state.tabs.is_empty() {
             sheet_rows = sheet_rows.push(
-                container(
-                    text("No schematic tab open.").size(11).color(text_muted),
-                )
-                .padding([6, 8]),
+                container(text("No schematic tab open.").size(11).color(text_muted))
+                    .padding([6, 8]),
             );
         }
 
@@ -360,10 +355,22 @@ impl Signex {
 
         // Column headers
         let list_headers = row![
-            text("Lock").size(10).color(text_muted).width(Length::Fixed(42.0)),
-            text("Current").size(10).color(text_muted).width(Length::FillPortion(2)),
-            text("Proposed").size(10).color(text_muted).width(Length::FillPortion(2)),
-            text("Location").size(10).color(text_muted).width(Length::FillPortion(3)),
+            text("Lock")
+                .size(10)
+                .color(text_muted)
+                .width(Length::Fixed(42.0)),
+            text("Current")
+                .size(10)
+                .color(text_muted)
+                .width(Length::FillPortion(2)),
+            text("Proposed")
+                .size(10)
+                .color(text_muted)
+                .width(Length::FillPortion(2)),
+            text("Location")
+                .size(10)
+                .color(text_muted)
+                .width(Length::FillPortion(3)),
         ]
         .padding([4, 8]);
 
@@ -454,10 +461,7 @@ impl Signex {
             .style(bordered_style(border_c));
 
         // Count only rows where proposed != current (actual changes).
-        let changes: usize = proposed
-            .iter()
-            .filter(|e| e.current != e.proposed)
-            .count();
+        let changes: usize = proposed.iter().filter(|e| e.current != e.proposed).count();
         let summary_text = if changes == 0 {
             format!(
                 "Annotation has nothing to do — all {total_symbols} symbols on '{current_sheet_name}' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch."
@@ -467,10 +471,7 @@ impl Signex {
                 "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. Click Accept Changes to apply, Update Changes List to recompute, or Reset All to clear every number first.",
             )
         };
-        let summary = container(
-            text(summary_text).size(10).color(text_muted),
-        )
-        .padding([4, 4]);
+        let summary = container(text(summary_text).size(10).color(text_muted)).padding([4, 4]);
 
         let right_col = column![
             right_title,
@@ -537,13 +538,12 @@ impl Signex {
 
         let body_row = row![
             container(left_col).padding([14, 14]),
-            container(
-                iced::widget::Space::new().width(1).height(Length::Fill),
-            )
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            }),
+            container(iced::widget::Space::new().width(1).height(Length::Fill),).style(
+                move |_: &Theme| container::Style {
+                    background: Some(Background::Color(border_c)),
+                    ..container::Style::default()
+                }
+            ),
             container(right_col).padding([14, 14]),
         ]
         .spacing(0);
@@ -551,13 +551,9 @@ impl Signex {
         let modal_w = 1100.0_f32;
         let modal_h = 760.0_f32;
         let dialog = container(
-            column![
-                header,
-                body_row,
-                container(footer).padding([10, 14]),
-            ]
-            .width(modal_w)
-            .height(modal_h),
+            column![header, body_row, container(footer).padding([10, 14]),]
+                .width(modal_w)
+                .height(modal_h),
         )
         .style(crate::styles::context_menu(tokens));
 
@@ -579,10 +575,7 @@ impl Signex {
         self.view_annotate_reset_confirm_body_inner(false)
     }
 
-    fn view_annotate_reset_confirm_body_inner(
-        &self,
-        draggable: bool,
-    ) -> Element<'_, Message> {
+    fn view_annotate_reset_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -592,11 +585,7 @@ impl Signex {
             row![
                 text("Reset All Annotations").size(14).color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::CloseAnnotateResetConfirm,
-                    text_muted,
-                    border_c,
-                ),
+                close_x_button(Message::CloseAnnotateResetConfirm, text_muted, border_c,),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -688,16 +677,16 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::state::ModalId::ErcDialog,
-            )
+            detached_header(header_content, super::super::state::ModalId::ErcDialog)
         };
 
         // Per-rule severity grid. 11 rules × 4 severities.
         let mut rule_rows = column![
             row![
-                text("Rule").size(10).color(text_muted).width(Length::FillPortion(3)),
+                text("Rule")
+                    .size(10)
+                    .color(text_muted)
+                    .width(Length::FillPortion(3)),
                 text("Severity")
                     .size(10)
                     .color(text_muted)
@@ -739,12 +728,8 @@ impl Signex {
         // lets both the full 11-rule list and the full 6×6 matrix
         // breathe without internal scrolling.
         let rules_pane = column![
-            text("Severity per rule")
-                .size(11)
-                .color(text_c),
-            text("Click a cell to change.")
-                .size(10)
-                .color(text_muted),
+            text("Severity per rule").size(11).color(text_c),
+            text("Click a cell to change.").size(10).color(text_muted),
             Space::new().height(8),
             container(rule_rows)
                 .padding(4)
@@ -762,9 +747,7 @@ impl Signex {
         .width(Length::FillPortion(3));
 
         let matrix_pane = column![
-            text("Pin Connection Matrix")
-                .size(11)
-                .color(text_c),
+            text("Pin Connection Matrix").size(11).color(text_c),
             text("Click a cell to cycle severity.")
                 .size(10)
                 .color(text_muted),
@@ -784,12 +767,8 @@ impl Signex {
         .spacing(2)
         .width(Length::FillPortion(2));
 
-        let body = row![
-            rules_pane,
-            Space::new().width(16),
-            matrix_pane,
-        ]
-        .align_y(iced::Alignment::Start);
+        let body =
+            row![rules_pane, Space::new().width(16), matrix_pane,].align_y(iced::Alignment::Start);
 
         let dialog = container(
             column![
@@ -996,35 +975,28 @@ fn detached_header<'a>(
 }
 
 /// Compact X close button for borderless modal headers.
-fn close_x_button(
-    message: Message,
-    text_color: Color,
-    border: Color,
-) -> Element<'static, Message> {
-    button(
-        container(text("\u{00D7}".to_string()).size(14).color(text_color))
-            .padding([0, 6]),
-    )
-    .on_press(message)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => {
-                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.1)))
+fn close_x_button(message: Message, text_color: Color, border: Color) -> Element<'static, Message> {
+    button(container(text("\u{00D7}".to_string()).size(14).color(text_color)).padding([0, 6]))
+        .on_press(message)
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => {
+                    Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.1)))
+                }
+                _ => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+            };
+            button::Style {
+                background: bg,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                text_color,
+                ..button::Style::default()
             }
-            _ => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
-        };
-        button::Style {
-            background: bg,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            text_color,
-            ..button::Style::default()
-        }
-    })
-    .into()
+        })
+        .into()
 }
 
 // `detach_button` was removed once the three big modals started
@@ -1075,11 +1047,7 @@ fn secondary_button(
         .into()
 }
 
-fn primary_button(
-    label: &str,
-    message: Option<Message>,
-    border: Color,
-) -> Element<'_, Message> {
+fn primary_button(label: &str, message: Option<Message>, border: Color) -> Element<'_, Message> {
     let enabled = message.is_some();
     let bg = if enabled {
         Color::from_rgb(0.00, 0.47, 0.84)
@@ -1122,21 +1090,19 @@ fn order_radio(
         Color::from_rgba(1.0, 1.0, 1.0, 0.04)
     };
     let fg = if selected { Color::WHITE } else { text_c };
-    button(
-        container(text(label.to_string()).size(11).color(fg)).padding([4, 10]),
-    )
-    .on_press(Message::AnnotateOrderChanged(value))
-    .style(move |_: &Theme, _| button::Style {
-        background: Some(Background::Color(bg)),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-        },
-        text_color: fg,
-        ..button::Style::default()
-    })
-    .into()
+    button(container(text(label.to_string()).size(11).color(fg)).padding([4, 10]))
+        .on_press(Message::AnnotateOrderChanged(value))
+        .style(move |_: &Theme, _| button::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            text_color: fg,
+            ..button::Style::default()
+        })
+        .into()
 }
 
 fn severity_segmented(
@@ -1146,12 +1112,16 @@ fn severity_segmented(
     text_c: Color,
     text_muted: Color,
 ) -> Element<'static, Message> {
-    let seg = |label: &'static str, value: signex_erc::Severity, color: Color| -> Element<
-        'static,
-        Message,
-    > {
+    let seg = |label: &'static str,
+               value: signex_erc::Severity,
+               color: Color|
+     -> Element<'static, Message> {
         let selected = value == current;
-        let bg = if selected { color } else { Color::from_rgba(1.0, 1.0, 1.0, 0.03) };
+        let bg = if selected {
+            color
+        } else {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+        };
         let fg = if selected { Color::WHITE } else { text_muted };
         button(container(text(label.to_string()).size(10).color(fg)).padding([3, 8]))
             .on_press(Message::ErcSeverityChanged(rule, value))
@@ -1169,10 +1139,26 @@ fn severity_segmented(
     };
     let _ = text_c;
     row![
-        seg("E", signex_erc::Severity::Error, Color::from_rgb(0.85, 0.25, 0.25)),
-        seg("W", signex_erc::Severity::Warning, Color::from_rgb(0.95, 0.70, 0.15)),
-        seg("I", signex_erc::Severity::Info, Color::from_rgb(0.30, 0.60, 0.95)),
-        seg("Off", signex_erc::Severity::Off, Color::from_rgb(0.35, 0.36, 0.42)),
+        seg(
+            "E",
+            signex_erc::Severity::Error,
+            Color::from_rgb(0.85, 0.25, 0.25)
+        ),
+        seg(
+            "W",
+            signex_erc::Severity::Warning,
+            Color::from_rgb(0.95, 0.70, 0.15)
+        ),
+        seg(
+            "I",
+            signex_erc::Severity::Info,
+            Color::from_rgb(0.30, 0.60, 0.95)
+        ),
+        seg(
+            "Off",
+            signex_erc::Severity::Off,
+            Color::from_rgb(0.35, 0.36, 0.42)
+        ),
     ]
     .spacing(2)
     .into()
@@ -1222,14 +1208,12 @@ impl super::super::Signex {
 
         // Owned sheets (parsed from disk) are boxed so we can hold them in
         // the same vector as the borrowed ones and still use slice APIs.
-        let mut owned_sheets: Vec<(String, signex_types::schematic::SchematicSheet)> =
-            Vec::new();
+        let mut owned_sheets: Vec<(String, signex_types::schematic::SchematicSheet)> = Vec::new();
         let mut open_paths: std::collections::HashSet<std::path::PathBuf> =
             std::collections::HashSet::new();
 
         // Pass 1: collect open tabs.
-        let mut borrowed: Vec<(String, &signex_types::schematic::SchematicSheet)> =
-            Vec::new();
+        let mut borrowed: Vec<(String, &signex_types::schematic::SchematicSheet)> = Vec::new();
         for (idx, tab) in self.document_state.tabs.iter().enumerate() {
             open_paths.insert(tab.path.clone());
             if idx == self.document_state.active_tab {
@@ -1241,10 +1225,11 @@ impl super::super::Signex {
             }
         }
         // Fallback when no tabs are open but an engine still holds a doc.
-        if borrowed.is_empty() && open_paths.is_empty() {
-            if let Some(eng) = self.document_state.engine.as_ref() {
-                borrowed.push(("(untitled)".to_string(), eng.document()));
-            }
+        if borrowed.is_empty()
+            && open_paths.is_empty()
+            && let Some(eng) = self.document_state.engine.as_ref()
+        {
+            borrowed.push(("(untitled)".to_string(), eng.document()));
         }
 
         // Pass 2: parse every remaining project sheet from disk so the
@@ -1263,10 +1248,7 @@ impl super::super::Signex {
                     continue;
                 }
                 if let Ok(parsed) = kicad_parser::parse_schematic_file(&file_path) {
-                    let title = sheet_entry
-                        .name
-                        .trim_end_matches(".kicad_sch")
-                        .to_string();
+                    let title = sheet_entry.name.trim_end_matches(".kicad_sch").to_string();
                     owned_sheets.push((title, parsed));
                 }
             }
@@ -1279,8 +1261,7 @@ impl super::super::Signex {
         }
 
         // Pass 1: global max per prefix.
-        let mut next: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
+        let mut next: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
         for (_, sheet) in &sheets {
             for sym in &sheet.symbols {
                 if !is_target(sym) {
@@ -1363,8 +1344,7 @@ fn preview_annotations(
         !sym.is_power && !sym.reference.starts_with('#')
     };
     // Collect existing per-prefix counters.
-    let mut next: std::collections::HashMap<String, u32> =
-        std::collections::HashMap::new();
+    let mut next: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     for sym in &snapshot.symbols {
         if !is_designator_target(sym) {
             continue;
@@ -1443,9 +1423,7 @@ fn pin_matrix_view(
     // 6 primary pin types. Full 12-type Altium matrix lands when
     // pin-type taxonomy is extended in rules.rs (Open Collector, Open
     // Emitter, HiZ, Unspecified, etc.).
-    const TYPES: &[&str] = &[
-        "Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC",
-    ];
+    const TYPES: &[&str] = &["Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC"];
     // Same baseline as the PinMatrixCellCycled handler — keep in sync.
     use signex_erc::Severity;
     #[rustfmt::skip]
@@ -1513,11 +1491,11 @@ fn pin_matrix_view(
     let mut body = column![header].spacing(0);
     for (r, row_label) in TYPES.iter().enumerate() {
         let mut rr = row![header_label(row_label)].spacing(0);
-        for c in 0..TYPES.len() {
+        for (c, &baseline_sev) in BASELINE[r].iter().enumerate().take(TYPES.len()) {
             let sev = overrides
                 .get(&(r as u8, c as u8))
                 .copied()
-                .unwrap_or(BASELINE[r][c]);
+                .unwrap_or(baseline_sev);
             rr = rr.push(cell(r as u8, c as u8, sev));
         }
         body = body.push(rr);

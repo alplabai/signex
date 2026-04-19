@@ -22,14 +22,12 @@ impl Signex {
             MenuMessage::Find => Some(self.update(Message::OpenFind)),
             MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
             MenuMessage::Annotate => Some(self.update(Message::OpenAnnotateDialog)),
-            MenuMessage::AnnotateReset => {
-                Some(self.update(Message::OpenAnnotateResetConfirm))
-            }
+            MenuMessage::AnnotateReset => Some(self.update(Message::OpenAnnotateResetConfirm)),
             // Alt+A shortcut-style: run incremental annotate without opening
             // the dialog. Matches Altium "Annotate Schematics Quietly".
-            MenuMessage::AnnotateQuietly => Some(
-                self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)),
-            ),
+            MenuMessage::AnnotateQuietly => {
+                Some(self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)))
+            }
             // Shift+Alt+A: force reset + renumber without confirm dialog.
             MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
                 signex_engine::AnnotateMode::ResetAndRenumber,
@@ -40,9 +38,7 @@ impl Signex {
             // reset just those to `{prefix}?`. Other designators keep
             // their current value. Saves unopened sheets through
             // kicad-writer so the fix is project-wide.
-            MenuMessage::AnnotateResetDuplicates => {
-                Some(self.handle_reset_duplicate_designators())
-            }
+            MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(
                     "Back-annotate from PCB lands with the PCB editor (v2.0)",

@@ -382,8 +382,7 @@ fn parse_erc_severity(s: &str) -> Option<signex_erc::Severity> {
 
 /// Read the pin-connection matrix overrides. Keys stored as `"row,col"`
 /// strings and values as the same severity strings as ERC overrides.
-pub fn read_pin_matrix_overrides()
--> std::collections::HashMap<(u8, u8), signex_erc::Severity> {
+pub fn read_pin_matrix_overrides() -> std::collections::HashMap<(u8, u8), signex_erc::Severity> {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
         return std::collections::HashMap::new();

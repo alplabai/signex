@@ -164,9 +164,9 @@ impl Signex {
                         signex_render::schematic::hit_test::hit_test_rect_mode(
                             snapshot, &rect, mode,
                         )
-                            .into_iter()
-                            .filter(|h| passes_filter(h, snapshot, &filters))
-                            .collect();
+                        .into_iter()
+                        .filter(|h| passes_filter(h, snapshot, &filters))
+                        .collect();
                     self.interaction_state.canvas.clear_overlay_cache();
                     self.update_selection_info();
                 }
@@ -176,8 +176,7 @@ impl Signex {
                     let hit =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
                     if let Some(item) = hit {
-                        self.interaction_state.canvas.selected =
-                            expand_to_net(snapshot, &item);
+                        self.interaction_state.canvas.selected = expand_to_net(snapshot, &item);
                         self.interaction_state.canvas.clear_overlay_cache();
                         self.update_selection_info();
                     }
@@ -202,104 +201,113 @@ impl Signex {
 /// items (wires, buses, junctions, labels) reachable by shared endpoints.
 /// Symbols and their pins are intentionally excluded — this matches Altium's
 /// "Select » Connection" behaviour which picks net geometry only.
+///
+/// Endpoints are quantised to 0.001 mm (1 nm in KiCad-space integer units)
+/// and stored in a HashSet — lookup is O(1), so the overall walk is
+/// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
+/// with hundreds of wires.
 fn expand_to_net(
     snapshot: &signex_render::schematic::SchematicRenderSnapshot,
     seed: &signex_types::schematic::SelectedItem,
 ) -> Vec<signex_types::schematic::SelectedItem> {
     use signex_types::schematic::{Point, SelectedItem, SelectedKind};
+    use std::collections::HashSet;
 
-    // Seed endpoints we start walking from.
-    let mut frontier: Vec<Point> = Vec::new();
+    // Quantise to 0.001 mm so endpoints compare as exact integer keys.
+    // KiCad schematic coordinates are multiples of 0.01 mm at worst, so
+    // a 0.001 mm bucket is tight enough to avoid false unions.
+    let key = |p: &Point| -> (i64, i64) {
+        ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
+    };
+
+    let mut net_keys: HashSet<(i64, i64)> = HashSet::new();
     match seed.kind {
         SelectedKind::Wire => {
             if let Some(w) = snapshot.wires.iter().find(|w| w.uuid == seed.uuid) {
-                frontier.push(w.start);
-                frontier.push(w.end);
+                net_keys.insert(key(&w.start));
+                net_keys.insert(key(&w.end));
             } else {
-                return vec![seed.clone()];
+                return vec![*seed];
             }
         }
         SelectedKind::Bus => {
             if let Some(b) = snapshot.buses.iter().find(|b| b.uuid == seed.uuid) {
-                frontier.push(b.start);
-                frontier.push(b.end);
+                net_keys.insert(key(&b.start));
+                net_keys.insert(key(&b.end));
             } else {
-                return vec![seed.clone()];
+                return vec![*seed];
             }
         }
         SelectedKind::Junction => {
             if let Some(j) = snapshot.junctions.iter().find(|j| j.uuid == seed.uuid) {
-                frontier.push(j.position);
+                net_keys.insert(key(&j.position));
             } else {
-                return vec![seed.clone()];
+                return vec![*seed];
             }
         }
         SelectedKind::Label => {
             if let Some(l) = snapshot.labels.iter().find(|l| l.uuid == seed.uuid) {
-                frontier.push(l.position);
+                net_keys.insert(key(&l.position));
             } else {
-                return vec![seed.clone()];
+                return vec![*seed];
             }
         }
-        _ => return vec![seed.clone()],
+        _ => return vec![*seed],
     }
 
-    // Net tolerance — KiCad coordinates are multiples of 0.01 mm at worst.
-    let eps = 1e-4_f64;
-    let same = |a: &Point, b: &Point| (a.x - b.x).abs() < eps && (a.y - b.y).abs() < eps;
-
-    let mut net_points: Vec<Point> = frontier.clone();
     let mut out: Vec<SelectedItem> = Vec::new();
-    let mut used_wires = std::collections::HashSet::new();
-    let mut used_buses = std::collections::HashSet::new();
-    let mut used_junctions = std::collections::HashSet::new();
-    let mut used_labels = std::collections::HashSet::new();
+    let mut used_wires: HashSet<uuid::Uuid> = HashSet::new();
+    let mut used_buses: HashSet<uuid::Uuid> = HashSet::new();
+    let mut used_junctions: HashSet<uuid::Uuid> = HashSet::new();
+    let mut used_labels: HashSet<uuid::Uuid> = HashSet::new();
 
     loop {
-        let before = net_points.len();
+        let before = net_keys.len();
         for w in &snapshot.wires {
             if used_wires.contains(&w.uuid) {
                 continue;
             }
-            if net_points.iter().any(|p| same(p, &w.start) || same(p, &w.end)) {
+            let (ks, ke) = (key(&w.start), key(&w.end));
+            if net_keys.contains(&ks) || net_keys.contains(&ke) {
                 used_wires.insert(w.uuid);
                 out.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
-                net_points.push(w.start);
-                net_points.push(w.end);
+                net_keys.insert(ks);
+                net_keys.insert(ke);
             }
         }
         for b in &snapshot.buses {
             if used_buses.contains(&b.uuid) {
                 continue;
             }
-            if net_points.iter().any(|p| same(p, &b.start) || same(p, &b.end)) {
+            let (ks, ke) = (key(&b.start), key(&b.end));
+            if net_keys.contains(&ks) || net_keys.contains(&ke) {
                 used_buses.insert(b.uuid);
                 out.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
-                net_points.push(b.start);
-                net_points.push(b.end);
+                net_keys.insert(ks);
+                net_keys.insert(ke);
             }
         }
         for j in &snapshot.junctions {
             if used_junctions.contains(&j.uuid) {
                 continue;
             }
-            if net_points.iter().any(|p| same(p, &j.position)) {
+            if net_keys.contains(&key(&j.position)) {
                 used_junctions.insert(j.uuid);
                 out.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
-                net_points.push(j.position);
+                // Junctions sit at shared points we already know about;
+                // nothing new to add to net_keys.
             }
         }
         for l in &snapshot.labels {
             if used_labels.contains(&l.uuid) {
                 continue;
             }
-            if net_points.iter().any(|p| same(p, &l.position)) {
+            if net_keys.contains(&key(&l.position)) {
                 used_labels.insert(l.uuid);
                 out.push(SelectedItem::new(l.uuid, SelectedKind::Label));
-                // Labels don't carry geometry beyond their anchor.
             }
         }
-        if net_points.len() == before {
+        if net_keys.len() == before {
             break;
         }
     }
@@ -307,7 +315,7 @@ fn expand_to_net(
     // Make sure the seed is in the result (in case no shared endpoints
     // matched it, e.g. an isolated label).
     if !out.iter().any(|i| i.uuid == seed.uuid) {
-        out.push(seed.clone());
+        out.push(*seed);
     }
     out
 }

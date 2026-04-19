@@ -31,14 +31,14 @@ impl Signex {
                 self.interaction_state.canvas.clear_overlay_cache();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
-                if let Some(entry) =
-                    self.document_state.panel_ctx.erc_violations.get(*idx).cloned()
+                if let Some(entry) = self
+                    .document_state
+                    .panel_ctx
+                    .erc_violations
+                    .get(*idx)
+                    .cloned()
                 {
-                    let _ = self.handle_focus_at(
-                        entry.world_x,
-                        entry.world_y,
-                        entry.select,
-                    );
+                    let _ = self.handle_focus_at(entry.world_x, entry.world_y, entry.select);
                 }
             }
             crate::panels::PanelMsg::ToggleGrid => {

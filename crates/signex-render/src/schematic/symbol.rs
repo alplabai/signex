@@ -209,16 +209,11 @@ pub fn draw_symbol(
                     let s0 = transform.to_screen_point(wx0, wy0);
                     let s1 = transform.to_screen_point(wx1, wy1);
                     let top_left = iced::Point::new(s0.x.min(s1.x), s0.y.min(s1.y));
-                    let box_size =
-                        iced::Size::new((s1.x - s0.x).abs(), (s1.y - s0.y).abs());
+                    let box_size = iced::Size::new((s1.x - s0.x).abs(), (s1.y - s0.y).abs());
                     // Fill
                     if !matches!(fill, signex_types::schematic::FillType::None) {
-                        let fill_color = Color::from_rgba(
-                            body_color.r,
-                            body_color.g,
-                            body_color.b,
-                            0.08,
-                        );
+                        let fill_color =
+                            Color::from_rgba(body_color.r, body_color.g, body_color.b, 0.08);
                         let rect = canvas::Path::rectangle(top_left, box_size);
                         frame.fill(&rect, fill_color);
                     }
@@ -231,20 +226,14 @@ pub fn draw_symbol(
                     let stroke = canvas::Stroke::default()
                         .with_color(body_color)
                         .with_width(stroke_w);
-                    frame.stroke(
-                        &canvas::Path::rectangle(top_left, box_size),
-                        stroke,
-                    );
+                    frame.stroke(&canvas::Path::rectangle(top_left, box_size), stroke);
                     // Text inside the box — single-line, top-left aligned.
                     // Multi-line wrap lands in v0.7.1.
                     let font_mm = if *font_size <= 0.0 { 1.27 } else { *font_size };
                     let screen_font = transform.world_len(font_mm).abs();
                     if screen_font >= 1.0 {
                         let pad = 2.0_f32;
-                        let text_pos = iced::Point::new(
-                            top_left.x + pad,
-                            top_left.y + pad,
-                        );
+                        let text_pos = iced::Point::new(top_left.x + pad, top_left.y + pad);
                         frame.fill_text(canvas::Text {
                             content: text.clone(),
                             position: text_pos,

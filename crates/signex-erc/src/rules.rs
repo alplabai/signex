@@ -17,9 +17,7 @@ fn same(a: &Point, b: &Point) -> bool {
 
 /// Every library-side pin on every placed symbol, transformed to world
 /// space. Returned as `(symbol_uuid, world_position)` pairs.
-fn pin_world_positions(
-    snapshot: &SchematicRenderSnapshot,
-) -> Vec<(uuid::Uuid, Point)> {
+fn pin_world_positions(snapshot: &SchematicRenderSnapshot) -> Vec<(uuid::Uuid, Point)> {
     let mut out = Vec::new();
     for symbol in &snapshot.symbols {
         let Some(lib_sym) = snapshot.lib_symbols.get(&symbol.lib_id) else {
@@ -30,10 +28,8 @@ fn pin_world_positions(
             if lib_pin.unit != 0 && lib_pin.unit != symbol.unit {
                 continue;
             }
-            let (wx, wy) = signex_render::schematic::instance_transform(
-                symbol,
-                &lib_pin.pin.position,
-            );
+            let (wx, wy) =
+                signex_render::schematic::instance_transform(symbol, &lib_pin.pin.position);
             out.push((symbol.uuid, Point::new(wx, wy)));
         }
     }
@@ -41,10 +37,7 @@ fn pin_world_positions(
 }
 
 /// Rule: a pin is unused if nothing touches its world-space tip.
-pub(crate) fn unused_pin(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn unused_pin(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     let pins = pin_world_positions(snapshot);
     for (symbol_uuid, pin_pos) in pins {
         let connected = snapshot
@@ -59,15 +52,11 @@ pub(crate) fn unused_pin(
                 .no_connects
                 .iter()
                 .any(|nc| same(&nc.position, &pin_pos))
-            || snapshot
-                .labels
-                .iter()
-                .any(|l| same(&l.position, &pin_pos));
+            || snapshot.labels.iter().any(|l| same(&l.position, &pin_pos));
         if connected {
             continue;
         }
-        let Some(symbol) = snapshot.symbols.iter().find(|s| s.uuid == symbol_uuid)
-        else {
+        let Some(symbol) = snapshot.symbols.iter().find(|s| s.uuid == symbol_uuid) else {
             continue;
         };
         // Skip power-flag symbols — their whole purpose is to dangle.
@@ -95,8 +84,7 @@ pub(crate) fn duplicate_ref_designator(
     snapshot: &SchematicRenderSnapshot,
     out: &mut Vec<Violation>,
 ) {
-    let mut by_ref: HashMap<&str, Vec<&signex_types::schematic::Symbol>> =
-        HashMap::new();
+    let mut by_ref: HashMap<&str, Vec<&signex_types::schematic::Symbol>> = HashMap::new();
     for symbol in &snapshot.symbols {
         let r = symbol.reference.trim();
         if r.is_empty() || r.ends_with('?') {
@@ -116,10 +104,7 @@ pub(crate) fn duplicate_ref_designator(
             out.push(Violation {
                 rule: RuleKind::DuplicateRefDesignator,
                 severity: RuleKind::DuplicateRefDesignator.default_severity(),
-                message: format!(
-                    "Reference '{reference}' is used by {} symbols",
-                    dupes.len(),
-                ),
+                message: format!("Reference '{reference}' is used by {} symbols", dupes.len(),),
                 location: sym.position,
                 primary: Some(sel(sym.uuid, SelectedKind::Symbol)),
                 peer: peer.map(|p| sel(p.uuid, SelectedKind::Symbol)),
@@ -129,10 +114,7 @@ pub(crate) fn duplicate_ref_designator(
 }
 
 /// Rule: a hierarchical label/port must sit on a wire endpoint.
-pub(crate) fn hier_port_disconnected(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn hier_port_disconnected(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     use signex_types::schematic::LabelType;
     for label in &snapshot.labels {
         if !matches!(
@@ -141,11 +123,14 @@ pub(crate) fn hier_port_disconnected(
         ) {
             continue;
         }
-        let touched = snapshot.wires.iter().any(|w| {
-            same(&w.start, &label.position) || same(&w.end, &label.position)
-        }) || snapshot.buses.iter().any(|b| {
-            same(&b.start, &label.position) || same(&b.end, &label.position)
-        });
+        let touched = snapshot
+            .wires
+            .iter()
+            .any(|w| same(&w.start, &label.position) || same(&w.end, &label.position))
+            || snapshot
+                .buses
+                .iter()
+                .any(|b| same(&b.start, &label.position) || same(&b.end, &label.position));
         if touched {
             continue;
         }
@@ -167,10 +152,7 @@ pub(crate) fn hier_port_disconnected(
 
 /// Rule: a wire endpoint touches nothing — no pin, no other wire, no junction,
 /// no label, no NC, no bus entry.
-pub(crate) fn dangling_wire(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn dangling_wire(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     let pins = pin_world_positions(snapshot);
     let touched_non_wire = |p: &Point| -> bool {
         pins.iter().any(|(_, pp)| same(pp, p))
@@ -210,10 +192,7 @@ pub(crate) fn dangling_wire(
 /// Rule: two different net-label texts land on the same electrical net.
 /// Uses a union-find over wire endpoints (and labels as "ghost endpoints")
 /// so connectivity follows any wire path between the two labels.
-pub(crate) fn net_label_conflict(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn net_label_conflict(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     // Quantise points to an integer grid so small float noise doesn't
     // split a single net. Grid spacing 0.01 mm is tighter than any
     // real schematic grid (smallest is 0.1 mm on KiCad).
@@ -266,10 +245,8 @@ pub(crate) fn net_label_conflict(
     // already handled by BadHierSheetPin / orphan label) by their net
     // root. A label's "root" is the union-find root of the quantised
     // point the label sits on.
-    let mut by_root: std::collections::HashMap<
-        (i64, i64),
-        Vec<&signex_types::schematic::Label>,
-    > = std::collections::HashMap::new();
+    let mut by_root: std::collections::HashMap<(i64, i64), Vec<&signex_types::schematic::Label>> =
+        std::collections::HashMap::new();
     for lbl in &snapshot.labels {
         if !matches!(lbl.label_type, signex_types::schematic::LabelType::Net) {
             continue;
@@ -303,10 +280,7 @@ pub(crate) fn net_label_conflict(
 }
 
 /// Rule: a label sits in free space (not on a wire, bus, or pin).
-pub(crate) fn orphan_label(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn orphan_label(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     let pins = pin_world_positions(snapshot);
     for label in &snapshot.labels {
         let on_wire = snapshot
@@ -343,10 +317,7 @@ pub(crate) fn orphan_label(
 /// Rule: bus labels on the same physical bus disagree on bit width.
 /// Each bus label is parsed for a `[low..high]` range suffix; labels on
 /// the same connected bus with mismatched ranges trigger an error.
-pub(crate) fn bus_bit_width_mismatch(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn bus_bit_width_mismatch(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     fn key(p: &Point) -> (i64, i64) {
         ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
     }
@@ -399,10 +370,11 @@ pub(crate) fn bus_bit_width_mismatch(
         Some((&text[..open], lo, hi))
     }
 
-    let mut by_root: std::collections::HashMap<
+    type BusLabelGroups<'a> = std::collections::HashMap<
         (i64, i64),
-        Vec<(&signex_types::schematic::Label, (i64, i64))>,
-    > = std::collections::HashMap::new();
+        Vec<(&'a signex_types::schematic::Label, (i64, i64))>,
+    >;
+    let mut by_root: BusLabelGroups<'_> = BusLabelGroups::new();
     for lbl in &snapshot.labels {
         let Some((_base, lo, hi)) = parse_bus_label(&lbl.text) else {
             continue;
@@ -415,9 +387,24 @@ pub(crate) fn bus_bit_width_mismatch(
         if group.len() < 2 {
             continue;
         }
-        let (first_lbl, first_range) = group[0];
+        // Pick the most common bit-range as the reference so the
+        // report flags the outlier, not the majority. With a tie,
+        // the first occurrence wins.
+        let mut range_counts: HashMap<(i64, i64), usize> = HashMap::new();
+        for (_, r) in group {
+            *range_counts.entry(*r).or_insert(0) += 1;
+        }
+        let (majority_range, _) = range_counts
+            .iter()
+            .max_by_key(|&(_, count)| *count)
+            .map(|(r, c)| (*r, *c))
+            .expect("group.len() >= 2 guarantees non-empty counts");
+        let Some((ref_lbl, ref_range)) = group.iter().find(|(_, r)| *r == majority_range).copied()
+        else {
+            continue;
+        };
         let Some((conflict_lbl, conflict_range)) =
-            group.iter().find(|(_, r)| *r != first_range)
+            group.iter().find(|(_, r)| *r != majority_range).copied()
         else {
             continue;
         };
@@ -426,16 +413,16 @@ pub(crate) fn bus_bit_width_mismatch(
             severity: RuleKind::BusBitWidthMismatch.default_severity(),
             message: format!(
                 "Bus width mismatch: '{}' ({}..{}) vs '{}' ({}..{})",
-                first_lbl.text,
-                first_range.0,
-                first_range.1,
+                ref_lbl.text,
+                ref_range.0,
+                ref_range.1,
                 conflict_lbl.text,
                 conflict_range.0,
                 conflict_range.1,
             ),
-            location: first_lbl.position,
-            primary: Some(sel(first_lbl.uuid, SelectedKind::Label)),
-            peer: Some(sel(conflict_lbl.uuid, SelectedKind::Label)),
+            location: conflict_lbl.position,
+            primary: Some(sel(conflict_lbl.uuid, SelectedKind::Label)),
+            peer: Some(sel(ref_lbl.uuid, SelectedKind::Label)),
         });
     }
 }
@@ -445,10 +432,7 @@ pub(crate) fn bus_bit_width_mismatch(
 /// cross-sheet validation (port name ↔ child-sheet hier label mapping)
 /// needs cross-sheet snapshots and lands with v1.1's hierarchical
 /// navigator; this thin check catches the common local mistake.
-pub(crate) fn bad_hier_sheet_pin(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn bad_hier_sheet_pin(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     for child in &snapshot.child_sheets {
         let mut seen: HashMap<&str, uuid::Uuid> = HashMap::new();
         for pin in &child.pins {
@@ -490,17 +474,11 @@ pub(crate) fn bad_hier_sheet_pin(
 /// also have a PWR_FLAG so the ERC engine knows the net is fed from somewhere.
 /// Needs full connectivity analysis; v0.7 ships a simpler heuristic — flag
 /// any power port whose net name isn't also used by a label elsewhere.
-pub(crate) fn missing_power_flag(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn missing_power_flag(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     // Collect every explicit label text so power ports tied to a labelled
     // net are silent.
-    let label_texts: std::collections::HashSet<&str> = snapshot
-        .labels
-        .iter()
-        .map(|l| l.text.as_str())
-        .collect();
+    let label_texts: std::collections::HashSet<&str> =
+        snapshot.labels.iter().map(|l| l.text.as_str()).collect();
     for symbol in &snapshot.symbols {
         if !symbol.is_power {
             continue;
@@ -531,10 +509,7 @@ pub(crate) fn missing_power_flag(
 /// Rule: two power ports with different nets sit on the same wire — that
 /// would short the power rails. Needs connectivity to detect rigorously;
 /// v0.7 ships the simpler endpoint-sharing check.
-pub(crate) fn power_port_short(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn power_port_short(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     let power_ports: Vec<&signex_types::schematic::Symbol> = snapshot
         .symbols
         .iter()
@@ -566,10 +541,7 @@ pub(crate) fn power_port_short(
 
 /// Rule: a symbol sits outside the active page bounds. We use a generous
 /// A4 bound (297×210 mm) — users can override in the future.
-pub(crate) fn symbol_outside_sheet(
-    snapshot: &SchematicRenderSnapshot,
-    out: &mut Vec<Violation>,
-) {
+pub(crate) fn symbol_outside_sheet(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     // Defensive: parse the snapshot's paper size; fall back to A4.
     let (w, h) = match snapshot.paper_size.as_str() {
         "A3" => (420.0_f64, 297.0),

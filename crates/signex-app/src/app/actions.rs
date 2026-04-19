@@ -10,6 +10,16 @@ impl Signex {
         self.interaction_state.canvas.ghost_text = None;
     }
 
+    /// Mirror `ui_state.lasso_polygon` into the canvas widget's copy and
+    /// invalidate the overlay cache. Iced's `canvas::Program` only sees
+    /// the widget's own state, so the canvas needs its own snapshot; any
+    /// mutation to the in-flight lasso must route through this helper so
+    /// the two copies never diverge.
+    pub(crate) fn sync_lasso_polygon_to_canvas(&mut self) {
+        self.interaction_state.canvas.lasso_polygon = self.ui_state.lasso_polygon.clone();
+        self.interaction_state.canvas.clear_overlay_cache();
+    }
+
     fn component_value_from_lib_id(lib_id: &str) -> String {
         lib_id
             .rsplit(':')
@@ -182,7 +192,6 @@ impl Signex {
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
-        self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
         // Escape / right-click also cancels the net-colour pen, the
         // z-order reference picker, and any in-flight lasso —
@@ -191,7 +200,7 @@ impl Signex {
         self.interaction_state.canvas.pending_net_color = None;
         self.ui_state.reorder_picker = None;
         self.ui_state.lasso_polygon = None;
-        self.interaction_state.canvas.lasso_polygon = None;
+        self.sync_lasso_polygon_to_canvas();
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;
@@ -199,6 +208,11 @@ impl Signex {
             self.interaction_state.canvas.wire_preview.clear();
             self.interaction_state.canvas.drawing_mode = false;
         }
+        // Drop any in-flight arc / polyline click buffers.
+        self.interaction_state.arc_points.clear();
+        self.interaction_state.polyline_points.clear();
+        self.interaction_state.canvas.arc_points.clear();
+        self.interaction_state.canvas.polyline_points.clear();
     }
 
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
