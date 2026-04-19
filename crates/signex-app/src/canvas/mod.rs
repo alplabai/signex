@@ -925,19 +925,15 @@ impl canvas::Program<Message> for SchematicCanvas {
                         iced::Point::new(cursor_pos.x - len, cursor_pos.y + len),
                         iced::Point::new(cursor_pos.x + len, cursor_pos.y - len),
                     );
-                    // Dark outline for contrast on light paper.
-                    let outline = canvas::Stroke::default()
-                        .with_color(Color::from_rgba(0.05, 0.05, 0.08, 0.85))
-                        .with_width(3.0);
-                    frame.stroke(&a, outline);
-                    frame.stroke(&b, outline);
-                    // Cyan core (Altium placement cursor colour).
-                    let cyan = Color::from_rgb8(0x00, 0xE5, 0xE5);
-                    let inner = canvas::Stroke::default()
-                        .with_color(cyan)
+                    // Plain gray X — no outline. Neutral so it reads
+                    // on both the dark canvas background and the
+                    // yellow paper fill without competing with the
+                    // theme's accent colours.
+                    let stroke = canvas::Stroke::default()
+                        .with_color(Color::from_rgba(0.55, 0.55, 0.58, 0.9))
                         .with_width(1.5);
-                    frame.stroke(&a, inner);
-                    frame.stroke(&b, inner);
+                    frame.stroke(&a, stroke);
+                    frame.stroke(&b, stroke);
                 }
 
                 // Net-color pen affordance — a diagonal "pencil" mark
@@ -1298,26 +1294,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                     } else {
                         cursor_pos
                     };
-                    let marker_color = Color::from_rgba(0.2, 0.85, 1.0, 0.95);
-                    let arm = 7.0;
-                    let stroke = canvas::Stroke::default()
-                        .with_color(marker_color)
-                        .with_width(1.8);
-                    // Diagonal X so it doesn't overlap the grid crosshair.
-                    frame.stroke(
-                        &canvas::Path::line(
-                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y - arm),
-                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y + arm),
-                        ),
-                        stroke,
-                    );
-                    frame.stroke(
-                        &canvas::Path::line(
-                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y - arm),
-                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y + arm),
-                        ),
-                        stroke,
-                    );
+                    // No cyan X here — the unified gray placement X
+                    // painted earlier already sits at the cursor for
+                    // every tool. Keep only the tool-name chip.
                     // Tool-name tag beside the marker. Dark text on a
                     // semi-opaque light chip so it reads on any canvas bg.
                     let tag_x = snapped_screen.x + 14.0;
