@@ -657,7 +657,7 @@ impl Signex {
             .get(&super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (680.0, 680.0))
+        wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
     }
 
     pub(super) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
@@ -734,35 +734,74 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Center);
 
+        // Two-column body: rules table on the left, pin-connection
+        // matrix on the right. Matches Altium's ERC setup layout and
+        // lets both the full 11-rule list and the full 6×6 matrix
+        // breathe without internal scrolling.
+        let rules_pane = column![
+            text("Severity per rule")
+                .size(11)
+                .color(text_c),
+            text("Click a cell to change.")
+                .size(10)
+                .color(text_muted),
+            Space::new().height(8),
+            container(rule_rows)
+                .padding(4)
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    ..container::Style::default()
+                }),
+        ]
+        .spacing(2)
+        .width(Length::FillPortion(3));
+
+        let matrix_pane = column![
+            text("Pin Connection Matrix")
+                .size(11)
+                .color(text_c),
+            text("Click a cell to cycle severity.")
+                .size(10)
+                .color(text_muted),
+            Space::new().height(8),
+            container(pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides))
+                .padding(8)
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    ..container::Style::default()
+                }),
+        ]
+        .spacing(2)
+        .width(Length::FillPortion(2));
+
+        let body = row![
+            rules_pane,
+            Space::new().width(16),
+            matrix_pane,
+        ]
+        .align_y(iced::Alignment::Start);
+
         let dialog = container(
             column![
                 header,
-                container(
-                    column![
-                        text("Severity per rule — click to change.")
-                            .size(11)
-                            .color(text_muted),
-                        Space::new().height(6),
-                        container(scrollable(rule_rows).height(300))
-                            .padding(4)
-                            .style(move |_: &Theme| container::Style {
-                                border: Border {
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                    color: border_c,
-                                },
-                                ..container::Style::default()
-                            }),
-                        Space::new().height(10),
-                        pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides),
-                    ]
-                    .spacing(4),
-                )
-                .padding([14, 14]),
+                container(body)
+                    .padding([14, 14])
+                    .width(Length::Fill)
+                    .height(Length::Fill),
                 container(footer).padding([10, 14]),
             ]
-            .width(680)
-            .height(680),
+            .width(1000)
+            .height(600),
         )
         .style(crate::styles::context_menu(tokens));
         dialog.into()
@@ -1418,15 +1457,15 @@ fn pin_matrix_view(
 
     let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, Message> {
         let (bg, ch) = match sev {
-            Severity::Error => (Color::from_rgba(0.85, 0.25, 0.25, 0.45), "E"),
-            Severity::Warning => (Color::from_rgba(0.95, 0.70, 0.15, 0.45), "W"),
-            Severity::Info => (Color::from_rgba(0.30, 0.55, 0.85, 0.45), "I"),
-            Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.30), "·"),
+            Severity::Error => (Color::from_rgba(0.85, 0.25, 0.25, 0.55), "E"),
+            Severity::Warning => (Color::from_rgba(0.95, 0.70, 0.15, 0.55), "W"),
+            Severity::Info => (Color::from_rgba(0.30, 0.55, 0.85, 0.55), "I"),
+            Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.35), "\u{00B7}"),
         };
         button(
-            container(text(ch.to_string()).size(10).color(text_c))
-                .width(30)
-                .height(20)
+            container(text(ch.to_string()).size(12).color(text_c))
+                .width(40)
+                .height(30)
                 .align_x(iced::alignment::Horizontal::Center)
                 .align_y(iced::alignment::Vertical::Center),
         )
@@ -1446,21 +1485,24 @@ fn pin_matrix_view(
     };
 
     let header_label = |label: &str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(9).color(text_muted))
-            .width(60)
-            .height(20)
+        container(text(label.to_string()).size(10).color(text_muted))
+            .width(80)
+            .height(30)
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Center)
+            .padding([0, 6])
             .into()
     };
     let col_label = |label: &str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(9).color(text_muted))
-            .width(30)
+        container(text(label.to_string()).size(10).color(text_muted))
+            .width(40)
+            .height(24)
             .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
             .into()
     };
 
-    let mut header = row![container(Space::new().width(60)).width(60)].spacing(0);
+    let mut header = row![container(Space::new().width(80)).width(80)].spacing(0);
     for t in TYPES {
         header = header.push(col_label(t));
     }
@@ -1478,15 +1520,5 @@ fn pin_matrix_view(
         body = body.push(rr);
     }
 
-    container(
-        column![
-            text("Pin Connection Matrix — click a cell to cycle severity")
-                .size(10)
-                .color(text_muted),
-            Space::new().height(4),
-            body,
-        ]
-        .spacing(0),
-    )
-    .into()
+    container(body).into()
 }

@@ -110,6 +110,24 @@ pub struct UiState {
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
+    /// Net-color override armed from the Active Bar palette. When Some,
+    /// the cursor turns into a paint-bucket over the canvas and the
+    /// next click on a wire floods that color across every connected
+    /// wire. Cleared after the click applies, or by Escape. Colors are
+    /// render-time only — they do NOT write back to the .kicad_sch.
+    pub pending_net_color: Option<signex_types::theme::Color>,
+    /// Per-wire color overrides keyed by wire uuid. Populated by the
+    /// net-color click; consulted when drawing wires. Not serialised.
+    pub wire_color_overrides:
+        std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// App-level undo stack for net-color floods. Each entry is the
+    /// full `wire_color_overrides` map captured before an action —
+    /// popping one restores the previous state. This is separate from
+    /// the engine's undo because net colours are render-only and
+    /// shouldn't mix with document mutations.
+    pub net_color_undo: Vec<
+        std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    >,
     /// Id of the primary app window — set once `iced::window::open` for
     /// the main window resolves. Every `view(id)` call checks this to
     /// decide whether it's rendering the main shell or a secondary

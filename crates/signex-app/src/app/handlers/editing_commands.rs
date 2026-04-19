@@ -17,6 +17,16 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // Net-colour floods aren't persisted to the KiCad document so
+        // they don't enter the engine's history. Check the app-level
+        // net_color_undo stack first; only fall through to the engine
+        // when no net-colour action is pending.
+        if let Some(prev) = self.ui_state.net_color_undo.pop() {
+            self.ui_state.wire_color_overrides = prev.clone();
+            self.interaction_state.canvas.wire_color_overrides = prev;
+            self.interaction_state.canvas.clear_content_cache();
+            return;
+        }
         let undone = self.apply_engine_undo(true);
 
         if undone {

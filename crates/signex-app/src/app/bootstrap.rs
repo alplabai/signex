@@ -96,6 +96,9 @@ impl Signex {
                 annotate_locked: std::collections::HashSet::new(),
                 selection_mode:
                     signex_render::schematic::hit_test::SelectionMode::default(),
+                pending_net_color: None,
+                wire_color_overrides: std::collections::HashMap::new(),
+                net_color_undo: Vec::new(),
             },
             document_state: DocumentState {
                 dock,

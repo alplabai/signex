@@ -517,6 +517,9 @@ pub fn render_schematic(
     colors: &CanvasColors,
     _bounds: Rectangle,
     focus: Option<&std::collections::HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<
+        &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    >,
 ) {
     let body_color = to_iced(&colors.body);
     let body_fill_color = to_iced(&colors.body_fill);
@@ -552,9 +555,14 @@ pub fn render_schematic(
         drawing::draw_sch_drawing(frame, d, transform, body_color);
     }
 
-    // Z=2: Wires
+    // Z=2: Wires — per-wire colour overrides win over the theme wire
+    // colour (net-colour flood from the Active Bar palette).
     for w in &sheet.wires {
-        wire::draw_wire(frame, w, transform, dim(wire_color, alpha_for(&w.uuid)));
+        let base = wire_color_overrides
+            .and_then(|o| o.get(&w.uuid))
+            .map(to_iced)
+            .unwrap_or(wire_color);
+        wire::draw_wire(frame, w, transform, dim(base, alpha_for(&w.uuid)));
     }
 
     // Z=3: Buses

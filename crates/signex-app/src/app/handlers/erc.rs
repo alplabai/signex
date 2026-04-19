@@ -34,6 +34,28 @@ impl Signex {
             "ERC: {} violations on active sheet",
             violations.len(),
         ));
+        // Sync canvas-side markers so each violation draws an Altium
+        // X-in-a-dot marker at its world location + a halo on the
+        // primary offender. Cleared on every Run ERC before refill so
+        // stale markers don't accumulate.
+        self.interaction_state.canvas.erc_markers = violations
+            .iter()
+            .map(|v| crate::canvas::ErcMarker {
+                x: v.location.x,
+                y: v.location.y,
+                severity: match v.severity {
+                    signex_erc::Severity::Error => {
+                        crate::canvas::ErcMarkerSeverity::Error
+                    }
+                    signex_erc::Severity::Warning => {
+                        crate::canvas::ErcMarkerSeverity::Warning
+                    }
+                    _ => crate::canvas::ErcMarkerSeverity::Info,
+                },
+                primary_uuid: v.primary.as_ref().map(|s| s.uuid),
+            })
+            .collect();
+        self.interaction_state.canvas.clear_overlay_cache();
         self.ui_state.erc_violations = violations;
         // Surface the Messages panel so the user can see the results.
         self.document_state.dock.add_panel(
@@ -452,7 +474,7 @@ impl Signex {
 
         let size = match modal {
             ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
-            ModalId::ErcDialog => iced::Size::new(680.0, 680.0),
+            ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
             ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
             ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
             ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),

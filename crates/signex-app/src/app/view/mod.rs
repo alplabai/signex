@@ -1224,15 +1224,13 @@ impl Signex {
             layers.push(Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
             )));
+            // Absolute-position the dropdown with Translate so the
+            // column can auto-size to its widest label. The old
+            // column+row+Space wrapping forced a fixed-width column
+            // which clipped labels like "Elliptical Arc".
             layers.push(
-                container(column![
-                    iced::widget::Space::new().height(ab_y),
-                    container(row![iced::widget::Space::new().width(adjusted_x), dropdown])
-                        .width(ww),
-                ])
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center)
-                .into(),
+                super::view::translate::Translate::new(dropdown, (adjusted_x, ab_y))
+                    .into(),
             );
         }
 
