@@ -267,6 +267,480 @@ impl Signex {
         super::view::translate::Translate::new(tab_like, (cx + 10.0, cy + 6.0)).into()
     }
 
+    /// Altium-style Move Selection dialog. Two numeric inputs plus
+    /// OK / Cancel. No header drag region on the body itself — the
+    /// modal opens borderless so the OS-window-drag handler owns that.
+    fn view_move_selection_body(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, row, text, text_input, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let ms = &self.ui_state.move_selection;
+        let selection_count = self.interaction_state.canvas.selected.len();
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Move Selection").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseMoveSelectionDialog),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::MoveSelection,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
+            column![
+                text(label).size(10).color(text_muted),
+                text_input("0.00", value)
+                    .on_input(msg)
+                    .padding([4, 8])
+                    .size(12),
+            ]
+            .spacing(4)
+        };
+
+        let body = container(
+            column![
+                text(format!("{} item(s) selected", selection_count))
+                    .size(11)
+                    .color(text_muted),
+                Space::new().height(12),
+                row![
+                    field("ΔX (mm)", &ms.dx, Message::MoveSelectionDxChanged),
+                    Space::new().width(14),
+                    field("ΔY (mm)", &ms.dy, Message::MoveSelectionDyChanged),
+                ]
+                .align_y(iced::Alignment::Start),
+            ]
+            .spacing(0),
+        )
+        .padding([14, 14]);
+
+        let ok_enabled = selection_count > 0;
+        let ok_bg = if ok_enabled {
+            iced::Color::from_rgb(0.00, 0.47, 0.84)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+        };
+        let ok_fg = if ok_enabled {
+            iced::Color::WHITE
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
+        };
+        let mut ok_btn = button(
+            container(text("Apply").size(11).color(ok_fg)).padding([4, 14]),
+        )
+        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(ok_bg)),
+            border: iced::Border {
+                width: 0.0,
+                radius: 3.0.into(),
+                ..iced::Border::default()
+            },
+            text_color: ok_fg,
+            ..iced::widget::button::Style::default()
+        });
+        if ok_enabled {
+            ok_btn = ok_btn.on_press(Message::MoveSelectionApply);
+        }
+
+        let footer = container(
+            row![
+                Space::new().width(iced::Length::Fill),
+                button(
+                    container(text("Cancel").size(11).color(text_c))
+                        .padding([4, 14])
+                )
+                .on_press(Message::CloseMoveSelectionDialog)
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    )),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }),
+                Space::new().width(8),
+                ok_btn,
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14]);
+
+        container(
+            column![header, body, footer]
+                .width(iced::Length::Fixed(420.0))
+                .height(iced::Length::Fixed(240.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
+    /// Compact X close button shared by the new v0.7.1 detached bodies.
+    fn view_close_x(&self, message: Message) -> Element<'_, Message> {
+        use iced::widget::{button, container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text_secondary);
+        let border = crate::styles::ti(tokens.border);
+        button(
+            container(text("\u{00D7}".to_string()).size(14).color(text_c))
+                .padding([0, 6]),
+        )
+        .on_press(message)
+        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                )),
+                _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.03,
+                ))),
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .into()
+    }
+
+    /// Altium F5 Net Color palette — list of net labels with a per-net
+    /// color picker. v0.7.1 ships this with a small palette of preset
+    /// colors (10 swatches); a full ColorPicker widget can replace it
+    /// later without changing the message contract.
+    fn view_net_color_palette_body(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, row, scrollable, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Net Colors").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseNetColorPalette),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::NetColorPalette,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        // Gather unique net labels from the active snapshot.
+        let mut nets: Vec<String> = self
+            .interaction_state
+            .canvas
+            .active_snapshot()
+            .map(|s| {
+                s.labels
+                    .iter()
+                    .filter(|l| {
+                        matches!(
+                            l.label_type,
+                            signex_types::schematic::LabelType::Net
+                                | signex_types::schematic::LabelType::Global
+                                | signex_types::schematic::LabelType::Hierarchical
+                        )
+                    })
+                    .map(|l| l.text.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect()
+            })
+            .unwrap_or_default();
+        nets.sort();
+
+        const PALETTE: &[(u8, u8, u8)] = &[
+            (0xE0, 0x54, 0x54),
+            (0xE0, 0xB0, 0x4A),
+            (0x78, 0xC2, 0x6A),
+            (0x42, 0xB8, 0xE0),
+            (0x6F, 0x77, 0xE0),
+            (0xB0, 0x6F, 0xE0),
+            (0xE0, 0x6F, 0xB0),
+            (0xC2, 0xA0, 0x78),
+            (0x78, 0xC2, 0xA0),
+            (0xA0, 0xA0, 0xA0),
+        ];
+
+        let mut rows_col = column![].spacing(4);
+        if nets.is_empty() {
+            rows_col = rows_col.push(
+                text("No net labels on the active sheet.")
+                    .size(11)
+                    .color(text_muted),
+            );
+        } else {
+            for net in nets {
+                let current = self.ui_state.net_colors.get(&net).copied();
+                let mut swatches = row![].spacing(4).align_y(iced::Alignment::Center);
+                for (r, g, b) in PALETTE {
+                    let is_current = current.is_some_and(|c| c.r == *r && c.g == *g && c.b == *b);
+                    let swatch_color = iced::Color::from_rgb8(*r, *g, *b);
+                    let border_w = if is_current { 2.0_f32 } else { 1.0_f32 };
+                    let net_copy = net.clone();
+                    let r_c = *r;
+                    let g_c = *g;
+                    let b_c = *b;
+                    swatches = swatches.push(
+                        button(
+                            container(Space::new().width(14).height(14))
+                                .style(move |_: &iced::Theme| container::Style {
+                                    background: Some(iced::Background::Color(
+                                        swatch_color,
+                                    )),
+                                    border: iced::Border {
+                                        width: border_w,
+                                        radius: 2.0.into(),
+                                        color: text_c,
+                                    },
+                                    ..container::Style::default()
+                                }),
+                        )
+                        .on_press(Message::NetColorSet {
+                            net: net_copy.clone(),
+                            color: Some(signex_types::theme::Color {
+                                r: r_c,
+                                g: g_c,
+                                b: b_c,
+                                a: 255,
+                            }),
+                        })
+                        .style(move |_: &iced::Theme, _| {
+                            iced::widget::button::Style {
+                                background: Some(iced::Background::Color(
+                                    iced::Color::TRANSPARENT,
+                                )),
+                                border: iced::Border::default(),
+                                ..iced::widget::button::Style::default()
+                            }
+                        }),
+                    );
+                }
+                // Clear-override button
+                let net_clear = net.clone();
+                swatches = swatches.push(
+                    button(
+                        container(text("×").size(10).color(text_c)).padding([0, 6]),
+                    )
+                    .on_press(Message::NetColorSet {
+                        net: net_clear,
+                        color: None,
+                    })
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    }),
+                );
+
+                rows_col = rows_col.push(
+                    row![
+                        text(net).size(11).color(text_c).width(iced::Length::FillPortion(2)),
+                        swatches,
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .padding([2, 8]),
+                );
+            }
+        }
+
+        container(
+            column![
+                header,
+                container(scrollable(rows_col).height(iced::Length::Fill))
+                    .padding([14, 14])
+                    .height(iced::Length::Fill),
+            ]
+            .width(iced::Length::Fixed(520.0))
+            .height(iced::Length::Fixed(480.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
+    /// Altium-style Parameter Manager — a scrolling table listing every
+    /// placed symbol with columns for reference / value / footprint and
+    /// a "Parameter" column that reveals the union of custom fields
+    /// across the design. Each cell is a text_input so the user can edit
+    /// values inline. Changes route through Command::SetSymbolField so
+    /// undo/redo / dirty-flagging behaves.
+    fn view_parameter_manager_body(&self) -> Element<'_, Message> {
+        use iced::widget::{column, container, row, scrollable, text, text_input, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Parameter Manager").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseParameterManager),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::ParameterManager,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        // Collect all parameter keys across symbols (besides the built-
+        // in reference / value / footprint). Keeps the table compact —
+        // only columns that someone actually uses show up.
+        let Some(engine) = self.document_state.engine.as_ref() else {
+            return container(
+                column![
+                    header,
+                    container(text("No active schematic.").size(11).color(text_muted))
+                        .padding([14, 14]),
+                ]
+                .width(iced::Length::Fixed(900.0))
+                .height(iced::Length::Fixed(560.0)),
+            )
+            .style(crate::styles::context_menu(tokens))
+            .into();
+        };
+        let doc = engine.document();
+        let mut keys: Vec<String> = doc
+            .symbols
+            .iter()
+            .filter(|s| !s.is_power)
+            .flat_map(|s| s.fields.keys().cloned())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        keys.sort();
+
+        let header_row = {
+            let mut r = row![
+                text("Reference")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(100.0)),
+                text("Value")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(160.0)),
+                text("Footprint")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(200.0)),
+            ];
+            for k in &keys {
+                r = r.push(
+                    text(k.clone())
+                        .size(10)
+                        .color(text_muted)
+                        .width(iced::Length::Fixed(140.0)),
+                );
+            }
+            r.padding([4, 8])
+        };
+
+        let mut rows_col = column![].spacing(2);
+        rows_col = rows_col.push(header_row);
+        for sym in &doc.symbols {
+            if sym.is_power {
+                continue;
+            }
+            let mut r = row![
+                text(sym.reference.clone())
+                    .size(11)
+                    .color(text_c)
+                    .width(iced::Length::Fixed(100.0)),
+                text(sym.value.clone())
+                    .size(11)
+                    .color(text_c)
+                    .width(iced::Length::Fixed(160.0)),
+                text(sym.footprint.clone())
+                    .size(11)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(200.0)),
+            ];
+            for k in &keys {
+                let v = sym.fields.get(k).cloned().unwrap_or_default();
+                let sym_uuid = sym.uuid;
+                let k_str = k.clone();
+                r = r.push(
+                    text_input("", &v)
+                        .on_input(move |new_val| Message::ParameterManagerEdit {
+                            symbol_uuid: sym_uuid,
+                            key: k_str.clone(),
+                            value: new_val,
+                        })
+                        .padding([2, 6])
+                        .size(11)
+                        .width(iced::Length::Fixed(140.0)),
+                );
+            }
+            rows_col = rows_col.push(r.padding([2, 8]));
+        }
+
+        container(
+            column![
+                header,
+                container(
+                    scrollable(rows_col)
+                        .direction(scrollable::Direction::Both {
+                            vertical: scrollable::Scrollbar::default(),
+                            horizontal: scrollable::Scrollbar::default(),
+                        })
+                        .height(iced::Length::Fill),
+                )
+                .padding([14, 14])
+                .height(iced::Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    ..container::Style::default()
+                }),
+            ]
+            .width(iced::Length::Fixed(900.0))
+            .height(iced::Length::Fixed(560.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
     fn view_detached_modal(
         &self,
         modal: super::state::ModalId,
@@ -279,6 +753,9 @@ impl Signex {
             // Stubs — these modals don't yet have extractable bodies; fall
             // back to a placeholder so the window is non-empty until their
             // body helpers land.
+            ModalId::MoveSelection => self.view_move_selection_body(),
+            ModalId::NetColorPalette => self.view_net_color_palette_body(),
+            ModalId::ParameterManager => self.view_parameter_manager_body(),
             ModalId::Preferences | ModalId::FindReplace | ModalId::CloseTabConfirm => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)

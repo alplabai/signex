@@ -113,55 +113,102 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
     None
 }
 
-/// Find all elements within a rectangular region (rubber-band selection).
-pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
-    let mut result = Vec::new();
+/// Altium-style rubber-band selection mode. Governs how
+/// `hit_test_rect` classifies hits relative to the drag rectangle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectionMode {
+    /// Only items fully contained within the rectangle are selected
+    /// (Altium's Inside / default left-to-right drag).
+    #[default]
+    Inside,
+    /// Only items fully OUTSIDE the rectangle are selected. Useful for
+    /// "select everything but this region" deletes.
+    Outside,
+    /// Wires/buses that *cross* the rectangle boundary (one endpoint
+    /// inside, one outside) are selected alongside fully-contained
+    /// items. Altium's right-to-left "touching" drag.
+    TouchingLine,
+}
 
+/// Find all elements within a rectangular region (rubber-band
+/// selection). Uses `SelectionMode::Inside` for backwards compatibility.
+pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
+    hit_test_rect_mode(sheet, rect, SelectionMode::Inside)
+}
+
+/// Mode-aware rubber-band selection.
+pub fn hit_test_rect_mode(
+    sheet: &SchematicRenderSnapshot,
+    rect: &Aabb,
+    mode: SelectionMode,
+) -> Vec<SelectedItem> {
+    let pt_match = |inside: bool| -> bool {
+        match mode {
+            SelectionMode::Inside | SelectionMode::TouchingLine => inside,
+            SelectionMode::Outside => !inside,
+        }
+    };
+    let seg_match = |a_in: bool, b_in: bool| -> bool {
+        match mode {
+            SelectionMode::Inside => a_in && b_in,
+            SelectionMode::Outside => !a_in && !b_in,
+            // Any endpoint touching the rectangle counts. A segment that
+            // passes fully across without touching corners is rare on a
+            // grid-snapped schematic, so we don't compute line-vs-rect
+            // intersection here.
+            SelectionMode::TouchingLine => a_in || b_in,
+        }
+    };
+    let mut result = Vec::new();
     for sym in &sheet.symbols {
-        if rect.contains(sym.position.x, sym.position.y) {
+        if pt_match(rect.contains(sym.position.x, sym.position.y)) {
             result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
         }
     }
     for w in &sheet.wires {
-        if rect.contains(w.start.x, w.start.y) && rect.contains(w.end.x, w.end.y) {
+        let a = rect.contains(w.start.x, w.start.y);
+        let b = rect.contains(w.end.x, w.end.y);
+        if seg_match(a, b) {
             result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
         }
     }
-    for b in &sheet.buses {
-        if rect.contains(b.start.x, b.start.y) && rect.contains(b.end.x, b.end.y) {
-            result.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
+    for bus in &sheet.buses {
+        let a = rect.contains(bus.start.x, bus.start.y);
+        let b = rect.contains(bus.end.x, bus.end.y);
+        if seg_match(a, b) {
+            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
         }
     }
     for j in &sheet.junctions {
-        if rect.contains(j.position.x, j.position.y) {
+        if pt_match(rect.contains(j.position.x, j.position.y)) {
             result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
         }
     }
     for nc in &sheet.no_connects {
-        if rect.contains(nc.position.x, nc.position.y) {
+        if pt_match(rect.contains(nc.position.x, nc.position.y)) {
             result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
         }
     }
     for lbl in &sheet.labels {
-        if rect.contains(lbl.position.x, lbl.position.y) {
+        if pt_match(rect.contains(lbl.position.x, lbl.position.y)) {
             result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
         }
     }
     for tn in &sheet.text_notes {
-        if rect.contains(tn.position.x, tn.position.y) {
+        if pt_match(rect.contains(tn.position.x, tn.position.y)) {
             result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
         }
     }
     for cs in &sheet.child_sheets {
         let cx = cs.position.x + cs.size.0 / 2.0;
         let cy = cs.position.y + cs.size.1 / 2.0;
-        if rect.contains(cx, cy) {
+        if pt_match(rect.contains(cx, cy)) {
             result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
         }
     }
-
     result
 }
+
 
 fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {
     point_to_segment_dist(wx, wy, w.start.x, w.start.y, w.end.x, w.end.y) < HIT_TOLERANCE
