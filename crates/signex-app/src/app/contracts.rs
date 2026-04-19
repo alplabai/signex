@@ -212,6 +212,9 @@ pub enum Message {
     /// Cycle Altium's rubber-band selection mode
     /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
     CycleSelectionMode,
+    /// Close the in-flight lasso polygon (Enter key). Commits the
+    /// selection if >= 3 vertices, otherwise cancels.
+    LassoCommit,
     /// Show / hide the custom net-color picker modal.
     NetColorCustomShow(bool),
     /// Live-update the draft colour as the user drags the picker.

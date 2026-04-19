@@ -395,13 +395,22 @@ impl DockArea {
                 iced::Color::TRANSPARENT
             };
 
+            // Visual feedback while dragging: give the source tab a
+            // brighter border + tinted background so the user sees
+            // which tab they grabbed.
+            let is_dragging_this =
+                matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
             // No manual width — Iced's layout engine measures the text.
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
             // Length::Fill which would expand the tab to the panel width.
             let label_el = container(text(label).size(11).color(text_c))
                 .padding([5, 10])
-                .style(styles::dock_tab_container(&ctx.tokens, is_active));
+                .style(styles::dock_tab_container_dragging(
+                    &ctx.tokens,
+                    is_active,
+                    is_dragging_this,
+                ));
             let tab = mouse_area(
                 container(label_el)
                     .padding(iced::Padding {

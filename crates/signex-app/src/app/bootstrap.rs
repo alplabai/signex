@@ -383,6 +383,13 @@ impl Signex {
                     (keyboard::Key::Character(c), m) if c == "S" && m.shift() && !m.command() => {
                         Message::CycleSelectionMode
                     }
+                    // Enter also closes the in-flight lasso (in
+                    // addition to a second canvas click). Useful
+                    // when the user's cursor is somewhere they'd
+                    // rather not drop a final vertex.
+                    (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
+                        Message::LassoCommit
+                    }
                     // Alt+A: annotate (Altium convention, incremental)
                     (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
                         Message::Annotate(signex_engine::AnnotateMode::Incremental)

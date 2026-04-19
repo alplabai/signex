@@ -24,6 +24,7 @@ pub enum TabMessage {
 pub fn view<'a>(
     tabs: &[TabInfo],
     active: usize,
+    dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
@@ -97,6 +98,21 @@ pub fn view<'a>(
         // still capture their own presses so those clicks behave
         // normally; presses on the text area fall through to the
         // mouse_area's on_press (StartDrag).
+        // Visual feedback: the tab currently being dragged gets a
+        // brighter accent border + slightly lifted background so the
+        // user can see which tab they grabbed.
+        let is_dragging = dragging == Some(i);
+        let accent = Color::from_rgb(0.00, 0.47, 0.84);
+        let drag_bg = Color::from_rgba(0.0, 0.47, 0.84, 0.18);
+        let bg = if is_dragging {
+            Some(Background::Color(drag_bg))
+        } else if is_active {
+            Some(Background::Color(tab_active_bg))
+        } else {
+            None
+        };
+        let border_w = if is_dragging { 2.0 } else { 1.0 };
+        let border_c = if is_dragging { accent } else { border };
         let tab_body = container(
             row![text(label).size(11).color(text_c), undock_btn, close_btn,]
                 .spacing(6.0)
@@ -104,15 +120,11 @@ pub fn view<'a>(
         )
         .padding([4, 10])
         .style(move |_: &Theme| container::Style {
-            background: if is_active {
-                Some(Background::Color(tab_active_bg))
-            } else {
-                None
-            },
+            background: bg,
             border: Border {
-                width: 1.0,
+                width: border_w,
                 radius: 0.0.into(),
-                color: border,
+                color: border_c,
             },
             ..container::Style::default()
         });

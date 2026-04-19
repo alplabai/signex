@@ -224,11 +224,46 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 /// underline (added by the caller via `tab_underline`). Inactive tabs are
 /// plain text — no border box. Iced 0.14 `Border` is uniform on all four
 /// sides, so any border here would draw the unwanted bottom edge too.
+/// Drag-aware wrapper — flags the currently-dragged tab with a thick
+/// accent border + tinted background so the user gets visual
+/// feedback on the tab they grabbed.
+pub fn dock_tab_container_dragging(
+    tokens: &ThemeTokens,
+    is_active: bool,
+    is_dragging: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let tab_active = ti(tokens.hover);
+    let border_c = ti(tokens.border);
+    let accent = ti(tokens.accent);
+    let inactive_fill = iced::Color {
+        a: tab_active.a * 0.35,
+        ..tab_active
+    };
+    let drag_fill = iced::Color { a: 0.22, ..accent };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(if is_dragging {
+            drag_fill
+        } else if is_active {
+            tab_active
+        } else {
+            inactive_fill
+        })),
+        border: Border {
+            width: if is_dragging { 2.0 } else { 1.0 },
+            radius: 0.0.into(),
+            color: if is_dragging { accent } else { border_c },
+        },
+        ..container::Style::default()
+    }
+}
+
+#[allow(dead_code)]
 pub fn dock_tab_container(
     tokens: &ThemeTokens,
     is_active: bool,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
+    let border_c = ti(tokens.border);
     // Inactive tabs get a subtle fill derived from the hover color
     // (about half its alpha) so they still read as clickable tabs
     // rather than bare text on the header strip.
@@ -242,7 +277,15 @@ pub fn dock_tab_container(
         } else {
             inactive_fill
         })),
-        border: Border::default(),
+        // Thin border on all sides so adjacent tabs have a visible
+        // divider between them. Iced Border is uniform 4-sided; the
+        // vertical edges give the tab-strip its "cell" look, and the
+        // horizontal edges blend into the surrounding strip padding.
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border_c,
+        },
         ..container::Style::default()
     }
 }

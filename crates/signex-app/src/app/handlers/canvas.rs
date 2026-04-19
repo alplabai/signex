@@ -83,7 +83,15 @@ impl Signex {
         ) {
             let dx = x - ox;
             let dy = y - oy;
-            if (dx * dx + dy * dy).sqrt() > 20.0 {
+            // Only undock when the drag clearly exits the tab strip.
+            // Tabs sit at the top/bottom of each region at ~28 px tall,
+            // so requiring vertical movement > 28 px keeps horizontal
+            // drags within the same bar free for reorder. Also bump
+            // the overall threshold so a slightly-wobbly intra-strip
+            // reorder doesn't undock by accident.
+            let moved_far = (dx * dx + dy * dy).sqrt() > 60.0;
+            let left_strip = dy.abs() > 28.0;
+            if moved_far && left_strip {
                 self.document_state
                     .dock
                     .update(DockMessage::UndockPanel(pos, idx));
@@ -244,12 +252,33 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
+                // Lasso auto-sample: while a lasso is anchored (>= 1
+                // vertex already committed), sample a new vertex each
+                // time the cursor moves more than SAMPLE_MIN from the
+                // last recorded point. Produces a freehand polyline
+                // between the two clicks (Altium's behaviour).
+                const SAMPLE_MIN_MM: f64 = 2.5;
+                if let Some(pts) = self.ui_state.lasso_polygon.as_mut()
+                    && !pts.is_empty()
+                {
+                    let last = *pts.last().unwrap();
+                    let dx = x as f64 - last.x;
+                    let dy = y as f64 - last.y;
+                    if (dx * dx + dy * dy).sqrt() >= SAMPLE_MIN_MM {
+                        pts.push(signex_types::schematic::Point::new(
+                            x as f64, y as f64,
+                        ));
+                        self.interaction_state.canvas.lasso_polygon =
+                            Some(pts.clone());
+                        self.interaction_state.canvas.clear_overlay_cache();
+                    }
+                }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
-                // Lasso in flight — each click appends a vertex.
-                // Clicking within 2 mm of the first vertex closes the
-                // polygon and commits the selection. Escape / right-
-                // click clear lasso_polygon to cancel.
+                // Altium-style lasso: first click anchors the start,
+                // the cursor path auto-samples vertices, a second
+                // click closes the polygon and commits. Escape /
+                // right-click cancels.
                 if self.ui_state.lasso_polygon.is_some() {
                     let (vx, vy) = if self.interaction_state.canvas.snap_enabled
                         && self.interaction_state.canvas.snap_grid_mm > 0.0
@@ -259,20 +288,29 @@ impl Signex {
                     } else {
                         (world_x, world_y)
                     };
-                    let close_dist = 2.0_f64;
-                    let should_close = {
-                        let pts = self.ui_state.lasso_polygon.as_ref().unwrap();
-                        if pts.len() >= 3 {
-                            let first = pts[0];
-                            let dx = vx - first.x;
-                            let dy = vy - first.y;
-                            (dx * dx + dy * dy).sqrt() < close_dist
-                        } else {
-                            false
-                        }
-                    };
-                    if should_close {
-                        let pts = self.ui_state.lasso_polygon.take().unwrap_or_default();
+                    let has_start = self
+                        .ui_state
+                        .lasso_polygon
+                        .as_ref()
+                        .map(|v| !v.is_empty())
+                        .unwrap_or(false);
+                    if !has_start {
+                        // First click — anchor vertex 0.
+                        self.ui_state.lasso_polygon.as_mut().unwrap().push(
+                            signex_types::schematic::Point::new(vx, vy),
+                        );
+                        self.interaction_state.canvas.lasso_polygon =
+                            self.ui_state.lasso_polygon.clone();
+                        self.interaction_state.canvas.clear_overlay_cache();
+                        return Task::none();
+                    }
+                    // Second click — close and commit. Append the
+                    // click position as the final vertex so the
+                    // polygon lands exactly where the user clicked.
+                    let mut pts =
+                        self.ui_state.lasso_polygon.take().unwrap_or_default();
+                    pts.push(signex_types::schematic::Point::new(vx, vy));
+                    if pts.len() >= 3 {
                         let poly: Vec<(f64, f64)> =
                             pts.iter().map(|p| (p.x, p.y)).collect();
                         if let Some(snapshot) = self.active_render_snapshot() {
@@ -291,19 +329,11 @@ impl Signex {
                                     )
                                 })
                                 .collect();
-                            self.interaction_state.canvas.clear_overlay_cache();
                             self.update_selection_info();
                         }
-                    } else {
-                        self.ui_state
-                            .lasso_polygon
-                            .as_mut()
-                            .unwrap()
-                            .push(signex_types::schematic::Point::new(vx, vy));
-                        self.interaction_state.canvas.lasso_polygon =
-                            self.ui_state.lasso_polygon.clone();
-                        self.interaction_state.canvas.clear_overlay_cache();
                     }
+                    self.interaction_state.canvas.lasso_polygon = None;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     return Task::none();
                 }
                 // Net-colour flood: the user picked a swatch from the

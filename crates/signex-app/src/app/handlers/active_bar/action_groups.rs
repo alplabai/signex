@@ -154,13 +154,23 @@ impl Signex {
             // each click and commits on double-click / first-vertex
             // click. Escape / right-click cancels.
             ActiveBarAction::LassoSelect => {
+                // Don't fire Tool::Select here — that calls
+                // clear_transient_schematic_tool_state which would
+                // wipe `lasso_polygon` right after we arm it. Clear
+                // any ghost previews from a previous tool inline,
+                // set Select as the current tool, arm the lasso.
+                self.interaction_state.current_tool = Tool::Select;
+                self.clear_ghost_previews();
+                self.interaction_state.canvas.tool_preview = None;
+                self.interaction_state.pending_power = None;
+                self.interaction_state.pending_port = None;
                 self.ui_state.lasso_polygon = Some(Vec::new());
                 self.interaction_state.canvas.lasso_polygon = Some(Vec::new());
                 self.interaction_state.canvas.clear_overlay_cache();
                 crate::diagnostics::log_info(
-                    "Lasso: click each vertex, double-click to close",
+                    "Lasso: click to anchor, move freely, click again to close (Enter / Esc shortcuts)",
                 );
-                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+                Task::none()
             }
             // Other select-mode variants currently enter the normal Select
             // tool; distinct box modes are handled via SelectionMode
