@@ -1221,12 +1221,15 @@ pub fn view_dropdown(
                                 },
                                 ..container::Style::default()
                             }),
-                        text(label.to_string()).size(11).color(ac.text),
+                        text(label.to_string())
+                            .size(13)
+                            .color(ac.text)
+                            .wrapping(iced::widget::text::Wrapping::None),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([4, 12])
+                .padding([5, 12])
                 .on_press(ActiveBarMsg::Action(action))
                 .style(dd_btn_style_f(ac.text, ac.hover))
                 .into()
@@ -1284,7 +1287,10 @@ pub fn view_dropdown(
         }
     };
 
-    // No hardcoded width — Iced auto-sizes the column to its widest child.
+    // Auto-sized: iced shrinks the column to its widest child as long
+    // as we don't wrap it in a Fill / Shrink-stacked chain that clamps
+    // it. The outer positioning now uses `Translate` (see view/mod.rs)
+    // so this container sits free of row/Space layout interactions.
     container(column(items).spacing(0))
         .padding([6, 0])
         .style(move |_: &Theme| container::Style {

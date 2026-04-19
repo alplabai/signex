@@ -115,6 +115,41 @@ pub struct SchematicCanvas {
     /// from `ui_state.auto_focus` so the renderer can compute a focus
     /// uuid set without reaching back into app state.
     pub auto_focus: bool,
+    /// ERC violations to highlight on the canvas — Altium-style marker
+    /// dots + primary-item halos. Synced from `ui_state.erc_violations`
+    /// after each ERC run so the overlay renders without the canvas
+    /// reaching back into app state.
+    pub erc_markers: Vec<ErcMarker>,
+    /// Armed net-color from the Active Bar palette. `Some(c)` with a
+    /// non-zero alpha means the next wire click floods that colour
+    /// onto the whole connected net; alpha 0 signals "clear one".
+    /// Drives the pen cursor drawn over the canvas.
+    pub pending_net_color: Option<signex_types::theme::Color>,
+    /// Per-wire colour overrides consulted when drawing wires. Synced
+    /// from `ui_state.wire_color_overrides` on every canvas rebuild.
+    pub wire_color_overrides:
+        std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+}
+
+/// Canvas-side projection of an ERC violation — just enough to draw
+/// its marker without pulling the full Violation type into the render
+/// crate.
+#[derive(Debug, Clone)]
+pub struct ErcMarker {
+    pub x: f64,
+    pub y: f64,
+    pub severity: ErcMarkerSeverity,
+    /// Uuid of the primary offending item (label, wire, symbol, …).
+    /// Reserved for a future halo/highlight pass; unused today.
+    #[allow(dead_code)]
+    pub primary_uuid: Option<uuid::Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErcMarkerSeverity {
+    Error,
+    Warning,
+    Info,
 }
 
 impl SchematicCanvas {
@@ -166,6 +201,9 @@ impl SchematicCanvas {
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             auto_focus: false,
+            erc_markers: Vec::new(),
+            pending_net_color: None,
+            wire_color_overrides: std::collections::HashMap::new(),
         }
     }
 
@@ -723,6 +761,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.canvas_colors,
                     bounds,
                     focus_ref,
+                    Some(&self.wire_color_overrides),
                 );
             }
             frame.into_geometry()
@@ -744,6 +783,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         &self.canvas_colors,
                         bounds,
                         focus_ref,
+                        Some(&self.wire_color_overrides),
                     );
                 }
             })
@@ -770,6 +810,61 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.selected,
                     &transform,
                 );
+                // Altium-style ERC markers: filled circle + concentric
+                // stroke at each violation's world position, colored by
+                // severity. Drawn in the overlay layer so they sit on
+                // top of wires and symbols but under the selection
+                // highlight.
+                for m in &self.erc_markers {
+                    let (sx, sy) = transform.world_to_screen(m.x, m.y);
+                    let (fill, stroke) = match m.severity {
+                        ErcMarkerSeverity::Error => (
+                            Color::from_rgba(0.95, 0.25, 0.25, 0.6),
+                            Color::from_rgb(0.95, 0.25, 0.25),
+                        ),
+                        ErcMarkerSeverity::Warning => (
+                            Color::from_rgba(0.98, 0.72, 0.20, 0.6),
+                            Color::from_rgb(0.98, 0.72, 0.20),
+                        ),
+                        ErcMarkerSeverity::Info => (
+                            Color::from_rgba(0.30, 0.55, 0.85, 0.55),
+                            Color::from_rgb(0.30, 0.55, 0.85),
+                        ),
+                    };
+                    // Outer soft halo so the marker is visible at low zoom.
+                    let halo = canvas::Path::circle(iced::Point::new(sx, sy), 16.0);
+                    frame.fill(
+                        &halo,
+                        Color::from_rgba(fill.r, fill.g, fill.b, 0.18),
+                    );
+                    // Core dot — filled bright + hard stroke so it stays
+                    // legible over wires and text.
+                    let dot = canvas::Path::circle(iced::Point::new(sx, sy), 7.0);
+                    frame.fill(&dot, fill);
+                    frame.stroke(
+                        &dot,
+                        canvas::Stroke::default().with_color(stroke).with_width(2.0),
+                    );
+                    // Cross-hair inside the dot (Altium's "X" marker).
+                    let cross_len = 4.0_f32;
+                    let v1 = canvas::Path::line(
+                        iced::Point::new(sx - cross_len, sy - cross_len),
+                        iced::Point::new(sx + cross_len, sy + cross_len),
+                    );
+                    let v2 = canvas::Path::line(
+                        iced::Point::new(sx - cross_len, sy + cross_len),
+                        iced::Point::new(sx + cross_len, sy - cross_len),
+                    );
+                    let white = Color::WHITE;
+                    frame.stroke(
+                        &v1,
+                        canvas::Stroke::default().with_color(white).with_width(1.5),
+                    );
+                    frame.stroke(
+                        &v2,
+                        canvas::Stroke::default().with_color(white).with_width(1.5),
+                    );
+                }
             };
             if drag_offset.is_some() {
                 let mut frame = canvas::Frame::new(renderer, bounds.size());
@@ -788,7 +883,31 @@ impl canvas::Program<Message> for SchematicCanvas {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
 
             if let Some(cursor_pos) = cursor.position_in(bounds) {
-                let crosshair_color = Color::from_rgba8(255, 255, 255, 0.3);
+                // Snap crosshair + pen glyph to the grid when snap is
+                // on — every other placement in the app snaps, so the
+                // cursor feedback should match. Convert to world,
+                // snap, convert back to screen for drawing.
+                let pen_armed = self.pending_net_color.is_some();
+                let cursor_pos = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                    let w = state.camera.screen_to_world(cursor_pos, bounds);
+                    let g = self.snap_grid_mm as f32;
+                    let snapped_w = iced::Point::new(
+                        (w.x / g).round() * g,
+                        (w.y / g).round() * g,
+                    );
+                    state.camera.world_to_screen(snapped_w, bounds)
+                } else {
+                    cursor_pos
+                };
+                // Default crosshair: white at low alpha, reads on the
+                // dark background. When the net-colour pen is armed we
+                // switch to dark so it stays visible on the yellow
+                // paper fill.
+                let crosshair_color = if pen_armed {
+                    Color::from_rgba8(40, 40, 40, 0.55)
+                } else {
+                    Color::from_rgba8(255, 255, 255, 0.3)
+                };
                 let h_line = canvas::Path::line(
                     iced::Point::new(0.0, cursor_pos.y),
                     iced::Point::new(bounds.width, cursor_pos.y),
@@ -799,9 +918,50 @@ impl canvas::Program<Message> for SchematicCanvas {
                 );
                 let stroke = canvas::Stroke::default()
                     .with_color(crosshair_color)
-                    .with_width(0.5);
+                    .with_width(if pen_armed { 0.8 } else { 0.5 });
                 frame.stroke(&h_line, stroke);
                 frame.stroke(&v_line, stroke);
+
+                // Net-color pen affordance — a diagonal "pencil" mark
+                // anchored to the cursor, filled with the armed color.
+                // iced's mouse cursor set only exposes Crosshair, so we
+                // paint our own pencil glyph on the canvas to make the
+                // mode visually obvious.
+                if let Some(c) = self.pending_net_color {
+                    let body = if c.a == 0 {
+                        // Clear-mode sentinel — render a grey pencil so
+                        // the user still sees the armed state.
+                        Color::from_rgb(0.75, 0.75, 0.75)
+                    } else {
+                        Color::from_rgb8(c.r, c.g, c.b)
+                    };
+                    let tip = iced::Point::new(cursor_pos.x + 4.0, cursor_pos.y + 4.0);
+                    let butt = iced::Point::new(
+                        cursor_pos.x + 22.0,
+                        cursor_pos.y + 22.0,
+                    );
+                    // Shaft (fat colored line)
+                    let shaft = canvas::Path::line(tip, butt);
+                    frame.stroke(
+                        &shaft,
+                        canvas::Stroke::default().with_color(body).with_width(6.0),
+                    );
+                    // Dark outline for contrast on light backgrounds
+                    frame.stroke(
+                        &shaft,
+                        canvas::Stroke::default()
+                            .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.45))
+                            .with_width(1.0),
+                    );
+                    // Small triangle at tip to look like a pencil nib
+                    let nib = canvas::Path::new(|b| {
+                        b.move_to(tip);
+                        b.line_to(iced::Point::new(tip.x + 3.0, tip.y - 2.0));
+                        b.line_to(iced::Point::new(tip.x - 2.0, tip.y + 3.0));
+                        b.close();
+                    });
+                    frame.fill(&nib, Color::from_rgb(0.15, 0.15, 0.15));
+                }
 
                 // Wire-in-progress rubber-band preview
                 if self.drawing_mode && !self.wire_preview.is_empty() {
@@ -1322,6 +1482,10 @@ impl canvas::Program<Message> for SchematicCanvas {
         } else if state.move_dragging {
             mouse::Interaction::Move
         } else {
+            // Net-colour armed state no longer forces the OS crosshair
+            // cursor — that's always white on Windows which becomes
+            // invisible on the yellow paper. The custom pencil glyph
+            // painted in the overlay layer is the sole affordance now.
             mouse::Interaction::default()
         }
     }
