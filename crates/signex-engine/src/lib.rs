@@ -899,6 +899,18 @@ impl Engine {
         }
     }
 
+    /// Is there at least one entry in the undo history? Used by the
+    /// context-aware menu to grey out Edit → Undo when nothing's
+    /// pending.
+    pub fn can_undo(&self) -> bool {
+        !self.history.is_empty()
+    }
+
+    /// Is there at least one entry in the redo stack?
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         let Some(entry) = self.history.pop() else {
             return Ok(None);

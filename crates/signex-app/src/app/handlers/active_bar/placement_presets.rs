@@ -114,9 +114,9 @@ impl Signex {
             }
             ActiveBarAction::PlaceParameterSet => {
                 // Parameter Set — attaches named params to a net. Arm a
-                // label-tool ghost with a "PARAM=VALUE" default so the user
-                // drops + edits inline. Full parameter-manager dialog lands
-                // in v0.7.1.
+                // label-tool ghost with a "PARAM=VALUE" default so the
+                // user drops + edits inline. Bulk edits go through the
+                // Parameter Manager (Design menu).
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
                 self.interaction_state.canvas.ghost_label =
@@ -148,9 +148,9 @@ impl Signex {
                     });
             }
             ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
-                // Blanket / Compile Mask — rectangular rule areas. Placement
-                // is Tool::Rectangle for v0.7; the rule/mask semantics wire
-                // into ERC in v0.7.1.
+                // Blanket / Compile Mask — rectangular rule areas.
+                // Placement is Tool::Rectangle for v0.7; rule/mask
+                // semantics are a v1.1 (Advanced Schematic) item.
                 let _ =
                     self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }

@@ -134,6 +134,124 @@ pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<Select
     hit_test_rect_mode(sheet, rect, SelectionMode::Inside)
 }
 
+/// Ray-cast point-in-polygon test. `poly` is a closed polygon in CCW
+/// or CW order (direction doesn't matter). Uses the even-odd rule.
+fn point_in_polygon(px: f64, py: f64, poly: &[(f64, f64)]) -> bool {
+    if poly.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let n = poly.len();
+    let mut j = n - 1;
+    for i in 0..n {
+        let (xi, yi) = poly[i];
+        let (xj, yj) = poly[j];
+        if ((yi > py) != (yj > py))
+            && (px < (xj - xi) * (py - yi) / (yj - yi + 1e-12) + xi)
+        {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Segment-segment intersection test (ignoring endpoint-touch since
+/// lasso polygons don't usually touch wire endpoints exactly — if
+/// they do, the containment test covers it).
+fn segments_intersect(
+    p1: (f64, f64),
+    p2: (f64, f64),
+    p3: (f64, f64),
+    p4: (f64, f64),
+) -> bool {
+    let d = (p4.0 - p3.0) * (p1.1 - p3.1) - (p4.1 - p3.1) * (p1.0 - p3.0);
+    let e = (p2.0 - p1.0) * (p1.1 - p3.1) - (p2.1 - p1.1) * (p1.0 - p3.0);
+    let f = (p4.0 - p3.0) * (p2.1 - p1.1) - (p4.1 - p3.1) * (p2.0 - p1.0);
+    if f.abs() < 1e-12 {
+        return false;
+    }
+    let t = d / f;
+    let u = e / f;
+    (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)
+}
+
+/// Altium-style lasso selection. `polygon` is the closed polygon in
+/// world space (the lasso's vertex list, implicitly closed — the last
+/// edge is `polygon[n-1] → polygon[0]`). Items with a point inside the
+/// polygon select; wire/bus segments select if either endpoint is
+/// inside OR any polygon edge crosses the segment.
+pub fn hit_test_polygon(
+    sheet: &SchematicRenderSnapshot,
+    polygon: &[(f64, f64)],
+) -> Vec<SelectedItem> {
+    if polygon.len() < 3 {
+        return Vec::new();
+    }
+    let edges: Vec<((f64, f64), (f64, f64))> = (0..polygon.len())
+        .map(|i| (polygon[i], polygon[(i + 1) % polygon.len()]))
+        .collect();
+    let segment_crosses_polygon = |a: (f64, f64), b: (f64, f64)| -> bool {
+        edges
+            .iter()
+            .any(|(e1, e2)| segments_intersect(a, b, *e1, *e2))
+    };
+    let mut result = Vec::new();
+    for sym in &sheet.symbols {
+        if point_in_polygon(sym.position.x, sym.position.y, polygon) {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+        }
+    }
+    for w in &sheet.wires {
+        let a = (w.start.x, w.start.y);
+        let b = (w.end.x, w.end.y);
+        if point_in_polygon(a.0, a.1, polygon)
+            || point_in_polygon(b.0, b.1, polygon)
+            || segment_crosses_polygon(a, b)
+        {
+            result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
+        }
+    }
+    for bus in &sheet.buses {
+        let a = (bus.start.x, bus.start.y);
+        let b = (bus.end.x, bus.end.y);
+        if point_in_polygon(a.0, a.1, polygon)
+            || point_in_polygon(b.0, b.1, polygon)
+            || segment_crosses_polygon(a, b)
+        {
+            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
+        }
+    }
+    for j in &sheet.junctions {
+        if point_in_polygon(j.position.x, j.position.y, polygon) {
+            result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
+        }
+    }
+    for nc in &sheet.no_connects {
+        if point_in_polygon(nc.position.x, nc.position.y, polygon) {
+            result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
+        }
+    }
+    for lbl in &sheet.labels {
+        if point_in_polygon(lbl.position.x, lbl.position.y, polygon) {
+            result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
+        }
+    }
+    for tn in &sheet.text_notes {
+        if point_in_polygon(tn.position.x, tn.position.y, polygon) {
+            result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
+        }
+    }
+    for cs in &sheet.child_sheets {
+        let cx = cs.position.x + cs.size.0 / 2.0;
+        let cy = cs.position.y + cs.size.1 / 2.0;
+        if point_in_polygon(cx, cy, polygon) {
+            result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
+        }
+    }
+    result
+}
+
 /// Returns true if a segment from `(x1,y1)` to `(x2,y2)` overlaps
 /// the rectangle at all — either endpoint inside, or the segment
 /// crossing any of the four edges.

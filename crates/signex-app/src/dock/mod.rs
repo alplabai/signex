@@ -52,6 +52,17 @@ pub enum DockMessage {
     TabDragStart(PanelPosition, usize),
     /// Mouse released on a tab — if no undock happened, treat as click → select.
     TabClick(PanelPosition, usize),
+    /// Reorder tabs within a dock region. `from` is the dragged tab's
+    /// original index, `to` is the index of the tab it was released
+    /// on. Currently produced by the internal TabClick handler — not
+    /// emitted directly by the UI yet (left available for a future
+    /// pointer-tracking drop indicator).
+    #[allow(dead_code)]
+    ReorderTab {
+        pos: PanelPosition,
+        from: usize,
+        to: usize,
+    },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Move a floating panel by delta.
@@ -181,18 +192,49 @@ impl DockArea {
             DockMessage::TabDragStart(pos, idx) => {
                 self.tab_drag = Some((pos, idx));
             }
+            DockMessage::ReorderTab { pos, from, to } => {
+                let region = match pos {
+                    PanelPosition::Left => &mut self.left,
+                    PanelPosition::Right => &mut self.right,
+                    PanelPosition::Bottom => &mut self.bottom,
+                };
+                if from < region.panels.len() && to < region.panels.len() {
+                    let panel = region.panels.remove(from);
+                    region.panels.insert(to, panel);
+                    region.active = to;
+                }
+            }
             DockMessage::TabClick(pos, idx) => {
-                // Mouse-up on tab: if UndockPanel did not fire, treat as click → select.
-                if self.tab_drag.is_some() {
-                    self.tab_drag = None;
-                    let region = match pos {
-                        PanelPosition::Left => &mut self.left,
-                        PanelPosition::Right => &mut self.right,
-                        PanelPosition::Bottom => &mut self.bottom,
-                    };
-                    if idx < region.panels.len() {
-                        region.active = idx;
-                        region.collapsed = false;
+                // Mouse-up on tab: if UndockPanel did not fire, treat
+                // as click → select. If the drag started on a
+                // different tab in the same region, reorder the
+                // panels vector instead so the user can drag tabs to
+                // shuffle them within the strip.
+                if let Some((drag_pos, from)) = self.tab_drag.take() {
+                    if drag_pos == pos && from != idx {
+                        let region = match pos {
+                            PanelPosition::Left => &mut self.left,
+                            PanelPosition::Right => &mut self.right,
+                            PanelPosition::Bottom => &mut self.bottom,
+                        };
+                        if from < region.panels.len()
+                            && idx < region.panels.len()
+                        {
+                            let panel = region.panels.remove(from);
+                            region.panels.insert(idx, panel);
+                            region.active = idx;
+                            region.collapsed = false;
+                        }
+                    } else {
+                        let region = match pos {
+                            PanelPosition::Left => &mut self.left,
+                            PanelPosition::Right => &mut self.right,
+                            PanelPosition::Bottom => &mut self.bottom,
+                        };
+                        if idx < region.panels.len() {
+                            region.active = idx;
+                            region.collapsed = false;
+                        }
                     }
                 }
             }

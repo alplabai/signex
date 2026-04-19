@@ -1029,7 +1029,28 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let menu = menu_bar::view(&document.panel_ctx.tokens).map(Message::Menu);
+        // Context-aware menu: each leaf gates on whether its action
+        // makes sense in the current app state. `has_schematic` /
+        // `has_selection` drive most entries; undo / redo consult
+        // the engine's history so they grey out when empty.
+        let menu_ctx = crate::menu_bar::MenuContext {
+            has_schematic: self.has_active_schematic(),
+            has_pcb: self.has_active_pcb(),
+            has_project: document.project_path.is_some(),
+            has_selection: !interaction.canvas.selected.is_empty(),
+            can_undo: document
+                .engine
+                .as_ref()
+                .map(|e| e.can_undo())
+                .unwrap_or(false),
+            can_redo: document
+                .engine
+                .as_ref()
+                .map(|e| e.can_redo())
+                .unwrap_or(false),
+        };
+        let menu =
+            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);

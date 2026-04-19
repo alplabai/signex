@@ -66,6 +66,25 @@ pub enum MenuMessage {
     OpenPreferences,
 }
 
+/// Context passed into `view` so each menu leaf can decide whether to
+/// render as an active link or a disabled item. Keeps the menu
+/// context-aware — e.g. Annotate / ERC / Save are unclickable when no
+/// schematic is open.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MenuContext {
+    pub has_schematic: bool,
+    pub has_pcb: bool,
+    /// Reserved for guarding project-wide items (e.g. multi-sheet
+    /// navigator, BOM across project) when those land. Currently no
+    /// menu entry reads this but the field stays so callers don't
+    /// need to update their struct literal when we wire it up.
+    #[allow(dead_code)]
+    pub has_project: bool,
+    pub has_selection: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
 // ─── Constants ────────────────────────────────────────────────
 
 pub const MENU_BAR_HEIGHT: f32 = 28.0;
@@ -102,8 +121,26 @@ impl MenuColors {
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
+pub fn view(
+    tokens: &ThemeTokens,
+    ctx: MenuContext,
+) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
+    // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_stub` — enabled items
+    // dispatch their message, disabled items render greyed-out like
+    // the stub entries so Annotate / ERC / Save can't fire when no
+    // schematic is loaded.
+    let leaf_if = |label: &str,
+                   shortcut: Option<&str>,
+                   msg: MenuMessage,
+                   enabled: bool|
+     -> Item<'static, MenuMessage, Theme, iced::Renderer> {
+        if enabled {
+            leaf(label, shortcut, msg, mc)
+        } else {
+            leaf_stub(label, shortcut, mc)
+        }
+    };
 
     let menu_template = |items| {
         Menu::new(items)
@@ -118,8 +155,13 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
             leaf_stub("New Project", Some("Ctrl+N"), mc),
             leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
             separator(mc),
-            leaf("Save", Some("Ctrl+S"), MenuMessage::Save, mc),
-            leaf("Save As...", Some("Ctrl+Shift+S"), MenuMessage::SaveAs, mc),
+            leaf_if("Save", Some("Ctrl+S"), MenuMessage::Save, ctx.has_schematic),
+            leaf_if(
+                "Save As...",
+                Some("Ctrl+Shift+S"),
+                MenuMessage::SaveAs,
+                ctx.has_schematic,
+            ),
             separator(mc),
             leaf_stub("Exit", None, mc),
         ]),
@@ -128,25 +170,45 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
     let edit_menu = Item::with_menu(
         root_btn("Edit", mc),
         menu_template(vec![
-            leaf("Undo", Some("Ctrl+Z"), MenuMessage::Undo, mc),
-            leaf("Redo", Some("Ctrl+Y"), MenuMessage::Redo, mc),
+            leaf_if("Undo", Some("Ctrl+Z"), MenuMessage::Undo, ctx.can_undo),
+            leaf_if("Redo", Some("Ctrl+Y"), MenuMessage::Redo, ctx.can_redo),
             separator(mc),
-            leaf("Cut", Some("Ctrl+X"), MenuMessage::Cut, mc),
-            leaf("Copy", Some("Ctrl+C"), MenuMessage::Copy, mc),
-            leaf("Paste", Some("Ctrl+V"), MenuMessage::Paste, mc),
-            leaf(
+            leaf_if("Cut", Some("Ctrl+X"), MenuMessage::Cut, ctx.has_selection),
+            leaf_if("Copy", Some("Ctrl+C"), MenuMessage::Copy, ctx.has_selection),
+            leaf_if("Paste", Some("Ctrl+V"), MenuMessage::Paste, ctx.has_schematic),
+            leaf_if(
                 "Smart Paste",
                 Some("Shift+Ctrl+V"),
                 MenuMessage::SmartPaste,
-                mc,
+                ctx.has_schematic,
             ),
-            leaf("Duplicate", Some("Ctrl+D"), MenuMessage::Duplicate, mc),
-            leaf("Delete", Some("Del"), MenuMessage::Delete, mc),
+            leaf_if(
+                "Duplicate",
+                Some("Ctrl+D"),
+                MenuMessage::Duplicate,
+                ctx.has_selection,
+            ),
+            leaf_if(
+                "Delete",
+                Some("Del"),
+                MenuMessage::Delete,
+                ctx.has_selection,
+            ),
             separator(mc),
-            leaf("Select All", Some("Ctrl+A"), MenuMessage::SelectAll, mc),
+            leaf_if(
+                "Select All",
+                Some("Ctrl+A"),
+                MenuMessage::SelectAll,
+                ctx.has_schematic,
+            ),
             separator(mc),
-            leaf("Find", Some("Ctrl+F"), MenuMessage::Find, mc),
-            leaf("Find and Replace", Some("Ctrl+H"), MenuMessage::Replace, mc),
+            leaf_if("Find", Some("Ctrl+F"), MenuMessage::Find, ctx.has_schematic),
+            leaf_if(
+                "Find and Replace",
+                Some("Ctrl+H"),
+                MenuMessage::Replace,
+                ctx.has_schematic,
+            ),
         ]),
     );
 
@@ -155,22 +217,34 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
         menu_template(vec![
             leaf_stub("Zoom In", Some("Ctrl+="), mc),
             leaf_stub("Zoom Out", Some("Ctrl+-"), mc),
-            leaf("Fit All", Some("Home"), MenuMessage::ZoomFit, mc),
+            leaf_if(
+                "Fit All",
+                Some("Home"),
+                MenuMessage::ZoomFit,
+                ctx.has_schematic || ctx.has_pcb,
+            ),
             separator(mc),
-            leaf(
+            leaf_if(
                 "Toggle Grid",
                 Some("Shift+Ctrl+G"),
                 MenuMessage::ToggleGrid,
-                mc,
+                ctx.has_schematic || ctx.has_pcb,
             ),
-            leaf("Cycle Grid Size", Some("G"), MenuMessage::CycleGrid, mc),
-            leaf(
+            leaf_if(
+                "Cycle Grid Size",
+                Some("G"),
+                MenuMessage::CycleGrid,
+                ctx.has_schematic || ctx.has_pcb,
+            ),
+            leaf_if(
                 "AutoFocus (dim unselected)",
                 Some("F9"),
                 MenuMessage::ToggleAutoFocus,
-                mc,
+                ctx.has_schematic,
             ),
             separator(mc),
+            // Panel-open entries are always available — panels work
+            // without an active document (show empty state).
             leaf("Projects", None, MenuMessage::OpenProjectsPanel, mc),
             leaf("Components", None, MenuMessage::OpenComponentsPanel, mc),
             leaf("Navigator", None, MenuMessage::OpenNavigatorPanel, mc),
@@ -183,11 +257,21 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
     let place_menu = Item::with_menu(
         root_btn("Place", mc),
         menu_template(vec![
-            leaf("Wire", Some("W"), MenuMessage::PlaceWire, mc),
-            leaf("Bus", Some("B"), MenuMessage::PlaceBus, mc),
-            leaf("Net Label", Some("L"), MenuMessage::PlaceLabel, mc),
+            leaf_if("Wire", Some("W"), MenuMessage::PlaceWire, ctx.has_schematic),
+            leaf_if("Bus", Some("B"), MenuMessage::PlaceBus, ctx.has_schematic),
+            leaf_if(
+                "Net Label",
+                Some("L"),
+                MenuMessage::PlaceLabel,
+                ctx.has_schematic,
+            ),
             separator(mc),
-            leaf("Component...", Some("P"), MenuMessage::PlaceComponent, mc),
+            leaf_if(
+                "Component...",
+                Some("P"),
+                MenuMessage::PlaceComponent,
+                ctx.has_schematic,
+            ),
             leaf_stub("Power Port", None, mc),
             separator(mc),
             leaf_stub("Text", None, mc),
@@ -197,40 +281,42 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
     );
 
     // Design → Annotation submenu mirrors Altium's Annotation cascade.
+    // Every entry gated on `has_schematic` — annotating without a
+    // project open is nonsense.
     let annotation_submenu: Item<'static, MenuMessage, Theme, iced::Renderer> =
         Item::with_menu(
             submenu_item_btn("Annotation", mc),
             menu_template(vec![
-                leaf(
+                leaf_if(
                     "Annotate Schematics...",
                     None,
                     MenuMessage::Annotate,
-                    mc,
+                    ctx.has_schematic,
                 ),
-                leaf(
+                leaf_if(
                     "Reset Schematic Designators...",
                     None,
                     MenuMessage::AnnotateReset,
-                    mc,
+                    ctx.has_schematic,
                 ),
-                leaf(
+                leaf_if(
                     "Reset Duplicate Schematic Designators...",
                     None,
                     MenuMessage::AnnotateResetDuplicates,
-                    mc,
+                    ctx.has_schematic,
                 ),
                 separator(mc),
-                leaf(
+                leaf_if(
                     "Annotate Schematics Quietly",
                     Some("Alt+A"),
                     MenuMessage::AnnotateQuietly,
-                    mc,
+                    ctx.has_schematic,
                 ),
-                leaf(
+                leaf_if(
                     "Force Annotate All Schematics",
                     Some("Shift+Alt+A"),
                     MenuMessage::AnnotateForceAll,
-                    mc,
+                    ctx.has_schematic,
                 ),
                 separator(mc),
                 leaf_stub("Back Annotate Schematics...", None, mc),
@@ -243,7 +329,12 @@ pub fn view(tokens: &ThemeTokens) -> Element<'static, MenuMessage> {
         menu_template(vec![
             annotation_submenu,
             separator(mc),
-            leaf("Electrical Rules Check", Some("F8"), MenuMessage::Erc, mc),
+            leaf_if(
+                "Electrical Rules Check",
+                Some("F8"),
+                MenuMessage::Erc,
+                ctx.has_schematic,
+            ),
             separator(mc),
             leaf_stub("Generate BOM", None, mc),
             leaf_stub("Generate Netlist", None, mc),

@@ -129,6 +129,11 @@ pub struct SchematicCanvas {
     /// from `ui_state.wire_color_overrides` on every canvas rebuild.
     pub wire_color_overrides:
         std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// In-flight lasso polygon in world space. Synced from
+    /// `ui_state.lasso_polygon` so the overlay draw can render the
+    /// committed vertices + rubber-band to the cursor without
+    /// reaching into app state.
+    pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
 }
 
 /// Canvas-side projection of an ERC violation — just enough to draw
@@ -204,6 +209,7 @@ impl SchematicCanvas {
             erc_markers: Vec::new(),
             pending_net_color: None,
             wire_color_overrides: std::collections::HashMap::new(),
+            lasso_polygon: None,
         }
     }
 
@@ -961,6 +967,78 @@ impl canvas::Program<Message> for SchematicCanvas {
                         b.close();
                     });
                     frame.fill(&nib, Color::from_rgb(0.15, 0.15, 0.15));
+                }
+
+                // Lasso-in-progress preview — solid segments between
+                // vertices plus a rubber-band dashed line from the
+                // last vertex to the cursor. Same colour as the
+                // selection accent so it reads as "selection in
+                // progress".
+                if let Some(lasso) = &self.lasso_polygon {
+                    if !lasso.is_empty() {
+                        // Use the selection overlay colour so lasso
+                        // reads as "selection in progress" — same as
+                        // the box-select rubber-band.
+                        let accent = Color::from_rgb(0.24, 0.62, 0.97);
+                        let stroke =
+                            canvas::Stroke::default().with_color(accent).with_width(1.5);
+                        // Segments between committed vertices.
+                        for pair in lasso.windows(2) {
+                            let p1 = state.camera.world_to_screen(
+                                iced::Point::new(pair[0].x as f32, pair[0].y as f32),
+                                bounds,
+                            );
+                            let p2 = state.camera.world_to_screen(
+                                iced::Point::new(pair[1].x as f32, pair[1].y as f32),
+                                bounds,
+                            );
+                            frame.stroke(&canvas::Path::line(p1, p2), stroke);
+                        }
+                        // Rubber-band from last vertex → cursor (snapped).
+                        if let Some(last) = lasso.last() {
+                            let cursor_world =
+                                state.camera.screen_to_world(cursor_pos, bounds);
+                            let (snap_x, snap_y) = if self.snap_enabled
+                                && self.snap_grid_mm > 0.0
+                            {
+                                let g = self.snap_grid_mm;
+                                (
+                                    (cursor_world.x as f64 / g).round() * g,
+                                    (cursor_world.y as f64 / g).round() * g,
+                                )
+                            } else {
+                                (cursor_world.x as f64, cursor_world.y as f64)
+                            };
+                            let p1 = state.camera.world_to_screen(
+                                iced::Point::new(last.x as f32, last.y as f32),
+                                bounds,
+                            );
+                            let p2 = state.camera.world_to_screen(
+                                iced::Point::new(snap_x as f32, snap_y as f32),
+                                bounds,
+                            );
+                            let dashed = canvas::Stroke::default()
+                                .with_color(Color { a: 0.6, ..accent })
+                                .with_width(1.0);
+                            frame.stroke(&canvas::Path::line(p1, p2), dashed);
+                        }
+                        // Small circle at the first vertex to hint
+                        // "click here to close the polygon".
+                        if lasso.len() >= 3 {
+                            let first = lasso[0];
+                            let p = state.camera.world_to_screen(
+                                iced::Point::new(first.x as f32, first.y as f32),
+                                bounds,
+                            );
+                            let ring = canvas::Path::circle(p, 5.0);
+                            frame.stroke(
+                                &ring,
+                                canvas::Stroke::default()
+                                    .with_color(accent)
+                                    .with_width(1.5),
+                            );
+                        }
+                    }
                 }
 
                 // Wire-in-progress rubber-band preview
