@@ -379,6 +379,45 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSymbolField {
+                symbol_id,
+                key,
+                value,
+            } => {
+                // Reject overwrites of reserved keys — those have their
+                // own commands so ref/value/footprint moves stay tracked.
+                match key.to_lowercase().as_str() {
+                    "reference" | "value" | "footprint" => {
+                        return Ok(CommandResult::unchanged());
+                    }
+                    _ => {}
+                }
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .map(|symbol| {
+                        if value.is_empty() {
+                            symbol.fields.remove(&key).is_some()
+                        } else if symbol.fields.get(&key) == Some(&value) {
+                            false
+                        } else {
+                            symbol.fields.insert(key, value);
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::UpdateSymbolFields {
                 symbol_id,
                 reference,
@@ -750,6 +789,26 @@ impl Engine {
                 if items.is_empty() {
                     return Ok(CommandResult::unchanged());
                 }
+
+                // Helper: given a Vec and a reference uuid, return the
+                // insert position for JustAbove (ref_idx + 1) or
+                // JustBelow (ref_idx). Returns None when the reference
+                // uuid isn't in the Vec — caller falls back to
+                // no-change.
+                fn reorder_slot<T>(vec: &[T], uuid_of: impl Fn(&T) -> uuid::Uuid, direction: ReorderDirection) -> Option<usize> {
+                    match direction {
+                        ReorderDirection::ToFront => Some(vec.len()),
+                        ReorderDirection::ToBack => Some(0),
+                        ReorderDirection::JustAbove(target) => vec
+                            .iter()
+                            .position(|x| uuid_of(x) == target)
+                            .map(|i| i + 1),
+                        ReorderDirection::JustBelow(target) => vec
+                            .iter()
+                            .position(|x| uuid_of(x) == target),
+                    }
+                }
+
                 let mut changed = false;
                 for item in &items {
                     match item.kind {
@@ -758,15 +817,17 @@ impl Engine {
                                 self.document.symbols.iter().position(|s| s.uuid == item.uuid)
                             {
                                 let sym = self.document.symbols.remove(idx);
-                                match direction {
-                                    ReorderDirection::ToFront => {
-                                        self.document.symbols.push(sym);
-                                    }
-                                    ReorderDirection::ToBack => {
-                                        self.document.symbols.insert(0, sym);
-                                    }
+                                if let Some(mut slot) =
+                                    reorder_slot(&self.document.symbols, |s| s.uuid, direction)
+                                {
+                                    slot = slot.min(self.document.symbols.len());
+                                    self.document.symbols.insert(slot, sym);
+                                    changed = true;
+                                } else {
+                                    // Reference uuid missing — restore item at its
+                                    // original slot so we don't drop it silently.
+                                    self.document.symbols.insert(idx, sym);
                                 }
-                                changed = true;
                             }
                         }
                         SelectedKind::Wire => {
@@ -774,13 +835,15 @@ impl Engine {
                                 self.document.wires.iter().position(|w| w.uuid == item.uuid)
                             {
                                 let w = self.document.wires.remove(idx);
-                                match direction {
-                                    ReorderDirection::ToFront => self.document.wires.push(w),
-                                    ReorderDirection::ToBack => {
-                                        self.document.wires.insert(0, w)
-                                    }
+                                if let Some(mut slot) =
+                                    reorder_slot(&self.document.wires, |x| x.uuid, direction)
+                                {
+                                    slot = slot.min(self.document.wires.len());
+                                    self.document.wires.insert(slot, w);
+                                    changed = true;
+                                } else {
+                                    self.document.wires.insert(idx, w);
                                 }
-                                changed = true;
                             }
                         }
                         SelectedKind::Label => {
@@ -788,13 +851,15 @@ impl Engine {
                                 self.document.labels.iter().position(|l| l.uuid == item.uuid)
                             {
                                 let l = self.document.labels.remove(idx);
-                                match direction {
-                                    ReorderDirection::ToFront => self.document.labels.push(l),
-                                    ReorderDirection::ToBack => {
-                                        self.document.labels.insert(0, l)
-                                    }
+                                if let Some(mut slot) =
+                                    reorder_slot(&self.document.labels, |x| x.uuid, direction)
+                                {
+                                    slot = slot.min(self.document.labels.len());
+                                    self.document.labels.insert(slot, l);
+                                    changed = true;
+                                } else {
+                                    self.document.labels.insert(idx, l);
                                 }
-                                changed = true;
                             }
                         }
                         SelectedKind::TextNote => {
@@ -805,15 +870,15 @@ impl Engine {
                                 .position(|t| t.uuid == item.uuid)
                             {
                                 let t = self.document.text_notes.remove(idx);
-                                match direction {
-                                    ReorderDirection::ToFront => {
-                                        self.document.text_notes.push(t)
-                                    }
-                                    ReorderDirection::ToBack => {
-                                        self.document.text_notes.insert(0, t)
-                                    }
+                                if let Some(mut slot) =
+                                    reorder_slot(&self.document.text_notes, |x| x.uuid, direction)
+                                {
+                                    slot = slot.min(self.document.text_notes.len());
+                                    self.document.text_notes.insert(slot, t);
+                                    changed = true;
+                                } else {
+                                    self.document.text_notes.insert(idx, t);
                                 }
-                                changed = true;
                             }
                         }
                         // Drawings, junctions, NC, bus entries — omit for v0.7;
@@ -875,11 +940,28 @@ impl Engine {
         mode: crate::command::AnnotateMode,
         next_by_prefix: &mut std::collections::HashMap<String, u32>,
     ) -> Result<bool, EngineError> {
+        self.annotate_with_seed_and_locks(
+            mode,
+            next_by_prefix,
+            &std::collections::HashSet::new(),
+        )
+    }
+
+    /// Same as `annotate_with_seed`, but skips every symbol whose uuid
+    /// appears in `locked`. Used by the Annotate dialog's per-row lock
+    /// checkboxes so the user can exclude individual designators from
+    /// reannotation (Altium's "Lock" column behaviour).
+    pub fn annotate_with_seed_and_locks(
+        &mut self,
+        mode: crate::command::AnnotateMode,
+        next_by_prefix: &mut std::collections::HashMap<String, u32>,
+        locked: &std::collections::HashSet<uuid::Uuid>,
+    ) -> Result<bool, EngineError> {
         use crate::command::AnnotateMode;
         let before = self.document.clone();
         let is_designator_target =
             |sym: &signex_types::schematic::Symbol| -> bool {
-                !sym.is_power && !sym.reference.starts_with('#')
+                !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
             };
 
         // Phase 1: reset to '?' if requested.

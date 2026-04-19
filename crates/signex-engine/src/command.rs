@@ -112,6 +112,16 @@ pub enum Command {
         value: String,
         footprint: String,
     },
+    /// Set a single custom parameter/field on a symbol. `reference`,
+    /// `value`, and `footprint` have dedicated `UpdateSymbolFields`
+    /// above — this handles every other key in `symbol.fields`, for
+    /// example the Parameter Manager editing `Manufacturer` or `PartNo`.
+    /// Empty `value` removes the field.
+    SetSymbolField {
+        symbol_id: Uuid,
+        key: String,
+        value: String,
+    },
     PlaceWireSegment {
         wire: Wire,
     },
@@ -165,6 +175,12 @@ pub enum ReorderDirection {
     ToFront,
     /// Move to the start of the vector so it renders behind (Send To Back).
     ToBack,
+    /// Move just after the reference item's slot — renders on top of
+    /// the reference but below anything above it.
+    JustAbove(Uuid),
+    /// Move just before the reference item's slot — renders behind the
+    /// reference but on top of anything below it.
+    JustBelow(Uuid),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,6 +208,7 @@ impl Command {
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
+            Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,

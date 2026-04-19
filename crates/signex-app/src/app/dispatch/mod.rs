@@ -106,6 +106,15 @@ impl Signex {
                             ModalId::CloseTabConfirm => {
                                 self.ui_state.close_tab_confirm = None
                             }
+                            ModalId::MoveSelection => {
+                                self.ui_state.move_selection.open = false
+                            }
+                            ModalId::NetColorPalette => {
+                                self.ui_state.net_color_palette_open = false
+                            }
+                            ModalId::ParameterManager => {
+                                self.ui_state.parameter_manager_open = false
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — no additional state to reset since the
@@ -162,6 +171,112 @@ impl Signex {
             }
             Message::StartDetachedWindowDrag(modal) => {
                 self.handle_start_detached_window_drag(modal)
+            }
+            Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
+            Message::CloseMoveSelectionDialog => {
+                let _ = self.handle_close_move_selection_dialog();
+                self.close_detached_modal(super::state::ModalId::MoveSelection)
+            }
+            Message::MoveSelectionDxChanged(s) => {
+                self.ui_state.move_selection.dx = s;
+                Task::none()
+            }
+            Message::MoveSelectionDyChanged(s) => {
+                self.ui_state.move_selection.dy = s;
+                Task::none()
+            }
+            Message::MoveSelectionApply => self.handle_move_selection_apply(),
+            Message::OpenNetColorPalette => {
+                self.ui_state.net_color_palette_open = true;
+                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
+            }
+            Message::CloseNetColorPalette => {
+                self.ui_state.net_color_palette_open = false;
+                self.close_detached_modal(super::state::ModalId::NetColorPalette)
+            }
+            Message::NetColorSet { net, color } => {
+                if let Some(c) = color {
+                    self.ui_state.net_colors.insert(net, c);
+                } else {
+                    self.ui_state.net_colors.remove(&net);
+                }
+                self.interaction_state.canvas.clear_content_cache();
+                Task::none()
+            }
+            Message::OpenParameterManager => {
+                self.ui_state.parameter_manager_open = true;
+                self.handle_detach_modal(super::state::ModalId::ParameterManager)
+            }
+            Message::CloseParameterManager => {
+                self.ui_state.parameter_manager_open = false;
+                self.close_detached_modal(super::state::ModalId::ParameterManager)
+            }
+            Message::ParameterManagerEdit {
+                symbol_uuid,
+                key,
+                value,
+            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
+            Message::AnnotateToggleLock(uuid) => {
+                if self.ui_state.annotate_locked.contains(&uuid) {
+                    self.ui_state.annotate_locked.remove(&uuid);
+                } else {
+                    self.ui_state.annotate_locked.insert(uuid);
+                }
+                Task::none()
+            }
+            Message::CycleSelectionMode => {
+                use signex_render::schematic::hit_test::SelectionMode;
+                self.ui_state.selection_mode = match self.ui_state.selection_mode {
+                    SelectionMode::Inside => SelectionMode::Outside,
+                    SelectionMode::Outside => SelectionMode::TouchingLine,
+                    SelectionMode::TouchingLine => SelectionMode::Inside,
+                };
+                crate::diagnostics::log_info(&format!(
+                    "Selection mode: {:?}",
+                    self.ui_state.selection_mode
+                ));
+                Task::none()
+            }
+            Message::PinMatrixCellCycled { row, col } => {
+                use signex_erc::Severity;
+                // Baseline defaults must match the `MATRIX` constant in
+                // `pin_matrix_view` so "clearing" an override drops back
+                // to the same severity the user sees in the UI.
+                const BASELINE: [[Severity; 6]; 6] = [
+                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off],
+                    [Severity::Off, Severity::Error, Severity::Off, Severity::Off, Severity::Error, Severity::Error],
+                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Warning],
+                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Error],
+                    [Severity::Off, Severity::Error, Severity::Off, Severity::Off, Severity::Error, Severity::Error],
+                    [Severity::Off, Severity::Error, Severity::Warning, Severity::Error, Severity::Error, Severity::Off],
+                ];
+                let key = (row, col);
+                let baseline = BASELINE
+                    .get(row as usize)
+                    .and_then(|r| r.get(col as usize))
+                    .copied()
+                    .unwrap_or(Severity::Off);
+                let current = self
+                    .ui_state
+                    .pin_matrix_overrides
+                    .get(&key)
+                    .copied()
+                    .unwrap_or(baseline);
+                let next = match current {
+                    Severity::Error => Severity::Warning,
+                    Severity::Warning => Severity::Info,
+                    Severity::Info => Severity::Off,
+                    Severity::Off => Severity::Error,
+                };
+                if next == baseline {
+                    self.ui_state.pin_matrix_overrides.remove(&key);
+                } else {
+                    self.ui_state.pin_matrix_overrides.insert(key, next);
+                }
+                crate::fonts::write_pin_matrix_overrides(
+                    &self.ui_state.pin_matrix_overrides,
+                );
+                Task::none()
             }
             Message::Noop => Task::none(),
         }

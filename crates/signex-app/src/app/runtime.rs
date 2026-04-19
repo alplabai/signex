@@ -233,6 +233,12 @@ impl Signex {
     }
 
     pub(crate) fn update_selection_info(&mut self) {
+        // AutoFocus dims every item not in the current selection, so any
+        // selection change must invalidate the cached content layer to
+        // reflect the new focus set.
+        if self.ui_state.auto_focus {
+            self.interaction_state.canvas.clear_content_cache();
+        }
         let selected = &self.interaction_state.canvas.selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

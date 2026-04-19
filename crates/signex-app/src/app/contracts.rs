@@ -169,6 +169,44 @@ pub enum Message {
     /// the detached modal even though `decorations: false` removed the
     /// native title bar.
     StartDetachedWindowDrag(super::state::ModalId),
+    /// Open the Move Selection dialog (Altium numeric ΔX / ΔY move).
+    OpenMoveSelectionDialog,
+    CloseMoveSelectionDialog,
+    MoveSelectionDxChanged(String),
+    MoveSelectionDyChanged(String),
+    /// Apply the current ΔX / ΔY to every selected item. Closes the
+    /// dialog on success.
+    MoveSelectionApply,
+    /// Open the F5 Net Color palette.
+    OpenNetColorPalette,
+    CloseNetColorPalette,
+    /// Assign a color to a net label text, or clear the override.
+    NetColorSet {
+        net: String,
+        color: Option<signex_types::theme::Color>,
+    },
+    /// Open the Parameter Manager dialog (bulk parameter editor).
+    OpenParameterManager,
+    CloseParameterManager,
+    /// Edit a single parameter on a single symbol via the manager.
+    ParameterManagerEdit {
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        value: String,
+    },
+    /// Click on a pin-connection matrix cell: cycle its severity
+    /// Error → Warning → Info → Off → (back to baseline default).
+    PinMatrixCellCycled {
+        row: u8,
+        col: u8,
+    },
+    /// Toggle the "locked against reannotation" flag on a symbol from
+    /// inside the Annotate dialog. Locked symbols keep their current
+    /// designator even under Reset & Renumber.
+    AnnotateToggleLock(uuid::Uuid),
+    /// Cycle Altium's rubber-band selection mode
+    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
+    CycleSelectionMode,
     Noop,
 }
 

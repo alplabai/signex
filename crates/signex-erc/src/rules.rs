@@ -207,13 +207,99 @@ pub(crate) fn dangling_wire(
 /// disjoint nets (labels on wires that never touch). Detecting "disjoint"
 /// rigorously needs full connectivity; v0.7 ships a simpler check that
 /// flags any label whose text matches a global/hier label's text but sits
-/// on a local-only subnet. Until connectivity analysis lands, this rule
-/// emits nothing — the scaffold stays so severity config works end-to-end.
+/// Rule: two different net-label texts land on the same electrical net.
+/// Uses a union-find over wire endpoints (and labels as "ghost endpoints")
+/// so connectivity follows any wire path between the two labels.
 pub(crate) fn net_label_conflict(
-    _snapshot: &SchematicRenderSnapshot,
-    _out: &mut [Violation],
+    snapshot: &SchematicRenderSnapshot,
+    out: &mut Vec<Violation>,
 ) {
-    // Connectivity analysis required — placeholder for v0.7.1.
+    // Quantise points to an integer grid so small float noise doesn't
+    // split a single net. Grid spacing 0.01 mm is tighter than any
+    // real schematic grid (smallest is 0.1 mm on KiCad).
+    fn key(p: &Point) -> (i64, i64) {
+        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    }
+
+    // Union-find over quantised points.
+    let mut parent: std::collections::HashMap<(i64, i64), (i64, i64)> =
+        std::collections::HashMap::new();
+    fn find(
+        parent: &mut std::collections::HashMap<(i64, i64), (i64, i64)>,
+        x: (i64, i64),
+    ) -> (i64, i64) {
+        let p = *parent.entry(x).or_insert(x);
+        if p == x {
+            x
+        } else {
+            let r = find(parent, p);
+            parent.insert(x, r);
+            r
+        }
+    }
+    fn union(
+        parent: &mut std::collections::HashMap<(i64, i64), (i64, i64)>,
+        a: (i64, i64),
+        b: (i64, i64),
+    ) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent.insert(ra, rb);
+        }
+    }
+
+    // Every wire segment joins its endpoints into one net.
+    for w in &snapshot.wires {
+        union(&mut parent, key(&w.start), key(&w.end));
+    }
+    // Junctions explicitly merge touching endpoints. (Wires already cover
+    // this implicitly, but explicit junctions on crossings need us to
+    // union their point with anything else we see at that position.)
+    for j in &snapshot.junctions {
+        let k = key(&j.position);
+        // Insert so the key exists even if nothing else references it.
+        find(&mut parent, k);
+    }
+
+    // Group net-type labels (not hier/global — those are cross-sheet and
+    // already handled by BadHierSheetPin / orphan label) by their net
+    // root. A label's "root" is the union-find root of the quantised
+    // point the label sits on.
+    let mut by_root: std::collections::HashMap<
+        (i64, i64),
+        Vec<&signex_types::schematic::Label>,
+    > = std::collections::HashMap::new();
+    for lbl in &snapshot.labels {
+        if !matches!(lbl.label_type, signex_types::schematic::LabelType::Net) {
+            continue;
+        }
+        let root = find(&mut parent, key(&lbl.position));
+        by_root.entry(root).or_default().push(lbl);
+    }
+
+    // Any root with 2+ labels carrying different texts is a conflict.
+    for labels in by_root.values() {
+        if labels.len() < 2 {
+            continue;
+        }
+        let first = labels[0];
+        // Find the first label whose text differs from `first.text`.
+        let Some(conflicting) = labels.iter().find(|l| l.text != first.text) else {
+            continue; // All same text — fine.
+        };
+        out.push(Violation {
+            rule: RuleKind::NetLabelConflict,
+            severity: RuleKind::NetLabelConflict.default_severity(),
+            message: format!(
+                "Net label conflict: '{}' and '{}' on the same net",
+                first.text, conflicting.text,
+            ),
+            location: first.position,
+            primary: Some(sel(first.uuid, SelectedKind::Label)),
+            peer: Some(sel(conflicting.uuid, SelectedKind::Label)),
+        });
+    }
 }
 
 /// Rule: a label sits in free space (not on a wire, bus, or pin).
@@ -254,24 +340,150 @@ pub(crate) fn orphan_label(
     }
 }
 
-/// Rule: two buses with explicit bit-range definitions connect and disagree
-/// on their width. Signex doesn't parse bus bit-ranges yet (v0.7.2);
-/// placeholder.
+/// Rule: bus labels on the same physical bus disagree on bit width.
+/// Each bus label is parsed for a `[low..high]` range suffix; labels on
+/// the same connected bus with mismatched ranges trigger an error.
 pub(crate) fn bus_bit_width_mismatch(
-    _snapshot: &SchematicRenderSnapshot,
-    _out: &mut [Violation],
+    snapshot: &SchematicRenderSnapshot,
+    out: &mut Vec<Violation>,
 ) {
-    // Bus bit-range parsing lands with v1.1 (Advanced Schematic).
+    fn key(p: &Point) -> (i64, i64) {
+        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    }
+    // Union-find, same structure as NetLabelConflict but over bus
+    // endpoints only. Local fns mirror the net_label_conflict helpers.
+    let mut parent: std::collections::HashMap<(i64, i64), (i64, i64)> =
+        std::collections::HashMap::new();
+    fn find(
+        parent: &mut std::collections::HashMap<(i64, i64), (i64, i64)>,
+        x: (i64, i64),
+    ) -> (i64, i64) {
+        let p = *parent.entry(x).or_insert(x);
+        if p == x {
+            x
+        } else {
+            let r = find(parent, p);
+            parent.insert(x, r);
+            r
+        }
+    }
+    fn union(
+        parent: &mut std::collections::HashMap<(i64, i64), (i64, i64)>,
+        a: (i64, i64),
+        b: (i64, i64),
+    ) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent.insert(ra, rb);
+        }
+    }
+    for b in &snapshot.buses {
+        union(&mut parent, key(&b.start), key(&b.end));
+    }
+
+    /// Parses a bus label like `DATA[0..7]` or `A[15..0]` into a (base,
+    /// low, high) tuple. Returns None for labels that don't match the
+    /// pattern — those are treated as "unknown width" and skipped.
+    fn parse_bus_label(text: &str) -> Option<(&str, i64, i64)> {
+        let open = text.rfind('[')?;
+        if !text.ends_with(']') {
+            return None;
+        }
+        let inside = &text[open + 1..text.len() - 1];
+        let dots = inside.find("..")?;
+        let lo: i64 = inside[..dots].trim().parse().ok()?;
+        let hi: i64 = inside[dots + 2..].trim().parse().ok()?;
+        // Normalise so low <= high regardless of MSB/LSB-first notation.
+        let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
+        Some((&text[..open], lo, hi))
+    }
+
+    let mut by_root: std::collections::HashMap<
+        (i64, i64),
+        Vec<(&signex_types::schematic::Label, (i64, i64))>,
+    > = std::collections::HashMap::new();
+    for lbl in &snapshot.labels {
+        let Some((_base, lo, hi)) = parse_bus_label(&lbl.text) else {
+            continue;
+        };
+        let root = find(&mut parent, key(&lbl.position));
+        by_root.entry(root).or_default().push((lbl, (lo, hi)));
+    }
+
+    for group in by_root.values() {
+        if group.len() < 2 {
+            continue;
+        }
+        let (first_lbl, first_range) = group[0];
+        let Some((conflict_lbl, conflict_range)) =
+            group.iter().find(|(_, r)| *r != first_range)
+        else {
+            continue;
+        };
+        out.push(Violation {
+            rule: RuleKind::BusBitWidthMismatch,
+            severity: RuleKind::BusBitWidthMismatch.default_severity(),
+            message: format!(
+                "Bus width mismatch: '{}' ({}..{}) vs '{}' ({}..{})",
+                first_lbl.text,
+                first_range.0,
+                first_range.1,
+                conflict_lbl.text,
+                conflict_range.0,
+                conflict_range.1,
+            ),
+            location: first_lbl.position,
+            primary: Some(sel(first_lbl.uuid, SelectedKind::Label)),
+            peer: Some(sel(conflict_lbl.uuid, SelectedKind::Label)),
+        });
+    }
 }
 
-/// Rule: a child-sheet declares a port that the sheet symbol doesn't expose,
-/// or vice versa. Needs cross-sheet resolution which Signex defers to v1.1
-/// (Hierarchical navigator); placeholder.
+/// Rule: a hierarchical sheet symbol declares duplicate port pin names,
+/// or declares zero pins while referencing a child schematic file. Full
+/// cross-sheet validation (port name ↔ child-sheet hier label mapping)
+/// needs cross-sheet snapshots and lands with v1.1's hierarchical
+/// navigator; this thin check catches the common local mistake.
 pub(crate) fn bad_hier_sheet_pin(
-    _snapshot: &SchematicRenderSnapshot,
-    _out: &mut [Violation],
+    snapshot: &SchematicRenderSnapshot,
+    out: &mut Vec<Violation>,
 ) {
-    // Cross-sheet validation belongs with the hierarchical navigator (v1.1).
+    for child in &snapshot.child_sheets {
+        let mut seen: HashMap<&str, uuid::Uuid> = HashMap::new();
+        for pin in &child.pins {
+            if let Some(prev_uuid) = seen.get(pin.name.as_str()) {
+                out.push(Violation {
+                    rule: RuleKind::BadHierSheetPin,
+                    severity: RuleKind::BadHierSheetPin.default_severity(),
+                    message: format!(
+                        "Duplicate sheet pin '{}' on sheet '{}'",
+                        pin.name, child.name,
+                    ),
+                    location: pin.position,
+                    primary: Some(sel(pin.uuid, SelectedKind::Label)),
+                    peer: Some(sel(*prev_uuid, SelectedKind::Label)),
+                });
+            } else {
+                seen.insert(pin.name.as_str(), pin.uuid);
+            }
+        }
+        // Flag a sheet that references a child file but exposes no
+        // ports at all — usually a leftover of an unfinished wiring.
+        if !child.filename.is_empty() && child.pins.is_empty() {
+            out.push(Violation {
+                rule: RuleKind::BadHierSheetPin,
+                severity: Severity::Warning,
+                message: format!(
+                    "Hierarchical sheet '{}' has no pins — the child schematic can't be wired in",
+                    child.name,
+                ),
+                location: child.position,
+                primary: Some(sel(child.uuid, SelectedKind::ChildSheet)),
+                peer: None,
+            });
+        }
+    }
 }
 
 /// Rule: a net that contains a symbol pin of type Power In or Power Out must
