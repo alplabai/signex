@@ -288,6 +288,16 @@ impl DockArea {
         }
     }
 
+    /// Panels currently docked in `position`, in display order. Used
+    /// by the Panels menu to mark open panels with a ✓.
+    pub fn panel_kinds(&self, position: PanelPosition) -> &[panels::PanelKind] {
+        match position {
+            PanelPosition::Left => &self.left.panels,
+            PanelPosition::Right => &self.right.panels,
+            PanelPosition::Bottom => &self.bottom.panels,
+        }
+    }
+
     pub fn view_region<'a>(
         &'a self,
         position: PanelPosition,
