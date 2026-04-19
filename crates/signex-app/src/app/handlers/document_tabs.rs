@@ -6,6 +6,35 @@ impl Signex {
     pub(crate) fn handle_document_tab_message(&mut self, msg: TabMessage) -> Task<Message> {
         match msg {
             TabMessage::Select(idx) => {
+                // If a drag is in flight from a different tab in the
+                // same bar, treat release-on-idx as a drop/reorder
+                // instead of a tab switch. Matches Altium's drag-the-
+                // tab behaviour and mirrors the dock-region reorder
+                // below in `dock::mod.rs`.
+                if let Some((from, _, _)) = self.ui_state.tab_dragging
+                    && from != idx
+                    && from < self.document_state.tabs.len()
+                    && idx < self.document_state.tabs.len()
+                {
+                    let tab = self.document_state.tabs.remove(from);
+                    self.document_state.tabs.insert(idx, tab);
+                    // Preserve the active tab visually — if the
+                    // dragged tab was active, it follows the move;
+                    // otherwise adjust the index to account for the
+                    // shift.
+                    let active = self.document_state.active_tab;
+                    self.document_state.active_tab = if active == from {
+                        idx
+                    } else if from < active && idx >= active {
+                        active - 1
+                    } else if from > active && idx <= active {
+                        active + 1
+                    } else {
+                        active
+                    };
+                    self.ui_state.tab_dragging = None;
+                    return Task::none();
+                }
                 if idx < self.document_state.tabs.len() && idx != self.document_state.active_tab {
                     self.park_active_schematic_session();
                     self.document_state.active_tab = idx;

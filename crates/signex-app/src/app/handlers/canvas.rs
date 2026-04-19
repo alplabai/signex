@@ -246,6 +246,66 @@ impl Signex {
                 self.ui_state.zoom = zoom_pct;
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Lasso in flight — each click appends a vertex.
+                // Clicking within 2 mm of the first vertex closes the
+                // polygon and commits the selection. Escape / right-
+                // click clear lasso_polygon to cancel.
+                if self.ui_state.lasso_polygon.is_some() {
+                    let (vx, vy) = if self.interaction_state.canvas.snap_enabled
+                        && self.interaction_state.canvas.snap_grid_mm > 0.0
+                    {
+                        let g = self.interaction_state.canvas.snap_grid_mm;
+                        ((world_x / g).round() * g, (world_y / g).round() * g)
+                    } else {
+                        (world_x, world_y)
+                    };
+                    let close_dist = 2.0_f64;
+                    let should_close = {
+                        let pts = self.ui_state.lasso_polygon.as_ref().unwrap();
+                        if pts.len() >= 3 {
+                            let first = pts[0];
+                            let dx = vx - first.x;
+                            let dy = vy - first.y;
+                            (dx * dx + dy * dy).sqrt() < close_dist
+                        } else {
+                            false
+                        }
+                    };
+                    if should_close {
+                        let pts = self.ui_state.lasso_polygon.take().unwrap_or_default();
+                        let poly: Vec<(f64, f64)> =
+                            pts.iter().map(|p| (p.x, p.y)).collect();
+                        if let Some(snapshot) = self.active_render_snapshot() {
+                            let filters =
+                                self.interaction_state.selection_filters.clone();
+                            self.interaction_state.canvas.selected =
+                                signex_render::schematic::hit_test::hit_test_polygon(
+                                    snapshot, &poly,
+                                )
+                                .into_iter()
+                                .filter(|h| {
+                                    crate::app::handlers::selection_workflow::passes_filter(
+                                        h,
+                                        snapshot,
+                                        &filters,
+                                    )
+                                })
+                                .collect();
+                            self.interaction_state.canvas.clear_overlay_cache();
+                            self.update_selection_info();
+                        }
+                    } else {
+                        self.ui_state
+                            .lasso_polygon
+                            .as_mut()
+                            .unwrap()
+                            .push(signex_types::schematic::Point::new(vx, vy));
+                        self.interaction_state.canvas.lasso_polygon =
+                            self.ui_state.lasso_polygon.clone();
+                        self.interaction_state.canvas.clear_overlay_cache();
+                    }
+                    return Task::none();
+                }
                 // Net-colour flood: the user picked a swatch from the
                 // Active Bar and is now clicking a wire. Union-find the
                 // whole connected net and apply the colour (or clear it
@@ -814,6 +874,34 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => {
+                // Lasso close on double-click — commit the polygon
+                // and select everything inside / crossing.
+                if let Some(pts) = self.ui_state.lasso_polygon.take() {
+                    if pts.len() >= 3 {
+                        let poly: Vec<(f64, f64)> =
+                            pts.iter().map(|p| (p.x, p.y)).collect();
+                        if let Some(snapshot) = self.active_render_snapshot() {
+                            let filters =
+                                self.interaction_state.selection_filters.clone();
+                            self.interaction_state.canvas.selected =
+                                signex_render::schematic::hit_test::hit_test_polygon(
+                                    snapshot, &poly,
+                                )
+                                .into_iter()
+                                .filter(|h| {
+                                    crate::app::handlers::selection_workflow::passes_filter(
+                                        h,
+                                        snapshot,
+                                        &filters,
+                                    )
+                                })
+                                .collect();
+                            self.interaction_state.canvas.clear_overlay_cache();
+                            self.update_selection_info();
+                        }
+                    }
+                    return Task::none();
+                }
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();

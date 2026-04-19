@@ -184,12 +184,14 @@ impl Signex {
         self.document_state.panel_ctx.pre_placement = None;
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
-        // Escape / right-click also cancels the net-colour pen and the
-        // z-order reference picker — Altium-parity "one terminator kills
-        // every armed mode".
+        // Escape / right-click also cancels the net-colour pen, the
+        // z-order reference picker, and any in-flight lasso —
+        // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
         self.interaction_state.canvas.pending_net_color = None;
         self.ui_state.reorder_picker = None;
+        self.ui_state.lasso_polygon = None;
+        self.interaction_state.canvas.lasso_polygon = None;
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;

@@ -67,9 +67,11 @@ pub struct UiState {
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides (F5 palette). Maps net label text → color.
-    /// Rendering hook wires in v0.7.1; the storage is in place so the
-    /// F5 palette widget (also v0.7.1) can mutate it.
+    /// Net-color overrides keyed by net-label text. Superseded by the
+    /// per-wire `wire_color_overrides` map below which the Active-Bar
+    /// net-colour flood populates; kept here so a future net-name
+    /// palette (maybe the F5 dialog) can cross-reference it without
+    /// another round-trip through state plumbing.
     #[allow(dead_code)]
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
@@ -130,6 +132,11 @@ pub struct UiState {
     /// net-color click; consulted when drawing wires. Not serialised.
     pub wire_color_overrides:
         std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// Altium-style lasso in flight. `Some(points)` means the user
+    /// started a lasso — each canvas click appends a vertex; a
+    /// double-click or a click on the first vertex closes the polygon
+    /// and commits the selection. Escape or right-click cancels.
+    pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
     /// App-level undo stack for net-color floods. Each entry is the
     /// full `wire_color_overrides` map captured before an action —
     /// popping one restores the previous state. This is separate from

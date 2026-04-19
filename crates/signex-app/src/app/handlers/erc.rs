@@ -373,6 +373,183 @@ impl Signex {
         self.close_detached_modal(super::super::state::ModalId::AnnotateDialog)
     }
 
+    /// Altium's "Reset Duplicate Designators" — find references that
+    /// appear on more than one symbol across the WHOLE project, reset
+    /// just those to `{prefix}?`. Everything else keeps its current
+    /// value. Walks open tabs (live + cached engines) and every sheet
+    /// in `project_data.sheets` not opened as a tab; unopened sheets
+    /// are re-saved through `kicad-writer` so the fix is project-wide.
+    pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
+        use crate::app::documents::TabDocument;
+
+        // Phase 1: walk every sheet and count how many symbols hold
+        // each (non-power, non-hash) reference.
+        let mut counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let bump = |counts: &mut std::collections::HashMap<String, usize>,
+                    sheet: &signex_types::schematic::SchematicSheet| {
+            for sym in &sheet.symbols {
+                if sym.is_power || sym.reference.starts_with('#') {
+                    continue;
+                }
+                if sym.reference.ends_with('?') {
+                    continue;
+                }
+                *counts.entry(sym.reference.clone()).or_insert(0) += 1;
+            }
+        };
+        if let Some(eng) = self.document_state.engine.as_ref() {
+            bump(&mut counts, eng.document());
+        }
+        for tab in &self.document_state.tabs {
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+                bump(&mut counts, session.document());
+            }
+        }
+        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .map(|t| t.path.clone())
+            .collect();
+        let project_root = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+        let unopened: Vec<std::path::PathBuf> = self
+            .document_state
+            .project_data
+            .as_ref()
+            .map(|pd| {
+                pd.sheets
+                    .iter()
+                    .filter_map(|s| {
+                        let path = match project_root.as_ref() {
+                            Some(root) => root.join(&s.filename),
+                            None => std::path::PathBuf::from(&s.filename),
+                        };
+                        if open_paths.contains(&path) {
+                            None
+                        } else {
+                            Some(path)
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for path in &unopened {
+            if let Ok(sheet) = kicad_parser::parse_schematic_file(path) {
+                bump(&mut counts, &sheet);
+            }
+        }
+
+        // Phase 2: anything seen more than once is a duplicate that
+        // needs resetting.
+        let duplicates: std::collections::HashSet<String> = counts
+            .into_iter()
+            .filter_map(|(r, n)| if n > 1 { Some(r) } else { None })
+            .collect();
+        if duplicates.is_empty() {
+            crate::diagnostics::log_info(
+                "Reset Duplicate Designators: no duplicates found",
+            );
+            return Task::none();
+        }
+
+        // Reset helper: for each symbol whose current reference is in
+        // the duplicates set, reset to `{prefix}?`. Returns whether
+        // anything changed in the sheet.
+        fn reset_in(
+            sheet: &mut signex_types::schematic::SchematicSheet,
+            dupes: &std::collections::HashSet<String>,
+        ) -> bool {
+            let mut changed = false;
+            for sym in sheet.symbols.iter_mut() {
+                if sym.is_power || sym.reference.starts_with('#') {
+                    continue;
+                }
+                if dupes.contains(&sym.reference) {
+                    let prefix: String = sym
+                        .reference
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphabetic())
+                        .collect();
+                    if !prefix.is_empty() {
+                        sym.reference = format!("{prefix}?");
+                        changed = true;
+                    }
+                }
+            }
+            changed
+        }
+
+        let mut resets = 0_usize;
+        let mut any_active_changed = false;
+        // Active engine
+        if let Some(engine) = self.document_state.engine.as_mut() {
+            let mut sheet = engine.document().clone();
+            if reset_in(&mut sheet, &duplicates) {
+                // Replace via the engine's ReplaceDocument path so
+                // undo records the snapshot.
+                let _ = engine.execute(signex_engine::Command::ReplaceDocument {
+                    document: sheet,
+                });
+                any_active_changed = true;
+                resets += 1;
+            }
+        }
+        // Cached tabs
+        for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
+            if idx == self.document_state.active_tab {
+                continue;
+            }
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut() {
+                let mut sheet = session.document().clone();
+                if reset_in(&mut sheet, &duplicates) {
+                    let _ = session
+                        .engine_mut()
+                        .execute(signex_engine::Command::ReplaceDocument {
+                            document: sheet,
+                        });
+                    session.set_dirty(true);
+                    tab.dirty = true;
+                    resets += 1;
+                }
+            }
+        }
+        // Unopened sheets — parse, mutate, write back.
+        for path in &unopened {
+            let Ok(mut sheet) = kicad_parser::parse_schematic_file(path) else {
+                continue;
+            };
+            if !reset_in(&mut sheet, &duplicates) {
+                continue;
+            }
+            let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
+                continue;
+            };
+            engine.set_path(Some(path.clone()));
+            if engine.save().is_ok() {
+                resets += 1;
+            }
+        }
+
+        if any_active_changed {
+            self.interaction_state.canvas.clear_content_cache();
+            self.sync_canvas_from_visible_schematic(
+                signex_render::schematic::RenderInvalidation::FULL,
+            );
+            self.refresh_panel_ctx();
+        }
+        crate::diagnostics::log_info(&format!(
+            "Reset Duplicate Designators: reset {} duplicate reference(s) across {} sheet(s)",
+            duplicates.len(),
+            resets,
+        ));
+        Task::none()
+    }
+
     pub(crate) fn handle_annotate_order_changed(
         &mut self,
         order: super::super::state::AnnotateOrder,

@@ -34,14 +34,14 @@ impl Signex {
             MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
                 signex_engine::AnnotateMode::ResetAndRenumber,
             ))),
-            // Reset Duplicate Designators — clears '?' only on symbols that
-            // share a reference with another symbol. Not yet implemented;
-            // log so the click registers.
+            // Reset Duplicate Designators — scan every sheet (active,
+            // cached, and on-disk project sheets), find references
+            // that appear on more than one symbol across the project,
+            // reset just those to `{prefix}?`. Other designators keep
+            // their current value. Saves unopened sheets through
+            // kicad-writer so the fix is project-wide.
             MenuMessage::AnnotateResetDuplicates => {
-                crate::diagnostics::log_info(
-                    "Reset Duplicate Designators is a v0.7.1 feature",
-                );
-                Some(Task::none())
+                Some(self.handle_reset_duplicate_designators())
             }
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(

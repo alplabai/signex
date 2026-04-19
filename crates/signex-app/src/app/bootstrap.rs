@@ -112,6 +112,7 @@ impl Signex {
                     signex_render::schematic::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
+                lasso_polygon: None,
                 net_color_undo: Vec::new(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
             },
