@@ -7,8 +7,8 @@ impl Signex {
         match message {
             Message::Menu(msg) => self.handle_menu_message(msg),
             Message::Tab(msg) => {
-                self.handle_document_tab_message(msg);
-                self.finish_update()
+                let task = self.handle_document_tab_message(msg);
+                Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),

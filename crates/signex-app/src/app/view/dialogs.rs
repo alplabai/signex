@@ -15,6 +15,33 @@ const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
 impl Signex {
     pub(super) fn view_annotate_dialog(&self) -> Element<'_, Message> {
+        let modal_w = 1100.0_f32;
+        let modal_h = 760.0_f32;
+        let dialog = self.view_annotate_dialog_body_inner(true);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::AnnotateDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            (modal_w, modal_h),
+        )
+    }
+
+    /// Detached-window flavour — just the body, no backdrop, no drag
+    /// handler on the header (the OS window chrome owns that).
+    pub(super) fn view_annotate_dialog_body(&self) -> Element<'_, Message> {
+        self.view_annotate_dialog_body_inner(false)
+    }
+
+    fn view_annotate_dialog_body_inner(
+        &self,
+        draggable: bool,
+    ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -32,23 +59,28 @@ impl Signex {
             .map(|t| t.title.clone())
             .unwrap_or_else(|| "Current Sheet".to_string());
 
-        // ── Header (draggable title bar) ──
+        // ── Header (draggable when in-window; OS-window-drag when
+        // detached) ──
         let header_content: Element<'_, Message> = container(
             row![
                 text("Annotate").size(14).color(text_c),
                 Space::new().width(Length::Fill),
-                close_button("Close", Message::CloseAnnotateDialog, text_muted, border_c),
+                close_x_button(Message::CloseAnnotateDialog, text_muted, border_c),
             ]
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14])
         .style(crate::styles::toolbar_strip(tokens))
         .into();
-        let header = draggable_header(
-            header_content,
-            super::super::state::ModalId::AnnotateDialog,
-            self.interaction_state.last_mouse_pos,
-        );
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                super::super::state::ModalId::AnnotateDialog,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(header_content, super::super::state::ModalId::AnnotateDialog)
+        };
 
         // ── Left column: Schematic Annotation Configuration ──
         let left_title = text("Schematic Annotation Configuration")
@@ -488,36 +520,60 @@ impl Signex {
         )
         .style(crate::styles::context_menu(tokens));
 
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
-            dialog.into(),
-            offset,
-            self.ui_state.window_size,
-            (modal_w, modal_h),
-        )
+        dialog.into()
     }
 
     pub(super) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
+        let dialog = self.view_annotate_reset_confirm_body_inner(true);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::AnnotateResetConfirm)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
+    }
+
+    pub(super) fn view_annotate_reset_confirm_body(&self) -> Element<'_, Message> {
+        self.view_annotate_reset_confirm_body_inner(false)
+    }
+
+    fn view_annotate_reset_confirm_body_inner(
+        &self,
+        draggable: bool,
+    ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        let header_content: Element<'_, Message> =
-            container(text("Reset All Annotations").size(14).color(text_c))
-                .padding([10, 14])
-                .style(crate::styles::toolbar_strip(tokens))
-                .into();
-        let header = draggable_header(
-            header_content,
-            super::super::state::ModalId::AnnotateResetConfirm,
-            self.interaction_state.last_mouse_pos,
-        );
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Reset All Annotations").size(14).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(
+                    Message::CloseAnnotateResetConfirm,
+                    text_muted,
+                    border_c,
+                ),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                super::super::state::ModalId::AnnotateResetConfirm,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(
+                header_content,
+                super::super::state::ModalId::AnnotateResetConfirm,
+            )
+        };
         let dialog = container(
             column![
                 header,
@@ -549,16 +605,25 @@ impl Signex {
             .width(420),
         )
         .style(crate::styles::context_menu(tokens));
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateResetConfirm)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog.into(), offset, self.ui_state.window_size, (420.0, 180.0))
+        dialog.into()
     }
 
     pub(super) fn view_erc_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_erc_dialog_body_inner(true);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::ErcDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (680.0, 680.0))
+    }
+
+    pub(super) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
+        self.view_erc_dialog_body_inner(false)
+    }
+
+    fn view_erc_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -568,18 +633,25 @@ impl Signex {
             row![
                 text("Electrical Rules Check").size(14).color(text_c),
                 Space::new().width(Length::Fill),
-                close_button("Close", Message::CloseErcDialog, text_muted, border_c),
+                close_x_button(Message::CloseErcDialog, text_muted, border_c),
             ]
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14])
         .style(crate::styles::toolbar_strip(tokens))
         .into();
-        let header = draggable_header(
-            header_content,
-            super::super::state::ModalId::ErcDialog,
-            self.interaction_state.last_mouse_pos,
-        );
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                super::super::state::ModalId::ErcDialog,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(
+                header_content,
+                super::super::state::ModalId::ErcDialog,
+            )
+        };
 
         // Per-rule severity grid. 11 rules × 4 severities.
         let mut rule_rows = column![
@@ -652,13 +724,7 @@ impl Signex {
             .height(680),
         )
         .style(crate::styles::context_menu(tokens));
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::state::ModalId::ErcDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog.into(), offset, self.ui_state.window_size, (680.0, 680.0))
+        dialog.into()
     }
 }
 
@@ -789,20 +855,21 @@ fn wrap_modal<'a>(
     window_size: (f32, f32),
     modal_size: (f32, f32),
 ) -> Element<'a, Message> {
-    // Absolute top-left = centre + drag offset, clamped within the window.
-    // iced's Space widget can't be negative-sized, so we keep the modal
-    // visible but allow the user to snap it against any of the four edges
-    // — fully off-screen positioning needs a custom widget and lands in
-    // v0.7.1.
+    // Absolute top-left = centre + drag offset. The Translate widget (see
+    // view/translate.rs) passes full parent limits to the child and then
+    // translates the child's layout node, so the modal keeps its fixed
+    // width/height even when positioned partially off-screen. No clamp is
+    // applied here — Altium lets modals drag completely off the client
+    // area and the OS window edge is the only hard boundary. If the user
+    // drags the modal fully outside the window, they can dismiss it with
+    // Escape (see bootstrap key handler).
     let (dx, dy) = offset;
     let (ww, wh) = window_size;
     let (mw, mh) = modal_size;
-    let centre_x = ((ww - mw) * 0.5).max(0.0);
-    let centre_y = ((wh - mh) * 0.5).max(0.0);
-    let max_left = (ww - mw).max(0.0);
-    let max_top = (wh - mh).max(0.0);
-    let left = (centre_x + dx).clamp(0.0, max_left);
-    let top = (centre_y + dy).clamp(0.0, max_top);
+    let centre_x = (ww - mw) * 0.5;
+    let centre_y = (wh - mh) * 0.5;
+    let left = centre_x + dx;
+    let top = centre_y + dy;
 
     let backdrop: Element<'a, Message> = container(iced::widget::Space::new())
         .width(Length::Fill)
@@ -813,13 +880,8 @@ fn wrap_modal<'a>(
         })
         .into();
 
-    // Column+row with explicit top/left Space and no trailing Fill means
-    // the inner modal keeps its fixed width/height regardless of viewport.
-    let positioned: Element<'a, Message> = column![
-        Space::new().height(top),
-        row![Space::new().width(left), inner,],
-    ]
-    .into();
+    let positioned: Element<'a, Message> =
+        super::translate::Translate::new(inner, (left, top)).into();
 
     iced::widget::stack![backdrop, positioned].into()
 }
@@ -840,6 +902,57 @@ fn draggable_header<'a>(
         .into()
 }
 
+/// Borderless-window header — pressing anywhere on the header region
+/// asks iced to start an OS-level window drag. Replaces the OS title
+/// bar for detached modals opened with `decorations: false`.
+fn detached_header<'a>(
+    header_content: Element<'a, Message>,
+    modal: super::super::state::ModalId,
+) -> Element<'a, Message> {
+    iced::widget::mouse_area(header_content)
+        .on_press(Message::StartDetachedWindowDrag(modal))
+        .interaction(iced::mouse::Interaction::Grab)
+        .into()
+}
+
+/// Compact X close button for borderless modal headers.
+fn close_x_button(
+    message: Message,
+    text_color: Color,
+    border: Color,
+) -> Element<'static, Message> {
+    button(
+        container(text("\u{00D7}".to_string()).size(14).color(text_color))
+            .padding([0, 6]),
+    )
+    .on_press(message)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered => {
+                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.1)))
+            }
+            _ => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+        };
+        button::Style {
+            background: bg,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            text_color,
+            ..button::Style::default()
+        }
+    })
+    .into()
+}
+
+// `detach_button` was removed once the three big modals started
+// opening as separate OS windows by default (see
+// `handle_open_annotate_dialog` et al.). Drag-off is no longer needed
+// because there is no in-window overlay to drag.
+
+#[allow(dead_code)]
 fn close_button(
     label: &str,
     message: Message,
