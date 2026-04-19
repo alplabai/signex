@@ -76,9 +76,24 @@ impl Signex {
             | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::WindowResizedFor(id, w, h) => {
+                // Only main-window resizes drive layout math. Detached
+                // modal + undocked-tab windows have their own sizes
+                // that would otherwise clobber the main-window state.
+                if self.ui_state.main_window_id == Some(id) {
+                    self.ui_state.window_size = (w, h);
+                }
+                Task::none()
+            }
             Message::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
-                Task::none()
+                // Pull the real initial size from winit — opening the
+                // window at Settings.size doesn't always land at
+                // exactly that size (OS DPI scaling, display clamps).
+                // Without this, Active-Bar dropdown positions are off
+                // until the user physically resizes the window.
+                iced::window::size(id)
+                    .map(move |size| Message::WindowResizedFor(id, size.width, size.height))
             }
             Message::SecondaryWindowClosed(id) => {
                 // Drop the entry and dismiss the backing modal state so
@@ -224,12 +239,46 @@ impl Signex {
                 }
                 Task::none()
             }
+            Message::NetColorCustomShow(show) => {
+                self.ui_state.net_color_custom.show = show;
+                Task::none()
+            }
+            Message::NetColorCustomDraft(c) => {
+                self.ui_state.net_color_custom.draft = c;
+                Task::none()
+            }
+            Message::NetColorCustomSubmit(c) => {
+                self.ui_state.net_color_custom.show = false;
+                self.ui_state.net_color_custom.draft = c;
+                let color = signex_types::theme::Color {
+                    r: (c.r * 255.0).round() as u8,
+                    g: (c.g * 255.0).round() as u8,
+                    b: (c.b * 255.0).round() as u8,
+                    a: 255,
+                };
+                self.ui_state.pending_net_color = Some(color);
+                self.interaction_state.canvas.pending_net_color = Some(color);
+                Task::none()
+            }
+            Message::NetColorCustomChannel(chan, s) => {
+                // Parse as u8; silently ignore invalid input so the
+                // text_input doesn't reject intermediate values like
+                // the empty string while the user types.
+                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                let draft = &mut self.ui_state.net_color_custom.draft;
+                let v = parsed as f32 / 255.0;
+                match chan {
+                    super::contracts::Channel::R => draft.r = v,
+                    super::contracts::Channel::G => draft.g = v,
+                    super::contracts::Channel::B => draft.b = v,
+                }
+                Task::none()
+            }
             Message::CycleSelectionMode => {
                 use signex_render::schematic::hit_test::SelectionMode;
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {
-                    SelectionMode::Inside => SelectionMode::Outside,
-                    SelectionMode::Outside => SelectionMode::TouchingLine,
-                    SelectionMode::TouchingLine => SelectionMode::Inside,
+                    SelectionMode::Inside => SelectionMode::Touching,
+                    SelectionMode::Touching => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(&format!(
                     "Selection mode: {:?}",

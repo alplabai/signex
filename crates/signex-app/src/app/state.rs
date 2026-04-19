@@ -51,9 +51,19 @@ pub struct UiState {
     /// edits. While `Some`, an overlay modal blocks other interaction with
     /// Save / Discard / Cancel actions.
     pub close_tab_confirm: Option<usize>,
-    /// ERC results from the last Run-ERC pass. Displayed in the Messages
-    /// panel; clicking a row focuses the violation on the canvas.
+    /// ERC results for the currently-visible sheet. Driven by the
+    /// per-sheet cache below — switching tabs repoints this at the
+    /// cached violations for that sheet, so markers and the Messages
+    /// panel always match what's on the canvas.
     pub erc_violations: Vec<signex_erc::Violation>,
+    /// Per-sheet ERC violation cache, keyed by the sheet's on-disk
+    /// file path. Run ERC populates this for every sheet in the
+    /// project; tab switches point `erc_violations` at the matching
+    /// entry without rerunning the analysis.
+    pub erc_violations_by_path: std::collections::HashMap<
+        std::path::PathBuf,
+        Vec<signex_erc::Violation>,
+    >,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -128,6 +138,10 @@ pub struct UiState {
     pub net_color_undo: Vec<
         std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     >,
+    /// Custom net-color picker state. When `show = true`, a floating
+    /// iced_aw ColorPicker appears anchored to the Active Bar button;
+    /// `draft` is the user's pending pick — committed on OK.
+    pub net_color_custom: NetColorCustomState,
     /// Id of the primary app window — set once `iced::window::open` for
     /// the main window resolves. Every `view(id)` call checks this to
     /// decide whether it's rendering the main shell or a secondary
@@ -169,6 +183,22 @@ pub enum ReorderPicker {
     Above,
     /// Move selection to render just below the clicked reference.
     Below,
+}
+
+/// Custom net-colour picker state (Active Bar → Net Color → Custom).
+#[derive(Debug, Clone)]
+pub struct NetColorCustomState {
+    pub show: bool,
+    pub draft: iced::Color,
+}
+
+impl Default for NetColorCustomState {
+    fn default() -> Self {
+        Self {
+            show: false,
+            draft: iced::Color::from_rgb(0.40, 0.40, 0.93),
+        }
+    }
 }
 
 /// Transient state for the Altium-style Move Selection dialog.

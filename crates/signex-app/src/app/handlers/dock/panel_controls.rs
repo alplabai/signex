@@ -25,6 +25,11 @@ impl Signex {
             crate::panels::PanelMsg::RunErc => {
                 let _ = self.handle_run_erc();
             }
+            crate::panels::PanelMsg::ClearErc => {
+                self.ui_state.erc_violations.clear();
+                self.interaction_state.canvas.erc_markers.clear();
+                self.interaction_state.canvas.clear_overlay_cache();
+            }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 if let Some(entry) =
                     self.document_state.panel_ctx.erc_violations.get(*idx).cloned()

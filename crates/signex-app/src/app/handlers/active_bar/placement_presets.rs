@@ -191,6 +191,19 @@ impl Signex {
                     "Net-color armed — click a wire to flood its net",
                 );
             }
+            ActiveBarAction::NetColorCustom => {
+                // Open the custom colour picker modal. Pre-seed the
+                // draft from whatever is currently armed so reopening
+                // the picker after a custom pick doesn't reset it.
+                let seed = self
+                    .ui_state
+                    .pending_net_color
+                    .filter(|c| c.a != 0)
+                    .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
+                    .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
+                self.ui_state.net_color_custom.draft = seed;
+                self.ui_state.net_color_custom.show = true;
+            }
             ActiveBarAction::ClearNetColor => {
                 // Arm "clear one" — next click removes the override on
                 // the wires of the clicked net.

@@ -580,13 +580,18 @@ pub fn render_schematic(
         );
     }
 
-    // Z=5: Junctions
+    // Z=5: Junctions — honour per-uuid colour overrides so a junction
+    // on a net-coloured net renders in the same colour as the wires.
     for j in &sheet.junctions {
+        let base = wire_color_overrides
+            .and_then(|o| o.get(&j.uuid))
+            .map(to_iced)
+            .unwrap_or(junction_color);
         junction::draw_junction(
             frame,
             j,
             transform,
-            dim(junction_color, alpha_for(&j.uuid)),
+            dim(base, alpha_for(&j.uuid)),
         );
     }
 

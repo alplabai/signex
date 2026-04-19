@@ -3,41 +3,134 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    /// Run ERC on the active schematic snapshot. Results land in
-    /// `ui_state.erc_violations` and are displayed by the Messages panel.
+    /// Run ERC across every sheet in the project — open tabs (live
+    /// engine or cached session) plus every sheet in `project_data`
+    /// that isn't open yet (parsed on-the-fly). Results are cached
+    /// per-path in `erc_violations_by_path`; the visible list
+    /// `erc_violations` repoints at the active sheet's entry so the
+    /// Messages panel + canvas markers stay consistent with what's
+    /// on screen.
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
-        let Some(snapshot) = self.active_render_snapshot() else {
-            self.ui_state.erc_violations.clear();
-            return Task::none();
+        use crate::app::documents::TabDocument;
+        let overrides = self.ui_state.erc_severity_override.clone();
+        let apply_overrides = |mut violations: Vec<signex_erc::Violation>|
+         -> Vec<signex_erc::Violation> {
+            for v in &mut violations {
+                if let Some(&sev) = overrides.get(&v.rule) {
+                    v.severity = sev;
+                }
+            }
+            violations.retain(|v| v.severity != signex_erc::Severity::Off);
+            violations.sort_by_key(|v| {
+                let bucket = match v.severity {
+                    signex_erc::Severity::Error => 0,
+                    signex_erc::Severity::Warning => 1,
+                    signex_erc::Severity::Info => 2,
+                    signex_erc::Severity::Off => 3,
+                };
+                (bucket, format!("{:?}", v.rule))
+            });
+            violations
         };
-        let mut violations = signex_erc::run(snapshot);
-        // Apply severity overrides from prefs.
-        for v in &mut violations {
-            if let Some(&sev) = self.ui_state.erc_severity_override.get(&v.rule) {
-                v.severity = sev;
+
+        let mut by_path: std::collections::HashMap<
+            std::path::PathBuf,
+            Vec<signex_erc::Violation>,
+        > = std::collections::HashMap::new();
+
+        // 1. Active tab — use the live engine's snapshot.
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(snapshot) = self.active_render_snapshot()
+        {
+            let violations = apply_overrides(signex_erc::run(snapshot));
+            by_path.insert(tab.path.clone(), violations);
+        }
+        // 2. Cached (non-active) tabs — build a snapshot from their
+        // cached SchematicSheet and run ERC against it.
+        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+            if idx == self.document_state.active_tab {
+                continue;
+            }
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+                let snapshot =
+                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(
+                        session.document(),
+                    );
+                let violations = apply_overrides(signex_erc::run(&snapshot));
+                by_path.insert(tab.path.clone(), violations);
             }
         }
-        // Drop violations the user disabled.
-        violations.retain(|v| v.severity != signex_erc::Severity::Off);
-        // Sort: errors first, then warnings, then info; within a bucket,
-        // by rule kind so the order is stable.
-        violations.sort_by_key(|v| {
-            let bucket = match v.severity {
-                signex_erc::Severity::Error => 0,
-                signex_erc::Severity::Warning => 1,
-                signex_erc::Severity::Info => 2,
-                signex_erc::Severity::Off => 3,
-            };
-            (bucket, format!("{:?}", v.rule))
-        });
+        // 3. Project sheets not opened as tabs — parse from disk,
+        // run ERC, store. Gives a true project-wide picture.
+        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .map(|t| t.path.clone())
+            .collect();
+        let project_root = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+        if let Some(pd) = self.document_state.project_data.as_ref() {
+            for sheet in &pd.sheets {
+                let path = match project_root.as_ref() {
+                    Some(root) => root.join(&sheet.filename),
+                    None => std::path::PathBuf::from(&sheet.filename),
+                };
+                if open_paths.contains(&path) || by_path.contains_key(&path) {
+                    continue;
+                }
+                let Ok(parsed) = kicad_parser::parse_schematic_file(&path) else {
+                    continue;
+                };
+                let snapshot =
+                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(
+                        &parsed,
+                    );
+                let violations = apply_overrides(signex_erc::run(&snapshot));
+                by_path.insert(path, violations);
+            }
+        }
+
+        let total: usize = by_path.values().map(|v| v.len()).sum();
         crate::diagnostics::log_info(&format!(
-            "ERC: {} violations on active sheet",
-            violations.len(),
+            "ERC: {} total violations across {} sheet(s)",
+            total,
+            by_path.len(),
         ));
-        // Sync canvas-side markers so each violation draws an Altium
-        // X-in-a-dot marker at its world location + a halo on the
-        // primary offender. Cleared on every Run ERC before refill so
-        // stale markers don't accumulate.
+
+        // Repoint the visible list + canvas markers at the active
+        // sheet's entry. Updates on tab switch via `sync_active_tab`.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| t.path.clone());
+        self.ui_state.erc_violations_by_path = by_path;
+        self.refresh_active_erc_from_cache(active_path.as_ref());
+
+        // Surface the Messages panel so the user can see the results.
+        self.document_state.dock.add_panel(
+            crate::dock::PanelPosition::Right,
+            crate::panels::PanelKind::Messages,
+        );
+        Task::none()
+    }
+
+    /// Repoint `erc_violations` + canvas markers at whatever the
+    /// per-sheet cache holds for `active_path`. Empty vec when the
+    /// sheet has never had ERC run, which is the right behaviour
+    /// pre-Run-ERC.
+    pub(crate) fn refresh_active_erc_from_cache(
+        &mut self,
+        active_path: Option<&std::path::PathBuf>,
+    ) {
+        let violations = active_path
+            .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
+            .cloned()
+            .unwrap_or_default();
         self.interaction_state.canvas.erc_markers = violations
             .iter()
             .map(|v| crate::canvas::ErcMarker {
@@ -57,12 +150,6 @@ impl Signex {
             .collect();
         self.interaction_state.canvas.clear_overlay_cache();
         self.ui_state.erc_violations = violations;
-        // Surface the Messages panel so the user can see the results.
-        self.document_state.dock.add_panel(
-            crate::dock::PanelPosition::Bottom,
-            crate::panels::PanelKind::Messages,
-        );
-        Task::none()
     }
 
     /// Move the viewport to center on a world-space point and optionally
