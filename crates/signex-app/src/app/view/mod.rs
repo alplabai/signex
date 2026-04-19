@@ -1138,10 +1138,12 @@ impl Signex {
                     .collect(),
             };
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
+            let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
+                    dragging,
                     &visible_paths,
                     &document.panel_ctx.tokens,
                 )

@@ -274,6 +274,32 @@ impl Signex {
                 }
                 Task::none()
             }
+            Message::LassoCommit => {
+                if let Some(pts) = self.ui_state.lasso_polygon.take() {
+                    if pts.len() >= 3
+                        && let Some(snapshot) = self.active_render_snapshot()
+                    {
+                        let poly: Vec<(f64, f64)> =
+                            pts.iter().map(|p| (p.x, p.y)).collect();
+                        let filters = self.interaction_state.selection_filters.clone();
+                        self.interaction_state.canvas.selected =
+                            signex_render::schematic::hit_test::hit_test_polygon(
+                                snapshot, &poly,
+                            )
+                            .into_iter()
+                            .filter(|h| {
+                                super::handlers::selection_workflow::passes_filter(
+                                    h, snapshot, &filters,
+                                )
+                            })
+                            .collect();
+                        self.update_selection_info();
+                    }
+                }
+                self.interaction_state.canvas.lasso_polygon = None;
+                self.interaction_state.canvas.clear_overlay_cache();
+                Task::none()
+            }
             Message::CycleSelectionMode => {
                 use signex_render::schematic::hit_test::SelectionMode;
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {

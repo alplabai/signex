@@ -889,11 +889,8 @@ impl canvas::Program<Message> for SchematicCanvas {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
 
             if let Some(cursor_pos) = cursor.position_in(bounds) {
-                // Snap crosshair + pen glyph to the grid when snap is
-                // on — every other placement in the app snaps, so the
-                // cursor feedback should match. Convert to world,
-                // snap, convert back to screen for drawing.
-                let pen_armed = self.pending_net_color.is_some();
+                // Snap cursor visuals to the grid so they match where
+                // the click will commit.
                 let cursor_pos = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let w = state.camera.screen_to_world(cursor_pos, bounds);
                     let g = self.snap_grid_mm as f32;
@@ -905,28 +902,43 @@ impl canvas::Program<Message> for SchematicCanvas {
                 } else {
                     cursor_pos
                 };
-                // Default crosshair: white at low alpha, reads on the
-                // dark background. When the net-colour pen is armed we
-                // switch to dark so it stays visible on the yellow
-                // paper fill.
-                let crosshair_color = if pen_armed {
-                    Color::from_rgba8(40, 40, 40, 0.55)
-                } else {
-                    Color::from_rgba8(255, 255, 255, 0.3)
-                };
-                let h_line = canvas::Path::line(
-                    iced::Point::new(0.0, cursor_pos.y),
-                    iced::Point::new(bounds.width, cursor_pos.y),
-                );
-                let v_line = canvas::Path::line(
-                    iced::Point::new(cursor_pos.x, 0.0),
-                    iced::Point::new(cursor_pos.x, bounds.height),
-                );
-                let stroke = canvas::Stroke::default()
-                    .with_color(crosshair_color)
-                    .with_width(if pen_armed { 0.8 } else { 0.5 });
-                frame.stroke(&h_line, stroke);
-                frame.stroke(&v_line, stroke);
+
+                // Altium-style placement crosshair: a cyan diagonal
+                // X at the cursor, ~28 px across (double the earlier
+                // +). Same shape, size, and colour everywhere a
+                // placement / tool mode is active so the cursor
+                // affordance is uniform.
+                let placement_active = self.pending_net_color.is_some()
+                    || self.lasso_polygon.is_some()
+                    || self.drawing_mode
+                    || self.tool_preview.is_some()
+                    || self.ghost_label.is_some()
+                    || self.ghost_symbol.is_some()
+                    || self.ghost_text.is_some();
+                if placement_active {
+                    let len = 14.0_f32;
+                    let a = canvas::Path::line(
+                        iced::Point::new(cursor_pos.x - len, cursor_pos.y - len),
+                        iced::Point::new(cursor_pos.x + len, cursor_pos.y + len),
+                    );
+                    let b = canvas::Path::line(
+                        iced::Point::new(cursor_pos.x - len, cursor_pos.y + len),
+                        iced::Point::new(cursor_pos.x + len, cursor_pos.y - len),
+                    );
+                    // Dark outline for contrast on light paper.
+                    let outline = canvas::Stroke::default()
+                        .with_color(Color::from_rgba(0.05, 0.05, 0.08, 0.85))
+                        .with_width(3.0);
+                    frame.stroke(&a, outline);
+                    frame.stroke(&b, outline);
+                    // Cyan core (Altium placement cursor colour).
+                    let cyan = Color::from_rgb8(0x00, 0xE5, 0xE5);
+                    let inner = canvas::Stroke::default()
+                        .with_color(cyan)
+                        .with_width(1.5);
+                    frame.stroke(&a, inner);
+                    frame.stroke(&b, inner);
+                }
 
                 // Net-color pen affordance — a diagonal "pencil" mark
                 // anchored to the cursor, filled with the armed color.
@@ -1555,15 +1567,17 @@ impl canvas::Program<Message> for SchematicCanvas {
         _bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> mouse::Interaction {
+        // Single cursor shape across every canvas mode: default arrow
+        // for idle, native pan / move cursors while dragging. No
+        // mode-specific shape swaps (the OS Crosshair is white + tiny
+        // on Windows so invisible on yellow paper anyway). Visual
+        // feedback for armed modes comes from overlay glyphs — the
+        // net-colour pencil and the lasso polygon preview.
         if state.panning {
             mouse::Interaction::Grabbing
         } else if state.move_dragging {
             mouse::Interaction::Move
         } else {
-            // Net-colour armed state no longer forces the OS crosshair
-            // cursor — that's always white on Windows which becomes
-            // invisible on the yellow paper. The custom pencil glyph
-            // painted in the overlay layer is the sole affordance now.
             mouse::Interaction::default()
         }
     }
