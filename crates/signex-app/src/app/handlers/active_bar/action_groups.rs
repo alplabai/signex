@@ -149,11 +149,23 @@ impl Signex {
                     self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
                 }
             }
+            // Lasso arms a multi-click polygon selection in
+            // `ui_state.lasso_polygon`. The canvas handler grows it on
+            // each click and commits on double-click / first-vertex
+            // click. Escape / right-click cancels.
+            ActiveBarAction::LassoSelect => {
+                self.ui_state.lasso_polygon = Some(Vec::new());
+                self.interaction_state.canvas.lasso_polygon = Some(Vec::new());
+                self.interaction_state.canvas.clear_overlay_cache();
+                crate::diagnostics::log_info(
+                    "Lasso: click each vertex, double-click to close",
+                );
+                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+            }
             // Other select-mode variants currently enter the normal Select
-            // tool; distinct box/lasso modes land with a later selection
-            // rewrite.
-            ActiveBarAction::LassoSelect
-            | ActiveBarAction::InsideArea
+            // tool; distinct box modes are handled via SelectionMode
+            // (Shift+S cycle). ToggleSelection inverts the selection.
+            ActiveBarAction::InsideArea
             | ActiveBarAction::OutsideArea
             | ActiveBarAction::TouchingRectangle
             | ActiveBarAction::TouchingLine
@@ -223,8 +235,8 @@ impl Signex {
                 }
                 Task::none()
             }
-            // MoveSelection / MoveSelectionXY → open the v0.7.1
-            // Move Selection dialog (numeric ΔX / ΔY apply to every
+            // MoveSelection / MoveSelectionXY → open the Move
+            // Selection dialog (numeric ΔX / ΔY apply to every
             // selected item through Command::MoveSelection).
             ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
                 self.update(Message::OpenMoveSelectionDialog)

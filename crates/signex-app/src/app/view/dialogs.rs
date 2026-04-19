@@ -246,7 +246,7 @@ impl Signex {
                 .padding(2)
                 .style(bordered_style(border_c)),
             Space::new().height(4),
-            text("Parameter-matching wires into the annotation engine in v0.7.1 — the list above reflects the intended grouping today.")
+            text("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now.")
                 .size(10)
                 .color(text_muted),
         ]
@@ -1427,8 +1427,11 @@ fn preview_annotations(
     out
 }
 
-/// Pin-connection matrix — compact read-only view for v0.7. Displays the
-/// default Altium-style pin-to-pin compatibility grid. Editing ships in v0.7.1.
+/// Pin-connection matrix. Click a cell to cycle Error → Warning →
+/// Info → Off → baseline. Overrides persist via
+/// `write_pin_matrix_overrides`. Currently 6×6 primary pin types;
+/// the full Altium 12-type grid lands when the rule engine learns
+/// the remaining variants (Open Collector, Open Emitter, HiZ, …).
 fn pin_matrix_view(
     tokens: &signex_types::theme::ThemeTokens,
     overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
@@ -1437,9 +1440,9 @@ fn pin_matrix_view(
     let text_muted = crate::styles::ti(tokens.text_secondary);
     let border = crate::styles::ti(tokens.border);
 
-    // 6 primary pin types for v0.7.1 (full 12-type Altium matrix lands
-    // when pin-type taxonomy is extended — rules.rs currently only
-    // distinguishes 6 families).
+    // 6 primary pin types. Full 12-type Altium matrix lands when
+    // pin-type taxonomy is extended in rules.rs (Open Collector, Open
+    // Emitter, HiZ, Unspecified, etc.).
     const TYPES: &[&str] = &[
         "Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC",
     ];
