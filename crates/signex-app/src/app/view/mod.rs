@@ -1255,18 +1255,62 @@ impl Signex {
 
         if ui.panel_list_open {
             let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
+            let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
             let has_sch = document.panel_ctx.has_schematic;
             let has_pcb = document.panel_ctx.has_pcb;
+            // Build a lookup of currently-open panel kinds so each row
+            // can show a ✓ mark. A panel counts as "open" if it lives in
+            // any dock region, floats on top, or owns a detached OS
+            // window.
+            let docked: std::collections::HashSet<crate::panels::PanelKind> = [
+                crate::dock::PanelPosition::Left,
+                crate::dock::PanelPosition::Right,
+                crate::dock::PanelPosition::Bottom,
+            ]
+            .iter()
+            .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
+            .collect();
+            let floating: std::collections::HashSet<crate::panels::PanelKind> = document
+                .dock
+                .floating
+                .iter()
+                .map(|fp| fp.kind)
+                .collect();
+            let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
+                .windows
+                .values()
+                .filter_map(|w| match w {
+                    super::state::WindowKind::DetachedPanel(k) => Some(*k),
+                    _ => None,
+                })
+                .collect();
+            let is_open = |k: crate::panels::PanelKind| {
+                docked.contains(&k) || floating.contains(&k) || detached.contains(&k)
+            };
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
                 .filter(|&&kind| {
                     (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
                 })
                 .map(|&kind| {
+                    // Altium parity: a leading ✓ column marks open panels
+                    // so the user can see at a glance which ones are
+                    // already somewhere on screen. Clicking an open panel
+                    // still fires OpenPanel — the dock brings it forward.
+                    let check = if is_open(kind) { "\u{2713}" } else { "" };
                     iced::widget::button(
-                        iced::widget::text(kind.label().to_string())
-                            .size(11)
-                            .color(text_c),
+                        iced::widget::row![
+                            iced::widget::container(
+                                iced::widget::text(check.to_string())
+                                    .size(11)
+                                    .color(text_muted),
+                            )
+                            .width(Length::Fixed(16.0)),
+                            iced::widget::text(kind.label().to_string())
+                                .size(11)
+                                .color(text_c),
+                        ]
+                        .align_y(iced::Alignment::Center),
                     )
                     .padding([4, 12])
                     .width(Length::Fill)
@@ -1276,23 +1320,33 @@ impl Signex {
                 })
                 .collect();
 
-            let popup = container(
-                iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
-            )
-            .padding([6, 0])
-            .style(crate::styles::context_menu(&document.panel_ctx.tokens));
+            // Drop the scrollable wrapper — the list fits the window at
+            // full height (15-ish panels × 21 px each = ~315 px) and a
+            // menu-style popup reads cleaner without a scrollbar.
+            let popup = container(column(panel_items).spacing(0).width(210))
+                .padding([6, 0])
+                .style(crate::styles::context_menu(&document.panel_ctx.tokens));
 
             layers.push(Self::dismiss_layer(Message::TogglePanelList));
+            // Anchor the popup directly above the "Panels" button in the
+            // bottom-right of the status bar. Approx: popup 210 px wide,
+            // 22 px per row × visible rows + 12 px vertical padding.
+            // Status bar sits at y = wh - 22, so we place the popup so
+            // its bottom edge lands just above it.
+            let (ww, wh) = ui.window_size;
+            let visible_rows = crate::panels::ALL_PANELS
+                .iter()
+                .filter(|&&k| {
+                    (!k.needs_schematic() || has_sch)
+                        && (!k.needs_pcb() || has_pcb)
+                })
+                .count() as f32;
+            let popup_w = 210.0_f32;
+            let popup_h = visible_rows * 22.0 + 12.0;
+            let left = (ww - popup_w - 10.0).max(0.0);
+            let top = (wh - popup_h - 26.0).max(0.0);
             layers.push(
-                container(
-                    container(popup)
-                        .align_x(iced::alignment::Horizontal::Right)
-                        .align_y(iced::alignment::Vertical::Bottom)
-                        .padding([15, 10]),
-                )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
+                translate::Translate::new(Element::from(popup), (left, top)).into(),
             );
         }
 
