@@ -111,6 +111,10 @@ pub struct SchematicCanvas {
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
+    /// When true, non-selected items dim on the canvas (F9). Synced
+    /// from `ui_state.auto_focus` so the renderer can compute a focus
+    /// uuid set without reaching back into app state.
+    pub auto_focus: bool,
 }
 
 impl SchematicCanvas {
@@ -161,7 +165,22 @@ impl SchematicCanvas {
             visible_grid_mm: 2.54,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
+            auto_focus: false,
         }
+    }
+
+    /// Compute the "focus" uuid set when auto_focus is on — members of
+    /// the current selection. Returns None when auto_focus is off; the
+    /// renderer then draws every item at full alpha.
+    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
+        if !self.auto_focus {
+            return None;
+        }
+        let mut set = std::collections::HashSet::new();
+        for item in &self.selected {
+            set.insert(item.uuid);
+        }
+        Some(set)
     }
 
     pub fn clear_overlay_cache(&mut self) {
@@ -692,6 +711,8 @@ impl canvas::Program<Message> for SchematicCanvas {
         let effective_snapshot: Option<&signex_render::schematic::SchematicRenderSnapshot> =
             shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
 
+        let focus_set = self.auto_focus_set();
+        let focus_ref = focus_set.as_ref();
         let content = if state.panning || drag_offset.is_some() {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
             if let Some(snapshot) = effective_snapshot {
@@ -701,6 +722,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &live_transform,
                     &self.canvas_colors,
                     bounds,
+                    focus_ref,
                 );
             }
             frame.into_geometry()
@@ -721,6 +743,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         &live_transform,
                         &self.canvas_colors,
                         bounds,
+                        focus_ref,
                     );
                 }
             })

@@ -246,6 +246,46 @@ impl Signex {
                 self.ui_state.zoom = zoom_pct;
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Z-order reference picker: the user previously chose
+                // Bring-To-Front-Of / Send-To-Back-Of on the Active Bar
+                // and is now clicking a reference item. Resolve the hit,
+                // emit a Reorder command, and clear the picker — matches
+                // Altium's "click the object to reference" convention.
+                if let Some(picker) = self.ui_state.reorder_picker {
+                    if let Some(snapshot) = self.active_render_snapshot() {
+                        let hit = signex_render::schematic::hit_test::hit_test(
+                            snapshot,
+                            world_x,
+                            world_y,
+                        );
+                        if let Some(reference) = hit {
+                            let direction = match picker {
+                                super::super::state::ReorderPicker::Above => {
+                                    signex_engine::ReorderDirection::JustAbove(
+                                        reference.uuid,
+                                    )
+                                }
+                                super::super::state::ReorderPicker::Below => {
+                                    signex_engine::ReorderDirection::JustBelow(
+                                        reference.uuid,
+                                    )
+                                }
+                            };
+                            let items = self.interaction_state.canvas.selected.clone();
+                            self.apply_engine_command(
+                                signex_engine::Command::ReorderObjects {
+                                    items,
+                                    direction,
+                                },
+                                false,
+                                true,
+                            );
+                        }
+                    }
+                    self.ui_state.reorder_picker = None;
+                    return Task::none();
+                }
+
                 // Altium-style placement pause: while the ghost is frozen
                 // (TAB pressed, pre-placement form open), canvas clicks are
                 // suppressed so the user can edit properties without a

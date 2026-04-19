@@ -159,8 +159,11 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
                     let filters = self.interaction_state.selection_filters.clone();
+                    let mode = self.ui_state.selection_mode;
                     self.interaction_state.canvas.selected =
-                        signex_render::schematic::hit_test::hit_test_rect(snapshot, &rect)
+                        signex_render::schematic::hit_test::hit_test_rect_mode(
+                            snapshot, &rect, mode,
+                        )
                             .into_iter()
                             .filter(|h| passes_filter(h, snapshot, &filters))
                             .collect();
