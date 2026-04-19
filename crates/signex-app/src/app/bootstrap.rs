@@ -108,8 +108,7 @@ impl Signex {
                 reorder_picker: None,
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
-                selection_mode:
-                    signex_render::schematic::hit_test::SelectionMode::default(),
+                selection_mode: signex_render::schematic::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
                 lasso_polygon: None,
@@ -197,6 +196,8 @@ impl Signex {
                 undo_stack: crate::undo::UndoStack::new(100),
                 wire_points: Vec::new(),
                 wire_drawing: false,
+                arc_points: Vec::new(),
+                polyline_points: Vec::new(),
                 clipboard_wires: Vec::new(),
                 clipboard_buses: Vec::new(),
                 clipboard_labels: Vec::new(),
@@ -371,9 +372,7 @@ impl Signex {
                         Message::CanvasEvent(CanvasEvent::FitAll)
                     }
                     (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
-                    (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
-                        Message::ToggleAutoFocus
-                    }
+                    (keyboard::Key::Named(keyboard::key::Named::F9), _) => Message::ToggleAutoFocus,
                     // F5: Net color palette (Altium convention).
                     (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
                         Message::OpenNetColorPalette
@@ -387,9 +386,7 @@ impl Signex {
                     // addition to a second canvas click). Useful
                     // when the user's cursor is somewhere they'd
                     // rather not drop a final vertex.
-                    (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
-                        Message::LassoCommit
-                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Enter), _) => Message::LassoCommit,
                     // Alt+A: annotate (Altium convention, incremental)
                     (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
                         Message::Annotate(signex_engine::AnnotateMode::Incremental)

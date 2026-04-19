@@ -10,8 +10,8 @@ pub use command::{
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, SchematicSheet, SelectedItem, SelectedKind, Symbol, TextNote,
-    Wire, SCHEMATIC_PT_TO_MM,
+    Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchematicSheet, SelectedItem,
+    SelectedKind, Symbol, TextNote, Wire,
 };
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -644,6 +644,18 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::PlaceSchDrawing { drawing } => {
+                self.document.drawings.push(drawing);
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: DocumentPatch::DRAWINGS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
                 // Power ports (is_power == true, or reference starting with '#')
@@ -654,7 +666,10 @@ impl Engine {
                     !sym.is_power && !sym.reference.starts_with('#')
                 };
                 // Phase 1: optionally reset existing numbers back to '?'.
-                if matches!(mode, AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber) {
+                if matches!(
+                    mode,
+                    AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
+                ) {
                     for symbol in self.document.symbols.iter_mut() {
                         if !is_designator_target(symbol) {
                             continue;
@@ -795,17 +810,20 @@ impl Engine {
                 // JustBelow (ref_idx). Returns None when the reference
                 // uuid isn't in the Vec — caller falls back to
                 // no-change.
-                fn reorder_slot<T>(vec: &[T], uuid_of: impl Fn(&T) -> uuid::Uuid, direction: ReorderDirection) -> Option<usize> {
+                fn reorder_slot<T>(
+                    vec: &[T],
+                    uuid_of: impl Fn(&T) -> uuid::Uuid,
+                    direction: ReorderDirection,
+                ) -> Option<usize> {
                     match direction {
                         ReorderDirection::ToFront => Some(vec.len()),
                         ReorderDirection::ToBack => Some(0),
-                        ReorderDirection::JustAbove(target) => vec
-                            .iter()
-                            .position(|x| uuid_of(x) == target)
-                            .map(|i| i + 1),
-                        ReorderDirection::JustBelow(target) => vec
-                            .iter()
-                            .position(|x| uuid_of(x) == target),
+                        ReorderDirection::JustAbove(target) => {
+                            vec.iter().position(|x| uuid_of(x) == target).map(|i| i + 1)
+                        }
+                        ReorderDirection::JustBelow(target) => {
+                            vec.iter().position(|x| uuid_of(x) == target)
+                        }
                     }
                 }
 
@@ -813,8 +831,11 @@ impl Engine {
                 for item in &items {
                     match item.kind {
                         SelectedKind::Symbol => {
-                            if let Some(idx) =
-                                self.document.symbols.iter().position(|s| s.uuid == item.uuid)
+                            if let Some(idx) = self
+                                .document
+                                .symbols
+                                .iter()
+                                .position(|s| s.uuid == item.uuid)
                             {
                                 let sym = self.document.symbols.remove(idx);
                                 if let Some(mut slot) =
@@ -847,8 +868,11 @@ impl Engine {
                             }
                         }
                         SelectedKind::Label => {
-                            if let Some(idx) =
-                                self.document.labels.iter().position(|l| l.uuid == item.uuid)
+                            if let Some(idx) = self
+                                .document
+                                .labels
+                                .iter()
+                                .position(|l| l.uuid == item.uuid)
                             {
                                 let l = self.document.labels.remove(idx);
                                 if let Some(mut slot) =
@@ -952,11 +976,7 @@ impl Engine {
         mode: crate::command::AnnotateMode,
         next_by_prefix: &mut std::collections::HashMap<String, u32>,
     ) -> Result<bool, EngineError> {
-        self.annotate_with_seed_and_locks(
-            mode,
-            next_by_prefix,
-            &std::collections::HashSet::new(),
-        )
+        self.annotate_with_seed_and_locks(mode, next_by_prefix, &std::collections::HashSet::new())
     }
 
     /// Same as `annotate_with_seed`, but skips every symbol whose uuid
@@ -971,10 +991,9 @@ impl Engine {
     ) -> Result<bool, EngineError> {
         use crate::command::AnnotateMode;
         let before = self.document.clone();
-        let is_designator_target =
-            |sym: &signex_types::schematic::Symbol| -> bool {
-                !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
-            };
+        let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
+            !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
+        };
 
         // Phase 1: reset to '?' if requested.
         if matches!(
@@ -1027,8 +1046,7 @@ impl Engine {
         }
 
         // Phase 3: renumber '?' symbols using the shared counter.
-        let mut order: Vec<usize> =
-            (0..self.document.symbols.len()).collect();
+        let mut order: Vec<usize> = (0..self.document.symbols.len()).collect();
         order.sort_by(|a, b| {
             let sa = &self.document.symbols[*a];
             let sb = &self.document.symbols[*b];
@@ -1358,7 +1376,10 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
+                    format!(
+                        "{}",
+                        (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
+                    ),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1404,7 +1425,10 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
+                    format!(
+                        "{}",
+                        (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
+                    ),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1469,7 +1493,10 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
+                    format!(
+                        "{}",
+                        (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
+                    ),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1513,7 +1540,10 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
+                    format!(
+                        "{}",
+                        (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
+                    ),
                 ));
                 info.push((
                     "Horizontal Justification".into(),

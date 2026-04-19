@@ -198,21 +198,16 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
-                super::state::WindowKind::DetachedModal(modal) => {
-                    self.view_detached_modal(*modal)
-                }
+                super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
                 // only difference between main and undocked is the OS
                 // window id they render into.
-                super::state::WindowKind::UndockedTab { .. } => {
-                    self.view_main_for(Some(window_id))
-                }
+                super::state::WindowKind::UndockedTab { .. } => self.view_main_for(Some(window_id)),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let panel =
-                        crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
-                            .map(crate::dock::DockMessage::Panel)
-                            .map(Message::Dock);
+                    let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
+                        .map(crate::dock::DockMessage::Panel)
+                        .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
                         .padding(8)
                         .into()
@@ -228,7 +223,7 @@ impl Signex {
     /// so it reads as "the tab itself is moving". The ghost is
     /// non-interactive; it just shows what the user is carrying.
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
-        use iced::widget::{container, row, text, Space};
+        use iced::widget::{Space, container, row, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -271,7 +266,7 @@ impl Signex {
     /// OK / Cancel. No header drag region on the body itself — the
     /// modal opens borderless so the OS-window-drag handler owns that.
     fn view_move_selection_body(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, row, text, text_input, Space};
+        use iced::widget::{Space, button, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -335,19 +330,17 @@ impl Signex {
         } else {
             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
         };
-        let mut ok_btn = button(
-            container(text("Apply").size(11).color(ok_fg)).padding([4, 14]),
-        )
-        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(ok_bg)),
-            border: iced::Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..iced::Border::default()
-            },
-            text_color: ok_fg,
-            ..iced::widget::button::Style::default()
-        });
+        let mut ok_btn = button(container(text("Apply").size(11).color(ok_fg)).padding([4, 14]))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(ok_bg)),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..iced::Border::default()
+                },
+                text_color: ok_fg,
+                ..iced::widget::button::Style::default()
+            });
         if ok_enabled {
             ok_btn = ok_btn.on_press(Message::MoveSelectionApply);
         }
@@ -355,23 +348,20 @@ impl Signex {
         let footer = container(
             row![
                 Space::new().width(iced::Length::Fill),
-                button(
-                    container(text("Cancel").size(11).color(text_c))
-                        .padding([4, 14])
-                )
-                .on_press(Message::CloseMoveSelectionDialog)
-                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
-                    )),
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border_c,
-                    },
-                    text_color: text_c,
-                    ..iced::widget::button::Style::default()
-                }),
+                button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+                    .on_press(Message::CloseMoveSelectionDialog)
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04
+                        ),)),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    }),
                 Space::new().width(8),
                 ok_btn,
             ]
@@ -394,32 +384,31 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text_secondary);
         let border = crate::styles::ti(tokens.border);
-        button(
-            container(text("\u{00D7}".to_string()).size(14).color(text_c))
-                .padding([0, 6]),
-        )
-        .on_press(message)
-        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
+        button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
+            .on_press(message)
+            .style(
+                move |_: &iced::Theme, status: iced::widget::button::Status| {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                        )),
+                        _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.03,
+                        ))),
+                    };
+                    iced::widget::button::Style {
+                        background: bg,
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border,
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    }
                 },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+            )
+            .into()
     }
 
     /// Altium F5 Net Color palette — list of net labels with a per-net
@@ -427,7 +416,7 @@ impl Signex {
     /// colors (10 swatches); a full ColorPicker widget can replace it
     /// later without changing the message contract.
     fn view_net_color_palette_body(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, row, scrollable, text, Space};
+        use iced::widget::{Space, button, column, container, row, scrollable, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -506,68 +495,63 @@ impl Signex {
                     let r_c = *r;
                     let g_c = *g;
                     let b_c = *b;
-                    swatches = swatches.push(
-                        button(
-                            container(Space::new().width(14).height(14))
-                                .style(move |_: &iced::Theme| container::Style {
-                                    background: Some(iced::Background::Color(
-                                        swatch_color,
-                                    )),
+                    swatches =
+                        swatches.push(
+                            button(container(Space::new().width(14).height(14)).style(
+                                move |_: &iced::Theme| container::Style {
+                                    background: Some(iced::Background::Color(swatch_color)),
                                     border: iced::Border {
                                         width: border_w,
                                         radius: 2.0.into(),
                                         color: text_c,
                                     },
                                     ..container::Style::default()
+                                },
+                            ))
+                            .on_press(Message::NetColorSet {
+                                net: net_copy.clone(),
+                                color: Some(signex_types::theme::Color {
+                                    r: r_c,
+                                    g: g_c,
+                                    b: b_c,
+                                    a: 255,
                                 }),
-                        )
-                        .on_press(Message::NetColorSet {
-                            net: net_copy.clone(),
-                            color: Some(signex_types::theme::Color {
-                                r: r_c,
-                                g: g_c,
-                                b: b_c,
-                                a: 255,
-                            }),
-                        })
-                        .style(move |_: &iced::Theme, _| {
-                            iced::widget::button::Style {
-                                background: Some(iced::Background::Color(
-                                    iced::Color::TRANSPARENT,
-                                )),
+                            })
+                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
                                 border: iced::Border::default(),
                                 ..iced::widget::button::Style::default()
-                            }
-                        }),
-                    );
+                            }),
+                        );
                 }
                 // Clear-override button
                 let net_clear = net.clone();
                 swatches = swatches.push(
-                    button(
-                        container(text("×").size(10).color(text_c)).padding([0, 6]),
-                    )
-                    .on_press(Message::NetColorSet {
-                        net: net_clear,
-                        color: None,
-                    })
-                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                        },
-                        text_color: text_c,
-                        ..iced::widget::button::Style::default()
-                    }),
+                    button(container(text("×").size(10).color(text_c)).padding([0, 6]))
+                        .on_press(Message::NetColorSet {
+                            net: net_clear,
+                            color: None,
+                        })
+                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            ))),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            text_color: text_c,
+                            ..iced::widget::button::Style::default()
+                        }),
                 );
 
                 rows_col = rows_col.push(
                     row![
-                        text(net).size(11).color(text_c).width(iced::Length::FillPortion(2)),
+                        text(net)
+                            .size(11)
+                            .color(text_c)
+                            .width(iced::Length::FillPortion(2)),
                         swatches,
                     ]
                     .align_y(iced::Alignment::Center)
@@ -597,7 +581,7 @@ impl Signex {
     /// values inline. Changes route through Command::SetSymbolField so
     /// undo/redo / dirty-flagging behaves.
     fn view_parameter_manager_body(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, row, scrollable, text, text_input, Space};
+        use iced::widget::{Space, column, container, row, scrollable, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -748,7 +732,7 @@ impl Signex {
     /// EDA-specific diagnostic colours.
     fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
         use super::contracts::Channel;
-        use iced::widget::{button, column, container, row, text, text_input, Space};
+        use iced::widget::{Space, button, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -819,21 +803,21 @@ impl Signex {
             (0x1F, 0x23, 0x2A), // Ink
         ];
 
-        let swatch_btn = |r: u8, g: u8, b: u8| -> Element<'_, Message> {
-            let col = iced::Color::from_rgb8(r, g, b);
-            let is_current = (draft.r - col.r).abs() < 0.01
-                && (draft.g - col.g).abs() < 0.01
-                && (draft.b - col.b).abs() < 0.01;
-            let sw = iced::Color::from_rgb8(r, g, b);
-            let border_w = if is_current { 2.0 } else { 1.0 };
-            let border_col = if is_current {
-                iced::Color::WHITE
-            } else {
-                iced::Color::from_rgba(0.2, 0.2, 0.22, 0.9)
-            };
-            button(
-                container(Space::new().width(24).height(20))
-                    .style(move |_: &iced::Theme| container::Style {
+        let swatch_btn =
+            |r: u8, g: u8, b: u8| -> Element<'_, Message> {
+                let col = iced::Color::from_rgb8(r, g, b);
+                let is_current = (draft.r - col.r).abs() < 0.01
+                    && (draft.g - col.g).abs() < 0.01
+                    && (draft.b - col.b).abs() < 0.01;
+                let sw = iced::Color::from_rgb8(r, g, b);
+                let border_w = if is_current { 2.0 } else { 1.0 };
+                let border_col = if is_current {
+                    iced::Color::WHITE
+                } else {
+                    iced::Color::from_rgba(0.2, 0.2, 0.22, 0.9)
+                };
+                button(container(Space::new().width(24).height(20)).style(
+                    move |_: &iced::Theme| container::Style {
                         background: Some(iced::Background::Color(sw)),
                         border: iced::Border {
                             width: border_w,
@@ -841,17 +825,17 @@ impl Signex {
                             color: border_col,
                         },
                         ..container::Style::default()
-                    }),
-            )
-            .padding(0)
-            .on_press(Message::NetColorCustomDraft(col))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                border: iced::Border::default(),
-                ..iced::widget::button::Style::default()
-            })
-            .into()
-        };
+                    },
+                ))
+                .padding(0)
+                .on_press(Message::NetColorCustomDraft(col))
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                    border: iced::Border::default(),
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
+            };
 
         // Build the 6 × 4 palette grid row by row.
         let mut palette_col = column![].spacing(6);
@@ -866,20 +850,24 @@ impl Signex {
         // RGB inputs — parse as u8, clamp on submit. Uses the
         // `draft` colour as the current value so swatch clicks and
         // text edits stay in sync.
-        let channel_row = |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
-            let v255 = (value * 255.0).round() as i32;
-            row![
-                text(label).size(11).color(text_muted).width(iced::Length::Fixed(16.0)),
-                text_input("0", &v255.to_string())
-                    .size(11)
-                    .padding([3, 8])
-                    .width(iced::Length::Fixed(70.0))
-                    .on_input(move |s| Message::NetColorCustomChannel(chan, s)),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(6)
-            .into()
-        };
+        let channel_row =
+            |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
+                let v255 = (value * 255.0).round() as i32;
+                row![
+                    text(label)
+                        .size(11)
+                        .color(text_muted)
+                        .width(iced::Length::Fixed(16.0)),
+                    text_input("0", &v255.to_string())
+                        .size(11)
+                        .padding([3, 8])
+                        .width(iced::Length::Fixed(70.0))
+                        .on_input(move |s| Message::NetColorCustomChannel(chan, s)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .spacing(6)
+                .into()
+            };
 
         let preview_hex = format!(
             "#{:02X}{:02X}{:02X}",
@@ -887,8 +875,8 @@ impl Signex {
             (draft.g * 255.0).round() as u8,
             (draft.b * 255.0).round() as u8,
         );
-        let preview_box = container(Space::new().width(iced::Length::Fill).height(32))
-            .style(move |_: &iced::Theme| container::Style {
+        let preview_box = container(Space::new().width(iced::Length::Fill).height(32)).style(
+            move |_: &iced::Theme| container::Style {
                 background: Some(iced::Background::Color(draft)),
                 border: iced::Border {
                     width: 1.0,
@@ -896,7 +884,8 @@ impl Signex {
                     color: border_c,
                 },
                 ..container::Style::default()
-            });
+            },
+        );
 
         let rgb_col = column![
             text("Custom RGB").size(11).color(text_c),
@@ -926,26 +915,23 @@ impl Signex {
 
         let footer = row![
             Space::new().width(iced::Length::Fill),
-            button(
-                container(text("Cancel").size(11).color(text_c)).padding([4, 14]),
-            )
-            .on_press(Message::NetColorCustomShow(false))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }),
+            button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]),)
+                .on_press(Message::NetColorCustomShow(false))
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }),
             Space::new().width(8),
             button(
-                container(text("Use Color").size(11).color(iced::Color::WHITE))
-                    .padding([4, 14]),
+                container(text("Use Color").size(11).color(iced::Color::WHITE)).padding([4, 14]),
             )
             .on_press(Message::NetColorCustomSubmit(draft))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
@@ -974,7 +960,9 @@ impl Signex {
                     .align_y(iced::Alignment::Center),
                 )
                 .padding([10, 14])
-                .style(crate::styles::toolbar_strip(&self.document_state.panel_ctx.tokens)),
+                .style(crate::styles::toolbar_strip(
+                    &self.document_state.panel_ctx.tokens
+                )),
                 container(body).padding([14, 14]),
                 container(footer).padding([10, 14]),
             ]
@@ -989,7 +977,11 @@ impl Signex {
         let card_w = 430.0;
         let x = ((ww - card_w) * 0.5).max(0.0);
         let y = crate::menu_bar::MENU_BAR_HEIGHT
-            + if self.document_state.tabs.is_empty() { 0.0 } else { 28.0 }
+            + if self.document_state.tabs.is_empty() {
+                0.0
+            } else {
+                28.0
+            }
             + 80.0;
         // Wrap in a mouse_area with on_press(Noop) so clicks inside the
         // card are captured and DON'T fall through to the dismiss
@@ -999,10 +991,7 @@ impl Signex {
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 
-    fn view_detached_modal(
-        &self,
-        modal: super::state::ModalId,
-    ) -> Element<'_, Message> {
+    fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
         use super::state::ModalId;
         match modal {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
@@ -1022,10 +1011,7 @@ impl Signex {
         }
     }
 
-    fn view_main_for(
-        &self,
-        undocked_window: Option<iced::window::Id>,
-    ) -> Element<'_, Message> {
+    fn view_main_for(&self, undocked_window: Option<iced::window::Id>) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
@@ -1049,8 +1035,7 @@ impl Signex {
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
         };
-        let menu =
-            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
+        let menu = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -1122,21 +1107,20 @@ impl Signex {
                 _ => None,
             })
             .collect();
-        let visible_paths: std::collections::HashSet<std::path::PathBuf> =
-            match undocked_window {
-                Some(id) => match ui.windows.get(&id) {
-                    Some(super::state::WindowKind::UndockedTab { path, .. }) => {
-                        std::iter::once(path.clone()).collect()
-                    }
-                    _ => std::collections::HashSet::new(),
-                },
-                None => document
-                    .tabs
-                    .iter()
-                    .map(|t| t.path.clone())
-                    .filter(|p| !all_undocked_paths.contains(p))
-                    .collect(),
-            };
+        let visible_paths: std::collections::HashSet<std::path::PathBuf> = match undocked_window {
+            Some(id) => match ui.windows.get(&id) {
+                Some(super::state::WindowKind::UndockedTab { path, .. }) => {
+                    std::iter::once(path.clone()).collect()
+                }
+                _ => std::collections::HashSet::new(),
+            },
+            None => document
+                .tabs
+                .iter()
+                .map(|t| t.path.clone())
+                .filter(|p| !all_undocked_paths.contains(p))
+                .collect(),
+        };
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
             main = main.push(
@@ -1518,10 +1502,8 @@ impl Signex {
             // column can auto-size to its widest label. The old
             // column+row+Space wrapping forced a fixed-width column
             // which clipped labels like "Elliptical Arc".
-            layers.push(
-                super::view::translate::Translate::new(dropdown, (adjusted_x, ab_y))
-                    .into(),
-            );
+            layers
+                .push(super::view::translate::Translate::new(dropdown, (adjusted_x, ab_y)).into());
         }
 
         if let Some(ref ctx_menu) = interaction.context_menu {
@@ -1558,12 +1540,8 @@ impl Signex {
             .iter()
             .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
             .collect();
-            let floating: std::collections::HashSet<crate::panels::PanelKind> = document
-                .dock
-                .floating
-                .iter()
-                .map(|fp| fp.kind)
-                .collect();
+            let floating: std::collections::HashSet<crate::panels::PanelKind> =
+                document.dock.floating.iter().map(|fp| fp.kind).collect();
             let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
                 .windows
                 .values()
@@ -1624,18 +1602,13 @@ impl Signex {
             let (ww, wh) = ui.window_size;
             let visible_rows = crate::panels::ALL_PANELS
                 .iter()
-                .filter(|&&k| {
-                    (!k.needs_schematic() || has_sch)
-                        && (!k.needs_pcb() || has_pcb)
-                })
+                .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
                 .count() as f32;
             let popup_w = 210.0_f32;
             let popup_h = visible_rows * 22.0 + 12.0;
             let left = (ww - popup_w - 10.0).max(0.0);
             let top = (wh - popup_h - 26.0).max(0.0);
-            layers.push(
-                translate::Translate::new(Element::from(popup), (left, top)).into(),
-            );
+            layers.push(translate::Translate::new(Element::from(popup), (left, top)).into());
         }
 
         if let Some(fp) = document.dock.floating.iter().find(|fp| fp.dragging) {
@@ -1689,11 +1662,7 @@ impl Signex {
                 // at the window boundary; within that, Translate renders
                 // the panel at fp.(x, y) without resizing it.
                 layers.push(
-                    translate::Translate::new(
-                        panel_widget.map(Message::Dock),
-                        (fp.x, fp.y),
-                    )
-                    .into(),
+                    translate::Translate::new(panel_widget.map(Message::Dock), (fp.x, fp.y)).into(),
                 );
             }
         }
@@ -1718,10 +1687,10 @@ impl Signex {
             layers.push(dialog);
         }
 
-        if let Some(idx) = ui.close_tab_confirm {
-            if let Some(tab) = document.tabs.get(idx) {
-                layers.push(self.view_close_tab_confirm(&tab.title));
-            }
+        if let Some(idx) = ui.close_tab_confirm
+            && let Some(tab) = document.tabs.get(idx)
+        {
+            layers.push(self.view_close_tab_confirm(&tab.title));
         }
 
         // Skip overlay rendering for any modal whose detached OS window
@@ -1729,18 +1698,15 @@ impl Signex {
         // both the main window and the popped-out window at the same
         // time.
         let modal_detached = |m: super::state::ModalId| -> bool {
-            ui.windows.values().any(
-                |kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m),
-            )
+            ui.windows
+                .values()
+                .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m))
         };
 
-        if ui.annotate_dialog_open
-            && !modal_detached(super::state::ModalId::AnnotateDialog)
-        {
+        if ui.annotate_dialog_open && !modal_detached(super::state::ModalId::AnnotateDialog) {
             layers.push(self.view_annotate_dialog());
         }
-        if ui.annotate_reset_confirm
-            && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
+        if ui.annotate_reset_confirm && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
         {
             layers.push(self.view_annotate_reset_confirm());
         }
@@ -1752,7 +1718,7 @@ impl Signex {
     }
 
     fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
-        use iced::widget::{button, text, Space};
+        use iced::widget::{Space, button, text};
         use iced::{Background, Border, Color, Theme};
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -1772,22 +1738,19 @@ impl Signex {
             } else {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.04)
             };
-            button(
-                container(text(label.to_string()).size(12).color(label_color))
-                    .padding([5, 14]),
-            )
-            .on_press(msg)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    color: border_c,
-                },
-                text_color: label_color,
-                ..iced::widget::button::Style::default()
-            })
-            .into()
+            button(container(text(label.to_string()).size(12).color(label_color)).padding([5, 14]))
+                .on_press(msg)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(Background::Color(bg)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 4.0.into(),
+                        color: border_c,
+                    },
+                    text_color: label_color,
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
         };
 
         let dialog = container(

@@ -121,6 +121,10 @@ pub enum Tool {
     Line,
     Rectangle,
     Circle,
+    /// 3-click arc: first click = start, second = mid, third = end.
+    Arc,
+    /// Click-by-click polyline; Enter / double-click commits.
+    Polyline,
 }
 
 impl std::fmt::Display for Tool {
@@ -137,6 +141,8 @@ impl std::fmt::Display for Tool {
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
+            Tool::Arc => write!(f, "Draw Arc"),
+            Tool::Polyline => write!(f, "Draw Polygon"),
         }
     }
 }

@@ -13,30 +13,28 @@ impl Signex {
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         use crate::app::documents::TabDocument;
         let overrides = self.ui_state.erc_severity_override.clone();
-        let apply_overrides = |mut violations: Vec<signex_erc::Violation>|
-         -> Vec<signex_erc::Violation> {
-            for v in &mut violations {
-                if let Some(&sev) = overrides.get(&v.rule) {
-                    v.severity = sev;
+        let apply_overrides =
+            |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
+                for v in &mut violations {
+                    if let Some(&sev) = overrides.get(&v.rule) {
+                        v.severity = sev;
+                    }
                 }
-            }
-            violations.retain(|v| v.severity != signex_erc::Severity::Off);
-            violations.sort_by_key(|v| {
-                let bucket = match v.severity {
-                    signex_erc::Severity::Error => 0,
-                    signex_erc::Severity::Warning => 1,
-                    signex_erc::Severity::Info => 2,
-                    signex_erc::Severity::Off => 3,
-                };
-                (bucket, format!("{:?}", v.rule))
-            });
-            violations
-        };
+                violations.retain(|v| v.severity != signex_erc::Severity::Off);
+                violations.sort_by_key(|v| {
+                    let bucket = match v.severity {
+                        signex_erc::Severity::Error => 0,
+                        signex_erc::Severity::Warning => 1,
+                        signex_erc::Severity::Info => 2,
+                        signex_erc::Severity::Off => 3,
+                    };
+                    (bucket, format!("{:?}", v.rule))
+                });
+                violations
+            };
 
-        let mut by_path: std::collections::HashMap<
-            std::path::PathBuf,
-            Vec<signex_erc::Violation>,
-        > = std::collections::HashMap::new();
+        let mut by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>> =
+            std::collections::HashMap::new();
 
         // 1. Active tab — use the live engine's snapshot.
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
@@ -52,10 +50,9 @@ impl Signex {
                 continue;
             }
             if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                let snapshot =
-                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                        session.document(),
-                    );
+                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
+                    session.document(),
+                );
                 let violations = apply_overrides(signex_erc::run(&snapshot));
                 by_path.insert(tab.path.clone(), violations);
             }
@@ -86,16 +83,14 @@ impl Signex {
                     continue;
                 };
                 let snapshot =
-                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                        &parsed,
-                    );
+                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(&parsed);
                 let violations = apply_overrides(signex_erc::run(&snapshot));
                 by_path.insert(path, violations);
             }
         }
 
         let total: usize = by_path.values().map(|v| v.len()).sum();
-        crate::diagnostics::log_info(&format!(
+        crate::diagnostics::log_info(format!(
             "ERC: {} total violations across {} sheet(s)",
             total,
             by_path.len(),
@@ -137,12 +132,8 @@ impl Signex {
                 x: v.location.x,
                 y: v.location.y,
                 severity: match v.severity {
-                    signex_erc::Severity::Error => {
-                        crate::canvas::ErcMarkerSeverity::Error
-                    }
-                    signex_erc::Severity::Warning => {
-                        crate::canvas::ErcMarkerSeverity::Warning
-                    }
+                    signex_erc::Severity::Error => crate::canvas::ErcMarkerSeverity::Error,
+                    signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
                 primary_uuid: v.primary.as_ref().map(|s| s.uuid),
@@ -191,10 +182,7 @@ impl Signex {
         Task::none()
     }
 
-    pub(crate) fn handle_annotate(
-        &mut self,
-        mode: signex_engine::AnnotateMode,
-    ) -> Task<Message> {
+    pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
@@ -246,17 +234,17 @@ impl Signex {
             if idx == self.document_state.active_tab {
                 continue;
             }
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut() {
-                if let Ok(changed) = session
-                    .engine_mut()
-                    .annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
-                {
-                    if changed {
-                        session.set_dirty(true);
-                        tab.dirty = true;
-                        any_cached_changed = true;
-                    }
-                }
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut()
+                && let Ok(changed) = session.engine_mut().annotate_with_seed_and_locks(
+                    mode,
+                    &mut next_by_prefix,
+                    &locked,
+                )
+                && changed
+            {
+                session.set_dirty(true);
+                tab.dirty = true;
+                any_cached_changed = true;
             }
         }
 
@@ -300,7 +288,7 @@ impl Signex {
         let mut disk_touched = 0usize;
         for sheet_path in unopened_sheet_paths {
             let Ok(sheet) = kicad_parser::parse_schematic_file(&sheet_path) else {
-                crate::diagnostics::log_info(&format!(
+                crate::diagnostics::log_info(format!(
                     "Annotate: failed to parse unopened sheet {}",
                     sheet_path.display()
                 ));
@@ -320,10 +308,7 @@ impl Signex {
             }
             if engine.save().is_ok() {
                 disk_touched += 1;
-                crate::diagnostics::log_info(&format!(
-                    "Annotate: saved {}",
-                    sheet_path.display()
-                ));
+                crate::diagnostics::log_info(format!("Annotate: saved {}", sheet_path.display()));
             }
         }
 
@@ -334,23 +319,21 @@ impl Signex {
             let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
         }
         if disk_touched > 0 {
-            crate::diagnostics::log_info(&format!(
+            crate::diagnostics::log_info(format!(
                 "Annotate: wrote {} unopened sheet file(s) to disk",
                 disk_touched,
             ));
         }
         // Force a render + panel refresh as if a command had fired.
         self.interaction_state.canvas.clear_content_cache();
-        self.sync_canvas_from_visible_schematic(
-            signex_render::schematic::RenderInvalidation::FULL,
-        );
+        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         if any_cached_changed || self.document_state.engine.is_some() {
             self.refresh_panel_ctx();
         }
 
         self.ui_state.annotate_reset_confirm = false;
-        crate::diagnostics::log_info(&format!(
+        crate::diagnostics::log_info(format!(
             "Annotated symbols across {} sheet(s) ({:?})",
             tab_count.max(1),
             mode,
@@ -381,12 +364,13 @@ impl Signex {
     /// are re-saved through `kicad-writer` so the fix is project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
         use crate::app::documents::TabDocument;
+        use std::collections::{HashMap, HashSet};
+        use std::path::PathBuf;
 
         // Phase 1: walk every sheet and count how many symbols hold
         // each (non-power, non-hash) reference.
-        let mut counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
-        let bump = |counts: &mut std::collections::HashMap<String, usize>,
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        let bump = |counts: &mut HashMap<String, usize>,
                     sheet: &signex_types::schematic::SchematicSheet| {
             for sym in &sheet.symbols {
                 if sym.is_power || sym.reference.starts_with('#') {
@@ -406,7 +390,7 @@ impl Signex {
                 bump(&mut counts, session.document());
             }
         }
-        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
+        let open_paths: HashSet<PathBuf> = self
             .document_state
             .tabs
             .iter()
@@ -416,8 +400,8 @@ impl Signex {
             .document_state
             .project_path
             .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from));
-        let unopened: Vec<std::path::PathBuf> = self
+            .and_then(|p| p.parent().map(PathBuf::from));
+        let unopened_paths: Vec<PathBuf> = self
             .document_state
             .project_data
             .as_ref()
@@ -427,7 +411,7 @@ impl Signex {
                     .filter_map(|s| {
                         let path = match project_root.as_ref() {
                             Some(root) => root.join(&s.filename),
-                            None => std::path::PathBuf::from(&s.filename),
+                            None => PathBuf::from(&s.filename),
                         };
                         if open_paths.contains(&path) {
                             None
@@ -438,22 +422,35 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
-        for path in &unopened {
-            if let Ok(sheet) = kicad_parser::parse_schematic_file(path) {
-                bump(&mut counts, &sheet);
+
+        // Parse each unopened sheet ONCE up-front and keep the
+        // `SchematicSheet` around for phase 2 — saves a second disk
+        // parse and guarantees counting + reset see the same state.
+        let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> =
+            Vec::with_capacity(unopened_paths.len());
+        for path in unopened_paths {
+            match kicad_parser::parse_schematic_file(&path) {
+                Ok(sheet) => {
+                    bump(&mut counts, &sheet);
+                    unopened.push((path, sheet));
+                }
+                Err(err) => {
+                    crate::diagnostics::log_info(format!(
+                        "Reset Duplicate Designators: failed to parse unopened sheet {}: {err}",
+                        path.display(),
+                    ));
+                }
             }
         }
 
         // Phase 2: anything seen more than once is a duplicate that
         // needs resetting.
-        let duplicates: std::collections::HashSet<String> = counts
+        let duplicates: HashSet<String> = counts
             .into_iter()
             .filter_map(|(r, n)| if n > 1 { Some(r) } else { None })
             .collect();
         if duplicates.is_empty() {
-            crate::diagnostics::log_info(
-                "Reset Duplicate Designators: no duplicates found",
-            );
+            crate::diagnostics::log_info("Reset Duplicate Designators: no duplicates found");
             return Task::none();
         }
 
@@ -462,7 +459,7 @@ impl Signex {
         // anything changed in the sheet.
         fn reset_in(
             sheet: &mut signex_types::schematic::SchematicSheet,
-            dupes: &std::collections::HashSet<String>,
+            dupes: &HashSet<String>,
         ) -> bool {
             let mut changed = false;
             for sym in sheet.symbols.iter_mut() {
@@ -486,20 +483,18 @@ impl Signex {
 
         let mut resets = 0_usize;
         let mut any_active_changed = false;
-        // Active engine
+        // Active engine — goes through ReplaceDocument so undo records
+        // the snapshot.
         if let Some(engine) = self.document_state.engine.as_mut() {
             let mut sheet = engine.document().clone();
             if reset_in(&mut sheet, &duplicates) {
-                // Replace via the engine's ReplaceDocument path so
-                // undo records the snapshot.
-                let _ = engine.execute(signex_engine::Command::ReplaceDocument {
-                    document: sheet,
-                });
+                let _ = engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
                 any_active_changed = true;
                 resets += 1;
             }
         }
-        // Cached tabs
+        // Cached tabs — same ReplaceDocument path; each tab's own
+        // history records the reset.
         for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
             if idx == self.document_state.active_tab {
                 continue;
@@ -509,29 +504,41 @@ impl Signex {
                 if reset_in(&mut sheet, &duplicates) {
                     let _ = session
                         .engine_mut()
-                        .execute(signex_engine::Command::ReplaceDocument {
-                            document: sheet,
-                        });
+                        .execute(signex_engine::Command::ReplaceDocument { document: sheet });
                     session.set_dirty(true);
                     tab.dirty = true;
                     resets += 1;
                 }
             }
         }
-        // Unopened sheets — parse, mutate, write back.
-        for path in &unopened {
-            let Ok(mut sheet) = kicad_parser::parse_schematic_file(path) else {
-                continue;
-            };
+        // Unopened sheets — mutate the already-parsed copy and write
+        // back. NOTE: direct save, not undoable from within Signex;
+        // the user would need to re-open the sheet and Ctrl+Z manually.
+        for (path, mut sheet) in unopened {
             if !reset_in(&mut sheet, &duplicates) {
                 continue;
             }
-            let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
-                continue;
+            let mut engine = match signex_engine::Engine::new(sheet) {
+                Ok(eng) => eng,
+                Err(err) => {
+                    crate::diagnostics::log_info(format!(
+                        "Reset Duplicate Designators: engine construct failed for {}: {err}",
+                        path.display(),
+                    ));
+                    continue;
+                }
             };
             engine.set_path(Some(path.clone()));
-            if engine.save().is_ok() {
-                resets += 1;
+            match engine.save() {
+                Ok(_) => {
+                    resets += 1;
+                }
+                Err(err) => {
+                    crate::diagnostics::log_info(format!(
+                        "Reset Duplicate Designators: save failed for {}: {err}",
+                        path.display(),
+                    ));
+                }
             }
         }
 
@@ -542,7 +549,7 @@ impl Signex {
             );
             self.refresh_panel_ctx();
         }
-        crate::diagnostics::log_info(&format!(
+        crate::diagnostics::log_info(format!(
             "Reset Duplicate Designators: reset {} duplicate reference(s) across {} sheet(s)",
             duplicates.len(),
             resets,
@@ -665,10 +672,7 @@ impl Signex {
     /// renders that panel's content. Closing the OS window re-docks the
     /// panel to the right column — see `SecondaryWindowClosed` in
     /// dispatch/mod.rs.
-    pub(crate) fn handle_detach_floating_panel(
-        &mut self,
-        idx: usize,
-    ) -> Task<Message> {
+    pub(crate) fn handle_detach_floating_panel(&mut self, idx: usize) -> Task<Message> {
         let Some(fp) = self.document_state.dock.floating.get(idx) else {
             return Task::none();
         };
@@ -727,12 +731,9 @@ impl Signex {
         use super::super::state::ModalId;
         // Don't open a second window for the same modal — treat detach
         // on an already-detached modal as a no-op.
-        if self
-            .ui_state
-            .windows
-            .values()
-            .any(|kind| matches!(kind, super::super::state::WindowKind::DetachedModal(m) if *m == modal))
-        {
+        if self.ui_state.windows.values().any(
+            |kind| matches!(kind, super::super::state::WindowKind::DetachedModal(m) if *m == modal),
+        ) {
             return Task::none();
         }
 
@@ -785,8 +786,20 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
-        let dx = self.ui_state.move_selection.dx.trim().parse::<f64>().unwrap_or(0.0);
-        let dy = self.ui_state.move_selection.dy.trim().parse::<f64>().unwrap_or(0.0);
+        let dx = self
+            .ui_state
+            .move_selection
+            .dx
+            .trim()
+            .parse::<f64>()
+            .unwrap_or(0.0);
+        let dy = self
+            .ui_state
+            .move_selection
+            .dy
+            .trim()
+            .parse::<f64>()
+            .unwrap_or(0.0);
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -802,9 +815,7 @@ impl Signex {
         self.ui_state.move_selection.open = false;
         self.interaction_state.canvas.clear_content_cache();
         self.interaction_state.canvas.clear_overlay_cache();
-        self.sync_canvas_from_visible_schematic(
-            signex_render::schematic::RenderInvalidation::FULL,
-        );
+        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         Task::none()
     }

@@ -46,6 +46,7 @@ pub enum CommandKind {
     PlaceNoConnect,
     PlaceBusEntry,
     PlaceTextNote,
+    PlaceSchDrawing,
     AnnotateAll,
     MoveSymbolAbsolute,
     ReorderObjects,
@@ -146,6 +147,12 @@ pub enum Command {
     PlaceTextNote {
         text_note: TextNote,
     },
+    /// Append a freeform graphic (line / rect / circle / arc / polyline)
+    /// to the sheet's drawings list. Used by the Arc 3-click tool and
+    /// the Polyline click-by-click tool.
+    PlaceSchDrawing {
+        drawing: signex_types::schematic::SchDrawing,
+    },
     /// Auto-annotate every symbol whose reference ends in `?` with a unique
     /// sequential designator per prefix (R?, C?, U?, …). Applied in a
     /// deterministic order so re-running produces the same layout.
@@ -217,6 +224,7 @@ impl Command {
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
+            Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
             Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,

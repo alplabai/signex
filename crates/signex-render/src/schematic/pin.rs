@@ -294,9 +294,9 @@ fn draw_pin(
             // above) we want CCW visual so text reads A→D from body-edge
             // upward (matching KiCad).  Top-exiting pins use the mirror.
             let rot = if wdy < 0.0 {
-                -std::f32::consts::FRAC_PI_2  // CCW visual → bottom-to-top
+                -std::f32::consts::FRAC_PI_2 // CCW visual → bottom-to-top
             } else {
-                std::f32::consts::FRAC_PI_2   // CW visual  → top-to-bottom
+                std::f32::consts::FRAC_PI_2 // CW visual  → top-to-bottom
             };
             // In the rotated frame, align_x controls the along-pin axis and
             // align_y controls the perpendicular axis.  We always want:
