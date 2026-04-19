@@ -273,29 +273,75 @@ fn draw_pin(
         // a separate stroke above the text with a small visible gap, which
         // matches KiCad's look.
         let (plain, overbars) = display_text_with_overbars(&pin.name);
-        let text = canvas::Text {
-            content: plain.clone(),
-            position: np,
-            color: pin_color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(text);
 
-        if !overbars.is_empty() {
-            draw_overbars(
-                frame,
-                &plain,
-                &overbars,
-                np,
-                screen_font,
-                h_align,
-                v_align,
-                pin_color,
-            );
+        // Determine whether the pin runs vertically on screen.
+        let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+        let is_vertical_pin = wdx.abs() < wdy.abs();
+
+        if is_vertical_pin {
+            // Rotate the frame so text baseline is parallel to the pin.
+            //
+            // KiCad convention for downward pins (wdy < 0 = body above pin):
+            //   CCW 90° (+π/2): rotated +X = screen UP.
+            //   h_align = Left  → first char at np (body edge), text extends upward into IC.
+            //   h_align = Right → last char at np, text extends upward into IC.
+            //
+            // For upward pins (wdy > 0 = body below pin):
+            //   CW 90° (-π/2): rotated +X = screen DOWN.
+            //   h_align = Left  → first char at np (body edge), text extends downward into IC.
+            // frame.rotate uses Iced's convention: positive = CCW visual in
+            // screen Y-down space.  For bottom-exiting pins (wdy < 0 = body
+            // above) we want CCW visual so text reads A→D from body-edge
+            // upward (matching KiCad).  Top-exiting pins use the mirror.
+            let rot = if wdy < 0.0 {
+                -std::f32::consts::FRAC_PI_2  // CCW visual → bottom-to-top
+            } else {
+                std::f32::consts::FRAC_PI_2   // CW visual  → top-to-bottom
+            };
+            // In the rotated frame, align_x controls the along-pin axis and
+            // align_y controls the perpendicular axis.  We always want:
+            //   - text to start at the body edge (Left = first char at anchor)
+            //   - text centered across the pin line (Center)
+            frame.with_save(|frame| {
+                frame.translate(iced::Vector::new(np.x, np.y));
+                frame.rotate(rot);
+                let text = canvas::Text {
+                    content: plain.clone(),
+                    position: iced::Point::ORIGIN,
+                    color: pin_color,
+                    size: iced::Pixels(screen_font),
+                    font: crate::canvas_font(),
+                    align_x: iced::alignment::Horizontal::Left.into(),
+                    align_y: iced::alignment::Vertical::Center,
+                    ..canvas::Text::default()
+                };
+                frame.fill_text(text);
+            });
+        } else {
+            let text = canvas::Text {
+                content: plain.clone(),
+                position: np,
+                color: pin_color,
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: h_align.into(),
+                align_y: v_align,
+                ..canvas::Text::default()
+            };
+            frame.fill_text(text);
+
+            if !overbars.is_empty() {
+                draw_overbars(
+                    frame,
+                    &plain,
+                    &overbars,
+                    np,
+                    screen_font,
+                    h_align,
+                    v_align,
+                    pin_color,
+                );
+            }
         }
     }
 
