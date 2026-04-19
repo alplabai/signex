@@ -246,6 +246,120 @@ impl Signex {
                 self.ui_state.zoom = zoom_pct;
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Net-colour flood: the user picked a swatch from the
+                // Active Bar and is now clicking a wire. Union-find the
+                // whole connected net and apply the colour (or clear it
+                // if alpha == 0). Colours stay in app state so the
+                // .kicad_sch round-trips unchanged — KiCad has no
+                // notion of per-wire override colours.
+                if let Some(pending) = self.ui_state.pending_net_color {
+                    // Compute the net's wire uuids while only holding an
+                    // immutable snapshot borrow, then release it before
+                    // mutating ui_state.
+                    let net_wire_uuids: Vec<uuid::Uuid> = match self
+                        .active_render_snapshot()
+                    {
+                        None => Vec::new(),
+                        Some(snapshot) => {
+                            let hit = signex_render::schematic::hit_test::hit_test(
+                                snapshot, world_x, world_y,
+                            );
+                            match hit {
+                                Some(h)
+                                    if h.kind
+                                        == signex_types::schematic::SelectedKind::Wire =>
+                                {
+                                    fn q(
+                                        p: &signex_types::schematic::Point,
+                                    ) -> (i64, i64) {
+                                        (
+                                            (p.x * 100.0).round() as i64,
+                                            (p.y * 100.0).round() as i64,
+                                        )
+                                    }
+                                    fn find(
+                                        parent: &mut std::collections::HashMap<
+                                            (i64, i64),
+                                            (i64, i64),
+                                        >,
+                                        x: (i64, i64),
+                                    ) -> (i64, i64) {
+                                        let p = *parent.entry(x).or_insert(x);
+                                        if p == x {
+                                            x
+                                        } else {
+                                            let r = find(parent, p);
+                                            parent.insert(x, r);
+                                            r
+                                        }
+                                    }
+                                    fn union(
+                                        parent: &mut std::collections::HashMap<
+                                            (i64, i64),
+                                            (i64, i64),
+                                        >,
+                                        a: (i64, i64),
+                                        b: (i64, i64),
+                                    ) {
+                                        let ra = find(parent, a);
+                                        let rb = find(parent, b);
+                                        if ra != rb {
+                                            parent.insert(ra, rb);
+                                        }
+                                    }
+                                    let mut parent: std::collections::HashMap<
+                                        (i64, i64),
+                                        (i64, i64),
+                                    > = std::collections::HashMap::new();
+                                    for w in &snapshot.wires {
+                                        union(&mut parent, q(&w.start), q(&w.end));
+                                    }
+                                    match snapshot
+                                        .wires
+                                        .iter()
+                                        .find(|w| w.uuid == h.uuid)
+                                    {
+                                        None => Vec::new(),
+                                        Some(hw) => {
+                                            let root = find(&mut parent, q(&hw.start));
+                                            snapshot
+                                                .wires
+                                                .iter()
+                                                .filter(|w| {
+                                                    find(&mut parent, q(&w.start)) == root
+                                                })
+                                                .map(|w| w.uuid)
+                                                .collect()
+                                        }
+                                    }
+                                }
+                                _ => Vec::new(),
+                            }
+                        }
+                    };
+                    if !net_wire_uuids.is_empty() {
+                        // Snapshot the current map onto the app-level
+                        // undo stack so Ctrl+Z can revert this flood.
+                        self.ui_state
+                            .net_color_undo
+                            .push(self.ui_state.wire_color_overrides.clone());
+                        for uuid in net_wire_uuids {
+                            if pending.a == 0 {
+                                self.ui_state.wire_color_overrides.remove(&uuid);
+                            } else {
+                                self.ui_state
+                                    .wire_color_overrides
+                                    .insert(uuid, pending);
+                            }
+                        }
+                        self.interaction_state.canvas.wire_color_overrides =
+                            self.ui_state.wire_color_overrides.clone();
+                        self.interaction_state.canvas.clear_content_cache();
+                    }
+                    self.ui_state.pending_net_color = None;
+                    self.interaction_state.canvas.pending_net_color = None;
+                    return Task::none();
+                }
                 // Z-order reference picker: the user previously chose
                 // Bring-To-Front-Of / Send-To-Back-Of on the Active Bar
                 // and is now clicking a reference item. Resolve the hit,

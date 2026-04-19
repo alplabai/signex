@@ -4104,7 +4104,49 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     } else {
-        for entry in ctx.diagnostics.iter().rev() {
+        // Table header — mirrors Altium's Messages panel with fixed
+        // columns for id, level, source tag, and the message body.
+        let muted = theme_ext::text_secondary(&ctx.tokens);
+        let primary = theme_ext::text_primary(&ctx.tokens);
+        let border = theme_ext::border_color(&ctx.tokens);
+        let header_bg = theme_ext::to_color(&ctx.tokens.hover);
+        let row_bg = theme_ext::to_color(&ctx.tokens.panel_bg);
+        // Alt-row tint: pull a darker variant from the panel background
+        // by shifting alpha. iced::Color lets us blend cheaply.
+        let alt_bg = Color {
+            a: row_bg.a,
+            r: (row_bg.r - 0.02).max(0.0),
+            g: (row_bg.g - 0.02).max(0.0),
+            b: (row_bg.b - 0.02).max(0.0),
+        };
+
+        let th =
+            |label: &str| -> Element<'a, PanelMsg> {
+                container(text(label.to_string()).size(9).color(muted))
+                    .padding([3, 6])
+                    .into()
+            };
+        col = col.push(
+            container(
+                row![
+                    container(th("#")).width(Length::Fixed(36.0)),
+                    container(th("Level")).width(Length::Fixed(56.0)),
+                    container(th("Source")).width(Length::Fixed(160.0)),
+                    container(th("Message")).width(Length::Fill),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .style(move |_theme: &Theme| iced::widget::container::Style {
+                background: Some(Background::Color(header_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 0.0.into(),
+                    color: border,
+                },
+                ..iced::widget::container::Style::default()
+            }),
+        );
+        for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
             let level_color = match entry.level {
                 crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
                 crate::diagnostics::DiagnosticLevel::Warning => {
@@ -4116,35 +4158,39 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     theme_ext::text_secondary(&ctx.tokens)
                 }
             };
-
+            let bg = if i % 2 == 0 { row_bg } else { alt_bg };
+            let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
+                container(text(label).size(size).color(color))
+                    .padding([2, 6])
+                    .into()
+            };
             col = col.push(
                 container(
-                    column![
-                        row![
-                            text(format!("#{}", entry.id))
-                                .size(9)
-                                .color(theme_ext::text_secondary(&ctx.tokens)),
-                            Space::new().width(6).height(Length::Shrink),
-                            text(entry.level.label()).size(9).color(level_color),
-                            Space::new().width(6).height(Length::Shrink),
-                            text(entry.code.as_str())
-                                .size(9)
-                                .color(theme_ext::text_secondary(&ctx.tokens)),
-                        ]
-                        .align_y(iced::Alignment::Center),
-                        text(entry.message.as_str())
-                            .size(10)
-                            .color(theme_ext::text_primary(&ctx.tokens)),
+                    row![
+                        container(cell(format!("#{}", entry.id), muted, 9.0))
+                            .width(Length::Fixed(36.0)),
+                        container(cell(
+                            entry.level.label().to_string(),
+                            level_color,
+                            9.0,
+                        ))
+                        .width(Length::Fixed(56.0)),
+                        container(cell(entry.code.as_str().to_string(), muted, 9.0))
+                            .width(Length::Fixed(160.0)),
+                        container(cell(entry.message.as_str().to_string(), primary, 10.0))
+                            .width(Length::Fill),
                     ]
-                    .spacing(3),
+                    .align_y(iced::Alignment::Center),
                 )
-                .padding([5, 6])
                 .style(move |_theme: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(theme_ext::to_color(&ctx.tokens.panel_bg))),
+                    background: Some(Background::Color(bg)),
                     border: Border {
                         width: 1.0,
+                        // Only the bottom edge visible — the row stack
+                        // forms the table grid without double-drawing
+                        // side borders.
                         radius: 0.0.into(),
-                        color: theme_ext::border_color(&ctx.tokens),
+                        color: border,
                     },
                     ..iced::widget::container::Style::default()
                 }),
