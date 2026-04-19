@@ -113,7 +113,7 @@ impl Signex {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.font_size_pt = *pt;
                 }
-                let fs_mm = *pt as f64 * 0.254;
+                let fs_mm = *pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM;
                 if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
                     g.font_size = fs_mm;
                 }
