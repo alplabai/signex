@@ -14,8 +14,8 @@ use std::sync::{OnceLock, RwLock};
 /// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 
-pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
+pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {

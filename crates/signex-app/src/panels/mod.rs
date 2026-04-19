@@ -1653,9 +1653,7 @@ fn view_selected_element_properties<'a>(
                             );
                         } else {
                             for (name, value) in &section_params {
-                                c = c.push(form_input_row(
-                                    name, value, muted, input_bg, input_bdr,
-                                ));
+                                c = c.push(form_input_row(name, value, muted, input_bg, input_bdr));
                             }
                         }
                         c
@@ -4131,12 +4129,11 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             b: (row_bg.b - 0.02).max(0.0),
         };
 
-        let th =
-            |label: &str| -> Element<'a, PanelMsg> {
-                container(text(label.to_string()).size(11).color(muted))
-                    .padding([4, 8])
-                    .into()
-            };
+        let th = |label: &str| -> Element<'a, PanelMsg> {
+            container(text(label.to_string()).size(11).color(muted))
+                .padding([4, 8])
+                .into()
+        };
         // Header row — background fill, no border (separator line
         // below sits in its own element so the table reads as a grid
         // of horizontal rules instead of individually framed boxes).
@@ -4189,12 +4186,8 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     row![
                         container(cell(format!("#{}", entry.id), muted, 11.0))
                             .width(Length::Fixed(48.0)),
-                        container(cell(
-                            entry.level.label().to_string(),
-                            level_color,
-                            11.0,
-                        ))
-                        .width(Length::Fixed(64.0)),
+                        container(cell(entry.level.label().to_string(), level_color, 11.0,))
+                            .width(Length::Fixed(64.0)),
                         container(cell(entry.code.as_str().to_string(), muted, 11.0))
                             .width(Length::Fixed(180.0)),
                         container(cell(entry.message.as_str().to_string(), primary, 12.0))

@@ -105,25 +105,15 @@ impl Signex {
                     use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => {
-                                self.ui_state.annotate_dialog_open = false
-                            }
+                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
-                            ModalId::Preferences => {
-                                self.ui_state.preferences_open = false
-                            }
-                            ModalId::FindReplace => {
-                                self.ui_state.find_replace.open = false
-                            }
-                            ModalId::CloseTabConfirm => {
-                                self.ui_state.close_tab_confirm = None
-                            }
-                            ModalId::MoveSelection => {
-                                self.ui_state.move_selection.open = false
-                            }
+                            ModalId::Preferences => self.ui_state.preferences_open = false,
+                            ModalId::FindReplace => self.ui_state.find_replace.open = false,
+                            ModalId::CloseTabConfirm => self.ui_state.close_tab_confirm = None,
+                            ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
                                 self.ui_state.net_color_palette_open = false
                             }
@@ -139,10 +129,9 @@ impl Signex {
                         // docked panel in the right column so the user
                         // doesn't lose access to the panel kind.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state.dock.add_panel(
-                                crate::dock::PanelPosition::Right,
-                                kind,
-                            );
+                            self.document_state
+                                .dock
+                                .add_panel(crate::dock::PanelPosition::Right, kind);
                         }
                     }
                 }
@@ -275,17 +264,38 @@ impl Signex {
                 Task::none()
             }
             Message::LassoCommit => {
-                if let Some(pts) = self.ui_state.lasso_polygon.take() {
-                    if pts.len() >= 3
-                        && let Some(snapshot) = self.active_render_snapshot()
-                    {
-                        let poly: Vec<(f64, f64)> =
-                            pts.iter().map(|p| (p.x, p.y)).collect();
-                        let filters = self.interaction_state.selection_filters.clone();
-                        self.interaction_state.canvas.selected =
-                            signex_render::schematic::hit_test::hit_test_polygon(
-                                snapshot, &poly,
-                            )
+                // Altium-style single terminator — Enter commits
+                // whichever multi-click buffer is currently armed:
+                //   - Lasso: selects inside the polygon.
+                //   - Polyline (Tool::Polyline): writes a SchDrawing.
+                //   - Arc (Tool::Arc): arms need 3 clicks regardless.
+                if self.interaction_state.current_tool == Tool::Polyline
+                    && self.interaction_state.polyline_points.len() >= 2
+                {
+                    let pts = std::mem::take(&mut self.interaction_state.polyline_points);
+                    let drawing = signex_types::schematic::SchDrawing::Polyline {
+                        uuid: uuid::Uuid::new_v4(),
+                        points: pts,
+                        width: 0.0,
+                        fill: signex_types::schematic::FillType::default(),
+                    };
+                    self.apply_engine_command(
+                        signex_engine::Command::PlaceSchDrawing { drawing },
+                        false,
+                        false,
+                    );
+                    self.interaction_state.canvas.polyline_points.clear();
+                    self.interaction_state.canvas.clear_overlay_cache();
+                    return Task::none();
+                }
+                if let Some(pts) = self.ui_state.lasso_polygon.take()
+                    && pts.len() >= 3
+                    && let Some(snapshot) = self.active_render_snapshot()
+                {
+                    let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
+                    let filters = self.interaction_state.selection_filters.clone();
+                    self.interaction_state.canvas.selected =
+                        signex_render::schematic::hit_test::hit_test_polygon(snapshot, &poly)
                             .into_iter()
                             .filter(|h| {
                                 super::handlers::selection_workflow::passes_filter(
@@ -293,11 +303,9 @@ impl Signex {
                                 )
                             })
                             .collect();
-                        self.update_selection_info();
-                    }
+                    self.update_selection_info();
                 }
-                self.interaction_state.canvas.lasso_polygon = None;
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.sync_lasso_polygon_to_canvas();
                 Task::none()
             }
             Message::CycleSelectionMode => {
@@ -306,7 +314,7 @@ impl Signex {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
                 };
-                crate::diagnostics::log_info(&format!(
+                crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",
                     self.ui_state.selection_mode
                 ));
@@ -318,12 +326,54 @@ impl Signex {
                 // `pin_matrix_view` so "clearing" an override drops back
                 // to the same severity the user sees in the UI.
                 const BASELINE: [[Severity; 6]; 6] = [
-                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off],
-                    [Severity::Off, Severity::Error, Severity::Off, Severity::Off, Severity::Error, Severity::Error],
-                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Warning],
-                    [Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Off, Severity::Error],
-                    [Severity::Off, Severity::Error, Severity::Off, Severity::Off, Severity::Error, Severity::Error],
-                    [Severity::Off, Severity::Error, Severity::Warning, Severity::Error, Severity::Error, Severity::Off],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Warning,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Warning,
+                        Severity::Error,
+                        Severity::Error,
+                        Severity::Off,
+                    ],
                 ];
                 let key = (row, col);
                 let baseline = BASELINE
@@ -348,9 +398,7 @@ impl Signex {
                 } else {
                     self.ui_state.pin_matrix_overrides.insert(key, next);
                 }
-                crate::fonts::write_pin_matrix_overrides(
-                    &self.ui_state.pin_matrix_overrides,
-                );
+                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
                 Task::none()
             }
             Message::Noop => Task::none(),

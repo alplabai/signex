@@ -121,10 +121,7 @@ impl MenuColors {
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(
-    tokens: &ThemeTokens,
-    ctx: MenuContext,
-) -> Element<'static, MenuMessage> {
+pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
     // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_stub` — enabled items
     // dispatch their message, disabled items render greyed-out like
@@ -175,7 +172,12 @@ pub fn view(
             separator(mc),
             leaf_if("Cut", Some("Ctrl+X"), MenuMessage::Cut, ctx.has_selection),
             leaf_if("Copy", Some("Ctrl+C"), MenuMessage::Copy, ctx.has_selection),
-            leaf_if("Paste", Some("Ctrl+V"), MenuMessage::Paste, ctx.has_schematic),
+            leaf_if(
+                "Paste",
+                Some("Ctrl+V"),
+                MenuMessage::Paste,
+                ctx.has_schematic,
+            ),
             leaf_if(
                 "Smart Paste",
                 Some("Shift+Ctrl+V"),
@@ -283,46 +285,45 @@ pub fn view(
     // Design → Annotation submenu mirrors Altium's Annotation cascade.
     // Every entry gated on `has_schematic` — annotating without a
     // project open is nonsense.
-    let annotation_submenu: Item<'static, MenuMessage, Theme, iced::Renderer> =
-        Item::with_menu(
-            submenu_item_btn("Annotation", mc),
-            menu_template(vec![
-                leaf_if(
-                    "Annotate Schematics...",
-                    None,
-                    MenuMessage::Annotate,
-                    ctx.has_schematic,
-                ),
-                leaf_if(
-                    "Reset Schematic Designators...",
-                    None,
-                    MenuMessage::AnnotateReset,
-                    ctx.has_schematic,
-                ),
-                leaf_if(
-                    "Reset Duplicate Schematic Designators...",
-                    None,
-                    MenuMessage::AnnotateResetDuplicates,
-                    ctx.has_schematic,
-                ),
-                separator(mc),
-                leaf_if(
-                    "Annotate Schematics Quietly",
-                    Some("Alt+A"),
-                    MenuMessage::AnnotateQuietly,
-                    ctx.has_schematic,
-                ),
-                leaf_if(
-                    "Force Annotate All Schematics",
-                    Some("Shift+Alt+A"),
-                    MenuMessage::AnnotateForceAll,
-                    ctx.has_schematic,
-                ),
-                separator(mc),
-                leaf_stub("Back Annotate Schematics...", None, mc),
-                leaf_stub("Number Schematic Sheets...", None, mc),
-            ]),
-        );
+    let annotation_submenu: Item<'static, MenuMessage, Theme, iced::Renderer> = Item::with_menu(
+        submenu_item_btn("Annotation", mc),
+        menu_template(vec![
+            leaf_if(
+                "Annotate Schematics...",
+                None,
+                MenuMessage::Annotate,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Reset Schematic Designators...",
+                None,
+                MenuMessage::AnnotateReset,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Reset Duplicate Schematic Designators...",
+                None,
+                MenuMessage::AnnotateResetDuplicates,
+                ctx.has_schematic,
+            ),
+            separator(mc),
+            leaf_if(
+                "Annotate Schematics Quietly",
+                Some("Alt+A"),
+                MenuMessage::AnnotateQuietly,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Force Annotate All Schematics",
+                Some("Shift+Alt+A"),
+                MenuMessage::AnnotateForceAll,
+                ctx.has_schematic,
+            ),
+            separator(mc),
+            leaf_stub("Back Annotate Schematics...", None, mc),
+            leaf_stub("Number Schematic Sheets...", None, mc),
+        ]),
+    );
 
     let design_menu = Item::with_menu(
         root_btn("Design", mc),

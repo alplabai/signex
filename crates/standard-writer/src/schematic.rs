@@ -374,8 +374,17 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     match sym.ref_text.as_ref() {
         Some(ref_text) => write_property(out, "Reference", &sym.reference, ref_text, sym.rotation),
         None => {
-            wln!(out, "    (property \"Reference\" \"{}\"", escape(&sym.reference));
-            wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+            wln!(
+                out,
+                "    (property \"Reference\" \"{}\"",
+                escape(&sym.reference)
+            );
+            wln!(
+                out,
+                "      (at {} {} 0)",
+                fmt_f64(sym.position.x),
+                fmt_f64(sym.position.y)
+            );
             wln!(out, "      (show_name no)");
             wln!(out, "      (do_not_autoplace no)");
             wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
@@ -387,7 +396,12 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         Some(val_text) => write_property(out, "Value", &sym.value, val_text, sym.rotation),
         None => {
             wln!(out, "    (property \"Value\" \"{}\"", escape(&sym.value));
-            wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+            wln!(
+                out,
+                "      (at {} {} 0)",
+                fmt_f64(sym.position.x),
+                fmt_f64(sym.position.y)
+            );
             wln!(out, "      (show_name no)");
             wln!(out, "      (do_not_autoplace no)");
             wln!(out, "      (effects (font (size 1.27 1.27)))");

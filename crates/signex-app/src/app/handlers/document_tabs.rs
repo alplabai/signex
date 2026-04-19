@@ -101,14 +101,12 @@ impl Signex {
                 // engine. For background tabs (which we'd have to activate
                 // first) we fall back to discard-and-close; the save flow
                 // across parked sessions is v0.7 scope.
-                if idx == self.document_state.active_tab {
-                    if let Some(engine) = self.document_state.engine.as_mut()
-                        && engine.save().is_ok()
-                    {
-                        if let Some(tab) = self.document_state.tabs.get_mut(idx) {
-                            tab.dirty = false;
-                        }
-                    }
+                if idx == self.document_state.active_tab
+                    && let Some(engine) = self.document_state.engine.as_mut()
+                    && engine.save().is_ok()
+                    && let Some(tab) = self.document_state.tabs.get_mut(idx)
+                {
+                    tab.dirty = false;
                 }
                 self.close_tab_now(idx);
                 Task::none()
