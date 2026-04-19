@@ -50,7 +50,7 @@ impl Signex {
                     rotation: 0.0,
                     label_type: signex_types::schematic::LabelType::Global,
                     shape: "bidirectional".to_string(),
-                    font_size: 1.8,
+                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: signex_types::schematic::HAlign::Left,
                 });
             }
@@ -67,7 +67,7 @@ impl Signex {
                     rotation: 0.0,
                     label_type: signex_types::schematic::LabelType::Hierarchical,
                     shape: String::new(),
-                    font_size: 1.8,
+                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: signex_types::schematic::HAlign::Left,
                 });
             }

@@ -11,7 +11,7 @@ pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
     Bus, Junction, Label, NoConnect, SchematicSheet, SelectedItem, SelectedKind, Symbol, TextNote,
-    Wire,
+    Wire, SCHEMATIC_PT_TO_MM,
 };
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -1358,7 +1358,7 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (label.font_size.max(0.0) / 0.18).round() as i32),
+                    format!("{}", (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1404,7 +1404,7 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (text_note.font_size.max(0.0) / 0.18).round() as i32),
+                    format!("{}", (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1469,7 +1469,7 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (ref_text.font_size.max(0.0) / 0.18).round() as i32),
+                    format!("{}", (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
@@ -1513,7 +1513,7 @@ impl Engine {
                 info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
                 info.push((
                     "Text Size".into(),
-                    format!("{}", (value_text.font_size.max(0.0) / 0.18).round() as i32),
+                    format!("{}", (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
                 ));
                 info.push((
                     "Horizontal Justification".into(),
