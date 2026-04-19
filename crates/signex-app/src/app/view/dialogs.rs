@@ -360,12 +360,14 @@ impl Signex {
 
         // Column headers
         let list_headers = row![
+            text("Lock").size(10).color(text_muted).width(Length::Fixed(42.0)),
             text("Current").size(10).color(text_muted).width(Length::FillPortion(2)),
             text("Proposed").size(10).color(text_muted).width(Length::FillPortion(2)),
             text("Location").size(10).color(text_muted).width(Length::FillPortion(3)),
         ]
         .padding([4, 8]);
 
+        let locked_set = &self.ui_state.annotate_locked;
         let mut rows_col: iced::widget::Column<'_, Message> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
@@ -379,22 +381,60 @@ impl Signex {
             );
         } else {
             for entry in &proposed {
+                let is_locked = locked_set.contains(&entry.uuid);
                 // Rows that actually change highlight in the accent color;
-                // unchanged rows fade into the muted palette.
-                let changing = entry.current != entry.proposed;
+                // unchanged rows fade into the muted palette. Locked rows
+                // force the muted palette regardless of proposed change.
+                let changing = entry.current != entry.proposed && !is_locked;
                 let cur_color = if changing { text_c } else { text_muted };
-                let new_color = if changing {
+                let new_color = if is_locked {
+                    text_muted
+                } else if changing {
                     Color::from_rgb(0.25, 0.75, 0.35)
                 } else {
                     text_muted
                 };
+                let proposed_display = if is_locked {
+                    entry.current.clone()
+                } else {
+                    entry.proposed.clone()
+                };
+                let lock_tick = if is_locked { "\u{2713}" } else { "" };
+                let uuid = entry.uuid;
+                let lock_btn: Element<'_, Message> = button(
+                    container(text(lock_tick.to_string()).size(11).color(text_c))
+                        .width(22)
+                        .height(16)
+                        .align_x(iced::alignment::Horizontal::Center)
+                        .align_y(iced::alignment::Vertical::Center),
+                )
+                .on_press(Message::AnnotateToggleLock(uuid))
+                .padding(0)
+                .style(move |_: &Theme, _| button::Style {
+                    background: Some(Background::Color(if is_locked {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.12)
+                    } else {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+                    })),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: border_c,
+                    },
+                    text_color: text_c,
+                    ..button::Style::default()
+                })
+                .into();
                 rows_col = rows_col.push(
                     row![
+                        container(lock_btn)
+                            .width(Length::Fixed(42.0))
+                            .padding([0, 6]),
                         text(entry.current.clone())
                             .size(11)
                             .color(cur_color)
                             .width(Length::FillPortion(2)),
-                        text(entry.proposed.clone())
+                        text(proposed_display)
                             .size(11)
                             .color(new_color)
                             .width(Length::FillPortion(2)),
@@ -403,6 +443,7 @@ impl Signex {
                             .color(text_muted)
                             .width(Length::FillPortion(3)),
                     ]
+                    .align_y(iced::Alignment::Center)
                     .padding([2, 8]),
                 );
             }
@@ -713,7 +754,7 @@ impl Signex {
                                 ..container::Style::default()
                             }),
                         Space::new().height(10),
-                        pin_matrix_view(tokens),
+                        pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides),
                     ]
                     .spacing(4),
                 )
@@ -1123,6 +1164,9 @@ pub(super) struct AnnotatePreviewEntry {
     pub sheet: String,
     pub current: String,
     pub proposed: String,
+    /// Symbol uuid — lets the row's lock checkbox toggle the global
+    /// `ui_state.annotate_locked` set without re-looking-up the symbol.
+    pub uuid: uuid::Uuid,
 }
 
 impl super::super::Signex {
@@ -1260,6 +1304,7 @@ impl super::super::Signex {
                     sheet: title.clone(),
                     current: sym.reference.clone(),
                     proposed,
+                    uuid: sym.uuid,
                 });
             }
         }
@@ -1345,56 +1390,59 @@ fn preview_annotations(
 
 /// Pin-connection matrix — compact read-only view for v0.7. Displays the
 /// default Altium-style pin-to-pin compatibility grid. Editing ships in v0.7.1.
-fn pin_matrix_view(tokens: &signex_types::theme::ThemeTokens) -> Element<'static, Message> {
+fn pin_matrix_view(
+    tokens: &signex_types::theme::ThemeTokens,
+    overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+) -> Element<'static, Message> {
     let text_c = crate::styles::ti(tokens.text);
     let text_muted = crate::styles::ti(tokens.text_secondary);
     let border = crate::styles::ti(tokens.border);
-    let cell_ok = Color::from_rgba(0.25, 0.70, 0.30, 0.35);
-    let cell_warn = Color::from_rgba(0.95, 0.70, 0.15, 0.45);
-    let cell_err = Color::from_rgba(0.85, 0.25, 0.25, 0.45);
 
-    // 6 primary pin types for v0.7 (full 12-type Altium matrix in v0.7.1).
+    // 6 primary pin types for v0.7.1 (full 12-type Altium matrix lands
+    // when pin-type taxonomy is extended — rules.rs currently only
+    // distinguishes 6 families).
     const TYPES: &[&str] = &[
         "Input", "Output", "Bidir", "PowerIn", "PowerOut", "NC",
     ];
-    // 0 = ok, 1 = warn, 2 = error. Lower-triangular matrix, symmetric logic.
+    // Same baseline as the PinMatrixCellCycled handler — keep in sync.
+    use signex_erc::Severity;
     #[rustfmt::skip]
-    const MATRIX: [[u8; 6]; 6] = [
-        //  In  Out Bi  Pin Pou NC
-        [    0,  0,  0,  0,  0,  0 ], // Input
-        [    0,  2,  0,  0,  2,  2 ], // Output (Out-Out short, Out-PowerOut short)
-        [    0,  0,  0,  0,  0,  1 ], // Bidir
-        [    0,  0,  0,  0,  0,  2 ], // Power In
-        [    0,  2,  0,  0,  2,  2 ], // Power Out
-        [    0,  2,  1,  2,  2,  0 ], // NC
+    const BASELINE: [[Severity; 6]; 6] = [
+        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Off],
+        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
+        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Warning],
+        [Severity::Off, Severity::Off,     Severity::Off,     Severity::Off,   Severity::Off,     Severity::Error],
+        [Severity::Off, Severity::Error,   Severity::Off,     Severity::Off,   Severity::Error,   Severity::Error],
+        [Severity::Off, Severity::Error,   Severity::Warning, Severity::Error, Severity::Error,   Severity::Off],
     ];
 
-    let cell = |v: u8| -> Element<'static, Message> {
-        let bg = match v {
-            2 => cell_err,
-            1 => cell_warn,
-            _ => cell_ok,
+    let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, Message> {
+        let (bg, ch) = match sev {
+            Severity::Error => (Color::from_rgba(0.85, 0.25, 0.25, 0.45), "E"),
+            Severity::Warning => (Color::from_rgba(0.95, 0.70, 0.15, 0.45), "W"),
+            Severity::Info => (Color::from_rgba(0.30, 0.55, 0.85, 0.45), "I"),
+            Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.30), "·"),
         };
-        let ch = match v {
-            2 => "E",
-            1 => "W",
-            _ => "·",
-        };
-        container(text(ch.to_string()).size(10).color(text_c))
-            .width(30)
-            .height(20)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 0.0.into(),
-                    color: border,
-                },
-                ..container::Style::default()
-            })
-            .into()
+        button(
+            container(text(ch.to_string()).size(10).color(text_c))
+                .width(30)
+                .height(20)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        .on_press(Message::PinMatrixCellCycled { row: r, col: c })
+        .padding(0)
+        .style(move |_: &Theme, _| button::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                width: 1.0,
+                radius: 0.0.into(),
+                color: border,
+            },
+            text_color: text_c,
+            ..button::Style::default()
+        })
+        .into()
     };
 
     let header_label = |label: &str| -> Element<'static, Message> {
@@ -1421,14 +1469,18 @@ fn pin_matrix_view(tokens: &signex_types::theme::ThemeTokens) -> Element<'static
     for (r, row_label) in TYPES.iter().enumerate() {
         let mut rr = row![header_label(row_label)].spacing(0);
         for c in 0..TYPES.len() {
-            rr = rr.push(cell(MATRIX[r][c]));
+            let sev = overrides
+                .get(&(r as u8, c as u8))
+                .copied()
+                .unwrap_or(BASELINE[r][c]);
+            rr = rr.push(cell(r as u8, c as u8, sev));
         }
         body = body.push(rr);
     }
 
     container(
         column![
-            text("Pin Connection Matrix (read-only, editable in v0.7.1)")
+            text("Pin Connection Matrix — click a cell to cycle severity")
                 .size(10)
                 .color(text_muted),
             Space::new().height(4),

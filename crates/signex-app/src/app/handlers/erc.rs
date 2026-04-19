@@ -74,6 +74,9 @@ impl Signex {
 
     pub(crate) fn handle_toggle_auto_focus(&mut self) -> Task<Message> {
         self.ui_state.auto_focus = !self.ui_state.auto_focus;
+        // Mirror the flag onto the canvas so the renderer can compute
+        // the focus uuid set locally without reaching into app state.
+        self.interaction_state.canvas.auto_focus = self.ui_state.auto_focus;
         self.interaction_state.canvas.clear_content_cache();
         self.interaction_state.canvas.clear_overlay_cache();
         Task::none()
@@ -128,6 +131,7 @@ impl Signex {
         }
 
         // Pass B: apply to cached (non-active) tabs via the shared counter.
+        let locked = self.ui_state.annotate_locked.clone();
         let mut any_cached_changed = false;
         for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
             if idx == self.document_state.active_tab {
@@ -136,7 +140,7 @@ impl Signex {
             if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut() {
                 if let Ok(changed) = session
                     .engine_mut()
-                    .annotate_with_seed(mode, &mut next_by_prefix)
+                    .annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
                 {
                     if changed {
                         session.set_dirty(true);
@@ -147,11 +151,84 @@ impl Signex {
             }
         }
 
+        // Pass B2: walk every sheet in the project that isn't currently
+        // open as a tab — parse from disk, annotate with the shared
+        // counter, and write back. Altium's Annotate-Across-Project
+        // covers even the sheets the user hasn't opened so designators
+        // stay unique project-wide.
+        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .map(|t| t.path.clone())
+            .collect();
+        let project_root = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+        let unopened_sheet_paths: Vec<std::path::PathBuf> = self
+            .document_state
+            .project_data
+            .as_ref()
+            .map(|pd| {
+                pd.sheets
+                    .iter()
+                    .filter_map(|s| {
+                        let path = match project_root.as_ref() {
+                            Some(root) => root.join(&s.filename),
+                            None => std::path::PathBuf::from(&s.filename),
+                        };
+                        if open_paths.contains(&path) {
+                            None
+                        } else {
+                            Some(path)
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut disk_touched = 0usize;
+        for sheet_path in unopened_sheet_paths {
+            let Ok(sheet) = kicad_parser::parse_schematic_file(&sheet_path) else {
+                crate::diagnostics::log_info(&format!(
+                    "Annotate: failed to parse unopened sheet {}",
+                    sheet_path.display()
+                ));
+                continue;
+            };
+            let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
+                continue;
+            };
+            engine.set_path(Some(sheet_path.clone()));
+            let Ok(changed) =
+                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+            else {
+                continue;
+            };
+            if !changed {
+                continue;
+            }
+            if engine.save().is_ok() {
+                disk_touched += 1;
+                crate::diagnostics::log_info(&format!(
+                    "Annotate: saved {}",
+                    sheet_path.display()
+                ));
+            }
+        }
+
         // Pass C: apply to the active engine so the canvas, Properties
         // panel, and render cache all refresh. Run through the raw engine
         // method (not Command) so it shares the same counter.
         if let Some(engine) = self.document_state.engine.as_mut() {
-            let _ = engine.annotate_with_seed(mode, &mut next_by_prefix);
+            let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
+        }
+        if disk_touched > 0 {
+            crate::diagnostics::log_info(&format!(
+                "Annotate: wrote {} unopened sheet file(s) to disk",
+                disk_touched,
+            ));
         }
         // Force a render + panel refresh as if a command had fired.
         self.interaction_state.canvas.clear_content_cache();
@@ -217,6 +294,9 @@ impl Signex {
         } else {
             self.ui_state.erc_severity_override.insert(rule, severity);
         }
+        // Persist so the override survives restart. Silent on I/O errors —
+        // this is a preference, not critical state.
+        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
         Task::none()
     }
 
@@ -374,6 +454,9 @@ impl Signex {
             ModalId::AnnotateDialog => iced::Size::new(1100.0, 760.0),
             ModalId::ErcDialog => iced::Size::new(680.0, 680.0),
             ModalId::AnnotateResetConfirm => iced::Size::new(420.0, 180.0),
+            ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
+            ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+            ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
             ModalId::Preferences => iced::Size::new(900.0, 620.0),
             ModalId::FindReplace => iced::Size::new(420.0, 180.0),
             ModalId::CloseTabConfirm => iced::Size::new(420.0, 180.0),
@@ -399,6 +482,66 @@ impl Signex {
             modal,
             id: settled_id,
         })
+    }
+
+    pub(crate) fn handle_open_move_selection_dialog(&mut self) -> Task<Message> {
+        self.ui_state.move_selection = super::super::state::MoveSelectionState {
+            open: true,
+            dx: "0".to_string(),
+            dy: "0".to_string(),
+        };
+        self.handle_detach_modal(super::super::state::ModalId::MoveSelection)
+    }
+
+    pub(crate) fn handle_close_move_selection_dialog(&mut self) -> Task<Message> {
+        self.ui_state.move_selection.open = false;
+        Task::none()
+    }
+
+    pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
+        let dx = self.ui_state.move_selection.dx.trim().parse::<f64>().unwrap_or(0.0);
+        let dy = self.ui_state.move_selection.dy.trim().parse::<f64>().unwrap_or(0.0);
+        if dx == 0.0 && dy == 0.0 {
+            self.ui_state.move_selection.open = false;
+            return Task::none();
+        }
+        let items = self.interaction_state.canvas.selected.clone();
+        if items.is_empty() {
+            self.ui_state.move_selection.open = false;
+            return Task::none();
+        }
+        if let Some(engine) = self.document_state.engine.as_mut() {
+            let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
+        }
+        self.ui_state.move_selection.open = false;
+        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.canvas.clear_overlay_cache();
+        self.sync_canvas_from_visible_schematic(
+            signex_render::schematic::RenderInvalidation::FULL,
+        );
+        self.update_selection_info();
+        Task::none()
+    }
+
+    pub(crate) fn handle_parameter_manager_edit(
+        &mut self,
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        value: String,
+    ) -> Task<Message> {
+        if let Some(engine) = self.document_state.engine.as_mut() {
+            let _ = engine.execute(signex_engine::Command::SetSymbolField {
+                symbol_id: symbol_uuid,
+                key,
+                value,
+            });
+            self.interaction_state.canvas.clear_content_cache();
+            self.sync_canvas_from_visible_schematic(
+                signex_render::schematic::RenderInvalidation::FULL,
+            );
+            self.refresh_panel_ctx();
+        }
+        Task::none()
     }
 
     /// Ask the OS to start a borderless-window drag for whichever window

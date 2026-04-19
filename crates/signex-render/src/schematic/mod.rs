@@ -516,6 +516,7 @@ pub fn render_schematic(
     transform: &ScreenTransform,
     colors: &CanvasColors,
     _bounds: Rectangle,
+    focus: Option<&std::collections::HashSet<uuid::Uuid>>,
 ) {
     let body_color = to_iced(&colors.body);
     let body_fill_color = to_iced(&colors.body_fill);
@@ -529,6 +530,23 @@ pub fn render_schematic(
     let power_color = to_iced(&colors.power);
     let power_style = crate::power_port_style();
 
+    // AutoFocus: dim non-selected items so the focus set stands out.
+    // When `focus` is None, every item draws at full alpha (normal mode).
+    // When Some, items NOT in the set get their color alpha scaled to
+    // `AUTO_FOCUS_DIM` so the selection reads as the spotlight. 0.28 is
+    // low enough to visibly recede but high enough that the context is
+    // still readable.
+    const AUTO_FOCUS_DIM: f32 = 0.28;
+    let alpha_for = |uuid: &uuid::Uuid| -> f32 {
+        match focus {
+            Some(set) if !set.contains(uuid) => AUTO_FOCUS_DIM,
+            _ => 1.0,
+        }
+    };
+    let dim = |c: iced::Color, a: f32| -> iced::Color {
+        iced::Color { a: c.a * a, ..c }
+    };
+
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
         drawing::draw_sch_drawing(frame, d, transform, body_color);
@@ -536,27 +554,42 @@ pub fn render_schematic(
 
     // Z=2: Wires
     for w in &sheet.wires {
-        wire::draw_wire(frame, w, transform, wire_color);
+        wire::draw_wire(frame, w, transform, dim(wire_color, alpha_for(&w.uuid)));
     }
 
     // Z=3: Buses
     for b in &sheet.buses {
-        wire::draw_bus(frame, b, transform, bus_color);
+        wire::draw_bus(frame, b, transform, dim(bus_color, alpha_for(&b.uuid)));
     }
 
     // Z=4: Bus entries
     for be in &sheet.bus_entries {
-        wire::draw_bus_entry(frame, be, transform, bus_color);
+        wire::draw_bus_entry(
+            frame,
+            be,
+            transform,
+            dim(bus_color, alpha_for(&be.uuid)),
+        );
     }
 
     // Z=5: Junctions
     for j in &sheet.junctions {
-        junction::draw_junction(frame, j, transform, junction_color);
+        junction::draw_junction(
+            frame,
+            j,
+            transform,
+            dim(junction_color, alpha_for(&j.uuid)),
+        );
     }
 
     // Z=6: No-connect markers
     for nc in &sheet.no_connects {
-        junction::draw_no_connect(frame, nc, transform, no_connect_color);
+        junction::draw_no_connect(
+            frame,
+            nc,
+            transform,
+            dim(no_connect_color, alpha_for(&nc.uuid)),
+        );
     }
 
     // Z=7-9: Labels (net, global, hierarchical, power)
@@ -567,17 +600,26 @@ pub fn render_schematic(
             LabelType::Hierarchical => to_iced(&colors.hier_label),
             LabelType::Power => to_iced(&colors.power),
         };
-        label::draw_label(frame, lbl, transform, color, body_fill_color);
+        label::draw_label(
+            frame,
+            lbl,
+            transform,
+            dim(color, alpha_for(&lbl.uuid)),
+            body_fill_color,
+        );
     }
 
     // Z=10-11: Symbol bodies + pins
     for sym in &sheet.symbols {
+        let a = alpha_for(&sym.uuid);
+        let body_c = dim(body_color, a);
+        let body_fill_c = dim(body_fill_color, a);
+        let pin_c = dim(pin_color, a);
+        let power_c = dim(power_color, a);
+        let reference_c = dim(reference_color, a);
+        let value_c = dim(value_color, a);
         if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
-            // Altium mode: always render the built-in power marker style,
-            // independent of library symbol body details.
-            // Power-port label uses the same color as the symbol body —
-            // Altium convention.
-            draw_builtin_power(frame, sym, transform, power_color, power_color);
+            draw_builtin_power(frame, sym, transform, power_c, power_c);
             continue;
         }
 
@@ -587,13 +629,13 @@ pub fn render_schematic(
                 sym,
                 lib_sym,
                 transform,
-                body_color,
-                body_fill_color,
-                pin_color,
+                body_c,
+                body_fill_c,
+                pin_c,
             );
 
             // Pins
-            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_color);
+            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_c);
 
             // Reference text — power symbols (#PWR refs) are always hidden
             if let Some(ref ref_text) = sym.ref_text
@@ -608,7 +650,7 @@ pub fn render_schematic(
                     sym,
                     dpos,
                     transform,
-                    reference_color,
+                    reference_c,
                 );
             }
 
@@ -624,25 +666,34 @@ pub fn render_schematic(
                     sym,
                     dpos,
                     transform,
-                    value_color,
+                    value_c,
                 );
             }
         } else if sym.is_power {
-            // Built-in Altium-style power symbol rendering (no lib_symbol needed)
-            // Power-port label uses the same color as the symbol body —
-            // Altium convention.
-            draw_builtin_power(frame, sym, transform, power_color, power_color);
+            draw_builtin_power(frame, sym, transform, power_c, power_c);
         }
     }
 
     // Z=11b: Child sheets (hierarchical sheets)
     for child in &sheet.child_sheets {
-        drawing::draw_child_sheet(frame, child, transform, body_color, body_fill_color);
+        let a = alpha_for(&child.uuid);
+        drawing::draw_child_sheet(
+            frame,
+            child,
+            transform,
+            dim(body_color, a),
+            dim(body_fill_color, a),
+        );
     }
 
     // Z=12: Text notes
     for tn in &sheet.text_notes {
-        text::draw_text_note(frame, tn, transform, to_iced(&colors.body));
+        text::draw_text_note(
+            frame,
+            tn,
+            transform,
+            dim(to_iced(&colors.body), alpha_for(&tn.uuid)),
+        );
     }
 }
 

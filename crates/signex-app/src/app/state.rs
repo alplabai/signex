@@ -86,6 +86,30 @@ pub struct UiState {
     /// mouse position. Used by auto-detach — when the cursor crosses the
     /// main window edge the tab undocks into its own OS window.
     pub tab_dragging: Option<(usize, f32, f32)>,
+    /// Move-Selection dialog state (Altium's numeric ΔX / ΔY move).
+    pub move_selection: MoveSelectionState,
+    /// F5 Net Color palette state — open flag and transient edit buffer.
+    pub net_color_palette_open: bool,
+    /// Parameter Manager dialog state.
+    pub parameter_manager_open: bool,
+    /// Active "pick a reference item" mode for z-order operations
+    /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
+    /// resolves the reference uuid and submits the Reorder command.
+    pub reorder_picker: Option<ReorderPicker>,
+    /// Pin-connection matrix overrides — sparse map keyed by (row, col)
+    /// pin-type index. Any entry present replaces the default severity
+    /// for that pair; missing entries fall back to the hard-coded
+    /// baseline in `pin_matrix_view`. Persisted alongside the ERC
+    /// severity map.
+    pub pin_matrix_overrides:
+        std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+    /// Symbols whose designator the user locked against reannotation.
+    /// Exposed as per-row checkboxes in the Annotate dialog; the engine
+    /// skips these uuids in `annotate_with_seed_and_locks`.
+    pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
+    /// Altium-style rubber-band selection mode. Drives how the box
+    /// drag classifies hits (Inside / Outside / TouchingLine).
+    pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
     /// Id of the primary app window — set once `iced::window::open` for
     /// the main window resolves. Every `view(id)` call checks this to
     /// decide whether it's rendering the main shell or a secondary
@@ -119,12 +143,38 @@ pub enum WindowKind {
     DetachedPanel(crate::panels::PanelKind),
 }
 
+/// Kind of z-order picker currently armed. Drives the first-click
+/// resolve in `handle_canvas_left_click`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReorderPicker {
+    /// Move selection to render just above the clicked reference.
+    Above,
+    /// Move selection to render just below the clicked reference.
+    Below,
+}
+
+/// Transient state for the Altium-style Move Selection dialog.
+/// Deltas are stored as strings so mid-edit partial values (`-`, `2.`)
+/// don't panic through number parsing; the Apply handler parses them.
+#[derive(Debug, Clone, Default)]
+pub struct MoveSelectionState {
+    pub open: bool,
+    pub dx: String,
+    pub dy: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
     ErcDialog,
+    /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
+    MoveSelection,
+    /// F5 net-color palette.
+    NetColorPalette,
+    /// Parameter manager — bulk parameter editor.
+    ParameterManager,
     // Reserved for future draggable modals — wired in when each dialog's
     // header gets a drag hook.
     Preferences,

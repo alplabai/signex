@@ -76,7 +76,7 @@ impl Signex {
                 custom_theme: None,
                 close_tab_confirm: None,
                 erc_violations: Vec::new(),
-                erc_severity_override: std::collections::HashMap::new(),
+                erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
                 annotate_dialog_open: false,
@@ -88,6 +88,14 @@ impl Signex {
                 tab_dragging: None,
                 main_window_id: None,
                 windows: std::collections::HashMap::new(),
+                move_selection: crate::app::state::MoveSelectionState::default(),
+                net_color_palette_open: false,
+                parameter_manager_open: false,
+                reorder_picker: None,
+                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
+                annotate_locked: std::collections::HashSet::new(),
+                selection_mode:
+                    signex_render::schematic::hit_test::SelectionMode::default(),
             },
             document_state: DocumentState {
                 dock,
@@ -346,6 +354,15 @@ impl Signex {
                     (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
                     (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
                         Message::ToggleAutoFocus
+                    }
+                    // F5: Net color palette (Altium convention).
+                    (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
+                        Message::OpenNetColorPalette
+                    }
+                    // Shift+S: cycle rubber-band selection mode
+                    // (Inside → Outside → TouchingLine).
+                    (keyboard::Key::Character(c), m) if c == "S" && m.shift() && !m.command() => {
+                        Message::CycleSelectionMode
                     }
                     // Alt+A: annotate (Altium convention, incremental)
                     (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {

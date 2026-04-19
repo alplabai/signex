@@ -200,12 +200,27 @@ impl Signex {
                 }
                 Task::none()
             }
-            // BringToFrontOf / SendToBackOf need a reference-picker UI
-            // (click a second item). Deferred to v0.7.1.
-            ActiveBarAction::BringToFrontOf | ActiveBarAction::SendToBackOf => {
-                crate::diagnostics::log_info(
-                    "Bring/Send-*-Of need a reference-picker UI — deferred to v0.7.1",
-                );
+            // Reference picker — next canvas click on a qualifying item
+            // becomes the z-order anchor. See `handle_canvas_left_click`
+            // for the pick site.
+            ActiveBarAction::BringToFrontOf => {
+                if !self.interaction_state.canvas.selected.is_empty() {
+                    self.ui_state.reorder_picker =
+                        Some(super::super::super::state::ReorderPicker::Above);
+                    crate::diagnostics::log_info(
+                        "Click a reference object to bring the selection above it",
+                    );
+                }
+                Task::none()
+            }
+            ActiveBarAction::SendToBackOf => {
+                if !self.interaction_state.canvas.selected.is_empty() {
+                    self.ui_state.reorder_picker =
+                        Some(super::super::super::state::ReorderPicker::Below);
+                    crate::diagnostics::log_info(
+                        "Click a reference object to send the selection below it",
+                    );
+                }
                 Task::none()
             }
             // MoveSelection / MoveSelectionXY are dialog-driven translates.
