@@ -2,6 +2,7 @@ use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length};
 
 mod dialogs;
+mod translate;
 
 use super::*;
 
@@ -190,7 +191,106 @@ impl Signex {
             .into()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
+        // Secondary windows (detached modals, future undocked tabs) render
+        // just their own content — no menu / dock / canvas. The main
+        // window's view_main drops any overlay whose modal is currently
+        // detached so we don't double-render.
+        if let Some(kind) = self.ui_state.windows.get(&window_id) {
+            return match kind {
+                super::state::WindowKind::DetachedModal(modal) => {
+                    self.view_detached_modal(*modal)
+                }
+                // Undocked tab = full duplicate of the main app view.
+                // Shared Signex state means edits sync automatically; the
+                // only difference between main and undocked is the OS
+                // window id they render into.
+                super::state::WindowKind::UndockedTab { .. } => {
+                    self.view_main_for(Some(window_id))
+                }
+                super::state::WindowKind::DetachedPanel(kind) => {
+                    let panel =
+                        crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
+                            .map(crate::dock::DockMessage::Panel)
+                            .map(Message::Dock);
+                    iced::widget::container(iced::widget::scrollable(panel))
+                        .padding(8)
+                        .into()
+                }
+            };
+        }
+        self.view_main_for(None)
+    }
+
+    /// Cursor-following translucent preview of a tab being dragged.
+    /// Shape matches the real tab bar entry — rounded container with
+    /// the title text, the ↗ undock indicator, and the × close icon —
+    /// so it reads as "the tab itself is moving". The ghost is
+    /// non-interactive; it just shows what the user is carrying.
+    fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
+        use iced::widget::{container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border = crate::styles::ti(tokens.border);
+        let active_bg = crate::styles::ti(tokens.hover);
+        // Slight translucency so the user still sees the tab bar
+        // underneath — reads as "ghost" rather than a solid widget.
+        let bg = iced::Color {
+            a: 0.88,
+            ..active_bg
+        };
+        let tab_like = container(
+            row![
+                text(title.to_string()).size(11).color(text_c),
+                Space::new().width(6),
+                text("\u{2197}".to_string()).size(12).color(text_muted),
+                Space::new().width(4),
+                text("\u{00D7}".to_string()).size(14).color(text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 10])
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Background::Color(bg)),
+            border: iced::Border {
+                width: 1.0,
+                radius: 0.0.into(),
+                color: border,
+            },
+            text_color: Some(text_c),
+            ..container::Style::default()
+        });
+        // Anchor near the cursor (right + below) so the pointer
+        // remains visible while the ghost trails it.
+        let (cx, cy) = self.interaction_state.last_mouse_pos;
+        super::view::translate::Translate::new(tab_like, (cx + 10.0, cy + 6.0)).into()
+    }
+
+    fn view_detached_modal(
+        &self,
+        modal: super::state::ModalId,
+    ) -> Element<'_, Message> {
+        use super::state::ModalId;
+        match modal {
+            ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
+            ModalId::ErcDialog => self.view_erc_dialog_body(),
+            ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
+            // Stubs — these modals don't yet have extractable bodies; fall
+            // back to a placeholder so the window is non-empty until their
+            // body helpers land.
+            ModalId::Preferences | ModalId::FindReplace | ModalId::CloseTabConfirm => {
+                iced::widget::container(iced::widget::text("Detached modal"))
+                    .padding(20)
+                    .into()
+            }
+        }
+    }
+
+    fn view_main_for(
+        &self,
+        undocked_window: Option<iced::window::Id>,
+    ) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
@@ -254,11 +354,39 @@ impl Signex {
         .map(Message::StatusBar);
 
         let mut main = column![menu];
-        if !document.tabs.is_empty() {
+        // Partition tabs across windows: main owns every tab that isn't
+        // currently rendered by an undocked-tab window; each undocked
+        // window owns exactly its one tab. Closing a tab in one window
+        // can no longer reach tabs that belong to the other.
+        let all_undocked_paths: std::collections::HashSet<std::path::PathBuf> = ui
+            .windows
+            .values()
+            .filter_map(|kind| match kind {
+                super::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .collect();
+        let visible_paths: std::collections::HashSet<std::path::PathBuf> =
+            match undocked_window {
+                Some(id) => match ui.windows.get(&id) {
+                    Some(super::state::WindowKind::UndockedTab { path, .. }) => {
+                        std::iter::once(path.clone()).collect()
+                    }
+                    _ => std::collections::HashSet::new(),
+                },
+                None => document
+                    .tabs
+                    .iter()
+                    .map(|t| t.path.clone())
+                    .filter(|p| !all_undocked_paths.contains(p))
+                    .collect(),
+            };
+        if !document.tabs.is_empty() && !visible_paths.is_empty() {
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
+                    &visible_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(Message::Tab),
@@ -271,6 +399,7 @@ impl Signex {
             .push(status);
 
         let has_active_bar = self.has_active_schematic();
+        let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
@@ -283,10 +412,22 @@ impl Signex {
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
             || ui.erc_dialog_open
-            || !document.dock.floating.is_empty();
+            || !document.dock.floating.is_empty()
+            || dragging_tab;
 
         if needs_overlay {
-            let overlays = self.collect_overlays();
+            let mut overlays = self.collect_overlays();
+            // Tab drag ghost: while a tab is being dragged, follow the
+            // cursor with a translucent copy of the tab label (Altium
+            // parity — see the user's screenshot). Gives direct visual
+            // feedback that the tab is being moved and will drop
+            // wherever the user releases, including into a new window
+            // past the edge.
+            if let Some((tab_idx, _, _)) = ui.tab_dragging
+                && let Some(tab) = document.tabs.get(tab_idx)
+            {
+                overlays.push(self.view_tab_drag_ghost(&tab.title));
+            }
             let mut stack = iced::widget::Stack::new().push(main);
             for overlay in overlays {
                 stack = stack.push(overlay);
@@ -721,21 +862,18 @@ impl Signex {
             }
         }
 
-        let (ww, wh) = ui.window_size;
         for i in 0..document.dock.floating.len() {
             if let Some(panel_widget) = document.dock.view_floating_panel(i, &document.panel_ctx) {
                 let fp = &document.dock.floating[i];
-                let max_x = (ww - fp.width).max(0.0);
-                let px = fp.x.clamp(0.0, max_x);
-                let py = fp.y.clamp(0.0, wh - 40.0).max(0.0);
+                // No clamp — panels follow Altium behaviour and may be
+                // dragged anywhere, even past the window edge. The OS clips
+                // at the window boundary; within that, Translate renders
+                // the panel at fp.(x, y) without resizing it.
                 layers.push(
-                    column![
-                        iced::widget::Space::new().height(py),
-                        row![
-                            iced::widget::Space::new().width(px),
-                            panel_widget.map(Message::Dock),
-                        ],
-                    ]
+                    translate::Translate::new(
+                        panel_widget.map(Message::Dock),
+                        (fp.x, fp.y),
+                    )
                     .into(),
                 );
             }
@@ -767,13 +905,27 @@ impl Signex {
             }
         }
 
-        if ui.annotate_dialog_open {
+        // Skip overlay rendering for any modal whose detached OS window
+        // owns the view. Without this guard the user sees the modal in
+        // both the main window and the popped-out window at the same
+        // time.
+        let modal_detached = |m: super::state::ModalId| -> bool {
+            ui.windows.values().any(
+                |kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m),
+            )
+        };
+
+        if ui.annotate_dialog_open
+            && !modal_detached(super::state::ModalId::AnnotateDialog)
+        {
             layers.push(self.view_annotate_dialog());
         }
-        if ui.annotate_reset_confirm {
+        if ui.annotate_reset_confirm
+            && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
+        {
             layers.push(self.view_annotate_reset_confirm());
         }
-        if ui.erc_dialog_open {
+        if ui.erc_dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
             layers.push(self.view_erc_dialog());
         }
 

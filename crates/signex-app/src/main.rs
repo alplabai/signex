@@ -33,11 +33,10 @@ fn main() -> iced::Result {
     // Read the persisted UI font preference (defaults to "Roboto").
     let ui_font_name = fonts::read_ui_font_pref();
 
-    iced::application(Signex::new, Signex::update, Signex::view)
+    iced::daemon(Signex::new, Signex::update, Signex::view)
         .title(Signex::title)
         .theme(Signex::theme)
         .subscription(Signex::subscription)
-        .window_size(iced::Size::new(1400.0, 900.0))
         // Iosevka is bundled — schematic / PCB canvas text.
         .font(IOSEVKA_REGULAR)
         .font(IOSEVKA_BOLD)

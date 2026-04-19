@@ -43,7 +43,7 @@ impl Signex {
             kicad_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
         }
 
-        let app = Self {
+        let mut app = Self {
             ui_state: UiState {
                 theme_id: ThemeId::Signex,
                 unit: Unit::Mm,
@@ -85,6 +85,9 @@ impl Signex {
                 annotate_reset_confirm: false,
                 modal_offsets: std::collections::HashMap::new(),
                 modal_dragging: None,
+                tab_dragging: None,
+                main_window_id: None,
+                windows: std::collections::HashMap::new(),
             },
             document_state: DocumentState {
                 dock,
@@ -196,14 +199,30 @@ impl Signex {
             app.ui_state.canvas_font_italic,
         );
         signex_render::set_power_port_style(app.ui_state.power_port_style);
-        (app, Task::none())
+
+        // Multi-window (Phase 1): open the main OS window here. Phase 2
+        // will open additional windows on demand when the user drags a
+        // modal off the main window, and Phase 3 will do the same for
+        // undocked tabs. The returned Task produces the settled Id once
+        // winit confirms the window is mapped.
+        let (main_id, open_task) = iced::window::open(iced::window::Settings {
+            size: iced::Size::new(1400.0, 900.0),
+            ..Default::default()
+        });
+        app.ui_state.main_window_id = Some(main_id);
+        let boot_task = open_task.map(Message::MainWindowOpened);
+        (app, boot_task)
     }
 
-    pub fn title(&self) -> String {
+    pub fn title(&self, _id: iced::window::Id) -> String {
         "Signex".to_string()
     }
 
-    pub fn theme(&self) -> Theme {
+    pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
+        Some(self.resolve_theme())
+    }
+
+    fn resolve_theme(&self) -> Theme {
         let id = if self.ui_state.preferences_open {
             self.ui_state.preferences_draft_theme
         } else {
@@ -423,6 +442,7 @@ impl Signex {
         let drag_active = self.interaction_state.dragging.is_some()
             || self.document_state.dock.tab_drag.is_some()
             || self.ui_state.modal_dragging.is_some()
+            || self.ui_state.tab_dragging.is_some()
             || self
                 .document_state
                 .dock
@@ -479,6 +499,10 @@ impl Signex {
                 _ => Message::Noop,
             })
         };
-        Subscription::batch([kbd, mouse_sub])
+        // Window-close events from winit: routed so Phase 2/3 can drop
+        // detached-modal / undocked-tab entries from ui_state.windows.
+        let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
+
+        Subscription::batch([kbd, mouse_sub, window_close])
     }
 }
