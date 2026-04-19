@@ -14,6 +14,7 @@ impl Signex {
                 self.document_state
                     .dock
                     .add_panel(crate::dock::PanelPosition::Right, kind);
+                crate::fonts::write_dock_layout(&self.document_state.dock);
                 Task::none()
             }
             Message::OpenFind => self.handle_find_replace_open_requested(false),
@@ -54,8 +55,8 @@ impl Signex {
             Message::ShowContextMenu(x, y) => {
                 // Altium convention: right-click during placement terminates
                 // the placement flow (tool-stuck OR ghost-armed OR pending
-                // power/port OR paused preview) instead of opening the
-                // context menu. Otherwise, open the menu.
+                // power/port OR paused preview OR net-colour pen armed)
+                // instead of opening the context menu.
                 let canvas = &self.interaction_state.canvas;
                 let placement_active = self.interaction_state.current_tool != Tool::Select
                     || canvas.ghost_label.is_some()
@@ -63,10 +64,17 @@ impl Signex {
                     || canvas.ghost_text.is_some()
                     || canvas.placement_paused
                     || self.interaction_state.pending_power.is_some()
-                    || self.interaction_state.pending_port.is_some();
+                    || self.interaction_state.pending_port.is_some()
+                    || self.ui_state.pending_net_color.is_some()
+                    || self.ui_state.reorder_picker.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
                     self.interaction_state.current_tool = Tool::Select;
+                    // Drop any app-level armed mode too.
+                    self.ui_state.pending_net_color = None;
+                    self.interaction_state.canvas.pending_net_color = None;
+                    self.ui_state.reorder_picker = None;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {

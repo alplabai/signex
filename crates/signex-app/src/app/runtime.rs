@@ -230,6 +230,13 @@ impl Signex {
 
     pub(crate) fn sync_active_tab(&mut self) {
         self.sync_visible_document_from_active_tab();
+        // ERC results are per-sheet; stale markers from the previous
+        // tab shouldn't linger on the new canvas. Clear both the
+        // violations list (drives the Messages panel) and the canvas-
+        // side marker overlay.
+        self.ui_state.erc_violations.clear();
+        self.interaction_state.canvas.erc_markers.clear();
+        self.interaction_state.canvas.clear_overlay_cache();
     }
 
     pub(crate) fn update_selection_info(&mut self) {

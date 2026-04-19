@@ -389,6 +389,8 @@ pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
     RunErc,
+    /// Clear the current ERC violations list and canvas markers.
+    ClearErc,
     /// Click-to-zoom on a Messages panel row — index into the context's
     /// `erc_violations` list. The app routes this to `Message::FocusAt`.
     FocusErcViolation(usize),
@@ -4008,15 +4010,24 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
                 text("Run ERC (F8)")
-                    .size(9)
+                    .size(11)
                     .color(theme_ext::text_primary(&ctx.tokens)),
             )
-            .padding([2, 8])
+            .padding([3, 10])
             .on_press(PanelMsg::RunErc)
             .style(crate::styles::menu_item(&ctx.tokens)),
             Space::new().width(6).height(Length::Shrink),
+            iced::widget::button(
+                text("Clear")
+                    .size(11)
+                    .color(theme_ext::text_secondary(&ctx.tokens)),
+            )
+            .padding([3, 10])
+            .on_press(PanelMsg::ClearErc)
+            .style(crate::styles::menu_item(&ctx.tokens)),
+            Space::new().width(10).height(Length::Shrink),
             text(format!("level {}", ctx.diagnostics_level))
-                .size(9)
+                .size(10)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
         .align_y(iced::Alignment::Center),
@@ -4122,30 +4133,39 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
         let th =
             |label: &str| -> Element<'a, PanelMsg> {
-                container(text(label.to_string()).size(9).color(muted))
-                    .padding([3, 6])
+                container(text(label.to_string()).size(11).color(muted))
+                    .padding([4, 8])
                     .into()
             };
+        // Header row — background fill, no border (separator line
+        // below sits in its own element so the table reads as a grid
+        // of horizontal rules instead of individually framed boxes).
         col = col.push(
             container(
                 row![
-                    container(th("#")).width(Length::Fixed(36.0)),
-                    container(th("Level")).width(Length::Fixed(56.0)),
-                    container(th("Source")).width(Length::Fixed(160.0)),
+                    container(th("#")).width(Length::Fixed(48.0)),
+                    container(th("Level")).width(Length::Fixed(64.0)),
+                    container(th("Source")).width(Length::Fixed(180.0)),
                     container(th("Message")).width(Length::Fill),
                 ]
                 .align_y(iced::Alignment::Center),
             )
             .style(move |_theme: &Theme| iced::widget::container::Style {
                 background: Some(Background::Color(header_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 0.0.into(),
-                    color: border,
-                },
                 ..iced::widget::container::Style::default()
             }),
         );
+        let separator = |bg: Color| -> Element<'a, PanelMsg> {
+            container(Space::new())
+                .height(Length::Fixed(1.0))
+                .width(Length::Fill)
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(Background::Color(bg)),
+                    ..iced::widget::container::Style::default()
+                })
+                .into()
+        };
+        col = col.push(separator(border));
         for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
             let level_color = match entry.level {
                 crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
@@ -4161,40 +4181,39 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             let bg = if i % 2 == 0 { row_bg } else { alt_bg };
             let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
                 container(text(label).size(size).color(color))
-                    .padding([2, 6])
+                    .padding([4, 8])
                     .into()
             };
             col = col.push(
                 container(
                     row![
-                        container(cell(format!("#{}", entry.id), muted, 9.0))
-                            .width(Length::Fixed(36.0)),
+                        container(cell(format!("#{}", entry.id), muted, 11.0))
+                            .width(Length::Fixed(48.0)),
                         container(cell(
                             entry.level.label().to_string(),
                             level_color,
-                            9.0,
+                            11.0,
                         ))
-                        .width(Length::Fixed(56.0)),
-                        container(cell(entry.code.as_str().to_string(), muted, 9.0))
-                            .width(Length::Fixed(160.0)),
-                        container(cell(entry.message.as_str().to_string(), primary, 10.0))
+                        .width(Length::Fixed(64.0)),
+                        container(cell(entry.code.as_str().to_string(), muted, 11.0))
+                            .width(Length::Fixed(180.0)),
+                        container(cell(entry.message.as_str().to_string(), primary, 12.0))
                             .width(Length::Fill),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
+                // No border on the row — the explicit separator line
+                // drawn below is the grid. Boxes around each entry
+                // (the previous look) were too heavy for a log table.
                 .style(move |_theme: &Theme| iced::widget::container::Style {
                     background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        // Only the bottom edge visible — the row stack
-                        // forms the table grid without double-drawing
-                        // side borders.
-                        radius: 0.0.into(),
-                        color: border,
-                    },
                     ..iced::widget::container::Style::default()
                 }),
             );
+            // One-pixel horizontal rule between rows — no right / left
+            // borders so the table reads as a stack of records with
+            // shared separators, matching Altium's Messages panel.
+            col = col.push(separator(border));
         }
     }
 

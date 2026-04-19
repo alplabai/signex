@@ -229,12 +229,19 @@ pub fn dock_tab_container(
     is_active: bool,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
+    // Inactive tabs get a subtle fill derived from the hover color
+    // (about half its alpha) so they still read as clickable tabs
+    // rather than bare text on the header strip.
+    let inactive_fill = iced::Color {
+        a: tab_active.a * 0.35,
+        ..tab_active
+    };
     move |_: &Theme| container::Style {
-        background: if is_active {
-            Some(Background::Color(tab_active))
+        background: Some(Background::Color(if is_active {
+            tab_active
         } else {
-            None
-        },
+            inactive_fill
+        })),
         border: Border::default(),
         ..container::Style::default()
     }

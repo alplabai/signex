@@ -75,6 +75,11 @@ pub enum Message {
     PreferencesMsg(crate::preferences::PrefMsg),
     FindReplaceMsg(crate::find_replace::FindReplaceMsg),
     WindowResized(f32, f32),
+    /// Resize event carrying the window id. Forwarded by the
+    /// `iced::window::resize_events()` subscription so the dispatcher
+    /// can drop non-main-window resizes before they touch
+    /// `ui_state.window_size`.
+    WindowResizedFor(iced::window::Id, f32, f32),
     /// User picked an option in the close-confirmation modal shown when they
     /// try to close a tab with unsaved changes. Drives the modal via
     /// `ui_state.close_tab_confirm`.
@@ -207,7 +212,24 @@ pub enum Message {
     /// Cycle Altium's rubber-band selection mode
     /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
     CycleSelectionMode,
+    /// Show / hide the custom net-color picker modal.
+    NetColorCustomShow(bool),
+    /// Live-update the draft colour as the user drags the picker.
+    NetColorCustomDraft(iced::Color),
+    /// Commit the draft colour and arm net-colour flood mode.
+    NetColorCustomSubmit(iced::Color),
+    /// Edit one R/G/B channel of the custom-picker draft via text
+    /// input. Parsed as 0-255; invalid values ignored.
+    NetColorCustomChannel(Channel, String),
     Noop,
+}
+
+/// R / G / B channel selector for the custom net-colour picker inputs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channel {
+    R,
+    G,
+    B,
 }
 
 #[derive(Debug, Clone, Copy)]

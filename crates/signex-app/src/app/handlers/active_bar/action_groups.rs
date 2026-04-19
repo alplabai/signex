@@ -223,14 +223,11 @@ impl Signex {
                 }
                 Task::none()
             }
-            // MoveSelection / MoveSelectionXY are dialog-driven translates.
-            // Engine supports MoveSymbolAbsolute today; the dialog lands in
-            // v0.7.1.
+            // MoveSelection / MoveSelectionXY → open the v0.7.1
+            // Move Selection dialog (numeric ΔX / ΔY apply to every
+            // selected item through Command::MoveSelection).
             ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
-                crate::diagnostics::log_info(
-                    "Move-Selection dialog lands in v0.7.1 — use click-drag for now",
-                );
-                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+                self.update(Message::OpenMoveSelectionDialog)
             }
             ActiveBarAction::AlignLeft
             | ActiveBarAction::AlignRight

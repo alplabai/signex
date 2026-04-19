@@ -253,6 +253,23 @@ impl Signex {
                 // .kicad_sch round-trips unchanged — KiCad has no
                 // notion of per-wire override colours.
                 if let Some(pending) = self.ui_state.pending_net_color {
+                    // Snap the click point to the grid before hit
+                    // testing so the click lands where the pen ghost
+                    // previewed. Without this the cursor's raw world
+                    // coords can land a full grid cell off the nearest
+                    // wire — the visible pen snaps, but the hit target
+                    // was being missed.
+                    let (hit_x, hit_y) = if self
+                        .interaction_state
+                        .canvas
+                        .snap_enabled
+                        && self.interaction_state.canvas.snap_grid_mm > 0.0
+                    {
+                        let g = self.interaction_state.canvas.snap_grid_mm;
+                        ((world_x / g).round() * g, (world_y / g).round() * g)
+                    } else {
+                        (world_x, world_y)
+                    };
                     // Compute the net's wire uuids while only holding an
                     // immutable snapshot borrow, then release it before
                     // mutating ui_state.
@@ -261,9 +278,50 @@ impl Signex {
                     {
                         None => Vec::new(),
                         Some(snapshot) => {
-                            let hit = signex_render::schematic::hit_test::hit_test(
-                                snapshot, world_x, world_y,
-                            );
+                            // Strict on-wire test: the snapped click
+                            // point must lie on a wire segment (point-
+                            // to-segment distance < 0.05 mm). The
+                            // general `hit_test` uses a 1.5 mm
+                            // tolerance so parallel wires on adjacent
+                            // grid points could each register; for
+                            // net-colour painting we only want the
+                            // wire directly under the pen.
+                            fn point_on_segment(
+                                px: f64,
+                                py: f64,
+                                ax: f64,
+                                ay: f64,
+                                bx: f64,
+                                by: f64,
+                            ) -> bool {
+                                let dx = bx - ax;
+                                let dy = by - ay;
+                                let len2 = dx * dx + dy * dy;
+                                if len2 == 0.0 {
+                                    let ddx = px - ax;
+                                    let ddy = py - ay;
+                                    return (ddx * ddx + ddy * ddy).sqrt() < 0.05;
+                                }
+                                let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+                                let t = t.clamp(0.0, 1.0);
+                                let cx = ax + t * dx;
+                                let cy = ay + t * dy;
+                                let ddx = px - cx;
+                                let ddy = py - cy;
+                                (ddx * ddx + ddy * ddy).sqrt() < 0.05
+                            }
+                            let hit = snapshot.wires.iter().find_map(|w| {
+                                if point_on_segment(
+                                    hit_x, hit_y, w.start.x, w.start.y, w.end.x, w.end.y,
+                                ) {
+                                    Some(signex_types::schematic::SelectedItem::new(
+                                        w.uuid,
+                                        signex_types::schematic::SelectedKind::Wire,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            });
                             match hit {
                                 Some(h)
                                     if h.kind
@@ -322,14 +380,28 @@ impl Signex {
                                         None => Vec::new(),
                                         Some(hw) => {
                                             let root = find(&mut parent, q(&hw.start));
-                                            snapshot
+                                            let mut ids: Vec<uuid::Uuid> = snapshot
                                                 .wires
                                                 .iter()
                                                 .filter(|w| {
                                                     find(&mut parent, q(&w.start)) == root
                                                 })
                                                 .map(|w| w.uuid)
-                                                .collect()
+                                                .collect();
+                                            // Junctions on this net should follow
+                                            // the colour — a junction's position
+                                            // is always a wire endpoint, so the
+                                            // union-find root test works with the
+                                            // same parent map.
+                                            for j in &snapshot.junctions {
+                                                let jq = q(&j.position);
+                                                if parent.contains_key(&jq)
+                                                    && find(&mut parent, jq) == root
+                                                {
+                                                    ids.push(j.uuid);
+                                                }
+                                            }
+                                            ids
                                         }
                                     }
                                 }
@@ -338,26 +410,55 @@ impl Signex {
                         }
                     };
                     if !net_wire_uuids.is_empty() {
-                        // Snapshot the current map onto the app-level
-                        // undo stack so Ctrl+Z can revert this flood.
-                        self.ui_state
-                            .net_color_undo
-                            .push(self.ui_state.wire_color_overrides.clone());
-                        for uuid in net_wire_uuids {
+                        // Dry-run the flood to see if anything will
+                        // actually change; only snapshot + apply when
+                        // there's a real diff. Clicking the same net
+                        // twice with the same colour was double-pushing
+                        // identical snapshots, forcing the user to hit
+                        // Ctrl+Z twice for a single visible change.
+                        let mut diff = false;
+                        for uuid in &net_wire_uuids {
                             if pending.a == 0 {
-                                self.ui_state.wire_color_overrides.remove(&uuid);
+                                if self.ui_state.wire_color_overrides.contains_key(uuid) {
+                                    diff = true;
+                                    break;
+                                }
                             } else {
-                                self.ui_state
-                                    .wire_color_overrides
-                                    .insert(uuid, pending);
+                                match self.ui_state.wire_color_overrides.get(uuid) {
+                                    Some(c) if *c == pending => {}
+                                    _ => {
+                                        diff = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
-                        self.interaction_state.canvas.wire_color_overrides =
-                            self.ui_state.wire_color_overrides.clone();
-                        self.interaction_state.canvas.clear_content_cache();
+                        if diff {
+                            self.ui_state
+                                .net_color_undo
+                                .push(self.ui_state.wire_color_overrides.clone());
+                            for uuid in net_wire_uuids {
+                                if pending.a == 0 {
+                                    self.ui_state
+                                        .wire_color_overrides
+                                        .remove(&uuid);
+                                } else {
+                                    self.ui_state
+                                        .wire_color_overrides
+                                        .insert(uuid, pending);
+                                }
+                            }
+                            self.interaction_state.canvas.wire_color_overrides =
+                                self.ui_state.wire_color_overrides.clone();
+                            self.interaction_state.canvas.clear_content_cache();
+                        }
                     }
-                    self.ui_state.pending_net_color = None;
-                    self.interaction_state.canvas.pending_net_color = None;
+                    // Altium-style continuous placement: stay armed
+                    // until the user right-clicks or presses Escape.
+                    // Empty-canvas clicks are no-ops; wire clicks keep
+                    // the pen ready for the next net. Return early so
+                    // the normal selection path doesn't run and pick
+                    // up the clicked wire as a selection.
                     return Task::none();
                 }
                 // Z-order reference picker: the user previously chose
