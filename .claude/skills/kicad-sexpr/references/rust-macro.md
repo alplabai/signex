@@ -1,6 +1,6 @@
 # KiCad S-Expression — Rust Macro & AST Referansı
 
-KiCad S-expression formatını Rust'ta üretmek için önerilen yaklaşım:
+Recommended approach for generating KiCad S-expressions in Rust:
 **AST/enum → `macro_rules!` DSL → `Display` serialize**.
 
 ---
@@ -11,13 +11,13 @@ KiCad S-expression formatını Rust'ta üretmek için önerilen yaklaşım:
 /// KiCad atom tipleri — quoted/unquoted ayrımı burada yapılır
 #[derive(Debug, Clone)]
 pub enum Atom {
-    /// Çıplak token: at, layer, F.Cu, 0.25  — tırnak olmadan yazılır
+    /// Bare token: at, layer, F.Cu, 0.25 — written without quotes
     Raw(String),
     /// Quoted string: "Resistor_SMD:R_0603" — zorunlu tırnak
     Str(String),
     /// Tam sayı
     Int(i64),
-    /// Ondalık — PCB için 6 hane, şematik için 4 hane hassasiyet
+    /// Decimal — 6 digits for PCB, 4 digits for schematic
     Float(f64),
 }
 
@@ -41,7 +41,7 @@ impl fmt::Display for Atom {
             Atom::Raw(s)   => write!(f, "{s}"),
             Atom::Str(s)   => write!(f, "\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Atom::Int(n)   => write!(f, "{n}"),
-            Atom::Float(v) => write!(f, "{v:.6}"),  // şematik için .4 kullan
+            Atom::Float(v) => write!(f, "{v:.6}"),  // use .4 for schematic
         }
     }
 }
@@ -94,7 +94,7 @@ impl Node {
 ### Basit `sexpr!` macro'su
 
 ```rust
-/// KiCad S-expression oluşturma DSL macro'su.
+/// KiCad S-expression builder DSL macro.
 /// 
 /// # Sözdizimi
 /// - `sexpr!( (token arg1 arg2 ...) )` → List node
@@ -126,7 +126,7 @@ macro_rules! sexpr {
     };
 }
 
-/// sexpr! içi liste üreteci
+/// Inner list builder for sexpr!
 macro_rules! sexpr_list {
     () => { vec![] };
     ($head:tt $($tail:tt)*) => {{
@@ -149,7 +149,7 @@ fn main() {
     let at_node   = sexpr!((at {x} {y}));
     let layer_node = sexpr!((layer "F.Cu"));
 
-    // Pad üretimi
+    // Pad generation
     let pad = sexpr!((
         pad "1" smd circle
         (at 0 0)
@@ -210,7 +210,7 @@ pub fn pts(points: &[(f64, f64)]) -> Node {
 
 // ─── Katman ve renk ───────────────────────────────────────────────
 
-/// (layer "F.Cu") — tek katman
+/// (layer "F.Cu") — single layer token
 pub fn layer(name: &str) -> Node {
     Node::List(vec![
         Node::Atom(Atom::Raw("layer".into())),
@@ -218,7 +218,7 @@ pub fn layer(name: &str) -> Node {
     ])
 }
 
-/// (layers "F.Cu" "F.Paste" ...) — pad katman listesi
+/// (layers "F.Cu" "F.Paste" ...) — pad layer list
 pub fn layers(names: &[&str]) -> Node {
     let mut items = vec![Node::Atom(Atom::Raw("layers".into()))];
     items.extend(names.iter().map(|&n| Node::Atom(Atom::Str(n.into()))));
@@ -398,7 +398,7 @@ pub fn junction(x: f64, y: f64, uuid: &str) -> Node {
 ## UUID Üretimi (Rust)
 
 ```rust
-/// KiCad uyumlu UUID v4 üretici (uuid crate olmadan)
+/// KiCad-compatible UUID v4 generator (without uuid crate)
 /// Cargo.toml: uuid = { version = "1", features = ["v4"] }
 
 #[cfg(feature = "uuid")]
@@ -408,7 +408,7 @@ pub fn new_uuid() -> String {
 
 /// uuid crate olmadan (gerekirse)
 pub fn pseudo_uuid(seed: u64) -> String {
-    // Sadece test amaçlı — prodüksiyonda uuid crate kullan
+    // For testing only — use the uuid crate in production
     format!(
         "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
         seed & 0xffffffff,
@@ -478,5 +478,5 @@ fn main() {
 | `uuid` format | Tam `XXXXXXXX-XXXX-4XXX-XXXX-XXXXXXXXXXXX` |
 | `tedit` | `format!("{:X}", unix_timestamp_secs)` |
 | `fp_text` zorunlu | `reference` ve `value` her footprint'te olmalı |
-| KiCad 7 `stroke` | `width` token artık `stroke` içinde — eski `(width W)` geçersiz |
-| Macro `$expr` fallback | `{var}` değişken interpolasyonu için `sexpr!({x})` kullan |
+| KiCad 7 `stroke` | `width` token is now inside `stroke` — old `(width W)` is invalid |
+| Macro `$expr` fallback | use `sexpr!({x})` for variable interpolation |

@@ -1,153 +1,151 @@
-# KiCad Library Convention (KLC) — Sembol Kuralları
-> Kaynak: https://klc.kicad.org | Versiyon 3.0.64
+# KiCad Library Convention (KLC) — Symbol Rules
+> Source: https://klc.kicad.org | Version 3.0.64
 
-Bu dosya, resmi KiCad kütüphanesine katkıda bulunmak VEYA
-KiCad-uyumlu kütüphaneler üretmek için geçerli tüm kuralları kapsar.
-
----
-
-## G1 — Genel Kurallar
-
-- **G1.1** Kütüphane ve sembol adlarında yalnızca şu karakterler: `A-Z a-z 0-9 _ - . ( )`
-  — boşluk, `/`, `#`, `@`, `!` yasak
-- **G1.3** Kütüphaneler işlevselliğe göre organize edilir (üretici × kategori matrisi)
-- **G1.4** Tüm içerik İngilizce olmalı
-- **G1.5** Çoğul isimlendirmeden kaçın — `Resistors` değil `Resistor`
-- **G1.6** CamelCase kullan — `MCU_ST_STM32F4`, `Transistor_BJT`
-- **G1.7** Unix satır sonları (`\n`, CRLF değil)
-- **G1.9** Birimler: mil (imperial) / mm — pin konumları için 100 mil grid
+This file covers all rules for contributing to the official KiCad library OR
+for generating KiCad-compatible libraries.
 
 ---
 
-## S1 — Kütüphane İsimlendirme
+## G1 — General Rules
+
+- **G1.1** Library and symbol names: only `A-Z a-z 0-9 _ - . ( )` — no spaces, `/`, `#`, `@`, `!`
+- **G1.3** Libraries are organized by function (manufacturer × category matrix)
+- **G1.4** All content must be in English
+- **G1.5** Avoid plural naming — use `Resistor`, not `Resistors`
+- **G1.6** Use CamelCase — `MCU_ST_STM32F4`, `Transistor_BJT`
+- **G1.7** Unix line endings (`\n`, not CRLF)
+- **G1.9** Units: mil (imperial) / mm — 100 mil grid for pin positions
+
+---
+
+## S1 — Library Naming
 
 ```
-[ÜRETİCİ_]KATEGORİ[_ALT_KATEGORİ]
+[MANUFACTURER_]CATEGORY[_SUB_CATEGORY]
 ```
 
-Örnekler:
+Examples:
 ```
-Device                    # genel aygıtlar (üretici yok)
-Transistor_BJT            # BJT transistörler
-MCU_ST_STM32F4            # ST üretici, STM32F4 ailesi
-Amplifier_Operational     # işlevsel kategori
-Interface_CAN_LIN         # protokol bazlı
+Device                    # general components (no manufacturer)
+Transistor_BJT            # BJT transistors
+MCU_ST_STM32F4            # ST manufacturer, STM32F4 family
+Amplifier_Operational     # functional category
+Interface_CAN_LIN         # protocol-based
 ```
 
 ---
 
-## S2 — Sembol İsimlendirme
+## S2 — Symbol Naming
 
 ```
-[ÜRETİCİ_]PARÇA_NUMARASI[_VARYANT]
+[MANUFACTURER_]PART_NUMBER[_VARIANT]
 ```
 
-Kurallar:
-- Sembol adı kütüphane adındaki kelimeleri tekrar etmemeli
-  (`Transistor_BJT:BC547` değil `Transistor_BJT:Transistor_BC547`)
-- Parça no. varyantları wildcard ile birleştirilebilir: `LM358x` (`LM358A`, `LM358B`…)
-- Farklı footprint seçenekleri → ayrı sembol: `ATmega328P-PU` ve `ATmega328P-AU`
-- Aktif düşük pinler üzeri çizgi ile: `~{RESET}`, `~{CS}`, `~{OE}`
+Rules:
+- Symbol name must not repeat words from the library name
+  (`Transistor_BJT:BC547`, not `Transistor_BJT:Transistor_BC547`)
+- Part number variants can use wildcards: `LM358x` (covers `LM358A`, `LM358B`…)
+- Different footprint options → separate symbols: `ATmega328P-PU` and `ATmega328P-AU`
+- Active-low pins use overbar notation: `~{RESET}`, `~{CS}`, `~{OE}`
 
 ---
 
-## S3 — Genel Sembol Gereksinimleri
+## S3 — General Symbol Requirements
 
-### S3.1 Orijin
-- Simetrik semboller: origin `(0, 0)` tam ortada olmalı
-- Asimetrik semboller: 100 mil grid'e uymak için kaydırılabilir
+### S3.1 Origin
+- Symmetric symbols: origin at `(0, 0)` exactly centered
+- Asymmetric symbols: may be offset to align to 100 mil grid
 
-### S3.2 Yazı Boyutları
-- Tüm text field'ları: **50 mil (1.27 mm)**
-- Pin adı/numarası: en küçük **20 mil** (çok kalabalık sembollerde)
+### S3.2 Text Sizes
+- All text fields: **50 mil (1.27 mm)**
+- Pin name/number: minimum **20 mil** (for very dense symbols)
 
-### S3.3 Outline ve Fill
+### S3.3 Outline and Fill
 ```
-Çizgi kalınlığı: 10 mil (0.254 mm)
+Line width: 10 mil (0.254 mm)
 ```
-- **Black-box IC** (gizli iç yapı): `fill (type background)` — arka plan rengiyle doldur
-- **Ayrık bileşen** (R, C, L, diyot…): `fill (type none)` — doldurma
+- **Black-box IC** (hidden internals): `fill (type background)` — fill with background color
+- **Discrete component** (R, C, L, diode…): `fill (type none)` — no fill
 
-### S3.5 Pin Bağlantı Noktaları
-Pin uçları (bağlantı noktası) sembol gövdesinin **dışında** olmalı —
-gövde kenarından en az 0 mm uzakta (üst üste binmemeli)
+### S3.5 Pin Connection Points
+Pin endpoints (connection point) must be **outside** the symbol body —
+at least 0 mm from the body edge (must not overlap)
 
-### S3.6 Pin İsim Offset
-Varsayılan offset: `1.016 mm` (40 mil)
+### S3.6 Pin Name Offset
+Default offset: `1.016 mm` (40 mil)
 ```scheme
 (pin_names (offset 1.016))
 ```
 
-### S3.8 Çok Birimli (Multi-unit) Semboller
-- Güç pinleri (`VCC`, `GND`) → tüm birimlerde ortak `unit 0` sembolüne
-- Her birim aynı footprint ile ilişkilendirilmeli
-- Birim sayısı bakımından simetrik tercih edilir (2, 4, eşit dağılım)
+### S3.8 Multi-Unit Symbols
+- Power pins (`VCC`, `GND`) → common to all units, in `unit 0` symbol
+- All units must associate with the same footprint
+- Symmetric unit count is preferred (2, 4, equal distribution)
 
-### S3.9 De Morgan (Alternatif Gövde)
-- Resmi kütüphane: **De Morgan kullanılmaz** (`S3.9` kuralı)
-- Kişisel kütüphaneler için opsiyonel olarak kullanılabilir
+### S3.9 De Morgan (Alternate Body)
+- Official library: **De Morgan is not used** (S3.9 rule)
+- Optional for personal libraries
 
 ---
 
-## S4 — Pin Gereksinimleri
+## S4 — Pin Requirements
 
-### S4.1 Genel Pin Kuralları
+### S4.1 General Pin Rules
 
-| Kural | Değer |
-|-------|-------|
+| Rule | Value |
+|------|-------|
 | Grid (pin origin) | **100 mil (2.54 mm)** — IEC-60617 |
-| Minimum pin uzunluğu | **100 mil (2.54 mm)** |
-| Artış adımı | 50 mil (1.27 mm) |
-| Maksimum pin uzunluğu | **300 mil (7.62 mm)** |
-| Pin no. 2 karakter → | 100 mil |
-| Pin no. 3 karakter → | 150 mil |
-| Pin no. 4 karakter → | 200 mil |
-| Ayrık bileşen | kısa pin izinli |
-| Tüm pinler | **aynı uzunlukta** olmalı |
+| Minimum pin length | **100 mil (2.54 mm)** |
+| Step increment | 50 mil (1.27 mm) |
+| Maximum pin length | **300 mil (7.62 mm)** |
+| Pin no. 2 chars → | 100 mil |
+| Pin no. 3 chars → | 150 mil |
+| Pin no. 4 chars → | 200 mil |
+| All pins on a symbol | **must be the same length** |
 
 ```scheme
-; 100 mil pin örneği (2.54 mm)
+; 100 mil pin example (2.54 mm)
 (pin input line (at -5.08 2.54 0) (length 2.54)
   (name "IN+" (effects (font (size 1.27 1.27))))
   (number "3"  (effects (font (size 1.27 1.27))))
 )
 ```
 
-### S4.2 Pin Gruplama
-Pinler **işleve göre** gruplanmalı (datasheetteki fiziksel sıraya göre değil):
-1. Güç (`VCC`, `GND`, `AGND`, `DVDD`…)
-2. Girişler (sol taraf)
-3. Çıkışlar (sağ taraf)
-4. Kontrol/konfigürasyon
+### S4.2 Pin Grouping
+Pins should be grouped **by function** (not physical order in datasheet):
+1. Power (`VCC`, `GND`, `AGND`, `DVDD`…)
+2. Inputs (left side)
+3. Outputs (right side)
+4. Control/configuration
 5. I/O
-6. Özel işlevler
+6. Special functions
 
-### S4.3 Pin Yığma (Stacking)
-Aynı konuma birden fazla pin konulabilir (örn. birden fazla GND):
-- Aynı `number` yasak — her pin benzersiz numara almalı
-- Aynı `name` + farklı `number` → geçerli yığma
+### S4.3 Pin Stacking
+Multiple pins can share the same position (e.g., multiple GND pins):
+- Same `number` is not allowed — each pin must have a unique number
+- Same `name` + different `number` → valid stacking
 
-### S4.4 Pin Elektrik Tipi Seçimi
+### S4.4 Pin Electrical Type Selection
 
-| Tip | Kullanım |
-|-----|----------|
-| `input` | Giriş pinleri |
-| `output` | Çıkış pinleri |
-| `bidirectional` | I/O pinleri |
-| `tri_state` | Üç durumlu çıkış |
-| `passive` | Pasif bileşen pinleri (R, C, L uçları) |
-| `power_in` | Güç girişi (VCC, VDD) |
-| `power_out` | Regülatör çıkışı, güç üretici |
-| `open_collector` | OC çıkış |
-| `open_emitter` | OE çıkış |
-| `no_connect` | NC pinler |
-| `free` | Dahili bağlantısız, serbest |
-| `unspecified` | Belirsiz (son çare) |
+| Type | Usage |
+|------|-------|
+| `input` | Input pins |
+| `output` | Output pins |
+| `bidirectional` | I/O pins |
+| `tri_state` | Three-state output |
+| `passive` | Passive component pins (R, C, L terminals) |
+| `power_in` | Power input (VCC, VDD) |
+| `power_out` | Regulator output, power generator |
+| `open_collector` | Open-collector output |
+| `open_emitter` | Open-emitter output |
+| `no_connect` | NC pins |
+| `free` | Internally unconnected, free |
+| `unspecified` | Unknown (last resort) |
 
-### S4.6 Gizli Pinler
-- Güç pinleri (`VCC`, `GND`) tek tip semboller için **gizlenebilir** (hidden)
-- Gizli pin `power_in` tipinde olmalı
-- Gizli pinlerin net adı net listede görünür
+### S4.6 Hidden Pins
+- Power pins (`VCC`, `GND`) may be **hidden** for single-unit symbols
+- Hidden pin must be `power_in` type
+- Hidden pin net names appear in the netlist
 
 ```scheme
 (pin power_in line (at 0 0 270) (length 0) hide
@@ -156,91 +154,91 @@ Aynı konuma birden fazla pin konulabilir (örn. birden fazla GND):
 )
 ```
 
-### S4.7 Aktif Düşük Pin İsimleri
-Aktif düşük sinyaller tilde+süslü parantez ile gösterilir:
+### S4.7 Active-Low Pin Names
+Active-low signals use tilde+curly brace notation:
 ```
 ~{RESET}   ~{CS}   ~{OE}   ~{WR}   ~{IRQ}
 ```
-Bunlar KiCad'de otomatik çizgi olarak render edilir.
+KiCad renders these with an automatic overbar.
 
 ---
 
-## S5 — Footprint İlişkilendirme
+## S5 — Footprint Association
 
-- Varsayılan footprint varsa → `"LIB:FOOTPRINT"` formatında doldurulmalı
-- Footprint filter'lar tüm uygun footprint'leri kapsamalı:
+- If a default footprint exists → fill in `"LIB:FOOTPRINT"` format
+- Footprint filters must cover all suitable footprints:
 
 ```scheme
 (property "ki_fp_filters" "R_* C_0402* C_0603*")
 ```
 
-Wildcard kuralları:
-- `TO*220*` → TO220, TO-220_Reverse, TO-220-5 hepsini yakalar
-- `_HandSoldering` varyantları için sonuna `*` ekle
-- Pin sayısını filtreye **koyma** — KiCad bunu kendi yapar
+Wildcard rules:
+- `TO*220*` → catches TO220, TO-220_Reverse, TO-220-5
+- Add `*` at the end for `_HandSoldering` variants
+- Do **not** add pin count to the filter — KiCad handles that
 
 ---
 
-## S6 — Sembol Metadata
+## S6 — Symbol Metadata
 
-### S6.1 Reference Designator (RefDes) Tablosu
+### S6.1 Reference Designator (RefDes) Table
 
-| RefDes | Bileşen Türü |
-|--------|-------------|
-| `A` | Alt-montaj, plug-in modül |
-| `AE` | Anten |
-| `BT` | Batarya |
-| `C` | Kondansatör |
-| `D` | Diyot |
-| `DS` | Ekran / Display |
-| `F` | Sigorta |
+| RefDes | Component Type |
+|--------|---------------|
+| `A` | Sub-assembly, plug-in module |
+| `AE` | Antenna |
+| `BT` | Battery |
+| `C` | Capacitor |
+| `D` | Diode |
+| `DS` | Display |
+| `F` | Fuse |
 | `FB` | Ferrite bead |
 | `FD` | Fiducial |
-| `FL` | Filtre |
-| `H` | Mekanik (vida, spacer) |
-| `J` | Jack (sabit konektör) |
+| `FL` | Filter |
+| `H` | Mechanical (screw, spacer) |
+| `J` | Jack (fixed connector) |
 | `JP` | Jumper / link |
-| `K` | Röle |
-| `L` | Bobin, indüktör, ferrite |
-| `LS` | Hoparlör, buzzer |
+| `K` | Relay |
+| `L` | Coil, inductor, ferrite |
+| `LS` | Speaker, buzzer |
 | `M` | Motor |
-| `MK` | Mikrofon |
-| `P` | Plug (hareketli konektör) |
-| `Q` | Transistör (BJT, MOSFET, IGBT) |
-| `R` | Direnç |
-| `RN` | Direnç ağı |
-| `RT` | Termistör |
-| `RV` | Varistör |
-| `SW` | Anahtar |
-| `T` | Transformatör |
-| `TC` | Termoçift |
-| `TP` | Test noktası |
-| `U` | Entegre devre (IC) |
-| `Y` | Kristal / osilatör |
-| `Z` | Zener diyot |
+| `MK` | Microphone |
+| `P` | Plug (free connector) |
+| `Q` | Transistor (BJT, MOSFET, IGBT) |
+| `R` | Resistor |
+| `RN` | Resistor network |
+| `RT` | Thermistor |
+| `RV` | Varistor |
+| `SW` | Switch |
+| `T` | Transformer |
+| `TC` | Thermocouple |
+| `TP` | Test point |
+| `U` | Integrated circuit (IC) |
+| `Y` | Crystal / oscillator |
+| `Z` | Zener diode |
 
-Güç ve grafik semboller: `#PWR`, `#SYM`
+Power and graphical symbols: `#PWR`, `#SYM`
 
-### S6.2 Zorunlu Metadata Alanları
+### S6.2 Required Metadata Fields
 
 ```scheme
-; Tüm semboller için:
+; Required for all symbols:
 (property "Reference"  "U"   (id 0) ...)   ; RefDes
-(property "Value"      "..."  (id 1) ...)   ; değer (sembol adıyla eşleşmeli)
-(property "Footprint"  "..."  (id 2) ...)   ; boş bırakılabilir
-(property "Datasheet"  "..."  (id 3) ...)   ; URL veya "~"
+(property "Value"      "..."  (id 1) ...)   ; value (should match symbol name)
+(property "Footprint"  "..."  (id 2) ...)   ; may be empty
+(property "Datasheet"  "..."  (id 3) ...)   ; URL or "~"
 
-; Opsiyonel ama önerilen:
-(property "ki_description" "Açıklama metni" ...)
-(property "ki_keywords"    "anahtar kelimeler boşlukla ayrılmış" ...)
+; Optional but recommended:
+(property "ki_description" "Description text" ...)
+(property "ki_keywords"    "space separated keywords" ...)
 (property "ki_fp_filters"  "FootprintLib:Pattern*" ...)
 ```
 
 ---
 
-## S7 — Özel Semboller
+## S7 — Special Symbols
 
-### S7.1 Power Semboller
+### S7.1 Power Symbols
 
 ```scheme
 (symbol "GND"
@@ -255,13 +253,13 @@ Güç ve grafik semboller: `#PWR`, `#SYM`
     (effects (font (size 1.27 1.27))))
 
   (symbol "GND_0_1"
-    ; Grafik: ters üçgen
+    ; Graphic: inverted triangle
     (polyline
       (pts (xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27))
       (stroke (width 0) (type default))
       (fill (type none))
     )
-    ; TEK VE GÖRÜNÜR PIN (KiCad 8+)
+    ; SINGLE VISIBLE PIN (KiCad 8+)
     (pin power_in line (at 0 0 270) (length 0)
       (name "~" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
@@ -270,23 +268,23 @@ Güç ve grafik semboller: `#PWR`, `#SYM`
 )
 ```
 
-**Kurallar (S7.1):**
+**Rules (S7.1):**
 - `Reference` → `#PWR`
-- Tam olarak **1 pin**, tip: `power_in`
-- Pin adı: `~`
-- KiCad 8+: pin **görünür** (`hide` olmadan)
-- KiCad 7 ve öncesi: pin **gizli** (`hide` ile)
-- `Define as power symbol` işaretli → `in_bom no` + `on_board no`
-- `Value` alanı sembol adıyla eşleşmeli
+- Exactly **1 pin**, type: `power_in`
+- Pin name: `~`
+- KiCad 8+: pin is **visible** (no `hide`)
+- KiCad 7 and earlier: pin is **hidden** (with `hide`)
+- `Define as power symbol` checked → `in_bom no` + `on_board no`
+- `Value` field must match symbol name
 
-### S7.2 Grafik Semboller
+### S7.2 Graphical Symbols
 - `Reference` → `#SYM`
 - `in_bom no`, `on_board no`
-- Pin yok (veya `no_connect` tipinde pin)
+- No pins (or `no_connect` type pin)
 
 ---
 
-## Koordinat Dönüşümleri (mil ↔ mm)
+## Coordinate Conversions (mil ↔ mm)
 
 ```python
 MIL_TO_MM = 0.0254
@@ -297,17 +295,17 @@ def mil_to_mm(mils):
 def mm_to_mil(mm):
     return round(mm / MIL_TO_MM)
 
-# Sık kullanılan değerler:
-# 50 mil  = 1.27 mm   (text boyutu, pin name offset)
-# 100 mil = 2.54 mm   (grid, pin uzunluğu)
-# 150 mil = 3.81 mm   (uzun pin)
-# 200 mil = 5.08 mm   (çok uzun pin)
-# 300 mil = 7.62 mm   (maks pin uzunluğu)
+# Common values:
+# 50 mil  = 1.27 mm   (text size, pin name offset)
+# 100 mil = 2.54 mm   (grid, pin length)
+# 150 mil = 3.81 mm   (long pin)
+# 200 mil = 5.08 mm   (extra long pin)
+# 300 mil = 7.62 mm   (max pin length)
 ```
 
 ---
 
-## Tam Sembol Üretme Şablonu (Python)
+## Full Symbol Generator Template (Python)
 
 ```python
 import uuid
@@ -328,11 +326,10 @@ def make_symbol(name, refdes, description, keywords,
       (number "{p['num']}" (effects (font (size 1.27 1.27))))
     )""")
 
-    # Gövde dikdörtgeni
     xs = [x for x, y in body_pts]
     ys = [y for x, y in body_pts]
-    x1, y1 = min(xs), max(ys)   # sol-üst
-    x2, y2 = max(xs), min(ys)   # sağ-alt
+    x1, y1 = min(xs), max(ys)   # top-left
+    x2, y2 = max(xs), min(ys)   # bottom-right
 
     return f"""(symbol "{name}"
   (in_bom yes) (on_board yes)
@@ -363,6 +360,7 @@ def make_kicad_sym(lib_name, symbols):
     return f"""(kicad_symbol_lib
   (version 20231120)
   (generator "my_generator")
+  (generator_version "1.0")
 
 {body}
 )
