@@ -152,6 +152,16 @@ impl Signex {
                     pp.underline = !pp.underline;
                 }
             }
+            crate::panels::PanelMsg::SetPrePlacementShapeWidth(w) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.shape_width_mm = (*w).max(0.0);
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementShapeFill(f) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.shape_fill = *f;
+                }
+            }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
                 // OK button: resume placement but keep pre_placement so the
                 // next click uses the values the user just edited.
