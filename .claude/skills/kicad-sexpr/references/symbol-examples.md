@@ -1,5 +1,5 @@
 # Real-World Symbol Examples — Annotated
-> KiCad 9 format (.kicad_sym) — matching official library patterns exactly
+> KiCad 9 format (.kicad_sym) — follows official library patterns exactly
 
 ---
 
@@ -16,7 +16,7 @@
   (on_board yes)
 
   (property "Reference" "R" (id 0)
-    (at 1.524 0 90)                           ; 90 deg rotated, on the right
+    (at 1.524 0 90)                           ; 90° rotated, on the right
     (effects (font (size 1.27 1.27))))
   (property "Value" "R" (id 1)
     (at -1.524 0 90)
@@ -32,23 +32,23 @@
   (property "ki_fp_filters" "R_*" (id 6)
     (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 
-  (symbol "R_0_1")                            ; unit 0, style 1 - empty (no common graphics)
+  (symbol "R_0_1")                            ; unit 0, style 1 — empty (no shared graphics)
 
-  (symbol "R_1_1"                             ; unit 1, style 1 - actual drawing
-    ; IEC rectangle body
+  (symbol "R_1_1"                             ; unit 1, style 1 — actual drawing
+    ; IEC rectangular body
     (rectangle
       (start -1.016 -2.54)
       (end 1.016 2.54)
       (stroke (width 0.254) (type default))
-      (fill (type none))                      ; discrete component -> no fill
+      (fill (type none))                      ; discrete component → NO fill
     )
-    ; Pin 1 - top (at Y=3.81, 270 deg = facing down, length 1.27)
+    ; Pin 1 — top (at Y=3.81, 270° = pointing downward, length 1.27)
     (pin passive line
-      (at 0 3.81 270) (length 1.27)           ; 270 deg = downward connection
+      (at 0 3.81 270) (length 1.27)
       (name "~" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
     )
-    ; Pin 2 - bottom (at Y=-3.81, 90 deg = facing up)
+    ; Pin 2 — bottom (at Y=-3.81, 90° = pointing upward)
     (pin passive line
       (at 0 -3.81 90) (length 1.27)
       (name "~" (effects (font (size 1.27 1.27))))
@@ -58,10 +58,10 @@
 )
 ```
 
-**Note:**
-- `~` pin name -> invisible name (IEC notation)
-- `pin_numbers hide` + `pin_names hide` -> standard for 2-pin components
-- `fill (type none)` -> discrete component rule (S3.3)
+**Notes:**
+- `~` pin name → invisible name (IEC notation)
+- `pin_numbers hide` + `pin_names hide` → standard for 2-pin components
+- `fill (type none)` → discrete component rule (S3.3)
 - Pin length: 1.27 mm (50 mil) — short pin exception (S4.1)
 
 ---
@@ -84,13 +84,13 @@
   (property "ki_fp_filters" "DIP*W7.62* SOIC*3.9x4.9mm*Pitch1.27mm*" (id 4)
     (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 
-  ; UNIT A — ilk op-amp
+  ; UNIT A — first op-amp
   (symbol "LM358_1_1"
     ; Triangle body (standard op-amp shape)
     (polyline
       (pts (xy -3.81 5.08) (xy -3.81 -5.08) (xy 3.81 0) (xy -3.81 5.08))
       (stroke (width 0.254) (type default))
-      (fill (type background))               ; IC -> arka plan dolgusu
+      (fill (type background))               ; IC → background fill
     )
     ; IN+ input
     (pin input line (at -6.35 2.54 0) (length 2.54)
@@ -138,7 +138,6 @@
       (name "OUT" (effects (font (size 1.27 1.27))))
       (number "7" (effects (font (size 1.27 1.27))))
     )
-    ; Power pins not in unit 0, same hidden pins as A are here too
     (pin power_in line (at 0 7.62 270) (length 2.54) hide
       (name "V+" (effects (font (size 1.27 1.27))))
       (number "8" (effects (font (size 1.27 1.27))))
@@ -172,7 +171,7 @@
     (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 
   (symbol "GND_0_1"
-    ; Triangle (inverted)
+    ; Inverted triangle
     (polyline
       (pts (xy 0 0) (xy 1.27 -1.27) (xy -1.27 -1.27) (xy 0 0))
       (stroke (width 0) (type default))
@@ -184,7 +183,7 @@
       (stroke (width 0) (type default))
       (fill (type none))
     )
-    ; KiCad 8+ -> visible pin
+    ; KiCad 8+ → visible pin (no hide)
     (pin power_in line (at 0 0 270) (length 0)
       (name "~" (effects (font (size 1.27 1.27))))
       (number "1" (effects (font (size 1.27 1.27))))
@@ -195,7 +194,7 @@
 
 ---
 
-## 4. Multi-Pin IC: STM32-style MCU (partial display)
+## 4. Multi-Pin IC: STM32-Style MCU (partial view)
 
 ```scheme
 (symbol "STM32F103C8Tx"
@@ -227,7 +226,7 @@
       (name "VSS" (effects (font (size 1.27 1.27))))
       (number "23" (effects (font (size 1.27 1.27))))
     )
-    ; RESET
+    ; RESET — active low
     (pin input line (at 17.78 20.32 180) (length 5.08)
       (name "~{NRST}" (effects (font (size 1.27 1.27))))
       (number "7" (effects (font (size 1.27 1.27))))
@@ -252,11 +251,11 @@
 ## 5. Active-Low Pin Names
 
 ```scheme
-; CORRECT — tilde+curly braces (KiCad 6+):
-(name "~{CS}"    ...)    ; -> CS overbar above
-(name "~{OE}"    ...)    ; -> OE overbar above
-(name "~{RESET}" ...)    ; -> RESET overbar above
-(name "~{WR}"    ...)    ; -> WR overbar above
+; CORRECT — tilde+curly brace (KiCad 6+):
+(name "~{CS}"    ...)    ; → overbar over CS
+(name "~{OE}"    ...)    ; → overbar over OE
+(name "~{RESET}" ...)    ; → overbar over RESET
+(name "~{WR}"    ...)    ; → overbar over WR
 
 ; WRONG (old format, no longer supported):
 (name "/CS"  ...)
@@ -267,10 +266,10 @@
 
 ## 6. Pin Stacking Example
 
-Same component has multiple GND pins — all placed at the same position:
+Multiple GND pins on the same component — all placed at the same location:
 
 ```scheme
-; All GND pins at same (at 0 -5.08 90) position are stacked
+; All GND pins stacked at (at 0 -5.08 90)
 (pin power_in line (at 0 -5.08 90) (length 2.54)
   (name "GND" (effects (font (size 1.27 1.27))))
   (number "3" (effects (font (size 1.27 1.27))))
@@ -287,17 +286,17 @@ Same component has multiple GND pins — all placed at the same position:
 
 ---
 
-## 7. Extended (Extends) Symbol
+## 7. Extends (Derived) Symbol
 
-Deriving from existing symbol — only properties change, graphics are the same:
+Derive from an existing symbol — only properties change, graphics are inherited:
 
 ```scheme
 (symbol "LM358A"
-  (extends "LM358")                           ; LM358'den derived
+  (extends "LM358")                           ; derived from LM358
   (property "Reference" "U" (id 0) ...)
   (property "Value" "LM358A" (id 1) ...)     ; only value changed
   (property "Datasheet" "https://..." (id 3) ...)
-  ; graphics, pins and all other properties are inherited from parent
+  ; graphics, pins and all other properties inherited from parent
 )
 ```
 
@@ -312,10 +311,9 @@ Deriving from existing symbol — only properties change, graphics are the same:
   (in_bom yes) (on_board yes)
   ...
   (symbol "Crystal_1_1"
-    ; Lines (crystal symbol shape)
-    (polyline (pts (xy 0 -1.778) (xy 0 1.778))     ; vertical line
+    (polyline (pts (xy 0 -1.778) (xy 0 1.778))      ; vertical line
       (stroke (width 0.508) (type default)) (fill (type none)))
-    (rectangle (start -0.762 -0.889) (end 0.762 0.889)  ; rectangle
+    (rectangle (start -0.762 -0.889) (end 0.762 0.889)   ; rectangle
       (stroke (width 0.254) (type default)) (fill (type background)))
     (polyline (pts (xy -1.778 -0.889) (xy -1.778 0.889)) ; left plate
       (stroke (width 0.508) (type default)) (fill (type none)))
@@ -338,18 +336,18 @@ Deriving from existing symbol — only properties change, graphics are the same:
 
 ## 9. Quick Coordinate Reference
 
-Pin directions (angle):
+Pin angles:
 ```
-0°   -> pin facing left (connection point on left) -> for IC left edge
-90°  -> pin facing down (connection point at bottom) -> for IC bottom edge
-180° -> pin facing right (connection point on right) -> for IC right edge
-270° -> pin facing up (connection point at top) -> for IC top edge
+0°   → pin faces left  (connection point on the left)  → left edge of IC body
+90°  → pin faces down  (connection point at the bottom) → bottom edge of IC body
+180° → pin faces right (connection point on the right) → right edge of IC body
+270° → pin faces up    (connection point at the top)   → top edge of IC body
 ```
 
 Typical IC pin positions (with 2.54 mm pin length):
 ```python
-# Left edge: x = -BOX_W - 2.54, angle = 0
-# Right edge: x = +BOX_W + 2.54, angle = 180
-# Top edge: y = +BOX_H + 2.54, angle = 270
+# Left edge:   x = -BOX_W - 2.54, angle = 0
+# Right edge:  x = +BOX_W + 2.54, angle = 180
+# Top edge:    y = +BOX_H + 2.54, angle = 270
 # Bottom edge: y = -BOX_H - 2.54, angle = 90
 ```

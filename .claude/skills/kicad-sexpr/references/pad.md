@@ -41,22 +41,22 @@
 ## Pad Types
 
 | Token | Description |
-|-------|----------|
+|-------|-------------|
 | `thru_hole` | Through-hole pad |
-| `smd` | Surface mount (SMD) pad |
-| `connect` | Connection pad (for net) |
-| `np_thru_hole` | Through-hole but non-plated |
+| `smd` | Surface-mount pad |
+| `connect` | Connection pad (for nets) |
+| `np_thru_hole` | Non-plated through-hole |
 
 ## Pad Shapes
 
 | Token | Description |
-|-------|----------|
+|-------|-------------|
 | `circle` | Circle |
 | `rect` | Rectangle |
 | `oval` | Oval |
 | `trapezoid` | Trapezoid |
-| `roundrect` | Rounded rectangle (`roundrect_rratio` required) |
-| `custom` | Custom shape (`primitives` required) |
+| `roundrect` | Rounded rectangle (requires `roundrect_rratio`) |
+| `custom` | Custom shape (requires `primitives`) |
 
 ## Drill Definition
 
@@ -74,18 +74,18 @@
 ## Pad Special Properties (`property` token)
 
 | Token | Description |
-|-------|----------|
+|-------|-------------|
 | `pad_prop_bga` | BGA pad |
 | `pad_prop_fiducial_glob` | Global fiducial |
 | `pad_prop_fiducial_loc` | Local fiducial |
 | `pad_prop_testpoint` | Test point |
-| `pad_prop_heatsink` | Heat sink |
+| `pad_prop_heatsink` | Heatsink pad |
 | `pad_prop_castellated` | Castellated pad |
 
 ## Zone Connection Types
 
 | Value | Description |
-|-------|----------|
+|-------|-------------|
 | `0` | Not connected to zone |
 | `1` | Connected with thermal relief |
 | `2` | Connected with solid fill |
@@ -124,7 +124,7 @@
 )
 ```
 
-## Creating Pads with pcbnew API
+## Creating Pads via pcbnew API
 
 ```python
 import pcbnew
@@ -132,7 +132,6 @@ import pcbnew
 board = pcbnew.GetBoard()
 fp = board.FindFootprintByReference("U1")
 
-# New pad
 pad = pcbnew.PAD(fp)
 pad.SetNumber("1")
 pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
