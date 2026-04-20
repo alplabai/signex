@@ -11,7 +11,6 @@ impl Signex {
     /// Messages panel + canvas markers stay consistent with what's
     /// on screen.
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
-        use crate::app::documents::TabDocument;
         let overrides = self.ui_state.erc_severity_override.clone();
         let apply_overrides =
             |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
@@ -88,14 +87,16 @@ impl Signex {
                 &mut children,
             );
         }
-        // Cached tabs.
+        // Cached tabs — engines for every open schematic tab live in
+        // `document_state.engines`, keyed by path. The active one was
+        // already handled above via the render snapshot.
         for (idx, tab) in self.document_state.tabs.iter().enumerate() {
             if idx == self.document_state.active_tab {
                 continue;
             }
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+            if let Some(engine) = self.document_state.engines.get(&tab.path) {
                 let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                    session.document(),
+                    engine.document(),
                 );
                 push_snap(
                     tab.path.clone(),
@@ -226,6 +227,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
+        use std::path::PathBuf;
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
@@ -246,8 +248,8 @@ impl Signex {
             }
         }
         for tab in &self.document_state.tabs {
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                for sym in &session.document().symbols {
+            if let Some(engine) = self.document_state.engines.get(&tab.path) {
+                for sym in &engine.document().symbols {
                     if !sym.is_power && !sym.reference.starts_with('#') {
                         all_existing.push(sym.reference.clone());
                     }
@@ -273,20 +275,28 @@ impl Signex {
         // Pass B: apply to cached (non-active) tabs via the shared counter.
         let locked = self.ui_state.annotate_locked.clone();
         let mut any_cached_changed = false;
-        for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
-            if idx == self.document_state.active_tab {
-                continue;
-            }
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut()
-                && let Ok(changed) = session.engine_mut().annotate_with_seed_and_locks(
-                    mode,
-                    &mut next_by_prefix,
-                    &locked,
-                )
-                && changed
-            {
-                session.set_dirty(true);
-                tab.dirty = true;
+        let active_idx = self.document_state.active_tab;
+        let paths: Vec<(usize, PathBuf)> = self
+            .document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, tab)| {
+                if idx == active_idx {
+                    None
+                } else {
+                    Some((idx, tab.path.clone()))
+                }
+            })
+            .collect();
+        for (idx, path) in paths {
+            let result = self.document_state.engines.get_mut(&path).map(|engine| {
+                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+            });
+            if let Some(Ok(true)) = result {
+                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
+                    tab.dirty = true;
+                }
                 any_cached_changed = true;
             }
         }
@@ -406,7 +416,6 @@ impl Signex {
     /// in `project_data.sheets` not opened as a tab; unopened sheets
     /// are re-saved through `kicad-writer` so the fix is project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
-        use crate::app::documents::TabDocument;
         use std::collections::{HashMap, HashSet};
         use std::path::PathBuf;
 
@@ -425,13 +434,10 @@ impl Signex {
                 *counts.entry(sym.reference.clone()).or_insert(0) += 1;
             }
         };
-        if let Some(eng) = self.document_state.active_engine() {
-            bump(&mut counts, eng.document());
-        }
-        for tab in &self.document_state.tabs {
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                bump(&mut counts, session.document());
-            }
+        // All open schematic engines live in the HashMap — one loop
+        // covers the active tab plus every background tab.
+        for engine in self.document_state.engines.values() {
+            bump(&mut counts, engine.document());
         }
         let open_paths: HashSet<PathBuf> = self
             .document_state
@@ -538,20 +544,37 @@ impl Signex {
         }
         // Cached tabs — same ReplaceDocument path; each tab's own
         // history records the reset.
-        for (idx, tab) in self.document_state.tabs.iter_mut().enumerate() {
-            if idx == self.document_state.active_tab {
-                continue;
-            }
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_mut() {
-                let mut sheet = session.document().clone();
-                if reset_in(&mut sheet, &duplicates) {
-                    let _ = session
-                        .engine_mut()
-                        .execute(signex_engine::Command::ReplaceDocument { document: sheet });
-                    session.set_dirty(true);
-                    tab.dirty = true;
-                    resets += 1;
+        let active_idx = self.document_state.active_tab;
+        let cached_paths: Vec<(usize, PathBuf)> = self
+            .document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, tab)| {
+                if idx == active_idx {
+                    None
+                } else {
+                    Some((idx, tab.path.clone()))
                 }
+            })
+            .collect();
+        for (idx, path) in cached_paths {
+            let applied = self.document_state.engines.get_mut(&path).map(|engine| {
+                let mut sheet = engine.document().clone();
+                if reset_in(&mut sheet, &duplicates) {
+                    let _ = engine.execute(signex_engine::Command::ReplaceDocument {
+                        document: sheet,
+                    });
+                    true
+                } else {
+                    false
+                }
+            });
+            if let Some(true) = applied {
+                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
+                    tab.dirty = true;
+                }
+                resets += 1;
             }
         }
         // Unopened sheets — mutate the already-parsed copy and write

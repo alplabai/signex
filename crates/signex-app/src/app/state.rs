@@ -9,7 +9,7 @@ use crate::canvas::SchematicCanvas;
 use crate::dock::DockArea;
 use crate::pcb_canvas::PcbCanvas;
 
-use super::{ContextMenuState, DragTarget, DrawMode, TabDocument, TabInfo, TextEditState, Tool};
+use super::{ContextMenuState, DragTarget, DrawMode, TabInfo, TextEditState, Tool};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -249,13 +249,19 @@ pub struct DocumentState {
     pub dock: DockArea,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
-    /// The engine for whichever tab is currently active. Every non-active
-    /// tab's engine lives inside `tabs[i].cached_document`. The v0.7
-    /// per-window split replaces both storage paths with a single
-    /// `HashMap<PathBuf, Engine>` + per-window `active_path`; for now the
-    /// accessor methods below are the public contract so callers can
-    /// migrate without waiting on the storage swap.
-    pub engine: Option<signex_engine::Engine>,
+    /// All live schematic engines keyed by their on-disk path. Every
+    /// open schematic tab — whether it's the active one in the main
+    /// window or parked in an undocked-tab window — has a live entry
+    /// here. `active_path` names which entry `active_engine()` resolves
+    /// to; undocked windows look up their own entry via
+    /// `engine_for_window`. Save-as rekeys an entry via
+    /// `rekey_engine(old, new)`.
+    pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// The path of the schematic the main window is currently editing.
+    /// `active_engine()` reads `engines.get(active_path)`. `None` means
+    /// no schematic tab is active (e.g. a PCB tab is active, or nothing
+    /// is open).
+    pub active_path: Option<PathBuf>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
     pub panel_ctx: crate::panels::PanelContext,
@@ -265,63 +271,47 @@ pub struct DocumentState {
 
 impl DocumentState {
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
-        self.engine.as_ref()
+        self.engines.get(self.active_path.as_ref()?)
     }
 
     pub fn active_engine_mut(&mut self) -> Option<&mut signex_engine::Engine> {
-        self.engine.as_mut()
+        let path = self.active_path.as_ref()?.clone();
+        self.engines.get_mut(&path)
     }
 
-    pub fn take_active_engine(&mut self) -> Option<signex_engine::Engine> {
-        self.engine.take()
-    }
-
-    pub fn set_active_engine(&mut self, engine: signex_engine::Engine) {
-        self.engine = Some(engine);
-    }
-
+    /// Drop the engine for the active path. Used when closing the
+    /// active tab — the tab's engine is gone, and `active_path` follows
+    /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
-        self.engine = None;
+        if let Some(path) = self.active_path.as_ref().cloned() {
+            self.engines.remove(&path);
+        }
+        self.active_path = None;
     }
 
     pub fn has_active_engine(&self) -> bool {
-        self.engine.is_some()
+        self.active_engine().is_some()
     }
 
     /// Per-window engine lookup. Main window → the active tab's engine
     /// (same as `active_engine`). Undocked tab windows → the engine for
-    /// the path the window was opened on, sourced from the parked
-    /// `SchematicTabSession` in `tabs[i].cached_document`. Returns None
-    /// if the window isn't known or the targeted path isn't a schematic.
+    /// the path the window was opened on. All schematic engines live in
+    /// `self.engines`, so every window resolves with a single HashMap
+    /// lookup.
     pub fn engine_for_window(
         &self,
         window_id: iced::window::Id,
         ui: &UiState,
     ) -> Option<&signex_engine::Engine> {
-        if ui.main_window_id == Some(window_id) {
-            return self.engine.as_ref();
-        }
-        let target_path = match ui.windows.get(&window_id)? {
-            WindowKind::UndockedTab { path, .. } => path,
-            _ => return None,
+        let target_path = if ui.main_window_id == Some(window_id) {
+            self.active_path.as_ref()?
+        } else {
+            match ui.windows.get(&window_id)? {
+                WindowKind::UndockedTab { path, .. } => path,
+                _ => return None,
+            }
         };
-        // Active tab matches the undocked path? Then the live engine is
-        // in `self.engine`.
-        if let Some(active_tab) = self.tabs.get(self.active_tab)
-            && active_tab.path == *target_path
-        {
-            return self.engine.as_ref();
-        }
-        // Otherwise the engine is parked inside a SchematicTabSession.
-        self.tabs.iter().find_map(|tab| {
-            if tab.path != *target_path {
-                return None;
-            }
-            match tab.cached_document.as_ref()? {
-                TabDocument::Schematic(session) => Some(session.engine()),
-                _ => None,
-            }
-        })
+        self.engines.get(target_path)
     }
 }
 
