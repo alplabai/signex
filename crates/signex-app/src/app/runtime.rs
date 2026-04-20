@@ -269,7 +269,13 @@ impl Signex {
             return;
         }
 
-        if let Some(engine) = self.document_state.engine.as_ref()
+        // Borrow `engines` + `panel_ctx` as disjoint fields so the
+        // compiler can split the mutation below. Going through
+        // `active_engine()` would keep the whole `DocumentState`
+        // borrowed for the duration of the block.
+        let active_path = self.document_state.active_path.clone();
+        if let Some(path) = active_path
+            && let Some(engine) = self.document_state.engines.get(&path)
             && let Some(details) = engine.describe_single_selection(selected)
         {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
