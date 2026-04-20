@@ -291,6 +291,7 @@ impl Signex {
                                 exclude_from_sim: false,
                                 locked: false,
                                 fields: std::collections::HashMap::new(),
+                                custom_properties: Vec::new(),
                                 pin_uuids: std::collections::HashMap::new(),
                                 instances: Vec::new(),
                             };

@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::property::SchematicProperty;
+
 // ---------------------------------------------------------------------------
 // Schematic text constants
 // ---------------------------------------------------------------------------
@@ -392,6 +394,8 @@ pub struct Symbol {
     pub locked: bool,
     #[serde(default)]
     pub fields: HashMap<String, String>,
+    #[serde(default)]
+    pub custom_properties: Vec<SchematicProperty>,
     #[serde(default)]
     pub pin_uuids: HashMap<String, Uuid>,
     #[serde(default)]
