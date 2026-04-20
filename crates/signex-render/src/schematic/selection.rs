@@ -613,17 +613,46 @@ fn draw_drawing_selection(
         SchDrawing::Arc {
             start, mid, end, ..
         } => {
-            let (sx, sy) = transform.world_to_screen(start.x, start.y);
-            let (mx, my) = transform.world_to_screen(mid.x, mid.y);
-            let (ex, ey) = transform.world_to_screen(end.x, end.y);
-            frame.stroke(
-                &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(mx, my)),
-                stroke,
-            );
-            frame.stroke(
-                &canvas::Path::line(iced::Point::new(mx, my), iced::Point::new(ex, ey)),
-                stroke,
-            );
+            // Fit the circle through the three stored points and
+            // sample the arc between start_angle → end_angle so the
+            // highlight traces the actual curve, not the chords.
+            if let Some((cx_w, cy_w, radius_w)) =
+                crate::schematic::circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+            {
+                let start_angle = (start.y - cy_w).atan2(start.x - cx_w);
+                let mid_angle = (mid.y - cy_w).atan2(mid.x - cx_w);
+                let end_angle = (end.y - cy_w).atan2(end.x - cx_w);
+                let (from, to) = crate::schematic::arc_sweep(start_angle, mid_angle, end_angle);
+                let steps = 48_usize;
+                let mut prev = transform.world_to_screen(start.x, start.y);
+                for i in 1..=steps {
+                    let t = i as f64 / steps as f64;
+                    let a = from + (to - from) * t;
+                    let wx = cx_w + radius_w * a.cos();
+                    let wy = cy_w + radius_w * a.sin();
+                    let (sx, sy) = transform.world_to_screen(wx, wy);
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(prev.0, prev.1),
+                            iced::Point::new(sx, sy),
+                        ),
+                        stroke,
+                    );
+                    prev = (sx, sy);
+                }
+            } else {
+                let (sx, sy) = transform.world_to_screen(start.x, start.y);
+                let (mx, my) = transform.world_to_screen(mid.x, mid.y);
+                let (ex, ey) = transform.world_to_screen(end.x, end.y);
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(mx, my)),
+                    stroke,
+                );
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(mx, my), iced::Point::new(ex, ey)),
+                    stroke,
+                );
+            }
         }
         SchDrawing::Polyline { points, .. } => {
             for pair in points.windows(2) {
