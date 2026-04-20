@@ -656,6 +656,40 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::UpdateSchDrawing { drawing } => {
+                use signex_types::schematic::SchDrawing;
+                let target_uuid = match &drawing {
+                    SchDrawing::Line { uuid, .. }
+                    | SchDrawing::Rect { uuid, .. }
+                    | SchDrawing::Circle { uuid, .. }
+                    | SchDrawing::Arc { uuid, .. }
+                    | SchDrawing::Polyline { uuid, .. } => *uuid,
+                };
+                let mut changed = false;
+                for d in self.document.drawings.iter_mut() {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    if u == target_uuid {
+                        *d = drawing.clone();
+                        changed = true;
+                        break;
+                    }
+                }
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::TextUpdated,
+                    document: DocumentPatch::DRAWINGS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
                 // Power ports (is_power == true, or reference starting with '#')
@@ -1284,6 +1318,11 @@ impl Engine {
             signex_types::schematic::VAlign::Center => "Center",
             signex_types::schematic::VAlign::Bottom => "Bottom",
         };
+        let fill_type_label = |fill| match fill {
+            signex_types::schematic::FillType::None => "None",
+            signex_types::schematic::FillType::Outline => "Outline",
+            signex_types::schematic::FillType::Background => "Background",
+        };
 
         let mut info = Vec::new();
 
@@ -1474,8 +1513,104 @@ impl Engine {
                 ));
                 info.push(("End".into(), format!("{:.2}, {:.2}", bus.end.x, bus.end.y)));
             }
-            SelectedKind::BusEntry | SelectedKind::Drawing => {
-                info.push(("Type".into(), format!("{:?}", item.kind)));
+            SelectedKind::BusEntry => {
+                info.push(("Type".into(), "Bus Entry".into()));
+            }
+            SelectedKind::Drawing => {
+                use signex_types::schematic::SchDrawing;
+                let d = self.document.drawings.iter().find(|d| {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u == item.uuid
+                })?;
+                match d {
+                    SchDrawing::Line {
+                        start, end, width, ..
+                    } => {
+                        info.push(("Type".into(), "Line".into()));
+                        info.push(("Start".into(), format!("{:.2}, {:.2}", start.x, start.y)));
+                        info.push(("End".into(), format!("{:.2}, {:.2}", end.x, end.y)));
+                        info.push(("Width".into(), format!("{width:.3}")));
+                    }
+                    SchDrawing::Rect {
+                        start,
+                        end,
+                        width,
+                        fill,
+                        ..
+                    } => {
+                        info.push(("Type".into(), "Rectangle".into()));
+                        let x0 = start.x.min(end.x);
+                        let y0 = start.y.min(end.y);
+                        let w = (end.x - start.x).abs();
+                        let h = (end.y - start.y).abs();
+                        info.push(("Position".into(), format!("{x0:.2}, {y0:.2}")));
+                        info.push(("Width".into(), format!("{w:.2}")));
+                        info.push(("Height".into(), format!("{h:.2}")));
+                        info.push(("Border".into(), format!("{width:.3}")));
+                        info.push(("Fill".into(), fill_type_label(*fill).into()));
+                    }
+                    SchDrawing::Circle {
+                        center,
+                        radius,
+                        width,
+                        fill,
+                        ..
+                    } => {
+                        info.push(("Type".into(), "Circle".into()));
+                        info.push(("Center".into(), format!("{:.2}, {:.2}", center.x, center.y)));
+                        info.push(("Radius".into(), format!("{radius:.3}")));
+                        info.push(("Border".into(), format!("{width:.3}")));
+                        info.push(("Fill".into(), fill_type_label(*fill).into()));
+                    }
+                    SchDrawing::Arc {
+                        start,
+                        mid,
+                        end,
+                        width,
+                        ..
+                    } => {
+                        info.push(("Type".into(), "Arc".into()));
+                        if let Some((cx, cy, radius)) =
+                            circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+                        {
+                            let sa: f64 = (start.y - cy).atan2(start.x - cx);
+                            let ea: f64 = (end.y - cy).atan2(end.x - cx);
+                            let norm = |a: f64| -> f64 {
+                                let mut t = a.to_degrees() % 360.0;
+                                if t < 0.0 {
+                                    t += 360.0;
+                                }
+                                t
+                            };
+                            info.push(("Center".into(), format!("{cx:.2}, {cy:.2}")));
+                            info.push(("Radius".into(), format!("{radius:.3}")));
+                            info.push(("Start Angle".into(), format!("{:.3}", norm(sa))));
+                            info.push(("End Angle".into(), format!("{:.3}", norm(ea))));
+                        } else {
+                            info.push(("Start".into(), format!("{:.2}, {:.2}", start.x, start.y)));
+                            info.push(("Mid".into(), format!("{:.2}, {:.2}", mid.x, mid.y)));
+                            info.push(("End".into(), format!("{:.2}, {:.2}", end.x, end.y)));
+                        }
+                        info.push(("Width".into(), format!("{width:.3}")));
+                    }
+                    SchDrawing::Polyline {
+                        points,
+                        width,
+                        fill,
+                        ..
+                    } => {
+                        info.push(("Type".into(), "Polygon".into()));
+                        info.push(("Vertices".into(), format!("{}", points.len())));
+                        info.push(("Border".into(), format!("{width:.3}")));
+                        info.push(("Fill".into(), fill_type_label(*fill).into()));
+                    }
+                }
             }
             SelectedKind::SymbolRefField => {
                 let symbol = self
@@ -1987,6 +2122,30 @@ where
     let original_len = items.len();
     items.retain(|item| item.uuid() != uuid);
     original_len != items.len()
+}
+
+/// Circle through three non-collinear points — used by the Arc
+/// selection info + properties panel to convert KiCad's
+/// (start, mid, end) storage into Altium's (center, radius, start
+/// angle, end angle) representation.
+fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let (cx, cy) = c;
+    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if d.abs() < 1e-9 {
+        return None;
+    }
+    let ux = ((ax * ax + ay * ay) * (by - cy)
+        + (bx * bx + by * by) * (cy - ay)
+        + (cx * cx + cy * cy) * (ay - by))
+        / d;
+    let uy = ((ax * ax + ay * ay) * (cx - bx)
+        + (bx * bx + by * by) * (ax - cx)
+        + (cx * cx + cy * cy) * (bx - ax))
+        / d;
+    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
+    Some((ux, uy, r))
 }
 
 trait HasUuid {
