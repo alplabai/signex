@@ -119,7 +119,8 @@ impl Signex {
                 dock,
                 tabs: vec![],
                 active_tab: 0,
-                engine: None,
+                engines: std::collections::HashMap::new(),
+                active_path: None,
                 project_path: None,
                 project_data: None,
                 panel_ctx: crate::panels::PanelContext {

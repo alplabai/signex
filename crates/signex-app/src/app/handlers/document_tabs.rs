@@ -91,8 +91,14 @@ impl Signex {
         if idx >= self.document_state.tabs.len() {
             return;
         }
-        if idx == self.document_state.active_tab {
-            self.document_state.clear_active_engine();
+        // Drop the engine for the tab being closed, whether it was the
+        // active one or a background schematic. The HashMap keeps every
+        // open tab's engine live — closing the tab is the only point
+        // where we prune an entry.
+        let closing_path = self.document_state.tabs[idx].path.clone();
+        self.document_state.engines.remove(&closing_path);
+        if self.document_state.active_path.as_ref() == Some(&closing_path) {
+            self.document_state.active_path = None;
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()
