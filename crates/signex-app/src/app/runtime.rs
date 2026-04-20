@@ -60,6 +60,8 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
+        let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -187,6 +189,8 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            drawing_edit_buf,
+            drawing_edit_buf_for,
             component_filter,
             collapsed_sections,
             pre_placement,
