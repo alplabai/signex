@@ -47,6 +47,7 @@ pub enum CommandKind {
     PlaceBusEntry,
     PlaceTextNote,
     PlaceSchDrawing,
+    UpdateSchDrawing,
     AnnotateAll,
     MoveSymbolAbsolute,
     ReorderObjects,
@@ -153,6 +154,12 @@ pub enum Command {
     PlaceSchDrawing {
         drawing: signex_types::schematic::SchDrawing,
     },
+    /// Replace an existing SchDrawing by uuid — used by the drawing
+    /// properties panel for per-field edits (angle, radius, vertex
+    /// coords, fill, width).
+    UpdateSchDrawing {
+        drawing: signex_types::schematic::SchDrawing,
+    },
     /// Auto-annotate every symbol whose reference ends in `?` with a unique
     /// sequential designator per prefix (R?, C?, U?, …). Applied in a
     /// deterministic order so re-running produces the same layout.
@@ -225,6 +232,7 @@ impl Command {
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
+            Command::UpdateSchDrawing { .. } => CommandKind::UpdateSchDrawing,
             Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
