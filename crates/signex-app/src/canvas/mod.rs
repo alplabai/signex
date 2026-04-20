@@ -885,6 +885,45 @@ impl canvas::Program<Message> for SchematicCanvas {
                             push_pt(cs.position.x + cs.size.0, cs.position.y + cs.size.1, 0.0);
                         }
                     }
+                    SelectedKind::Drawing => {
+                        use signex_types::schematic::SchDrawing;
+                        if let Some(d) = snapshot.drawings.iter().find(|d| {
+                            let u = match d {
+                                SchDrawing::Line { uuid, .. }
+                                | SchDrawing::Rect { uuid, .. }
+                                | SchDrawing::Circle { uuid, .. }
+                                | SchDrawing::Arc { uuid, .. }
+                                | SchDrawing::Polyline { uuid, .. } => *uuid,
+                            };
+                            u == item.uuid
+                        }) {
+                            match d {
+                                SchDrawing::Line { start, end, .. } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Rect { start, end, .. } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Circle { center, radius, .. } => {
+                                    push_pt(center.x, center.y, *radius as f32);
+                                }
+                                SchDrawing::Arc {
+                                    start, mid, end, ..
+                                } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(mid.x, mid.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Polyline { points, .. } => {
+                                    for p in points {
+                                        push_pt(p.x, p.y, 1.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
