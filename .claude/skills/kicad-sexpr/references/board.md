@@ -1,6 +1,6 @@
 # KiCad Board File Format — Full Reference
 
-> Extension: `.kicad_pcb` | KiCad 4.0'available since KiCad 4.0, this reference is for 6.0+
+> Extension: `.kicad_pcb` | Available since KiCad 4.0; this reference covers 6.0+
 
 ---
 
@@ -9,10 +9,11 @@
 ```scheme
 (kicad_pcb
   (version YYYYMMDD)
-  (generator GENERATOR_NAME)   ; Warning: "pcbnew" DO NOT USE
+  (generator "YOUR_TOOL_NAME")   ; ⚠️ Do NOT use "pcbnew"
+  (generator_version "1.0")      ; Required KiCad 8+
 
   (general
-    (thickness MM)           ; board thickness
+    (thickness MM)               ; board thickness
   )
 
   (paper ...)
@@ -28,12 +29,12 @@
   ; Optional properties
   (property "KEY" "VALUE")
 
-  ; Nets (required — at least net 0)
+  ; Nets (required — at minimum net 0)
   (net 0 "")
   (net 1 "GND")
   (net 2 "+3V3")
 
-  ; Content sections (order not critical, except header)
+  ; Content sections (order is not critical except header)
   FOOTPRINTS...
   GRAPHIC_ITEMS...
   IMAGES...
@@ -45,9 +46,9 @@
 )
 ```
 
-> Warning: `generator` do not use `pcbnew` for generator.
-> Warning: Header (`kicad_pcb version generator`) **must be the first token**;
-> order of other sections is not critical.
+> ⚠️ Do NOT use `"pcbnew"` as the `generator` value.
+> ⚠️ The header (`kicad_pcb version generator`) must be the **first token**;
+> other sections can appear in any order.
 
 ---
 
@@ -58,7 +59,7 @@
   (0  "F.Cu"      signal)
   (1  "In1.Cu"    signal)
   (31 "B.Cu"      signal)
-  (32 "B.Adhes"   user "B.Adhesive")   ; optional user name
+  (32 "B.Adhes"   user "B.Adhesive")   ; optional user-visible name
   (44 "Edge.Cuts" user)
   ...
 )
@@ -83,7 +84,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 )
 ```
 
-### Stackup (Layer Stacking)
+### Stackup
 
 ```scheme
 (stackup
@@ -115,7 +116,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ```scheme
 (pcbplotparams
-  (layerselection 0x...)        ; hex bit set — which layers are plotted
+  (layerselection 0x...)        ; hex bit set — which layers to plot
   (outputformat 0|1|2|3|4|5)   ; 0=gerber 1=PS 2=SVG 3=DXF 4=HPGL 5=PDF
   (usegerberextensions true|false)
   (usegerberattributes true|false)
@@ -132,7 +133,6 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (mirror true|false)
   (drillshape SHAPE)
   (outputdirectory "./gerber/")
-  ; ... other plot parameters
 )
 ```
 
@@ -147,7 +147,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 (net 3 "/MCU/PA0")
 ```
 
-> ℹ️ Net class definitions were moved to `.kicad_dru` (design rules) file in KiCad 6.
+> Net class definitions were moved to `.kicad_dru` (design rules) in KiCad 6.
 
 ---
 
@@ -161,7 +161,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (layer LAYER)
   [(locked)]
   (net NET_NUMBER)
-  (tstamp UUID)           ; Warning: uses `tstamp`, not `uuid`
+  (tstamp UUID)           ; ⚠️ uses `tstamp`, not `uuid`
 )
 ```
 
@@ -171,15 +171,15 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ```scheme
 (via
-  [blind|micro]           ; if type not specified, through-hole
+  [blind|micro]           ; omit for through-hole
   [(locked)]
   (at X Y)
-  (size ANNULAR_DIAMETER)
-  (drill DRILL_DIAMETER)
-  (layers "F.Cu" "B.Cu")  ; connected layers
+  (size ANNULAR_RING_DIAMETER)
+  (drill HOLE_DIAMETER)
+  (layers "F.Cu" "B.Cu")  ; layers it connects
   [(remove_unused_layers)]
-  [(keep_end_layers)]     ; only remove_unused_layers with together
-  [(free)]                ; can move freely outside net
+  [(keep_end_layers)]     ; only with remove_unused_layers
+  [(free)]                ; can move independently from net
   (net NET_NUMBER)
   (tstamp UUID)
 )
@@ -204,84 +204,46 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ---
 
-## Real Board Example
+## Minimum Valid KiCad 10 Board File
 
 ```scheme
-(kicad_pcb (version 3) (host pcbnew "(2013-02-20 BZR 3963)-testing")
-
+(kicad_pcb (version 20250324) (generator "my-tool") (generator_version "1.0")
   (general
     (thickness 1.6)
-    (drawings 5)
-    (tracks 5)
-    (zones 0)
-    (modules 2)
-    (nets 3)
   )
-
-  (page A4)
+  (paper "A4")
   (layers
-    (15 top_side.Cu signal)
-    (0  bottom_side.Cu signal)
-    (28 Edge.Cuts user)
+    (0  "F.Cu"      signal)
+    (31 "B.Cu"      signal)
+    (36 "B.SilkS"   user)
+    (37 "F.SilkS"   user)
+    (38 "B.Paste"   user)
+    (39 "F.Paste"   user)
+    (40 "B.Mask"    user)
+    (41 "F.Mask"    user)
+    (44 "Edge.Cuts" user)
+    (45 "Margin"    user)
+    (46 "B.CrtYd"   user)
+    (47 "F.CrtYd"   user)
+    (48 "B.Fab"     user)
+    (49 "F.Fab"     user)
   )
-
+  (setup
+    (pad_to_mask_clearance 0)
+  )
   (net 0 "")
-  (net 1 /SIGNAL)
-  (net 2 GND)
-
-  (module R3 (layer top_side.Cu) (tedit 4E4C0E65) (tstamp 5127A136)
-    (at 66.04 33.3502)
-    (fp_text reference R1 (at 0 0.127) (layer F.SilkS) hide
-      (effects (font (size 1.397 1.27) (thickness 0.2032)))
-    )
-    (fp_text value 330K (at 0 0.127) (layer F.SilkS)
-      (effects (font (size 1.397 1.27) (thickness 0.2032)))
-    )
-    (fp_line (start -3.81 0) (end -3.302 0) (layer F.SilkS) (width 0.2032))
-    (pad 1 thru_hole circle (at -3.81 0) (size 1.397 1.397) (drill 0.812799)
-      (layers *.Cu *.Mask F.SilkS)
-      (net 1 /SIGNAL)
-    )
-    (pad 2 thru_hole circle (at 3.81 0) (size 1.397 1.397) (drill 0.812799)
-      (layers *.Cu *.Mask F.SilkS)
-      (net 2 GND)
-    )
-    (model discret/resistor.wrl
-      (at (xyz 0 0 0))
-      (scale (xyz 0.3 0.3 0.3))
-      (rotate (xyz 0 0 0))
-    )
-  )
-
-  (gr_line (start 58 42) (end 58 29) (layer Edge.Cuts) (width 0.15))
-  (gr_line (start 74 42) (end 58 42) (layer Edge.Cuts) (width 0.15))
-  (gr_line (start 74 29) (end 74 42) (layer Edge.Cuts) (width 0.15))
-  (gr_line (start 58 29) (end 74 29) (layer Edge.Cuts) (width 0.15))
-
-  (segment (start 61.0616 36.8808) (end 61.0616 34.5186)
-    (width 0.254) (layer bottom_side.Cu) (net 1))
-
-  (zone (net 2) (net_name GND) (layer bottom_side.Cu)
-    (tstamp 5127A1B2) (hatch edge 0.508)
-    (connect_pads (clearance 0.2))
-    (min_thickness 0.1778)
-    (fill (thermal_gap 0.254) (thermal_bridge_width 0.4064))
-    (polygon (pts
-      (xy 59 30) (xy 73 30) (xy 73 41) (xy 59 41)
-    ))
-  )
 )
 ```
 
 ---
 
-## Python: Board Read/Write
+## Python: Reading and Writing Boards
 
 ```python
 import pcbnew
 
 # Load
-board = pcbnew.LoadBoard("circuit.kicad_pcb")
+board = pcbnew.LoadBoard("board.kicad_pcb")
 
 # Iterate footprints
 for fp in board.GetFootprints():
@@ -293,9 +255,9 @@ for fp in board.GetFootprints():
 # Filter tracks by net
 for track in board.GetTracks():
     if track.GetNetname() == "GND":
-        print(f"  Track: {track.GetStart()} -> {track.GetEnd()}")
+        print(f"  Track: {track.GetStart()} → {track.GetEnd()}")
 
-# Add new track
+# Add a new track
 track = pcbnew.PCB_TRACK(board)
 track.SetStart(pcbnew.FromMM(10), pcbnew.FromMM(20))
 track.SetEnd(pcbnew.FromMM(30), pcbnew.FromMM(20))
@@ -304,6 +266,6 @@ track.SetLayer(pcbnew.F_Cu)
 board.Add(track)
 
 # Save
-pcbnew.SaveBoard("devre_yeni.kicad_pcb", board)
+pcbnew.SaveBoard("board_new.kicad_pcb", board)
 pcbnew.Refresh()
 ```

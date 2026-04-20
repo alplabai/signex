@@ -1,6 +1,6 @@
 # KiCad Schematic File Format — Full Reference
 
-> Extension: `.kicad_sch` | KiCad 6.0+ valid
+> Extension: `.kicad_sch` | Valid for KiCad 6.0+
 
 ---
 
@@ -9,14 +9,15 @@
 ```scheme
 (kicad_sch
   (version YYYYMMDD)                    ; e.g.: 20211123
-  (generator GENERATOR_NAME)              ; Warning: 3rd party: "eeschema" DO NOT USE
+  (generator "YOUR_TOOL_NAME")          ; ⚠️ Do NOT use "eeschema"
+  (generator_version "1.0")             ; Required KiCad 8+
 
   (uuid UUID)                           ; unique ID of this schematic file
 
-  (paper ...)                           ; paper settings
-  (title_block ...)                     ; title block
+  (paper ...)
+  (title_block ...)
 
-  (lib_symbols                          ; library of symbols used in the schematic
+  (lib_symbols                          ; inline copies of all symbols used
     SYMBOL_DEFINITIONS...
   )
 
@@ -41,20 +42,20 @@
 )
 ```
 
-> Warning: `generator` do not use `eeschema` for generator — write your own tool name.
+> ⚠️ Do NOT use `"eeschema"` as the `generator` value — use your own tool's name.
 
 ---
 
 ## Instance Path Concept
 
-Shared schematics can have multiple instances. The hierarchical path
-is formed by joining the UUIDs of related sheets with `/`:
+Shared schematics can have multiple instances. The hierarchical path is
+formed by joining the UUIDs of the relevant sheets with `/`:
 
 ```
 "/00000000-0000-0000-0000-00004b3a13a4/00000000-0000-0000-0000-00004b617b88"
 ```
 
-- **First UUID** must always be the root sheet UUID (UUID of the root `.kicad_sch` file)
+- The **first UUID** must always be the root sheet UUID (the `.kicad_sch` file's own `uuid`)
 
 ---
 
@@ -63,8 +64,8 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (junction
   (at X Y)
-  (diameter MM)    ; 0 = sistem default
-  (color R G B A)  ; 0 0 0 0 = default renk
+  (diameter MM)    ; 0 = system default
+  (color R G B A)  ; 0 0 0 0 = default color
   (uuid UUID)
 )
 ```
@@ -87,7 +88,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (bus_entry
   (at X Y)
-  (size WIDTH HEIGHT)   ; end point, start'tan delta offset
+  (size WIDTH HEIGHT)   ; end point delta offset from start
   (stroke (width W) (type TYPE))
   (uuid UUID)
 )
@@ -111,7 +112,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: `(start)(end)` not — wire/bus **`pts` + `xy`** pairs.
+> ⚠️ Wire/bus does NOT use `(start)(end)` — it uses **`pts` + `xy`** pairs.
 
 ---
 
@@ -144,7 +145,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 ### Local Label
 
 ```scheme
-(label "AD"
+(label "NAME"
   (at X Y [ANGLE])
   (effects ...)
   (uuid UUID)
@@ -154,20 +155,20 @@ is formed by joining the UUIDs of related sheets with `/`:
 ### Global Label
 
 ```scheme
-(global_label "AD"
+(global_label "NAME"
   (shape input|output|bidirectional|tri_state|passive)
   [(fields_autoplaced)]
   (at X Y [ANGLE])
   (effects ...)
   (uuid UUID)
-  PROPERTIES...        ; (property ...) tokens - including inter-sheet ref
+  PROPERTIES...        ; (property ...) tokens — includes inter-sheet ref
 )
 ```
 
 ### Hierarchical Label
 
 ```scheme
-(hierarchical_label "AD"
+(hierarchical_label "NAME"
   (shape input|output|bidirectional|tri_state|passive)
   (at X Y [ANGLE])
   (effects ...)
@@ -175,13 +176,13 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-**Label/Pin shapes:** `input` | `output` | `bidirectional` | `tri_state` | `passive`
+**Label/pin shapes:** `input` | `output` | `bidirectional` | `tri_state` | `passive`
 
 ---
 
 ## Symbol (Schematic Symbol Placement)
 
-`lib_symbols` in the schematic.
+An instance of a symbol from `lib_symbols` placed on the schematic.
 
 ```scheme
 (symbol "LIB:SYMBOL_NAME"
@@ -201,14 +202,14 @@ is formed by joining the UUIDs of related sheets with `/`:
   (pin "1" (uuid PIN1_UUID))
   (pin "2" (uuid PIN2_UUID))
 
-  ; Project-based instance data
+  ; Per-project instance data
   (instances
     (project "PROJECT_NAME"
-      (path "/ROOT_UUID"                  ; single page
+      (path "/ROOT_UUID"                  ; single-sheet design
         (reference "R1")
         (unit 1)
       )
-      (path "/ROOT_UUID/SHEET_UUID"       ; instance in sub-page
+      (path "/ROOT_UUID/SHEET_UUID"       ; instance on a sub-sheet
         (reference "R2")
         (unit 1)
       )
@@ -231,10 +232,10 @@ is formed by joining the UUIDs of related sheets with `/`:
   (uuid UUID)
 
   ; Required properties
-  (property "Sheet name" "SUB_CIRCUIT"            (id 0) (at X Y) (effects ...))
-  (property "Sheet file" "alt_circuit.kicad_sch"  (id 1) (at X Y) (effects ...))
+  (property "Sheet name" "SUB_CIRCUIT"          (id 0) (at X Y) (effects ...))
+  (property "Sheet file" "sub_circuit.kicad_sch" (id 1) (at X Y) (effects ...))
 
-  ; Hierarchical pin'ler
+  ; Hierarchical pins
   (pin "SIGNAL_NAME" input|output|bidirectional|tri_state|passive
     (at X Y ANGLE)
     (effects ...)
@@ -252,12 +253,12 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: Sheet `pin` name in the associated `.kicad_sch` file
-> must be **exactly identical** to the `hierarchical_label` name.
+> ⚠️ The sheet `pin` name must match the `hierarchical_label` name in the
+> referenced `.kicad_sch` file **character for character**.
 
 ---
 
-## Root Sheet Instance Section
+## Root Sheet Instances Section
 
 Found at the end of every root schematic file:
 
@@ -273,8 +274,8 @@ Found at the end of every root schematic file:
 
 ## lib_symbols Section
 
-**Inline copies** of all symbols used in the schematic are stored here.
-The file can be opened without library dependency.
+An **inline copy** of every symbol used in the schematic is stored here.
+The file can be opened without the original library.
 
 ```scheme
 (lib_symbols
@@ -309,7 +310,7 @@ The file can be opened without library dependency.
 ```scheme
 (kicad_symbol_lib
   (version YYYYMMDD)
-  (generator GENERATOR_NAME)   ; Warning: "kicad_symbol_editor" DO NOT USE
+  (generator "YOUR_TOOL_NAME")   ; ⚠️ Do NOT use "kicad_symbol_editor"
 
   (symbol "SYMBOL_NAME" ...)
   (symbol "SYMBOL_NAME_2" ...)
@@ -321,13 +322,13 @@ The file can be opened without library dependency.
 
 ## Python: Reading Schematics
 
-### kiutils (recommended)
+### Using kiutils (recommended)
 
 ```python
 # pip install kiutils
 from kiutils.schematic import Schematic
 
-sch = Schematic.from_file("circuit.kicad_sch")
+sch = Schematic.from_file("board.kicad_sch")
 
 # Symbols
 for sym in sch.schematicSymbols:
@@ -339,11 +340,10 @@ for wire in sch.wires:
     print(wire.startPoint, wire.endPoint)
 ```
 
-### Instance path resolution
+### Resolving instance paths
 
 ```python
-# root UUID = the schematic file uuid token
-# Traverse symbol instances:
+# root UUID = the schematic file's own uuid token
 for sym in symbols:
     for project_instance in sym.instances:
         project_name = project_instance.name
