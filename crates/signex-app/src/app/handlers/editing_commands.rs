@@ -2,7 +2,7 @@ use super::super::*;
 
 impl Signex {
     pub(crate) fn handle_selection_delete_requested(&mut self) {
-        if let Some(engine) = self.document_state.engine.as_ref()
+        if let Some(engine) = self.document_state.active_engine()
             && engine.has_selected_items(&self.interaction_state.canvas.selected)
             && self.apply_engine_command(
                 signex_engine::Command::DeleteSelection {
@@ -43,7 +43,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_rotate_requested(&mut self) {
-        if let Some(engine) = self.document_state.engine.as_ref()
+        if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.canvas.selected)
         {
             self.apply_engine_command(
@@ -58,7 +58,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
-        if let Some(engine) = self.document_state.engine.as_ref()
+        if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.canvas.selected)
         {
             self.apply_engine_command(
@@ -73,7 +73,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
-        if let Some(engine) = self.document_state.engine.as_ref()
+        if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.canvas.selected)
         {
             self.apply_engine_command(
@@ -93,7 +93,7 @@ impl Signex {
         edit: crate::app::contracts::DrawingFieldEdit,
     ) -> iced::Task<crate::app::Message> {
         use signex_types::schematic::SchDrawing;
-        let Some(engine) = self.document_state.engine.as_ref() else {
+        let Some(engine) = self.document_state.active_engine() else {
             return iced::Task::none();
         };
         let doc = engine.document();

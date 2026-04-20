@@ -249,12 +249,44 @@ pub struct DocumentState {
     pub dock: DockArea,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
+    /// The engine for whichever tab is currently active. Every non-active
+    /// tab's engine lives inside `tabs[i].cached_document`. The v0.7
+    /// per-window split replaces both storage paths with a single
+    /// `HashMap<PathBuf, Engine>` + per-window `active_path`; for now the
+    /// accessor methods below are the public contract so callers can
+    /// migrate without waiting on the storage swap.
     pub engine: Option<signex_engine::Engine>,
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
     pub panel_ctx: crate::panels::PanelContext,
     pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
+}
+
+impl DocumentState {
+    pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
+        self.engine.as_ref()
+    }
+
+    pub fn active_engine_mut(&mut self) -> Option<&mut signex_engine::Engine> {
+        self.engine.as_mut()
+    }
+
+    pub fn take_active_engine(&mut self) -> Option<signex_engine::Engine> {
+        self.engine.take()
+    }
+
+    pub fn set_active_engine(&mut self, engine: signex_engine::Engine) {
+        self.engine = Some(engine);
+    }
+
+    pub fn clear_active_engine(&mut self) {
+        self.engine = None;
+    }
+
+    pub fn has_active_engine(&self) -> bool {
+        self.engine.is_some()
+    }
 }
 
 pub struct InteractionState {

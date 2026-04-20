@@ -1216,7 +1216,7 @@ impl super::super::Signex {
         for (idx, tab) in self.document_state.tabs.iter().enumerate() {
             open_paths.insert(tab.path.clone());
             if idx == self.document_state.active_tab {
-                if let Some(eng) = self.document_state.engine.as_ref() {
+                if let Some(eng) = self.document_state.active_engine() {
                     borrowed.push((tab.title.clone(), eng.document()));
                 }
             } else if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
@@ -1226,7 +1226,7 @@ impl super::super::Signex {
         // Fallback when no tabs are open but an engine still holds a doc.
         if borrowed.is_empty()
             && open_paths.is_empty()
-            && let Some(eng) = self.document_state.engine.as_ref()
+            && let Some(eng) = self.document_state.active_engine()
         {
             borrowed.push(("(untitled)".to_string(), eng.document()));
         }

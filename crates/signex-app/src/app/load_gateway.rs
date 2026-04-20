@@ -15,8 +15,7 @@ impl Signex {
 
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
         self.document_state
-            .engine
-            .as_ref()
+            .active_engine()
             .map(|engine| engine.document())
             .or_else(|| self.active_tab_cached_schematic())
     }
@@ -53,14 +52,14 @@ impl Signex {
         &mut self,
         update: impl FnOnce(&mut SchematicTabSession) -> R,
     ) -> Option<R> {
-        let engine = self.document_state.engine.take()?;
+        let engine = self.document_state.take_active_engine()?;
         let Some((title, path, dirty)) = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
             .map(|tab| (tab.title.clone(), tab.path.clone(), tab.dirty))
         else {
-            self.document_state.engine = Some(engine);
+            self.document_state.set_active_engine(engine);
             return None;
         };
 
@@ -78,12 +77,12 @@ impl Signex {
             tab.dirty = dirty;
         }
 
-        self.document_state.engine = Some(engine);
+        self.document_state.set_active_engine(engine);
         Some(result)
     }
 
     pub(crate) fn park_active_schematic_session(&mut self) {
-        let Some(engine) = self.document_state.engine.take() else {
+        let Some(engine) = self.document_state.take_active_engine() else {
             return;
         };
 
@@ -99,7 +98,7 @@ impl Signex {
                 tab.dirty,
             )));
         } else {
-            self.document_state.engine = Some(engine);
+            self.document_state.set_active_engine(engine);
         }
     }
 
@@ -122,7 +121,7 @@ impl Signex {
                     tab.path = path;
                     tab.dirty = dirty;
                 }
-                self.document_state.engine = Some(engine);
+                self.document_state.set_active_engine(engine);
                 true
             }
             Some(other_document) => {
@@ -135,7 +134,7 @@ impl Signex {
                 }
                 false
             }
-            None => self.document_state.engine.is_some(),
+            None => self.document_state.has_active_engine(),
         }
     }
 
@@ -147,16 +146,18 @@ impl Signex {
     }
 
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
-        self.document_state.engine = schematic.and_then(|sheet| {
-            signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok()
-        });
+        let path = self.active_tab_path();
+        match schematic.and_then(|sheet| signex_engine::Engine::new_with_path(sheet, path).ok()) {
+            Some(engine) => self.document_state.set_active_engine(engine),
+            None => self.document_state.clear_active_engine(),
+        }
     }
 
     pub(crate) fn sync_canvas_from_visible_schematic(
         &mut self,
         invalidation: signex_render::schematic::RenderInvalidation,
     ) {
-        if let Some(engine) = self.document_state.engine.as_ref() {
+        if let Some(engine) = self.document_state.active_engine() {
             if let Some(cache) = self.interaction_state.canvas.render_cache.as_mut() {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
@@ -238,7 +239,7 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        self.document_state.engine = None;
+        self.document_state.clear_active_engine();
         self.interaction_state.canvas.set_render_cache(None);
         self.interaction_state.canvas.selected.clear();
         self.interaction_state.canvas.wire_preview.clear();
@@ -288,7 +289,7 @@ impl Signex {
         if let Some(schematic) = schematic {
             self.sync_engine_from_schematic(Some(schematic));
         }
-        if self.document_state.engine.is_none() {
+        if !self.document_state.has_active_engine() {
             return;
         }
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);

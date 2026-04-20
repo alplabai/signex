@@ -238,7 +238,7 @@ impl Signex {
         // first ensures order-independence — without this, sheet B could
         // reuse numbers it considers free that sheet A actually claims.
         let mut all_existing: Vec<String> = Vec::new();
-        if let Some(eng) = self.document_state.engine.as_ref() {
+        if let Some(eng) = self.document_state.active_engine() {
             for sym in &eng.document().symbols {
                 if !sym.is_power && !sym.reference.starts_with('#') {
                     all_existing.push(sym.reference.clone());
@@ -358,7 +358,7 @@ impl Signex {
         // Pass C: apply to the active engine so the canvas, Properties
         // panel, and render cache all refresh. Run through the raw engine
         // method (not Command) so it shares the same counter.
-        if let Some(engine) = self.document_state.engine.as_mut() {
+        if let Some(engine) = self.document_state.active_engine_mut() {
             let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
         }
         if disk_touched > 0 {
@@ -371,7 +371,7 @@ impl Signex {
         self.interaction_state.canvas.clear_content_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
-        if any_cached_changed || self.document_state.engine.is_some() {
+        if any_cached_changed || self.document_state.has_active_engine() {
             self.refresh_panel_ctx();
         }
 
@@ -425,7 +425,7 @@ impl Signex {
                 *counts.entry(sym.reference.clone()).or_insert(0) += 1;
             }
         };
-        if let Some(eng) = self.document_state.engine.as_ref() {
+        if let Some(eng) = self.document_state.active_engine() {
             bump(&mut counts, eng.document());
         }
         for tab in &self.document_state.tabs {
@@ -528,7 +528,7 @@ impl Signex {
         let mut any_active_changed = false;
         // Active engine — goes through ReplaceDocument so undo records
         // the snapshot.
-        if let Some(engine) = self.document_state.engine.as_mut() {
+        if let Some(engine) = self.document_state.active_engine_mut() {
             let mut sheet = engine.document().clone();
             if reset_in(&mut sheet, &duplicates) {
                 let _ = engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
@@ -852,7 +852,7 @@ impl Signex {
             self.ui_state.move_selection.open = false;
             return Task::none();
         }
-        if let Some(engine) = self.document_state.engine.as_mut() {
+        if let Some(engine) = self.document_state.active_engine_mut() {
             let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
         }
         self.ui_state.move_selection.open = false;
@@ -869,7 +869,7 @@ impl Signex {
         key: String,
         value: String,
     ) -> Task<Message> {
-        if let Some(engine) = self.document_state.engine.as_mut() {
+        if let Some(engine) = self.document_state.active_engine_mut() {
             let _ = engine.execute(signex_engine::Command::SetSymbolField {
                 symbol_id: symbol_uuid,
                 key,

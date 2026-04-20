@@ -155,7 +155,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_copy_requested(&mut self) {
-        let Some(engine) = self.document_state.engine.as_ref() else {
+        let Some(engine) = self.document_state.active_engine() else {
             return;
         };
 
