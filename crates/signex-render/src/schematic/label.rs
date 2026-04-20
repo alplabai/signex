@@ -28,7 +28,7 @@ pub fn draw_label(
     // mutating the stored value keeps save round-trips stable.
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
     let _stored = label.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs();
+    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
     if screen_font < 1.0 {
         return;
     }
