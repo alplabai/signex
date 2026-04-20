@@ -50,7 +50,7 @@ impl Signex {
                     rotation: 0.0,
                     label_type,
                     shape,
-                    font_size: 1.8,
+                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: sch::HAlign::Left,
                 };
                 self.apply_engine_command(
@@ -77,7 +77,7 @@ impl Signex {
                     },
                     position: sch::Point::new(wx, wy),
                     rotation: 0.0,
-                    font_size: 1.8,
+                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: sch::HAlign::Left,
                     justify_v: sch::VAlign::default(),
                 };
@@ -380,7 +380,7 @@ impl Signex {
                             text: "Text".to_string(),
                             position: signex_types::schematic::Point::new(0.0, 0.0),
                             rotation: 0.0,
-                            font_size: 1.8,
+                            font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         });
