@@ -28,7 +28,7 @@ impl Signex {
                 // the label-specific ghost + clear any Global/Hier pending.
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "NET".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -64,7 +64,7 @@ impl Signex {
                     "{default_text}: bounded text box (text_box) lands in v0.7 — placing a plain text note for now",
                 ));
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
-                self.interaction_state.canvas.ghost_text =
+                self.interaction_state.active_canvas_mut().ghost_text =
                     Some(signex_types::schematic::TextNote {
                         uuid: uuid::Uuid::new_v4(),
                         text: default_text.to_string(),
@@ -96,7 +96,7 @@ impl Signex {
             // dispatched with SelectConnected.
             ActiveBarAction::SelectConnection => {
                 use signex_types::schematic::SelectedKind;
-                let has_net_seed = self.interaction_state.canvas.selected.iter().any(|i| {
+                let has_net_seed = self.interaction_state.active_canvas_mut().selected.iter().any(|i| {
                     matches!(
                         i.kind,
                         SelectedKind::Wire
@@ -106,10 +106,8 @@ impl Signex {
                     )
                 });
                 if has_net_seed {
-                    if let (Some(snapshot), Some(seed)) = (
-                        self.active_render_snapshot(),
-                        self.interaction_state.canvas.selected.first().cloned(),
-                    ) {
+                    let seed = self.interaction_state.active_canvas().selected.first().cloned();
+                    if let (Some(snapshot), Some(seed)) = (self.active_render_snapshot(), seed) {
                         let (wx, wy) = match seed.kind {
                             SelectedKind::Wire => snapshot
                                 .wires
@@ -191,8 +189,8 @@ impl Signex {
             // items to the end of their Vec; Send-To-Back moves them to the
             // front.
             ActiveBarAction::BringToFront | ActiveBarAction::MoveToFront => {
-                if !self.interaction_state.canvas.selected.is_empty() {
-                    let items = self.interaction_state.canvas.selected.clone();
+                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                    let items = self.interaction_state.active_canvas_mut().selected.clone();
                     self.apply_engine_command(
                         signex_engine::Command::ReorderObjects {
                             items,
@@ -205,8 +203,8 @@ impl Signex {
                 Task::none()
             }
             ActiveBarAction::SendToBack => {
-                if !self.interaction_state.canvas.selected.is_empty() {
-                    let items = self.interaction_state.canvas.selected.clone();
+                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                    let items = self.interaction_state.active_canvas_mut().selected.clone();
                     self.apply_engine_command(
                         signex_engine::Command::ReorderObjects {
                             items,
@@ -222,11 +220,11 @@ impl Signex {
             // becomes the z-order anchor. See `handle_canvas_left_click`
             // for the pick site.
             ActiveBarAction::BringToFrontOf => {
-                if !self.interaction_state.canvas.selected.is_empty() {
+                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Above);
-                    self.interaction_state.canvas.reorder_picker_armed = true;
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().reorder_picker_armed = true;
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     crate::diagnostics::log_info(
                         "Click a reference object to bring the selection above it (Esc to cancel)",
                     );
@@ -234,11 +232,11 @@ impl Signex {
                 Task::none()
             }
             ActiveBarAction::SendToBackOf => {
-                if !self.interaction_state.canvas.selected.is_empty() {
+                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Below);
-                    self.interaction_state.canvas.reorder_picker_armed = true;
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().reorder_picker_armed = true;
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     crate::diagnostics::log_info(
                         "Click a reference object to send the selection below it (Esc to cancel)",
                     );
