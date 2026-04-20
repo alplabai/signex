@@ -1,6 +1,11 @@
 use std::fmt::Write;
 
+use signex_types::property::PcbProperty;
 use signex_types::pcb::*;
+
+use crate::sexpr_render::{
+    at_node, atom, effects_node, hide_yes_node, node, write_rendered_sexpr, SExpr,
+};
 
 // String's Write impl is infallible -- these macros avoid many `.unwrap()` calls.
 macro_rules! w {
@@ -63,6 +68,43 @@ fn fmt_f64(v: f64) -> String {
         let s = s.trim_end_matches('.');
         s.to_string()
     }
+}
+
+fn pcb_text_effects_node(font_size: f64) -> SExpr {
+    effects_node(font_size, Some(0.15), false, false, Vec::new())
+}
+
+fn pcb_property_node(property: &PcbProperty) -> SExpr {
+    let position = property.position.unwrap_or(Point { x: 0.0, y: 0.0 });
+    let mut items = vec![atom(&property.key), atom(&property.value)];
+
+    items.push(at_node(
+        position.x,
+        position.y,
+        (property.rotation != 0.0).then_some(property.rotation),
+    ));
+
+    if let Some(layer) = &property.layer {
+        items.push(node("layer", vec![atom(layer)]));
+    }
+    if property.hidden {
+        items.push(hide_yes_node());
+    }
+    items.push(pcb_text_effects_node(property.font_size.unwrap_or(1.0)));
+    node("property", items)
+}
+
+fn board_text_node(text: &BoardText) -> SExpr {
+    let mut items = vec![atom(&text.text)];
+    items.push(at_node(
+        text.position.x,
+        text.position.y,
+        (text.rotation != 0.0).then_some(text.rotation),
+    ));
+    items.push(node("layer", vec![atom(&text.layer)]));
+    items.push(pcb_text_effects_node(text.font_size));
+    items.push(node("uuid", vec![atom(text.uuid.to_string())]));
+    node("gr_text", items)
 }
 
 // ---------------------------------------------------------------------------
@@ -213,26 +255,16 @@ fn write_footprint(out: &mut String, fp: &Footprint) {
     }
     wln!(out, "    (uuid \"{}\")", fp.uuid);
 
-    // Reference property
-    wln!(
-        out,
-        "    (property \"Reference\" \"{}\"",
-        escape(&fp.reference)
-    );
-    wln!(out, "      (at 0 -2)");
-    wln!(out, "      (layer \"F.SilkS\")");
-    wln!(out, "      (effects (font (size 1 1) (thickness 0.15)))");
-    wln!(out, "    )");
-
-    // Value property
-    wln!(out, "    (property \"Value\" \"{}\"", escape(&fp.value));
-    wln!(out, "      (at 0 2)");
-    wln!(out, "      (layer \"F.Fab\")");
-    wln!(out, "      (effects (font (size 1 1) (thickness 0.15)))");
-    wln!(out, "    )");
+    let properties = effective_footprint_properties(fp);
+    for property in &properties {
+        write_footprint_property(out, property);
+    }
 
     // Footprint graphics
     for g in &fp.graphics {
+        if is_property_backed_text_graphic(g, &properties) {
+            continue;
+        }
         write_fp_graphic(out, g);
     }
 
@@ -242,6 +274,103 @@ fn write_footprint(out: &mut String, fp: &Footprint) {
     }
 
     wln!(out, "  )");
+}
+
+fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
+    if fp.properties.is_empty() {
+        return vec![
+            PcbProperty {
+                key: "Reference".to_string(),
+                value: fp.reference.clone(),
+                position: Some(Point { x: 0.0, y: -2.0 }),
+                rotation: 0.0,
+                layer: Some("F.SilkS".to_string()),
+                font_size: Some(1.0),
+                hidden: false,
+            },
+            PcbProperty {
+                key: "Value".to_string(),
+                value: fp.value.clone(),
+                position: Some(Point { x: 0.0, y: 2.0 }),
+                rotation: 0.0,
+                layer: Some("F.Fab".to_string()),
+                font_size: Some(1.0),
+                hidden: false,
+            },
+        ];
+    }
+
+    let mut properties = fp.properties.clone();
+    for property in &mut properties {
+        match property.key.as_str() {
+            "Reference" => property.value = fp.reference.clone(),
+            "Value" => property.value = fp.value.clone(),
+            _ => {}
+        }
+    }
+
+    if !properties.iter().any(|property| property.key == "Reference") {
+        properties.insert(
+            0,
+            PcbProperty {
+                key: "Reference".to_string(),
+                value: fp.reference.clone(),
+                position: Some(Point { x: 0.0, y: -2.0 }),
+                rotation: 0.0,
+                layer: Some("F.SilkS".to_string()),
+                font_size: Some(1.0),
+                hidden: false,
+            },
+        );
+    }
+    if !properties.iter().any(|property| property.key == "Value") {
+        properties.push(PcbProperty {
+            key: "Value".to_string(),
+            value: fp.value.clone(),
+            position: Some(Point { x: 0.0, y: 2.0 }),
+            rotation: 0.0,
+            layer: Some("F.Fab".to_string()),
+            font_size: Some(1.0),
+            hidden: false,
+        });
+    }
+
+    properties
+}
+
+fn write_footprint_property(out: &mut String, property: &PcbProperty) {
+    write_rendered_sexpr(out, 4, pcb_property_node(property));
+}
+
+fn is_property_backed_text_graphic(g: &FpGraphic, properties: &[PcbProperty]) -> bool {
+    if g.graphic_type != "text" {
+        return false;
+    }
+
+    let Some(position) = g.position else {
+        return false;
+    };
+
+    properties.iter().filter(|property| !property.hidden).any(|property| {
+        let Some(property_pos) = property.position else {
+            return false;
+        };
+        let Some(property_layer) = property.layer.as_deref() else {
+            return false;
+        };
+        let display_text = match property.key.as_str() {
+            "Reference" => "%R",
+            "Value" => "%V",
+            _ => property.value.as_str(),
+        };
+        let property_font_size = property.font_size.unwrap_or(1.0);
+
+        g.layer == property_layer
+            && g.text == display_text
+            && g.rotation == property.rotation
+            && g.font_size == property_font_size
+            && position == property_pos
+    })
 }
 
 fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
@@ -559,30 +688,130 @@ fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
 }
 
 fn write_board_text(out: &mut String, t: &BoardText) {
-    wln!(out, "  (gr_text \"{}\"", escape(&t.text));
-    if t.rotation != 0.0 {
-        wln!(
-            out,
-            "    (at {} {} {})",
-            fmt_f64(t.position.x),
-            fmt_f64(t.position.y),
-            fmt_f64(t.rotation)
-        );
-    } else {
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(t.position.x),
-            fmt_f64(t.position.y)
+    write_rendered_sexpr(out, 2, board_text_node(t));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sexpr_render::{list, raw};
+
+    fn assert_fragment_matches(actual: &str, expected: SExpr) {
+        let parsed = kicad_parser::sexpr::parse(actual).unwrap();
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn writes_footprint_property_as_expected_sexpr() {
+        let mut out = String::new();
+        let property = PcbProperty {
+            key: "MPN".to_string(),
+            value: "RC0603FR-0710KL".to_string(),
+            position: Some(Point { x: 1.0, y: 3.0 }),
+            rotation: 180.0,
+            layer: Some("Cmts.User".to_string()),
+            font_size: Some(1.2),
+            hidden: true,
+        };
+
+        write_footprint_property(&mut out, &property);
+
+        assert_fragment_matches(
+            out.trim(),
+            list(vec![
+                raw("property"),
+                atom("MPN"),
+                atom("RC0603FR-0710KL"),
+                list(vec![raw("at"), atom(1.0_f64), atom(3.0_f64), atom(180.0_f64)]),
+                list(vec![raw("layer"), atom("Cmts.User")]),
+                list(vec![raw("hide"), raw("yes")]),
+                list(vec![
+                    raw("effects"),
+                    list(vec![
+                        raw("font"),
+                        list(vec![raw("size"), atom(1.2_f64), atom(1.2_f64)]),
+                        list(vec![raw("thickness"), atom(0.15_f64)]),
+                    ]),
+                ]),
+            ]),
         );
     }
-    wln!(out, "    (layer \"{}\")", escape(&t.layer));
-    wln!(
-        out,
-        "    (effects (font (size {} {}) (thickness 0.15)))",
-        fmt_f64(t.font_size),
-        fmt_f64(t.font_size)
-    );
-    wln!(out, "    (uuid \"{}\")", t.uuid);
-    wln!(out, "  )");
+
+    #[test]
+    fn writes_board_text_as_expected_sexpr() {
+        let mut out = String::new();
+        let text = BoardText {
+            uuid: Default::default(),
+            text: "HELLO".to_string(),
+            position: Point { x: 10.0, y: 20.0 },
+            rotation: 90.0,
+            layer: "F.SilkS".to_string(),
+            font_size: 1.5,
+        };
+
+        write_board_text(&mut out, &text);
+
+        assert_fragment_matches(
+            out.trim(),
+            kicad_parser::sexpr!((
+                gr_text "HELLO"
+                (at 10 20 90)
+                (layer "F.SilkS")
+                (effects (font (size 1.5 1.5) (thickness 0.15)))
+                (uuid {text.uuid.to_string()})
+            )),
+        );
+    }
+
+    #[test]
+    fn writes_structured_footprint_properties_without_duplicate_text_graphics() {
+        let fp = Footprint {
+            uuid: Default::default(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint_id: "Resistor_SMD:R_0603".to_string(),
+            position: Point { x: 10.0, y: 20.0 },
+            rotation: 0.0,
+            layer: "F.Cu".to_string(),
+            locked: false,
+            pads: Vec::new(),
+            graphics: vec![FpGraphic {
+                graphic_type: "text".to_string(),
+                layer: "Cmts.User".to_string(),
+                width: 0.1,
+                start: None,
+                end: None,
+                center: None,
+                mid: None,
+                radius: 0.0,
+                points: Vec::new(),
+                text: "RC0603FR-0710KL".to_string(),
+                font_size: 1.2,
+                position: Some(Point { x: 1.0, y: 3.0 }),
+                rotation: 180.0,
+                fill: String::new(),
+            }],
+            properties: vec![PcbProperty {
+                key: "MPN".to_string(),
+                value: "RC0603FR-0710KL".to_string(),
+                position: Some(Point { x: 1.0, y: 3.0 }),
+                rotation: 180.0,
+                layer: Some("Cmts.User".to_string()),
+                font_size: Some(1.2),
+                hidden: false,
+            }],
+        };
+
+        let mut out = String::new();
+        write_footprint(&mut out, &fp);
+
+        let parsed = kicad_parser::sexpr::parse(&out).unwrap();
+        let property = parsed
+            .find_all("property")
+            .into_iter()
+            .find(|node| node.first_arg() == Some("MPN"))
+            .unwrap();
+        assert_eq!(property.arg(1), Some("RC0603FR-0710KL"));
+        assert_eq!(out.matches("RC0603FR-0710KL").count(), 1);
+    }
 }

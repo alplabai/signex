@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use uuid::Uuid;
 
 use signex_types::project::{ProjectData, SheetEntry};
+use signex_types::property::SchematicProperty;
 use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
     LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
@@ -108,6 +109,33 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
     }
 }
 
+fn parse_schematic_property(prop_node: &SExpr, fallback_pos: Point) -> SchematicProperty {
+    let id = prop_node
+        .find("id")
+        .and_then(|node| node.first_arg())
+        .and_then(|value| value.parse::<u32>().ok());
+    let show_name = prop_node
+        .find("show_name")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes");
+    let do_not_autoplace = prop_node
+        .find("do_not_autoplace")
+        .and_then(|node| node.first_arg())
+        .map(|value| value == "yes");
+    let text = prop_node
+        .find("at")
+        .map(|_| parse_text_prop(prop_node, fallback_pos));
+
+    SchematicProperty {
+        key: prop_node.first_arg().unwrap_or("").to_string(),
+        value: prop_node.arg(1).unwrap_or("").to_string(),
+        id,
+        text,
+        show_name,
+        do_not_autoplace,
+    }
+}
+
 fn parse_uuid(node: &SExpr) -> Uuid {
     node.find("uuid")
         .and_then(|u| u.first_arg())
@@ -161,7 +189,7 @@ fn is_effects_hidden(effects: Option<&SExpr>) -> bool {
     // Check for standalone 'hide' atom (KiCad 5/6 format)
     eff.children()
         .iter()
-        .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+        .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "hide"))
 }
 
 fn is_text_hidden(node: &SExpr) -> bool {
@@ -277,7 +305,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
             if pn
                 .children()
                 .iter()
-                .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+                .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "hide"))
             {
                 return false;
             }
@@ -301,7 +329,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
             // child atom form: (pin_names (offset X) hide)
             !pn.children()
                 .iter()
-                .any(|c| matches!(c, SExpr::Atom(s) if s == "hide"))
+                .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "hide"))
         })
         .unwrap_or(true);
     let pin_name_offset = pin_names_node
@@ -491,7 +519,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .unwrap_or_else(|| {
                                     f.children()
                                         .iter()
-                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                        .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -503,7 +531,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .unwrap_or_else(|| {
                                     f.children()
                                         .iter()
-                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                        .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -555,7 +583,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .unwrap_or_else(|| {
                                     f.children()
                                         .iter()
-                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "bold"))
+                                        .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "bold"))
                                 })
                         })
                         .unwrap_or(false);
@@ -567,7 +595,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                                 .unwrap_or_else(|| {
                                     f.children()
                                         .iter()
-                                        .any(|c| matches!(c, SExpr::Atom(s) if s == "italic"))
+                                        .any(|c| matches!(c, SExpr::Atom(atom) if atom.as_str() == "italic"))
                                 })
                         })
                         .unwrap_or(false);
@@ -924,6 +952,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
     // Parse custom fields (all properties beyond Reference/Value/Footprint/Datasheet)
     let standard_props = ["Reference", "Value", "Footprint", "Datasheet"];
     let mut fields = HashMap::new();
+    let mut custom_properties = Vec::new();
     for child in s.children() {
         if child.keyword() == Some("property") {
             if let Some(key) = child.first_arg() {
@@ -931,6 +960,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
                     if let Some(val) = child.arg(1) {
                         fields.insert(key.to_string(), val.to_string());
                     }
+                    custom_properties.push(parse_schematic_property(child, position));
                 }
             }
         }
@@ -958,6 +988,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         exclude_from_sim,
         locked,
         fields,
+        custom_properties,
         pin_uuids,
         instances,
     }
@@ -1712,7 +1743,54 @@ mod tests {
         assert!(sym.on_board);
         assert!(!sym.exclude_from_sim);
         assert!(!sym.locked);
+                assert!(sym.custom_properties.is_empty());
     }
+
+        #[test]
+        fn parse_symbol_custom_property_metadata() {
+                let content = r#"(kicad_sch
+    (version 20260326)
+    (generator "test")
+    (uuid "00000000-0000-0000-0000-000000000010")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 100 50 0)
+        (unit 1)
+        (in_bom yes)
+        (on_board yes)
+        (uuid "00000000-0000-0000-0000-000000000011")
+        (property "Reference" "R1" (at 100 48 0) (effects (font (size 1.27 1.27))))
+        (property "Value" "10k" (at 100 52 0) (effects (font (size 1.27 1.27))))
+        (property "Tolerance" "1%"
+            (id 7)
+            (at 110 60 90)
+            (show_name yes)
+            (do_not_autoplace yes)
+            (hide yes)
+            (effects (font (size 1.5 1.5)) (justify left bottom))
+        )
+    )
+)"#;
+
+                let sheet = parse_schematic(content).unwrap();
+                let property = &sheet.symbols[0].custom_properties[0];
+
+                assert_eq!(property.key, "Tolerance");
+                assert_eq!(property.value, "1%");
+                assert_eq!(property.id, Some(7));
+                assert_eq!(property.show_name, Some(true));
+                assert_eq!(property.do_not_autoplace, Some(true));
+                let text = property.text.as_ref().unwrap();
+                assert_eq!(text.position.x, 110.0);
+                assert_eq!(text.position.y, 60.0);
+                assert_eq!(text.rotation, 90.0);
+                assert_eq!(text.font_size, 1.5);
+                assert_eq!(text.justify_h, HAlign::Left);
+                assert_eq!(text.justify_v, VAlign::Bottom);
+                assert!(text.hidden);
+                assert_eq!(sheet.symbols[0].fields.get("Tolerance"), Some(&"1%".to_string()));
+        }
 
     #[test]
     fn parse_lib_symbol_preserves_parent_metadata() {
