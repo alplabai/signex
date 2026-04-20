@@ -16,9 +16,9 @@ impl Signex {
             }
             Message::GridToggle | Message::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.canvas.grid_visible = self.ui_state.grid_visible;
+                self.interaction_state.active_canvas_mut().grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 self.finish_update()
             }
@@ -54,12 +54,12 @@ impl Signex {
                 self.finish_update()
             }
             Message::GridCycle => {
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.finish_update()
             }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.canvas.snap_enabled = self.ui_state.snap_enabled;
+                self.interaction_state.active_canvas_mut().snap_enabled = self.ui_state.snap_enabled;
                 self.finish_update()
             }
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {

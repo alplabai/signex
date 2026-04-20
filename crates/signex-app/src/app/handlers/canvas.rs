@@ -318,10 +318,10 @@ impl Signex {
                 // click closes the polygon and commits. Escape /
                 // right-click cancels.
                 if self.ui_state.lasso_polygon.is_some() {
-                    let (vx, vy) = if self.interaction_state.canvas.snap_enabled
-                        && self.interaction_state.canvas.snap_grid_mm > 0.0
+                    let (vx, vy) = if self.interaction_state.active_canvas_mut().snap_enabled
+                        && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
                     {
-                        let g = self.interaction_state.canvas.snap_grid_mm;
+                        let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
                         ((world_x / g).round() * g, (world_y / g).round() * g)
                     } else {
                         (world_x, world_y)
@@ -348,7 +348,7 @@ impl Signex {
                         let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
                         if let Some(snapshot) = self.active_render_snapshot() {
                             let filters = self.interaction_state.selection_filters.clone();
-                            self.interaction_state.canvas.selected =
+                            self.interaction_state.active_canvas_mut().selected =
                                 signex_render::schematic::hit_test::hit_test_polygon(
                                     snapshot, &poly,
                                 )
@@ -381,10 +381,10 @@ impl Signex {
                     // coords can land a full grid cell off the nearest
                     // wire — the visible pen snaps, but the hit target
                     // was being missed.
-                    let (hit_x, hit_y) = if self.interaction_state.canvas.snap_enabled
-                        && self.interaction_state.canvas.snap_grid_mm > 0.0
+                    let (hit_x, hit_y) = if self.interaction_state.active_canvas_mut().snap_enabled
+                        && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
                     {
-                        let g = self.interaction_state.canvas.snap_grid_mm;
+                        let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
                         ((world_x / g).round() * g, (world_y / g).round() * g)
                     } else {
                         (world_x, world_y)
@@ -549,9 +549,9 @@ impl Signex {
                                     self.ui_state.wire_color_overrides.insert(uuid, pending);
                                 }
                             }
-                            self.interaction_state.canvas.wire_color_overrides =
+                            self.interaction_state.active_canvas_mut().wire_color_overrides =
                                 self.ui_state.wire_color_overrides.clone();
-                            self.interaction_state.canvas.clear_content_cache();
+                            self.interaction_state.active_canvas_mut().clear_content_cache();
                         }
                     }
                     // Altium-style continuous placement: stay armed
@@ -581,7 +581,7 @@ impl Signex {
                                     signex_engine::ReorderDirection::JustBelow(reference.uuid)
                                 }
                             };
-                            let items = self.interaction_state.canvas.selected.clone();
+                            let items = self.interaction_state.active_canvas_mut().selected.clone();
                             self.apply_engine_command(
                                 signex_engine::Command::ReorderObjects { items, direction },
                                 false,
@@ -590,8 +590,8 @@ impl Signex {
                         }
                     }
                     self.ui_state.reorder_picker = None;
-                    self.interaction_state.canvas.reorder_picker_armed = false;
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     return Task::none();
                 }
 
@@ -602,7 +602,7 @@ impl Signex {
                 // past Resume so the first click after Resume inherits the
                 // edited defaults — so key the gate on `placement_paused`,
                 // not on `pre_placement.is_some()`.
-                if self.interaction_state.canvas.placement_paused {
+                if self.interaction_state.active_canvas_mut().placement_paused {
                     return Task::none();
                 }
                 // A click outside the inline editor commits its current value
@@ -646,12 +646,12 @@ impl Signex {
                             self.interaction_state.wire_drawing = true;
                             self.interaction_state.wire_points.clear();
                             self.interaction_state.wire_points.push(pt);
-                            self.interaction_state.canvas.wire_preview =
+                            self.interaction_state.active_canvas_mut().wire_preview =
                                 self.interaction_state.wire_points.clone();
-                            self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode =
+                            self.interaction_state.active_canvas_mut().drawing_mode = true;
+                            self.interaction_state.active_canvas_mut().draw_mode =
                                 self.interaction_state.draw_mode;
-                            self.interaction_state.canvas.tool_preview = None;
+                            self.interaction_state.active_canvas_mut().tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
                             let segments =
                                 constrain_segments(start, pt, self.interaction_state.draw_mode);
@@ -671,7 +671,7 @@ impl Signex {
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.interaction_state.wire_points = vec![end_pt];
-                            self.interaction_state.canvas.wire_preview = vec![end_pt];
+                            self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Bus => {
@@ -680,12 +680,12 @@ impl Signex {
                             self.interaction_state.wire_drawing = true;
                             self.interaction_state.wire_points.clear();
                             self.interaction_state.wire_points.push(pt);
-                            self.interaction_state.canvas.wire_preview =
+                            self.interaction_state.active_canvas_mut().wire_preview =
                                 self.interaction_state.wire_points.clone();
-                            self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode =
+                            self.interaction_state.active_canvas_mut().drawing_mode = true;
+                            self.interaction_state.active_canvas_mut().draw_mode =
                                 self.interaction_state.draw_mode;
-                            self.interaction_state.canvas.tool_preview = None;
+                            self.interaction_state.active_canvas_mut().tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
                             let segments =
                                 constrain_segments(start, pt, self.interaction_state.draw_mode);
@@ -703,7 +703,7 @@ impl Signex {
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.interaction_state.wire_points = vec![end_pt];
-                            self.interaction_state.canvas.wire_preview = vec![end_pt];
+                            self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Component if self.interaction_state.pending_power.is_some() => {
@@ -786,9 +786,9 @@ impl Signex {
                         match self.interaction_state.shape_anchor.take() {
                             None => {
                                 self.interaction_state.shape_anchor = Some(p);
-                                self.interaction_state.canvas.shape_anchor =
+                                self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Line {
@@ -807,9 +807,9 @@ impl Signex {
                                 // as the new anchor so chained segments
                                 // share vertices.
                                 self.interaction_state.shape_anchor = Some(p);
-                                self.interaction_state.canvas.shape_anchor =
+                                self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                         }
                     }
@@ -822,9 +822,9 @@ impl Signex {
                         match self.interaction_state.shape_anchor.take() {
                             None => {
                                 self.interaction_state.shape_anchor = Some(p);
-                                self.interaction_state.canvas.shape_anchor =
+                                self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Rect));
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Rect {
@@ -841,8 +841,8 @@ impl Signex {
                                     false,
                                 );
                                 self.interaction_state.shape_anchor = None;
-                                self.interaction_state.canvas.shape_anchor = None;
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                         }
                     }
@@ -854,9 +854,9 @@ impl Signex {
                         match self.interaction_state.shape_anchor.take() {
                             None => {
                                 self.interaction_state.shape_anchor = Some(p);
-                                self.interaction_state.canvas.shape_anchor =
+                                self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Circle));
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                             Some(center) => {
                                 let dx = p.x - center.x;
@@ -878,8 +878,8 @@ impl Signex {
                                     );
                                 }
                                 self.interaction_state.shape_anchor = None;
-                                self.interaction_state.canvas.shape_anchor = None;
-                                self.interaction_state.canvas.clear_overlay_cache();
+                                self.interaction_state.active_canvas_mut().shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                             }
                         }
                     }
@@ -905,17 +905,17 @@ impl Signex {
                                 false,
                             );
                         }
-                        self.interaction_state.canvas.arc_points =
+                        self.interaction_state.active_canvas_mut().arc_points =
                             self.interaction_state.arc_points.clone();
-                        self.interaction_state.canvas.clear_overlay_cache();
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     }
                     Tool::Polyline => {
                         // Click-by-click polyline. Enter / double-click commits.
                         let p = signex_types::schematic::Point::new(wx, wy);
                         self.interaction_state.polyline_points.push(p);
-                        self.interaction_state.canvas.polyline_points =
+                        self.interaction_state.active_canvas_mut().polyline_points =
                             self.interaction_state.polyline_points.clone();
-                        self.interaction_state.canvas.clear_overlay_cache();
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     }
                     Tool::Text => {
                         let note_text = self
@@ -1042,11 +1042,11 @@ impl Signex {
                     (dx, dy)
                 };
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
-                    && !self.interaction_state.canvas.selected.is_empty()
+                    && !self.interaction_state.active_canvas_mut().selected.is_empty()
                 {
                     self.apply_engine_command(
                         signex_engine::Command::MoveSelection {
-                            items: self.interaction_state.canvas.selected.clone(),
+                            items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
                         },
@@ -1089,9 +1089,9 @@ impl Signex {
                                 false,
                             );
                             self.interaction_state.shape_anchor = Some(p);
-                            self.interaction_state.canvas.shape_anchor =
+                            self.interaction_state.active_canvas_mut().shape_anchor =
                                 Some((p, crate::canvas::ShapePreviewKind::Line));
-                            self.interaction_state.canvas.clear_overlay_cache();
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1112,8 +1112,8 @@ impl Signex {
                                 false,
                                 false,
                             );
-                            self.interaction_state.canvas.shape_anchor = None;
-                            self.interaction_state.canvas.clear_overlay_cache();
+                            self.interaction_state.active_canvas_mut().shape_anchor = None;
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1139,8 +1139,8 @@ impl Signex {
                                     false,
                                 );
                             }
-                            self.interaction_state.canvas.shape_anchor = None;
-                            self.interaction_state.canvas.clear_overlay_cache();
+                            self.interaction_state.active_canvas_mut().shape_anchor = None;
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1164,12 +1164,12 @@ impl Signex {
                                 false,
                                 false,
                             );
-                            self.interaction_state.canvas.arc_points.clear();
+                            self.interaction_state.active_canvas_mut().arc_points.clear();
                         } else {
-                            self.interaction_state.canvas.arc_points =
+                            self.interaction_state.active_canvas_mut().arc_points =
                                 self.interaction_state.arc_points.clone();
                         }
-                        self.interaction_state.canvas.clear_overlay_cache();
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
                         return Task::none();
                     }
                     _ => {}
@@ -1209,15 +1209,15 @@ impl Signex {
                             false,
                         );
                     }
-                    self.interaction_state.canvas.polyline_points.clear();
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().polyline_points.clear();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.canvas.wire_preview.clear();
-                    self.interaction_state.canvas.drawing_mode = false;
+                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state.active_canvas_mut().drawing_mode = false;
                 } else if let Some(snapshot) = self.active_render_snapshot() {
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
@@ -1273,17 +1273,17 @@ impl Signex {
                 );
             }
             CanvasEvent::CursorMoved => {
-                self.interaction_state.canvas.clear_bg_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.canvas.pending_fit.set(None);
+                self.interaction_state.active_canvas_mut().pending_fit.set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
-                    self.interaction_state.canvas.fit_to_paper();
-                    self.interaction_state.canvas.clear_bg_cache();
-                    self.interaction_state.canvas.clear_content_cache();
+                    self.interaction_state.active_canvas_mut().fit_to_paper();
+                    self.interaction_state.active_canvas_mut().clear_bg_cache();
+                    self.interaction_state.active_canvas_mut().clear_content_cache();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
                     self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -1307,11 +1307,11 @@ impl Signex {
                         .iter()
                         .position(|s| s.uuid == hit.uuid)
                     {
-                        self.interaction_state.canvas.selected.remove(pos);
+                        self.interaction_state.active_canvas_mut().selected.remove(pos);
                     } else {
-                        self.interaction_state.canvas.selected.push(hit);
+                        self.interaction_state.active_canvas_mut().selected.push(hit);
                     }
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }

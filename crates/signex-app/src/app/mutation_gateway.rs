@@ -218,9 +218,9 @@ impl Signex {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
         if clear_overlay_cache {
-            self.interaction_state.canvas.clear_overlay_cache();
+            self.interaction_state.active_canvas_mut().clear_overlay_cache();
         }
         if update_selection_info {
             self.update_selection_info();
