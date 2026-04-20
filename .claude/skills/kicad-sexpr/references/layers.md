@@ -1,4 +1,4 @@
-# KiCad Canonical Layer Names — Full List
+# KiCad Canonical Layer Names — Full Reference
 
 ## Copper Layers
 
@@ -45,8 +45,8 @@
 | `F.Adhes` | Front adhesive |
 | `B.Paste` | Back solder paste |
 | `F.Paste` | Front solder paste |
-| `B.SilkS` | Back silkscreen |
-| `F.SilkS` | Front silkscreen |
+| `B.SilkS` | Back silk screen |
+| `F.SilkS` | Front silk screen |
 | `B.Mask` | Back solder mask |
 | `F.Mask` | Front solder mask |
 
@@ -59,7 +59,7 @@
 | `Eco1.User` | ECO layer 1 |
 | `Eco2.User` | ECO layer 2 |
 
-## Board Edge Layers
+## Board Boundary Layers
 
 | Canonical Name | Description |
 |----------------|-------------|
@@ -70,7 +70,7 @@
 
 | Canonical Name | Description |
 |----------------|-------------|
-| `F.CrtYd` | Front courtyard (keep-out area) |
+| `F.CrtYd` | Front courtyard |
 | `B.CrtYd` | Back courtyard |
 | `F.Fab` | Front fabrication layer |
 | `B.Fab` | Back fabrication layer |
@@ -89,30 +89,69 @@
 | `User.8` | User layer 8 |
 | `User.9` | User layer 9 |
 
+Note: KiCad 9+ supports an arbitrary number of user layers (not limited to 9).
+
 ## Wildcard Usage
 
 ```scheme
 (layer *.Cu)       ; all copper layers
-(layer F.*)        ; all front layers (for canonical names only)
+(layer F.*)        ; all front layers (canonical names only)
 ```
 
-## Python Layer Numbers (pcbnew API)
+## Layer Numbers (pcbnew API)
 
 ```python
 import pcbnew
 
-# Layer name -> number
-layer_num = pcbnew.GetLayerByName("F.Cu")  # -> 0
+# Layer name → number
+layer_num = pcbnew.GetLayerByName("F.Cu")  # → 0
 
-# Number -> name
-layer_name = pcbnew.GetLayerName(0)         # -> "F.Cu"
+# Number → name
+layer_name = pcbnew.GetLayerName(0)        # → "F.Cu"
 
-# Frequently used constants
-pcbnew.F_Cu    # 0
-pcbnew.B_Cu    # 31
-pcbnew.F_SilkS # 37
-pcbnew.B_SilkS # 36
-pcbnew.F_Mask  # 39
-pcbnew.B_Mask  # 38
+# Common constants
+pcbnew.F_Cu       # 0
+pcbnew.B_Cu       # 31
+pcbnew.F_SilkS    # 37
+pcbnew.B_SilkS    # 36
+pcbnew.F_Mask     # 41
+pcbnew.B_Mask     # 40
+pcbnew.F_Paste    # 39
+pcbnew.B_Paste    # 38
 pcbnew.Edge_Cuts  # 44
+pcbnew.F_CrtYd    # 47
+pcbnew.B_CrtYd    # 46
+pcbnew.F_Fab      # 49
+pcbnew.B_Fab      # 48
 ```
+
+## Layer Ordinal Numbers in Board Files
+
+The `(layers ...)` section in `.kicad_pcb` uses ordinal numbers:
+
+```scheme
+(layers
+  (0  "F.Cu"      signal)
+  (1  "In1.Cu"    signal)
+  ; ... In2.Cu through In30.Cu are ordinals 2–30
+  (31 "B.Cu"      signal)
+  (32 "B.Adhes"   user)
+  (33 "F.Adhes"   user)
+  (34 "B.Paste"   user)
+  (35 "F.Paste"   user)
+  (36 "B.SilkS"   user)
+  (37 "F.SilkS"   user)
+  (38 "B.Mask"    user)
+  (39 "F.Mask"    user)  ; Note: some sources show 40/41
+  (44 "Edge.Cuts" user)
+  (45 "Margin"    user)
+  (46 "B.CrtYd"   user)
+  (47 "F.CrtYd"   user)
+  (48 "B.Fab"     user)
+  (49 "F.Fab"     user)
+  (50 "User.1"    user)
+  ; User.2–User.9 continue at 51–58
+)
+```
+
+Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
