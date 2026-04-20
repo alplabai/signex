@@ -1200,7 +1200,6 @@ impl super::super::Signex {
     /// the change list reflects the whole project, not just what the user
     /// has active.
     pub(super) fn preview_project_annotations(&self) -> Vec<AnnotatePreviewEntry> {
-        use crate::app::documents::TabDocument;
         let is_target = |sym: &signex_types::schematic::Symbol| -> bool {
             !sym.is_power && !sym.reference.starts_with('#')
         };
@@ -1213,14 +1212,10 @@ impl super::super::Signex {
 
         // Pass 1: collect open tabs.
         let mut borrowed: Vec<(String, &signex_types::schematic::SchematicSheet)> = Vec::new();
-        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+        for tab in self.document_state.tabs.iter() {
             open_paths.insert(tab.path.clone());
-            if idx == self.document_state.active_tab {
-                if let Some(eng) = self.document_state.active_engine() {
-                    borrowed.push((tab.title.clone(), eng.document()));
-                }
-            } else if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                borrowed.push((tab.title.clone(), session.document()));
+            if let Some(engine) = self.document_state.engines.get(&tab.path) {
+                borrowed.push((tab.title.clone(), engine.document()));
             }
         }
         // Fallback when no tabs are open but an engine still holds a doc.
