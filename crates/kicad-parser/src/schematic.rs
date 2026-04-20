@@ -146,6 +146,23 @@ fn parse_stroke_width(node: &SExpr) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Parse `(stroke ... (color R G B A))` if present. Returns None when
+/// the stroke has no color override — callers default to the theme.
+fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
+    let color = node.find("stroke")?.find("color")?;
+    let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
+    let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
+    let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
+    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
+    // A zero RGBA is Standard's way of saying "use theme default" — we
+    // treat that as None so the sheet round-trips cleanly when the
+    // user hasn't customised the colour.
+    if r == 0 && g == 0 && b == 0 && a == 0 {
+        return None;
+    }
+    Some(signex_types::schematic::StrokeColor { r, g, b, a })
+}
+
 /// Returns true if an `(effects ...)` node contains a hide marker.
 ///
 /// Handles three formats across Standard versions:
@@ -1032,12 +1049,14 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             .unwrap_or_default();
         let width = parse_stroke_width(pl);
         let fill = parse_fill_type(pl);
+        let stroke_color = parse_stroke_color(pl);
         if pts.len() == 2 {
             drawings.push(SchDrawing::Line {
                 uuid: parse_uuid(pl),
                 start: pts[0],
                 end: pts[1],
                 width,
+                stroke_color,
             });
         } else if pts.len() > 2 {
             drawings.push(SchDrawing::Polyline {
@@ -1045,6 +1064,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
                 points: pts,
                 width,
                 fill,
+                stroke_color,
             });
         }
     }
@@ -1078,6 +1098,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             end,
             width: parse_stroke_width(arc),
             fill: parse_fill_type(arc),
+            stroke_color: parse_stroke_color(arc),
         });
     }
 
@@ -1100,6 +1121,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             radius,
             width: parse_stroke_width(circ),
             fill: fill_type,
+            stroke_color: parse_stroke_color(circ),
         });
     }
 
@@ -1135,6 +1157,7 @@ fn parse_drawings(root: &SExpr) -> Vec<SchDrawing> {
             end,
             width: parse_stroke_width(rect),
             fill,
+            stroke_color: parse_stroke_color(rect),
         });
     }
 

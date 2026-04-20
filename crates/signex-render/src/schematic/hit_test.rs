@@ -121,6 +121,41 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
     None
 }
 
+/// True iff `probe` (radians) falls within the arc going from
+/// `start_angle` through `mid_angle` to `end_angle` (also radians).
+/// Handles both CW / CCW sweeps and the wrap across ±π.
+fn angle_in_arc_sweep(probe: f64, start: f64, mid: f64, end: f64) -> bool {
+    use std::f64::consts::TAU;
+    let norm = |a: f64| -> f64 {
+        let mut t = a % TAU;
+        if t < 0.0 {
+            t += TAU;
+        }
+        t
+    };
+    let ccw_dist = |a: f64, b: f64| -> f64 {
+        let d = b - a;
+        if d < 0.0 { d + TAU } else { d }
+    };
+    let s = norm(start);
+    let m = norm(mid);
+    let e = norm(end);
+    let p = norm(probe);
+    // Walk CCW from s: does it reach m before e?
+    let s_to_m = ccw_dist(s, m);
+    let s_to_e = ccw_dist(s, e);
+    let s_to_p = ccw_dist(s, p);
+    if s_to_m <= s_to_e {
+        // CCW sweep; probe is inside iff it's hit before reaching end CCW.
+        s_to_p <= s_to_e
+    } else {
+        // CW sweep; equivalent to probe reaching start after going CCW from end.
+        let e_to_p = ccw_dist(e, p);
+        let e_to_s = ccw_dist(e, s);
+        e_to_p <= e_to_s
+    }
+}
+
 /// Distance from point `(px, py)` to the infinite line through `(ax, ay)` → `(bx, by)`,
 /// clamped to the segment. Returns `None` for a degenerate zero-length segment.
 fn dist_point_segment(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> Option<f64> {
@@ -218,19 +253,44 @@ fn hit_drawing(
             end,
             ..
         } => {
-            // Treat arc as 3 connected chords for hit-testing (cheap
-            // + good enough for typical clicks; precise arc math can
-            // come later). Covers start→mid, mid→end, and a wide
-            // tolerance around the sagitta.
-            for (a, b) in [(start, mid), (mid, end)] {
-                if dist_point_segment(wx, wy, a.x, a.y, b.x, b.y)
-                    .map(|d| d <= tol * 2.0)
-                    .unwrap_or(false)
-                {
-                    return Some(*uuid);
+            // Real-arc hit test: the click must be on the circle of
+            // the arc (distance to center ≈ radius) AND within the
+            // angular sweep. Chord approximation captured empty
+            // canvas near the arc's bulge, so users couldn't
+            // deselect by clicking near it.
+            let Some((cx, cy, r)) =
+                crate::schematic::circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+            else {
+                // Degenerate / collinear — fall back to the chord check.
+                for (a, b) in [(start, mid), (mid, end)] {
+                    if dist_point_segment(wx, wy, a.x, a.y, b.x, b.y)
+                        .map(|d| d <= tol)
+                        .unwrap_or(false)
+                    {
+                        return Some(*uuid);
+                    }
                 }
+                return None;
+            };
+            let dx = wx - cx;
+            let dy = wy - cy;
+            let d = (dx * dx + dy * dy).sqrt();
+            if (d - r).abs() > tol {
+                return None;
             }
-            None
+            // Angular sweep check: click angle must fall within the
+            // arc's span, where the span is determined by walking
+            // from start → end via mid (same direction used by the
+            // renderer).
+            let click_angle = dy.atan2(dx);
+            let sa = (start.y - cy).atan2(start.x - cx);
+            let ma = (mid.y - cy).atan2(mid.x - cx);
+            let ea = (end.y - cy).atan2(end.x - cx);
+            if angle_in_arc_sweep(click_angle, sa, ma, ea) {
+                Some(*uuid)
+            } else {
+                None
+            }
         }
         SchDrawing::Polyline {
             uuid, points, fill, ..

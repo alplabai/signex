@@ -612,6 +612,23 @@ fn write_text_note(out: &mut String, note: &TextNote) {
     wln!(out, "  )");
 }
 
+/// Format the stroke S-expression: `(stroke (width W) (type default) [ (color R G B A) ])`.
+/// Colour is only emitted when the drawing carries an explicit
+/// override, matching Standard's round-trip (unset means theme default).
+fn fmt_stroke(width: f64, color: Option<signex_types::schematic::StrokeColor>) -> String {
+    match color {
+        Some(c) => format!(
+            "    (stroke (width {}) (type default) (color {} {} {} {}))",
+            fmt_f64(width),
+            c.r,
+            c.g,
+            c.b,
+            c.a
+        ),
+        None => format!("    (stroke (width {}) (type default))", fmt_f64(width)),
+    }
+}
+
 fn write_drawing(out: &mut String, d: &SchDrawing) {
     match d {
         SchDrawing::Line {
@@ -619,6 +636,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             start,
             end,
             width,
+            stroke_color,
         } => {
             wln!(out, "  (polyline");
             wln!(
@@ -629,11 +647,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
                 fmt_f64(end.x),
                 fmt_f64(end.y)
             );
-            wln!(
-                out,
-                "    (stroke (width {}) (type default))",
-                fmt_f64(*width)
-            );
+            wln!(out, "{}", fmt_stroke(*width, *stroke_color));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
         }
@@ -642,6 +656,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             points,
             width,
             fill,
+            stroke_color,
         } => {
             wln!(out, "  (polyline");
             w!(out, "    (pts");
@@ -649,11 +664,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
                 w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
             }
             wln!(out, ")");
-            wln!(
-                out,
-                "    (stroke (width {}) (type default))",
-                fmt_f64(*width)
-            );
+            wln!(out, "{}", fmt_stroke(*width, *stroke_color));
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -664,6 +675,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             radius,
             width,
             fill,
+            stroke_color,
         } => {
             wln!(out, "  (circle");
             wln!(
@@ -673,11 +685,7 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
                 fmt_f64(center.y)
             );
             wln!(out, "    (radius {})", fmt_f64(*radius));
-            wln!(
-                out,
-                "    (stroke (width {}) (type default))",
-                fmt_f64(*width)
-            );
+            wln!(out, "{}", fmt_stroke(*width, *stroke_color));
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -689,16 +697,13 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             end,
             width,
             fill,
+            stroke_color,
         } => {
             wln!(out, "  (arc");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (mid {} {})", fmt_f64(mid.x), fmt_f64(mid.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(
-                out,
-                "    (stroke (width {}) (type default))",
-                fmt_f64(*width)
-            );
+            wln!(out, "{}", fmt_stroke(*width, *stroke_color));
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");
@@ -709,15 +714,12 @@ fn write_drawing(out: &mut String, d: &SchDrawing) {
             end,
             width,
             fill,
+            stroke_color,
         } => {
             wln!(out, "  (rectangle");
             wln!(out, "    (start {} {})", fmt_f64(start.x), fmt_f64(start.y));
             wln!(out, "    (end {} {})", fmt_f64(end.x), fmt_f64(end.y));
-            wln!(
-                out,
-                "    (stroke (width {}) (type default))",
-                fmt_f64(*width)
-            );
+            wln!(out, "{}", fmt_stroke(*width, *stroke_color));
             wln!(out, "    (fill (type {}))", fill_type_str(*fill));
             wln!(out, "    (uuid \"{}\")", uuid);
             wln!(out, "  )");

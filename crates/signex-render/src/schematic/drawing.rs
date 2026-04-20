@@ -9,6 +9,23 @@ use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 use super::ScreenTransform;
 use super::text::display_text_content;
 
+/// Resolve the per-drawing stroke colour: falls back to the theme
+/// `color` when the drawing has no `stroke_color` override.
+fn resolve_stroke_color(
+    theme: Color,
+    override_rgba: Option<signex_types::schematic::StrokeColor>,
+) -> Color {
+    match override_rgba {
+        Some(c) => Color::from_rgba(
+            c.r as f32 / 255.0,
+            c.g as f32 / 255.0,
+            c.b as f32 / 255.0,
+            c.a as f32 / 255.0,
+        ),
+        None => theme,
+    }
+}
+
 /// Draw a schematic drawing primitive.
 pub fn draw_sch_drawing(
     frame: &mut canvas::Frame,
@@ -18,13 +35,18 @@ pub fn draw_sch_drawing(
 ) {
     match drawing {
         SchDrawing::Line {
-            start, end, width, ..
+            start,
+            end,
+            width,
+            stroke_color,
+            ..
         } => {
             let p1 = transform.to_screen_point(start.x, start.y);
             let p2 = transform.to_screen_point(end.x, end.y);
             let line = canvas::Path::line(p1, p2);
             let w = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default().with_color(color).with_width(w);
+            let c = resolve_stroke_color(color, *stroke_color);
+            let stroke = canvas::Stroke::default().with_color(c).with_width(w);
             frame.stroke(&line, stroke);
         }
 
@@ -33,6 +55,7 @@ pub fn draw_sch_drawing(
             end,
             width,
             fill,
+            stroke_color,
             ..
         } => {
             let p1 = transform.to_screen_point(start.x, start.y);
@@ -46,16 +69,19 @@ pub fn draw_sch_drawing(
             let rect =
                 canvas::Path::rectangle(iced::Point::new(min_x, min_y), iced::Size::new(w, h));
 
+            let stroke_c = resolve_stroke_color(color, *stroke_color);
             if *fill != FillType::None {
                 let fill_color = Color {
-                    a: color.a * 0.15,
-                    ..color
+                    a: stroke_c.a * 0.15,
+                    ..stroke_c
                 };
                 frame.fill(&rect, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+            let stroke = canvas::Stroke::default()
+                .with_color(stroke_c)
+                .with_width(sw);
             frame.stroke(&rect, stroke);
         }
 
@@ -64,22 +90,26 @@ pub fn draw_sch_drawing(
             radius,
             width,
             fill,
+            stroke_color,
             ..
         } => {
             let c = transform.to_screen_point(center.x, center.y);
             let r = transform.world_len(*radius).max(1.0);
             let circle = canvas::Path::circle(c, r);
 
+            let stroke_c = resolve_stroke_color(color, *stroke_color);
             if *fill != FillType::None {
                 let fill_color = Color {
-                    a: color.a * 0.15,
-                    ..color
+                    a: stroke_c.a * 0.15,
+                    ..stroke_c
                 };
                 frame.fill(&circle, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+            let stroke = canvas::Stroke::default()
+                .with_color(stroke_c)
+                .with_width(sw);
             frame.stroke(&circle, stroke);
         }
 
@@ -89,6 +119,7 @@ pub fn draw_sch_drawing(
             end,
             width,
             fill,
+            stroke_color,
             ..
         } => {
             // Approximate arc with line segments via the three-point method
@@ -99,6 +130,7 @@ pub fn draw_sch_drawing(
             let ex = end.x;
             let ey = end.y;
 
+            let stroke_c = resolve_stroke_color(color, *stroke_color);
             if let Some((cx, cy, r)) = circle_from_three_points(sx, sy, mx, my, ex, ey) {
                 let start_angle = (sy - cy).atan2(sx - cx);
                 let mid_angle = (my - cy).atan2(mx - cx);
@@ -138,14 +170,16 @@ pub fn draw_sch_drawing(
 
                 if *fill != FillType::None {
                     let fill_color = Color {
-                        a: color.a * 0.15,
-                        ..color
+                        a: stroke_c.a * 0.15,
+                        ..stroke_c
                     };
                     frame.fill(&path, fill_color);
                 }
 
                 let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+                let stroke = canvas::Stroke::default()
+                    .with_color(stroke_c)
+                    .with_width(sw);
                 frame.stroke(&path, stroke);
             } else {
                 // Degenerate -- just draw a line
@@ -153,7 +187,9 @@ pub fn draw_sch_drawing(
                 let p2 = transform.to_screen_point(ex, ey);
                 let line = canvas::Path::line(p1, p2);
                 let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+                let stroke = canvas::Stroke::default()
+                    .with_color(stroke_c)
+                    .with_width(sw);
                 frame.stroke(&line, stroke);
             }
         }
@@ -162,6 +198,7 @@ pub fn draw_sch_drawing(
             points,
             width,
             fill,
+            stroke_color,
             ..
         } => {
             if points.len() < 2 {
@@ -179,16 +216,19 @@ pub fn draw_sch_drawing(
                 }
             });
 
+            let stroke_c = resolve_stroke_color(color, *stroke_color);
             if *fill != FillType::None {
                 let fill_color = Color {
-                    a: color.a * 0.15,
-                    ..color
+                    a: stroke_c.a * 0.15,
+                    ..stroke_c
                 };
                 frame.fill(&path, fill_color);
             }
 
             let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
+            let stroke = canvas::Stroke::default()
+                .with_color(stroke_c)
+                .with_width(sw);
             frame.stroke(&path, stroke);
         }
     }
