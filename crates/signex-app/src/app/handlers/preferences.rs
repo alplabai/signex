@@ -209,6 +209,19 @@ impl Signex {
                     self.ui_state.preferences_dirty = true;
                 }
             }
+            PrefMsg::DraftErcSeverity(rule, severity) => {
+                let default_sev = rule.default_severity();
+                if severity == default_sev {
+                    self.ui_state.erc_severity_override.remove(&rule);
+                } else {
+                    self.ui_state.erc_severity_override.insert(rule, severity);
+                }
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+            }
+            PrefMsg::ResetErcSeverities => {
+                self.ui_state.erc_severity_override.clear();
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+            }
         }
 
         Task::none()

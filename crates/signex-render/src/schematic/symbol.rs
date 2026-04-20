@@ -228,7 +228,8 @@ pub fn draw_symbol(
                         .with_width(stroke_w);
                     frame.stroke(&canvas::Path::rectangle(top_left, box_size), stroke);
                     // Text inside the box — single-line, top-left aligned.
-                    // Multi-line wrap lands in v0.7.1.
+                    // Multi-line wrap deferred; KiCad writes text_box body
+                    // as a single wrapped string at parse time.
                     let font_mm = if *font_size <= 0.0 { 1.27 } else { *font_size };
                     let screen_font = transform.world_len(font_mm).abs();
                     if screen_font >= 1.0 {

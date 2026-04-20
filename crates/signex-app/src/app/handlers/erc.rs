@@ -36,29 +36,19 @@ impl Signex {
         let mut by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>> =
             std::collections::HashMap::new();
 
-        // 1. Active tab — use the live engine's snapshot.
-        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(snapshot) = self.active_render_snapshot()
-        {
-            let violations = apply_overrides(signex_erc::run(snapshot));
-            by_path.insert(tab.path.clone(), violations);
-        }
-        // 2. Cached (non-active) tabs — build a snapshot from their
-        // cached SchematicSheet and run ERC against it.
-        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
-            if idx == self.document_state.active_tab {
-                continue;
-            }
-            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
-                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                    session.document(),
-                );
-                let violations = apply_overrides(signex_erc::run(&snapshot));
-                by_path.insert(tab.path.clone(), violations);
-            }
-        }
-        // 3. Project sheets not opened as tabs — parse from disk,
-        // run ERC, store. Gives a true project-wide picture.
+        // First pass: collect every sheet's snapshot keyed by BOTH its
+        // absolute path AND its bare filename. BadHierSheetPin looks up
+        // children by the filename stored on the parent's sheet symbol,
+        // which is often just the basename (e.g. "power.kicad_sch").
+        let mut snapshots_by_path: std::collections::HashMap<
+            std::path::PathBuf,
+            signex_render::schematic::SchematicRenderSnapshot,
+        > = std::collections::HashMap::new();
+        let mut children: std::collections::HashMap<
+            String,
+            signex_render::schematic::SchematicRenderSnapshot,
+        > = std::collections::HashMap::new();
+
         let open_paths: std::collections::HashSet<std::path::PathBuf> = self
             .document_state
             .tabs
@@ -70,13 +60,59 @@ impl Signex {
             .project_path
             .as_ref()
             .and_then(|p| p.parent().map(std::path::PathBuf::from));
+
+        let push_snap = |path: std::path::PathBuf,
+                         snap: signex_render::schematic::SchematicRenderSnapshot,
+                         by_path_out: &mut std::collections::HashMap<
+            std::path::PathBuf,
+            signex_render::schematic::SchematicRenderSnapshot,
+        >,
+                         children_out: &mut std::collections::HashMap<
+            String,
+            signex_render::schematic::SchematicRenderSnapshot,
+        >| {
+            if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                children_out.insert(name.to_string(), snap.clone());
+            }
+            by_path_out.insert(path, snap);
+        };
+
+        // Active tab.
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(snapshot) = self.active_render_snapshot()
+        {
+            push_snap(
+                tab.path.clone(),
+                snapshot.clone(),
+                &mut snapshots_by_path,
+                &mut children,
+            );
+        }
+        // Cached tabs.
+        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
+            if idx == self.document_state.active_tab {
+                continue;
+            }
+            if let Some(TabDocument::Schematic(session)) = tab.cached_document.as_ref() {
+                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
+                    session.document(),
+                );
+                push_snap(
+                    tab.path.clone(),
+                    snapshot,
+                    &mut snapshots_by_path,
+                    &mut children,
+                );
+            }
+        }
+        // Unopened project sheets.
         if let Some(pd) = self.document_state.project_data.as_ref() {
             for sheet in &pd.sheets {
                 let path = match project_root.as_ref() {
                     Some(root) => root.join(&sheet.filename),
                     None => std::path::PathBuf::from(&sheet.filename),
                 };
-                if open_paths.contains(&path) || by_path.contains_key(&path) {
+                if open_paths.contains(&path) || snapshots_by_path.contains_key(&path) {
                     continue;
                 }
                 let Ok(parsed) = kicad_parser::parse_schematic_file(&path) else {
@@ -84,9 +120,16 @@ impl Signex {
                 };
                 let snapshot =
                     signex_render::schematic::SchematicRenderSnapshot::from_sheet(&parsed);
-                let violations = apply_overrides(signex_erc::run(&snapshot));
-                by_path.insert(path, violations);
+                push_snap(path, snapshot, &mut snapshots_by_path, &mut children);
             }
+        }
+
+        // Second pass: run ERC with the shared children map so
+        // BadHierSheetPin can cross-check each sheet symbol against
+        // the actual child schematic.
+        for (path, snapshot) in &snapshots_by_path {
+            let violations = apply_overrides(signex_erc::run_with_project(snapshot, &children));
+            by_path.insert(path.clone(), violations);
         }
 
         let total: usize = by_path.values().map(|v| v.len()).sum();

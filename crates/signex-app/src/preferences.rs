@@ -16,21 +16,25 @@ use crate::fonts;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Electrical Rule Check — per-rule severity override.
+    Erc,
     // Future: Editor, Shortcuts, ...
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] = &[PrefNav::Appearance];
+    pub const ALL: &'static [PrefNav] = &[PrefNav::Appearance, PrefNav::Erc];
 
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Erc => "Electrical Rules",
         }
     }
 
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Erc => "Validation",
         }
     }
 }
@@ -59,6 +63,11 @@ pub enum PrefMsg {
     ExportTheme,
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
+    /// Set the severity override for an ERC rule. Setting the override
+    /// to the default value clears the entry instead.
+    DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
+    /// Clear every ERC severity override — reset to defaults.
+    ResetErcSeverities,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -95,6 +104,7 @@ const BTN_DANGER_HOV: Color = Color::from_rgb(0.50, 0.22, 0.22);
 /// * `draft_font`       — UI font name pending save
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
+#[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -103,6 +113,7 @@ pub fn view<'a>(
     draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
+    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -112,6 +123,7 @@ pub fn view<'a>(
         draft_power_port_style,
         custom_name,
         dirty,
+        erc_overrides,
     );
 
     container(
@@ -138,6 +150,7 @@ pub fn view<'a>(
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn build_dialog<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -146,6 +159,7 @@ fn build_dialog<'a>(
     draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
+    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
     // ── Header ──
     let header = container(
@@ -187,6 +201,7 @@ fn build_dialog<'a>(
             draft_font,
             draft_power_port_style,
             custom_name,
+            erc_overrides,
         ),
     ]
     .width(Length::Fill)
@@ -316,6 +331,7 @@ fn build_content<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     custom_name: Option<&'a str>,
+    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -325,6 +341,7 @@ fn build_content<'a>(
             draft_power_port_style,
             custom_name,
         ),
+        PrefNav::Erc => content_erc(erc_overrides),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -749,4 +766,149 @@ fn export_btn<'a>() -> Element<'a, PrefMsg> {
             }
         })
         .into()
+}
+
+// === ERC Severity content ===
+
+fn content_erc<'a>(
+    overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) -> Element<'a, PrefMsg> {
+    use signex_erc::{RuleKind, Severity};
+    const RULES: &[RuleKind] = &[
+        RuleKind::UnusedPin,
+        RuleKind::DuplicateRefDesignator,
+        RuleKind::HierPortDisconnected,
+        RuleKind::DanglingWire,
+        RuleKind::NetLabelConflict,
+        RuleKind::OrphanLabel,
+        RuleKind::BusBitWidthMismatch,
+        RuleKind::BadHierSheetPin,
+        RuleKind::MissingPowerFlag,
+        RuleKind::PowerPortShort,
+        RuleKind::SymbolOutsideSheet,
+    ];
+    const CHOICES: &[Severity] = &[
+        Severity::Error,
+        Severity::Warning,
+        Severity::Info,
+        Severity::Off,
+    ];
+
+    let header = column![
+        text("Electrical Rules Severity").size(15).color(TEXT_PRI),
+        Space::new().height(4),
+        text("Per-rule severity override. Errors show red, Warnings yellow, Info blue; Off silences the rule entirely.")
+            .size(11)
+            .color(TEXT_MUT),
+    ]
+    .padding([16, 20]);
+
+    let mut rows_col = column![].spacing(0).padding([0, 20]);
+    for rule in RULES {
+        let current = overrides
+            .get(rule)
+            .copied()
+            .unwrap_or_else(|| rule.default_severity());
+        let default_sev = rule.default_severity();
+        let mut row_ui = row![
+            text(rule.label())
+                .size(12)
+                .color(TEXT_PRI)
+                .width(Length::Fill)
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+        for &sev in CHOICES {
+            let active = current == sev;
+            let r = *rule;
+            let s = sev;
+            let d = default_sev;
+            row_ui = row_ui.push(
+                button(text(severity_label(sev)).size(11).color(if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    TEXT_MUT
+                }))
+                .padding([4, 10])
+                .on_press(PrefMsg::DraftErcSeverity(r, if s == d { d } else { s }))
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = if active {
+                        severity_bg(sev)
+                    } else if matches!(status, button::Status::Hovered) {
+                        ROW_HOVER
+                    } else {
+                        NAV_BG
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: if active { severity_bg(sev) } else { SEP },
+                        },
+                        ..button::Style::default()
+                    }
+                }),
+            );
+        }
+        rows_col = rows_col.push(container(row_ui).padding([6, 4]).width(Length::Fill).style(
+            |_: &Theme| container::Style {
+                background: None,
+                border: Border {
+                    width: 1.0,
+                    color: SEP,
+                    radius: 0.0.into(),
+                },
+                ..container::Style::default()
+            },
+        ));
+    }
+
+    let reset_row = container(
+        row![
+            Space::new().width(Length::Fill),
+            button(text("Reset to defaults").size(11).color(TEXT_MUT))
+                .padding([5, 12])
+                .on_press(PrefMsg::ResetErcSeverities)
+                .style(|_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered => BTN_IMPORT_HOV,
+                        _ => BTN_IMPORT,
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: SEP,
+                        },
+                        text_color: TEXT_MUT,
+                        ..button::Style::default()
+                    }
+                }),
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([12, 20])
+    .width(Length::Fill);
+
+    column![header, rows_col, reset_row].spacing(0).into()
+}
+
+fn severity_label(sev: signex_erc::Severity) -> &'static str {
+    match sev {
+        signex_erc::Severity::Error => "Error",
+        signex_erc::Severity::Warning => "Warning",
+        signex_erc::Severity::Info => "Info",
+        signex_erc::Severity::Off => "Off",
+    }
+}
+
+fn severity_bg(sev: signex_erc::Severity) -> Color {
+    match sev {
+        signex_erc::Severity::Error => Color::from_rgb(0.58, 0.20, 0.22),
+        signex_erc::Severity::Warning => Color::from_rgb(0.55, 0.45, 0.12),
+        signex_erc::Severity::Info => Color::from_rgb(0.20, 0.36, 0.58),
+        signex_erc::Severity::Off => Color::from_rgb(0.28, 0.28, 0.32),
+    }
 }

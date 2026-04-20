@@ -410,16 +410,34 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         }
     }
     // Footprint and Datasheet: always hidden at property level (KiCad 8 format).
-    wln!(out, "    (property \"Footprint\" \"{}\"", escape(&sym.footprint));
-    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+    wln!(
+        out,
+        "    (property \"Footprint\" \"{}\"",
+        escape(&sym.footprint)
+    );
+    wln!(
+        out,
+        "      (at {} {} 0)",
+        fmt_f64(sym.position.x),
+        fmt_f64(sym.position.y)
+    );
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
     wln!(out, "      (hide yes)");
     wln!(out, "      (effects (font (size 1.27 1.27)))");
     wln!(out, "    )");
 
-    wln!(out, "    (property \"Datasheet\" \"{}\"", escape(&sym.datasheet));
-    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+    wln!(
+        out,
+        "    (property \"Datasheet\" \"{}\"",
+        escape(&sym.datasheet)
+    );
+    wln!(
+        out,
+        "      (at {} {} 0)",
+        fmt_f64(sym.position.x),
+        fmt_f64(sym.position.y)
+    );
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
     wln!(out, "      (hide yes)");

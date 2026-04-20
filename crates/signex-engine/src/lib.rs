@@ -905,8 +905,9 @@ impl Engine {
                                 }
                             }
                         }
-                        // Drawings, junctions, NC, bus entries — omit for v0.7;
-                        // add in v0.7.1 if users request them.
+                        // Drawings, junctions, NC, bus entries aren't
+                        // z-ordered in KiCad schematic (no explicit
+                        // stacking). Left out intentionally.
                         _ => {}
                     }
                 }

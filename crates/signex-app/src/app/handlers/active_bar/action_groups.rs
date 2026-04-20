@@ -225,8 +225,10 @@ impl Signex {
                 if !self.interaction_state.canvas.selected.is_empty() {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Above);
+                    self.interaction_state.canvas.reorder_picker_armed = true;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     crate::diagnostics::log_info(
-                        "Click a reference object to bring the selection above it",
+                        "Click a reference object to bring the selection above it (Esc to cancel)",
                     );
                 }
                 Task::none()
@@ -235,8 +237,10 @@ impl Signex {
                 if !self.interaction_state.canvas.selected.is_empty() {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Below);
+                    self.interaction_state.canvas.reorder_picker_armed = true;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     crate::diagnostics::log_info(
-                        "Click a reference object to send the selection below it",
+                        "Click a reference object to send the selection below it (Esc to cancel)",
                     );
                 }
                 Task::none()
