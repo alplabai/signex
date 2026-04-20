@@ -183,7 +183,7 @@ fn draw_pin(
 
     // Pin name is drawn near the symbol-side end of the pin.
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
-    let screen_font = transform.world_len(font_size_mm).abs();
+    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
 
     if screen_font >= 1.0
         && lib.show_pin_names
@@ -359,14 +359,15 @@ fn draw_pin(
         let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
         let perp_offset_px = transform.world_len(0.8);
 
-        // Always offset toward screen-up for horizontal pins, screen-left for
-        // vertical pins.  This keeps numbers above (never below) the pin line
-        // regardless of lib-local rotation (0° vs 180° pins agree).
+        // Offset perpendicular to the pin so the number clears the pin line.
+        // Horizontal pins → above line; vertical (top/bottom) pins → left of
+        // line. Both cases render horizontal, unrotated text — same convention
+        // as side-pin numbers, keeping numbers outside the IC body.
         let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
             // Horizontal pin → above line (screen -Y), centered on X.
             (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
         } else {
-            // Vertical pin → left of line (screen -X), right-aligned text.
+            // Vertical pin → left of pin line (screen -X), right-aligned.
             (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
         };
 
@@ -375,11 +376,11 @@ fn draw_pin(
             np_base.y + perp_sy * perp_offset_px,
         );
 
-        let small_font = (screen_font * 0.8).abs();
-        if small_font < 1.0 {
+        let num_font = screen_font;
+        if num_font < 1.0 {
             return;
         }
-        let fanout_step_px = transform.world_len(0.9).max(small_font * 0.8);
+        let fanout_step_px = transform.world_len(0.9).max(num_font * 0.8);
         let stack_center = stack.index as f32 - (stack.total as f32 - 1.0) * 0.5;
         let line_dx = p2.x - p1.x;
         let line_dy = p2.y - p1.y;
@@ -392,7 +393,7 @@ fn draw_pin(
             content: display_text_content(&pin.number),
             position: stack_np,
             color: pin_color,
-            size: iced::Pixels(small_font),
+            size: iced::Pixels(num_font),
             font: crate::canvas_font(),
             align_x: num_align.into(),
             align_y: iced::alignment::Vertical::Center,
