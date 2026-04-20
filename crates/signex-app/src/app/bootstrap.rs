@@ -198,6 +198,7 @@ impl Signex {
                 wire_drawing: false,
                 arc_points: Vec::new(),
                 polyline_points: Vec::new(),
+                shape_anchor: None,
                 clipboard_wires: Vec::new(),
                 clipboard_buses: Vec::new(),
                 clipboard_labels: Vec::new(),

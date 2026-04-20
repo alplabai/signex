@@ -214,6 +214,9 @@ impl Signex {
         self.interaction_state.polyline_points.clear();
         self.interaction_state.canvas.arc_points.clear();
         self.interaction_state.canvas.polyline_points.clear();
+        // Drop any two-click shape anchor.
+        self.interaction_state.shape_anchor = None;
+        self.interaction_state.canvas.shape_anchor = None;
     }
 
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
