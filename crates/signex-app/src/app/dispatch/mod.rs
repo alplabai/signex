@@ -19,6 +19,7 @@ impl Signex {
             | Message::UnitCycled
             | Message::GridToggle
             | Message::CanvasEvent(_)
+            | Message::CanvasEventInWindow { .. }
             | Message::DragStart(_)
             | Message::DragMove(_, _)
             | Message::WindowResized(_, _)
@@ -122,9 +123,13 @@ impl Signex {
                             }
                         },
                         // Closing an undocked-tab window is the reattach
-                        // gesture — no additional state to reset since the
-                        // tab itself stays in document_state.tabs.
-                        WindowKind::UndockedTab { .. } => {}
+                        // gesture — the tab itself stays in
+                        // document_state.tabs. Drop the per-window
+                        // canvas so we don't leak caches for a window
+                        // that's gone.
+                        WindowKind::UndockedTab { .. } => {
+                            self.interaction_state.canvases.remove(&id);
+                        }
                         // Closing a detached panel reattaches it as a
                         // docked panel in the right column so the user
                         // doesn't lose access to the panel kind.
@@ -157,9 +162,41 @@ impl Signex {
                     .find(|t| t.path == path)
                     .map(|t| t.title.clone())
                     .unwrap_or_default();
-                self.ui_state
-                    .windows
-                    .insert(id, super::state::WindowKind::UndockedTab { path, title });
+                self.ui_state.windows.insert(
+                    id,
+                    super::state::WindowKind::UndockedTab {
+                        path: path.clone(),
+                        title,
+                    },
+                );
+                // Spin up a fresh canvas for this window, seeded from
+                // the engine that the tab points at so the new window
+                // renders the correct schematic from its first frame.
+                // Pan/zoom/selection start at SchematicCanvas::new
+                // defaults — independent of the main canvas.
+                let mut per_window = crate::canvas::SchematicCanvas::new();
+                if let Some(engine) = self.document_state.engines.get(&path) {
+                    per_window.set_render_cache(Some(
+                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                            engine.document(),
+                        ),
+                    ));
+                }
+                // Mirror the main canvas's theme / snap / grid / paper
+                // settings so the new window doesn't flash with the
+                // defaults before any sync happens.
+                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
+                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
+                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
+                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
+                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
+                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
+                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
+                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
+                per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
+                per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
+                per_window.fit_to_paper();
+                self.interaction_state.canvases.insert(id, per_window);
                 Task::none()
             }
             Message::ReattachTab(id) => {

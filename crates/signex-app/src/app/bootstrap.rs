@@ -192,6 +192,7 @@ impl Signex {
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
                 canvas: sch_canvas,
+                canvases: std::collections::HashMap::new(),
                 pcb_canvas,
                 dragging: None,
                 drag_start_pos: None,
