@@ -21,18 +21,18 @@ jobs:
         include:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            artifact: signex.exe
-            archive: signex-windows-x86_64.zip
+            arch: x64
+            arch_suffix: x86_64
 
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            artifact: signex.exe
-            archive: signex-windows-aarch64.zip
+            arch: arm64
+            arch_suffix: aarch64
 
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact: signex
-            archive: signex-linux-x86_64.tar.gz
+            arch: amd64
+            arch_suffix: x86_64
 
           # aarch64-unknown-linux-gnu deferred — cross-compiling iced +
           # wgpu with their native C/C++ deps on ubuntu-latest needs
@@ -41,8 +41,8 @@ jobs:
 
           - target: aarch64-apple-darwin
             os: macos-14
-            artifact: signex
-            archive: signex-macos-aarch64.tar.gz
+            arch: aarch64
+            arch_suffix: aarch64
 
           # macos-latest was stalling on v0.6.2 (set-up job failed in 2s
           # — queue exhausted). Pinned to macos-14 (Apple Silicon) for
@@ -51,13 +51,23 @@ jobs:
           # x86_64-apple-darwin deferred — macos-13 runners are in the
           # deprecated queue and take 30+ minutes to pick up a job. Apple
           # Silicon Macs run the aarch64-apple-darwin binary natively;
-          # Intel Macs can run it under Rosetta 2. Revisit once GitHub
-          # stabilises macos-13 capacity or we move to self-hosted.
+          # Intel Macs can run it under Rosetta 2.
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: false
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Strip the leading "v" for the installer's internal version
+          # fields; keep the original tag around for release-page naming.
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -73,32 +83,97 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            desktop-file-utils fakeroot
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} -p signex-app
 
-      - name: Package (Windows)
+      # ─── Windows: InnoSetup installer ────────────────────────────
+      - name: Install InnoSetup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          mkdir staging
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact }}" staging/
-          Compress-Archive -Path staging/* -DestinationPath ${{ matrix.archive }}
+          $binary = "$PWD\target\${{ matrix.target }}\release\signex.exe"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DVersion=${{ steps.version.outputs.version }}" `
+            "/DArch=${{ matrix.arch }}" `
+            "/DBinary=$binary" `
+            "/Q" `
+            installer\windows\signex.iss
+          # InnoSetup writes the installer alongside the .iss script;
+          # move it to the repo root so upload-artifact can find it.
+          Move-Item installer\windows\signex-setup-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.exe .
 
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
+      - name: Package Windows portable ZIP (alongside installer)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mkdir staging | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/signex.exe" staging/
+          Compress-Archive -Path staging/* -DestinationPath "signex-windows-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.zip"
+
+      # ─── macOS: .app bundle → .dmg ────────────────────────────────
+      - name: Build macOS DMG installer
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x installer/macos/build-dmg.sh
+          ./installer/macos/build-dmg.sh \
+            "target/${{ matrix.target }}/release/signex" \
+            "${{ steps.version.outputs.version }}" \
+            "${{ matrix.arch_suffix }}"
+
+      # ─── Linux: .deb package ──────────────────────────────────────
+      - name: Build Linux .deb package
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x installer/linux/build-deb.sh
+          ./installer/linux/build-deb.sh \
+            "target/${{ matrix.target }}/release/signex" \
+            "${{ steps.version.outputs.version }}" \
+            "${{ matrix.arch }}"
+
+      # ─── Linux: AppImage ──────────────────────────────────────────
+      - name: Build Linux AppImage
+        if: runner.os == 'Linux'
+        run: |
+          # Fetch appimagetool so the script can package the AppDir.
+          wget -q -O appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch_suffix }}.AppImage"
+          chmod +x appimagetool
+          export APPIMAGETOOL="$PWD/appimagetool"
+          chmod +x installer/linux/build-appimage.sh
+          ./installer/linux/build-appimage.sh \
+            "target/${{ matrix.target }}/release/signex" \
+            "${{ steps.version.outputs.version }}" \
+            "${{ matrix.arch_suffix }}"
+          # AppImage tool runs fuse at runtime; ensure CI has it.
+
+      - name: Package Linux tarball (alongside installer)
+        if: runner.os == 'Linux'
         run: |
           mkdir staging
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} staging/
+          cp "target/${{ matrix.target }}/release/signex" staging/
           cd staging
-          tar czf ../${{ matrix.archive }} *
+          tar czf "../signex-linux-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.tar.gz" *
 
-      - name: Upload artifact
+      # ─── Upload all artifacts for this target ─────────────────────
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.archive }}
-          path: ${{ matrix.archive }}
+          name: signex-${{ matrix.target }}-${{ steps.version.outputs.version }}
+          path: |
+            signex-setup-*-${{ steps.version.outputs.version }}.exe
+            signex-windows-*-${{ steps.version.outputs.version }}.zip
+            signex-macos-*-${{ steps.version.outputs.version }}.dmg
+            signex_${{ steps.version.outputs.version }}_*.deb
+            Signex-${{ steps.version.outputs.version }}-*.AppImage
+            signex-linux-*-${{ steps.version.outputs.version }}.tar.gz
+          if-no-files-found: ignore
 
   release:
     name: Create Release
@@ -130,9 +205,13 @@ jobs:
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true
+          # Explicit list — the installer stack is what users want, the
+          # tarball/zip are fallbacks for scripted installs.
           files: |
-            artifacts/signex-windows-x86_64.zip
-            artifacts/signex-windows-aarch64.zip
-            artifacts/signex-linux-x86_64.tar.gz
-            artifacts/signex-macos-aarch64.tar.gz
+            artifacts/signex-setup-*.exe
+            artifacts/signex-windows-*.zip
+            artifacts/signex-macos-*.dmg
+            artifacts/signex_*.deb
+            artifacts/Signex-*.AppImage
+            artifacts/signex-linux-*.tar.gz
             artifacts/SHA256SUMS.txt
