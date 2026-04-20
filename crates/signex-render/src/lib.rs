@@ -14,11 +14,12 @@ use std::sync::{OnceLock, RwLock};
 /// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 
-/// Default text size used everywhere on the schematic canvas — labels, symbol
-/// designators/values, pin name/number, graphic text. Kept as a single source
-/// so size changes flow through the whole renderer. 1.8 mm ≈ Altium "10 pt"
-/// (cap-height basis). Variable instead of a hardcoded literal.
-pub const SCHEMATIC_TEXT_MM: f64 = 1.8;
+pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
+pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
+
+/// KiCad stroke font stores "size" as cap-height; Iced TrueType uses em-square.
+/// Cap height ≈ 72 % of em-square → scale up by 1/0.72 so visual sizes match KiCad.
+pub const STROKE_FONT_SCALE: f32 = 1.0 / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {

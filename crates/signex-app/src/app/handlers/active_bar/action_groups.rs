@@ -35,7 +35,7 @@ impl Signex {
                     rotation: 0.0,
                     label_type: signex_types::schematic::LabelType::Net,
                     shape: String::new(),
-                    font_size: 1.8,
+                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: signex_types::schematic::HAlign::Left,
                 });
                 task
@@ -70,7 +70,7 @@ impl Signex {
                         text: default_text.to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
-                        font_size: 1.8,
+                        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify_h: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::default(),
                     });

@@ -113,7 +113,7 @@ impl Signex {
                     signex_engine::Command::UpdateSymbolTextSize {
                         symbol_id: *uuid,
                         field: signex_engine::SymbolTextField::Value,
-                        font_size_mm: (*pt as f64) * 0.18,
+                        font_size_mm: (*pt as f64) * signex_types::schematic::SCHEMATIC_PT_TO_MM,
                     },
                     true,
                     true,
@@ -168,7 +168,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditLabelFontSizePt(uuid, pt) => {
-                let mm = (*pt as f64) * 0.18;
+                let mm = (*pt as f64) * signex_types::schematic::SCHEMATIC_PT_TO_MM;
                 self.apply_engine_command(
                     signex_engine::Command::UpdateLabelProps {
                         label_id: *uuid,
