@@ -13,6 +13,16 @@ pub const SCHEMATIC_TEXT_MM: f64 = 1.27;
 /// Altium schematic point → mm: 1 pt = 0.127 mm (10 pt = 1.27 mm).
 pub const SCHEMATIC_PT_TO_MM: f64 = 0.127;
 
+/// KiCad schematic grid step: 2.54 mm = 100 mils. Used as pin length,
+/// bus-entry size, and any other default that snaps to the coarse grid.
+pub const GRID_MM: f64 = 2.54;
+
+/// KiCad default pin line length in mm (one grid step).
+pub const PIN_LENGTH_MM: f64 = GRID_MM;
+
+/// KiCad default offset from pin body-end to pin name text anchor.
+pub const PIN_NAME_OFFSET_MM: f64 = 0.508;
+
 // ---------------------------------------------------------------------------
 // Point -- KiCad mm-space coordinate (f64). Copy-friendly.
 // ---------------------------------------------------------------------------

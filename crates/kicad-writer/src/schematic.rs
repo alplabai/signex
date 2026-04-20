@@ -18,6 +18,29 @@ fn escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// `(effects (font (size S S)))` — inline, no justify, no hide.
+fn effects_font(size: f64) -> String {
+    format!("(effects (font (size {} {})))", fmt_f64(size), fmt_f64(size))
+}
+
+/// `(effects (font (size S S)) (justify ARGS))` — with justify, no hide.
+fn effects_font_justify(size: f64, justify: &str) -> String {
+    format!(
+        "(effects (font (size {} {})) (justify {justify}))",
+        fmt_f64(size),
+        fmt_f64(size)
+    )
+}
+
+/// `(effects (font (size S S)) (hide yes))` — hidden, no justify.
+fn effects_font_hidden(size: f64) -> String {
+    format!(
+        "(effects (font (size {} {})) (hide yes))",
+        fmt_f64(size),
+        fmt_f64(size)
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Enum-to-KiCad-string helpers
 // ---------------------------------------------------------------------------
@@ -379,7 +402,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
             wln!(out, "      (show_name no)");
             wln!(out, "      (do_not_autoplace no)");
             wln!(out, "      (hide yes)");
-            wln!(out, "      (effects (font (size 1.27 1.27)))");
+            wln!(out, "      {}", effects_font(SCHEMATIC_TEXT_MM));
             wln!(out, "    )");
         }
     }
@@ -391,7 +414,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
             wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
             wln!(out, "      (show_name no)");
             wln!(out, "      (do_not_autoplace no)");
-            wln!(out, "      (effects (font (size 1.27 1.27)))");
+            wln!(out, "      {}", effects_font(SCHEMATIC_TEXT_MM));
             wln!(out, "    )");
         }
     }
@@ -401,7 +424,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
     wln!(out, "      (hide yes)");
-    wln!(out, "      (effects (font (size 1.27 1.27)))");
+    wln!(out, "      {}", effects_font(SCHEMATIC_TEXT_MM));
     wln!(out, "    )");
 
     wln!(out, "    (property \"Datasheet\" \"{}\"", escape(&sym.datasheet));
@@ -409,7 +432,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
     wln!(out, "      (hide yes)");
-    wln!(out, "      (effects (font (size 1.27 1.27)))");
+    wln!(out, "      {}", effects_font(SCHEMATIC_TEXT_MM));
     wln!(out, "    )");
 
     // Custom fields — sort keys for deterministic output order
@@ -431,7 +454,7 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
         );
         wln!(out, "      (show_name no)");
         wln!(out, "      (do_not_autoplace no)");
-        wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+        wln!(out, "      {}", effects_font_hidden(SCHEMATIC_TEXT_MM));
         wln!(out, "    )");
     }
 
@@ -729,7 +752,7 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
     wln!(out, "      (do_not_autoplace no)");
     wln!(
         out,
-        "      (effects (font (size 1.27 1.27)) (justify left bottom))"
+        "      {}", effects_font_justify(SCHEMATIC_TEXT_MM, "left bottom")
     );
     wln!(out, "    )");
     // Sheetfile property
@@ -749,7 +772,7 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
     wln!(out, "      (do_not_autoplace no)");
     wln!(
         out,
-        "      (effects (font (size 1.27 1.27)) (justify left top))"
+        "      {}", effects_font_justify(SCHEMATIC_TEXT_MM, "left top")
     );
     wln!(out, "    )");
     // Sheet pins
@@ -764,7 +787,7 @@ fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
         );
         wln!(
             out,
-            "      (effects (font (size 1.27 1.27)) (justify left))"
+            "      {}", effects_font_justify(SCHEMATIC_TEXT_MM, "left")
         );
         wln!(out, "      (uuid \"{}\")", pin.uuid);
         wln!(out, "    )");
@@ -777,7 +800,7 @@ fn write_lib_symbol_property(out: &mut String, key: &str, value: &str, id: u32) 
     wln!(out, "      (property \"{}\" \"{}\"", key, escape(value));
     wln!(out, "        (id {})", id);
     wln!(out, "        (at 0 0 0)");
-    wln!(out, "        (effects (font (size 1.27 1.27)))");
+    wln!(out, "        {}", effects_font(SCHEMATIC_TEXT_MM));
     wln!(out, "      )");
 }
 
@@ -1091,20 +1114,13 @@ fn write_lib_pin(out: &mut String, pin: &Pin) {
     if !pin.visible {
         wln!(out, "          (hide yes)");
     }
-    w!(
-        out,
-        "          (name \"{}\" (effects (font (size 1.27 1.27))",
-        escape(&pin.name)
-    );
+    let fs = fmt_f64(SCHEMATIC_TEXT_MM);
+    w!(out, "          (name \"{}\" (effects (font (size {fs} {fs}))", escape(&pin.name));
     if !pin.name_visible {
         w!(out, " (hide yes)");
     }
     wln!(out, "))");
-    w!(
-        out,
-        "          (number \"{}\" (effects (font (size 1.27 1.27))",
-        escape(&pin.number)
-    );
+    w!(out, "          (number \"{}\" (effects (font (size {fs} {fs}))", escape(&pin.number));
     if !pin.number_visible {
         w!(out, " (hide yes)");
     }
@@ -1130,7 +1146,7 @@ mod tests {
         let text = TextProp {
             position: Point { x: 10.0, y: 20.0 },
             rotation: 0.0,
-            font_size: 1.27,
+            font_size: SCHEMATIC_TEXT_MM,
             justify_h: HAlign::Center,
             justify_v: VAlign::Center,
             hidden: false,
@@ -1183,7 +1199,7 @@ mod tests {
             ref_text: Some(TextProp {
                 position: Point { x: 10.0, y: 8.0 },
                 rotation: 0.0,
-                font_size: 1.27,
+                font_size: SCHEMATIC_TEXT_MM,
                 justify_h: HAlign::Center,
                 justify_v: VAlign::Center,
                 hidden: false,
@@ -1191,7 +1207,7 @@ mod tests {
             val_text: Some(TextProp {
                 position: Point { x: 10.0, y: 12.0 },
                 rotation: 0.0,
-                font_size: 1.27,
+                font_size: SCHEMATIC_TEXT_MM,
                 justify_h: HAlign::Center,
                 justify_v: VAlign::Center,
                 hidden: false,

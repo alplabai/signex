@@ -9,7 +9,7 @@ use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
     LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
     SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign,
-    Wire,
+    Wire, GRID_MM, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, SCHEMATIC_TEXT_MM,
 };
 
 use crate::error::ParseError;
@@ -68,7 +68,7 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
         .and_then(|e| e.find("font"))
         .and_then(|f| f.find("size"))
         .and_then(|s| s.arg_f64(0))
-        .unwrap_or(1.27);
+        .unwrap_or(SCHEMATIC_TEXT_MM);
 
     // KiCad 8: (hide yes) may sit at the property level (direct child of the
     // property node) instead of inside (effects ...).  Check both locations.
@@ -307,7 +307,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
     let pin_name_offset = pin_names_node
         .and_then(|pn| pn.find("offset"))
         .and_then(|o| o.arg_f64(0))
-        .unwrap_or(0.508);
+        .unwrap_or(PIN_NAME_OFFSET_MM);
 
     /// Extract `(unit, body_style)` from a sub-symbol name like `"Device_R_1_1"`.
     /// Format: `PREFIX_UNIT_BODYSTYLE` — we split from the right.
@@ -482,7 +482,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                     let font_size = font
                         .and_then(|f| f.find("size"))
                         .and_then(|s| s.arg_f64(0))
-                        .unwrap_or(1.27);
+                        .unwrap_or(SCHEMATIC_TEXT_MM);
                     let bold = font
                         .map(|f| {
                             f.find("bold")
@@ -546,7 +546,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                     let font_size = font
                         .and_then(|f| f.find("size"))
                         .and_then(|s| s.arg_f64(0))
-                        .unwrap_or(1.27);
+                        .unwrap_or(SCHEMATIC_TEXT_MM);
                     let bold = font
                         .map(|f| {
                             f.find("bold")
@@ -599,7 +599,7 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
             let length = pin
                 .find("length")
                 .and_then(|l| l.arg_f64(0))
-                .unwrap_or(2.54);
+                .unwrap_or(PIN_LENGTH_MM);
             let visible = !pin
                 .find("hide")
                 .map(|hide| hide.first_arg().map(|value| value == "yes").unwrap_or(true))
@@ -805,7 +805,7 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         .and_then(|e| e.find("font"))
         .and_then(|f| f.find("size"))
         .and_then(|s| s.arg_f64(0))
-        .unwrap_or(1.27);
+        .unwrap_or(SCHEMATIC_TEXT_MM);
     let justify = effects
         .and_then(|e| e.find("justify"))
         .and_then(|j| j.first_arg())
@@ -905,7 +905,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .unwrap_or(TextProp {
             position,
             rotation: 0.0,
-            font_size: 1.27,
+            font_size: SCHEMATIC_TEXT_MM,
             justify_h: HAlign::Center,
             justify_v: VAlign::Center,
             hidden: false,
@@ -915,7 +915,7 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         .unwrap_or(TextProp {
             position,
             rotation: 0.0,
-            font_size: 1.27,
+            font_size: SCHEMATIC_TEXT_MM,
             justify_h: HAlign::Center,
             justify_v: VAlign::Center,
             hidden: false,
@@ -1265,8 +1265,8 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
             let (position, _) = parse_at(be);
             let size = be
                 .find("size")
-                .map(|s| (s.arg_f64(0).unwrap_or(2.54), s.arg_f64(1).unwrap_or(2.54)))
-                .unwrap_or((2.54, 2.54));
+                .map(|s| (s.arg_f64(0).unwrap_or(GRID_MM), s.arg_f64(1).unwrap_or(GRID_MM)))
+                .unwrap_or((GRID_MM, GRID_MM));
             BusEntry {
                 uuid: parse_uuid(be),
                 position,
@@ -1293,7 +1293,7 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
                 .and_then(|e| e.find("font"))
                 .and_then(|f| f.find("size"))
                 .and_then(|s| s.arg_f64(0))
-                .unwrap_or(1.27);
+                .unwrap_or(SCHEMATIC_TEXT_MM);
             let justify = effects.and_then(|e| e.find("justify"));
             let justify_h = justify
                 .and_then(|j| j.first_arg())
