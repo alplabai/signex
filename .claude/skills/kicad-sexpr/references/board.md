@@ -1,18 +1,18 @@
-# KiCad Board File Format — Full Reference
+# KiCad Board Dosya Formatı — Tam Referans
 
-> Extension: `.kicad_pcb` | KiCad 4.0'available since KiCad 4.0, this reference is for 6.0+
+> Uzantı: `.kicad_pcb` | KiCad 4.0'dan itibaren mevcut, 6.0+ için bu referans
 
 ---
 
-## Top-Level File Structure
+## Dosya Üst Düzey Yapısı
 
 ```scheme
 (kicad_pcb
   (version YYYYMMDD)
-  (generator GENERATOR_NAME)   ; Warning: "pcbnew" DO NOT USE
+  (generator ÜRETICI_ADI)   ; ⚠️ "pcbnew" KULLANMA
 
   (general
-    (thickness MM)           ; board thickness
+    (thickness MM)           ; kart kalınlığı
   )
 
   (paper ...)
@@ -25,29 +25,29 @@
 
   (setup ...)
 
-  ; Optional properties
+  ; Opsiyonel properties
   (property "KEY" "VALUE")
 
-  ; Nets (required — at least net 0)
+  ; Netler (zorunlu — en azından net 0)
   (net 0 "")
   (net 1 "GND")
   (net 2 "+3V3")
 
-  ; Content sections (order not critical, except header)
-  FOOTPRINTS...
-  GRAPHIC_ITEMS...
-  IMAGES...
-  TRACK_SEGMENTS...
-  TRACK_VIAS...
-  TRACK_ARCS...
-  ZONES...
-  GROUPS...
+  ; İçerik bölümleri (sıra kritik değil, header hariç)
+  FOOTPRINTLER...
+  GRAFIK_ÖGELER...
+  IMAGELER...
+  TRACK_SEGMENTLER...
+  TRACK_VIALAR...
+  TRACK_ARCLAR...
+  ZONLAR...
+  GRUPLAR...
 )
 ```
 
-> Warning: `generator` do not use `pcbnew` for generator.
-> Warning: Header (`kicad_pcb version generator`) **must be the first token**;
-> order of other sections is not critical.
+> ⚠️ `generator` için `pcbnew` kullanma.
+> ⚠️ Header (`kicad_pcb version generator`) **ilk token** olmak zorunda;
+> diğer section'ların sırası kritik değil.
 
 ---
 
@@ -58,13 +58,13 @@
   (0  "F.Cu"      signal)
   (1  "In1.Cu"    signal)
   (31 "B.Cu"      signal)
-  (32 "B.Adhes"   user "B.Adhesive")   ; optional user name
+  (32 "B.Adhes"   user "B.Adhesive")   ; opsiyonel kullanıcı adı
   (44 "Edge.Cuts" user)
   ...
 )
 ```
 
-Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
+Layer tipleri: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ---
 
@@ -76,14 +76,14 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (pad_to_mask_clearance MM)
   [(solder_mask_min_width MM)]
   [(pad_to_paste_clearance MM)]
-  [(pad_to_paste_clearance_ratio RATIO)]
+  [(pad_to_paste_clearance_ratio ORAN)]
   [(aux_axis_origin X Y)]
   [(grid_origin X Y)]
   (pcbplotparams ...)
 )
 ```
 
-### Stackup (Layer Stacking)
+### Stackup (Katman İstifleme)
 
 ```scheme
 (stackup
@@ -92,8 +92,8 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
     [(color "...")]
     [(thickness MM)]
     [(material "...")]
-    [(epsilon_r DIELECTRIC_CONSTANT)]
-    [(loss_tangent LOSS_TANGENT)]
+    [(epsilon_r DIELEKTRIK_SABİTİ)]
+    [(loss_tangent KAYIP_TANJANT)]
   )
   (layer "dielectric 1" 2
     (type "core")
@@ -102,7 +102,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
     (epsilon_r 4.5)
     (loss_tangent 0.02)
   )
-  ; ... other layers
+  ; ... diğer katmanlar
   [(copper_finish "ENIG")]
   [(dielectric_constraints yes|no)]
   [(edge_connector yes|bevelled)]
@@ -111,11 +111,11 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 )
 ```
 
-### pcbplotparams (Plot Settings)
+### pcbplotparams (Plot Ayarları)
 
 ```scheme
 (pcbplotparams
-  (layerselection 0x...)        ; hex bit set — which layers are plotted
+  (layerselection 0x...)        ; hex bit seti — hangi katmanlar plot edilir
   (outputformat 0|1|2|3|4|5)   ; 0=gerber 1=PS 2=SVG 3=DXF 4=HPGL 5=PDF
   (usegerberextensions true|false)
   (usegerberattributes true|false)
@@ -132,7 +132,7 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (mirror true|false)
   (drillshape SHAPE)
   (outputdirectory "./gerber/")
-  ; ... other plot parameters
+  ; ... diğer plot parametreleri
 )
 ```
 
@@ -141,13 +141,13 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 ## Nets Section
 
 ```scheme
-(net 0 "")          ; empty net — always ordinal 0
+(net 0 "")          ; boş net — her zaman ordinal 0
 (net 1 "GND")
 (net 2 "+3V3")
 (net 3 "/MCU/PA0")
 ```
 
-> ℹ️ Net class definitions were moved to `.kicad_dru` (design rules) file in KiCad 6.
+> ℹ️ Net class tanımları KiCad 6'da `.kicad_dru` (design rules) dosyasına taşınmıştır.
 
 ---
 
@@ -158,10 +158,10 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (start X Y)
   (end X Y)
   (width MM)
-  (layer LAYER)
+  (layer KATMAN)
   [(locked)]
-  (net NET_NUMBER)
-  (tstamp UUID)           ; Warning: uses `tstamp`, not `uuid`
+  (net NET_NUMARASI)
+  (tstamp UUID)           ; ⚠️ `uuid` değil, `tstamp` kullanılır
 )
 ```
 
@@ -171,16 +171,16 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ```scheme
 (via
-  [blind|micro]           ; if type not specified, through-hole
+  [blind|micro]           ; tip belirtilmezse through-hole
   [(locked)]
   (at X Y)
-  (size ANNULAR_DIAMETER)
-  (drill DRILL_DIAMETER)
-  (layers "F.Cu" "B.Cu")  ; connected layers
+  (size HALKA_ÇAPI)
+  (drill DELIK_ÇAPI)
+  (layers "F.Cu" "B.Cu")  ; bağladığı katmanlar
   [(remove_unused_layers)]
-  [(keep_end_layers)]     ; only remove_unused_layers with together
-  [(free)]                ; can move freely outside net
-  (net NET_NUMBER)
+  [(keep_end_layers)]     ; sadece remove_unused_layers ile birlikte
+  [(free)]                ; net dışında serbest hareket edebilir
+  (net NET_NUMARASI)
   (tstamp UUID)
 )
 ```
@@ -195,16 +195,16 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
   (mid X Y)
   (end X Y)
   (width MM)
-  (layer LAYER)
+  (layer KATMAN)
   [(locked)]
-  (net NET_NUMBER)
+  (net NET_NUMARASI)
   (tstamp UUID)
 )
 ```
 
 ---
 
-## Real Board Example
+## Gerçek Board Örneği
 
 ```scheme
 (kicad_pcb (version 3) (host pcbnew "(2013-02-20 BZR 3963)-testing")
@@ -275,27 +275,27 @@ Layer types: `jumper` | `mixed` | `power` | `signal` | `user`
 
 ---
 
-## Python: Board Read/Write
+## Python: Board Okuma/Yazma
 
 ```python
 import pcbnew
 
-# Load
-board = pcbnew.LoadBoard("circuit.kicad_pcb")
+# Yükle
+board = pcbnew.LoadBoard("devre.kicad_pcb")
 
-# Iterate footprints
+# Footprint'leri dolaş
 for fp in board.GetFootprints():
     ref = fp.GetReference()
     pos = fp.GetPosition()
     layer = fp.GetLayerName()
     print(f"{ref} @ ({pcbnew.ToMM(pos.x):.3f}, {pcbnew.ToMM(pos.y):.3f}) on {layer}")
 
-# Filter tracks by net
+# Net'e göre track'leri filtrele
 for track in board.GetTracks():
     if track.GetNetname() == "GND":
-        print(f"  Track: {track.GetStart()} -> {track.GetEnd()}")
+        print(f"  Track: {track.GetStart()} → {track.GetEnd()}")
 
-# Add new track
+# Yeni track ekle
 track = pcbnew.PCB_TRACK(board)
 track.SetStart(pcbnew.FromMM(10), pcbnew.FromMM(20))
 track.SetEnd(pcbnew.FromMM(30), pcbnew.FromMM(20))
@@ -303,7 +303,7 @@ track.SetWidth(pcbnew.FromMM(0.25))
 track.SetLayer(pcbnew.F_Cu)
 board.Add(track)
 
-# Save
+# Kaydet
 pcbnew.SaveBoard("devre_yeni.kicad_pcb", board)
 pcbnew.Refresh()
 ```

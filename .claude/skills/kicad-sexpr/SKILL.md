@@ -1,124 +1,74 @@
 ---
 name: kicad-sexpr
 description: >
-  KiCad S-expression (sexpr) file format for reading, writing, parsing, generating, or
-  manipulating - comprehensive reference. KiCad .kicad_pcb, .kicad_sch, .kicad_sym,
-  .kicad_mod, .kicad_wks files; when writing footprint/symbol/schematic generator
-  scripts; for Action Plugin file manipulation; when you need to
-  understand/validate/convert KiCad s-expression tokens, always use this
-  skill. "kicad file", "kicad format", "sexpr", "s-expression", "kicad parse",
-  "kicad pcb read/write", "generate footprint", "netlist", "schematic format" should trigger this skill.
+  KiCad S-expression (sexpr) dosya formatını okumak, yazmak, parse etmek, üretmek veya
+  manipüle etmek için kapsamlı referans. KiCad .kicad_pcb, .kicad_sch, .kicad_sym,
+  .kicad_mod, .kicad_wks dosyalarıyla çalışırken; footprint/sembol/şematik üretici
+  scriptleri yazarken; Action Plugin'ler için dosya manipülasyonu yaparken; KiCad
+  s-expression tokenlarını anlamak/doğrulamak/dönüştürmek istediğinde mutlaka bu skili
+  kullan. "kicad dosya", "kicad format", "sexpr", "s-expression", "kicad parse",
+  "kicad pcb oku/yaz", "footprint üret", "netlist", "schematic format" gibi konularda
+  bu skill tetiklenmeli.
 ---
 
-# KiCad S-Expression Format — Comprehensive Reference
+# KiCad S-Expression Format — Kapsamlı Referans
 
-## Overview
+## Genel Bakış
 
-KiCad, uses S-expression (sexpr) for all file formats:
+KiCad, tüm dosya formatları için S-expression (sexpr) kullanır:
 
-| Extension    | Content                     |
-| ------------ | --------------------------- |
+| Uzantı | İçerik |
+|--------|--------|
 | `.kicad_pcb` | Printed Circuit Board (PCB) |
-| `.kicad_sch` | Schematic                   |
-| `.kicad_sym` | Symbol library              |
-| `.kicad_mod` | Footprint library           |
-| `.kicad_wks` | Worksheet                   |
-
-## Official File Headers
-
-Use the correct top-level token for each file type:
-
-```scheme
-; Schematic file
-(kicad_sch
-  (version YYYYMMDD)
-  (generator "your-tool")
-  ...
-)
-
-; Symbol library file
-(kicad_symbol_lib
-  (version YYYYMMDD)
-  (generator "your-tool")
-  ...
-)
-
-; Footprint library file
-(footprint "NAME"
-  (version YYYYMMDD)
-  (generator "your-tool")
-  ...
-)
-
-; Board file
-(kicad_pcb
-  (version YYYYMMDD)
-  (generator "your-tool")
-  ...
-)
-
-; Worksheet file
-(kicad_wks
-  (version YYYYMMDD)
-  (generator "your-tool")
-  ...
-)
-```
-
-**Generator rule:** third-party tools should not pretend to be KiCad. Do **not** use these generator identifiers:
-
-- `eeschema` for `.kicad_sch`
-- `kicad_symbol_editor` for `.kicad_sym`
-- `pcbnew` for `.kicad_mod`
-- `pcbnew` for `.kicad_pcb`
-- `pl_editor` for `.kicad_wks`
+| `.kicad_sch` | Şematik |
+| `.kicad_sym` | Sembol kütüphanesi |
+| `.kicad_mod` | Footprint kütüphanesi |
+| `.kicad_wks` | Çalışma sayfası (worksheet) |
 
 ---
 
-## Syntax Fundamentals
+## Sözdizimi Temelleri
 
 ```
 (token attribute1 attribute2 (nested_token ...) ...)
 ```
 
-**Rules:**
+**Kurallar:**
+- Her token `(` ve `)` ile çevrilir
+- Tüm tokenlar **küçük harf** (`lowercase`)
+- Token isimlerinde sadece `_` özel karakter kullanılabilir (boşluk yok)
+- String'ler `"çift tırnak"` ile, UTF-8 kodlamalı
+- Sayılar **milimetre** cinsinden, üstel gösterim (`1e-3`) **kullanılmaz**
+- PCB/Footprint hassasiyeti: 6 ondalık (0.000001 mm = 1 nm)
+- Şematik/Sembol hassasiyeti: 4 ondalık (0.0001 mm)
+- İsteğe bağlı nitelikler `[köşeli parantez]` ile gösterilir (bu dokümanda)
+- Birden fazla seçenek `|` ile ayrılır: `yes|no`
 
-- Each token is wrapped with `(` and `)`
-- All tokens are **lowercase** (`lowercase`)
-- Only `_` special character allowed in token names (no spaces)
-- Strings use `"double quotes"`, UTF-8 encoded
-- Numbers in **millimeters**, exponential notation (`1e-3`) **is **not used\*\*
-- PCB/Footprint precision: 6 decimals (0.000001 mm = 1 nm)
-- Schematic/Symbol precision: 4 decimals (0.0001 mm)
-- Optional attributes shown with `[square brackets]` (in this document)
-- Multiple options separated by `|`: `yes|no`
-
-**Coordinate system:**
-
-- All coordinates are **relative** to the parent origin
-- PCB Y-axis down positive (screen coordinates)
-- Schematic Y-axis up positive
+**Koordinat sistemi:**
+- Tüm koordinatlar **üst nesnenin origin'ine** göre görecelidir (relative)
+- PCB Y ekseni aşağı pozitif (screen coordinates)
+- Şematik Y ekseni yukarı pozitif
 
 ---
 
-## Common Token Reference (Common Syntax)
+## Ortak Token Referansı (Common Syntax)
 
-### `at` — Position Descriptor
+### `at` — Konum Tanımlayıcı
 
 ```scheme
 (at X Y [ANGLE])
 ```
 
-- `X`, `Y`: coordinate in mm
-- `ANGLE`: rotation angle in degrees (optional)
-- Warning: Symbol `text` ANGLEs are stored in **1/10 degree**; others in **full degrees**
+- `X`, `Y`: mm cinsinden koordinat
+- `ANGLE`: derece cinsinden dönme açısı (opsiyonel)
+- ⚠️ Sembol `text` ANGLE'ları **1/10 derece** cinsinden saklanır; diğerleri **tam derece**
 
 ```scheme
-; Example: 10mm, 20mm at point, rotated 90 degrees
+; Örnek: 10mm, 20mm noktasında, 90 derece döndürülmüş
 (at 10 20 90)
 ```
 
-### `pts` — Coordinate Point List
+### `pts` — Koordinat Noktası Listesi
 
 ```scheme
 (pts
@@ -128,88 +78,87 @@ Use the correct top-level token for each file type:
 )
 ```
 
-### `stroke` — Line Style
+### `stroke` — Çizgi Stili
 
 ```scheme
 (stroke
   (width WIDTH)
   (type solid|dash|dot|dash_dot|dash_dot_dot|default)
-  (color R G B A)    ; 0-255 or 0.0-1.0
+  (color R G B A)    ; 0-255 veya 0.0-1.0
 )
 ```
 
-Valid `type` values:
-
-- `solid`, `dash`, `dot`, `dash_dot` — all versions
+Geçerli `type` değerleri:
+- `solid`, `dash`, `dot`, `dash_dot` — tüm versiyonlar
 - `dash_dot_dot` — KiCad 7+
-- `default` — theme default
+- `default` — tema varsayılanı
 
-### `effects` — Text Effects
+### `effects` — Yazı Efektleri
 
 ```scheme
 (effects
   (font
-    [(face "FONT_FAMILY")]          ; KiCad 7+; "KiCad Font" or TTF ismi
-    (size HEIGHT WIDTH)             ; in mm
+    [(face "FONT_FAMILY")]          ; KiCad 7+; "KiCad Font" veya TTF ismi
+    (size HEIGHT WIDTH)             ; mm cinsinden
     [(thickness THICKNESS)]
     [bold]
     [italic]
-    [(line_spacing LINE_SPACING)]   ; not yet supported
+    [(line_spacing LINE_SPACING)]   ; henüz desteklenmiyor
   )
   [(justify [left|right] [top|bottom] [mirror])]
   [hide]
 )
 ```
 
-- `justify` if not defined: horizontal + vertical centered, no mirror
-- `mirror` only supported in PCB Editor and Footprint
+- `justify` tanımlanmazsa: yatay + dikey ortalı, ayna yok
+- `mirror` sadece PCB Editor ve Footprint'te desteklenir
 
-### `paper` — Paper Settings
+### `paper` — Kağıt Ayarları
 
 ```scheme
 (paper A4|A3|A2|A1|A0|A|B|C|D|E [portrait])
-; OR custom size:
+; VEYA özel boyut:
 (paper WIDTH HEIGHT [portrait])
 ```
 
-### `title_block` — Title Block
+### `title_block` — Başlık Bloğu
 
 ```scheme
 (title_block
-  (title "TITLE")
+  (title "BAŞLIK")
   (date "YYYY-MM-DD")
   (rev "REV")
-  (company "COMPANY")
-  (comment 1 "COMMENT1")
-  (comment 2 "COMMENT2")
-  ; ... 9'a up to
+  (company "ŞİRKET")
+  (comment 1 "YORUM1")
+  (comment 2 "YORUM2")
+  ; ... 9'a kadar
 )
 ```
 
-### `property` — General Purpose Property (Key-Value)
+### `property` — Genel Amaçlı Özellik (Key-Value)
 
 ```scheme
-(property "KEY" "VALUE")
+(property "ANAHTAR" "DEĞER")
 ```
 
-Keys must be unique. The `property` token inside a symbol uses a different structure — see [Symbol Properties](#symbol-properties).
+Anahtarlar unique olmalı. Sembol içindeki `property` tokeni farklı bir yapı kullanır — bkz. [Sembol Özellikleri](#sembol-özellikleri).
 
-### `uuid` — Universally Unique Identifier
+### `uuid` — Evrensel Benzersiz Tanımlayıcı
 
 ```scheme
 (uuid XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)
 ```
 
-- Version 4 (random) UUID, generated with mt19937 Mersenne Twister
-- Pre-KiCad 6 files had timestamp to UUID conversion
+- Version 4 (random) UUID, mt19937 Mersenne Twister ile üretilir
+- KiCad 6 öncesi dosyalarda timestamp → UUID dönüşümü yapılmıştır
 
-### `image` — Embedded Image
+### `image` — Gömülü Görsel
 
 ```scheme
 (image
   (at X Y)
   [(scale SCALAR)]
-  [(layer LAYER_NAME)]    ; only PCB/Footprint
+  [(layer LAYER_NAME)]    ; sadece PCB/Footprint
   (uuid UUID)
   (data BASE64_PNG_DATA)
 )
@@ -217,46 +166,46 @@ Keys must be unique. The `property` token inside a symbol uses a different struc
 
 ---
 
-## PCB / Footprint Common Syntax
+## PCB / Footprint Ortak Sözdizimi
 
-### Layer Capacity
+### Layer Kapasitesi
 
-| Category                                    | Count |
-| ------------------------------------------- | ----- |
-| Total                                       | 60    |
-| Copper (copper)                             | 32    |
-| Technical paired (silk/mask/paste/adhesive) | 8     |
-| Pre-defined user layers                     | 4     |
-| Board outline + margin                      | 2     |
-| Optional user layers                        | 9     |
+| Kategori | Adet |
+|----------|------|
+| Toplam | 60 |
+| Bakır (copper) | 32 |
+| Teknik çiftli (silk/mask/paste/adhesive) | 8 |
+| Kullanıcı tanımlı önceden hazır | 4 |
+| Board outline + margin | 2 |
+| İsteğe bağlı kullanıcı | 9 |
 
-### Canonical Layer Names
+### Canonical Layer İsimleri
 
-> For detailed table see `references/layers.md`
+> Detaylı tablo için → `references/layers.md`
 
-Commonly used:
+Sık kullanılanlar:
 
-| Name                  | Description               |
-| --------------------- | ------------------------- |
-| `F.Cu`                | Front copper              |
-| `B.Cu`                | Back copper               |
-| `In1.Cu`…`In30.Cu`    | Inner copper layers       |
-| `F.SilkS` / `B.SilkS` | Front/back silkscreen     |
-| `F.Mask` / `B.Mask`   | Front/back solder mask    |
-| `F.Paste` / `B.Paste` | Front/back solder paste   |
-| `F.Fab` / `B.Fab`     | Fabrication layer         |
-| `F.CrtYd` / `B.CrtYd` | Courtyard (keep-out area) |
-| `Edge.Cuts`           | Board edge                |
-| `Dwgs.User`           | Drawing layer             |
-| `User.1`…`User.9`     | User-defined              |
+| İsim | Açıklama |
+|------|----------|
+| `F.Cu` | Ön bakır |
+| `B.Cu` | Arka bakır |
+| `In1.Cu`…`In30.Cu` | İç bakır katmanları |
+| `F.SilkS` / `B.SilkS` | Ön/arka serigrafi |
+| `F.Mask` / `B.Mask` | Ön/arka lehim maskesi |
+| `F.Paste` / `B.Paste` | Ön/arka lehim pastası |
+| `F.Fab` / `B.Fab` | Üretim katmanı |
+| `F.CrtYd` / `B.CrtYd` | Courtyard (koruma alanı) |
+| `Edge.Cuts` | Kart kenarı |
+| `Dwgs.User` | Çizim katmanı |
+| `User.1`…`User.9` | Kullanıcı tanımlı |
 
-Wildcard usage: `*.Cu` -> all copper layers
+Wildcard kullanımı: `*.Cu` → tüm bakır katmanlar
 
 ---
 
-## Footprint Token
+## Footprint Tokeni
 
-> For detailed footprint format see `references/footprint.md`
+> Detaylı footprint formatı → `references/footprint.md`
 
 ```scheme
 (footprint ["LIB:FOOTPRINT_NAME"]
@@ -265,66 +214,66 @@ Wildcard usage: `*.Cu` -> all copper layers
   (tedit TIMESTAMP)
   [(uuid UUID)]
   [(at X Y [ANGLE])]
-  [(descr "DESCRIPTION")]
-  [(tags "TAGS")]
+  [(descr "AÇIKLAMA")]
+  [(tags "ETIKETLER")]
   [(property "KEY" "VALUE") ...]
-  [(path "SCHEMATIC_PATH")]
+  [(path "SEMATIK_YOLU")]
   [(solder_mask_margin MM)]
   [(solder_paste_margin MM)]
-  [(solder_paste_ratio RATIO)]
+  [(solder_paste_ratio ORAN)]
   [(clearance MM)]
-  [(zone_connect 0|1|2)]          ; 0=not connected, 1=thermal, 2=solid
+  [(zone_connect 0|1|2)]          ; 0=bağlı değil, 1=thermal, 2=solid
   [(thermal_width MM)]
   [(thermal_gap MM)]
   [(attr TYPE [board_only] [exclude_from_pos_files] [exclude_from_bom])]
-  GRAPHIC_ITEMS...                ; fp_text, fp_line, fp_rect, fp_circle, fp_arc, fp_poly
-  PADS...                       ; pad token list
-  ZONES...
-  GROUPS...
-  [(model "3D_FILE" (at (xyz X Y Z)) (scale (xyz X Y Z)) (rotate (xyz X Y Z)))]
+  GRAFIK_OGELER...                ; fp_text, fp_line, fp_rect, fp_circle, fp_arc, fp_poly
+  PADLER...                       ; pad token listesi
+  ZONLAR...
+  GRUPLAR...
+  [(model "3D_DOSYA" (at (xyz X Y Z)) (scale (xyz X Y Z)) (rotate (xyz X Y Z)))]
 )
 ```
 
-**`attr` TYPE values:** `smd`, `through_hole`
+**`attr` TYPE değerleri:** `smd`, `through_hole`
 
-### Footprint Graphic Items
+### Footprint Grafik Ögeleri
 
 ```scheme
-; Text
-(fp_text reference|value|user "TEXT" (at X Y [ANGLE])
+; Metin
+(fp_text reference|value|user "METİN" (at X Y [ANGLE])
   (layer LAYER) [hide] (effects ...) (uuid UUID))
 
-; Line
+; Çizgi
 (fp_line (start X Y) (end X Y) (layer LAYER)
   (stroke ...) [(locked)] (uuid UUID))
 
-; Rectangle
+; Dikdörtgen
 (fp_rect (start X Y) (end X Y) (layer LAYER)
   (stroke ...) [(fill yes|no)] [(locked)] (uuid UUID))
 
-; Circle (center + end of radius)
+; Daire (center + end of radius)
 (fp_circle (center X Y) (end X Y) (layer LAYER)
   (stroke ...) [(fill yes|no)] [(locked)] (uuid UUID))
 
-; Arc (start + midpoint + end)
+; Yay (start + midpoint + end)
 (fp_arc (start X Y) (mid X Y) (end X Y) (layer LAYER)
   (stroke ...) [(locked)] (uuid UUID))
 
-; Polygon
+; Çokgen
 (fp_poly (pts (xy X Y) ...) (layer LAYER)
   (stroke ...) [(fill yes|no)] [(locked)] (uuid UUID))
 
-; Bezier curve (4 control points)
+; Bezier eğrisi (4 kontrol noktası)
 (fp_curve (pts (xy X Y) (xy X Y) (xy X Y) (xy X Y))
   (layer LAYER) (stroke ...) [(locked)] (uuid UUID))
 ```
 
-### Pad Token
+### Pad Tokeni
 
-> For full pad details see `references/pad.md`
+> Tam pad detayı → `references/pad.md`
 
 ```scheme
-(pad "NUMBER"
+(pad "NUMARA"
   thru_hole|smd|connect|np_thru_hole
   circle|rect|oval|trapezoid|roundrect|custom
   (at X Y [ANGLE])
@@ -332,7 +281,7 @@ Wildcard usage: `*.Cu` -> all copper layers
   (size WIDTH HEIGHT)
   [(drill [oval] DIAMETER [SLOT_WIDTH] [(offset X Y)])]
   (layers "LAYER_LIST")
-  [(net NUMBER "NET_NAME")]
+  [(net NUMARA "NET_ADI")]
   (uuid UUID)
   [(roundrect_rratio 0.0-1.0)]
   [(chamfer_ratio 0.0-1.0)]
@@ -346,26 +295,26 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 ---
 
-## Graphic Items (Board-level)
+## Grafik Ögeler (Board-level)
 
 ```scheme
-; Text
-(gr_text "TEXT" (at X Y) (layer LAYER [(knockout)])
+; Metin
+(gr_text "METİN" (at X Y) (layer LAYER [(knockout)])
   (uuid UUID) (effects ...))
 
-; Line
+; Çizgi
 (gr_line (start X Y) (end X Y) [(angle A)] (layer LAYER) (width W) (uuid UUID))
 
-; Rectangle
+; Dikdörtgen
 (gr_rect (start X Y) (end X Y) (layer LAYER) (width W) [(fill yes|no)] (uuid UUID))
 
-; Circle
+; Daire
 (gr_circle (center X Y) (end X Y) (layer LAYER) (width W) [(fill yes|no)] (uuid UUID))
 
-; Arc (mid-point method)
+; Yay (mid-point yöntemi)
 (gr_arc (start X Y) (mid X Y) (end X Y) (layer LAYER) (width W) (uuid UUID))
 
-; Polygon
+; Çokgen
 (gr_poly (pts ...) (layer LAYER) (width W) [(fill yes|no)] (uuid UUID))
 
 ; Bezier (KiCad 7+)
@@ -374,15 +323,15 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 ---
 
-## Zone Token
+## Zone Tokeni
 
 ```scheme
 (zone
-  (net NET_NUMBER)
-  (net_name "NET_NAME")
+  (net NET_NUMARASI)
+  (net_name "NET_ADI")
   (layer LAYER)
   (uuid UUID)
-  [(name "NAME")]
+  [(name "ADI")]
   (hatch none|edge|full PITCH)
   [(priority N)]
   (connect_pads [thru_hole_only|full|no] (clearance MM))
@@ -394,7 +343,7 @@ Wildcard usage: `*.Cu` -> all copper layers
     [(mode hatched)]
     (thermal_gap MM) (thermal_bridge_width MM)
     [(smoothing chamfer|fillet)] [(radius R)]
-    [(island_removal_mode 0|1|2)] [(island_area_min AREA)]
+    [(island_removal_mode 0|1|2)] [(island_area_min ALAN)]
   )
   (polygon (pts (xy X Y) ...))
   [(filled_polygon (layer LAYER) (pts ...))]
@@ -403,121 +352,117 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 ---
 
-## Schematic / Symbol Library Common Syntax
+## Şematik / Sembol Kütüphanesi Ortak Sözdizimi
 
-### Symbol Token Structure
+### Sembol Token Yapısı
 
 ```scheme
-(symbol "LIB_ID" | "UNIT_ID"
-  [(extends "LIB_ID")]
+(symbol "LIB_KIMLIK" | "BIRIM_KIMLIK"
+  [(extends "LIB_KIMLIK")]
   [(pin_numbers hide)]
   [(pin_names [(offset MM)] [hide])]
   (in_bom yes|no)
   (on_board yes|no)
-  SYMBOL_PROPERTIES...
-  GRAPHIC_ITEMS...
-  PINS...
-  UNITS...
-  [(unit_name "UNIT_NAME")]
+  SEMBOL_OZELLIKLERI...
+  GRAFIK_OGELER...
+  PINLER...
+  BIRIMLER...
+  [(unit_name "BIRIM_ADI")]
 )
 ```
 
-**Unit ID format:** `"SYMBOL_NAME_UNIT_STYLE"`
+**Birim ID formatı:** `"SEMBOL_ADI_BIRIM_STIL"`
+- `BIRIM`: hangi birimi, `0` = tüm birimlerde ortak
+- `STIL`: 1 veya 2 (sadece iki body style desteklenir)
 
-- `UNIT`: which unit, `0` = common to all units
-- `STYLE`: 1 or 2 (only two body styles supported)
-- If `pin_names` exists without an explicit offset, KiCad uses a default offset of `0.508 mm` (`0.020"`).
-- Child unit symbols cannot define symbol properties; mandatory properties belong on the parent symbol.
-
-### Symbol Properties
+### Sembol Özellikleri
 
 ```scheme
-(property "KEY" "VALUE"
-  (id N)                  ; integer, must be unique
+(property "ANAHTAR" "DEĞER"
+  (id N)                  ; integer, benzersiz olmalı
   (at X Y [ANGLE])
   (effects ...)
 )
 ```
 
-**Required properties (for parent symbols):**
+**Zorunlu özellikler (parent semboller için):**
 
-| Key         | id  | Description          | Can be empty? |
-| ----------- | --- | -------------------- | ------------- |
-| `Reference` | 0   | Reference designator | No            |
-| `Value`     | 1   | Value string         | No            |
-| `Footprint` | 2   | Footprint lib ID     | Yes           |
-| `Datasheet` | 3   | Datasheet link       | Yes           |
+| Anahtar | id | Açıklama | Boş olabilir mi? |
+|---------|----|----------|-----------------|
+| `Reference` | 0 | Referans tanımlayıcı | Hayır |
+| `Value` | 1 | Değer string'i | Hayır |
+| `Footprint` | 2 | Footprint lib ID | Evet |
+| `Datasheet` | 3 | Datasheet linki | Evet |
 
-**KiCad reserved keys** (cannot be used as user properties):
+**KiCad rezerve anahtarlar** (kullanıcı property olarak kullanılamaz):
 `ki_keywords`, `ki_description`, `ki_locked`, `ki_fp_filters`
 
-### Symbol Graphic Items
+### Sembol Grafik Ögeleri
 
 ```scheme
-; Arc
+; Yay
 (arc (start X Y) (mid X Y) (end X Y) STROKE_DEF FILL_DEF)
 
-; Circle
+; Daire
 (circle (center X Y) (radius R) STROKE_DEF FILL_DEF)
 
 ; Bezier
 (bezier (pts (xy X Y)(xy X Y)(xy X Y)(xy X Y)) STROKE_DEF FILL_DEF)
 
-; Multi-line (polyline — symbol line or polygon)
+; Çoklu çizgi (polyline — sembol çizgisi veya çokgeni)
 (polyline (pts ...) STROKE_DEF FILL_DEF)
 
-; Rectangle
+; Dikdörtgen
 (rectangle (start X Y) (end X Y) STROKE_DEF FILL_DEF)
 
-; Text
-(text "TEXT" (at X Y [ANGLE]) (effects ...))
+; Metin
+(text "METİN" (at X Y [ANGLE]) (effects ...))
 ```
 
-**`fill` token (for schematic/symbol):**
-
+**`fill` token (şematik/sembol için):**
 ```scheme
 (fill (type none|outline|background))
 ```
 
-### Pin Token
+### Pin Tokeni
 
 ```scheme
 (pin
-  ELECTRICAL_TYPE
-  GRAPHIC_STYLE
-  (at X Y ANGLE)          ; only 0, 90, 180, 270 supported
+  ELEKTRIKSEL_TIP
+  GRAFIK_STIL
+  (at X Y ANGLE)          ; sadece 0, 90, 180, 270 desteklenir
   (length MM)
   (name "AD" (effects ...))
-  (number "NUMBER" (effects ...))
+  (number "NUMARA" (effects ...))
 )
 ```
 
-**Electrical types:**
+**Elektriksel tipler:**
 
-| Token            | Description            |
-| ---------------- | ---------------------- |
-| `input`          | Input                  |
-| `output`         | Output                 |
-| `bidirectional`  | Bidirectional          |
-| `tri_state`      | Three-state output     |
-| `passive`        | Passive                |
-| `free`           | Internally unconnected |
-| `unspecified`    | Unspecified            |
-| `power_in`       | Power input            |
-| `power_out`      | Power output           |
-| `open_collector` | Open collector         |
-| `open_emitter`   | Open emitter           |
-| `no_connect`     | No connection          |
+| Token | Açıklama |
+|-------|----------|
+| `input` | Giriş |
+| `output` | Çıkış |
+| `bidirectional` | Çift yönlü |
+| `tri_state` | Üç durumlu çıkış |
+| `passive` | Pasif |
+| `free` | İç bağlantısız |
+| `unspecified` | Belirsiz |
+| `power_in` | Güç girişi |
+| `power_out` | Güç çıkışı |
+| `open_collector` | Açık kollektör |
+| `open_emitter` | Açık emiter |
+| `no_connect` | Bağlantı yok |
 
-**Graphic styles:** `line`, `inverted`, `clock`, `inverted_clock`, `input_low`,
+**Grafik stiller:** `line`, `inverted`, `clock`, `inverted_clock`, `input_low`,
 `clock_low`, `output_low`, `edge_clock_high`, `non_logic`
 
 ---
 
-## Group Token
+## Grup Tokeni
 
 ```scheme
-(group "NAME"
+(group "ADI"
   (id UUID)
   (members UUID1 UUID2 ... UUIDN)
 )
@@ -525,94 +470,41 @@ Wildcard usage: `*.Cu` -> all copper layers
 
 ---
 
-## Schematic-Specific Rules
+## Library Identifier Formatı
 
-### Instance Paths
-
-- Hierarchical instance paths are slash-separated UUID chains, for example:
-
-```text
-/00000000-0000-0000-0000-00004b3a13a4/00000000-0000-0000-0000-00004b617b88
+```
+"KUTUPHANE_TAKMA_ADI:GIRIS_ADI"
 ```
 
-- The first UUID in a non-root instance path must be the root schematic UUID.
-- The root sheet instance path is always exactly `/`.
-
-### Schematic Symbol Instances
-
-```scheme
-(symbol
-  "LIBRARY_IDENTIFIER"
-  (at X Y ANGLE)
-  (unit N)
-  (in_bom yes|no)
-  (on_board yes|no)
-  (uuid UUID)
-  PROPERTIES...
-  (pin "PIN_NUMBER" (uuid UUID))...
-  (instances
-    (project "PROJECT_NAME"
-      (path "PATH_INSTANCE"
-        (reference "REFDES")
-        (unit N)
-      )
-    )
-  )
-)
-```
-
-- `instances -> project -> path -> reference/unit` ordering matters.
-- Project instance entries are sorted by `PROJECT_NAME`.
-- Every symbol has at least one instance entry.
-
-### Sheet and Label Shape Tokens
-
-Valid shape tokens for `global_label`, `hierarchical_label`, and hierarchical sheet `pin` are:
-
-`input`, `output`, `bidirectional`, `tri_state`, `passive`
-
-### Global Label Properties
-
-- `global_label` may include `fields_autoplaced`.
-- The only currently documented global-label property is the inter-sheet reference.
+⚠️ Kütüphane dosyaları `KUTUPHANE_TAKMA_ADI`'nı içermez — sadece `GIRIS_ADI` saklanır.
 
 ---
 
-## Library Identifier Format
+## Python ile S-Expression Parse Etme
 
-```
-"LIBRARY_ALIAS:ENTRY_NAME"
-```
-
-Warning: Library files do not contain `LIBRARY_ALIAS` - only `ENTRY_NAME` is stored.
-
----
-
-## Parsing S-Expression with Python
-
-In KiCad Action Plugins or the scripting console, use the `pcbnew` module for native reading:
+KiCad Action Plugin'lerinde veya scripting consolunda `pcbnew` modülü ile native okuma:
 
 ```python
 import pcbnew
 
-# Load PCB
-board = pcbnew.LoadBoard("circuit.kicad_pcb")
+# PCB yükle
+board = pcbnew.LoadBoard("devre.kicad_pcb")
 
-# Read footprints
+# Footprint'leri oku
 for fp in board.GetFootprints():
     print(fp.GetReference(), fp.GetPosition())
 
-# Add footprint
+# Footprint ekle
 fp = pcbnew.FootprintLoad("MyCoolLib", "SOT23")
 board.Add(fp)
 pcbnew.Refresh()
 ```
 
-Lightweight Python parser for raw S-expression parsing:
+Ham S-expression parse etmek için lightweight Python parser:
 
 ```python
 def parse_sexpr(text):
-    """Minimal KiCad sexpr parser. Nested list returns."""
+    """Minimal KiCad sexpr parser. Nested list döner."""
     tokens = []
     current = []
     stack = [current]
@@ -640,29 +532,29 @@ def parse_sexpr(text):
         i += 1
     return current[0] if current else []
 
-# Usage:
-with open("circuit.kicad_pcb", encoding="utf-8") as f:
+# Kullanım:
+with open("devre.kicad_pcb", encoding="utf-8") as f:
     tree = parse_sexpr(f.read())
 ```
 
-### S-Expression Generation (Python)
+### S-Expression Üretme (Python)
 
 ```python
 def to_sexpr(obj, indent=0):
-    """Convert Python list to KiCad sexpr format."""
+    """Python listesini KiCad sexpr formatına çevir."""
     pad = "  " * indent
     if isinstance(obj, list):
         if not obj:
             return "()"
         inner = " ".join(to_sexpr(x) for x in obj)
-        # Break long lines
+        # Uzun satırları break et
         if len(inner) > 80:
             child_pad = "  " * (indent + 1)
             lines = "\n".join(f"{child_pad}{to_sexpr(x, indent+1)}" for x in obj)
             return f"(\n{lines}\n{pad})"
         return f"({inner})"
     elif isinstance(obj, str):
-        # Token or string?
+        # Token mu string mi?
         if obj.replace('_', '').replace('.', '').isalnum():
             return obj
         return f'"{obj}"'
@@ -675,40 +567,50 @@ def to_sexpr(obj, indent=0):
 
 ---
 
-## Critical Notes and Pitfalls
+## Kritik Notlar ve Tuzaklar
 
-1. **Coordinate precision:** `round(val, 6)` for PCB/footprint, `round(val, 4)` for schematic/symbol, `round(val, 3)` for worksheet
-2. **UUID generation:** `uuid.uuid4()` is sufficient in Python, produces KiCad-compatible v4 UUID
-3. **Timestamp (tedit):** `format(int(time.time()), 'X')` — in hex format
-4. **fp_text requirement:** `reference` and `value` required in every footprint; KiCad will complain if missing
-5. **Layer names:** canonical names are always in English — user names are display-only
-6. **KiCad 7 changes:** `width` token -> `stroke` token; `dash_dot_dot` added; TrueType `face` token added
-7. **Version compatibility:** Pre-KiCad 6 used `module` instead of `footprint`
-8. **Wire/Bus syntax:** schematic `wire` and `bus` use `(pts (xy X1 Y1) (xy X2 Y2))`, not `(start ...)(end ...)`
-9. **Track/Via UUID difference:** PCB tracks and vias use `tstamp UUID` not `uuid`
-10. **Symbol `instances` block:** Schematic symbol placement token, in hierarchical designs `instances -> project -> path -> reference/unit` chain; if not filled correctly in third-party generators, netlist output corrupts
-11. **Generator warning:** `eeschema`, `kicad_symbol_editor`, `pcbnew`, and `pl_editor` are reserved for KiCad tools only; use your own identifier in third-party tools
-12. **lib_symbols:** Schematic file stores a copy of all used symbols in `lib_symbols` - can be opened without library
-13. **Hierarchical sheet pin -> label matching:** Sheet `pin` name must be **letter-for-letter identical** to the `hierarchical_label` name in the sub-schematic; otherwise connection fails
-14. **Parent symbol properties:** Parent symbols must define `Reference`, `Value`, `Footprint`, and `Datasheet`; IDs are `0`, `1`, `2`, `3`
-15. **Reserved symbol property keys:** Never emit user properties with `ki_keywords`, `ki_description`, `ki_locked`, or `ki_fp_filters`
-16. **Pin electrical token:** The valid no-connect electrical type is `no_connect`, not `not_connected`
-17. **Root path rule:** The root schematic instance path is `/`; non-root instance paths must begin with the root schematic UUID
+1. **Koordinat hassasiyeti:** `round(val, 6)` kullan (PCB), `round(val, 4)` kullan (şematik)
+2. **UUID üretimi:** `uuid.uuid4()` Python'da yeterli, KiCad uyumlu v4 UUID üretir
+3. **Timestamp (tedit):** `format(int(time.time()), 'X')` — hex formatında
+4. **fp_text zorunluluğu:** `reference` ve `value` her footprint'te zorunlu; bulunmazsa KiCad şikayet eder
+5. **Layer isimleri:** canonical isimler her zaman İngilizce — kullanıcı isimleri sadece görüntülemedir
+6. **KiCad 7 değişiklikleri:** `width` token → `stroke` token; `dash_dot_dot` eklendi; TrueType `face` token eklendi
+7. **Sürüm uyumluluğu:** KiCad 6 öncesi `footprint` yerine `module` kullanırdı
+8. **Wire/Bus sözdizimi:** `(start X Y)(end X Y)` DEĞİL — `(pts (xy X1 Y1)(xy X2 Y2))` kullanır
+9. **Track/Via UUID farkı:** PCB track ve via'larda `uuid` değil `tstamp UUID` kullanılır
+10. **Symbol `instances` bloğu:** Şematik sembol yerleştirme token'ı, hiyerarşik tasarımlarda `instances → project → path → reference/unit` zinciri içerir; üçüncü parti üreticide bu blok doğru doldurulmazsa netlist çıktısı bozulur
+11. **Şematik `generator` uyarısı:** `eeschema` ve `kicad_symbol_editor` yalnızca KiCad'a ayrılmıştır; 3. parti araçlarda kendi kimliğini kullan
+12. **lib_symbols:** Şematik dosyası, kullandığı tüm sembollerin bir kopyasını `lib_symbols` içinde saklar — kütüphane olmadan da açılabilir
+13. **Hierarchical sheet pin → label eşleşmesi:** Sheet içindeki `pin` adı, alt şematikteki `hierarchical_label` adıyla **harf harf aynı** olmalı; aksi hâlde bağlantı kurulmaz
 
 ---
 
-## Reference Files
+## Rust ile S-Expression Üretme
 
-For more details, read these files:
+KiCad dosyaları Rust'ta üretmek veya manipüle etmek istiyorsan **önce şu dosyayı oku:**
 
-- `references/layers.md` — All canonical layer names, wildcard usage, Python pcbnew constants
-- `references/pad.md` — Full pad token reference, drill, custom pad, zone connection types
-- `references/sexpr-intro.md` — Official common syntax summary, precision rules, headers, generator warnings
-- `references/schematic.md` — Schematic format (wire, bus, junction, label, symbol instance, hierarchical sheet, instances block)
-- `references/board.md` — PCB board format (segment, via, arc, net, stackup, real example)
-- `references/symbol-lib.md` — Official symbol library summary, mandatory parent properties, reserved keys, pin rules
-- `references/footprint.md` — Official footprint library summary, required text objects, pad and attr rules
-- `references/worksheet.md` — Official worksheet summary, setup tokens, repeat/increment, bitmap rules
-- `references/klc-symbols.md` — **KiCad Library Convention (KLC)** — symbol creation rules, pin grid, fill, RefDes table, power symbol structure, Python generator template
-- `references/symbol-libraries.md` — **Official library catalog** — 130+ library names/descriptions, Device library contents, "which library?" quick search table
-- `references/symbol-examples.md` — **Annotated real symbol examples** — R, op-amp, GND power, MCU, crystal, active-low pin, pin stacking, extends pattern
+> 📄 `references/rust-macro.md` — Rust `Node/Atom` AST enum'u, `macro_rules! sexpr!` DSL,
+> `Display` serialize, pretty-print, ve hazır helper fonksiyonlar:
+> `at()`, `layer()`, `layers()`, `pts()`, `stroke()`, `fp_line()`, `fp_text()`,
+> `smd_pad()`, `wire()`, `junction()`, `build_r0603()` tam örneği
+
+**Hangi durumda oku:**
+- Rust'ta footprint / şematik üretici yazıyorsan
+- `macro_rules!` S-expression DSL'i lazımsa
+- `Node::List` / `Atom::Raw` vs `Atom::Str` farkını anlamak istiyorsan
+- UUID üretimi veya `tedit` timestamp formatı lazımsa
+
+---
+
+## Referans Dosyaları
+
+Daha fazla detay için bu dosyaları oku:
+
+- `references/rust-macro.md` — **Rust macro & AST** — `Node/Atom` enum, `sexpr!` macro, helper API, tam footprint örneği
+- `references/layers.md` — Tüm canonical layer isimleri, wildcard kullanımı, Python pcbnew sabitleri
+- `references/pad.md` — Pad token tam referansı, drill, custom pad, zone bağlantı tipleri
+- `references/schematic.md` — Şematik format (wire, bus, junction, label, symbol instance, hierarchical sheet, instances bloğu)
+- `references/board.md` — PCB board formatı (segment, via, arc, net, stackup, gerçek örnek)
+- `references/klc-symbols.md` — **KiCad Library Convention (KLC)** — sembol oluşturma kuralları, pin grid, fill, RefDes tablosu, power sembol yapısı, Python üretici şablonu
+- `references/symbol-libraries.md` — **Resmi kütüphane kataloğu** — 130+ kütüphane adı/açıklaması, Device kütüphanesi içeriği, "hangi kütüphanede?" hızlı arama tablosu
+- `references/symbol-examples.md` — **Annotated gerçek sembol örnekleri** — R, op-amp, GND power, MCU, kristal, aktif düşük pin, pin yığma, extends kalıbı

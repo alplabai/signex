@@ -7,6 +7,6 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
+kicad-parser = { workspace = true }
 
 [dev-dependencies]
-kicad-parser = { workspace = true }

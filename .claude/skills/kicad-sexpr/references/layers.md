@@ -1,113 +1,113 @@
-# KiCad Canonical Layer Names — Full List
+# KiCad Canonical Layer İsimleri — Tam Liste
 
-## Copper Layers
+## Bakır Katmanlar
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `F.Cu` | Front (top) copper layer |
-| `In1.Cu` | Inner copper layer 1 |
-| `In2.Cu` | Inner copper layer 2 |
-| `In3.Cu` | Inner copper layer 3 |
-| `In4.Cu` | Inner copper layer 4 |
-| `In5.Cu` | Inner copper layer 5 |
-| `In6.Cu` | Inner copper layer 6 |
-| `In7.Cu` | Inner copper layer 7 |
-| `In8.Cu` | Inner copper layer 8 |
-| `In9.Cu` | Inner copper layer 9 |
-| `In10.Cu` | Inner copper layer 10 |
-| `In11.Cu` | Inner copper layer 11 |
-| `In12.Cu` | Inner copper layer 12 |
-| `In13.Cu` | Inner copper layer 13 |
-| `In14.Cu` | Inner copper layer 14 |
-| `In15.Cu` | Inner copper layer 15 |
-| `In16.Cu` | Inner copper layer 16 |
-| `In17.Cu` | Inner copper layer 17 |
-| `In18.Cu` | Inner copper layer 18 |
-| `In19.Cu` | Inner copper layer 19 |
-| `In20.Cu` | Inner copper layer 20 |
-| `In21.Cu` | Inner copper layer 21 |
-| `In22.Cu` | Inner copper layer 22 |
-| `In23.Cu` | Inner copper layer 23 |
-| `In24.Cu` | Inner copper layer 24 |
-| `In25.Cu` | Inner copper layer 25 |
-| `In26.Cu` | Inner copper layer 26 |
-| `In27.Cu` | Inner copper layer 27 |
-| `In28.Cu` | Inner copper layer 28 |
-| `In29.Cu` | Inner copper layer 29 |
-| `In30.Cu` | Inner copper layer 30 |
-| `B.Cu` | Back (bottom) copper layer |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `F.Cu` | Ön (top) bakır katmanı |
+| `In1.Cu` | İç bakır katman 1 |
+| `In2.Cu` | İç bakır katman 2 |
+| `In3.Cu` | İç bakır katman 3 |
+| `In4.Cu` | İç bakır katman 4 |
+| `In5.Cu` | İç bakır katman 5 |
+| `In6.Cu` | İç bakır katman 6 |
+| `In7.Cu` | İç bakır katman 7 |
+| `In8.Cu` | İç bakır katman 8 |
+| `In9.Cu` | İç bakır katman 9 |
+| `In10.Cu` | İç bakır katman 10 |
+| `In11.Cu` | İç bakır katman 11 |
+| `In12.Cu` | İç bakır katman 12 |
+| `In13.Cu` | İç bakır katman 13 |
+| `In14.Cu` | İç bakır katman 14 |
+| `In15.Cu` | İç bakır katman 15 |
+| `In16.Cu` | İç bakır katman 16 |
+| `In17.Cu` | İç bakır katman 17 |
+| `In18.Cu` | İç bakır katman 18 |
+| `In19.Cu` | İç bakır katman 19 |
+| `In20.Cu` | İç bakır katman 20 |
+| `In21.Cu` | İç bakır katman 21 |
+| `In22.Cu` | İç bakır katman 22 |
+| `In23.Cu` | İç bakır katman 23 |
+| `In24.Cu` | İç bakır katman 24 |
+| `In25.Cu` | İç bakır katman 25 |
+| `In26.Cu` | İç bakır katman 26 |
+| `In27.Cu` | İç bakır katman 27 |
+| `In28.Cu` | İç bakır katman 28 |
+| `In29.Cu` | İç bakır katman 29 |
+| `In30.Cu` | İç bakır katman 30 |
+| `B.Cu` | Arka (bottom) bakır katmanı |
 
-## Technical Layers
+## Teknik Katmanlar
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `B.Adhes` | Back adhesive |
-| `F.Adhes` | Front adhesive |
-| `B.Paste` | Back solder paste |
-| `F.Paste` | Front solder paste |
-| `B.SilkS` | Back silkscreen |
-| `F.SilkS` | Front silkscreen |
-| `B.Mask` | Back solder mask |
-| `F.Mask` | Front solder mask |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `B.Adhes` | Arka yapıştırıcı (adhesive) |
+| `F.Adhes` | Ön yapıştırıcı |
+| `B.Paste` | Arka lehim pastası |
+| `F.Paste` | Ön lehim pastası |
+| `B.SilkS` | Arka serigrafi (silk screen) |
+| `F.SilkS` | Ön serigrafi |
+| `B.Mask` | Arka lehim maskesi |
+| `F.Mask` | Ön lehim maskesi |
 
-## Drawing / Comment Layers
+## Çizim / Yorum Katmanları
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `Dwgs.User` | User drawing layer |
-| `Cmts.User` | User comment layer |
-| `Eco1.User` | ECO layer 1 |
-| `Eco2.User` | ECO layer 2 |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `Dwgs.User` | Kullanıcı çizim katmanı |
+| `Cmts.User` | Kullanıcı yorum katmanı |
+| `Eco1.User` | ECO katmanı 1 |
+| `Eco2.User` | ECO katmanı 2 |
 
-## Board Edge Layers
+## Kart Sınır Katmanları
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `Edge.Cuts` | Board cut boundary |
-| `Margin` | Board edge margin |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `Edge.Cuts` | Kart kesim sınırı |
+| `Margin` | Kart kenar boşluğu |
 
-## Footprint Layers
+## Footprint Katmanları
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `F.CrtYd` | Front courtyard (keep-out area) |
-| `B.CrtYd` | Back courtyard |
-| `F.Fab` | Front fabrication layer |
-| `B.Fab` | Back fabrication layer |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `F.CrtYd` | Ön courtyard (koruma alanı) |
+| `B.CrtYd` | Arka courtyard |
+| `F.Fab` | Ön fabrication katmanı |
+| `B.Fab` | Arka fabrication katmanı |
 
-## User-Defined Layers
+## Kullanıcı Tanımlı Katmanlar
 
-| Canonical Name | Description |
-|----------------|-------------|
-| `User.1` | User layer 1 |
-| `User.2` | User layer 2 |
-| `User.3` | User layer 3 |
-| `User.4` | User layer 4 |
-| `User.5` | User layer 5 |
-| `User.6` | User layer 6 |
-| `User.7` | User layer 7 |
-| `User.8` | User layer 8 |
-| `User.9` | User layer 9 |
+| Canonical İsim | Açıklama |
+|----------------|----------|
+| `User.1` | Kullanıcı katmanı 1 |
+| `User.2` | Kullanıcı katmanı 2 |
+| `User.3` | Kullanıcı katmanı 3 |
+| `User.4` | Kullanıcı katmanı 4 |
+| `User.5` | Kullanıcı katmanı 5 |
+| `User.6` | Kullanıcı katmanı 6 |
+| `User.7` | Kullanıcı katmanı 7 |
+| `User.8` | Kullanıcı katmanı 8 |
+| `User.9` | Kullanıcı katmanı 9 |
 
-## Wildcard Usage
+## Wildcard Kullanımı
 
 ```scheme
-(layer *.Cu)       ; all copper layers
-(layer F.*)        ; all front layers (for canonical names only)
+(layer *.Cu)       ; tüm bakır katmanlar
+(layer F.*)        ; tüm ön katmanlar (sadece canonical isimler için)
 ```
 
-## Python Layer Numbers (pcbnew API)
+## Python'da Layer Numaraları (pcbnew API)
 
 ```python
 import pcbnew
 
-# Layer name -> number
-layer_num = pcbnew.GetLayerByName("F.Cu")  # -> 0
+# Layer ismi → numara
+layer_num = pcbnew.GetLayerByName("F.Cu")  # → 0
 
-# Number -> name
-layer_name = pcbnew.GetLayerName(0)         # -> "F.Cu"
+# Numara → isim
+layer_name = pcbnew.GetLayerName(0)         # → "F.Cu"
 
-# Frequently used constants
+# Sık kullanılan sabitler
 pcbnew.F_Cu    # 0
 pcbnew.B_Cu    # 31
 pcbnew.F_SilkS # 37

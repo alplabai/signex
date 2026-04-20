@@ -1,39 +1,39 @@
-# KiCad Schematic File Format — Full Reference
+# KiCad Şematik Dosya Formatı — Tam Referans
 
-> Extension: `.kicad_sch` | KiCad 6.0+ valid
+> Uzantı: `.kicad_sch` | KiCad 6.0+ geçerli
 
 ---
 
-## Top-Level File Structure
+## Dosya Üst Düzey Yapısı
 
 ```scheme
 (kicad_sch
-  (version YYYYMMDD)                    ; e.g.: 20211123
-  (generator GENERATOR_NAME)              ; Warning: 3rd party: "eeschema" DO NOT USE
+  (version YYYYMMDD)                    ; örn: 20211123
+  (generator ÜRETICI_ADI)              ; ⚠️ 3. parti: "eeschema" KULLANMA
 
-  (uuid UUID)                           ; unique ID of this schematic file
+  (uuid UUID)                           ; bu şematik dosyasının benzersiz ID'si
 
-  (paper ...)                           ; paper settings
-  (title_block ...)                     ; title block
+  (paper ...)                           ; kağıt ayarları
+  (title_block ...)                     ; başlık bloğu
 
-  (lib_symbols                          ; library of symbols used in the schematic
-    SYMBOL_DEFINITIONS...
+  (lib_symbols                          ; şematikte kullanılan sembollerin kütüphanesi
+    SEMBOL_TANIMLARI...
   )
 
-  JUNCTION_DEFINITIONS...
-  NO_CONNECT_DEFINITIONS...
-  BUS_ENTRY_DEFINITIONS...
-  WIRE_AND_BUS_DEFINITIONS...
-  IMAGE_DEFINITIONS...
-  POLYLINE_DEFINITIONS...
-  TEXT_DEFINITIONS...
-  LABEL_DEFINITIONS...
-  GLOBAL_LABEL_DEFINITIONS...
-  HIERARCHICAL_LABEL_DEFINITIONS...
-  SYMBOL_PLACEMENTS...
-  SHEET_DEFINITIONS...
+  JUNCTION_TANIMLARI...
+  NO_CONNECT_TANIMLARI...
+  BUS_ENTRY_TANIMLARI...
+  WIRE_VE_BUS_TANIMLARI...
+  IMAGE_TANIMLARI...
+  POLYLINE_TANIMLARI...
+  TEXT_TANIMLARI...
+  LABEL_TANIMLARI...
+  GLOBAL_LABEL_TANIMLARI...
+  HIERARCHICAL_LABEL_TANIMLARI...
+  SEMBOL_YERLESTIRILERI...
+  SHEET_TANIMLARI...
 
-  (sheet_instances                      ; root sheet instance (required)
+  (sheet_instances                      ; root sheet instance (zorunlu)
     (path "/"
       (page "1")
     )
@@ -41,20 +41,20 @@
 )
 ```
 
-> Warning: `generator` do not use `eeschema` for generator — write your own tool name.
+> ⚠️ `generator` için `eeschema` kullanma — kendi aracının adını yaz.
 
 ---
 
-## Instance Path Concept
+## Instance Path Kavramı
 
-Shared schematics can have multiple instances. The hierarchical path
-is formed by joining the UUIDs of related sheets with `/`:
+Paylaşılan şematikler birden fazla instance'a sahip olabilir. Hiyerarşik yol,
+ilgili sheet'lerin UUID'lerinin `/` ile birleştirilmesiyle oluşur:
 
 ```
 "/00000000-0000-0000-0000-00004b3a13a4/00000000-0000-0000-0000-00004b617b88"
 ```
 
-- **First UUID** must always be the root sheet UUID (UUID of the root `.kicad_sch` file)
+- **İlk UUID** her zaman root sheet UUID'si olmalıdır (root `.kicad_sch` dosyasının UUID'si)
 
 ---
 
@@ -63,8 +63,8 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (junction
   (at X Y)
-  (diameter MM)    ; 0 = sistem default
-  (color R G B A)  ; 0 0 0 0 = default renk
+  (diameter MM)    ; 0 = sistem varsayılanı
+  (color R G B A)  ; 0 0 0 0 = varsayılan renk
   (uuid UUID)
 )
 ```
@@ -87,7 +87,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (bus_entry
   (at X Y)
-  (size WIDTH HEIGHT)   ; end point, start'tan delta offset
+  (size GENİŞLİK YÜKSEKLİK)   ; end point, start'tan delta offset
   (stroke (width W) (type TYPE))
   (uuid UUID)
 )
@@ -95,7 +95,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 
 ---
 
-## Wire and Bus
+## Wire ve Bus
 
 ```scheme
 (wire
@@ -111,7 +111,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: `(start)(end)` not — wire/bus **`pts` + `xy`** pairs.
+> ⚠️ `(start)(end)` değil — wire/bus **`pts` + `xy`** çifti kullanır.
 
 ---
 
@@ -119,7 +119,7 @@ is formed by joining the UUIDs of related sheets with `/`:
 
 ```scheme
 (polyline
-  (pts (xy X1 Y1) (xy X2 Y2) ...)   ; minimum 2 points
+  (pts (xy X1 Y1) (xy X2 Y2) ...)   ; minimum 2 nokta
   (stroke ...)
   (uuid UUID)
 )
@@ -130,8 +130,8 @@ is formed by joining the UUIDs of related sheets with `/`:
 ## Graphical Text
 
 ```scheme
-(text "TEXT"
-  (at X Y [ANGLE])
+(text "METİN"
+  (at X Y [AÇI])
   (effects ...)
   (uuid UUID)
 )
@@ -139,13 +139,13 @@ is formed by joining the UUIDs of related sheets with `/`:
 
 ---
 
-## Labels
+## Etiketler
 
 ### Local Label
 
 ```scheme
 (label "AD"
-  (at X Y [ANGLE])
+  (at X Y [AÇI])
   (effects ...)
   (uuid UUID)
 )
@@ -157,10 +157,10 @@ is formed by joining the UUIDs of related sheets with `/`:
 (global_label "AD"
   (shape input|output|bidirectional|tri_state|passive)
   [(fields_autoplaced)]
-  (at X Y [ANGLE])
+  (at X Y [AÇI])
   (effects ...)
   (uuid UUID)
-  PROPERTIES...        ; (property ...) tokens - including inter-sheet ref
+  ÖZELLIKLER...        ; (property ...) tokenları — inter-sheet ref dahil
 )
 ```
 
@@ -169,46 +169,46 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (hierarchical_label "AD"
   (shape input|output|bidirectional|tri_state|passive)
-  (at X Y [ANGLE])
+  (at X Y [AÇI])
   (effects ...)
   (uuid UUID)
 )
 ```
 
-**Label/Pin shapes:** `input` | `output` | `bidirectional` | `tri_state` | `passive`
+**Label/Pin şekilleri:** `input` | `output` | `bidirectional` | `tri_state` | `passive`
 
 ---
 
-## Symbol (Schematic Symbol Placement)
+## Symbol (Şematik Sembol Yerleştirmesi)
 
-`lib_symbols` in the schematic.
+`lib_symbols` içindeki bir sembolün şematikteki instance'ı.
 
 ```scheme
-(symbol "LIB:SYMBOL_NAME"
-  (at X Y [ANGLE])
+(symbol "LIB:SEMBOL_ADI"
+  (at X Y [AÇI])
   [(mirror x|y)]
   (unit N)
   (in_bom yes|no)
   (on_board yes|no)
   (uuid UUID)
 
-  (property "Reference" "R1" (id 0) (at X Y [ANGLE]) (effects ...))
-  (property "Value" "10k"    (id 1) (at X Y [ANGLE]) (effects ...))
-  (property "Footprint" "Resistor_SMD:R_0402" (id 2) (at X Y [ANGLE]) (effects ...))
-  (property "Datasheet" ""   (id 3) (at X Y [ANGLE]) (effects ...))
+  (property "Reference" "R1" (id 0) (at X Y [AÇI]) (effects ...))
+  (property "Value" "10k"    (id 1) (at X Y [AÇI]) (effects ...))
+  (property "Footprint" "Resistor_SMD:R_0402" (id 2) (at X Y [AÇI]) (effects ...))
+  (property "Datasheet" ""   (id 3) (at X Y [AÇI]) (effects ...))
 
-  ; Pin UUID mapping
+  ; Pin UUID eşlemesi
   (pin "1" (uuid PIN1_UUID))
   (pin "2" (uuid PIN2_UUID))
 
-  ; Project-based instance data
+  ; Proje bazlı instance verileri
   (instances
-    (project "PROJECT_NAME"
-      (path "/ROOT_UUID"                  ; single page
+    (project "PROJE_ADI"
+      (path "/ROOT_UUID"                  ; tek sayfa
         (reference "R1")
         (unit 1)
       )
-      (path "/ROOT_UUID/SHEET_UUID"       ; instance in sub-page
+      (path "/ROOT_UUID/SHEET_UUID"       ; alt sayfadaki instance
         (reference "R2")
         (unit 1)
       )
@@ -224,26 +224,26 @@ is formed by joining the UUIDs of related sheets with `/`:
 ```scheme
 (sheet
   (at X Y)
-  (size WIDTH HEIGHT)
+  (size GENİŞLİK YÜKSEKLİK)
   [(fields_autoplaced)]
   (stroke ...)
   (fill (type none|outline|background))
   (uuid UUID)
 
-  ; Required properties
-  (property "Sheet name" "SUB_CIRCUIT"            (id 0) (at X Y) (effects ...))
-  (property "Sheet file" "alt_circuit.kicad_sch"  (id 1) (at X Y) (effects ...))
+  ; Zorunlu özellikler
+  (property "Sheet name" "ALT_DEVRE"            (id 0) (at X Y) (effects ...))
+  (property "Sheet file" "alt_devre.kicad_sch"  (id 1) (at X Y) (effects ...))
 
   ; Hierarchical pin'ler
-  (pin "SIGNAL_NAME" input|output|bidirectional|tri_state|passive
-    (at X Y ANGLE)
+  (pin "SİNYAL_ADI" input|output|bidirectional|tri_state|passive
+    (at X Y AÇI)
     (effects ...)
     (uuid PIN_UUID)
   )
 
-  ; Instance data
+  ; Instance verileri
   (instances
-    (project "PROJECT_NAME"
+    (project "PROJE_ADI"
       (path "/ROOT_UUID"
         (page "2")
       )
@@ -252,14 +252,14 @@ is formed by joining the UUIDs of related sheets with `/`:
 )
 ```
 
-> Warning: Sheet `pin` name in the associated `.kicad_sch` file
-> must be **exactly identical** to the `hierarchical_label` name.
+> ⚠️ Sheet `pin` adı, ilişkili `.kicad_sch` dosyasındaki
+> `hierarchical_label` adıyla **birebir aynı** olmalıdır.
 
 ---
 
 ## Root Sheet Instance Section
 
-Found at the end of every root schematic file:
+Her root şematik dosyasının en sonunda bulunur:
 
 ```scheme
 (sheet_instances
@@ -273,17 +273,17 @@ Found at the end of every root schematic file:
 
 ## lib_symbols Section
 
-**Inline copies** of all symbols used in the schematic are stored here.
-The file can be opened without library dependency.
+Şematikde kullanılan tüm sembollerin **inline kopyası** burada saklanır.
+Kütüphane bağımlılığı olmadan dosya açılabilir.
 
 ```scheme
 (lib_symbols
-  (symbol "LIB_NAME:SYMBOL_NAME"
+  (symbol "LIB_ADI:SEMBOL_ADI"
     (pin_names (offset 1.016))
     (in_bom yes) (on_board yes)
     (property "Reference" "R" (id 0) (at 0 1.27 0) (effects ...))
     (property "Value" "R"     (id 1) (at 0 -1.27 0) (effects ...))
-    (symbol "SYMBOL_NAME_1_1"
+    (symbol "SEMBOL_ADI_1_1"
       (polyline
         (pts (xy -1.778 -0.889)(xy -1.778 0.889))
         (stroke (width 0.254)(type default))
@@ -309,46 +309,46 @@ The file can be opened without library dependency.
 ```scheme
 (kicad_symbol_lib
   (version YYYYMMDD)
-  (generator GENERATOR_NAME)   ; Warning: "kicad_symbol_editor" DO NOT USE
+  (generator ÜRETICI_ADI)   ; ⚠️ "kicad_symbol_editor" KULLANMA
 
-  (symbol "SYMBOL_NAME" ...)
-  (symbol "SYMBOL_NAME_2" ...)
-  ; zero or more symbols
+  (symbol "SEMBOL_ADI" ...)
+  (symbol "SEMBOL_ADI_2" ...)
+  ; sıfır veya daha fazla sembol
 )
 ```
 
 ---
 
-## Python: Reading Schematics
+## Python: Şematik Okuma
 
-### kiutils (recommended)
+### kiutils ile (önerilen)
 
 ```python
 # pip install kiutils
 from kiutils.schematic import Schematic
 
-sch = Schematic.from_file("circuit.kicad_sch")
+sch = Schematic.from_file("devre.kicad_sch")
 
-# Symbols
+# Semboller
 for sym in sch.schematicSymbols:
     props = {p.key: p.value for p in sym.properties}
     print(f"{props.get('Reference')}: {props.get('Value')}")
 
-# Wires
+# Wireler
 for wire in sch.wires:
     print(wire.startPoint, wire.endPoint)
 ```
 
-### Instance path resolution
+### Instance yolu çözümlemesi
 
 ```python
-# root UUID = the schematic file uuid token
-# Traverse symbol instances:
+# root UUID = şematik dosyasının uuid token'ı
+# Sembol instance'larını dolaş:
 for sym in symbols:
     for project_instance in sym.instances:
         project_name = project_instance.name
         for path_entry in project_instance.paths:
-            hier_path = path_entry.path   # "/root_uuid" or "/root_uuid/sheet_uuid"
+            hier_path = path_entry.path   # "/root_uuid" veya "/root_uuid/sheet_uuid"
             reference = path_entry.reference
             unit = path_entry.unit
 ```

@@ -9,6 +9,7 @@ pub mod error;
 pub mod pcb;
 pub mod schematic;
 pub mod sexpr;
+pub mod sexpr_builder;
 pub mod symbol_lib;
 
 pub use error::ParseError;

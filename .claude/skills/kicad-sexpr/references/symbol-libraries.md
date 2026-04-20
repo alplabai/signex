@@ -1,25 +1,25 @@
-# Official KiCad Symbol Library Catalog
-> Source: https://kicad.github.io/symbols/ | KiCad 9 updated with (kicad-symbols master)
+# Resmi KiCad Sembol Kütüphane Kataloğu
+> Kaynak: https://kicad.github.io/symbols/ | KiCad 9 ile güncellendi (kicad-symbols master)
 
-For each library: **library name**, short description, symbol count.
-Library filename: `<NAME>.kicad_sym`
-Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
+Her kütüphane için: **kütüphane adı**, kısa açıklama, sembol sayısı.
+Kütüphane dosya adı: `<İSİM>.kicad_sym`
+Repö: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 ---
 
-## Digital Logic
+## Dijital Mantık
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `4xxx` | 4000 series CMOS logic | 48 |
+| `4xxx` | 4000 serisi CMOS mantık | 48 |
 | `4xxx_IEEE` | 4000 serisi IEEE sembolleri | 99 |
-| `74xGxx` | 74xGxx logic | 163 |
-| `74xx` | 74xx TTL/CMOS logic | 235 |
+| `74xGxx` | 74xGxx mantık | 163 |
+| `74xx` | 74xx TTL/CMOS mantık | 235 |
 | `74xx_IEEE` | 74xx IEEE sembolleri | 185 |
 
-## Microprocessor and MCU
+## Mikroişlemci ve MCU
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
 | `MCU_AnalogDevices` | Analog Devices MCU | 1 |
 | `MCU_Cypress` | Cypress MCU | 36 |
@@ -41,7 +41,7 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `MCU_Microchip_SAME` | SAME serisi | 16 |
 | `MCU_Microchip_SAML` | SAML serisi | 20 |
 | `MCU_Microchip_SAMV` | SAMV serisi | 3 |
-| `MCU_Module` | Arduino, Raspberry Pi, breakout modules | 50 |
+| `MCU_Module` | Arduino, Raspberry Pi, breakout modüller | 50 |
 | `MCU_Nordic` | nRF51, nRF52 | 7 |
 | `MCU_NXP_Kinetis` | NXP Kinetis | 155 |
 | `MCU_NXP_LPC` | NXP LPC | 105 |
@@ -63,9 +63,9 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 
 ## CPU, DSP, FPGA
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `CPU` | Various CPUs | 6 |
+| `CPU` | Çeşitli CPU | 6 |
 | `CPU_NXP_68000` | Motorola/NXP 68000 | 5 |
 | `CPU_PowerPC` | PowerPC | 1 |
 | `DSP_AnalogDevices` | ADI DSP | 5 |
@@ -80,53 +80,53 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `CPLD_Altera` | Altera (Intel) CPLD | 26 |
 | `CPLD_Xilinx` | Xilinx CPLD | 17 |
 
-## Analog / Amplifier
+## Analog / Amplifikatör
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Amplifier_Audio` | Audio amplifiers | 94 |
-| `Amplifier_Buffer` | Buffer amplifiers | 7 |
-| `Amplifier_Current` | Current sense amp (shunt) | 74 |
-| `Amplifier_Difference` | Difference amplifiers | 12 |
-| `Amplifier_Instrumentation` | Instrumentation amp | 36 |
-| `Amplifier_Operational` | General op-amp | 321 |
-| `Amplifier_Video` | Video amplifiers | 2 |
-| `Analog` | Miscellaneous analog | 16 |
+| `Amplifier_Audio` | Ses amplifikatörleri | 94 |
+| `Amplifier_Buffer` | Buffer amplifikatörler | 7 |
+| `Amplifier_Current` | Akım ölçüm amp (shunt) | 74 |
+| `Amplifier_Difference` | Fark amplifikatörleri | 12 |
+| `Amplifier_Instrumentation` | Enstrümantasyon amp | 36 |
+| `Amplifier_Operational` | Genel op-amp | 321 |
+| `Amplifier_Video` | Video amplifikatörleri | 2 |
+| `Analog` | Çeşitli analog | 16 |
 | `Analog_ADC` | ADC | 158 |
 | `Analog_DAC` | DAC | 126 |
-| `Analog_Switch` | Analog switches | 123 |
-| `Comparator` | Comparators | 54 |
+| `Analog_Switch` | Analog anahtarlar | 123 |
+| `Comparator` | Karşılaştırıcılar | 54 |
 
-## Power Management
+## Güç Yönetimi
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Battery_Management` | Battery management IC | 120 |
-| `Converter_ACDC` | AC/DC converters | 137 |
-| `Converter_DCDC` | DC/DC converters | 538 |
-| `power` | Power symbols (GND, VCC, PWR_FLAG…) | ~50 |
-| `Regulator_Linear` | Linear regulators (LM78xx, LDO…) | — |
-| `Regulator_Switching` | Switching regulators | — |
+| `Battery_Management` | Batarya yönetim IC | 120 |
+| `Converter_ACDC` | AC/DC dönüştürücüler | 137 |
+| `Converter_DCDC` | DC/DC dönüştürücüler | 538 |
+| `power` | Güç sembolleri (GND, VCC, PWR_FLAG…) | ~50 |
+| `Regulator_Linear` | Lineer regülatörler (LM78xx, LDO…) | — |
+| `Regulator_Switching` | Anahtarlamalı regülatörler | — |
 
-## Discrete Semiconductors
+## Ayrık Yarı İletkenler
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Device` | **General devices: R, C, L, D, Q, MOSFET, kristal…** | 564 |
-| `Diode` | Diodelar (genel) | 538 |
-| `Diode_Bridge` | Bridge diodes/rectifiers | 148 |
-| `Diode_Laser` | Laser diodes | 5 |
-| `LED` | LED symbols | 54 |
-| `Transistor_BJT` | BJT transistors | — |
+| `Device` | **Genel aygıtlar: R, C, L, D, Q, MOSFET, kristal…** | 564 |
+| `Diode` | Diyotlar (genel) | 538 |
+| `Diode_Bridge` | Köprü diyotlar/doğrultucular | 148 |
+| `Diode_Laser` | Lazer diyotlar | 5 |
+| `LED` | LED semboller | 54 |
+| `Transistor_BJT` | BJT transistörler | — |
 | `Transistor_FET` | MOSFET/JFET | — |
 | `Transistor_IGBT` | IGBT | — |
 | `Triac_Thyristor` | TRIAC, SCR, DIAC | — |
 
-## Interface / Communication
+## Arayüz / İletişim
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Interface` | Miscellaneous interface IC | 100 |
+| `Interface` | Çeşitli arayüz IC | 100 |
 | `Interface_CAN_LIN` | CAN / LIN | 85 |
 | `Interface_CurrentLoop` | 4-20 mA current loop | 2 |
 | `Interface_Ethernet` | Ethernet PHY, magnetics | 26 |
@@ -134,197 +134,197 @@ Repo: `https://gitlab.com/kicad/libraries/kicad-symbols`
 | `Interface_HDMI` | HDMI | 2 |
 | `Interface_HID` | USB HID | 5 |
 | `Interface_LineDriver` | RS-232, RS-485 line driver | 16 |
-| `Interface_Optical` | IR receiver/transmitter | 42 |
+| `Interface_Optical` | IR alıcı/verici | 42 |
 | `Interface_UART` | UART IC | 133 |
-| `Interface_USB` | USB controller, PHY, hub | 95 |
-| `Isolator` | Optocoupler, digital isolation | 315 |
-| `Isolator_Analog` | Analog isolation | 7 |
+| `Interface_USB` | USB kontrolcü, PHY, hub | 95 |
+| `Isolator` | Optokuplör, dijital izolasyon | 315 |
+| `Isolator_Analog` | Analog izolasyon | 7 |
 
-## Connectors
+## Konektörler
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Connector` | General connectors (USB, D-SUB, DIN…) | 361 |
-| `Connector_Generic` | General-purpose connectors | 274 |
-| `Connector_Generic_MountingPin` | Mechanical mounting pin | 274 |
-| `Connector_Generic_Shielded` | Shielded | 274 |
+| `Connector` | Genel konektörler (USB, D-SUB, DIN…) | 361 |
+| `Connector_Generic` | Genel amaçlı konektörler | 274 |
+| `Connector_Generic_MountingPin` | Mekanik montaj pinli | 274 |
+| `Connector_Generic_Shielded` | Kalkanlamalı | 274 |
 
-## Memory / Storage
+## Hafıza / Depolama
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
 | `Memory_EEPROM` | EEPROM | — |
 | `Memory_Flash` | Flash bellek | — |
 | `Memory_RAM` | SRAM, DRAM | — |
 | `Memory_UniqueID` | 1-Wire ID chip | — |
 
-## Sensor
+## Sensör
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Sensor` | General sensors | — |
-| `Sensor_Current` | Current sensors | — |
-| `Sensor_Humidity` | Humidity sensors | — |
-| `Sensor_Motion` | IMU, accelerometer | — |
-| `Sensor_Optical` | Optical sensors | — |
-| `Sensor_Pressure` | Pressure sensors | — |
-| `Sensor_Temperature` | Temperature sensors | — |
+| `Sensor` | Genel sensörler | — |
+| `Sensor_Current` | Akım sensörleri | — |
+| `Sensor_Humidity` | Nem sensörleri | — |
+| `Sensor_Motion` | IMU, ivme ölçer | — |
+| `Sensor_Optical` | Optik sensörler | — |
+| `Sensor_Pressure` | Basınç sensörleri | — |
+| `Sensor_Temperature` | Sıcaklık sensörleri | — |
 
-## RF and Wireless
+## RF ve Wireless
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `RF_Module` | RF modules (LoRa, WiFi, BT…) | — |
-| `RF_Amplifier` | RF amplifiers | — |
-| `RF_Filter` | RF filterr | — |
-| `RF_Mixer` | RF mixers | — |
-| `RF_Switch` | RF switches | — |
+| `RF_Module` | RF modüller (LoRa, WiFi, BT…) | — |
+| `RF_Amplifier` | RF amplifikatörler | — |
+| `RF_Filter` | RF filtreler | — |
+| `RF_Mixer` | RF karıştırıcılar | — |
+| `RF_Switch` | RF anahtarlar | — |
 | `Wireless` | Wireless IC | — |
 
-## Drivers
+## Sürücüler
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Driver_Display` | Display drivers | 10 |
+| `Driver_Display` | Ekran sürücüleri | 10 |
 | `Driver_FET` | MOSFET / gate driver | 194 |
-| `Driver_LED` | LED drivers | 78 |
-| `Driver_Motor` | Motor driver IC | 65 |
-| `Driver_Relay` | Relay drivers | 5 |
-| `Driver_TEC` | Peltier drivers | 2 |
+| `Driver_LED` | LED sürücüleri | 78 |
+| `Driver_Motor` | Motor sürücü IC | 65 |
+| `Driver_Relay` | Röle sürücüleri | 5 |
+| `Driver_TEC` | Peltier sürücüleri | 2 |
 
-## Display
+## Ekran
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Display_Character` | Character displays (7-seg, dot matrix) | 128 |
-| `Display_Graphic` | Graphic displays | 38 |
+| `Display_Character` | Karakter ekranlar (7-seg, dot matrix) | 128 |
+| `Display_Graphic` | Grafik ekranlar | 38 |
 
-## Other
+## Diğer
 
-| Library | Description | # |
+| Kütüphane | Açıklama | # |
 |-----------|----------|---|
-| `Audio` | Audio IC | 82 |
-| `Buffer` | Clock/data buffer | 1 |
-| `Filter` | Filter IC | 48 |
-| `Fiber_Optic` | Fiber optic | 2 |
+| `Audio` | Ses IC | 82 |
+| `Buffer` | Saat/veri buffer | 1 |
+| `Filter` | Filtre IC | 48 |
+| `Fiber_Optic` | Fiber optik | 2 |
 | `GPU` | GPU | 3 |
-| `Graphic` | Graphic/decorative symbols | 29 |
-| `Jumper` | Solder jumper | 9 |
-| `Logic_LevelTranslator` | Level translators | 34 |
-| `Logic_Programmable` | Programmable logic | 6 |
-| `Mechanical` | Mechanical components | — |
-| `Oscillator` | Oscillators | — |
-| `Switch` | Keylar | — |
-| `Timer` | Timers (555, etc.) | — |
-| `Transformer` | Transformerler | — |
-| `Valve` | Vacuum tubes | — |
+| `Graphic` | Grafik/dekoratif semboller | 29 |
+| `Jumper` | Lehim jumper | 9 |
+| `Logic_LevelTranslator` | Seviye dönüştürücüler | 34 |
+| `Logic_Programmable` | Programlanabilir mantık | 6 |
+| `Mechanical` | Mekanik bileşenler | — |
+| `Oscillator` | Osilatörler | — |
+| `Switch` | Anahtarlar | — |
+| `Timer` | Zamanlayıcılar (555, vb.) | — |
+| `Transformer` | Transformatörler | — |
+| `Valve` | Vakum tüpleri | — |
 
 ---
 
-## Device Library - Basic Components
+## Device Kütüphanesi — Temel Bileşenler
 
-`Device` library is the most commonly used library (564 symbols).
-Main components:
+`Device` kütüphanesi en sık kullanılan kütüphanedir (564 sembol).
+Başlıca bileşenler:
 
-### Passive Components
-| Symbol | Description | RefDes |
+### Pasif Bileşenler
+| Sembol | Açıklama | RefDes |
 |--------|----------|--------|
-| `R` | Resistor (IEC) | R |
-| `R_US` | Resistor (US) | R |
-| `R_Small` | Small resistor | R |
-| `R_Variable` | Variable resistor | RV |
-| `R_Potentiometer` | Potentiometer | RV |
-| `C` | Capacitor (polar not) | C |
-| `C_Polarized` | Polar capacitor | C |
-| `C_Small` | Small capacitor | C |
-| `C_Variable` | Variable capacitor | C |
-| `L` | Inductor | L |
-| `L_Small` | Small inductor | L |
-| `L_Ferrite` | Ferrite core inductor | L |
+| `R` | Direnç (IEC) | R |
+| `R_US` | Direnç (US) | R |
+| `R_Small` | Küçük direnç | R |
+| `R_Variable` | Değişken direnç | RV |
+| `R_Potentiometer` | Potansiyometre | RV |
+| `C` | Kondansatör (polar değil) | C |
+| `C_Polarized` | Polar kondansatör | C |
+| `C_Small` | Küçük kondansatör | C |
+| `C_Variable` | Değişken kondansatör | C |
+| `L` | Bobin | L |
+| `L_Small` | Küçük bobin | L |
+| `L_Ferrite` | Ferrit çekirdekli bobin | L |
 | `FerriteBead` | Ferrite bead | FB |
-| `Fuse` | Fuse | F |
+| `Fuse` | Sigorta | F |
 
-### Semiconductors
-| Symbol | Description | RefDes |
+### Yarı İletkenler
+| Sembol | Açıklama | RefDes |
 |--------|----------|--------|
-| `D` | Diode | D |
-| `D_Zener` | Zener diode | D |
-| `D_Schottky` | Schottky diode | D |
-| `D_TVS` | TVS diode | D |
-| `LED` | LED (Device librarysi) | D |
+| `D` | Diyot | D |
+| `D_Zener` | Zener diyot | D |
+| `D_Schottky` | Schottky diyot | D |
+| `D_TVS` | TVS diyot | D |
+| `LED` | LED (Device kütüphanesi) | D |
 | `Q_NPN_BCE` | NPN BJT | Q |
 | `Q_PNP_BCE` | PNP BJT | Q |
 | `Q_NMOS_GSD` | N-MOSFET | Q |
 | `Q_PMOS_GSD` | P-MOSFET | Q |
 | `Q_NMOS_NMOS_GSD` | Dual N-MOSFET | Q |
 
-### Mechanical / Other
-| Symbol | Description | RefDes |
+### Mekanik / Diğer
+| Sembol | Açıklama | RefDes |
 |--------|----------|--------|
-| `Crystal` | 2-pin crystal | Y |
-| `Crystal_GND24` | 4-pin crystal | Y |
-| `Battery` | Multi-cell battery | BT |
-| `Battery_Cell` | Single-cell battery | BT |
-| `Antennanana` | Antennana | AE |
-| `TestPoint` | Test point | TP |
-| `MountingHole` | Mounting hole | H |
-| `Transformer_1P_1S` | 1:1 transformer | T |
+| `Crystal` | 2 pinli kristal | Y |
+| `Crystal_GND24` | 4 pinli kristal | Y |
+| `Battery` | Çok hücreli batarya | BT |
+| `Battery_Cell` | Tek hücreli pil | BT |
+| `Antenna` | Anten | AE |
+| `TestPoint` | Test noktası | TP |
+| `MountingHole` | Montaj deliği | H |
+| `Transformer_1P_1S` | 1:1 transformatör | T |
 
 ---
 
-## Quick Search: Which Library?
+## Hızlı Arama: Hangi Kütüphanede?
 
-| Looking for | Library |
+| Aradığın | Kütüphane |
 |----------|-----------|
 | STM32F4 MCU | `MCU_ST_STM32F4` |
 | ESP32 | `MCU_Espressif` |
 | nRF52 | `MCU_Nordic` |
 | LM358 op-amp | `Amplifier_Operational` |
-| LM7805 regulator | `Regulator_Linear` |
+| LM7805 regülatör | `Regulator_Linear` |
 | AMS1117 LDO | `Regulator_Linear` |
 | SN74HC574 | `74xx` |
 | MAX485 RS-485 | `Interface_LineDriver` |
-| TLP250 optocoupler | `Isolator` |
-| NE555 timer | `Timer` |
+| TLP250 optokuplör | `Isolator` |
+| NE555 zamanlayıcı | `Timer` |
 | INA219 | `Amplifier_Current` |
 | DS18B20 | `Sensor_Temperature` |
 | GND, VCC, +3V3 | `power` |
-| General R, C, L, BJT | `Device` |
-| USB connector | `Connector` |
+| Genel R, C, L, BJT | `Device` |
+| USB konektör | `Connector` |
 | RJ45 | `Connector` |
 | Arduino Nano | `MCU_Module` |
 
 ---
 
-## Python: Symbol Arama (kiutils with)
+## Python: Sembol Arama (kiutils ile)
 
 ```python
 from kiutils.symbol import SymbolLib
 
-# Load library
+# Kütüphane yükle
 lib = SymbolLib.from_file("Device.kicad_sym")
 
-# List all symbol names
+# Tüm sembol adlarını listele
 for sym in lib.symbols:
     print(sym.entryName)
 
-# Find specific symbol and get pin list
+# Belirli sembolü bul ve pin listesini al
 r = next(s for s in lib.symbols if s.entryName == "R")
 for unit in r.units:
     for pin in unit.pins:
         print(f"  Pin {pin.number}: {pin.name} ({pin.electricalType})")
 ```
 
-## Python: Library Name Normalization
+## Python: Kütüphane İsmi Normalizasyonu
 
 ```python
 def normalize_lib_id(raw_id: str) -> tuple[str, str]:
     """
-    'Device:R' -> ('Device', 'R')
-    'MCU_ST_STM32F4:STM32F407VGTx' -> ('MCU_ST_STM32F4', 'STM32F407VGTx')
+    'Device:R' → ('Device', 'R')
+    'MCU_ST_STM32F4:STM32F407VGTx' → ('MCU_ST_STM32F4', 'STM32F407VGTx')
     """
     parts = raw_id.split(":", 1)
     if len(parts) == 2:
         return parts[0], parts[1]
-    return "", raw_id  # symbol name only (inside library file)
+    return "", raw_id  # sadece sembol adı (kütüphane dosyası içinde)
 ```
