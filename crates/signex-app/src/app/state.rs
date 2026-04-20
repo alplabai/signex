@@ -317,13 +317,18 @@ impl DocumentState {
 
 pub struct InteractionState {
     pub current_tool: Tool,
-    /// The schematic canvas for the main window's active tab. The v0.7
-    /// per-window split replaces this with `HashMap<window::Id,
-    /// SchematicCanvas>` so each undocked-tab window can carry its own
-    /// pan/zoom/selection/render_cache. Accessors on this struct are the
-    /// public contract so callers can migrate without waiting on the
-    /// storage swap.
+    /// The main-window schematic canvas. Every non-main window carries
+    /// its own `SchematicCanvas` inside `canvases`, keyed by that
+    /// window's `iced::window::Id`. The event-dispatch layer swaps a
+    /// per-window canvas into this slot while handling an event so the
+    /// hundreds of `active_canvas_mut()` call sites don't need to know
+    /// about per-window routing.
     pub canvas: SchematicCanvas,
+    /// Extra schematic canvases owned by non-main windows (undocked
+    /// tabs). Populated on `Message::UndockedTabOpened`; drained on
+    /// `Message::SecondaryWindowClosed`. Reads go through
+    /// `canvas_for_window`; writes happen via the dispatch swap trick.
+    pub canvases: std::collections::HashMap<iced::window::Id, SchematicCanvas>,
     pub pcb_canvas: PcbCanvas,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
@@ -369,19 +374,24 @@ impl InteractionState {
         &mut self.canvas
     }
 
-    /// Per-window canvas lookup. Currently delegates to `active_canvas`
-    /// regardless of `window_id` — the argument is already threaded
-    /// through call sites so step 5 (HashMap<window::Id, SchematicCanvas>
-    /// storage) only changes this body, not every caller.
-    pub fn canvas_for_window(&self, _window_id: iced::window::Id) -> &SchematicCanvas {
-        &self.canvas
+    /// Per-window canvas lookup. Returns the per-window `SchematicCanvas`
+    /// if one is registered (undocked windows), otherwise the main
+    /// window's shared canvas. Writes from canvas events still go
+    /// through the main-canvas slot; see the dispatch swap trick in
+    /// `dispatch::ui::handle_canvas_event_in_window`.
+    pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &SchematicCanvas {
+        self.canvases.get(&window_id).unwrap_or(&self.canvas)
     }
 
-    #[allow(dead_code)] // will be used by step 4 message handlers carrying window_id
+    #[allow(dead_code)]
     pub fn canvas_for_window_mut(
         &mut self,
-        _window_id: iced::window::Id,
+        window_id: iced::window::Id,
     ) -> &mut SchematicCanvas {
-        &mut self.canvas
+        if self.canvases.contains_key(&window_id) {
+            self.canvases.get_mut(&window_id).unwrap()
+        } else {
+            &mut self.canvas
+        }
     }
 }

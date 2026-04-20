@@ -1270,11 +1270,39 @@ impl Signex {
     }
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
-        if self.has_active_schematic() {
-            canvas(self.interaction_state.canvas_for_window(window_id))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+        let is_main = self.ui_state.main_window_id == Some(window_id);
+        let has_schematic = if is_main {
+            self.has_active_schematic()
+        } else {
+            // An undocked tab window renders if its path still has a
+            // live engine in the HashMap. Falls back to the main
+            // predicate when the window has already been dropped from
+            // the windows map (mid-close frame).
+            self.document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some()
+        };
+        if has_schematic {
+            // Canvas events from non-main windows need to carry the
+            // window_id through to the dispatch layer so the right
+            // per-window canvas receives the mutation. Keyboard
+            // shortcuts that synthesize `Message::CanvasEvent` keep
+            // targeting the main canvas unchanged.
+            let base: Element<'_, Message> =
+                canvas(self.interaction_state.canvas_for_window(window_id))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into();
+            if is_main {
+                base
+            } else {
+                base.map(move |msg| match msg {
+                    Message::CanvasEvent(event) => {
+                        Message::CanvasEventInWindow { window_id, event }
+                    }
+                    other => other,
+                })
+            }
         } else if self.has_active_pcb() {
             canvas(&self.interaction_state.pcb_canvas)
                 .width(Length::Fill)

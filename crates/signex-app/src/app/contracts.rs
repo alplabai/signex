@@ -36,6 +36,18 @@ pub enum Message {
     Dock(DockMessage),
     StatusBar(StatusBarRequest),
     CanvasEvent(CanvasEvent),
+    /// Canvas event stamped with the window that produced it. The
+    /// dispatch layer swaps the window's `SchematicCanvas` into the
+    /// main canvas slot for the duration of the handler so the
+    /// hundreds of `active_canvas_mut()` call sites read and write the
+    /// right canvas transparently. Keyboard-generated canvas events
+    /// (FitAll shortcut, etc.) continue to use the unwrapped
+    /// `Message::CanvasEvent` variant and always target the main
+    /// window.
+    CanvasEventInWindow {
+        window_id: iced::window::Id,
+        event: CanvasEvent,
+    },
     #[allow(dead_code)]
     ThemeChanged(ThemeId),
     UnitCycled,
