@@ -868,7 +868,7 @@ fn draw_builtin_power(
     let label_y = (pin_len + body_extent + 0.25) * dir;
     // 10 pt — the canvas-wide default — matching Altium.
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
-    let screen_font = transform.world_len(font_size_mm).abs();
+    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
     if screen_font >= 1.0 {
         let (tx, ty) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, label_y));
         let sp = transform.to_screen_point(tx, ty);
