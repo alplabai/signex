@@ -62,6 +62,7 @@ impl Signex {
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
+        let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -191,6 +192,7 @@ impl Signex {
             selection_info,
             drawing_edit_buf,
             drawing_edit_buf_for,
+            selected_drawing,
             component_filter,
             collapsed_sections,
             pre_placement,
@@ -255,6 +257,7 @@ impl Signex {
         self.document_state.panel_ctx.selection_info.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
+        self.document_state.panel_ctx.selected_drawing = None;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -272,6 +275,29 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // Cache the live SchDrawing for the Properties preview
+            // widget — only when the single selection is a drawing.
+            if matches!(
+                details.selected_kind,
+                signex_types::schematic::SelectedKind::Drawing
+            ) {
+                use signex_types::schematic::SchDrawing;
+                self.document_state.panel_ctx.selected_drawing = engine
+                    .document()
+                    .drawings
+                    .iter()
+                    .find(|d| {
+                        let u = match d {
+                            SchDrawing::Line { uuid, .. }
+                            | SchDrawing::Rect { uuid, .. }
+                            | SchDrawing::Circle { uuid, .. }
+                            | SchDrawing::Arc { uuid, .. }
+                            | SchDrawing::Polyline { uuid, .. } => *uuid,
+                        };
+                        u == details.selected_uuid
+                    })
+                    .cloned();
+            }
         }
     }
 
