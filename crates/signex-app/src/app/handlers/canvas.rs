@@ -745,6 +745,107 @@ impl Signex {
                             false,
                         );
                     }
+                    Tool::Line => {
+                        // Two-click: anchor → commit. First click
+                        // seeds shape_anchor; second click emits
+                        // SchDrawing::Line and re-arms for the next
+                        // line (matches Altium's stay-in-tool flow).
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.canvas.shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Line));
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                            Some(start) => {
+                                let drawing = signex_types::schematic::SchDrawing::Line {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end: p,
+                                    width: 0.0,
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                                // Re-arm with the just-placed endpoint
+                                // as the new anchor so chained segments
+                                // share vertices.
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.canvas.shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Line));
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                        }
+                    }
+                    Tool::Rectangle => {
+                        // Two-click: corner → opposite-corner →
+                        // SchDrawing::Rect. Rearms blank for the
+                        // next rect.
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.canvas.shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Rect));
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                            Some(start) => {
+                                let drawing = signex_types::schematic::SchDrawing::Rect {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end: p,
+                                    width: 0.0,
+                                    fill: signex_types::schematic::FillType::default(),
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                                self.interaction_state.shape_anchor = None;
+                                self.interaction_state.canvas.shape_anchor = None;
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                        }
+                    }
+                    Tool::Circle => {
+                        // Two-click: center → edge-point → commit as
+                        // SchDrawing::Circle with radius = |edge-center|.
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.canvas.shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Circle));
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                            Some(center) => {
+                                let dx = p.x - center.x;
+                                let dy = p.y - center.y;
+                                let radius = (dx * dx + dy * dy).sqrt();
+                                if radius > 0.01 {
+                                    let drawing = signex_types::schematic::SchDrawing::Circle {
+                                        uuid: uuid::Uuid::new_v4(),
+                                        center,
+                                        radius,
+                                        width: 0.0,
+                                        fill: signex_types::schematic::FillType::default(),
+                                    };
+                                    self.apply_engine_command(
+                                        signex_engine::Command::PlaceSchDrawing { drawing },
+                                        false,
+                                        false,
+                                    );
+                                }
+                                self.interaction_state.shape_anchor = None;
+                                self.interaction_state.canvas.shape_anchor = None;
+                                self.interaction_state.canvas.clear_overlay_cache();
+                            }
+                        }
+                    }
                     Tool::Arc => {
                         // 3-click arc: start → mid → end.
                         let p = signex_types::schematic::Point::new(wx, wy);
