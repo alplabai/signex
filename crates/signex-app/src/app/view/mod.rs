@@ -1130,7 +1130,7 @@ impl Signex {
                     &visible_paths,
                     &document.panel_ctx.tokens,
                 )
-                .map(Message::Tab),
+                .map(move |msg| Message::Tab { window_id, msg }),
             );
         }
         let main = main

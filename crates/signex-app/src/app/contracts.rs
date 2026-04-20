@@ -24,7 +24,15 @@ pub enum DragTarget {
 pub enum Message {
     Menu(MenuMessage),
     Tool(ToolMessage),
-    Tab(TabMessage),
+    /// Tab-bar message carrying the id of the window whose tab bar emitted
+    /// it. Lets the handler distinguish main-window tab reorder/select
+    /// (which mutates `document_state.active_tab`) from an undocked
+    /// window's tab bar, which only has one visible tab and must not
+    /// clobber the main window's active index.
+    Tab {
+        window_id: iced::window::Id,
+        msg: TabMessage,
+    },
     Dock(DockMessage),
     StatusBar(StatusBarRequest),
     CanvasEvent(CanvasEvent),
