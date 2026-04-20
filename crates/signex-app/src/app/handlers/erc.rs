@@ -169,7 +169,7 @@ impl Signex {
             .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
-        self.interaction_state.canvas.erc_markers = violations
+        self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
@@ -182,7 +182,7 @@ impl Signex {
                 primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
         self.ui_state.erc_violations = violations;
     }
 
@@ -196,9 +196,9 @@ impl Signex {
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
         if let Some(item) = select {
-            self.interaction_state.canvas.selected = vec![item];
+            self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
-            self.interaction_state.canvas.clear_overlay_cache();
+            self.interaction_state.active_canvas_mut().clear_overlay_cache();
         }
         // Stage a fit target around the violation point so the canvas's
         // next draw centers on it.
@@ -219,9 +219,9 @@ impl Signex {
         self.ui_state.auto_focus = !self.ui_state.auto_focus;
         // Mirror the flag onto the canvas so the renderer can compute
         // the focus uuid set locally without reaching into app state.
-        self.interaction_state.canvas.auto_focus = self.ui_state.auto_focus;
-        self.interaction_state.canvas.clear_content_cache();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().auto_focus = self.ui_state.auto_focus;
+        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
         Task::none()
     }
 
@@ -368,7 +368,7 @@ impl Signex {
             ));
         }
         // Force a render + panel refresh as if a command had fired.
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
@@ -586,7 +586,7 @@ impl Signex {
         }
 
         if any_active_changed {
-            self.interaction_state.canvas.clear_content_cache();
+            self.interaction_state.active_canvas_mut().clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );
@@ -847,7 +847,7 @@ impl Signex {
             self.ui_state.move_selection.open = false;
             return Task::none();
         }
-        let items = self.interaction_state.canvas.selected.clone();
+        let items = self.interaction_state.active_canvas_mut().selected.clone();
         if items.is_empty() {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -856,8 +856,8 @@ impl Signex {
             let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
         }
         self.ui_state.move_selection.open = false;
-        self.interaction_state.canvas.clear_content_cache();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         Task::none()
@@ -875,7 +875,7 @@ impl Signex {
                 key,
                 value,
             });
-            self.interaction_state.canvas.clear_content_cache();
+            self.interaction_state.active_canvas_mut().clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );

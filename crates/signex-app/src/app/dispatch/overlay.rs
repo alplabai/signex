@@ -49,7 +49,7 @@ impl Signex {
                 // the placement flow (tool-stuck OR ghost-armed OR pending
                 // power/port OR paused preview OR net-colour pen armed)
                 // instead of opening the context menu.
-                let canvas = &self.interaction_state.canvas;
+                let canvas = self.interaction_state.active_canvas();
                 let placement_active = self.interaction_state.current_tool != Tool::Select
                     || canvas.ghost_label.is_some()
                     || canvas.ghost_symbol.is_some()
@@ -65,9 +65,9 @@ impl Signex {
                     self.interaction_state.current_tool = Tool::Select;
                     // Drop any app-level armed mode too.
                     self.ui_state.pending_net_color = None;
-                    self.interaction_state.canvas.pending_net_color = None;
+                    self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {

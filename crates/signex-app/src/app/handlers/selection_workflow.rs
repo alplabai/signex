@@ -121,14 +121,15 @@ impl Signex {
         match request {
             selection_request::SelectionRequest::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    self.interaction_state.canvas.selected = all_selectable_items(snapshot);
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().selected = all_selectable_items(snapshot);
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
             selection_request::SelectionRequest::StoreSlot { slot } => {
+                let selected = self.interaction_state.canvas.selected.clone();
                 if let Some(selection_slot) = self.interaction_state.selection_slots.get_mut(slot) {
-                    *selection_slot = self.interaction_state.canvas.selected.clone();
+                    *selection_slot = selected;
                 }
             }
             selection_request::SelectionRequest::RecallSlot { slot } => {
@@ -139,8 +140,8 @@ impl Signex {
                         .get(slot)
                         .map(|items| valid_selection_items(snapshot, items))
                         .unwrap_or_default();
-                    self.interaction_state.canvas.selected = recalled;
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().selected = recalled;
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -150,8 +151,8 @@ impl Signex {
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
-                    self.interaction_state.canvas.selected = hit.into_iter().collect();
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -160,14 +161,14 @@ impl Signex {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
                     let filters = self.interaction_state.selection_filters.clone();
                     let mode = self.ui_state.selection_mode;
-                    self.interaction_state.canvas.selected =
+                    self.interaction_state.active_canvas_mut().selected =
                         signex_render::schematic::hit_test::hit_test_rect_mode(
                             snapshot, &rect, mode,
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
                         .collect();
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -176,8 +177,8 @@ impl Signex {
                     let hit =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
                     if let Some(item) = hit {
-                        self.interaction_state.canvas.selected = expand_to_net(snapshot, &item);
-                        self.interaction_state.canvas.clear_overlay_cache();
+                        self.interaction_state.active_canvas_mut().selected = expand_to_net(snapshot, &item);
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
                         self.update_selection_info();
                     }
                 }

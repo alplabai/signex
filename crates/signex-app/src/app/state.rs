@@ -291,6 +291,12 @@ impl DocumentState {
 
 pub struct InteractionState {
     pub current_tool: Tool,
+    /// The schematic canvas for the main window's active tab. The v0.7
+    /// per-window split replaces this with `HashMap<window::Id,
+    /// SchematicCanvas>` so each undocked-tab window can carry its own
+    /// pan/zoom/selection/render_cache. Accessors on this struct are the
+    /// public contract so callers can migrate without waiting on the
+    /// storage swap.
     pub canvas: SchematicCanvas,
     pub pcb_canvas: PcbCanvas,
     pub dragging: Option<DragTarget>,
@@ -326,4 +332,14 @@ pub struct InteractionState {
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
+}
+
+impl InteractionState {
+    pub fn active_canvas(&self) -> &SchematicCanvas {
+        &self.canvas
+    }
+
+    pub fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
+        &mut self.canvas
+    }
 }

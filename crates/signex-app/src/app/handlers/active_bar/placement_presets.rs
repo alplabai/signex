@@ -43,7 +43,7 @@ impl Signex {
                     signex_types::schematic::LabelType::Global,
                     "bidirectional".to_string(),
                 ));
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "PORT".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -60,7 +60,7 @@ impl Signex {
                     signex_types::schematic::LabelType::Hierarchical,
                     String::new(),
                 ));
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "SHEET".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -125,7 +125,7 @@ impl Signex {
                 // Parameter Manager (Design menu).
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "PARAM=VALUE".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -141,7 +141,7 @@ impl Signex {
                 // Ships as a text note until the PCB router's constraint
                 // model lands in v2.1.
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
-                self.interaction_state.canvas.ghost_text =
+                self.interaction_state.active_canvas_mut().ghost_text =
                     Some(signex_types::schematic::TextNote {
                         uuid: uuid::Uuid::new_v4(),
                         text: "DIFF_PAIR".to_string(),
@@ -188,7 +188,7 @@ impl Signex {
                 });
                 // Sync to canvas so mouse_interaction can show a pen
                 // cursor while armed.
-                self.interaction_state.canvas.pending_net_color = self.ui_state.pending_net_color;
+                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Net-color armed — click a wire to flood its net");
             }
             ActiveBarAction::NetColorCustom => {
@@ -208,7 +208,7 @@ impl Signex {
                 // Arm "clear one" — next click removes the override on
                 // the wires of the clicked net.
                 self.ui_state.pending_net_color = None;
-                self.interaction_state.canvas.pending_net_color = None;
+                self.interaction_state.active_canvas_mut().pending_net_color = None;
                 // A distinct armed state: use a sentinel color (alpha 0)
                 // to mean "clear mode". Simpler than a second enum — we
                 // still read pending_net_color at click time.
@@ -218,7 +218,7 @@ impl Signex {
                     b: 0,
                     a: 0,
                 });
-                self.interaction_state.canvas.pending_net_color = self.ui_state.pending_net_color;
+                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
@@ -228,10 +228,10 @@ impl Signex {
                         .push(self.ui_state.wire_color_overrides.clone());
                 }
                 self.ui_state.wire_color_overrides.clear();
-                self.interaction_state.canvas.wire_color_overrides.clear();
+                self.interaction_state.active_canvas_mut().wire_color_overrides.clear();
                 self.ui_state.pending_net_color = None;
-                self.interaction_state.canvas.pending_net_color = None;
-                self.interaction_state.canvas.clear_content_cache();
+                self.interaction_state.active_canvas_mut().pending_net_color = None;
+                self.interaction_state.active_canvas_mut().clear_content_cache();
                 crate::diagnostics::log_info("Cleared all net-color overrides");
             }
             _ => {}
@@ -246,11 +246,11 @@ impl Signex {
         // the specific power-port name and arm the ghost_symbol.
         let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
         self.interaction_state.pending_power = Some((net_name.to_string(), lib_id.to_string()));
-        self.interaction_state.canvas.tool_preview = Some(net_name.to_string());
+        self.interaction_state.active_canvas_mut().tool_preview = Some(net_name.to_string());
         // Live preview: build a ghost power-port symbol that follows the
         // cursor so the user sees the actual shape (bars / bar / triangle)
         // before committing to a click.
-        self.interaction_state.canvas.ghost_symbol = Some(signex_types::schematic::Symbol {
+        self.interaction_state.active_canvas_mut().ghost_symbol = Some(signex_types::schematic::Symbol {
             uuid: uuid::Uuid::new_v4(),
             lib_id: lib_id.to_string(),
             reference: String::new(),
