@@ -4796,6 +4796,22 @@ fn view_drawing_properties<'a>(
             }
         }
     }
+    // Stroke colour swatch row — applies to every drawing kind that
+    // matched a known variant above. Reads the current stored colour
+    // from the live SchDrawing so the active tile highlights correctly.
+    if matches!(
+        elem_type.as_str(),
+        "Line" | "Rectangle" | "Circle" | "Arc" | "Polygon"
+    ) {
+        let current_color = ctx.selected_drawing.as_ref().and_then(|d| match d {
+            signex_types::schematic::SchDrawing::Line { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Rect { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Circle { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+        });
+        col = col.push(drawing_stroke_color_row(current_color, muted));
+    }
     col.into()
 }
 
@@ -4824,6 +4840,102 @@ fn drawing_num_row<'a>(
             .size(11)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Altium-style stroke colour swatch row. A small preset palette
+/// (Theme/Red/Green/Blue/Yellow/Orange/White/Black) lets the user
+/// recolour a placed shape without committing to a full colour
+/// picker. Each tile dispatches UpdateDrawingEdit::StrokeColor.
+fn drawing_stroke_color_row<'a>(
+    current: Option<signex_types::schematic::StrokeColor>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use iced::widget::{button, row, text};
+    use signex_types::schematic::StrokeColor;
+    let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
+    let tile = |label: &'static str,
+                stored: Option<StrokeColor>,
+                active: bool,
+                fill_color: Color|
+     -> Element<'a, PanelMsg> {
+        button(text(label).size(9))
+            .padding([3, 6])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(fill_color)),
+                border: Border {
+                    width: if active { 2.0 } else { 1.0 },
+                    radius: 3.0.into(),
+                    color: if active {
+                        Color::from_rgb(1.0, 1.0, 1.0)
+                    } else {
+                        Color::from_rgb(0.28, 0.28, 0.32)
+                    },
+                },
+                text_color: Color::WHITE,
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    let is_active = |c: Option<StrokeColor>| -> bool {
+        match (current, c) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
+    };
+    let theme_active = current.is_none();
+    row![
+        text("Color")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile(
+                "Auto",
+                None,
+                theme_active,
+                Color::from_rgba(0.28, 0.28, 0.32, 0.6),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE5, 0x3E, 0x3E)),
+                is_active(Some(rgb(0xE5, 0x3E, 0x3E))),
+                Color::from_rgb(0.90, 0.24, 0.24),
+            ),
+            tile(
+                "",
+                Some(rgb(0x3E, 0xA5, 0x44)),
+                is_active(Some(rgb(0x3E, 0xA5, 0x44))),
+                Color::from_rgb(0.24, 0.65, 0.27),
+            ),
+            tile(
+                "",
+                Some(rgb(0x3C, 0x85, 0xD6)),
+                is_active(Some(rgb(0x3C, 0x85, 0xD6))),
+                Color::from_rgb(0.24, 0.52, 0.84),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE6, 0xB7, 0x1E)),
+                is_active(Some(rgb(0xE6, 0xB7, 0x1E))),
+                Color::from_rgb(0.90, 0.72, 0.12),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE0, 0xE0, 0xE0)),
+                is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
+                Color::from_rgb(0.88, 0.88, 0.88),
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)

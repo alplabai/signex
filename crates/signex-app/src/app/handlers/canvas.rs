@@ -6,6 +6,13 @@ use crate::dock::DockMessage;
 use super::super::helpers::constrain_segments;
 use super::super::*;
 
+/// Default stroke width applied when the user hasn't edited the
+/// pre_placement Width value yet. KiCad's "default line width"
+/// is ~0.15 mm in schematics; showing 0 in the properties panel
+/// used to confuse users because the line was still visible
+/// (renderer substitutes its own default for 0).
+const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
+
 /// Read the shape width + fill defaults out of the current
 /// pre_placement slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
@@ -15,8 +22,18 @@ fn pre_placement_shape(
     doc.panel_ctx
         .pre_placement
         .as_ref()
-        .map(|pp| (pp.shape_width_mm, pp.shape_fill))
-        .unwrap_or((0.0, signex_types::schematic::FillType::None))
+        .map(|pp| {
+            let w = if pp.shape_width_mm > 0.0 {
+                pp.shape_width_mm
+            } else {
+                DEFAULT_SHAPE_STROKE_MM
+            };
+            (w, pp.shape_fill)
+        })
+        .unwrap_or((
+            DEFAULT_SHAPE_STROKE_MM,
+            signex_types::schematic::FillType::None,
+        ))
 }
 
 impl Signex {
@@ -778,6 +795,7 @@ impl Signex {
                                     start,
                                     end: p,
                                     width: pp_w,
+                                    stroke_color: None,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -814,6 +832,7 @@ impl Signex {
                                     end: p,
                                     width: pp_w,
                                     fill: pp_fill,
+                                    stroke_color: None,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -849,6 +868,7 @@ impl Signex {
                                         radius,
                                         width: pp_w,
                                         fill: pp_fill,
+                                        stroke_color: None,
                                     };
                                     self.apply_engine_command(
                                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -876,6 +896,7 @@ impl Signex {
                                 end: pts[2],
                                 width: pp_w,
                                 fill: pp_fill,
+                                stroke_color: None,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1059,6 +1080,7 @@ impl Signex {
                                 start,
                                 end: p,
                                 width: pre_placement_shape(&self.document_state).0,
+                                stroke_color: None,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1082,6 +1104,7 @@ impl Signex {
                                 end: p,
                                 width: pp_w,
                                 fill: pp_fill,
+                                stroke_color: None,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1107,6 +1130,7 @@ impl Signex {
                                     radius,
                                     width: pp_w,
                                     fill: pp_fill,
+                                    stroke_color: None,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1132,6 +1156,7 @@ impl Signex {
                                 end: pts[2],
                                 width: pp_w,
                                 fill: pp_fill,
+                                stroke_color: None,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1175,6 +1200,7 @@ impl Signex {
                             points: pts,
                             width: pp_w,
                             fill: pp_fill,
+                            stroke_color: None,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },

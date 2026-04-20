@@ -126,413 +126,140 @@ impl Signex {
     }
 }
 
-/// Patch a `SchDrawing` with a single field edit. Returns `None`
-/// when the edit is incompatible with the drawing variant (e.g.
-/// `ArcRadius` on a Rect). Arc edits convert the Altium-style
-/// (center, radius, start/end angle) fields back to KiCad's stored
-/// (start, mid, end) triple.
+/// Patch a `SchDrawing` with a single field edit. Mutates a cloned
+/// copy in place to avoid rebuilding every SchDrawing variant — and
+/// to preserve every future field (stroke_color et al) automatically.
+/// Returns `None` when the edit is incompatible with the drawing
+/// variant (e.g. `ArcRadius` on a Rect). Arc edits convert the
+/// Altium-style (center, radius, start/end angle) fields back to
+/// KiCad's stored (start, mid, end) triple.
 fn apply_drawing_edit(
     current: signex_types::schematic::SchDrawing,
     edit: crate::app::contracts::DrawingFieldEdit,
 ) -> Option<signex_types::schematic::SchDrawing> {
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::{Point, SchDrawing};
-    match (current, edit) {
+    let mut next = current;
+    match (&mut next, edit) {
+        // Stroke width applies to every variant.
         (
-            SchDrawing::Line {
-                uuid,
-                start,
-                end,
-                width: _,
-            },
+            SchDrawing::Line { width, .. }
+            | SchDrawing::Rect { width, .. }
+            | SchDrawing::Circle { width, .. }
+            | SchDrawing::Arc { width, .. }
+            | SchDrawing::Polyline { width, .. },
             E::Width(w),
-        ) => Some(SchDrawing::Line {
-            uuid,
-            start,
-            end,
-            width: w.max(0.0),
-        }),
-        (
-            SchDrawing::Line {
-                uuid,
-                mut start,
-                end,
-                width,
-            },
-            E::LineStartX(v),
         ) => {
-            start.x = v;
-            Some(SchDrawing::Line {
-                uuid,
-                start,
-                end,
-                width,
-            })
+            *width = w.max(0.0);
         }
+        // Fill applies to filled variants only.
         (
-            SchDrawing::Line {
-                uuid,
-                mut start,
-                end,
-                width,
-            },
-            E::LineStartY(v),
-        ) => {
-            start.y = v;
-            Some(SchDrawing::Line {
-                uuid,
-                start,
-                end,
-                width,
-            })
-        }
-        (
-            SchDrawing::Line {
-                uuid,
-                start,
-                mut end,
-                width,
-            },
-            E::LineEndX(v),
-        ) => {
-            end.x = v;
-            Some(SchDrawing::Line {
-                uuid,
-                start,
-                end,
-                width,
-            })
-        }
-        (
-            SchDrawing::Line {
-                uuid,
-                start,
-                mut end,
-                width,
-            },
-            E::LineEndY(v),
-        ) => {
-            end.y = v;
-            Some(SchDrawing::Line {
-                uuid,
-                start,
-                end,
-                width,
-            })
-        }
-        (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width: _,
-                fill,
-            },
-            E::Width(w),
-        ) => Some(SchDrawing::Rect {
-            uuid,
-            start,
-            end,
-            width: w.max(0.0),
-            fill,
-        }),
-        (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width,
-                fill: _,
-            },
+            SchDrawing::Rect { fill, .. }
+            | SchDrawing::Circle { fill, .. }
+            | SchDrawing::Polyline { fill, .. },
             E::Fill(f),
-        ) => Some(SchDrawing::Rect {
-            uuid,
-            start,
-            end,
-            width,
-            fill: f,
-        }),
-        (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width,
-                fill,
-            },
-            E::RectStartX(v),
         ) => {
-            let (x0, x1) = (start.x.min(end.x), start.x.max(end.x));
-            let w_mm = x1 - x0;
-            Some(SchDrawing::Rect {
-                uuid,
-                start: Point::new(v, start.y.min(end.y)),
-                end: Point::new(v + w_mm, start.y.max(end.y)),
-                width,
-                fill,
-            })
+            *fill = f;
         }
+        // Stroke colour: every variant carries an Option<StrokeColor>.
         (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width,
-                fill,
-            },
-            E::RectStartY(v),
+            SchDrawing::Line { stroke_color, .. }
+            | SchDrawing::Rect { stroke_color, .. }
+            | SchDrawing::Circle { stroke_color, .. }
+            | SchDrawing::Arc { stroke_color, .. }
+            | SchDrawing::Polyline { stroke_color, .. },
+            E::StrokeColor(c),
         ) => {
+            *stroke_color = c;
+        }
+        // Line endpoints
+        (SchDrawing::Line { start, .. }, E::LineStartX(v)) => start.x = v,
+        (SchDrawing::Line { start, .. }, E::LineStartY(v)) => start.y = v,
+        (SchDrawing::Line { end, .. }, E::LineEndX(v)) => end.x = v,
+        (SchDrawing::Line { end, .. }, E::LineEndY(v)) => end.y = v,
+        // Rect position / size — preserved by repositioning start/end.
+        (SchDrawing::Rect { start, end, .. }, E::RectStartX(v)) => {
+            let w_mm = (start.x.max(end.x)) - (start.x.min(end.x));
+            *start = Point::new(v, start.y.min(end.y));
+            *end = Point::new(v + w_mm, start.y.max(end.y));
+        }
+        (SchDrawing::Rect { start, end, .. }, E::RectStartY(v)) => {
             let h_mm = (end.y - start.y).abs();
-            Some(SchDrawing::Rect {
-                uuid,
-                start: Point::new(start.x.min(end.x), v),
-                end: Point::new(start.x.max(end.x), v + h_mm),
-                width,
-                fill,
-            })
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            *start = Point::new(x0, v);
+            *end = Point::new(x1, v + h_mm);
         }
-        (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width,
-                fill,
-            },
-            E::RectWidthMm(v),
-        ) => {
+        (SchDrawing::Rect { start, end, .. }, E::RectWidthMm(v)) => {
             let x0 = start.x.min(end.x);
             let y0 = start.y.min(end.y);
             let y1 = start.y.max(end.y);
-            Some(SchDrawing::Rect {
-                uuid,
-                start: Point::new(x0, y0),
-                end: Point::new(x0 + v.max(0.01), y1),
-                width,
-                fill,
-            })
+            *start = Point::new(x0, y0);
+            *end = Point::new(x0 + v.max(0.01), y1);
         }
-        (
-            SchDrawing::Rect {
-                uuid,
-                start,
-                end,
-                width,
-                fill,
-            },
-            E::RectHeightMm(v),
-        ) => {
+        (SchDrawing::Rect { start, end, .. }, E::RectHeightMm(v)) => {
             let x0 = start.x.min(end.x);
             let x1 = start.x.max(end.x);
             let y0 = start.y.min(end.y);
-            Some(SchDrawing::Rect {
-                uuid,
-                start: Point::new(x0, y0),
-                end: Point::new(x1, y0 + v.max(0.01)),
-                width,
-                fill,
-            })
+            *start = Point::new(x0, y0);
+            *end = Point::new(x1, y0 + v.max(0.01));
         }
+        // Circle
+        (SchDrawing::Circle { center, .. }, E::CircleCenterX(v)) => center.x = v,
+        (SchDrawing::Circle { center, .. }, E::CircleCenterY(v)) => center.y = v,
+        (SchDrawing::Circle { radius, .. }, E::CircleRadius(v)) => *radius = v.max(0.01),
+        // Arc — needs full (start,mid,end) reconstruction so it's
+        // handled separately (original values live inside `next`).
         (
-            SchDrawing::Circle {
-                uuid,
-                center,
-                radius,
-                width: _,
-                fill,
-            },
-            E::Width(w),
-        ) => Some(SchDrawing::Circle {
-            uuid,
-            center,
-            radius,
-            width: w.max(0.0),
-            fill,
-        }),
-        (
-            SchDrawing::Circle {
-                uuid,
-                center,
-                radius,
-                width,
-                fill: _,
-            },
-            E::Fill(f),
-        ) => Some(SchDrawing::Circle {
-            uuid,
-            center,
-            radius,
-            width,
-            fill: f,
-        }),
-        (
-            SchDrawing::Circle {
-                uuid,
-                mut center,
-                radius,
-                width,
-                fill,
-            },
-            E::CircleCenterX(v),
-        ) => {
-            center.x = v;
-            Some(SchDrawing::Circle {
-                uuid,
-                center,
-                radius,
-                width,
-                fill,
-            })
-        }
-        (
-            SchDrawing::Circle {
-                uuid,
-                mut center,
-                radius,
-                width,
-                fill,
-            },
-            E::CircleCenterY(v),
-        ) => {
-            center.y = v;
-            Some(SchDrawing::Circle {
-                uuid,
-                center,
-                radius,
-                width,
-                fill,
-            })
-        }
-        (
-            SchDrawing::Circle {
-                uuid,
-                center,
-                radius: _,
-                width,
-                fill,
-            },
-            E::CircleRadius(v),
-        ) => Some(SchDrawing::Circle {
-            uuid,
-            center,
-            radius: v.max(0.01),
-            width,
-            fill,
-        }),
-        (
-            SchDrawing::Arc {
-                uuid,
-                start,
-                mid,
-                end,
-                width: _,
-                fill,
-            },
-            E::Width(w),
-        ) => Some(SchDrawing::Arc {
-            uuid,
-            start,
-            mid,
-            end,
-            width: w.max(0.0),
-            fill,
-        }),
-        (
-            SchDrawing::Arc {
-                uuid,
-                start,
-                mid,
-                end,
-                width,
-                fill,
-            },
+            SchDrawing::Arc { .. },
             edit @ (E::ArcCenterX(_)
             | E::ArcCenterY(_)
             | E::ArcRadius(_)
             | E::ArcStartAngle(_)
             | E::ArcEndAngle(_)),
         ) => {
-            // Convert KiCad (start,mid,end) → Altium (cx,cy,r,sa,ea),
-            // apply the edit, then reconstruct the three points. Arcs
-            // that can't form a circle (colinear three points) get
-            // their radius synthesised from the drag anchor.
-            let (cx, cy, r) =
-                circumcircle_points(start, mid, end).unwrap_or((start.x, start.y, 1.0));
-            let mut ncx = cx;
-            let mut ncy = cy;
-            let mut nr = r;
-            let mut nsa = (start.y - cy).atan2(start.x - cx);
-            let mut nea = (end.y - cy).atan2(end.x - cx);
-            let nma = (mid.y - cy).atan2(mid.x - cx);
-            match edit {
-                E::ArcCenterX(v) => ncx = v,
-                E::ArcCenterY(v) => ncy = v,
-                E::ArcRadius(v) => nr = v.max(0.01),
-                E::ArcStartAngle(deg) => nsa = deg.to_radians(),
-                E::ArcEndAngle(deg) => nea = deg.to_radians(),
-                _ => {}
-            }
-            // Choose the mid point so the arc sweep direction is
-            // preserved: keep mid angle proportional between new
-            // start/end based on where it sat in the original sweep.
-            let orig_sweep = {
-                let s = normalize_rad((start.y - cy).atan2(start.x - cx));
-                let m = normalize_rad(nma);
-                let e = normalize_rad((end.y - cy).atan2(end.x - cx));
-                let s_to_m = norm_ccw(s, m);
-                let s_to_e = norm_ccw(s, e);
-                if s_to_e.abs() < 1e-9 {
-                    0.5
-                } else {
-                    s_to_m / s_to_e
+            if let SchDrawing::Arc {
+                start, mid, end, ..
+            } = &mut next
+            {
+                let (cx, cy, r) =
+                    circumcircle_points(*start, *mid, *end).unwrap_or((start.x, start.y, 1.0));
+                let mut ncx = cx;
+                let mut ncy = cy;
+                let mut nr = r;
+                let mut nsa = (start.y - cy).atan2(start.x - cx);
+                let mut nea = (end.y - cy).atan2(end.x - cx);
+                match edit {
+                    E::ArcCenterX(v) => ncx = v,
+                    E::ArcCenterY(v) => ncy = v,
+                    E::ArcRadius(v) => nr = v.max(0.01),
+                    E::ArcStartAngle(deg) => nsa = deg.to_radians(),
+                    E::ArcEndAngle(deg) => nea = deg.to_radians(),
+                    _ => {}
                 }
-            };
-            let (sa_unwrapped, ea_unwrapped) = (nsa, nea);
-            let ccw = norm_ccw(normalize_rad(sa_unwrapped), normalize_rad(ea_unwrapped));
-            let mid_angle = sa_unwrapped + ccw * orig_sweep;
-            let new_start =
-                Point::new(ncx + nr * sa_unwrapped.cos(), ncy + nr * sa_unwrapped.sin());
-            let new_mid = Point::new(ncx + nr * mid_angle.cos(), ncy + nr * mid_angle.sin());
-            let new_end = Point::new(ncx + nr * ea_unwrapped.cos(), ncy + nr * ea_unwrapped.sin());
-            Some(SchDrawing::Arc {
-                uuid,
-                start: new_start,
-                mid: new_mid,
-                end: new_end,
-                width,
-                fill,
-            })
+                // Preserve original sweep proportion for mid.
+                let orig_sweep = {
+                    let s = normalize_rad((start.y - cy).atan2(start.x - cx));
+                    let m = normalize_rad((mid.y - cy).atan2(mid.x - cx));
+                    let e = normalize_rad((end.y - cy).atan2(end.x - cx));
+                    let s_to_m = norm_ccw(s, m);
+                    let s_to_e = norm_ccw(s, e);
+                    if s_to_e.abs() < 1e-9 {
+                        0.5
+                    } else {
+                        s_to_m / s_to_e
+                    }
+                };
+                let ccw = norm_ccw(normalize_rad(nsa), normalize_rad(nea));
+                let mid_angle = nsa + ccw * orig_sweep;
+                *start = Point::new(ncx + nr * nsa.cos(), ncy + nr * nsa.sin());
+                *mid = Point::new(ncx + nr * mid_angle.cos(), ncy + nr * mid_angle.sin());
+                *end = Point::new(ncx + nr * nea.cos(), ncy + nr * nea.sin());
+            }
         }
-        (
-            SchDrawing::Polyline {
-                uuid,
-                points,
-                width: _,
-                fill,
-            },
-            E::Width(w),
-        ) => Some(SchDrawing::Polyline {
-            uuid,
-            points,
-            width: w.max(0.0),
-            fill,
-        }),
-        (
-            SchDrawing::Polyline {
-                uuid,
-                points,
-                width,
-                fill: _,
-            },
-            E::Fill(f),
-        ) => Some(SchDrawing::Polyline {
-            uuid,
-            points,
-            width,
-            fill: f,
-        }),
-        _ => None,
+        _ => return None,
     }
+    Some(next)
 }
 
 fn circumcircle_points(

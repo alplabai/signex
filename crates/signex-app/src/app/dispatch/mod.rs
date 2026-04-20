@@ -292,6 +292,7 @@ impl Signex {
                         points: pts,
                         width: pp_w,
                         fill: pp_fill,
+                        stroke_color: None,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
