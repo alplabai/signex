@@ -43,6 +43,10 @@ impl SchematicTabSession {
         self.engine.document()
     }
 
+    pub fn engine(&self) -> &signex_engine::Engine {
+        &self.engine
+    }
+
     pub fn engine_mut(&mut self) -> &mut signex_engine::Engine {
         &mut self.engine
     }

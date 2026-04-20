@@ -1024,11 +1024,11 @@ impl Signex {
             has_project: document.project_path.is_some(),
             has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
             can_undo: document
-                .engine_for_window(window_id)
+                .engine_for_window(window_id, ui)
                 .map(|e| e.can_undo())
                 .unwrap_or(false),
             can_redo: document
-                .engine_for_window(window_id)
+                .engine_for_window(window_id, ui)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
         };
