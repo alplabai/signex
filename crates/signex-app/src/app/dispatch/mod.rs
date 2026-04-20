@@ -272,12 +272,26 @@ impl Signex {
                 if self.interaction_state.current_tool == Tool::Polyline
                     && self.interaction_state.polyline_points.len() >= 2
                 {
+                    let pp_w = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_width_mm)
+                        .unwrap_or(0.0);
+                    let pp_fill = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_fill)
+                        .unwrap_or(signex_types::schematic::FillType::None);
                     let pts = std::mem::take(&mut self.interaction_state.polyline_points);
                     let drawing = signex_types::schematic::SchDrawing::Polyline {
                         uuid: uuid::Uuid::new_v4(),
                         points: pts,
-                        width: 0.0,
-                        fill: signex_types::schematic::FillType::default(),
+                        width: pp_w,
+                        fill: pp_fill,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },

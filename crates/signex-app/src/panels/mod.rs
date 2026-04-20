@@ -363,6 +363,11 @@ pub struct PrePlacementData {
     /// Most-recent cursor world position (for the X/Y readout).
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
+    /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
+    /// Polygon). 0 = KiCad default ≈ 0.15 mm.
+    pub shape_width_mm: f64,
+    /// Fill style for shapes that support it (Rect / Circle / Polygon).
+    pub shape_fill: signex_types::schematic::FillType,
 }
 
 /// Distinguishes placement flavors so the pre-placement form only shows
@@ -379,6 +384,11 @@ pub enum PrePlacementKind {
     PowerPort,
     TextNote,
     Component,
+    Line,
+    Rectangle,
+    Circle,
+    Arc,
+    Polygon,
     Other,
 }
 
@@ -458,6 +468,8 @@ pub enum PanelMsg {
     TogglePrePlacementBold,
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
+    SetPrePlacementShapeWidth(f64),
+    SetPrePlacementShapeFill(signex_types::schematic::FillType),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -2132,6 +2144,39 @@ fn view_pre_placement<'a>(
                 c
             },
         ));
+    } else if matches!(
+        kind,
+        PrePlacementKind::Line
+            | PrePlacementKind::Rectangle
+            | PrePlacementKind::Circle
+            | PrePlacementKind::Arc
+            | PrePlacementKind::Polygon
+    ) {
+        // Shape tools — Altium-style Width + Fill so users can
+        // preconfigure the next placement via TAB.
+        let width = pp.shape_width_mm;
+        let fill = pp.shape_fill;
+        let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
+        col = col.push(collapsible_section(
+            "preplace_shape",
+            "Properties",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_edit_row_f64(
+                    "Width (mm)",
+                    width,
+                    muted,
+                    PanelMsg::SetPrePlacementShapeWidth,
+                ));
+                if show_fill {
+                    c = c.push(shape_fill_row(fill, muted, border_c));
+                }
+                c
+            },
+        ));
     } else {
         col = col.push(
             container(
@@ -2146,6 +2191,93 @@ fn view_pre_placement<'a>(
     container(scrollable(col).width(Length::Fill))
         .width(Length::Fill)
         .into()
+}
+
+/// Numeric edit row used by the shape pre-placement form. Writes on
+/// submit — partial text mid-type doesn't panic via parse failure.
+fn form_edit_row_f64<'a>(
+    label: &'a str,
+    value: f64,
+    muted: Color,
+    on_submit: impl Fn(f64) -> PanelMsg + 'a + Clone,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{row, text, text_input};
+    let buf = format!("{value:.3}");
+    let on_submit_cb = on_submit.clone();
+    row![
+        text(label)
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        text_input("", &buf)
+            .size(11)
+            .on_input(move |s| {
+                if let Ok(v) = s.parse::<f64>() {
+                    on_submit_cb(v)
+                } else {
+                    PanelMsg::Noop
+                }
+            })
+            .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn shape_fill_row<'a>(
+    current: signex_types::schematic::FillType,
+    muted: Color,
+    _border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{button, row, text};
+    use signex_types::schematic::FillType;
+    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        button(text(label).size(10))
+            .padding([3, 8])
+            .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Fill")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("None", FillType::None, current == FillType::None),
+            tile("Outline", FillType::Outline, current == FillType::Outline),
+            tile(
+                "Background",
+                FillType::Background,
+                current == FillType::Background
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 fn view_properties_general<'a>(
