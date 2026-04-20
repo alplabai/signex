@@ -40,9 +40,13 @@ jobs:
           # image. Revisit in a patch release; drop here so v0.6 can ship.
 
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-14
             artifact: signex
             archive: signex-macos-aarch64.tar.gz
+
+          # macos-latest was stalling on v0.6.2 (set-up job failed in 2s
+          # — queue exhausted). Pinned to macos-14 (Apple Silicon) for
+          # stable capacity. Bump to macos-15 when macos-14 rolls off.
 
           # x86_64-apple-darwin deferred — macos-13 runners are in the
           # deprecated queue and take 30+ minutes to pick up a job. Apple
