@@ -203,7 +203,7 @@ impl Signex {
                 // Shared Signex state means edits sync automatically; the
                 // only difference between main and undocked is the OS
                 // window id they render into.
-                super::state::WindowKind::UndockedTab { .. } => self.view_main_for(Some(window_id)),
+                super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
                     let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
                         .map(crate::dock::DockMessage::Panel)
@@ -214,7 +214,7 @@ impl Signex {
                 }
             };
         }
-        self.view_main_for(None)
+        self.view_main_for(window_id)
     }
 
     /// Cursor-following translucent preview of a tab being dragged.
@@ -1010,7 +1010,7 @@ impl Signex {
         }
     }
 
-    fn view_main_for(&self, undocked_window: Option<iced::window::Id>) -> Element<'_, Message> {
+    fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
@@ -1022,15 +1022,13 @@ impl Signex {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
             has_project: document.project_path.is_some(),
-            has_selection: !interaction.canvas.selected.is_empty(),
+            has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
             can_undo: document
-                .engine
-                .as_ref()
+                .engine_for_window(window_id)
                 .map(|e| e.can_undo())
                 .unwrap_or(false),
             can_redo: document
-                .engine
-                .as_ref()
+                .engine_for_window(window_id)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
         };
@@ -1054,7 +1052,7 @@ impl Signex {
             left_has_panels && !left_collapsed,
             true,
         );
-        let center = self.view_center();
+        let center = self.view_center(window_id);
         let right_handle = self.view_resize_handle(
             DragTarget::RightPanel,
             right_has_panels && !right_collapsed,
@@ -1106,19 +1104,21 @@ impl Signex {
                 _ => None,
             })
             .collect();
-        let visible_paths: std::collections::HashSet<std::path::PathBuf> = match undocked_window {
-            Some(id) => match ui.windows.get(&id) {
-                Some(super::state::WindowKind::UndockedTab { path, .. }) => {
-                    std::iter::once(path.clone()).collect()
-                }
-                _ => std::collections::HashSet::new(),
-            },
-            None => document
+        let is_main_window = ui.main_window_id == Some(window_id);
+        let visible_paths: std::collections::HashSet<std::path::PathBuf> = if is_main_window {
+            document
                 .tabs
                 .iter()
                 .map(|t| t.path.clone())
                 .filter(|p| !all_undocked_paths.contains(p))
-                .collect(),
+                .collect()
+        } else {
+            match ui.windows.get(&window_id) {
+                Some(super::state::WindowKind::UndockedTab { path, .. }) => {
+                    std::iter::once(path.clone()).collect()
+                }
+                _ => std::collections::HashSet::new(),
+            }
         };
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
@@ -1269,9 +1269,9 @@ impl Signex {
             .into()
     }
 
-    fn view_center(&self) -> Element<'_, Message> {
+    fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         if self.has_active_schematic() {
-            canvas(self.interaction_state.active_canvas())
+            canvas(self.interaction_state.canvas_for_window(window_id))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
