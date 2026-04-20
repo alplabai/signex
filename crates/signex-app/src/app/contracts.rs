@@ -256,6 +256,8 @@ pub enum DrawingFieldEdit {
     ArcRadius(f64),
     ArcStartAngle(f64),
     ArcEndAngle(f64),
+    /// Override the stroke colour; `None` restores the theme default.
+    StrokeColor(Option<signex_types::schematic::StrokeColor>),
 }
 
 /// R / G / B channel selector for the custom net-colour picker inputs.
