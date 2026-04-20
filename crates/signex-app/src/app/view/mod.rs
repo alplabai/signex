@@ -606,7 +606,7 @@ impl Signex {
         // Collect all parameter keys across symbols (besides the built-
         // in reference / value / footprint). Keeps the table compact —
         // only columns that someone actually uses show up.
-        let Some(engine) = self.document_state.engine.as_ref() else {
+        let Some(engine) = self.document_state.active_engine() else {
             return container(
                 column![
                     header,
