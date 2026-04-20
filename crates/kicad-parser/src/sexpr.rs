@@ -1,9 +1,44 @@
 /// S-expression tokenizer and tree parser for KiCad files.
 /// KiCad uses a Lisp-like format: (keyword arg1 "string arg" (nested ...))
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Atom {
+    Raw(String),
+    Quoted(String),
+}
+
+impl Atom {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Atom::Raw(value) | Atom::Quoted(value) => value,
+        }
+    }
+
+    pub fn is_quoted(&self) -> bool {
+        matches!(self, Atom::Quoted(_))
+    }
+
+    pub fn is_raw(&self) -> bool {
+        matches!(self, Atom::Raw(_))
+    }
+}
+
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Atom::Raw(value) => write!(f, "{value}"),
+            Atom::Quoted(value) => {
+                let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+                write!(f, "\"{escaped}\"")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SExpr {
-    Atom(String),
+    Atom(Atom),
     List(Vec<SExpr>),
 }
 
@@ -12,8 +47,8 @@ impl SExpr {
     pub fn keyword(&self) -> Option<&str> {
         match self {
             SExpr::List(items) if !items.is_empty() => {
-                if let SExpr::Atom(s) = &items[0] {
-                    Some(s)
+                if let SExpr::Atom(atom) = &items[0] {
+                    Some(atom.as_str())
                 } else {
                     None
                 }
@@ -49,8 +84,8 @@ impl SExpr {
     pub fn first_arg(&self) -> Option<&str> {
         match self {
             SExpr::List(items) if items.len() > 1 => {
-                if let SExpr::Atom(s) = &items[1] {
-                    Some(s)
+                if let SExpr::Atom(atom) = &items[1] {
+                    Some(atom.as_str())
                 } else {
                     None
                 }
@@ -63,8 +98,8 @@ impl SExpr {
     pub fn arg(&self, n: usize) -> Option<&str> {
         match self {
             SExpr::List(items) if items.len() > n + 1 => {
-                if let SExpr::Atom(s) = &items[n + 1] {
-                    Some(s)
+                if let SExpr::Atom(atom) = &items[n + 1] {
+                    Some(atom.as_str())
                 } else {
                     None
                 }
@@ -89,6 +124,46 @@ impl SExpr {
             }
         }
         None
+    }
+
+    pub fn pretty(&self, indent: usize) -> String {
+        match self {
+            SExpr::Atom(atom) => atom.to_string(),
+            SExpr::List(items) => {
+                let one_line = self.to_string();
+                if one_line.len() <= 80 || items.iter().all(|item| matches!(item, SExpr::Atom(_))) {
+                    return one_line;
+                }
+
+                let pad = "  ".repeat(indent);
+                let child_pad = "  ".repeat(indent + 1);
+                let inner = items
+                    .iter()
+                    .map(|item| format!("{child_pad}{}", item.pretty(indent + 1)))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                format!("(\n{inner}\n{pad})")
+            }
+        }
+    }
+}
+
+impl fmt::Display for SExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SExpr::Atom(atom) => write!(f, "{atom}"),
+            SExpr::List(items) => {
+                write!(f, "(")?;
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, ")")
+            }
+        }
     }
 }
 
@@ -120,12 +195,12 @@ fn parse_tokens(tokens: &[Token], start: usize) -> Result<(SExpr, usize), String
                     return Ok((expr, i + 1));
                 }
             }
-            Token::Str(s) => {
-                let atom = SExpr::Atom(s.clone());
+            Token::Atom(atom) => {
+                let expr_atom = SExpr::Atom(atom.clone());
                 if let Some(top) = stack.last_mut() {
-                    top.push(atom);
+                    top.push(expr_atom);
                 } else {
-                    return Ok((atom, i + 1));
+                    return Ok((expr_atom, i + 1));
                 }
                 i += 1;
             }
@@ -143,7 +218,7 @@ fn parse_tokens(tokens: &[Token], start: usize) -> Result<(SExpr, usize), String
 enum Token {
     Open,
     Close,
-    Str(String),
+    Atom(Atom),
 }
 
 fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -190,7 +265,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 i += 1; // skip closing "
                 let s = String::from_utf8(raw)
                     .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).to_string());
-                tokens.push(Token::Str(s));
+                tokens.push(Token::Atom(Atom::Quoted(s)));
             }
             b' ' | b'\t' | b'\n' | b'\r' => {
                 i += 1;
@@ -202,7 +277,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     i += 1;
                 }
                 let s = String::from_utf8_lossy(&bytes[start..i]).to_string();
-                tokens.push(Token::Str(s));
+                tokens.push(Token::Atom(Atom::Raw(s)));
             }
         }
     }
@@ -273,5 +348,25 @@ mod tests {
             parse(r#"(symbol (property "Reference" "R1") (property "Value" "10k"))"#).unwrap();
         assert_eq!(expr.property("Reference"), Some("R1"));
         assert_eq!(expr.property("Value"), Some("10k"));
+    }
+
+    #[test]
+    fn preserves_quoted_and_raw_atoms() {
+        let expr = parse(r#"(footprint F.Cu "F.Cu" 123)"#).unwrap();
+        let items = match expr {
+            SExpr::List(items) => items,
+            _ => panic!("expected list"),
+        };
+
+        assert!(matches!(&items[0], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "footprint"));
+        assert!(matches!(&items[1], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "F.Cu"));
+        assert!(matches!(&items[2], SExpr::Atom(atom) if atom.is_quoted() && atom.as_str() == "F.Cu"));
+        assert!(matches!(&items[3], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "123"));
+    }
+
+    #[test]
+    fn display_preserves_quoted_and_raw_atoms() {
+        let expr = parse(r#"(footprint F.Cu "F.Cu")"#).unwrap();
+        assert_eq!(expr.to_string(), r#"(footprint F.Cu "F.Cu")"#);
     }
 }
