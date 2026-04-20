@@ -1,3 +1,4 @@
+mod sexpr_render;
 pub mod pcb;
 pub mod schematic;
 
