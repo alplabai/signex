@@ -215,6 +215,14 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// Transient numeric-input buffers for the drawing properties
+    /// panel — keyed on DrawingFieldId. Keeps half-typed strings
+    /// ("", "-", "2.") alive between rerenders so fields can be
+    /// fully erased and retyped. Reset when selection changes.
+    pub drawing_edit_buf: std::collections::HashMap<DrawingFieldId, String>,
+    /// UUID that owns the current drawing_edit_buf. When
+    /// `selected_uuid` changes the handler clears the buffer.
+    pub drawing_edit_buf_for: Option<uuid::Uuid>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -370,6 +378,35 @@ pub struct PrePlacementData {
     pub shape_fill: signex_types::schematic::FillType,
 }
 
+/// Stable identifiers for every numeric drawing-field editor so the
+/// panel keeps a transient string buffer per field across rerenders.
+/// Erasing a text_input leaves an empty string in the buffer until
+/// the user types a valid f64, at which point UpdateDrawingEdit fires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DrawingFieldId {
+    LineStartX,
+    LineStartY,
+    LineEndX,
+    LineEndY,
+    LineWidth,
+    RectStartX,
+    RectStartY,
+    RectWidth,
+    RectHeight,
+    RectBorder,
+    CircleCenterX,
+    CircleCenterY,
+    CircleRadius,
+    CircleBorder,
+    ArcCenterX,
+    ArcCenterY,
+    ArcRadius,
+    ArcStartAngle,
+    ArcEndAngle,
+    ArcWidth,
+    PolyBorder,
+}
+
 /// Distinguishes placement flavors so the pre-placement form only shows
 /// fields relevant to what the user is about to drop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -471,6 +508,12 @@ pub enum PanelMsg {
     SetPrePlacementShapeWidth(f64),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
+    /// Numeric text_input keystroke for a drawing field. The string
+    /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
+    /// partial input survives between frames; the handler parses
+    /// best-effort and fires UpdateDrawingEdit when the value is a
+    /// valid f64.
+    DrawingFieldTyping(DrawingFieldId, String),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -565,6 +608,47 @@ fn chevron_down() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
     H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
         .clone()
+}
+
+// Draft shape icons (16×16). Stylistic draft only — safe to replace
+// with final assets later by dropping equivalent files at the same
+// paths. Loaded once and cached via OnceLock.
+const SVG_SHAPE_LINE: &[u8] = include_bytes!("../../assets/icons/shape_line.svg");
+const SVG_SHAPE_RECT: &[u8] = include_bytes!("../../assets/icons/shape_rect.svg");
+const SVG_SHAPE_CIRCLE: &[u8] = include_bytes!("../../assets/icons/shape_circle.svg");
+const SVG_SHAPE_ARC: &[u8] = include_bytes!("../../assets/icons/shape_arc.svg");
+const SVG_SHAPE_POLYGON: &[u8] = include_bytes!("../../assets/icons/shape_polygon.svg");
+
+fn shape_icon_handle(elem_type: &str) -> Option<svg::Handle> {
+    static LINE: OnceLock<svg::Handle> = OnceLock::new();
+    static RECT: OnceLock<svg::Handle> = OnceLock::new();
+    static CIRCLE: OnceLock<svg::Handle> = OnceLock::new();
+    static ARC: OnceLock<svg::Handle> = OnceLock::new();
+    static POLY: OnceLock<svg::Handle> = OnceLock::new();
+    match elem_type {
+        "Line" => Some(
+            LINE.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_LINE))
+                .clone(),
+        ),
+        "Rectangle" => Some(
+            RECT.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_RECT))
+                .clone(),
+        ),
+        "Circle" => Some(
+            CIRCLE
+                .get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_CIRCLE))
+                .clone(),
+        ),
+        "Arc" => Some(
+            ARC.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_ARC))
+                .clone(),
+        ),
+        "Polygon" => Some(
+            POLY.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_POLYGON))
+                .clone(),
+        ),
+        _ => None,
+    }
 }
 
 /// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
@@ -4357,7 +4441,6 @@ fn view_drawing_properties<'a>(
     _primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::FillType;
     let get = |key: &str| -> String {
         ctx.selection_info
@@ -4388,24 +4471,41 @@ fn view_drawing_properties<'a>(
     };
 
     let elem_type = get("Type");
-    let width = parse_f64(&get("Width"));
-    let border = parse_f64(&get("Border"));
-    let stroke_w = if border > 0.0 { border } else { width };
+    // Line + Arc store their stroke in the `Width` key; Rect / Circle
+    // / Polygon put stroke under `Border` and use `Width` for the
+    // X-dimension (Rect) or nothing (Circle / Polygon). Picking the
+    // wrong one here pre-fills the input with the X-dim or 0.
+    let stroke_w = match elem_type.as_str() {
+        "Line" | "Arc" => parse_f64(&get("Width")),
+        _ => parse_f64(&get("Border")),
+    };
     let fill = parse_fill(&get("Fill"));
     let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
 
     let mut col = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(
-        container(
+    // Header: shape icon + type label. Draft SVGs live at
+    // assets/icons/shape_*.svg and can be swapped out for final art
+    // without touching the panel code.
+    let header_row: Element<'a, PanelMsg> = if let Some(icon) = shape_icon_handle(&elem_type) {
+        row![
+            iced::widget::svg(icon).width(16).height(16),
             text(elem_type.clone())
                 .size(11)
                 .color(Color::from_rgb(0.90, 0.90, 0.92)),
-        )
-        .padding([6, 8])
-        .width(Length::Fill),
-    );
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        text(elem_type.clone())
+            .size(11)
+            .color(Color::from_rgb(0.90, 0.90, 0.92))
+            .into()
+    };
+    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
     col = col.push(thin_sep(border_c));
 
+    let buf = &ctx.drawing_edit_buf;
     match elem_type.as_str() {
         "Line" => {
             let (sx, sy) = parse_pair(&get("Start"));
@@ -4418,21 +4518,41 @@ fn view_drawing_properties<'a>(
                 border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row_f64("Start X", sx, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::LineStartX(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Start Y", sy, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::LineStartY(v))
-                    }));
-                    c = c.push(form_edit_row_f64("End X", ex, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::LineEndX(v))
-                    }));
-                    c = c.push(form_edit_row_f64("End Y", ey, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::LineEndY(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Width (mm)", stroke_w, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::Width(v))
-                    }));
+                    c = c.push(drawing_num_row(
+                        "Start X",
+                        DrawingFieldId::LineStartX,
+                        sx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Start Y",
+                        DrawingFieldId::LineStartY,
+                        sy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End X",
+                        DrawingFieldId::LineEndX,
+                        ex,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End Y",
+                        DrawingFieldId::LineEndY,
+                        ey,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width (mm)",
+                        DrawingFieldId::LineWidth,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
                     c
                 },
             ));
@@ -4449,21 +4569,41 @@ fn view_drawing_properties<'a>(
                 border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row_f64("Position X", px, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::RectStartX(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Position Y", py, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::RectStartY(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Width (mm)", w_mm, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::RectWidthMm(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Height (mm)", h_mm, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::RectHeightMm(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::Width(v))
-                    }));
+                    c = c.push(drawing_num_row(
+                        "Position X",
+                        DrawingFieldId::RectStartX,
+                        px,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Position Y",
+                        DrawingFieldId::RectStartY,
+                        py,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width (mm)",
+                        DrawingFieldId::RectWidth,
+                        w_mm,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Height (mm)",
+                        DrawingFieldId::RectHeight,
+                        h_mm,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::RectBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
                     if show_fill {
                         c = c.push(drawing_fill_row(fill, muted, border_c));
                     }
@@ -4482,18 +4622,34 @@ fn view_drawing_properties<'a>(
                 border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row_f64("Center X", cx, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::CircleCenterX(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Center Y", cy, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::CircleCenterY(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Radius", radius, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::CircleRadius(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::Width(v))
-                    }));
+                    c = c.push(drawing_num_row(
+                        "Center X",
+                        DrawingFieldId::CircleCenterX,
+                        cx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Center Y",
+                        DrawingFieldId::CircleCenterY,
+                        cy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Radius",
+                        DrawingFieldId::CircleRadius,
+                        radius,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::CircleBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
                     if show_fill {
                         c = c.push(drawing_fill_row(fill, muted, border_c));
                     }
@@ -4514,24 +4670,48 @@ fn view_drawing_properties<'a>(
                 border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row_f64("Center X", cx, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::ArcCenterX(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Center Y", cy, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::ArcCenterY(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Radius", radius, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::ArcRadius(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Start Angle", start_angle, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::ArcStartAngle(v))
-                    }));
-                    c = c.push(form_edit_row_f64("End Angle", end_angle, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::ArcEndAngle(v))
-                    }));
-                    c = c.push(form_edit_row_f64("Width", stroke_w, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::Width(v))
-                    }));
+                    c = c.push(drawing_num_row(
+                        "Center X",
+                        DrawingFieldId::ArcCenterX,
+                        cx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Center Y",
+                        DrawingFieldId::ArcCenterY,
+                        cy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Radius",
+                        DrawingFieldId::ArcRadius,
+                        radius,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Start Angle",
+                        DrawingFieldId::ArcStartAngle,
+                        start_angle,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End Angle",
+                        DrawingFieldId::ArcEndAngle,
+                        end_angle,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width",
+                        DrawingFieldId::ArcWidth,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
                     c
                 },
             ));
@@ -4552,9 +4732,13 @@ fn view_drawing_properties<'a>(
                         muted,
                         Color::from_rgb(0.90, 0.90, 0.92),
                     ));
-                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
-                        PanelMsg::UpdateDrawingEdit(E::Width(v))
-                    }));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::PolyBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
                     if show_fill {
                         c = c.push(drawing_fill_row(fill, muted, border_c));
                     }
@@ -4576,6 +4760,38 @@ fn view_drawing_properties<'a>(
         }
     }
     col.into()
+}
+
+/// Buffer-backed numeric row — survives empty / partial input so the
+/// user can erase and retype the whole value. Emits DrawingFieldTyping
+/// on every keystroke; the handler commits to the engine when the
+/// string parses as f64.
+fn drawing_num_row<'a>(
+    label: &'a str,
+    field: DrawingFieldId,
+    stored_value: f64,
+    buf: &std::collections::HashMap<DrawingFieldId, String>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{row, text, text_input};
+    let display = buf
+        .get(&field)
+        .cloned()
+        .unwrap_or_else(|| format!("{stored_value:.3}"));
+    row![
+        text(label)
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        text_input("", &display)
+            .size(11)
+            .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
+            .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 fn drawing_fill_row<'a>(

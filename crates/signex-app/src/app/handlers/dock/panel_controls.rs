@@ -162,6 +162,58 @@ impl Signex {
                     pp.shape_fill = *f;
                 }
             }
+            crate::panels::PanelMsg::DrawingFieldTyping(field_id, text) => {
+                // Rebind the buffer ownership when selection changes
+                // so a prior drawing's half-typed text doesn't bleed
+                // into the newly selected one.
+                let current_uuid = self.document_state.panel_ctx.selected_uuid;
+                if self.document_state.panel_ctx.drawing_edit_buf_for != current_uuid {
+                    self.document_state.panel_ctx.drawing_edit_buf.clear();
+                    self.document_state.panel_ctx.drawing_edit_buf_for = current_uuid;
+                }
+                self.document_state
+                    .panel_ctx
+                    .drawing_edit_buf
+                    .insert(*field_id, text.clone());
+                // Emit the engine update only when the string parses
+                // cleanly — empty / partial input stays in the buffer
+                // so the user can keep typing.
+                if let Ok(v) = text.trim().parse::<f64>() {
+                    use crate::app::contracts::DrawingFieldEdit as E;
+                    use crate::panels::DrawingFieldId as F;
+                    let edit = match field_id {
+                        F::LineStartX => E::LineStartX(v),
+                        F::LineStartY => E::LineStartY(v),
+                        F::LineEndX => E::LineEndX(v),
+                        F::LineEndY => E::LineEndY(v),
+                        F::LineWidth => E::Width(v),
+                        F::RectStartX => E::RectStartX(v),
+                        F::RectStartY => E::RectStartY(v),
+                        F::RectWidth => E::RectWidthMm(v),
+                        F::RectHeight => E::RectHeightMm(v),
+                        F::RectBorder => E::Width(v),
+                        F::CircleCenterX => E::CircleCenterX(v),
+                        F::CircleCenterY => E::CircleCenterY(v),
+                        F::CircleRadius => E::CircleRadius(v),
+                        F::CircleBorder => E::Width(v),
+                        F::ArcCenterX => E::ArcCenterX(v),
+                        F::ArcCenterY => E::ArcCenterY(v),
+                        F::ArcRadius => E::ArcRadius(v),
+                        F::ArcStartAngle => E::ArcStartAngle(v),
+                        F::ArcEndAngle => E::ArcEndAngle(v),
+                        F::ArcWidth => E::Width(v),
+                        F::PolyBorder => E::Width(v),
+                    };
+                    if let Some(uuid) = current_uuid.filter(|_| {
+                        matches!(
+                            self.document_state.panel_ctx.selected_kind,
+                            Some(signex_types::schematic::SelectedKind::Drawing)
+                        )
+                    }) {
+                        let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
+                    }
+                }
+            }
             crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
                 // Fire the engine-side update only if exactly one
                 // drawing is selected — the panel shows post-placement
