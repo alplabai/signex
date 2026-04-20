@@ -480,6 +480,66 @@ pub(super) fn field_effective_style(
     (draw_rot, h, v)
 }
 
+/// Find the circle passing through three non-collinear points.
+/// Returns `(cx, cy, radius)` in world space. Returns `None` when
+/// the three points are collinear (determinant ≈ 0), in which case
+/// callers should fall back to chord-segment rendering.
+pub fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let (cx, cy) = c;
+    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if d.abs() < 1e-9 {
+        return None;
+    }
+    let ux = ((ax * ax + ay * ay) * (by - cy)
+        + (bx * bx + by * by) * (cy - ay)
+        + (cx * cx + cy * cy) * (ay - by))
+        / d;
+    let uy = ((ax * ax + ay * ay) * (cx - bx)
+        + (bx * bx + by * by) * (ax - cx)
+        + (cx * cx + cy * cy) * (bx - ax))
+        / d;
+    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
+    Some((ux, uy, r))
+}
+
+/// Given start / mid / end angles (radians) around a circle center,
+/// return the `(from, to)` sweep that passes through `mid`.  The
+/// returned `to` may be outside `[-π, π]` so `from → to` covers the
+/// right arc direction for linear interpolation. Handles the case
+/// where the arc wraps across the ±π branch cut.
+pub fn arc_sweep(start: f64, mid: f64, end: f64) -> (f64, f64) {
+    use std::f64::consts::TAU;
+    // Normalise to [0, 2π).
+    let norm = |a: f64| -> f64 {
+        let mut t = a % TAU;
+        if t < 0.0 {
+            t += TAU;
+        }
+        t
+    };
+    let s = norm(start);
+    let m = norm(mid);
+    let e = norm(end);
+    // CCW distance from `a` to `b` in [0, 2π).
+    let ccw = |a: f64, b: f64| -> f64 {
+        let d = b - a;
+        if d < 0.0 { d + TAU } else { d }
+    };
+    // Walk CCW from s: does we hit m before e?
+    let s_to_m = ccw(s, m);
+    let s_to_e = ccw(s, e);
+    if s_to_m <= s_to_e {
+        // CCW sweep start → end via mid.
+        (start, start + s_to_e)
+    } else {
+        // CW sweep: negative direction to reach end via mid.
+        let cw_dist = TAU - s_to_e;
+        (start, start - cw_dist)
+    }
+}
+
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
 pub fn instance_transform(

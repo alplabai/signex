@@ -1621,6 +1621,19 @@ impl Engine {
                 .text_notes
                 .iter()
                 .any(|text_note| text_note.uuid == item.uuid),
+            SelectedKind::Drawing => {
+                use signex_types::schematic::SchDrawing;
+                self.document.drawings.iter().any(|d| {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u == item.uuid
+                })
+            }
             _ => false,
         }
     }
@@ -1634,6 +1647,21 @@ impl Engine {
             SelectedKind::NoConnect => remove_by_uuid(&mut self.document.no_connects, item.uuid),
             SelectedKind::Symbol => remove_by_uuid(&mut self.document.symbols, item.uuid),
             SelectedKind::TextNote => remove_by_uuid(&mut self.document.text_notes, item.uuid),
+            SelectedKind::Drawing => {
+                use signex_types::schematic::SchDrawing;
+                let before_len = self.document.drawings.len();
+                self.document.drawings.retain(|d| {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u != item.uuid
+                });
+                self.document.drawings.len() != before_len
+            }
             _ => false,
         }
     }
@@ -1783,7 +1811,59 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
-            SelectedKind::Drawing => false,
+            SelectedKind::Drawing => self
+                .document
+                .drawings
+                .iter_mut()
+                .find(|d| {
+                    let u = match d {
+                        signex_types::schematic::SchDrawing::Line { uuid, .. }
+                        | signex_types::schematic::SchDrawing::Rect { uuid, .. }
+                        | signex_types::schematic::SchDrawing::Circle { uuid, .. }
+                        | signex_types::schematic::SchDrawing::Arc { uuid, .. }
+                        | signex_types::schematic::SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u == item.uuid
+                })
+                .map(|d| {
+                    use signex_types::schematic::SchDrawing;
+                    match d {
+                        SchDrawing::Line { start, end, .. } => {
+                            start.x += dx;
+                            start.y += dy;
+                            end.x += dx;
+                            end.y += dy;
+                        }
+                        SchDrawing::Rect { start, end, .. } => {
+                            start.x += dx;
+                            start.y += dy;
+                            end.x += dx;
+                            end.y += dy;
+                        }
+                        SchDrawing::Circle { center, .. } => {
+                            center.x += dx;
+                            center.y += dy;
+                        }
+                        SchDrawing::Arc {
+                            start, mid, end, ..
+                        } => {
+                            start.x += dx;
+                            start.y += dy;
+                            mid.x += dx;
+                            mid.y += dy;
+                            end.x += dx;
+                            end.y += dy;
+                        }
+                        SchDrawing::Polyline { points, .. } => {
+                            for p in points {
+                                p.x += dx;
+                                p.y += dy;
+                            }
+                        }
+                    }
+                    true
+                })
+                .unwrap_or(false),
         }
     }
 

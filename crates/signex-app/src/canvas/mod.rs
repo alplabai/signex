@@ -1963,6 +1963,44 @@ fn shift_snapshot_for_selection(
             cs.position = shift(cs.position);
         }
     }
+    use signex_types::schematic::SchDrawing;
+    for d in out.drawings.iter_mut() {
+        let uuid = match d {
+            SchDrawing::Line { uuid, .. }
+            | SchDrawing::Rect { uuid, .. }
+            | SchDrawing::Circle { uuid, .. }
+            | SchDrawing::Arc { uuid, .. }
+            | SchDrawing::Polyline { uuid, .. } => *uuid,
+        };
+        if !is_selected(uuid, SelectedKind::Drawing) {
+            continue;
+        }
+        match d {
+            SchDrawing::Line { start, end, .. } => {
+                *start = shift(*start);
+                *end = shift(*end);
+            }
+            SchDrawing::Rect { start, end, .. } => {
+                *start = shift(*start);
+                *end = shift(*end);
+            }
+            SchDrawing::Circle { center, .. } => {
+                *center = shift(*center);
+            }
+            SchDrawing::Arc {
+                start, mid, end, ..
+            } => {
+                *start = shift(*start);
+                *mid = shift(*mid);
+                *end = shift(*end);
+            }
+            SchDrawing::Polyline { points, .. } => {
+                for p in points {
+                    *p = shift(*p);
+                }
+            }
+        }
+    }
     out
 }
 
