@@ -232,6 +232,36 @@ impl Signex {
                                     String::new(),
                                 ),
                             },
+                            Tool::Line => (
+                                PrePlacementKind::Line,
+                                "Line".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Rectangle => (
+                                PrePlacementKind::Rectangle,
+                                "Rectangle".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Circle => (
+                                PrePlacementKind::Circle,
+                                "Full Circle".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Arc => (
+                                PrePlacementKind::Arc,
+                                "Arc".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Polyline => (
+                                PrePlacementKind::Polygon,
+                                "Polygon".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             _ => (
                                 PrePlacementKind::Other,
                                 format!("{}", self.interaction_state.current_tool),
@@ -290,6 +320,20 @@ impl Signex {
                         .as_ref()
                         .map(|pp| pp.justify_v)
                         .unwrap_or_default();
+                    let prev_shape_width = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_width_mm)
+                        .unwrap_or(0.0);
+                    let prev_shape_fill = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_fill)
+                        .unwrap_or(signex_types::schematic::FillType::None);
                     let label_text_for_commit = label_text.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
@@ -307,6 +351,8 @@ impl Signex {
                             underline: false,
                             cursor_x_mm: self.ui_state.cursor_x,
                             cursor_y_mm: self.ui_state.cursor_y,
+                            shape_width_mm: prev_shape_width,
+                            shape_fill: prev_shape_fill,
                         });
                     self.document_state
                         .dock

@@ -6,6 +6,19 @@ use crate::dock::DockMessage;
 use super::super::helpers::constrain_segments;
 use super::super::*;
 
+/// Read the shape width + fill defaults out of the current
+/// pre_placement slot (TAB-configured) so shape tools pick up the
+/// user's Width/Fill edits when committing the next click.
+fn pre_placement_shape(
+    doc: &super::super::state::DocumentState,
+) -> (f64, signex_types::schematic::FillType) {
+    doc.panel_ctx
+        .pre_placement
+        .as_ref()
+        .map(|pp| (pp.shape_width_mm, pp.shape_fill))
+        .unwrap_or((0.0, signex_types::schematic::FillType::None))
+}
+
 impl Signex {
     pub(crate) fn handle_layout_drag_started(&mut self, target: DragTarget) {
         crate::diagnostics::log_debug(format!("[drag] START {target:?}"));
@@ -750,6 +763,7 @@ impl Signex {
                         // seeds shape_anchor; second click emits
                         // SchDrawing::Line and re-arms for the next
                         // line (matches Altium's stay-in-tool flow).
+                        let (pp_w, _) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(wx, wy);
                         match self.interaction_state.shape_anchor.take() {
                             None => {
@@ -763,7 +777,7 @@ impl Signex {
                                     uuid: uuid::Uuid::new_v4(),
                                     start,
                                     end: p,
-                                    width: 0.0,
+                                    width: pp_w,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -784,6 +798,7 @@ impl Signex {
                         // Two-click: corner → opposite-corner →
                         // SchDrawing::Rect. Rearms blank for the
                         // next rect.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(wx, wy);
                         match self.interaction_state.shape_anchor.take() {
                             None => {
@@ -797,8 +812,8 @@ impl Signex {
                                     uuid: uuid::Uuid::new_v4(),
                                     start,
                                     end: p,
-                                    width: 0.0,
-                                    fill: signex_types::schematic::FillType::default(),
+                                    width: pp_w,
+                                    fill: pp_fill,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -814,6 +829,7 @@ impl Signex {
                     Tool::Circle => {
                         // Two-click: center → edge-point → commit as
                         // SchDrawing::Circle with radius = |edge-center|.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(wx, wy);
                         match self.interaction_state.shape_anchor.take() {
                             None => {
@@ -831,8 +847,8 @@ impl Signex {
                                         uuid: uuid::Uuid::new_v4(),
                                         center,
                                         radius,
-                                        width: 0.0,
-                                        fill: signex_types::schematic::FillType::default(),
+                                        width: pp_w,
+                                        fill: pp_fill,
                                     };
                                     self.apply_engine_command(
                                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -848,6 +864,7 @@ impl Signex {
                     }
                     Tool::Arc => {
                         // 3-click arc: start → mid → end.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(wx, wy);
                         self.interaction_state.arc_points.push(p);
                         if self.interaction_state.arc_points.len() >= 3 {
@@ -857,8 +874,8 @@ impl Signex {
                                 start: pts[0],
                                 mid: pts[1],
                                 end: pts[2],
-                                width: 0.0,
-                                fill: signex_types::schematic::FillType::default(),
+                                width: pp_w,
+                                fill: pp_fill,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1041,7 +1058,7 @@ impl Signex {
                                 uuid: uuid::Uuid::new_v4(),
                                 start,
                                 end: p,
-                                width: 0.0,
+                                width: pre_placement_shape(&self.document_state).0,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1056,14 +1073,15 @@ impl Signex {
                         return Task::none();
                     }
                     Tool::Rectangle => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(world_x, world_y);
                         if let Some(start) = self.interaction_state.shape_anchor.take() {
                             let drawing = signex_types::schematic::SchDrawing::Rect {
                                 uuid: uuid::Uuid::new_v4(),
                                 start,
                                 end: p,
-                                width: 0.0,
-                                fill: signex_types::schematic::FillType::default(),
+                                width: pp_w,
+                                fill: pp_fill,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1076,6 +1094,7 @@ impl Signex {
                         return Task::none();
                     }
                     Tool::Circle => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(world_x, world_y);
                         if let Some(center) = self.interaction_state.shape_anchor.take() {
                             let dx = p.x - center.x;
@@ -1086,8 +1105,8 @@ impl Signex {
                                     uuid: uuid::Uuid::new_v4(),
                                     center,
                                     radius,
-                                    width: 0.0,
-                                    fill: signex_types::schematic::FillType::default(),
+                                    width: pp_w,
+                                    fill: pp_fill,
                                 };
                                 self.apply_engine_command(
                                     signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1101,6 +1120,7 @@ impl Signex {
                         return Task::none();
                     }
                     Tool::Arc => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let p = signex_types::schematic::Point::new(world_x, world_y);
                         self.interaction_state.arc_points.push(p);
                         if self.interaction_state.arc_points.len() >= 3 {
@@ -1110,8 +1130,8 @@ impl Signex {
                                 start: pts[0],
                                 mid: pts[1],
                                 end: pts[2],
-                                width: 0.0,
-                                fill: signex_types::schematic::FillType::default(),
+                                width: pp_w,
+                                fill: pp_fill,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -1148,12 +1168,13 @@ impl Signex {
                         self.interaction_state.polyline_points.push(p);
                     }
                     if self.interaction_state.polyline_points.len() >= 2 {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
                         let pts = std::mem::take(&mut self.interaction_state.polyline_points);
                         let drawing = signex_types::schematic::SchDrawing::Polyline {
                             uuid: uuid::Uuid::new_v4(),
                             points: pts,
-                            width: 0.0,
-                            fill: signex_types::schematic::FillType::default(),
+                            width: pp_w,
+                            fill: pp_fill,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
