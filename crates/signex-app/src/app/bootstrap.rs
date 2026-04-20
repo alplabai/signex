@@ -166,6 +166,7 @@ impl Signex {
                     selection_info: vec![],
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
+                    selected_drawing: None,
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
