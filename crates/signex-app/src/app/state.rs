@@ -274,6 +274,9 @@ pub struct InteractionState {
     /// Freehand polygon placement buffer. Accumulates clicks until
     /// the user presses Enter / double-clicks / right-clicks.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// Two-click shape placement: first click sets the anchor, second
+    /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
+    pub shape_anchor: Option<signex_types::schematic::Point>,
     pub clipboard_wires: Vec<signex_types::schematic::Wire>,
     pub clipboard_buses: Vec<signex_types::schematic::Bus>,
     pub clipboard_labels: Vec<signex_types::schematic::Label>,

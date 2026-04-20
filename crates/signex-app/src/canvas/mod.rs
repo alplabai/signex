@@ -144,6 +144,16 @@ pub struct SchematicCanvas {
     /// is a reference pick, not a selection. Synced from
     /// `ui_state.reorder_picker.is_some()` at the top of each view().
     pub reorder_picker_armed: bool,
+    /// Two-click shape anchor + which shape is being drawn. Used by
+    /// the rubber-band preview for Line / Rectangle / Circle.
+    pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapePreviewKind {
+    Line,
+    Rect,
+    Circle,
 }
 
 /// Canvas-side projection of an ERC violation — just enough to draw
@@ -223,6 +233,7 @@ impl SchematicCanvas {
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
+            shape_anchor: None,
         }
     }
 
@@ -1044,7 +1055,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     || self.ghost_text.is_some()
                     || !self.arc_points.is_empty()
                     || !self.polyline_points.is_empty()
-                    || self.reorder_picker_armed;
+                    || self.reorder_picker_armed
+                    || self.shape_anchor.is_some();
                 if placement_active {
                     let len = 14.0_f32;
                     let a = canvas::Path::line(
@@ -1102,6 +1114,58 @@ impl canvas::Program<Message> for SchematicCanvas {
                         b.close();
                     });
                     frame.fill(&nib, Color::from_rgb(0.15, 0.15, 0.15));
+                }
+
+                // Two-click shape rubber-band — line from anchor to
+                // cursor, or rect / circle sized by the cursor offset.
+                // Commits on the second click via the tool's branch
+                // in CanvasEvent::Clicked.
+                if let Some((anchor, kind)) = self.shape_anchor {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let p_a = state.camera.world_to_screen(
+                        iced::Point::new(anchor.x as f32, anchor.y as f32),
+                        bounds,
+                    );
+                    let p_b = state
+                        .camera
+                        .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+                    let accent = Color::from_rgb(0.94, 0.74, 0.28);
+                    let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
+                    match kind {
+                        crate::canvas::ShapePreviewKind::Line => {
+                            frame.stroke(&canvas::Path::line(p_a, p_b), stroke);
+                        }
+                        crate::canvas::ShapePreviewKind::Rect => {
+                            let x0 = p_a.x.min(p_b.x);
+                            let y0 = p_a.y.min(p_b.y);
+                            let w = (p_a.x - p_b.x).abs();
+                            let h = (p_a.y - p_b.y).abs();
+                            frame.stroke(
+                                &canvas::Path::rectangle(
+                                    iced::Point::new(x0, y0),
+                                    iced::Size::new(w.max(0.1), h.max(0.1)),
+                                ),
+                                stroke,
+                            );
+                        }
+                        crate::canvas::ShapePreviewKind::Circle => {
+                            let dx = p_b.x - p_a.x;
+                            let dy = p_b.y - p_a.y;
+                            let r = (dx * dx + dy * dy).sqrt().max(0.5);
+                            frame.stroke(&canvas::Path::circle(p_a, r), stroke);
+                            // Small center dot for Altium-style feedback.
+                            frame.fill(&canvas::Path::circle(p_a, 2.0), accent);
+                        }
+                    }
                 }
 
                 // Polyline-in-progress preview — solid segments between
