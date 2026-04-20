@@ -370,45 +370,46 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
     }
     wln!(out, "    (uuid \"{}\")", sym.uuid);
 
-    // Reference property
-    if let Some(ref ref_text) = sym.ref_text {
-        write_property(out, "Reference", &sym.reference, ref_text, sym.rotation);
+    // Reference property — always written; hidden when ref_text is None (power symbols).
+    match sym.ref_text.as_ref() {
+        Some(ref_text) => write_property(out, "Reference", &sym.reference, ref_text, sym.rotation),
+        None => {
+            wln!(out, "    (property \"Reference\" \"{}\"", escape(&sym.reference));
+            wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+            wln!(out, "      (show_name no)");
+            wln!(out, "      (do_not_autoplace no)");
+            wln!(out, "      (hide yes)");
+            wln!(out, "      (effects (font (size 1.27 1.27)))");
+            wln!(out, "    )");
+        }
     }
-    // Value property
-    if let Some(ref val_text) = sym.val_text {
-        write_property(out, "Value", &sym.value, val_text, sym.rotation);
+    // Value property — always written; hidden when val_text is None.
+    match sym.val_text.as_ref() {
+        Some(val_text) => write_property(out, "Value", &sym.value, val_text, sym.rotation),
+        None => {
+            wln!(out, "    (property \"Value\" \"{}\"", escape(&sym.value));
+            wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
+            wln!(out, "      (show_name no)");
+            wln!(out, "      (do_not_autoplace no)");
+            wln!(out, "      (effects (font (size 1.27 1.27)))");
+            wln!(out, "    )");
+        }
     }
-    // Footprint property (hidden)
-    wln!(
-        out,
-        "    (property \"Footprint\" \"{}\"",
-        escape(&sym.footprint)
-    );
-    wln!(
-        out,
-        "      (at {} {} 0)",
-        fmt_f64(sym.position.x),
-        fmt_f64(sym.position.y)
-    );
+    // Footprint and Datasheet: always hidden at property level (KiCad 8 format).
+    wln!(out, "    (property \"Footprint\" \"{}\"", escape(&sym.footprint));
+    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
-    wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+    wln!(out, "      (hide yes)");
+    wln!(out, "      (effects (font (size 1.27 1.27)))");
     wln!(out, "    )");
 
-    wln!(
-        out,
-        "    (property \"Datasheet\" \"{}\"",
-        escape(&sym.datasheet)
-    );
-    wln!(
-        out,
-        "      (at {} {} 0)",
-        fmt_f64(sym.position.x),
-        fmt_f64(sym.position.y)
-    );
+    wln!(out, "    (property \"Datasheet\" \"{}\"", escape(&sym.datasheet));
+    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
-    wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+    wln!(out, "      (hide yes)");
+    wln!(out, "      (effects (font (size 1.27 1.27)))");
     wln!(out, "    )");
 
     // Custom fields — sort keys for deterministic output order
@@ -511,14 +512,10 @@ fn write_sheet_instances(out: &mut String, instances: &[SheetInstance]) {
     wln!(out, "    )");
 }
 
-fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym_rot: f64) {
-    // Reconstruct stored rotation (reverse the toggle applied during parsing)
-    let sym_90_270 = (sym_rot - 90.0).abs() < 0.1 || (sym_rot - 270.0).abs() < 0.1;
-    let stored_rot = if sym_90_270 {
-        if text.rotation.abs() < 0.1 { 90.0 } else { 0.0 }
-    } else {
-        text.rotation
-    };
+fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, _sym_rot: f64) {
+    // prop.rotation is stored in world-frame (same as KiCad file storage).
+    // Write it back verbatim — the renderer composes sym+prop to get screen angle.
+    let stored_rot = text.rotation;
 
     wln!(out, "    (property \"{}\" \"{}\"", key, escape(value));
     wln!(
@@ -530,15 +527,17 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, sym
     );
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
+    // KiCad 8: (hide yes) is a direct child of the property node, NOT inside
+    // (effects ...).  Write it here so round-trips preserve visibility.
+    if text.hidden {
+        wln!(out, "      (hide yes)");
+    }
     w!(
         out,
         "      (effects (font (size {} {}))",
         fmt_f64(text.font_size),
         fmt_f64(text.font_size)
     );
-    if text.hidden {
-        w!(out, " (hide yes)");
-    }
     if text.justify_h != HAlign::Center || text.justify_v != VAlign::Center {
         w!(out, " (justify");
         if text.justify_h != HAlign::Center {
