@@ -287,6 +287,17 @@ impl DocumentState {
     pub fn has_active_engine(&self) -> bool {
         self.engine.is_some()
     }
+
+    /// Per-window engine lookup. Currently delegates to `active_engine`
+    /// regardless of `window_id` — the argument is already threaded
+    /// through call sites so step 5 (HashMap<PathBuf, Engine> storage)
+    /// only changes this body, not every caller.
+    pub fn engine_for_window(
+        &self,
+        _window_id: iced::window::Id,
+    ) -> Option<&signex_engine::Engine> {
+        self.engine.as_ref()
+    }
 }
 
 pub struct InteractionState {
@@ -340,6 +351,22 @@ impl InteractionState {
     }
 
     pub fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
+        &mut self.canvas
+    }
+
+    /// Per-window canvas lookup. Currently delegates to `active_canvas`
+    /// regardless of `window_id` — the argument is already threaded
+    /// through call sites so step 5 (HashMap<window::Id, SchematicCanvas>
+    /// storage) only changes this body, not every caller.
+    pub fn canvas_for_window(&self, _window_id: iced::window::Id) -> &SchematicCanvas {
+        &self.canvas
+    }
+
+    #[allow(dead_code)] // will be used by step 4 message handlers carrying window_id
+    pub fn canvas_for_window_mut(
+        &mut self,
+        _window_id: iced::window::Id,
+    ) -> &mut SchematicCanvas {
         &mut self.canvas
     }
 }
