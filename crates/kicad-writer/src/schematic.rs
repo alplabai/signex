@@ -387,7 +387,8 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
             );
             wln!(out, "      (show_name no)");
             wln!(out, "      (do_not_autoplace no)");
-            wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+            wln!(out, "      (hide yes)");
+            wln!(out, "      (effects (font (size 1.27 1.27)))");
             wln!(out, "    )");
         }
     }
@@ -408,37 +409,21 @@ fn write_symbol(out: &mut String, sym: &Symbol) {
             wln!(out, "    )");
         }
     }
-    // Footprint property (hidden)
-    wln!(
-        out,
-        "    (property \"Footprint\" \"{}\"",
-        escape(&sym.footprint)
-    );
-    wln!(
-        out,
-        "      (at {} {} 0)",
-        fmt_f64(sym.position.x),
-        fmt_f64(sym.position.y)
-    );
+    // Footprint and Datasheet: always hidden at property level (KiCad 8 format).
+    wln!(out, "    (property \"Footprint\" \"{}\"", escape(&sym.footprint));
+    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
-    wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+    wln!(out, "      (hide yes)");
+    wln!(out, "      (effects (font (size 1.27 1.27)))");
     wln!(out, "    )");
 
-    wln!(
-        out,
-        "    (property \"Datasheet\" \"{}\"",
-        escape(&sym.datasheet)
-    );
-    wln!(
-        out,
-        "      (at {} {} 0)",
-        fmt_f64(sym.position.x),
-        fmt_f64(sym.position.y)
-    );
+    wln!(out, "    (property \"Datasheet\" \"{}\"", escape(&sym.datasheet));
+    wln!(out, "      (at {} {} 0)", fmt_f64(sym.position.x), fmt_f64(sym.position.y));
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
-    wln!(out, "      (effects (font (size 1.27 1.27)) (hide yes))");
+    wln!(out, "      (hide yes)");
+    wln!(out, "      (effects (font (size 1.27 1.27)))");
     wln!(out, "    )");
 
     // Custom fields — sort keys for deterministic output order
@@ -556,15 +541,17 @@ fn write_property(out: &mut String, key: &str, value: &str, text: &TextProp, _sy
     );
     wln!(out, "      (show_name no)");
     wln!(out, "      (do_not_autoplace no)");
+    // KiCad 8: (hide yes) is a direct child of the property node, NOT inside
+    // (effects ...).  Write it here so round-trips preserve visibility.
+    if text.hidden {
+        wln!(out, "      (hide yes)");
+    }
     w!(
         out,
         "      (effects (font (size {} {}))",
         fmt_f64(text.font_size),
         fmt_f64(text.font_size)
     );
-    if text.hidden {
-        w!(out, " (hide yes)");
-    }
     if text.justify_h != HAlign::Center || text.justify_v != VAlign::Center {
         w!(out, " (justify");
         if text.justify_h != HAlign::Center {

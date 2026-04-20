@@ -17,6 +17,10 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
+/// KiCad stroke font stores "size" as cap-height; Iced TrueType uses em-square.
+/// Cap height ≈ 72 % of em-square → scale up by 1/0.72 so visual sizes match KiCad.
+pub const STROKE_FONT_SCALE: f32 = 1.0 / 0.72;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
     KiCad,
