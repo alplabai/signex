@@ -1028,25 +1028,139 @@ impl Signex {
                 // consumed. Fall through to the wire-drawing /
                 // inline-edit branches below.
                 //
-                // Polyline closes on double-click: the first click of
-                // the double already appended a vertex (see Clicked
-                // handler), so we just commit whatever's in the buffer
-                // — minimum 2 points for a valid polyline.
-                if self.interaction_state.current_tool == Tool::Polyline
-                    && self.interaction_state.polyline_points.len() >= 2
-                {
-                    let pts = std::mem::take(&mut self.interaction_state.polyline_points);
-                    let drawing = signex_types::schematic::SchDrawing::Polyline {
-                        uuid: uuid::Uuid::new_v4(),
-                        points: pts,
-                        width: 0.0,
-                        fill: signex_types::schematic::FillType::default(),
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
+                // The canvas detects double-clicks (300ms / 3mm) and
+                // publishes DoubleClicked INSTEAD of Clicked for the
+                // second press. For multi-click shape tools that
+                // means the 2nd click would otherwise be eaten. Route
+                // DoubleClicked into the same commit path as Clicked.
+                match self.interaction_state.current_tool {
+                    Tool::Line => {
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(start) = self.interaction_state.shape_anchor.take() {
+                            let drawing = signex_types::schematic::SchDrawing::Line {
+                                uuid: uuid::Uuid::new_v4(),
+                                start,
+                                end: p,
+                                width: 0.0,
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.shape_anchor = Some(p);
+                            self.interaction_state.canvas.shape_anchor =
+                                Some((p, crate::canvas::ShapePreviewKind::Line));
+                            self.interaction_state.canvas.clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Rectangle => {
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(start) = self.interaction_state.shape_anchor.take() {
+                            let drawing = signex_types::schematic::SchDrawing::Rect {
+                                uuid: uuid::Uuid::new_v4(),
+                                start,
+                                end: p,
+                                width: 0.0,
+                                fill: signex_types::schematic::FillType::default(),
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.canvas.shape_anchor = None;
+                            self.interaction_state.canvas.clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Circle => {
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(center) = self.interaction_state.shape_anchor.take() {
+                            let dx = p.x - center.x;
+                            let dy = p.y - center.y;
+                            let radius = (dx * dx + dy * dy).sqrt();
+                            if radius > 0.01 {
+                                let drawing = signex_types::schematic::SchDrawing::Circle {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    center,
+                                    radius,
+                                    width: 0.0,
+                                    fill: signex_types::schematic::FillType::default(),
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                            }
+                            self.interaction_state.canvas.shape_anchor = None;
+                            self.interaction_state.canvas.clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Arc => {
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        self.interaction_state.arc_points.push(p);
+                        if self.interaction_state.arc_points.len() >= 3 {
+                            let pts = std::mem::take(&mut self.interaction_state.arc_points);
+                            let drawing = signex_types::schematic::SchDrawing::Arc {
+                                uuid: uuid::Uuid::new_v4(),
+                                start: pts[0],
+                                mid: pts[1],
+                                end: pts[2],
+                                width: 0.0,
+                                fill: signex_types::schematic::FillType::default(),
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.canvas.arc_points.clear();
+                        } else {
+                            self.interaction_state.canvas.arc_points =
+                                self.interaction_state.arc_points.clone();
+                        }
+                        self.interaction_state.canvas.clear_overlay_cache();
+                        return Task::none();
+                    }
+                    _ => {}
+                }
+
+                // Polyline closes on double-click. The canvas widget
+                // intercepts the 2nd click and publishes DoubleClicked
+                // INSTEAD OF Clicked, so the buffer has only one
+                // vertex at this point. Append the cursor as the
+                // final vertex, then commit if we now have >= 2.
+                if self.interaction_state.current_tool == Tool::Polyline {
+                    let p = signex_types::schematic::Point::new(world_x, world_y);
+                    // Avoid appending a duplicate of the anchor when
+                    // the user double-clicks on the same spot.
+                    let is_dup = self
+                        .interaction_state
+                        .polyline_points
+                        .last()
+                        .map(|last| (last.x - p.x).abs() < 0.01 && (last.y - p.y).abs() < 0.01)
+                        .unwrap_or(false);
+                    if !is_dup {
+                        self.interaction_state.polyline_points.push(p);
+                    }
+                    if self.interaction_state.polyline_points.len() >= 2 {
+                        let pts = std::mem::take(&mut self.interaction_state.polyline_points);
+                        let drawing = signex_types::schematic::SchDrawing::Polyline {
+                            uuid: uuid::Uuid::new_v4(),
+                            points: pts,
+                            width: 0.0,
+                            fill: signex_types::schematic::FillType::default(),
+                        };
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceSchDrawing { drawing },
+                            false,
+                            false,
+                        );
+                    }
                     self.interaction_state.canvas.polyline_points.clear();
                     self.interaction_state.canvas.clear_overlay_cache();
                     return Task::none();
