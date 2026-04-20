@@ -199,6 +199,7 @@ impl Signex {
         self.ui_state.pending_net_color = None;
         self.interaction_state.canvas.pending_net_color = None;
         self.ui_state.reorder_picker = None;
+        self.interaction_state.canvas.reorder_picker_armed = false;
         self.ui_state.lasso_polygon = None;
         self.sync_lasso_polygon_to_canvas();
 

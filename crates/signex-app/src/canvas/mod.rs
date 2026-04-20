@@ -139,6 +139,11 @@ pub struct SchematicCanvas {
     /// In-flight polyline vertices while Tool::Polyline is active.
     /// Mirrors `interaction_state.polyline_points`.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// When the BringToFrontOf / SendToBackOf picker is armed, show
+    /// the gray-X placement cursor so the user knows the next click
+    /// is a reference pick, not a selection. Synced from
+    /// `ui_state.reorder_picker.is_some()` at the top of each view().
+    pub reorder_picker_armed: bool,
 }
 
 /// Canvas-side projection of an ERC violation — just enough to draw
@@ -217,6 +222,7 @@ impl SchematicCanvas {
             lasso_polygon: None,
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
+            reorder_picker_armed: false,
         }
     }
 
@@ -803,6 +809,126 @@ impl canvas::Program<Message> for SchematicCanvas {
         };
         layers.push(content);
 
+        // Layer 2.5: AutoFocus dim — when F9 is on and a selection
+        // exists, fade everything outside the selection bbox + margin
+        // with a translucent dark overlay. Uses four rects forming a
+        // frame around the bbox, so 2D paths can express the hole
+        // without compositing modes.
+        if self.auto_focus
+            && !self.selected.is_empty()
+            && let Some(snapshot) = effective_snapshot
+        {
+            use signex_types::schematic::SelectedKind;
+            let mut xs: Vec<f32> = Vec::new();
+            let mut ys: Vec<f32> = Vec::new();
+            let mut push_pt = |x: f64, y: f64, r: f32| {
+                xs.push(x as f32 - r);
+                xs.push(x as f32 + r);
+                ys.push(y as f32 - r);
+                ys.push(y as f32 + r);
+            };
+            for item in &self.selected {
+                match item.kind {
+                    SelectedKind::Symbol
+                    | SelectedKind::SymbolRefField
+                    | SelectedKind::SymbolValField => {
+                        if let Some(s) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
+                            push_pt(s.position.x, s.position.y, 8.0);
+                        }
+                    }
+                    SelectedKind::Wire => {
+                        if let Some(w) = snapshot.wires.iter().find(|w| w.uuid == item.uuid) {
+                            push_pt(w.start.x, w.start.y, 1.0);
+                            push_pt(w.end.x, w.end.y, 1.0);
+                        }
+                    }
+                    SelectedKind::Bus => {
+                        if let Some(b) = snapshot.buses.iter().find(|b| b.uuid == item.uuid) {
+                            push_pt(b.start.x, b.start.y, 1.0);
+                            push_pt(b.end.x, b.end.y, 1.0);
+                        }
+                    }
+                    SelectedKind::Label => {
+                        if let Some(l) = snapshot.labels.iter().find(|l| l.uuid == item.uuid) {
+                            push_pt(l.position.x, l.position.y, 4.0);
+                        }
+                    }
+                    SelectedKind::Junction | SelectedKind::NoConnect => {
+                        if let Some(j) = snapshot.junctions.iter().find(|j| j.uuid == item.uuid) {
+                            push_pt(j.position.x, j.position.y, 1.0);
+                        } else if let Some(nc) =
+                            snapshot.no_connects.iter().find(|n| n.uuid == item.uuid)
+                        {
+                            push_pt(nc.position.x, nc.position.y, 1.0);
+                        }
+                    }
+                    SelectedKind::TextNote => {
+                        if let Some(tn) = snapshot.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                            push_pt(tn.position.x, tn.position.y, 6.0);
+                        }
+                    }
+                    SelectedKind::ChildSheet => {
+                        if let Some(cs) = snapshot.child_sheets.iter().find(|c| c.uuid == item.uuid)
+                        {
+                            push_pt(cs.position.x, cs.position.y, 0.0);
+                            push_pt(cs.position.x + cs.size.0, cs.position.y + cs.size.1, 0.0);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if !xs.is_empty() && !ys.is_empty() {
+                let min_x = xs.iter().cloned().fold(f32::INFINITY, f32::min);
+                let max_x = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let min_y = ys.iter().cloned().fold(f32::INFINITY, f32::min);
+                let max_y = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let p_min = state
+                    .camera
+                    .world_to_screen(iced::Point::new(min_x, min_y), bounds);
+                let p_max = state
+                    .camera
+                    .world_to_screen(iced::Point::new(max_x, max_y), bounds);
+                let margin = 30.0_f32;
+                let sx0 = p_min.x.min(p_max.x) - margin;
+                let sy0 = p_min.y.min(p_max.y) - margin;
+                let sx1 = p_min.x.max(p_max.x) + margin;
+                let sy1 = p_min.y.max(p_max.y) + margin;
+                let dim = iced::Color::from_rgba(0.05, 0.05, 0.08, 0.55);
+                let dim_frame = {
+                    let mut f = canvas::Frame::new(renderer, bounds.size());
+                    let bw = bounds.width;
+                    let bh = bounds.height;
+                    // Top
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, 0.0),
+                        iced::Size::new(bw, sy0.max(0.0)),
+                        dim,
+                    );
+                    // Bottom
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, sy1.min(bh)),
+                        iced::Size::new(bw, (bh - sy1).max(0.0)),
+                        dim,
+                    );
+                    // Left
+                    let mid_h = (sy1.min(bh) - sy0.max(0.0)).max(0.0);
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, sy0.max(0.0)),
+                        iced::Size::new(sx0.max(0.0), mid_h),
+                        dim,
+                    );
+                    // Right
+                    f.fill_rectangle(
+                        iced::Point::new(sx1.min(bw), sy0.max(0.0)),
+                        iced::Size::new((bw - sx1).max(0.0), mid_h),
+                        dim,
+                    );
+                    f.into_geometry()
+                };
+                layers.push(dim_frame);
+            }
+        }
+
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
         // During drag we use the shifted snapshot so the selection rectangle
         // travels with the dragged items instead of staying behind.
@@ -917,7 +1043,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     || self.ghost_symbol.is_some()
                     || self.ghost_text.is_some()
                     || !self.arc_points.is_empty()
-                    || !self.polyline_points.is_empty();
+                    || !self.polyline_points.is_empty()
+                    || self.reorder_picker_armed;
                 if placement_active {
                     let len = 14.0_f32;
                     let a = canvas::Path::line(

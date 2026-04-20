@@ -185,12 +185,8 @@ pub(crate) fn dangling_wire(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Vi
     }
 }
 
-/// Rule: two local labels with the same text assigned to electrically
-/// disjoint nets (labels on wires that never touch). Detecting "disjoint"
-/// rigorously needs full connectivity; v0.7 ships a simpler check that
-/// flags any label whose text matches a global/hier label's text but sits
 /// Rule: two different net-label texts land on the same electrical net.
-/// Uses a union-find over wire endpoints (and labels as "ghost endpoints")
+/// Uses a union-find over wire endpoints (and junctions as anchor points)
 /// so connectivity follows any wire path between the two labels.
 pub(crate) fn net_label_conflict(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
     // Quantise points to an integer grid so small float noise doesn't
@@ -432,7 +428,11 @@ pub(crate) fn bus_bit_width_mismatch(snapshot: &SchematicRenderSnapshot, out: &m
 /// cross-sheet validation (port name ↔ child-sheet hier label mapping)
 /// needs cross-sheet snapshots and lands with v1.1's hierarchical
 /// navigator; this thin check catches the common local mistake.
-pub(crate) fn bad_hier_sheet_pin(snapshot: &SchematicRenderSnapshot, out: &mut Vec<Violation>) {
+pub(crate) fn bad_hier_sheet_pin(
+    snapshot: &SchematicRenderSnapshot,
+    out: &mut Vec<Violation>,
+    children: Option<&HashMap<String, SchematicRenderSnapshot>>,
+) {
     for child in &snapshot.child_sheets {
         let mut seen: HashMap<&str, uuid::Uuid> = HashMap::new();
         for pin in &child.pins {
@@ -466,6 +466,66 @@ pub(crate) fn bad_hier_sheet_pin(snapshot: &SchematicRenderSnapshot, out: &mut V
                 primary: Some(sel(child.uuid, SelectedKind::ChildSheet)),
                 peer: None,
             });
+        }
+        // Cross-sheet validation: for each pin on the parent's sheet
+        // symbol, the child must expose a hierarchical or global
+        // label with the same text. And the child shouldn't expose
+        // a hier label that the parent forgot to declare as a pin.
+        // Only runs when the caller supplies the child snapshots via
+        // run_with_project — top-only run() passes None to keep the
+        // rule fast and loader-free.
+        let Some(children) = children else { continue };
+        let Some(child_snap) = children.get(child.filename.as_str()) else {
+            continue;
+        };
+        let hier_text: std::collections::HashSet<&str> = child_snap
+            .labels
+            .iter()
+            .filter(|l| {
+                matches!(
+                    l.label_type,
+                    signex_types::schematic::LabelType::Hierarchical
+                        | signex_types::schematic::LabelType::Global
+                )
+            })
+            .map(|l| l.text.as_str())
+            .collect();
+        for pin in &child.pins {
+            if !hier_text.contains(pin.name.as_str()) {
+                out.push(Violation {
+                    rule: RuleKind::BadHierSheetPin,
+                    severity: RuleKind::BadHierSheetPin.default_severity(),
+                    message: format!(
+                        "Sheet pin '{}' on '{}' has no matching hierarchical label in child schematic '{}'",
+                        pin.name, child.name, child.filename,
+                    ),
+                    location: pin.position,
+                    primary: Some(sel(pin.uuid, SelectedKind::Label)),
+                    peer: None,
+                });
+            }
+        }
+        let parent_pins: std::collections::HashSet<&str> =
+            child.pins.iter().map(|p| p.name.as_str()).collect();
+        for lbl in child_snap.labels.iter().filter(|l| {
+            matches!(
+                l.label_type,
+                signex_types::schematic::LabelType::Hierarchical
+            )
+        }) {
+            if !parent_pins.contains(lbl.text.as_str()) {
+                out.push(Violation {
+                    rule: RuleKind::BadHierSheetPin,
+                    severity: Severity::Warning,
+                    message: format!(
+                        "Hierarchical label '{}' in '{}' is not exposed as a sheet pin on the parent",
+                        lbl.text, child.filename,
+                    ),
+                    location: lbl.position,
+                    primary: Some(sel(lbl.uuid, SelectedKind::Label)),
+                    peer: None,
+                });
+            }
         }
     }
 }

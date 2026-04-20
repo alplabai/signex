@@ -560,6 +560,8 @@ impl Signex {
                         }
                     }
                     self.ui_state.reorder_picker = None;
+                    self.interaction_state.canvas.reorder_picker_armed = false;
+                    self.interaction_state.canvas.clear_overlay_cache();
                     return Task::none();
                 }
 

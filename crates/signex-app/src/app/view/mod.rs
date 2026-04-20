@@ -378,7 +378,7 @@ impl Signex {
         .into()
     }
 
-    /// Compact X close button shared by the new v0.7.1 detached bodies.
+    /// Compact X close button shared by the detached-modal bodies.
     fn view_close_x(&self, message: Message) -> Element<'_, Message> {
         use iced::widget::{button, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -412,9 +412,8 @@ impl Signex {
     }
 
     /// Altium F5 Net Color palette — list of net labels with a per-net
-    /// color picker. v0.7.1 ships this with a small palette of preset
-    /// colors (10 swatches); a full ColorPicker widget can replace it
-    /// later without changing the message contract.
+    /// color picker. Ships with a 10-swatch palette; a full ColorPicker
+    /// widget can replace it later without changing the message contract.
     fn view_net_color_palette_body(&self) -> Element<'_, Message> {
         use iced::widget::{Space, button, column, container, row, scrollable, text};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -1676,6 +1675,7 @@ impl Signex {
                 ui.preferences_draft_power_port_style,
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
+                &ui.erc_severity_override,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);

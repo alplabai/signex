@@ -792,8 +792,7 @@ impl Signex {
 // ---------------------------------------------------------------------------
 
 /// Tiny inline checkbox pip — read-only indicator used inside the Annotate
-/// dialog's parameter list and sheet table. The boxes are visual only for
-/// v0.7; v0.7.1 makes them interactive.
+/// dialog's parameter list and sheet table.
 fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
     let inner = if on {
         text("✓").size(9).color(Color::WHITE)
@@ -1179,10 +1178,10 @@ const ALL_RULES: &[signex_erc::RuleKind] = &[
 ];
 
 /// Compute the proposed (current, new) reference designator pairs that would
-/// result from running Annotate Incremental on the active snapshot. Preserves
-/// the engine's ordering logic (by y,x,uuid) — but the dialog currently only
-/// offers one order because the engine hard-codes that; adding UpThenAcross
-/// wiring ships in v0.7.1 when the engine learns about the order flag.
+/// result from running Annotate Incremental on the active snapshot.
+/// Preserves the engine's ordering logic (by y,x,uuid). The dialog
+/// currently only offers one order because the engine hard-codes that;
+/// order-flag wiring is a v0.7.1 follow-up.
 /// One row of the project-wide proposed change list.
 #[derive(Debug, Clone)]
 pub(super) struct AnnotatePreviewEntry {
