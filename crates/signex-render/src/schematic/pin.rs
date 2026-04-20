@@ -183,7 +183,7 @@ fn draw_pin(
 
     // Pin name is drawn near the symbol-side end of the pin.
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
-    let screen_font = transform.world_len(font_size_mm).abs();
+    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
 
     if screen_font >= 1.0
         && lib.show_pin_names
@@ -273,29 +273,75 @@ fn draw_pin(
         // a separate stroke above the text with a small visible gap, which
         // matches KiCad's look.
         let (plain, overbars) = display_text_with_overbars(&pin.name);
-        let text = canvas::Text {
-            content: plain.clone(),
-            position: np,
-            color: pin_color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(text);
 
-        if !overbars.is_empty() {
-            draw_overbars(
-                frame,
-                &plain,
-                &overbars,
-                np,
-                screen_font,
-                h_align,
-                v_align,
-                pin_color,
-            );
+        // Determine whether the pin runs vertically on screen.
+        let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
+        let is_vertical_pin = wdx.abs() < wdy.abs();
+
+        if is_vertical_pin {
+            // Rotate the frame so text baseline is parallel to the pin.
+            //
+            // KiCad convention for downward pins (wdy < 0 = body above pin):
+            //   CCW 90° (+π/2): rotated +X = screen UP.
+            //   h_align = Left  → first char at np (body edge), text extends upward into IC.
+            //   h_align = Right → last char at np, text extends upward into IC.
+            //
+            // For upward pins (wdy > 0 = body below pin):
+            //   CW 90° (-π/2): rotated +X = screen DOWN.
+            //   h_align = Left  → first char at np (body edge), text extends downward into IC.
+            // frame.rotate uses Iced's convention: positive = CCW visual in
+            // screen Y-down space.  For bottom-exiting pins (wdy < 0 = body
+            // above) we want CCW visual so text reads A→D from body-edge
+            // upward (matching KiCad).  Top-exiting pins use the mirror.
+            let rot = if wdy < 0.0 {
+                -std::f32::consts::FRAC_PI_2  // CCW visual → bottom-to-top
+            } else {
+                std::f32::consts::FRAC_PI_2   // CW visual  → top-to-bottom
+            };
+            // In the rotated frame, align_x controls the along-pin axis and
+            // align_y controls the perpendicular axis.  We always want:
+            //   - text to start at the body edge (Left = first char at anchor)
+            //   - text centered across the pin line (Center)
+            frame.with_save(|frame| {
+                frame.translate(iced::Vector::new(np.x, np.y));
+                frame.rotate(rot);
+                let text = canvas::Text {
+                    content: plain.clone(),
+                    position: iced::Point::ORIGIN,
+                    color: pin_color,
+                    size: iced::Pixels(screen_font),
+                    font: crate::canvas_font(),
+                    align_x: iced::alignment::Horizontal::Left.into(),
+                    align_y: iced::alignment::Vertical::Center,
+                    ..canvas::Text::default()
+                };
+                frame.fill_text(text);
+            });
+        } else {
+            let text = canvas::Text {
+                content: plain.clone(),
+                position: np,
+                color: pin_color,
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: h_align.into(),
+                align_y: v_align,
+                ..canvas::Text::default()
+            };
+            frame.fill_text(text);
+
+            if !overbars.is_empty() {
+                draw_overbars(
+                    frame,
+                    &plain,
+                    &overbars,
+                    np,
+                    screen_font,
+                    h_align,
+                    v_align,
+                    pin_color,
+                );
+            }
         }
     }
 
@@ -313,14 +359,15 @@ fn draw_pin(
         let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
         let perp_offset_px = transform.world_len(0.8);
 
-        // Always offset toward screen-up for horizontal pins, screen-left for
-        // vertical pins.  This keeps numbers above (never below) the pin line
-        // regardless of lib-local rotation (0° vs 180° pins agree).
+        // Offset perpendicular to the pin so the number clears the pin line.
+        // Horizontal pins → above line; vertical (top/bottom) pins → left of
+        // line. Both cases render horizontal, unrotated text — same convention
+        // as side-pin numbers, keeping numbers outside the IC body.
         let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
             // Horizontal pin → above line (screen -Y), centered on X.
             (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
         } else {
-            // Vertical pin → left of line (screen -X), right-aligned text.
+            // Vertical pin → left of pin line (screen -X), right-aligned.
             (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
         };
 
@@ -329,11 +376,11 @@ fn draw_pin(
             np_base.y + perp_sy * perp_offset_px,
         );
 
-        let small_font = (screen_font * 0.8).abs();
-        if small_font < 1.0 {
+        let num_font = screen_font;
+        if num_font < 1.0 {
             return;
         }
-        let fanout_step_px = transform.world_len(0.9).max(small_font * 0.8);
+        let fanout_step_px = transform.world_len(0.9).max(num_font * 0.8);
         let stack_center = stack.index as f32 - (stack.total as f32 - 1.0) * 0.5;
         let line_dx = p2.x - p1.x;
         let line_dy = p2.y - p1.y;
@@ -346,7 +393,7 @@ fn draw_pin(
             content: display_text_content(&pin.number),
             position: stack_np,
             color: pin_color,
-            size: iced::Pixels(small_font),
+            size: iced::Pixels(num_font),
             font: crate::canvas_font(),
             align_x: num_align.into(),
             align_y: iced::alignment::Vertical::Center,

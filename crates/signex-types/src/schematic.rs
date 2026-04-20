@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
+// Schematic text constants
+// ---------------------------------------------------------------------------
+
+/// Default schematic text height: 1.27 mm = 50 mils = 10 Altium pt.
+pub const SCHEMATIC_TEXT_MM: f64 = 1.27;
+
+/// Altium schematic point → mm: 1 pt = 0.127 mm (10 pt = 1.27 mm).
+pub const SCHEMATIC_PT_TO_MM: f64 = 0.127;
+
+// ---------------------------------------------------------------------------
 // Point -- KiCad mm-space coordinate (f64). Copy-friendly.
 // ---------------------------------------------------------------------------
 
