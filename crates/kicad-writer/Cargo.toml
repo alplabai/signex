@@ -7,6 +7,6 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
+standard-parser = { workspace = true }
 
 [dev-dependencies]
-standard-parser = { workspace = true }
