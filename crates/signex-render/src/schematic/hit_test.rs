@@ -110,7 +110,152 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
         }
     }
 
+    // Graphic drawings — line / rect / circle / arc / polyline.
+    // Shapes placed by the Active Bar shape tools live here.
+    for d in &sheet.drawings {
+        if let Some(uuid) = hit_drawing(d, wx, wy) {
+            return Some(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
+
     None
+}
+
+/// Distance from point `(px, py)` to the infinite line through `(ax, ay)` → `(bx, by)`,
+/// clamped to the segment. Returns `None` for a degenerate zero-length segment.
+fn dist_point_segment(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> Option<f64> {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-9 {
+        return None;
+    }
+    let t = (((px - ax) * dx) + ((py - ay) * dy)) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let cx = ax + t * dx;
+    let cy = ay + t * dy;
+    let ex = px - cx;
+    let ey = py - cy;
+    Some((ex * ex + ey * ey).sqrt())
+}
+
+fn hit_drawing(
+    drawing: &signex_types::schematic::SchDrawing,
+    wx: f64,
+    wy: f64,
+) -> Option<uuid::Uuid> {
+    use signex_types::schematic::SchDrawing;
+    let tol = HIT_TOLERANCE;
+    match drawing {
+        SchDrawing::Line {
+            uuid, start, end, ..
+        } => {
+            if dist_point_segment(wx, wy, start.x, start.y, end.x, end.y)
+                .map(|d| d <= tol)
+                .unwrap_or(false)
+            {
+                Some(*uuid)
+            } else {
+                None
+            }
+        }
+        SchDrawing::Rect {
+            uuid,
+            start,
+            end,
+            fill,
+            ..
+        } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled && wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1 {
+                return Some(*uuid);
+            }
+            // Outline test — click on any of 4 edges within tolerance.
+            let edges = [
+                (x0, y0, x1, y0),
+                (x1, y0, x1, y1),
+                (x1, y1, x0, y1),
+                (x0, y1, x0, y0),
+            ];
+            for (ax, ay, bx, by) in edges {
+                if dist_point_segment(wx, wy, ax, ay, bx, by)
+                    .map(|d| d <= tol)
+                    .unwrap_or(false)
+                {
+                    return Some(*uuid);
+                }
+            }
+            None
+        }
+        SchDrawing::Circle {
+            uuid,
+            center,
+            radius,
+            fill,
+            ..
+        } => {
+            let dx = wx - center.x;
+            let dy = wy - center.y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled && dist <= *radius + tol {
+                return Some(*uuid);
+            }
+            if (dist - *radius).abs() <= tol {
+                Some(*uuid)
+            } else {
+                None
+            }
+        }
+        SchDrawing::Arc {
+            uuid,
+            start,
+            mid,
+            end,
+            ..
+        } => {
+            // Treat arc as 3 connected chords for hit-testing (cheap
+            // + good enough for typical clicks; precise arc math can
+            // come later). Covers start→mid, mid→end, and a wide
+            // tolerance around the sagitta.
+            for (a, b) in [(start, mid), (mid, end)] {
+                if dist_point_segment(wx, wy, a.x, a.y, b.x, b.y)
+                    .map(|d| d <= tol * 2.0)
+                    .unwrap_or(false)
+                {
+                    return Some(*uuid);
+                }
+            }
+            None
+        }
+        SchDrawing::Polyline {
+            uuid, points, fill, ..
+        } => {
+            if points.len() < 2 {
+                return None;
+            }
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled {
+                let poly: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
+                if point_in_polygon(wx, wy, &poly) {
+                    return Some(*uuid);
+                }
+            }
+            for pair in points.windows(2) {
+                if dist_point_segment(wx, wy, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
+                    .map(|d| d <= tol)
+                    .unwrap_or(false)
+                {
+                    return Some(*uuid);
+                }
+            }
+            None
+        }
+    }
 }
 
 /// Altium-style rubber-band selection mode. Governs how
@@ -275,6 +420,63 @@ pub fn hit_test_polygon(
             result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
         }
     }
+    // Graphic drawings — lasso picks any drawing whose endpoints /
+    // bounds overlap the polygon or whose edges cross it.
+    for d in &sheet.drawings {
+        use signex_types::schematic::SchDrawing;
+        let (hit, uuid) = match d {
+            SchDrawing::Line {
+                uuid, start, end, ..
+            } => {
+                let inside = point_in_polygon(start.x, start.y, polygon)
+                    || point_in_polygon(end.x, end.y, polygon);
+                let crosses = segment_crosses_polygon((start.x, start.y), (end.x, end.y));
+                (inside || crosses, *uuid)
+            }
+            SchDrawing::Rect {
+                uuid, start, end, ..
+            } => {
+                let x0 = start.x.min(end.x);
+                let x1 = start.x.max(end.x);
+                let y0 = start.y.min(end.y);
+                let y1 = start.y.max(end.y);
+                let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+                let any_corner_in = corners
+                    .iter()
+                    .any(|&(x, y)| point_in_polygon(x, y, polygon));
+                let any_edge_crosses = corners
+                    .iter()
+                    .zip(corners.iter().cycle().skip(1))
+                    .any(|(&a, &b)| segment_crosses_polygon(a, b));
+                (any_corner_in || any_edge_crosses, *uuid)
+            }
+            SchDrawing::Circle { uuid, center, .. } => {
+                (point_in_polygon(center.x, center.y, polygon), *uuid)
+            }
+            SchDrawing::Arc {
+                uuid,
+                start,
+                mid,
+                end,
+                ..
+            } => {
+                let inside = point_in_polygon(start.x, start.y, polygon)
+                    || point_in_polygon(mid.x, mid.y, polygon)
+                    || point_in_polygon(end.x, end.y, polygon);
+                (inside, *uuid)
+            }
+            SchDrawing::Polyline { uuid, points, .. } => {
+                let any_inside = points.iter().any(|p| point_in_polygon(p.x, p.y, polygon));
+                let any_crosses = points.windows(2).any(|pair| {
+                    segment_crosses_polygon((pair[0].x, pair[0].y), (pair[1].x, pair[1].y))
+                });
+                (any_inside || any_crosses, *uuid)
+            }
+        };
+        if hit {
+            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
     result
 }
 
@@ -396,7 +598,103 @@ pub fn hit_test_rect_mode(
             result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
         }
     }
+    for d in &sheet.drawings {
+        if drawing_in_rect(d, rect, mode) {
+            let uuid = drawing_uuid(d);
+            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
     result
+}
+
+fn drawing_uuid(d: &signex_types::schematic::SchDrawing) -> uuid::Uuid {
+    use signex_types::schematic::SchDrawing;
+    match d {
+        SchDrawing::Line { uuid, .. }
+        | SchDrawing::Rect { uuid, .. }
+        | SchDrawing::Circle { uuid, .. }
+        | SchDrawing::Arc { uuid, .. }
+        | SchDrawing::Polyline { uuid, .. } => *uuid,
+    }
+}
+
+fn drawing_in_rect(
+    d: &signex_types::schematic::SchDrawing,
+    rect: &Aabb,
+    mode: SelectionMode,
+) -> bool {
+    use signex_types::schematic::SchDrawing;
+    let touching = matches!(mode, SelectionMode::Touching);
+    match d {
+        SchDrawing::Line { start, end, .. } => {
+            let a = rect.contains(start.x, start.y);
+            let b = rect.contains(end.x, end.y);
+            let crosses = touching && seg_overlaps_rect(rect, start.x, start.y, end.x, end.y);
+            match mode {
+                SelectionMode::Inside => a && b,
+                SelectionMode::Touching => a || b || crosses,
+            }
+        }
+        SchDrawing::Rect { start, end, .. } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            match mode {
+                SelectionMode::Inside => rect.contains(x0, y0) && rect.contains(x1, y1),
+                SelectionMode::Touching => {
+                    // Overlap test between rect bboxes.
+                    !(rect.max_x < x0 || rect.min_x > x1 || rect.max_y < y0 || rect.min_y > y1)
+                }
+            }
+        }
+        SchDrawing::Circle { center, radius, .. } => {
+            match mode {
+                SelectionMode::Inside => {
+                    rect.contains(center.x - *radius, center.y - *radius)
+                        && rect.contains(center.x + *radius, center.y + *radius)
+                }
+                SelectionMode::Touching => {
+                    // Circle bbox overlaps rect.
+                    let cx0 = center.x - *radius;
+                    let cx1 = center.x + *radius;
+                    let cy0 = center.y - *radius;
+                    let cy1 = center.y + *radius;
+                    !(rect.max_x < cx0 || rect.min_x > cx1 || rect.max_y < cy0 || rect.min_y > cy1)
+                }
+            }
+        }
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            let a = rect.contains(start.x, start.y);
+            let b = rect.contains(mid.x, mid.y);
+            let c = rect.contains(end.x, end.y);
+            match mode {
+                SelectionMode::Inside => a && b && c,
+                SelectionMode::Touching => {
+                    a || b
+                        || c
+                        || seg_overlaps_rect(rect, start.x, start.y, mid.x, mid.y)
+                        || seg_overlaps_rect(rect, mid.x, mid.y, end.x, end.y)
+                }
+            }
+        }
+        SchDrawing::Polyline { points, .. } => {
+            let all_inside = points.iter().all(|p| rect.contains(p.x, p.y));
+            match mode {
+                SelectionMode::Inside => all_inside,
+                SelectionMode::Touching => {
+                    if points.iter().any(|p| rect.contains(p.x, p.y)) {
+                        return true;
+                    }
+                    points.windows(2).any(|pair| {
+                        seg_overlaps_rect(rect, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
+                    })
+                }
+            }
+        }
+    }
 }
 
 fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {

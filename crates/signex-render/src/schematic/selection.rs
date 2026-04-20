@@ -80,7 +80,20 @@ pub fn draw_selection_overlay(
                     draw_rect_highlight(frame, &aabb, transform);
                 }
             }
-            SelectedKind::Drawing => {}
+            SelectedKind::Drawing => {
+                if let Some(d) = sheet.drawings.iter().find(|d| {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u == item.uuid
+                }) {
+                    draw_drawing_selection(frame, d, transform);
+                }
+            }
             SelectedKind::SymbolRefField => {
                 if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
                     && let Some(ref rt) = sym.ref_text
@@ -562,4 +575,65 @@ fn ext(min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64, x: f6
     *min_y = min_y.min(y);
     *max_x = max_x.max(x);
     *max_y = max_y.max(y);
+}
+
+/// Highlight a graphic drawing. For each shape kind we either repaint
+/// the geometry in the selection colour (line / arc / polyline) or
+/// surround it with a thin selection bbox (rect / circle).
+fn draw_drawing_selection(
+    frame: &mut canvas::Frame,
+    drawing: &SchDrawing,
+    transform: &ScreenTransform,
+) {
+    let stroke = canvas::Stroke::default()
+        .with_color(SEL_COLOR)
+        .with_width(2.0);
+    match drawing {
+        SchDrawing::Line { start, end, .. } => {
+            let (sx, sy) = transform.world_to_screen(start.x, start.y);
+            let (ex, ey) = transform.world_to_screen(end.x, end.y);
+            frame.stroke(
+                &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(ex, ey)),
+                stroke,
+            );
+        }
+        SchDrawing::Rect { start, end, .. } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            let aabb = Aabb::new(x0, y0, x1, y1).expand(0.5);
+            draw_rect_highlight(frame, &aabb, transform);
+        }
+        SchDrawing::Circle { center, radius, .. } => {
+            let (cx, cy) = transform.world_to_screen(center.x, center.y);
+            let rs = transform.world_len(*radius).abs();
+            frame.stroke(&canvas::Path::circle(iced::Point::new(cx, cy), rs), stroke);
+        }
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            let (sx, sy) = transform.world_to_screen(start.x, start.y);
+            let (mx, my) = transform.world_to_screen(mid.x, mid.y);
+            let (ex, ey) = transform.world_to_screen(end.x, end.y);
+            frame.stroke(
+                &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(mx, my)),
+                stroke,
+            );
+            frame.stroke(
+                &canvas::Path::line(iced::Point::new(mx, my), iced::Point::new(ex, ey)),
+                stroke,
+            );
+        }
+        SchDrawing::Polyline { points, .. } => {
+            for pair in points.windows(2) {
+                let (sx, sy) = transform.world_to_screen(pair[0].x, pair[0].y);
+                let (ex, ey) = transform.world_to_screen(pair[1].x, pair[1].y);
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(ex, ey)),
+                    stroke,
+                );
+            }
+        }
+    }
 }
