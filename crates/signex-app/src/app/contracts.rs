@@ -224,7 +224,38 @@ pub enum Message {
     /// Edit one R/G/B channel of the custom-picker draft via text
     /// input. Parsed as 0-255; invalid values ignored.
     NetColorCustomChannel(Channel, String),
+    /// Apply an edit to a placed SchDrawing. Dispatched from the
+    /// post-placement Properties panel (Line / Rect / Circle / Arc /
+    /// Polygon editable rows). Engine replaces the stored drawing by
+    /// uuid with full undo.
+    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
     Noop,
+}
+
+/// Per-shape edit descriptor. The Properties panel dispatches one of
+/// these per numeric text-input edit; the handler looks up the stored
+/// drawing, applies the field change, and emits
+/// `Command::UpdateSchDrawing` with the patched variant.
+#[derive(Debug, Clone, Copy)]
+pub enum DrawingFieldEdit {
+    Width(f64),
+    Fill(signex_types::schematic::FillType),
+    LineStartX(f64),
+    LineStartY(f64),
+    LineEndX(f64),
+    LineEndY(f64),
+    RectStartX(f64),
+    RectStartY(f64),
+    RectWidthMm(f64),
+    RectHeightMm(f64),
+    CircleCenterX(f64),
+    CircleCenterY(f64),
+    CircleRadius(f64),
+    ArcCenterX(f64),
+    ArcCenterY(f64),
+    ArcRadius(f64),
+    ArcStartAngle(f64),
+    ArcEndAngle(f64),
 }
 
 /// R / G / B channel selector for the custom net-colour picker inputs.

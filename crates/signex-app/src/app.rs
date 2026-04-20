@@ -13,7 +13,7 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 mod bootstrap;
-mod contracts;
+pub mod contracts;
 mod dispatch;
 mod documents;
 mod handlers;

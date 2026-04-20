@@ -162,6 +162,19 @@ impl Signex {
                     pp.shape_fill = *f;
                 }
             }
+            crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
+                // Fire the engine-side update only if exactly one
+                // drawing is selected — the panel shows post-placement
+                // fields only in that case.
+                if let Some(uuid) = self.document_state.panel_ctx.selected_uuid.filter(|_| {
+                    matches!(
+                        self.document_state.panel_ctx.selected_kind,
+                        Some(signex_types::schematic::SelectedKind::Drawing)
+                    )
+                }) {
+                    let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
+                }
+            }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
                 // OK button: resume placement but keep pre_placement so the
                 // next click uses the values the user just edited.
