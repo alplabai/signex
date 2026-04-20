@@ -415,6 +415,7 @@ impl Signex {
                 crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
                 Task::none()
             }
+            Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             Message::Noop => Task::none(),
         }
     }

@@ -470,6 +470,7 @@ pub enum PanelMsg {
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
+    UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -1947,6 +1948,9 @@ fn view_selected_element_properties<'a>(
                     },
                 ));
             }
+        }
+        Some(signex_types::schematic::SelectedKind::Drawing) => {
+            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
         }
         _ => {
             // Generic read-only properties for other types
@@ -4343,4 +4347,287 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     container(col).width(Length::Fill).into()
+}
+
+// ─── Drawing properties editor (post-placement) ──────────────────
+
+fn view_drawing_properties<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    _primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_types::schematic::FillType;
+    let get = |key: &str| -> String {
+        ctx.selection_info
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default()
+    };
+    let parse_pair = |s: &str| -> (f64, f64) {
+        let parts: Vec<&str> = s.split(',').collect();
+        let x = parts
+            .first()
+            .and_then(|p| p.trim().parse::<f64>().ok())
+            .unwrap_or(0.0);
+        let y = parts
+            .get(1)
+            .and_then(|p| p.trim().parse::<f64>().ok())
+            .unwrap_or(0.0);
+        (x, y)
+    };
+    let parse_f64 = |s: &str| -> f64 { s.trim().parse::<f64>().ok().unwrap_or(0.0) };
+    let parse_fill = |s: &str| -> FillType {
+        match s {
+            "Outline" => FillType::Outline,
+            "Background" => FillType::Background,
+            _ => FillType::None,
+        }
+    };
+
+    let elem_type = get("Type");
+    let width = parse_f64(&get("Width"));
+    let border = parse_f64(&get("Border"));
+    let stroke_w = if border > 0.0 { border } else { width };
+    let fill = parse_fill(&get("Fill"));
+    let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
+
+    let mut col = Column::new().spacing(0).width(Length::Fill);
+    col = col.push(
+        container(
+            text(elem_type.clone())
+                .size(11)
+                .color(Color::from_rgb(0.90, 0.90, 0.92)),
+        )
+        .padding([6, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    match elem_type.as_str() {
+        "Line" => {
+            let (sx, sy) = parse_pair(&get("Start"));
+            let (ex, ey) = parse_pair(&get("End"));
+            col = col.push(collapsible_section(
+                "draw_line",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row_f64("Start X", sx, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::LineStartX(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Start Y", sy, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::LineStartY(v))
+                    }));
+                    c = c.push(form_edit_row_f64("End X", ex, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::LineEndX(v))
+                    }));
+                    c = c.push(form_edit_row_f64("End Y", ey, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::LineEndY(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Width (mm)", stroke_w, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::Width(v))
+                    }));
+                    c
+                },
+            ));
+        }
+        "Rectangle" => {
+            let (px, py) = parse_pair(&get("Position"));
+            let w_mm = parse_f64(&get("Width"));
+            let h_mm = parse_f64(&get("Height"));
+            col = col.push(collapsible_section(
+                "draw_rect",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row_f64("Position X", px, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::RectStartX(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Position Y", py, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::RectStartY(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Width (mm)", w_mm, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::RectWidthMm(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Height (mm)", h_mm, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::RectHeightMm(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::Width(v))
+                    }));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        "Circle" => {
+            let (cx, cy) = parse_pair(&get("Center"));
+            let radius = parse_f64(&get("Radius"));
+            col = col.push(collapsible_section(
+                "draw_circle",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row_f64("Center X", cx, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::CircleCenterX(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Center Y", cy, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::CircleCenterY(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Radius", radius, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::CircleRadius(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::Width(v))
+                    }));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        "Arc" => {
+            let (cx, cy) = parse_pair(&get("Center"));
+            let radius = parse_f64(&get("Radius"));
+            let start_angle = parse_f64(&get("Start Angle"));
+            let end_angle = parse_f64(&get("End Angle"));
+            col = col.push(collapsible_section(
+                "draw_arc",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row_f64("Center X", cx, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::ArcCenterX(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Center Y", cy, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::ArcCenterY(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Radius", radius, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::ArcRadius(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Start Angle", start_angle, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::ArcStartAngle(v))
+                    }));
+                    c = c.push(form_edit_row_f64("End Angle", end_angle, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::ArcEndAngle(v))
+                    }));
+                    c = c.push(form_edit_row_f64("Width", stroke_w, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::Width(v))
+                    }));
+                    c
+                },
+            ));
+        }
+        "Polygon" => {
+            let vert_count = parse_f64(&get("Vertices")) as i32;
+            col = col.push(collapsible_section(
+                "draw_poly",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(prop_kv_row(
+                        "Vertices",
+                        &vert_count.to_string(),
+                        muted,
+                        Color::from_rgb(0.90, 0.90, 0.92),
+                    ));
+                    c = c.push(form_edit_row_f64("Border", stroke_w, muted, |v| {
+                        PanelMsg::UpdateDrawingEdit(E::Width(v))
+                    }));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        _ => {
+            for (key, value) in &ctx.selection_info {
+                if key != "Type" {
+                    col = col.push(prop_kv_row(
+                        key,
+                        value,
+                        muted,
+                        Color::from_rgb(0.9, 0.9, 0.92),
+                    ));
+                }
+            }
+        }
+    }
+    col.into()
+}
+
+fn drawing_fill_row<'a>(
+    current: signex_types::schematic::FillType,
+    muted: Color,
+    _border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_types::schematic::FillType;
+    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        iced::widget::button(text(label).size(10))
+            .padding([3, 8])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Fill")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("None", FillType::None, current == FillType::None),
+            tile("Outline", FillType::Outline, current == FillType::Outline),
+            tile(
+                "Background",
+                FillType::Background,
+                current == FillType::Background,
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
