@@ -70,7 +70,14 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
         .and_then(|s| s.arg_f64(0))
         .unwrap_or(1.27);
 
-    let hidden = is_effects_hidden(effects);
+    // KiCad 8: (hide yes) may sit at the property level (direct child of the
+    // property node) instead of inside (effects ...).  Check both locations.
+    let hidden_in_effects = is_effects_hidden(effects);
+    let hidden_on_prop = prop_node
+        .find("hide")
+        .map(|h| h.first_arg().map(|v| v == "yes").unwrap_or(true))
+        .unwrap_or(false);
+    let hidden = hidden_in_effects || hidden_on_prop;
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
