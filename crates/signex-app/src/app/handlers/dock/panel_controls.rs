@@ -9,9 +9,9 @@ impl Signex {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
             _ => crate::panels::paper_dimensions(&ctx.paper_size),
         };
-        self.interaction_state.canvas.paper_width_mm = w;
-        self.interaction_state.canvas.paper_height_mm = h;
-        self.interaction_state.canvas.clear_bg_cache();
+        self.interaction_state.active_canvas_mut().paper_width_mm = w;
+        self.interaction_state.active_canvas_mut().paper_height_mm = h;
+        self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
     pub(super) fn handle_dock_panel_control_message(
@@ -27,8 +27,8 @@ impl Signex {
             }
             crate::panels::PanelMsg::ClearErc => {
                 self.ui_state.erc_violations.clear();
-                self.interaction_state.canvas.erc_markers.clear();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().erc_markers.clear();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 if let Some(entry) = self
@@ -43,14 +43,14 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.canvas.grid_visible = self.ui_state.grid_visible;
+                self.interaction_state.active_canvas_mut().grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.canvas.snap_enabled = self.ui_state.snap_enabled;
+                self.interaction_state.active_canvas_mut().snap_enabled = self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -75,13 +75,13 @@ impl Signex {
                 }
                 // Mirror the edit to whichever ghost is armed so the live
                 // preview reflects the user's typed net/port/text name.
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.text = text.clone();
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_symbol {
                     g.value = text.clone();
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.text = text.clone();
                 }
             }
@@ -94,13 +94,13 @@ impl Signex {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_symbol {
                     g.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.rotation = *rotation;
                 }
             }
@@ -114,10 +114,10 @@ impl Signex {
                     pp.font_size_pt = *pt;
                 }
                 let fs_mm = *pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM;
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.font_size = fs_mm;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.font_size = fs_mm;
                 }
             }
@@ -125,10 +125,10 @@ impl Signex {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.justify_h = *h;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.justify = *h;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.justify_h = *h;
                 }
             }
@@ -230,21 +230,21 @@ impl Signex {
             crate::panels::PanelMsg::ConfirmPrePlacement => {
                 // OK button: resume placement but keep pre_placement so the
                 // next click uses the values the user just edited.
-                self.interaction_state.canvas.placement_paused = false;
+                self.interaction_state.active_canvas_mut().placement_paused = false;
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
-                self.interaction_state.canvas.snap_grid_mm = *size as f64;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
-                self.interaction_state.canvas.visible_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().visible_grid_mm = *size as f64;
                 self.interaction_state.pcb_canvas.visible_grid_mm = *size as f64;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnapHotspots => {
@@ -264,15 +264,15 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
                 self.document_state.panel_ctx.canvas_font_size = *size;
                 signex_render::set_canvas_font_size(*size);
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
@@ -281,8 +281,8 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
@@ -291,8 +291,8 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::OpenCanvasFontPopup => {
                 self.document_state.panel_ctx.canvas_font_popup_open = true;
@@ -327,8 +327,8 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;
-                self.interaction_state.canvas.theme_paper = color.to_color();
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().theme_paper = color.to_color();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
             crate::panels::PanelMsg::DragComponentsSplit => {
                 self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);

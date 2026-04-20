@@ -7,9 +7,9 @@ impl Signex {
         match msg {
             MenuMessage::ZoomFit => {
                 if self.has_active_schematic() {
-                    self.interaction_state.canvas.fit_to_paper();
-                    self.interaction_state.canvas.clear_bg_cache();
-                    self.interaction_state.canvas.clear_content_cache();
+                    self.interaction_state.active_canvas_mut().fit_to_paper();
+                    self.interaction_state.active_canvas_mut().clear_bg_cache();
+                    self.interaction_state.active_canvas_mut().clear_content_cache();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
                     self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -19,14 +19,14 @@ impl Signex {
             }
             MenuMessage::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.canvas.grid_visible = self.ui_state.grid_visible;
+                self.interaction_state.active_canvas_mut().grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 Some(Task::none())
             }
             MenuMessage::CycleGrid => {
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 Some(Task::none())
             }
             MenuMessage::ZoomIn | MenuMessage::ZoomOut => Some(Task::none()),

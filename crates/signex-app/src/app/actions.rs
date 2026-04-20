@@ -5,9 +5,9 @@ impl Signex {
     /// ghost or switching to a tool that doesn't have one, so a previously
     /// armed ghost from another tool doesn't linger on the canvas.
     pub(crate) fn clear_ghost_previews(&mut self) {
-        self.interaction_state.canvas.ghost_label = None;
-        self.interaction_state.canvas.ghost_symbol = None;
-        self.interaction_state.canvas.ghost_text = None;
+        self.interaction_state.active_canvas_mut().ghost_label = None;
+        self.interaction_state.active_canvas_mut().ghost_symbol = None;
+        self.interaction_state.active_canvas_mut().ghost_text = None;
     }
 
     /// Mirror `ui_state.lasso_polygon` into the canvas widget's copy and
@@ -16,8 +16,8 @@ impl Signex {
     /// mutation to the in-flight lasso must route through this helper so
     /// the two copies never diverge.
     pub(crate) fn sync_lasso_polygon_to_canvas(&mut self) {
-        self.interaction_state.canvas.lasso_polygon = self.ui_state.lasso_polygon.clone();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().lasso_polygon = self.ui_state.lasso_polygon.clone();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
     }
 
     fn component_value_from_lib_id(lib_id: &str) -> String {
@@ -185,11 +185,11 @@ impl Signex {
     pub(crate) fn clear_transient_schematic_tool_state(&mut self) {
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
-        self.interaction_state.canvas.ghost_label = None;
-        self.interaction_state.canvas.ghost_symbol = None;
-        self.interaction_state.canvas.ghost_text = None;
-        self.interaction_state.canvas.tool_preview = None;
-        self.interaction_state.canvas.placement_paused = false;
+        self.interaction_state.active_canvas_mut().ghost_label = None;
+        self.interaction_state.active_canvas_mut().ghost_symbol = None;
+        self.interaction_state.active_canvas_mut().ghost_text = None;
+        self.interaction_state.active_canvas_mut().tool_preview = None;
+        self.interaction_state.active_canvas_mut().placement_paused = false;
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
@@ -198,32 +198,32 @@ impl Signex {
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
-        self.interaction_state.canvas.pending_net_color = None;
+        self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
-        self.interaction_state.canvas.reorder_picker_armed = false;
+        self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
         self.ui_state.lasso_polygon = None;
         self.sync_lasso_polygon_to_canvas();
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;
             self.interaction_state.wire_points.clear();
-            self.interaction_state.canvas.wire_preview.clear();
-            self.interaction_state.canvas.drawing_mode = false;
+            self.interaction_state.active_canvas_mut().wire_preview.clear();
+            self.interaction_state.active_canvas_mut().drawing_mode = false;
         }
         // Drop any in-flight arc / polyline click buffers.
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
-        self.interaction_state.canvas.arc_points.clear();
-        self.interaction_state.canvas.polyline_points.clear();
+        self.interaction_state.active_canvas_mut().arc_points.clear();
+        self.interaction_state.active_canvas_mut().polyline_points.clear();
         // Drop any two-click shape anchor.
         self.interaction_state.shape_anchor = None;
-        self.interaction_state.canvas.shape_anchor = None;
+        self.interaction_state.active_canvas_mut().shape_anchor = None;
     }
 
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
 
-        if self.interaction_state.canvas.selected.len() < 2
+        if self.interaction_state.active_canvas().selected.len() < 2
             && !matches!(action, ActiveBarAction::AlignToGrid)
         {
             return;
@@ -232,7 +232,7 @@ impl Signex {
             return;
         };
 
-        let positions = engine.selection_anchors(&self.interaction_state.canvas.selected);
+        let positions = engine.selection_anchors(&self.interaction_state.active_canvas().selected);
 
         if positions.is_empty() {
             return;

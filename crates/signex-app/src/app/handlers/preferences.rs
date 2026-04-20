@@ -61,7 +61,7 @@ impl Signex {
                 self.document_state.panel_ctx.tokens = tokens;
                 self.update_canvas_theme();
                 signex_render::set_power_port_style(self.ui_state.power_port_style);
-                self.interaction_state.canvas.clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
             }
             PrefMsg::Save => {
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
@@ -105,13 +105,13 @@ impl Signex {
                 } else {
                     signex_types::theme::canvas_colors(id)
                 };
-                self.interaction_state.canvas.set_theme_colors(
+                self.interaction_state.active_canvas_mut().set_theme_colors(
                     signex_render::colors::to_iced(&canvas_colors.background),
                     signex_render::colors::to_iced(&canvas_colors.grid),
                     signex_render::colors::to_iced(&canvas_colors.paper),
                 );
-                self.interaction_state.canvas.canvas_colors = canvas_colors;
-                self.interaction_state.canvas.clear_content_cache();
+                self.interaction_state.active_canvas_mut().canvas_colors = canvas_colors;
+                self.interaction_state.active_canvas_mut().clear_content_cache();
                 self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
                     != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
@@ -129,7 +129,7 @@ impl Signex {
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
                 signex_render::set_power_port_style(style);
-                self.interaction_state.canvas.clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
                 self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
                     != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name

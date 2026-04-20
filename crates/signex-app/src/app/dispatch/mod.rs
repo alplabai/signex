@@ -204,7 +204,7 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state.canvas.clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
                 Task::none()
             }
             Message::OpenParameterManager => {
@@ -246,7 +246,7 @@ impl Signex {
                     a: 255,
                 };
                 self.ui_state.pending_net_color = Some(color);
-                self.interaction_state.canvas.pending_net_color = Some(color);
+                self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
             Message::NetColorCustomChannel(chan, s) => {
@@ -299,8 +299,8 @@ impl Signex {
                         false,
                         false,
                     );
-                    self.interaction_state.canvas.polyline_points.clear();
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().polyline_points.clear();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     return Task::none();
                 }
                 if let Some(pts) = self.ui_state.lasso_polygon.take()
@@ -309,7 +309,7 @@ impl Signex {
                 {
                     let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
                     let filters = self.interaction_state.selection_filters.clone();
-                    self.interaction_state.canvas.selected =
+                    self.interaction_state.active_canvas_mut().selected =
                         signex_render::schematic::hit_test::hit_test_polygon(snapshot, &poly)
                             .into_iter()
                             .filter(|h| {

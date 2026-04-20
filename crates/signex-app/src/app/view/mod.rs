@@ -10,7 +10,7 @@ impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
-        let canvas = &self.interaction_state.canvas;
+        let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
 
         // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
@@ -272,7 +272,7 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
         let ms = &self.ui_state.move_selection;
-        let selection_count = self.interaction_state.canvas.selected.len();
+        let selection_count = self.interaction_state.active_canvas().selected.len();
 
         let header = iced::widget::mouse_area(
             container(
@@ -1271,7 +1271,7 @@ impl Signex {
 
     fn view_center(&self) -> Element<'_, Message> {
         if self.has_active_schematic() {
-            canvas(&self.interaction_state.canvas)
+            canvas(self.interaction_state.active_canvas())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()

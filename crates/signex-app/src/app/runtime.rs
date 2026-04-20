@@ -241,8 +241,8 @@ impl Signex {
         // violations list (drives the Messages panel) and the canvas-
         // side marker overlay.
         self.ui_state.erc_violations.clear();
-        self.interaction_state.canvas.erc_markers.clear();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().erc_markers.clear();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
     }
 
     pub(crate) fn update_selection_info(&mut self) {
@@ -250,9 +250,9 @@ impl Signex {
         // selection change must invalidate the cached content layer to
         // reflect the new focus set.
         if self.ui_state.auto_focus {
-            self.interaction_state.canvas.clear_content_cache();
+            self.interaction_state.active_canvas_mut().clear_content_cache();
         }
-        let selected = &self.interaction_state.canvas.selected;
+        let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
         self.document_state.panel_ctx.selected_uuid = None;
@@ -311,7 +311,7 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.canvas.set_theme_colors(
+        self.interaction_state.active_canvas_mut().set_theme_colors(
             signex_render::colors::to_iced(&colors.background),
             signex_render::colors::to_iced(&colors.grid),
             signex_render::colors::to_iced(&colors.paper),
@@ -320,9 +320,9 @@ impl Signex {
             signex_render::colors::to_iced(&colors.background),
             signex_render::colors::to_iced(&colors.grid),
         );
-        self.interaction_state.canvas.canvas_colors = colors;
+        self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }

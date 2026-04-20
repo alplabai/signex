@@ -36,7 +36,7 @@ impl Signex {
     pub(crate) fn active_render_snapshot(
         &self,
     ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
-        self.interaction_state.canvas.active_snapshot()
+        self.interaction_state.active_canvas().active_snapshot()
     }
 
     pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
@@ -158,10 +158,10 @@ impl Signex {
         invalidation: signex_render::schematic::RenderInvalidation,
     ) {
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self.interaction_state.canvas.render_cache.as_mut() {
+            if let Some(cache) = self.interaction_state.active_canvas_mut().render_cache.as_mut() {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.interaction_state.canvas.set_render_cache(Some(
+                self.interaction_state.active_canvas_mut().set_render_cache(Some(
                     signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
                 ));
             }
@@ -173,9 +173,9 @@ impl Signex {
             .map(signex_render::schematic::SchematicRenderCache::from_sheet);
 
         if let Some(cache) = rebuilt_cache {
-            self.interaction_state.canvas.set_render_cache(Some(cache));
+            self.interaction_state.active_canvas_mut().set_render_cache(Some(cache));
         } else {
-            self.interaction_state.canvas.set_render_cache(None);
+            self.interaction_state.active_canvas_mut().set_render_cache(None);
         }
     }
 
@@ -240,12 +240,12 @@ impl Signex {
 
     fn clear_schematic_ui_state(&mut self) {
         self.document_state.clear_active_engine();
-        self.interaction_state.canvas.set_render_cache(None);
-        self.interaction_state.canvas.selected.clear();
-        self.interaction_state.canvas.wire_preview.clear();
-        self.interaction_state.canvas.drawing_mode = false;
-        self.interaction_state.canvas.clear_content_cache();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().set_render_cache(None);
+        self.interaction_state.active_canvas_mut().selected.clear();
+        self.interaction_state.active_canvas_mut().wire_preview.clear();
+        self.interaction_state.active_canvas_mut().drawing_mode = false;
+        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
     }
 
@@ -295,12 +295,12 @@ impl Signex {
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
 
         if fit_to_paper {
-            self.interaction_state.canvas.fit_to_paper();
+            self.interaction_state.active_canvas_mut().fit_to_paper();
         }
         if clear_bg_cache {
-            self.interaction_state.canvas.clear_bg_cache();
+            self.interaction_state.active_canvas_mut().clear_bg_cache();
         }
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
 
         let _ = commit_to_active_tab;
 
