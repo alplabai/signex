@@ -279,7 +279,7 @@ impl Signex {
                                 val_text: Some(signex_types::schematic::TextProp {
                                     position: signex_types::schematic::Point::new(wx, wy - 1.27),
                                     rotation: 0.0,
-                                    font_size: 1.8,
+                                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                                     justify_h: signex_types::schematic::HAlign::Center,
                                     justify_v: signex_types::schematic::VAlign::default(),
                                     hidden: false,
@@ -340,7 +340,7 @@ impl Signex {
                             text: note_text,
                             position: signex_types::schematic::Point::new(wx, wy),
                             rotation: 0.0,
-                            font_size: 1.8,
+                            font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                         };
@@ -386,8 +386,8 @@ impl Signex {
                             .panel_ctx
                             .pre_placement
                             .as_ref()
-                            .map(|pp| (pp.rotation, pp.font_size_pt as f64 * 0.254, pp.justify_h))
-                            .unwrap_or((0.0, 1.8, signex_types::schematic::HAlign::Left));
+                            .map(|pp| (pp.rotation, pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM, pp.justify_h))
+                            .unwrap_or((0.0, signex_types::schematic::SCHEMATIC_TEXT_MM, signex_types::schematic::HAlign::Left));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
                             text,
