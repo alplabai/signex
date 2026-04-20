@@ -57,7 +57,8 @@ impl RuleKind {
         }
     }
 
-    /// Default severity. Users can override per-rule in preferences (v0.7.1).
+    /// Default severity. Users can override per-rule in the Preferences
+    /// panel via `ui_state.erc_severity_override`.
     pub fn default_severity(self) -> Severity {
         match self {
             // Hard errors — the netlist will be wrong if shipped.
@@ -116,7 +117,31 @@ pub fn run(snapshot: &SchematicRenderSnapshot) -> Vec<Violation> {
     rules::net_label_conflict(snapshot, &mut out);
     rules::orphan_label(snapshot, &mut out);
     rules::bus_bit_width_mismatch(snapshot, &mut out);
-    rules::bad_hier_sheet_pin(snapshot, &mut out);
+    rules::bad_hier_sheet_pin(snapshot, &mut out, None);
+    rules::missing_power_flag(snapshot, &mut out);
+    rules::power_port_short(snapshot, &mut out);
+    rules::symbol_outside_sheet(snapshot, &mut out);
+    out
+}
+
+/// Run ERC for a schematic in the context of a whole project. Cross-sheet
+/// rules (e.g. BadHierSheetPin validating each child sheet's hier-labels
+/// match the parent's pin list) consult `children` keyed by the child's
+/// KiCad filename as it appears on the parent's sheet symbol. Pass an
+/// empty map for top-only runs — behaviour matches `run()` exactly.
+pub fn run_with_project(
+    snapshot: &SchematicRenderSnapshot,
+    children: &std::collections::HashMap<String, SchematicRenderSnapshot>,
+) -> Vec<Violation> {
+    let mut out = Vec::new();
+    rules::unused_pin(snapshot, &mut out);
+    rules::duplicate_ref_designator(snapshot, &mut out);
+    rules::hier_port_disconnected(snapshot, &mut out);
+    rules::dangling_wire(snapshot, &mut out);
+    rules::net_label_conflict(snapshot, &mut out);
+    rules::orphan_label(snapshot, &mut out);
+    rules::bus_bit_width_mismatch(snapshot, &mut out);
+    rules::bad_hier_sheet_pin(snapshot, &mut out, Some(children));
     rules::missing_power_flag(snapshot, &mut out);
     rules::power_port_short(snapshot, &mut out);
     rules::symbol_outside_sheet(snapshot, &mut out);
