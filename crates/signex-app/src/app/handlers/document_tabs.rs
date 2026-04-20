@@ -3,15 +3,23 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_document_tab_message(&mut self, msg: TabMessage) -> Task<Message> {
+    pub(crate) fn handle_document_tab_message(
+        &mut self,
+        window_id: iced::window::Id,
+        msg: TabMessage,
+    ) -> Task<Message> {
+        let is_main = self.ui_state.main_window_id == Some(window_id);
         match msg {
             TabMessage::Select(idx) => {
                 // If a drag is in flight from a different tab in the
                 // same bar, treat release-on-idx as a drop/reorder
                 // instead of a tab switch. Matches Altium's drag-the-
                 // tab behaviour and mirrors the dock-region reorder
-                // below in `dock::mod.rs`.
-                if let Some((from, _, _)) = self.ui_state.tab_dragging
+                // below in `dock::mod.rs`. Reordering is only meaningful
+                // on the main tab bar — undocked windows show a single
+                // tab, so a drag ending on their own tab is a no-op.
+                if is_main
+                    && let Some((from, _, _)) = self.ui_state.tab_dragging
                     && from != idx
                     && from < self.document_state.tabs.len()
                     && idx < self.document_state.tabs.len()
@@ -35,7 +43,13 @@ impl Signex {
                     self.ui_state.tab_dragging = None;
                     return Task::none();
                 }
-                if idx < self.document_state.tabs.len() && idx != self.document_state.active_tab {
+                // Tab switch only mutates the shared active_tab when the
+                // main window drove the click. Undocked windows own one
+                // tab and must not clobber the main bar's active index.
+                if is_main
+                    && idx < self.document_state.tabs.len()
+                    && idx != self.document_state.active_tab
+                {
                     self.park_active_schematic_session();
                     self.document_state.active_tab = idx;
                     self.sync_active_tab();
@@ -56,6 +70,12 @@ impl Signex {
             }
             TabMessage::Undock(idx) => Task::done(Message::UndockTab(idx)),
             TabMessage::StartDrag(idx, x, y) => {
+                // Drag-to-reorder / drag-out-to-detach originates only
+                // from the main tab bar. The single-tab bar inside an
+                // undocked window has nothing to drag into.
+                if !is_main {
+                    return Task::none();
+                }
                 // Seed last_mouse_pos as (x, y) = (0, 0) wasn't real;
                 // pull the live cursor from interaction_state so the
                 // next DragMove delivers a correct position check.
