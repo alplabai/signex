@@ -9,7 +9,7 @@ use crate::canvas::SchematicCanvas;
 use crate::dock::DockArea;
 use crate::pcb_canvas::PcbCanvas;
 
-use super::{ContextMenuState, DragTarget, DrawMode, TabInfo, TextEditState, Tool};
+use super::{ContextMenuState, DragTarget, DrawMode, TabDocument, TabInfo, TextEditState, Tool};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -288,15 +288,40 @@ impl DocumentState {
         self.engine.is_some()
     }
 
-    /// Per-window engine lookup. Currently delegates to `active_engine`
-    /// regardless of `window_id` — the argument is already threaded
-    /// through call sites so step 5 (HashMap<PathBuf, Engine> storage)
-    /// only changes this body, not every caller.
+    /// Per-window engine lookup. Main window → the active tab's engine
+    /// (same as `active_engine`). Undocked tab windows → the engine for
+    /// the path the window was opened on, sourced from the parked
+    /// `SchematicTabSession` in `tabs[i].cached_document`. Returns None
+    /// if the window isn't known or the targeted path isn't a schematic.
     pub fn engine_for_window(
         &self,
-        _window_id: iced::window::Id,
+        window_id: iced::window::Id,
+        ui: &UiState,
     ) -> Option<&signex_engine::Engine> {
-        self.engine.as_ref()
+        if ui.main_window_id == Some(window_id) {
+            return self.engine.as_ref();
+        }
+        let target_path = match ui.windows.get(&window_id)? {
+            WindowKind::UndockedTab { path, .. } => path,
+            _ => return None,
+        };
+        // Active tab matches the undocked path? Then the live engine is
+        // in `self.engine`.
+        if let Some(active_tab) = self.tabs.get(self.active_tab)
+            && active_tab.path == *target_path
+        {
+            return self.engine.as_ref();
+        }
+        // Otherwise the engine is parked inside a SchematicTabSession.
+        self.tabs.iter().find_map(|tab| {
+            if tab.path != *target_path {
+                return None;
+            }
+            match tab.cached_document.as_ref()? {
+                TabDocument::Schematic(session) => Some(session.engine()),
+                _ => None,
+            }
+        })
     }
 }
 
