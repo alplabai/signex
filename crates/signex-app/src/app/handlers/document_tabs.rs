@@ -72,7 +72,7 @@ impl Signex {
             return;
         }
         if idx == self.document_state.active_tab {
-            self.document_state.engine = None;
+            self.document_state.clear_active_engine();
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()
@@ -102,7 +102,7 @@ impl Signex {
                 // first) we fall back to discard-and-close; the save flow
                 // across parked sessions is v0.7 scope.
                 if idx == self.document_state.active_tab
-                    && let Some(engine) = self.document_state.engine.as_mut()
+                    && let Some(engine) = self.document_state.active_engine_mut()
                     && engine.save().is_ok()
                     && let Some(tab) = self.document_state.tabs.get_mut(idx)
                 {
