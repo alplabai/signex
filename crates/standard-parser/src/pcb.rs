@@ -2,6 +2,7 @@ use std::path::Path;
 
 use uuid::Uuid;
 
+use signex_types::property::PcbProperty;
 use signex_types::pcb::{
     BoardGraphic, BoardText, DrillDef, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadNet,
     PadShape, PadType, PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
@@ -72,6 +73,41 @@ fn parse_via_type(s: &str) -> ViaType {
         "blind" => ViaType::Blind,
         "micro" => ViaType::Micro,
         _ => ViaType::Through,
+    }
+}
+
+fn parse_pcb_property(node: &SExpr) -> PcbProperty {
+    let (position, rotation) = parse_at(node);
+    let layer = node
+        .find("layer")
+        .and_then(|child| child.first_arg())
+        .map(ToOwned::to_owned);
+    let font_size = node
+        .find("effects")
+        .and_then(|effects| effects.find("font"))
+        .and_then(|font| font.find("size"))
+        .and_then(|size| size.first_arg())
+        .and_then(|value| value.parse::<f64>().ok());
+    let hidden = node.find("hide").is_some()
+        || node
+            .find("effects")
+            .map(|effects| {
+                effects.find("hide").is_some()
+                    || effects
+                        .children()
+                        .iter()
+                        .any(|child| matches!(child, SExpr::Atom(atom) if atom.as_str() == "hide"))
+            })
+            .unwrap_or(false);
+
+    PcbProperty {
+        key: node.first_arg().unwrap_or("").to_string(),
+        value: node.arg(1).unwrap_or("").to_string(),
+        position: node.find("at").map(|_| position),
+        rotation,
+        layer,
+        font_size,
+        hidden,
     }
 }
 
@@ -581,6 +617,12 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
         .unwrap_or("")
         .to_string();
 
+    let properties: Vec<PcbProperty> = fp
+        .find_all("property")
+        .iter()
+        .map(|prop| parse_pcb_property(prop))
+        .collect();
+
     // Pads
     let pads: Vec<Pad> = fp
         .find_all("pad")
@@ -914,6 +956,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
         locked,
         pads,
         graphics,
+        properties,
     }
 }
 
@@ -937,4 +980,52 @@ pub fn parse_footprint_file(content: &str) -> Result<Footprint, ParseError> {
     }
 
     Ok(parse_footprint_node(&root))
+}
+
+#[cfg(test)]
+mod tests {
+        use super::*;
+
+        #[test]
+        fn parse_footprint_property_metadata() {
+                let footprint = parse_footprint_file(
+                        r#"(footprint "Resistor_SMD:R_0603"
+    (layer "F.Cu")
+    (at 10 20 90)
+    (uuid "00000000-0000-0000-0000-000000000010")
+    (property "Reference" "R1"
+        (at 0 -2 0)
+        (layer "F.SilkS")
+        (effects (font (size 1 1) (thickness 0.15)))
+    )
+    (property "Value" "10k"
+        (at 0 2 0)
+        (layer "F.Fab")
+        (effects (font (size 1 1) (thickness 0.15)))
+    )
+    (property "MPN" "RC0603FR-0710KL"
+        (at 1 3 180)
+        (layer "Cmts.User")
+        (hide yes)
+        (effects (font (size 1.2 1.2) (thickness 0.15)))
+    )
+)"#,
+                )
+                .unwrap();
+
+                assert_eq!(footprint.reference, "R1");
+                assert_eq!(footprint.value, "10k");
+                assert_eq!(footprint.properties.len(), 3);
+                let mpn = footprint
+                        .properties
+                        .iter()
+                        .find(|property| property.key == "MPN")
+                        .unwrap();
+                assert_eq!(mpn.value, "RC0603FR-0710KL");
+                assert_eq!(mpn.position, Some(Point { x: 1.0, y: 3.0 }));
+                assert_eq!(mpn.rotation, 180.0);
+                assert_eq!(mpn.layer.as_deref(), Some("Cmts.User"));
+                assert_eq!(mpn.font_size, Some(1.2));
+                assert!(mpn.hidden);
+        }
 }

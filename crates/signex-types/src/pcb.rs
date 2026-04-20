@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::property::PcbProperty;
+
 pub use crate::schematic::Point;
 
 // ---------------------------------------------------------------------------
@@ -177,6 +179,8 @@ pub struct Footprint {
     pub pads: Vec<Pad>,
     #[serde(default)]
     pub graphics: Vec<FpGraphic>,
+    #[serde(default)]
+    pub properties: Vec<PcbProperty>,
 }
 
 // ---------------------------------------------------------------------------
