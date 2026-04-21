@@ -1378,6 +1378,11 @@ fn primary_anchor_world(
             .iter()
             .find(|c| c.uuid == item.uuid)
             .map(|c| (c.position.x, c.position.y)),
+        SelectedKind::SheetPin => snap
+            .child_sheets
+            .iter()
+            .find_map(|c| c.pins.iter().find(|pin| pin.uuid == item.uuid))
+            .map(|pin| (pin.position.x, pin.position.y)),
         SelectedKind::SymbolRefField => snap
             .symbols
             .iter()

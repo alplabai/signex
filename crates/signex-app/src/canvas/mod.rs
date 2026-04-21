@@ -885,6 +885,15 @@ impl canvas::Program<Message> for SchematicCanvas {
                             push_pt(cs.position.x + cs.size.0, cs.position.y + cs.size.1, 0.0);
                         }
                     }
+                    SelectedKind::SheetPin => {
+                        if let Some(pin) = snapshot
+                            .child_sheets
+                            .iter()
+                            .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == item.uuid))
+                        {
+                            push_pt(pin.position.x, pin.position.y, 2.0);
+                        }
+                    }
                     SelectedKind::Drawing => {
                         use signex_types::schematic::SchDrawing;
                         if let Some(d) = snapshot.drawings.iter().find(|d| {
@@ -1781,6 +1790,22 @@ impl canvas::Program<Message> for SchematicCanvas {
                                     draw_x(&mut frame, s);
                                 }
                             }
+                            SelectedKind::SheetPin => {
+                                if let Some(pin) = snap
+                                    .child_sheets
+                                    .iter()
+                                    .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == sel.uuid))
+                                {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new(
+                                            (pin.position.x + dxf) as f32,
+                                            (pin.position.y + dyf) as f32,
+                                        ),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
                             SelectedKind::Symbol => {
                                 if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
                                     && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
@@ -1961,6 +1986,15 @@ fn shift_snapshot_for_selection(
     for cs in out.child_sheets.iter_mut() {
         if is_selected(cs.uuid, SelectedKind::ChildSheet) {
             cs.position = shift(cs.position);
+            for pin in &mut cs.pins {
+                pin.position = shift(pin.position);
+            }
+        } else {
+            for pin in &mut cs.pins {
+                if is_selected(pin.uuid, SelectedKind::SheetPin) {
+                    pin.position = shift(pin.position);
+                }
+            }
         }
     }
     use signex_types::schematic::SchDrawing;

@@ -43,6 +43,9 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
 
     // Child sheets
     for cs in &sheet.child_sheets {
+        if let Some(pin) = cs.pins.iter().find(|pin| hit_child_sheet_pin(pin, wx, wy)) {
+            return Some(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+        }
         if hit_child_sheet(cs, wx, wy) {
             return Some(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
         }
@@ -447,6 +450,11 @@ pub fn hit_test_polygon(
     // a sheet symbol should pick it up even when the center is
     // outside. Test every corner + every edge against the lasso.
     for cs in &sheet.child_sheets {
+        for pin in &cs.pins {
+            if point_in_polygon(pin.position.x, pin.position.y, polygon) {
+                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+            }
+        }
         let x0 = cs.position.x;
         let y0 = cs.position.y;
         let x1 = x0 + cs.size.0;
@@ -652,6 +660,11 @@ pub fn hit_test_rect_mode(
         }
     }
     for cs in &sheet.child_sheets {
+        for pin in &cs.pins {
+            if pt_match(rect.contains(pin.position.x, pin.position.y)) {
+                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+            }
+        }
         let cx = cs.position.x + cs.size.0 / 2.0;
         let cy = cs.position.y + cs.size.1 / 2.0;
         if pt_match(rect.contains(cx, cy)) {
@@ -817,6 +830,12 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
         cs.position.y + cs.size.1,
     )
     .contains(wx, wy)
+}
+
+fn hit_child_sheet_pin(pin: &SheetPin, wx: f64, wy: f64) -> bool {
+    let dx = wx - pin.position.x;
+    let dy = wy - pin.position.y;
+    (dx * dx + dy * dy).sqrt() <= HIT_TOLERANCE
 }
 
 /// Hit-test a text property (reference or value field).

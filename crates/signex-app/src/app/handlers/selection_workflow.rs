@@ -28,7 +28,7 @@ pub(crate) fn passes_filter(
         }
         SelectedKind::Wire => SelectionFilter::Wires,
         SelectedKind::Bus | SelectedKind::BusEntry => SelectionFilter::Buses,
-        SelectedKind::ChildSheet => SelectionFilter::SheetSymbols,
+        SelectedKind::ChildSheet | SelectedKind::SheetPin => SelectionFilter::SheetSymbols,
         SelectedKind::Label => SelectionFilter::NetLabels,
         SelectedKind::TextNote => SelectionFilter::Texts,
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField => SelectionFilter::Parameters,
@@ -70,6 +70,9 @@ fn all_selectable_items(
             child_sheet.uuid,
             SelectedKind::ChildSheet,
         ));
+        for sheet_pin in &child_sheet.pins {
+            items.push(SelectedItem::new(sheet_pin.uuid, SelectedKind::SheetPin));
+        }
     }
     for bus_entry in &snapshot.bus_entries {
         items.push(SelectedItem::new(bus_entry.uuid, SelectedKind::BusEntry));

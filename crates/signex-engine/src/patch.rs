@@ -11,6 +11,7 @@ pub enum SemanticPatch {
     SelectionRotated,
     SelectionMirrored,
     ObjectPlaced,
+    SheetPinsReconciled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +52,7 @@ impl DocumentPatch {
             SelectedKind::Junction => Self::JUNCTIONS,
             SelectedKind::NoConnect => Self::NO_CONNECTS,
             SelectedKind::Label => Self::LABELS,
+            SelectedKind::SheetPin => Self::CHILD_SHEETS,
             SelectedKind::TextNote => Self::TEXT_NOTES,
             SelectedKind::ChildSheet => Self::CHILD_SHEETS,
             SelectedKind::Drawing => Self::DRAWINGS,

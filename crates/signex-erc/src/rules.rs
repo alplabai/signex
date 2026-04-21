@@ -445,8 +445,8 @@ pub(crate) fn bad_hier_sheet_pin(
                         pin.name, child.name,
                     ),
                     location: pin.position,
-                    primary: Some(sel(pin.uuid, SelectedKind::Label)),
-                    peer: Some(sel(*prev_uuid, SelectedKind::Label)),
+                    primary: Some(sel(pin.uuid, SelectedKind::SheetPin)),
+                    peer: Some(sel(*prev_uuid, SelectedKind::SheetPin)),
                 });
             } else {
                 seen.insert(pin.name.as_str(), pin.uuid);
@@ -500,7 +500,7 @@ pub(crate) fn bad_hier_sheet_pin(
                         pin.name, child.name, child.filename,
                     ),
                     location: pin.position,
-                    primary: Some(sel(pin.uuid, SelectedKind::Label)),
+                    primary: Some(sel(pin.uuid, SelectedKind::SheetPin)),
                     peer: None,
                 });
             }

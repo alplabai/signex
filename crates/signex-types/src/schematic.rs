@@ -493,6 +493,10 @@ pub struct SheetPin {
     pub position: Point,
     #[serde(default)]
     pub rotation: f64,
+    #[serde(default)]
+    pub auto_generated: bool,
+    #[serde(default)]
+    pub user_moved: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -650,6 +654,8 @@ pub enum SelectedKind {
     Junction,
     NoConnect,
     Label,
+    /// Hierarchical sheet pin rendered on a child-sheet symbol.
+    SheetPin,
     TextNote,
     ChildSheet,
     Drawing,
