@@ -11,6 +11,7 @@ impl Signex {
     /// Messages panel + canvas markers stay consistent with what's
     /// on screen.
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
+        let dsl_eval_fns = self.load_project_dsl_eval_fns();
         let overrides = self.ui_state.erc_severity_override.clone();
         let apply_overrides =
             |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
@@ -129,7 +130,15 @@ impl Signex {
         // BadHierSheetPin can cross-check each sheet symbol against
         // the actual child schematic.
         for (path, snapshot) in &snapshots_by_path {
-            let violations = apply_overrides(signex_erc::run_with_project(snapshot, &children));
+            let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
+                apply_overrides(signex_erc::run_with_project_and_dsl(
+                    snapshot,
+                    &children,
+                    eval_fns,
+                ))
+            } else {
+                apply_overrides(signex_erc::run_with_project(snapshot, &children))
+            };
             by_path.insert(path.clone(), violations);
         }
 
@@ -148,14 +157,59 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.ui_state.erc_violations_by_path = by_path;
+        self.ui_state.erc_focus_global_index = self
+            .ui_state
+            .erc_violations_by_path
+            .values()
+            .any(|v| !v.is_empty())
+            .then_some(0);
         self.refresh_active_erc_from_cache(active_path.as_ref());
 
-        // Surface the Messages panel so the user can see the results.
+        // Surface the ERC panel so the user can see the results.
         self.document_state.dock.add_panel(
             crate::dock::PanelPosition::Right,
-            crate::panels::PanelKind::Messages,
+            crate::panels::PanelKind::Erc,
         );
         Task::none()
+    }
+
+    fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
+        let project_root = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|p| p.parent().map(std::path::PathBuf::from))?;
+
+        let dsl_path_candidates = [
+            project_root.join("erc.dsl"),
+            project_root.join("signex.erc.dsl"),
+        ];
+        let dsl_path = dsl_path_candidates.iter().find(|p| p.exists())?;
+
+        let Ok(src) = std::fs::read_to_string(dsl_path) else {
+            crate::diagnostics::log_info(format!(
+                "ERC DSL: failed to read {}",
+                dsl_path.display()
+            ));
+            return None;
+        };
+
+        match signex_erc_dsl::parse_validate_compile_to_eval_fns(&src) {
+            Ok(eval_fns) => {
+                crate::diagnostics::log_info(format!(
+                    "ERC DSL: loaded {} compiled rule(s) from {}",
+                    eval_fns.len(),
+                    dsl_path.display()
+                ));
+                Some(eval_fns)
+            }
+            Err(errors) => {
+                for error in errors {
+                    crate::diagnostics::log_info(format!("ERC DSL: {error}"));
+                }
+                None
+            }
+        }
     }
 
     /// Repoint `erc_violations` + canvas markers at whatever the
@@ -187,8 +241,106 @@ impl Signex {
         self.ui_state.erc_violations = violations;
     }
 
+    pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
+        let mut paths: Vec<_> = self.ui_state.erc_violations_by_path.keys().cloned().collect();
+        paths.sort();
+
+        let mut out = Vec::new();
+        for path in paths {
+            let sheet_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.display().to_string());
+            if let Some(list) = self.ui_state.erc_violations_by_path.get(&path) {
+                for v in list {
+                    out.push(crate::panels::ErcDiagnosticEntry {
+                        global_index: out.len(),
+                        sheet_name: sheet_name.clone(),
+                        sheet_path: path.clone(),
+                        severity: match v.severity {
+                            signex_erc::Severity::Error => crate::panels::ErcSeverityLite::Error,
+                            signex_erc::Severity::Warning => {
+                                crate::panels::ErcSeverityLite::Warning
+                            }
+                            _ => crate::panels::ErcSeverityLite::Info,
+                        },
+                        rule_label: v.rule.label(),
+                        message: v.message.clone(),
+                        world_x: v.location.x,
+                        world_y: v.location.y,
+                        select: v.primary,
+                    });
+                }
+            }
+        }
+
+        out
+    }
+
+    pub(crate) fn handle_focus_erc_diagnostic_offset(&mut self, delta: isize) -> Task<Message> {
+        let entries = self.build_erc_diagnostic_entries();
+        if entries.is_empty() {
+            self.ui_state.erc_focus_global_index = None;
+            return Task::none();
+        }
+        let current = self.ui_state.erc_focus_global_index.unwrap_or(0) as isize;
+        let len = entries.len() as isize;
+        let next = (current + delta).rem_euclid(len) as usize;
+        self.handle_focus_erc_diagnostic_index(next)
+    }
+
+    pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
+        let entries = self.build_erc_diagnostic_entries();
+        if entries.is_empty() {
+            self.ui_state.erc_focus_global_index = None;
+            return Task::none();
+        }
+        let clamped = index.min(entries.len() - 1);
+        let target = entries[clamped].clone();
+
+        // Ensure the target sheet is open and active before focusing its point.
+        self.ensure_sheet_open_and_active(&target.sheet_path);
+
+        self.ui_state.erc_focus_global_index = Some(clamped);
+        self.handle_focus_at(target.world_x, target.world_y, target.select)
+    }
+
+    fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
+        if let Some(index) = self.document_state.tabs.iter().position(|tab| &tab.path == path) {
+            if index != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = index;
+                self.sync_active_tab();
+            }
+            return;
+        }
+
+        let is_schematic = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| matches!(e, "standard_sch" | "snxsch"))
+            .unwrap_or(false);
+        if !is_schematic {
+            return;
+        }
+
+        let Ok(sheet) = standard_parser::parse_schematic_file(path) else {
+            crate::diagnostics::log_info(format!(
+                "ERC navigation: failed to open sheet {}",
+                path.display()
+            ));
+            return;
+        };
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "sheet".to_string());
+        self.open_schematic_tab(path.clone(), title, sheet);
+        self.sync_active_tab();
+    }
+
     /// Move the viewport to center on a world-space point and optionally
-    /// replace the current selection. Used by the Messages panel's
+    /// replace the current selection. Used by the ERC panel's
     /// click-to-zoom and by future Find/Replace result navigation.
     pub(crate) fn handle_focus_at(
         &mut self,
@@ -201,9 +353,9 @@ impl Signex {
             self.update_selection_info();
             self.interaction_state.active_canvas_mut().clear_overlay_cache();
         }
-        // Stage a fit target around the violation point so the canvas's
-        // next draw centers on it.
-        let half = 20.0_f32;
+        // Stage a tighter fit target around the target point so
+        // navigation jumps both center and zoom in to the issue.
+        let half = 8.0_f32;
         self.interaction_state
             .canvas
             .pending_fit

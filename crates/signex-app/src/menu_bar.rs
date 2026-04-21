@@ -43,6 +43,7 @@ pub enum MenuMessage {
     OpenComponentsPanel,
     OpenNavigatorPanel,
     OpenPropertiesPanel,
+    OpenErcPanel,
     OpenMessagesPanel,
     OpenSignalPanel,
     // Place
@@ -251,6 +252,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             leaf("Components", None, MenuMessage::OpenComponentsPanel, mc),
             leaf("Navigator", None, MenuMessage::OpenNavigatorPanel, mc),
             leaf("Properties", None, MenuMessage::OpenPropertiesPanel, mc),
+            leaf("ERC", None, MenuMessage::OpenErcPanel, mc),
             leaf("Messages", None, MenuMessage::OpenMessagesPanel, mc),
             leaf("Signal", None, MenuMessage::OpenSignalPanel, mc),
         ]),
