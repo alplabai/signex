@@ -1,14 +1,32 @@
-//! Electrical Rules Check — runs on a [`SchematicRenderSnapshot`] and returns
-//! a list of [`Violation`]s flagged per [`RuleKind`]. v0.7 scope: 11 rule
-//! kinds with Phase A shipping the three cheapest ones (hier port dangling,
-//! duplicate reference, unused pin). Severity per rule is configurable via
-//! [`Severity`]; defaults follow the Altium convention.
+//! Electrical Rules Check. Runs on a [`SchematicRenderSnapshot`] and returns
+//! a list of [`Violation`]s. Internally the snapshot is projected into an
+//! [`ErcContext`] first, so rule logic never imports `signex-render`.
+//!
+//! # Architecture
+//!
+//! ```text
+//! SchematicRenderSnapshot
+//!        ↓  (projection)
+//!    ErcContext
+//!        ↓  (engine::run_all)
+//!  Vec<Diagnostic>
+//!        ↓  (From<Diagnostic>)
+//!  Vec<Violation>   ← public API
+//! ```
 
 use serde::{Deserialize, Serialize};
 use signex_render::schematic::SchematicRenderSnapshot;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
+pub mod context;
+pub mod diagnostic;
+pub mod engine;
+pub mod rule;
 mod rules;
+
+pub use context::ErcContext;
+pub use diagnostic::Diagnostic;
+pub use rule::{Applicability, AnalysisScope, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
 /// in the user's configuration. Ordered by the Altium ERC matrix conventions.
@@ -61,19 +79,16 @@ impl RuleKind {
     /// panel via `ui_state.erc_severity_override`.
     pub fn default_severity(self) -> Severity {
         match self {
-            // Hard errors — the netlist will be wrong if shipped.
             RuleKind::DuplicateRefDesignator
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin
             | RuleKind::PowerPortShort => Severity::Error,
-            // Warnings — likely user intent mistakes.
             RuleKind::UnusedPin
             | RuleKind::HierPortDisconnected
             | RuleKind::DanglingWire
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
             | RuleKind::MissingPowerFlag => Severity::Warning,
-            // Info — style hints.
             RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }
@@ -90,62 +105,41 @@ pub enum Severity {
 }
 
 /// A concrete violation emitted by a rule run. `location` is in world-space
-/// mm (same coordinate system as the schematic); the app uses it to center
-/// the canvas when the user clicks the message.
+/// mm; the app uses it to centre the canvas when the user clicks the message.
 #[derive(Debug, Clone)]
 pub struct Violation {
     pub rule: RuleKind,
     pub severity: Severity,
     pub message: String,
     pub location: Point,
-    /// The primary object the violation refers to. The app uses this to
-    /// replace the current selection on click-to-zoom.
+    /// The primary object the violation refers to.
     pub primary: Option<SelectedItem>,
-    /// Optional peer — the "other" object in two-object rules (duplicate
-    /// designator, power-port short).
+    /// Optional peer — the "other" object in two-object rules.
     pub peer: Option<SelectedItem>,
 }
 
 /// Run every enabled rule against the snapshot. Returns a flat list of
 /// violations in rule order.
 pub fn run(snapshot: &SchematicRenderSnapshot) -> Vec<Violation> {
-    let mut out = Vec::new();
-    rules::unused_pin(snapshot, &mut out);
-    rules::duplicate_ref_designator(snapshot, &mut out);
-    rules::hier_port_disconnected(snapshot, &mut out);
-    rules::dangling_wire(snapshot, &mut out);
-    rules::net_label_conflict(snapshot, &mut out);
-    rules::orphan_label(snapshot, &mut out);
-    rules::bus_bit_width_mismatch(snapshot, &mut out);
-    rules::bad_hier_sheet_pin(snapshot, &mut out, None);
-    rules::missing_power_flag(snapshot, &mut out);
-    rules::power_port_short(snapshot, &mut out);
-    rules::symbol_outside_sheet(snapshot, &mut out);
-    out
+    let ctx = ErcContext::from_snapshot(snapshot);
+    engine::run_all(&ctx)
+        .into_iter()
+        .map(Violation::from)
+        .collect()
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules (e.g. BadHierSheetPin validating each child sheet's hier-labels
-/// match the parent's pin list) consult `children` keyed by the child's
-/// Standard filename as it appears on the parent's sheet symbol. Pass an
-/// empty map for top-only runs — behaviour matches `run()` exactly.
+/// rules consult `children` keyed by the child's Standard filename as it appears
+/// on the parent's sheet symbol. Pass an empty map for top-only runs.
 pub fn run_with_project(
     snapshot: &SchematicRenderSnapshot,
     children: &std::collections::HashMap<String, SchematicRenderSnapshot>,
 ) -> Vec<Violation> {
-    let mut out = Vec::new();
-    rules::unused_pin(snapshot, &mut out);
-    rules::duplicate_ref_designator(snapshot, &mut out);
-    rules::hier_port_disconnected(snapshot, &mut out);
-    rules::dangling_wire(snapshot, &mut out);
-    rules::net_label_conflict(snapshot, &mut out);
-    rules::orphan_label(snapshot, &mut out);
-    rules::bus_bit_width_mismatch(snapshot, &mut out);
-    rules::bad_hier_sheet_pin(snapshot, &mut out, Some(children));
-    rules::missing_power_flag(snapshot, &mut out);
-    rules::power_port_short(snapshot, &mut out);
-    rules::symbol_outside_sheet(snapshot, &mut out);
-    out
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    engine::run_all(&ctx)
+        .into_iter()
+        .map(Violation::from)
+        .collect()
 }
 
 /// Helper for rules to build a [`SelectedItem`] when they only have a uuid.
