@@ -45,7 +45,7 @@ impl Signex {
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
         // defaults: Projects + Components + Signal on the left,
-        // Properties + Messages on the right, nothing on the bottom
+        // Properties + ERC + Messages on the right, nothing on the bottom
         // (user's request — bottom is reserved for future log tails).
         let mut dock = match crate::fonts::read_dock_layout() {
             Some(saved) => saved,
@@ -55,6 +55,7 @@ impl Signex {
                 d.add_panel(PanelPosition::Left, PanelKind::Components);
                 d.add_panel(PanelPosition::Left, PanelKind::Signal);
                 d.add_panel(PanelPosition::Right, PanelKind::Properties);
+                d.add_panel(PanelPosition::Right, PanelKind::Erc);
                 d.add_panel(PanelPosition::Right, PanelKind::Messages);
                 d
             }
@@ -110,6 +111,7 @@ impl Signex {
                 close_tab_confirm: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
+                erc_focus_global_index: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,
@@ -191,7 +193,8 @@ impl Signex {
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
-                    erc_violations: Vec::new(),
+                    erc_diagnostics: Vec::new(),
+                    erc_focus_index: None,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL

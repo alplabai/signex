@@ -64,6 +64,9 @@ pub struct UiState {
     /// entry without rerunning the analysis.
     pub erc_violations_by_path:
         std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Global cursor into the flattened ERC diagnostics list spanning all
+    /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
+    pub erc_focus_global_index: Option<usize>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
