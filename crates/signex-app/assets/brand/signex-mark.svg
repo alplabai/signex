@@ -3,7 +3,7 @@
 <g>
 	<linearGradient id="sxg1" gradientUnits="userSpaceOnUse" x1="1507.6936" y1="2706.8792" x2="1507.6936" y2="1622.4879" gradientTransform="matrix(1 -0.0099 0.0099 1 -17.0079 15.8203)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<path style="fill:url(#sxg1)" d="M1781.242,2676.171l-470.267-298.328c-17.657-11.193-32.143-26.121-42.596-43.469
 		c-10.462-17.347-17.036-37.104-18.734-57.898c-0.019-0.271-0.045-0.542-0.064-0.806c-1.12-13.951-0.611-27.886,1.465-41.558
@@ -18,7 +18,7 @@
 		c5.448-2.84,10.905-5.616,16.37-8.313L1781.242,2676.171z"/>
 	<linearGradient id="sxg2" gradientUnits="userSpaceOnUse" x1="3008.5166" y1="2398.7129" x2="954.4917" y2="2398.7129" gradientTransform="matrix(0.9999 -0.0115 0.0115 0.9999 -21.5832 15.9509)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<path style="fill:url(#sxg2)" d="M1267.725,2706.68c0,0,948.243-426.13,967.706-435.904c5.464-2.699,10.922-5.472,16.373-8.318
 		c13.641-6.967,27.044-14.134,40.427-21.517c47.765-26.148,94.127-54.804,138.683-86.369c0.482-0.338,0.825-0.588,1.306-0.926
@@ -32,7 +32,7 @@
 		c1.636,125.239-71.176,239.752-185.446,291.354l-795.981,355.211L1267.725,2706.68z"/>
 	<linearGradient id="sxg3" gradientUnits="userSpaceOnUse" x1="2488.2627" y1="1306.6985" x2="2488.2627" y2="2447.3899" gradientTransform="matrix(0.9999 -0.0115 0.0115 0.9999 -21.5832 15.9509)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<path style="fill:url(#sxg3)" d="M2235.43,2270.776l-17.178-930.128l470.271,298.328c17.656,11.193,32.139,26.119,42.598,43.468
 		c10.459,17.348,17.038,37.104,18.731,57.895c0.023,0.27,0.045,0.539,0.066,0.809c3.202,39.769-6.892,79.475-28.347,113.113
@@ -47,7 +47,7 @@
 		C2246.353,2265.303,2240.895,2268.076,2235.43,2270.776z"/>
 	<linearGradient id="sxg4" gradientUnits="userSpaceOnUse" x1="826.5574" y1="1606.2859" x2="3408.311" y2="1606.2859" gradientTransform="matrix(1 -0.0099 0.0099 1 -17.0079 15.8203)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<path style="fill:url(#sxg4)" d="M2751,1293.319c0,0-967.473,442.95-986.935,452.722c-5.466,2.696-10.922,5.473-16.37,8.313
 		c-13.638,6.968-27.042,14.134-40.428,21.523c-47.766,26.146-94.127,54.801-138.679,86.368c-0.483,0.34-0.824,0.591-1.308,0.923

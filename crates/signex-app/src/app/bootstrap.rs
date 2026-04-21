@@ -6,6 +6,24 @@ use crate::panels::PanelKind;
 
 use super::*;
 
+/// Load the 256×256 PNG bundled by `installer/build-icons.sh` into an
+/// [`iced::window::Icon`]. When `has_bundled_icon` isn't set (i.e. the PNG
+/// hasn't been generated yet) this returns `None` and the window opens with
+/// the platform default icon.
+fn bundled_window_icon() -> Option<iced::window::Icon> {
+    #[cfg(has_bundled_icon)]
+    {
+        let bytes: &[u8] = include_bytes!("../../assets/brand/generated/signex-256.png");
+        let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+        let (w, h) = img.dimensions();
+        iced::window::icon::from_rgba(img.into_raw(), w, h).ok()
+    }
+    #[cfg(not(has_bundled_icon))]
+    {
+        None
+    }
+}
+
 fn selection_slot_from_key(key: &str) -> Option<usize> {
     match key {
         "1" => Some(0),
@@ -241,6 +259,7 @@ impl Signex {
         // winit confirms the window is mapped.
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
             size: iced::Size::new(1400.0, 900.0),
+            icon: bundled_window_icon(),
             ..Default::default()
         });
         app.ui_state.main_window_id = Some(main_id);

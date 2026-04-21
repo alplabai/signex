@@ -27,3 +27,7 @@ signex-erc = { workspace = true }
 rfd = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
