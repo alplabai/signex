@@ -25,7 +25,11 @@ impl Signex {
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
-            Message::RunErc => self.handle_run_erc(),
+            Message::RunErc => {
+                let task = self.handle_run_erc();
+                let finish = self.finish_update();
+                Task::batch([finish, task])
+            }
             Message::Annotate(mode) => self.handle_annotate(mode),
             Message::OpenAnnotateDialog => self.handle_open_annotate_dialog(),
             Message::CloseAnnotateDialog => self.handle_close_annotate_dialog(),
