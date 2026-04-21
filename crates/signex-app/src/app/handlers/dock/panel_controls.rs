@@ -27,19 +27,19 @@ impl Signex {
             }
             crate::panels::PanelMsg::ClearErc => {
                 self.ui_state.erc_violations.clear();
+                self.ui_state.erc_violations_by_path.clear();
+                self.ui_state.erc_focus_global_index = None;
                 self.interaction_state.active_canvas_mut().erc_markers.clear();
                 self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
-                if let Some(entry) = self
-                    .document_state
-                    .panel_ctx
-                    .erc_violations
-                    .get(*idx)
-                    .cloned()
-                {
-                    let _ = self.handle_focus_at(entry.world_x, entry.world_y, entry.select);
-                }
+                let _ = self.handle_focus_erc_diagnostic_index(*idx);
+            }
+            crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
+                let _ = self.handle_focus_erc_diagnostic_offset(-1);
+            }
+            crate::panels::PanelMsg::FocusNextErcDiagnostic => {
+                let _ = self.handle_focus_erc_diagnostic_offset(1);
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;

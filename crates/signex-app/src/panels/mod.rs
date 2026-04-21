@@ -19,6 +19,7 @@ pub enum PanelKind {
     Navigator,
     Properties,
     Filter,
+    Erc,
     Messages,
     Signal,
     Drc,
@@ -45,6 +46,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Filter,
     PanelKind::SchFilter,
     PanelKind::SchList,
+    PanelKind::Erc,
     PanelKind::Messages,
     PanelKind::Signal,
     PanelKind::Drc,
@@ -67,6 +69,7 @@ impl PanelKind {
             PanelKind::Navigator
                 | PanelKind::Properties
                 | PanelKind::Filter
+                | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
                 | PanelKind::Signal
@@ -90,6 +93,7 @@ impl PanelKind {
             PanelKind::Navigator => "Navigator",
             PanelKind::Properties => "Properties",
             PanelKind::Filter => "Filter",
+            PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
             PanelKind::Signal => "Signal",
             PanelKind::Drc => "DRC",
@@ -133,12 +137,15 @@ pub struct LibrarySymbolEntry {
     pub pin_count: usize,
 }
 
-/// Simplified projection of `signex_erc::Violation` for the Messages panel,
-/// so the panels module doesn't depend on signex-erc directly. Severity is
-/// lowered to a single enum here; the engine's `Off` severity filter runs
-/// before this list is populated.
+/// Flattened ERC diagnostic row for the ERC panel.
+///
+/// The app flattens per-sheet ERC caches into this list so the panel can
+/// present one navigable table across the entire project.
 #[derive(Debug, Clone)]
-pub struct ErcViolationEntry {
+pub struct ErcDiagnosticEntry {
+    pub global_index: usize,
+    pub sheet_name: String,
+    pub sheet_path: std::path::PathBuf,
     pub severity: ErcSeverityLite,
     pub rule_label: &'static str,
     pub message: String,
@@ -236,8 +243,10 @@ pub struct PanelContext {
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
-    /// ERC violations from the most recent Run-ERC pass.
-    pub erc_violations: Vec<ErcViolationEntry>,
+    /// Flattened ERC diagnostics from the most recent Run-ERC pass.
+    pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
+    /// Focused ERC diagnostic index used by prev/next navigation arrows.
+    pub erc_focus_index: Option<usize>,
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
@@ -444,9 +453,12 @@ pub enum PanelMsg {
     RunErc,
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
-    /// Click-to-zoom on a Messages panel row — index into the context's
-    /// `erc_violations` list. The app routes this to `Message::FocusAt`.
+    /// Focus a specific ERC diagnostic row from the global flattened list.
     FocusErcViolation(usize),
+    /// Focus previous ERC diagnostic row in the global list.
+    FocusPrevErcDiagnostic,
+    /// Focus next ERC diagnostic row in the global list.
+    FocusNextErcDiagnostic,
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -580,6 +592,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
+        PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
         PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
@@ -4224,13 +4237,13 @@ fn seg_btn<'a>(
     .into()
 }
 
-// ─── Messages Panel ───────────────────────────────────────────
+// ─── ERC Panel ────────────────────────────────────────────────
 
-fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
     col = col.push(
         row![
-            section_title("Messages", &ctx.tokens),
+            section_title("ERC", &ctx.tokens),
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
                 text("Run ERC (F8)")
@@ -4249,7 +4262,148 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .padding([3, 10])
             .on_press(PanelMsg::ClearErc)
             .style(crate::styles::menu_item(&ctx.tokens)),
-            Space::new().width(10).height(Length::Shrink),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(separator(&ctx.tokens));
+
+    if ctx.erc_diagnostics.is_empty() {
+        col = col.push(
+            text("No ERC diagnostics yet")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+        col = col.push(
+            text("Run ERC to populate project-wide diagnostics")
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+        return col.into();
+    }
+
+    let errors = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Error)
+        .count();
+    let warnings = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Warning)
+        .count();
+    let infos = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Info)
+        .count();
+    let focus_label = if let Some(i) = ctx.erc_focus_index {
+        format!("{}/{}", i + 1, ctx.erc_diagnostics.len())
+    } else {
+        format!("0/{}", ctx.erc_diagnostics.len())
+    };
+
+    col = col.push(
+        row![
+            text("ERC Diagnostic Results")
+                .size(10)
+                .color(theme_ext::text_primary(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{errors} errors"))
+                .size(10)
+                .color(theme_ext::error_color(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{warnings} warnings"))
+                .size(10)
+                .color(theme_ext::warning_color(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{infos} info"))
+                .size(10)
+                .color(theme_ext::accent(&ctx.tokens)),
+            Space::new().width(Length::Fill).height(Length::Shrink),
+            iced::widget::button(text("<").size(11))
+                .padding([1, 6])
+                .on_press(PanelMsg::FocusPrevErcDiagnostic)
+                .style(crate::styles::menu_item(&ctx.tokens)),
+            Space::new().width(4).height(Length::Shrink),
+            text(focus_label)
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+            Space::new().width(4).height(Length::Shrink),
+            iced::widget::button(text(">").size(11))
+                .padding([1, 6])
+                .on_press(PanelMsg::FocusNextErcDiagnostic)
+                .style(crate::styles::menu_item(&ctx.tokens)),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+
+    for v in &ctx.erc_diagnostics {
+        let sev_color = match v.severity {
+            ErcSeverityLite::Error => theme_ext::error_color(&ctx.tokens),
+            ErcSeverityLite::Warning => theme_ext::warning_color(&ctx.tokens),
+            ErcSeverityLite::Info => theme_ext::accent(&ctx.tokens),
+        };
+        let sev_label = match v.severity {
+            ErcSeverityLite::Error => "E",
+            ErcSeverityLite::Warning => "W",
+            ErcSeverityLite::Info => "I",
+        };
+        let is_focused = ctx.erc_focus_index == Some(v.global_index);
+        let row_bg = if is_focused {
+            Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
+        } else {
+            None
+        };
+        col = col.push(
+            iced::widget::button(
+                row![
+                    text(sev_label).size(9).color(sev_color),
+                    Space::new().width(4).height(Length::Shrink),
+                    text(v.rule_label)
+                        .size(9)
+                        .color(theme_ext::text_primary(&ctx.tokens)),
+                    Space::new().width(6).height(Length::Shrink),
+                    text(v.message.clone())
+                        .size(9)
+                        .color(theme_ext::text_secondary(&ctx.tokens)),
+                    Space::new().width(6).height(Length::Shrink),
+                    text(format!(
+                        "{}  ({:.2}, {:.2})  {}",
+                        v.sheet_name,
+                        v.world_x,
+                        v.world_y,
+                        v.sheet_path.display()
+                    ))
+                    .size(9)
+                    .color(theme_ext::text_secondary(&ctx.tokens)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .width(Length::Fill),
+            )
+            .width(Length::Fill)
+            .padding([2, 6])
+            .on_press(PanelMsg::FocusErcViolation(v.global_index))
+            .style(move |_theme: &Theme, status: iced::widget::button::Status| {
+                let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
+                iced::widget::button::Style {
+                    background: row_bg.clone().or(base.background),
+                    ..base
+                }
+            }),
+        );
+    }
+
+    col.into()
+}
+
+// ─── Messages Panel ───────────────────────────────────────────
+
+fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    col = col.push(
+        row![
+            section_title("Messages", &ctx.tokens),
+            Space::new().width(Length::Fill).height(Length::Shrink),
             text(format!("level {}", ctx.diagnostics_level))
                 .size(10)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
@@ -4257,75 +4411,6 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .align_y(iced::Alignment::Center),
     );
     col = col.push(separator(&ctx.tokens));
-
-    // ERC violations section
-    if !ctx.erc_violations.is_empty() {
-        let errors = ctx
-            .erc_violations
-            .iter()
-            .filter(|v| v.severity == ErcSeverityLite::Error)
-            .count();
-        let warnings = ctx
-            .erc_violations
-            .iter()
-            .filter(|v| v.severity == ErcSeverityLite::Warning)
-            .count();
-        let infos = ctx
-            .erc_violations
-            .iter()
-            .filter(|v| v.severity == ErcSeverityLite::Info)
-            .count();
-        col = col.push(
-            row![
-                text(format!("ERC: {errors} errors"))
-                    .size(10)
-                    .color(theme_ext::error_color(&ctx.tokens)),
-                Space::new().width(8).height(Length::Shrink),
-                text(format!("{warnings} warnings"))
-                    .size(10)
-                    .color(theme_ext::warning_color(&ctx.tokens)),
-                Space::new().width(8).height(Length::Shrink),
-                text(format!("{infos} info"))
-                    .size(10)
-                    .color(theme_ext::accent(&ctx.tokens)),
-            ]
-            .align_y(iced::Alignment::Center),
-        );
-        for (idx, v) in ctx.erc_violations.iter().enumerate() {
-            let sev_color = match v.severity {
-                ErcSeverityLite::Error => theme_ext::error_color(&ctx.tokens),
-                ErcSeverityLite::Warning => theme_ext::warning_color(&ctx.tokens),
-                ErcSeverityLite::Info => theme_ext::accent(&ctx.tokens),
-            };
-            let sev_label = match v.severity {
-                ErcSeverityLite::Error => "E",
-                ErcSeverityLite::Warning => "W",
-                ErcSeverityLite::Info => "I",
-            };
-            col = col.push(
-                iced::widget::button(
-                    row![
-                        text(sev_label).size(9).color(sev_color),
-                        Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label)
-                            .size(9)
-                            .color(theme_ext::text_primary(&ctx.tokens)),
-                        Space::new().width(6).height(Length::Shrink),
-                        text(v.message.clone())
-                            .size(9)
-                            .color(theme_ext::text_secondary(&ctx.tokens)),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .width(Length::Fill),
-                )
-                .width(Length::Fill)
-                .padding([2, 6])
-                .on_press(PanelMsg::FocusErcViolation(idx))
-                .style(crate::styles::menu_item(&ctx.tokens)),
-            );
-        }
-        col = col.push(separator(&ctx.tokens));
-    }
 
     if ctx.diagnostics.is_empty() {
         col = col.push(

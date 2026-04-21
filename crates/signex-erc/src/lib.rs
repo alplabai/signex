@@ -128,6 +128,18 @@ pub fn run(snapshot: &SchematicRenderSnapshot) -> Vec<Violation> {
         .collect()
 }
 
+/// Run built-in ERC rules plus caller-provided DSL evaluator functions.
+pub fn run_with_dsl(
+    snapshot: &SchematicRenderSnapshot,
+    dsl_rules: &[engine::EvalFn],
+) -> Vec<Violation> {
+    let ctx = ErcContext::from_snapshot(snapshot);
+    engine::run_all_with_dsl(&ctx, dsl_rules)
+        .into_iter()
+        .map(Violation::from)
+        .collect()
+}
+
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
 /// rules consult `children` keyed by the child's Standard filename as it appears
 /// on the parent's sheet symbol. Pass an empty map for top-only runs.
@@ -137,6 +149,19 @@ pub fn run_with_project(
 ) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
     engine::run_all(&ctx)
+        .into_iter()
+        .map(Violation::from)
+        .collect()
+}
+
+/// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
+pub fn run_with_project_and_dsl(
+    snapshot: &SchematicRenderSnapshot,
+    children: &std::collections::HashMap<String, SchematicRenderSnapshot>,
+    dsl_rules: &[engine::EvalFn],
+) -> Vec<Violation> {
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    engine::run_all_with_dsl(&ctx, dsl_rules)
         .into_iter()
         .map(Violation::from)
         .collect()

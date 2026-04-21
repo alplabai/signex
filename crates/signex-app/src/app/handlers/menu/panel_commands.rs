@@ -34,6 +34,13 @@ impl Signex {
                 self.interaction_state.context_menu = None;
                 Some(Task::none())
             }
+            MenuMessage::OpenErcPanel => {
+                self.document_state.dock.add_panel(
+                    crate::dock::PanelPosition::Right,
+                    crate::panels::PanelKind::Erc,
+                );
+                Some(Task::none())
+            }
             MenuMessage::OpenMessagesPanel => {
                 self.document_state.dock.add_panel(
                     crate::dock::PanelPosition::Bottom,

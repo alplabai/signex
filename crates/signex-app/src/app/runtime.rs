@@ -73,6 +73,7 @@ impl Signex {
         let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
         let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
+        let erc_diagnostics = self.build_erc_diagnostic_entries();
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
             project_name,
@@ -196,23 +197,8 @@ impl Signex {
             component_filter,
             collapsed_sections,
             pre_placement,
-            erc_violations: self
-                .ui_state
-                .erc_violations
-                .iter()
-                .map(|v| crate::panels::ErcViolationEntry {
-                    severity: match v.severity {
-                        signex_erc::Severity::Error => crate::panels::ErcSeverityLite::Error,
-                        signex_erc::Severity::Warning => crate::panels::ErcSeverityLite::Warning,
-                        _ => crate::panels::ErcSeverityLite::Info,
-                    },
-                    rule_label: v.rule.label(),
-                    message: v.message.clone(),
-                    world_x: v.location.x,
-                    world_y: v.location.y,
-                    select: v.primary,
-                })
-                .collect(),
+            erc_diagnostics,
+            erc_focus_index: self.ui_state.erc_focus_global_index,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
@@ -236,12 +222,14 @@ impl Signex {
 
     pub(crate) fn sync_active_tab(&mut self) {
         self.sync_visible_document_from_active_tab();
-        // ERC results are per-sheet; stale markers from the previous
-        // tab shouldn't linger on the new canvas. Clear both the
-        // violations list (drives the Messages panel) and the canvas-
-        // side marker overlay.
-        self.ui_state.erc_violations.clear();
-        self.interaction_state.active_canvas_mut().erc_markers.clear();
+        // ERC results are cached per-sheet. On tab switch, repoint the visible
+        // list/markers at the newly active sheet instead of dropping results.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| t.path.clone());
+        self.refresh_active_erc_from_cache(active_path.as_ref());
         self.interaction_state.active_canvas_mut().clear_overlay_cache();
     }
 

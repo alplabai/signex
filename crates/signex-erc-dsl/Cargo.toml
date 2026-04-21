@@ -1,0 +1,12 @@
+[package]
+name = "signex-erc-dsl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-erc.workspace = true
+signex-types.workspace = true
+chumsky.workspace = true
+regex.workspace = true
+thiserror.workspace = true
