@@ -1,4 +1,4 @@
-use signex_types::schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind, GRID_MM};
+use signex_types::schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
 
 use crate::command::MirrorAxis;
 
@@ -200,18 +200,13 @@ impl Engine {
                         .iter()
                         .position(|sheet_pin| sheet_pin.uuid == item.uuid)
                     {
-                        let child = &self.document.child_sheets[child_idx];
-                        let (left_x, right_x, y_min, y_max) = (
-                            child.position.x,
-                            child.position.x + child.size.0,
-                            child.position.y + GRID_MM,
-                            (child.position.y + child.size.1 - GRID_MM)
-                                .max(child.position.y + GRID_MM),
-                        );
-
+                        let (cx, cy, cw, ch) = {
+                            let c = &self.document.child_sheets[child_idx];
+                            (c.position.x, c.position.y, c.size.0, c.size.1)
+                        };
                         let pin = &mut self.document.child_sheets[child_idx].pins[pin_idx];
                         super::sheet::lock_sheet_pin_to_child_edge(
-                            pin, dx, dy, left_x, right_x, y_min, y_max,
+                            pin, dx, dy, cx, cy, cw, ch,
                         );
                         pin.user_moved = true;
                         return true;

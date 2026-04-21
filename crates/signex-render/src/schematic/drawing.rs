@@ -299,21 +299,47 @@ pub fn draw_child_sheet(
     };
     frame.fill_text(file_text);
 
-    // Draw sheet pins
-    let sheet_mid_x = child.position.x + child.size.0 * 0.5;
+    // Draw sheet pins — stub direction and label placement driven by rotation:
+    //   0°   = left edge  (stub exits left,  label inside-right)
+    //   180° = right edge (stub exits right, label inside-left)
+    //   270° = top edge   (stub exits up,    label inside-below)
+    //   90°  = bottom edge(stub exits down,  label inside-above)
     let pin_stub = 1.5;
     for pin in &child.pins {
         let pp = transform.to_screen_point(pin.position.x, pin.position.y);
-        let is_right_side = pin.position.x >= sheet_mid_x;
-        let stub_world_end_x = if is_right_side {
-            pin.position.x + pin_stub
-        } else {
-            pin.position.x - pin_stub
+
+        let rot = pin.rotation.rem_euclid(360.0).round() as i32;
+        let (stub_wx, stub_wy, text_off_x, text_off_y, h_align, v_align) = match rot {
+            180 => (
+                pin.position.x + pin_stub, pin.position.y,
+                -4.0, 0.0,
+                iced::alignment::Horizontal::Right,
+                iced::alignment::Vertical::Center,
+            ),
+            270 => (
+                pin.position.x, pin.position.y - pin_stub,
+                0.0, small_font + 4.0,
+                iced::alignment::Horizontal::Center,
+                iced::alignment::Vertical::Top,
+            ),
+            90 => (
+                pin.position.x, pin.position.y + pin_stub,
+                0.0, -(small_font + 4.0),
+                iced::alignment::Horizontal::Center,
+                iced::alignment::Vertical::Bottom,
+            ),
+            _ => (
+                // 0° and anything else → left edge
+                pin.position.x - pin_stub, pin.position.y,
+                4.0, 0.0,
+                iced::alignment::Horizontal::Left,
+                iced::alignment::Vertical::Center,
+            ),
         };
-        let stub_screen_end = transform.to_screen_point(stub_world_end_x, pin.position.y);
-        let stub_path = canvas::Path::line(pp, stub_screen_end);
+
+        let stub_end = transform.to_screen_point(stub_wx, stub_wy);
         frame.stroke(
-            &stub_path,
+            &canvas::Path::line(pp, stub_end),
             canvas::Stroke::default()
                 .with_color(body_color)
                 .with_width((transform.scale * 0.16).clamp(1.0, 2.0)),
@@ -322,20 +348,14 @@ pub fn draw_child_sheet(
         let dot = canvas::Path::circle(pp, (transform.scale * 0.3).max(2.0));
         frame.fill(&dot, body_color);
 
-        let text_x = if is_right_side { pp.x - 4.0 } else { pp.x + 4.0 };
         let pin_text = canvas::Text {
             content: display_text_content(&pin.name),
-            position: iced::Point::new(text_x, pp.y),
+            position: iced::Point::new(pp.x + text_off_x, pp.y + text_off_y),
             color: body_color,
             size: iced::Pixels(small_font),
             font: crate::canvas_font(),
-            align_x: if is_right_side {
-                iced::alignment::Horizontal::Right
-            } else {
-                iced::alignment::Horizontal::Left
-            }
-            .into(),
-            align_y: iced::alignment::Vertical::Center,
+            align_x: h_align.into(),
+            align_y: v_align,
             ..canvas::Text::default()
         };
         frame.fill_text(pin_text);
