@@ -103,6 +103,7 @@ See `docs/internal/docs/PCB_ROUTER_PLAN.md` for the detailed router plan.
 
 - `.github/workflows/ci.yml` — check, clippy, test, fmt on push/PR to dev and main
 - `.github/workflows/release.yml` — triggered by version tags (v*), builds release binaries for Windows/Linux/macOS, creates GitHub Release with checksums
+- `.github/workflows/docs-release-sync.yml` — triggered by version tags, auto-opens a `docs/release-sync-vX.Y.Z` PR against `main` with: README version-badge bump, 🔄→✅ status flips across README/ROADMAP/CLAUDE.md, and a CHANGELOG.md entry generated from conventional-commit messages since the previous tag. PR description reminds the reviewer to manually update `docs/internal/docs/MASTER_PLAN.md` (private submodule, not reachable from this workflow) and bump the submodule pointer before merge
 
 ## Skills
 
