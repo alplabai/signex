@@ -103,6 +103,8 @@ impl Signex {
                 preferences_draft_font: String::new(),
                 power_port_style: crate::fonts::read_power_port_style_pref(),
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
+                label_style: crate::fonts::read_label_style_pref(),
+                preferences_draft_label_style: crate::fonts::read_label_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
                 close_tab_confirm: None,
@@ -251,6 +253,7 @@ impl Signex {
             app.ui_state.canvas_font_italic,
         );
         signex_render::set_power_port_style(app.ui_state.power_port_style);
+        signex_render::set_label_style(app.ui_state.label_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a

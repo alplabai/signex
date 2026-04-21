@@ -28,6 +28,22 @@ pub enum PowerPortStyle {
     Altium,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LabelStyle {
+    #[default]
+    Standard,
+    Altium,
+}
+
+impl std::fmt::Display for LabelStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LabelStyle::Standard => write!(f, "Standard"),
+            LabelStyle::Altium => write!(f, "Altium"),
+        }
+    }
+}
+
 impl std::fmt::Display for PowerPortStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -45,6 +61,7 @@ struct CanvasTextConfig {
     bold: bool,
     italic: bool,
     power_port_style: PowerPortStyle,
+    label_style: LabelStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -74,6 +91,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             bold: false,
             italic: false,
             power_port_style: PowerPortStyle::Altium,
+            label_style: LabelStyle::Standard,
         })
     })
 }
@@ -112,6 +130,19 @@ pub fn power_port_style() -> PowerPortStyle {
         .read()
         .map(|c| c.power_port_style)
         .unwrap_or(PowerPortStyle::Altium)
+}
+
+pub fn set_label_style(style: LabelStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.label_style = style;
+    }
+}
+
+pub fn label_style() -> LabelStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.label_style)
+        .unwrap_or(LabelStyle::Standard)
 }
 
 pub fn canvas_font() -> iced::Font {

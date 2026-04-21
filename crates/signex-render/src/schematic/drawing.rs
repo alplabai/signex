@@ -300,17 +300,41 @@ pub fn draw_child_sheet(
     frame.fill_text(file_text);
 
     // Draw sheet pins
+    let sheet_mid_x = child.position.x + child.size.0 * 0.5;
+    let pin_stub = 1.5;
     for pin in &child.pins {
         let pp = transform.to_screen_point(pin.position.x, pin.position.y);
+        let is_right_side = pin.position.x >= sheet_mid_x;
+        let stub_world_end_x = if is_right_side {
+            pin.position.x + pin_stub
+        } else {
+            pin.position.x - pin_stub
+        };
+        let stub_screen_end = transform.to_screen_point(stub_world_end_x, pin.position.y);
+        let stub_path = canvas::Path::line(pp, stub_screen_end);
+        frame.stroke(
+            &stub_path,
+            canvas::Stroke::default()
+                .with_color(body_color)
+                .with_width((transform.scale * 0.16).clamp(1.0, 2.0)),
+        );
+
         let dot = canvas::Path::circle(pp, (transform.scale * 0.3).max(2.0));
         frame.fill(&dot, body_color);
 
+        let text_x = if is_right_side { pp.x - 4.0 } else { pp.x + 4.0 };
         let pin_text = canvas::Text {
             content: display_text_content(&pin.name),
-            position: iced::Point::new(pp.x + 4.0, pp.y),
+            position: iced::Point::new(text_x, pp.y),
             color: body_color,
             size: iced::Pixels(small_font),
             font: crate::canvas_font(),
+            align_x: if is_right_side {
+                iced::alignment::Horizontal::Right
+            } else {
+                iced::alignment::Horizontal::Left
+            }
+            .into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         };

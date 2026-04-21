@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use signex_render::PowerPortStyle;
+use signex_render::{LabelStyle, PowerPortStyle};
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
@@ -135,6 +135,45 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
     json["power_port_style"] = serde_json::Value::String(match style {
         PowerPortStyle::Standard => "standard".to_string(),
         PowerPortStyle::Altium => "altium".to_string(),
+    });
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read `label_style` from preferences file.
+/// Defaults to `Standard` when missing or invalid.
+pub fn read_label_style_pref() -> LabelStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return LabelStyle::Standard;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return LabelStyle::Standard;
+    };
+
+    match json["label_style"].as_str().unwrap_or("standard") {
+        "altium" | "Altium" => LabelStyle::Altium,
+        _ => LabelStyle::Standard,
+    }
+}
+
+/// Persist label style without clobbering other preference keys.
+pub fn write_label_style_pref(style: LabelStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    json["label_style"] = serde_json::Value::String(match style {
+        LabelStyle::Standard => "standard".to_string(),
+        LabelStyle::Altium => "altium".to_string(),
     });
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
