@@ -113,14 +113,14 @@ impl Signex {
         ) {
             let dx = x - ox;
             let dy = y - oy;
-            // Only undock when the drag clearly exits the tab strip.
-            // Tabs sit at the top/bottom of each region at ~28 px tall,
-            // so requiring vertical movement > 28 px keeps horizontal
-            // drags within the same bar free for reorder. Also bump
-            // the overall threshold so a slightly-wobbly intra-strip
-            // reorder doesn't undock by accident.
+            // Undock when drag clearly exits tab-strip intent.
+            // Vertical exit keeps previous behavior, and a large horizontal
+            // sweep also counts as exit so users can drag a right-docked tab
+            // directly toward the left edge to re-dock there.
             let moved_far = (dx * dx + dy * dy).sqrt() > 60.0;
-            let left_strip = dy.abs() > 28.0;
+            let left_strip_vertically = dy.abs() > 28.0;
+            let left_strip_horizontally = dx.abs() > 180.0;
+            let left_strip = left_strip_vertically || left_strip_horizontally;
             if moved_far && left_strip {
                 self.document_state
                     .dock
