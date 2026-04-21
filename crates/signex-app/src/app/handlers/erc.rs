@@ -167,7 +167,7 @@ impl Signex {
 
         // Surface the ERC panel so the user can see the results.
         self.document_state.dock.add_panel(
-            crate::dock::PanelPosition::Right,
+            crate::dock::PanelPosition::Bottom,
             crate::panels::PanelKind::Erc,
         );
         Task::none()
