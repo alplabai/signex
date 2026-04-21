@@ -369,6 +369,9 @@ impl Signex {
                     self.update_selection_info();
                 }
                 self.sync_lasso_polygon_to_canvas();
+                if self.open_selected_child_sheet() {
+                    return Task::none();
+                }
                 Task::none()
             }
             Message::CycleSelectionMode => {

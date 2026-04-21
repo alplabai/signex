@@ -88,6 +88,10 @@ impl Signex {
                     ContextAction::SmartPaste => {
                         self.dispatch_document_message(Message::SmartPaste)
                     }
+                    ContextAction::OpenChildSheet => {
+                        self.open_selected_child_sheet();
+                        Task::none()
+                    }
                     ContextAction::Delete => {
                         self.dispatch_document_message(Message::DeleteSelected)
                     }

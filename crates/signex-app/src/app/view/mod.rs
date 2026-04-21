@@ -32,6 +32,19 @@ impl Signex {
             items.push(self.ctx_menu_item_disabled("Snippets", Some(SUBMENU_ARROW)));
         }
 
+        let child_sheet_selected = canvas
+            .selected
+            .iter()
+            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
+        if child_sheet_selected {
+            items.push(self.ctx_menu_item_kb(
+                "Open Child Sheet",
+                "Enter",
+                ContextAction::OpenChildSheet,
+            ));
+            items.push(self.ctx_menu_sep());
+        }
+
         items.push(self.ctx_menu_item_disabled("Cross Probe", None));
         items.push(self.ctx_menu_sep());
         items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
