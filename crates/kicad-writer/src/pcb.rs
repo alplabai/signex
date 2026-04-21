@@ -1,7 +1,11 @@
 use std::fmt::Write;
 
 use signex_types::property::PcbProperty;
-use signex_types::pcb::*;
+use signex_types::pcb::{
+    BoardGraphic, BoardText, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadShape, PadType,
+    PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
+    PCB_DEFAULT_TEXT_SIZE_MM, PCB_FP_TEXT_OFFSET_MM, PCB_TEXT_THICKNESS_MM,
+};
 
 use crate::sexpr_render::{
     at_node, atom, effects_node, hide_yes_node, node, write_rendered_sexpr, SExpr,
@@ -71,7 +75,7 @@ fn fmt_f64(v: f64) -> String {
 }
 
 fn pcb_text_effects_node(font_size: f64) -> SExpr {
-    effects_node(font_size, Some(0.15), false, false, Vec::new())
+    effects_node(font_size, Some(PCB_TEXT_THICKNESS_MM), false, false, Vec::new())
 }
 
 fn pcb_property_node(property: &PcbProperty) -> SExpr {
@@ -90,7 +94,7 @@ fn pcb_property_node(property: &PcbProperty) -> SExpr {
     if property.hidden {
         items.push(hide_yes_node());
     }
-    items.push(pcb_text_effects_node(property.font_size.unwrap_or(1.0)));
+    items.push(pcb_text_effects_node(property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM)));
     node("property", items)
 }
 
@@ -282,19 +286,19 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -2.0 }),
+                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
             PcbProperty {
                 key: "Value".to_string(),
                 value: fp.value.clone(),
-                position: Some(Point { x: 0.0, y: 2.0 }),
+                position: Some(Point { x: 0.0, y: PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.Fab".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
         ];
@@ -315,10 +319,10 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -2.0 }),
+                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
         );
@@ -363,7 +367,7 @@ fn is_property_backed_text_graphic(g: &FpGraphic, properties: &[PcbProperty]) ->
             "Value" => "%V",
             _ => property.value.as_str(),
         };
-        let property_font_size = property.font_size.unwrap_or(1.0);
+        let property_font_size = property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
 
         g.layer == property_layer
             && g.text == display_text
@@ -461,7 +465,7 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
         }
         "text" => {
             if let Some(pos) = &g.position {
-                let fs = if g.font_size != 0.0 { g.font_size } else { 1.0 };
+                let fs = if g.font_size != 0.0 { g.font_size } else { PCB_DEFAULT_TEXT_SIZE_MM };
                 wln!(out, "    (fp_text user \"{}\"", escape(&g.text));
                 if g.rotation != 0.0 {
                     wln!(
@@ -477,9 +481,10 @@ fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
                 wln!(out, "      (layer \"{}\")", escape(&g.layer));
                 wln!(
                     out,
-                    "      (effects (font (size {} {}) (thickness 0.15)))",
+                    "      (effects (font (size {} {}) (thickness {})))",
                     fmt_f64(fs),
-                    fmt_f64(fs)
+                    fmt_f64(fs),
+                    fmt_f64(PCB_TEXT_THICKNESS_MM)
                 );
                 wln!(out, "    )");
             }
