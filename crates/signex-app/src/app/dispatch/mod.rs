@@ -97,6 +97,10 @@ impl Signex {
                     .map(move |size| Message::WindowResizedFor(id, size.width, size.height))
             }
             Message::SecondaryWindowClosed(id) => {
+                // Main window closed → terminate the process.
+                if self.ui_state.main_window_id == Some(id) {
+                    return iced::exit();
+                }
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
