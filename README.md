@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/milestone/6"><img src="https://img.shields.io/badge/version-v0.6--dev-orange.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/milestone/7"><img src="https://img.shields.io/badge/version-v0.7--dev-orange.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
@@ -37,23 +37,35 @@ get a better editor without leaving the ecosystem they trust.
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.6 (full schematic editor) in progress.
-> [Join the discussion](https://github.com/alplabai/signex/discussions) or
-> check the [roadmap](#roadmap).
+> **Status:** Early development — v0.7 (ERC validation + multi-window editing)
+> in progress. [Join the discussion](https://github.com/alplabai/signex/discussions)
+> or check the [roadmap](#roadmap).
 
 ## Features
 
-**What works today (v0.1–v0.6):**
+**What works today (v0.1–v0.7):**
 
 - Open and render any KiCad schematic (.kicad_sch, .kicad_sym, .kicad_pro)
 - Full schematic editing: select, move, wire (W), bus (B), label (L),
   component placement (P), delete, rotate (Space), mirror (X/Y)
+- Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
+  (click-by-click), editable drawing Properties with live preview
 - Copy/paste, undo/redo (100 levels), save back to KiCad format
 - 6 built-in themes with customizable theme editor
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 14-button floating toolbar with dropdown menus
 - Context menu, in-place text editing (F2), selection filter
-- Properties panel with context-aware field editing
+- Properties panel with context-aware field editing, Parameter Manager
+- **Multi-window editing (v0.7)** — undock any tab into its own OS window
+  and edit it independently; each window keeps its own pan/zoom, selection,
+  and undo/redo history
+- **ERC validation (v0.7)** — 11 Altium-style rules including cross-sheet
+  hierarchy checks and net-label conflicts; Messages panel with click-to-zoom
+- **Annotation (v0.7)** — four modes, review-and-confirm dialog,
+  lock/unlock per designator, project-wide consistency
+- F5 net-color palette, F8 ERC, F9 AutoFocus (dim unrelated objects)
+- Pin connection matrix (12×12, per-cell severity override)
+- Lasso + Inside/Outside/TouchingLine selection modes (Shift+S to cycle)
 - KiCad 8/9 format support with round-trip fidelity
 - 60fps pan/zoom on schematics with 500+ components
 
@@ -61,7 +73,6 @@ get a better editor without leaving the ecosystem they trust.
 
 | Version | Milestone |
 |---|---|
-| v0.7 | ERC validation, annotation |
 | v0.8–v0.9 | PDF/BOM output, library editor, installers |
 | **v1.0** | **Community Preview** — schematic-only release |
 | **v2.0–v2.2** | **Community Release** — full PCB editor |
@@ -109,6 +120,7 @@ signex/
 
 - **KiCad compatibility first.** Open existing KiCad projects, save back losslessly. No proprietary format.
 - **Elm architecture.** Iced's `Message -> update -> view` cycle. No interior mutability.
+- **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
 - **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial.
 - **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering for 100K+ PCB elements.
 - **Types crate has zero rendering deps.** Clean separation between domain and display.
@@ -134,8 +146,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Canvas — wgpu pan/zoom/grid, Altium-style camera | v0.3 | Done |
 | Schematic Viewer — render all elements, multi-sheet nav | v0.4 | Done |
 | Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
-| Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | **In Progress** |
-| Validation — ERC, annotation, pin matrix | v0.7 | |
+| Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
+| Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | **In Progress** |
 | Output — PDF, BOM, netlist | v0.8 | |
 | Library & Polish — symbol/footprint editor, installers | v0.9 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
