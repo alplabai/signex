@@ -56,6 +56,7 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - **Canvas:** Use `iced::widget::Canvas` for schematic (CPU tessellation, 3-layer cache: bg/content/overlay).
   Use `iced::widget::Shader` for PCB (100K+ elements need GPU instanced rendering).
 - **Panel docking:** Custom DockArea with 3 regions (left/right/bottom) + floating panels. Tabs with collapse/undock.
+- **Multi-window:** `iced::daemon` with per-window id. Schematic engines live in `DocumentState::engines: HashMap<PathBuf, Engine>` keyed by tab path; main window tracks `active_path`. Per-window `SchematicCanvas` lives in `InteractionState::canvases: HashMap<window::Id, SchematicCanvas>`. Canvas events from non-main windows flow through `Message::CanvasEventInWindow { window_id, event }` and the dispatcher swaps the per-window canvas into the main slot for the handler's duration (see `dispatch/ui.rs::handle_canvas_event_in_window`).
 - **Active Bar:** 14-button Altium-style floating toolbar on canvas via Stack overlay. SVG icons with LazyLock handles.
 - **Keyboard shortcuts:** Altium-compatible defaults. W=Wire, B=Bus, L=Label, P=Component, Space=Rotate, etc.
 - **Styles:** Reusable style helpers in `styles.rs` — `dock_tab()`, `rail_tab()`, `menu_item()`, `floating_title_bar()`, etc.
@@ -68,8 +69,8 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - v0.3.0 — Canvas (wgpu pan/zoom/grid) ✅
 - v0.4.0 — Schematic Viewer ✅
 - v0.5.0 — Schematic Editor (selection, wire drawing, undo/redo) ✅
-- v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) 🔄
-- v0.7.0 — Validation & ERC (11 violation types, annotation, pin connection matrix)
+- v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) ✅
+- v0.7.0 — Validation & ERC + multi-window (11 ERC rules, annotation, pin matrix, per-window engine/canvas via `iced::daemon` — undocked tabs are fully interactive) 🔄
 - v0.8.0 — Output Generation (PDF, BOM, netlist)
 - v0.9.0 — Library & Polish (symbol/footprint editor, installers)
 - v1.0.0 — Community Preview (schematic-only early access)
