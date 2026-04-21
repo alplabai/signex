@@ -24,6 +24,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::RunErc => {
                 let _ = self.handle_run_erc();
+                self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
                 self.ui_state.erc_violations.clear();
@@ -31,6 +32,7 @@ impl Signex {
                 self.ui_state.erc_focus_global_index = None;
                 self.interaction_state.active_canvas_mut().erc_markers.clear();
                 self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 let _ = self.handle_focus_erc_diagnostic_index(*idx);
