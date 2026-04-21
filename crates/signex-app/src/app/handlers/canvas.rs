@@ -1061,6 +1061,28 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => {
+                // In Select mode, double-clicking a child-sheet symbol
+                // navigates into the referenced schematic.
+                let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
+                    && let Some(snapshot) = self.active_render_snapshot()
+                    && let Some(hit) =
+                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                    && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
+                {
+                    snapshot
+                        .child_sheets
+                        .iter()
+                        .find(|c| c.uuid == hit.uuid)
+                        .map(|child_sheet| child_sheet.filename.clone())
+                } else {
+                    None
+                };
+
+                if let Some(child_filename) = child_filename_to_open {
+                    self.open_or_focus_child_sheet(child_filename.as_str());
+                    return Task::none();
+                }
+
                 // Lasso already commits on the second single-click
                 // (see CanvasEvent::Clicked above), so by the time
                 // a DoubleClicked fires the polygon is already
@@ -1327,6 +1349,77 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+    }
+
+    fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
+        let trimmed = child_filename.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let raw = std::path::PathBuf::from(trimmed);
+        if raw.is_absolute() {
+            return Some(raw);
+        }
+
+        let base_dir = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            .or_else(|| {
+                self.active_tab_path()
+                    .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            });
+
+        Some(match base_dir {
+            Some(base) => base.join(raw),
+            None => raw,
+        })
+    }
+
+    fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
+        let Some(path) = self.resolve_child_sheet_path(child_filename) else {
+            return;
+        };
+
+        if !path.exists() {
+            crate::diagnostics::log_info(format!(
+                "Child-sheet file not found: {}",
+                path.display()
+            ));
+            return;
+        }
+
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == path)
+        {
+            if index != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = index;
+                self.sync_active_tab();
+            }
+            return;
+        }
+
+        match kicad_parser::parse_schematic_file(&path) {
+            Ok(sheet) => {
+                let title = path
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Schematic".to_string());
+                self.open_schematic_tab(path, title, sheet);
+            }
+            Err(error) => {
+                crate::diagnostics::log_info(format!(
+                    "Failed to open child-sheet schematic from double-click: {}",
+                    error
+                ));
+            }
+        }
     }
 }
 
