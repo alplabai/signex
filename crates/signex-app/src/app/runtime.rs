@@ -245,6 +245,17 @@ impl Signex {
         self.interaction_state.active_canvas_mut().clear_overlay_cache();
     }
 
+    /// Refresh `panel_ctx` selection fields from the active canvas.
+    ///
+    /// NOTE: `panel_ctx` is shared across every window — the dock
+    /// panels, Properties panel, and status bar all read these
+    /// fields. When an undocked window handles a canvas event via
+    /// the swap trick, "active canvas" refers to the undocked
+    /// window's canvas for the duration of the event, so this
+    /// function writes THAT window's selection into the shared
+    /// panel_ctx. End result: main-window panels reflect the
+    /// most-recently-interacted-with window's selection. This is
+    /// intentional "last-touched wins" behaviour.
     pub(crate) fn update_selection_info(&mut self) {
         // AutoFocus dims every item not in the current selection, so any
         // selection change must invalidate the cached content layer to

@@ -388,10 +388,12 @@ impl InteractionState {
         &mut self,
         window_id: iced::window::Id,
     ) -> &mut SchematicCanvas {
-        if self.canvases.contains_key(&window_id) {
-            self.canvases.get_mut(&window_id).unwrap()
-        } else {
-            &mut self.canvas
+        // `get_mut` returns `Option<&mut V>`. Match rather than
+        // `contains_key` + `get_mut().unwrap()` to avoid the double
+        // lookup and the unwrap.
+        match self.canvases.get_mut(&window_id) {
+            Some(canvas) => canvas,
+            None => &mut self.canvas,
         }
     }
 }

@@ -64,7 +64,7 @@ impl Signex {
                         self.ui_state.close_tab_confirm = Some(idx);
                         return Task::none();
                     }
-                    self.close_tab_now(idx);
+                    return self.close_tab_now(idx);
                 }
                 Task::none()
             }
@@ -87,15 +87,31 @@ impl Signex {
         }
     }
 
-    pub(crate) fn close_tab_now(&mut self, idx: usize) {
+    pub(crate) fn close_tab_now(&mut self, idx: usize) -> Task<Message> {
         if idx >= self.document_state.tabs.len() {
-            return;
+            return Task::none();
         }
         // Drop the engine for the tab being closed, whether it was the
         // active one or a background schematic. The HashMap keeps every
         // open tab's engine live — closing the tab is the only point
         // where we prune an entry.
         let closing_path = self.document_state.tabs[idx].path.clone();
+
+        // If the tab has an undocked window open, close that window
+        // too — otherwise it'd be an orphan showing "No document open"
+        // indefinitely. The window's `SecondaryWindowClosed` cleans up
+        // `canvases[id]` + `ui_state.windows[id]`.
+        use crate::app::state::WindowKind;
+        let orphan_window_ids: Vec<iced::window::Id> = self
+            .ui_state
+            .windows
+            .iter()
+            .filter_map(|(id, kind)| match kind {
+                WindowKind::UndockedTab { path, .. } if path == &closing_path => Some(*id),
+                _ => None,
+            })
+            .collect();
+
         self.document_state.engines.remove(&closing_path);
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
@@ -107,6 +123,12 @@ impl Signex {
             self.document_state.active_tab -= 1;
         }
         self.sync_active_tab();
+
+        if orphan_window_ids.is_empty() {
+            Task::none()
+        } else {
+            Task::batch(orphan_window_ids.into_iter().map(iced::window::close))
+        }
     }
 
     pub(crate) fn handle_close_tab_confirm(&mut self, choice: CloseTabChoice) -> Task<Message> {
@@ -118,7 +140,7 @@ impl Signex {
             CloseTabChoice::DiscardAndClose => {
                 if idx < self.document_state.tabs.len() {
                     self.document_state.tabs[idx].dirty = false;
-                    self.close_tab_now(idx);
+                    return self.close_tab_now(idx);
                 }
                 Task::none()
             }
@@ -134,8 +156,7 @@ impl Signex {
                 {
                     tab.dirty = false;
                 }
-                self.close_tab_now(idx);
-                Task::none()
+                self.close_tab_now(idx)
             }
         }
     }

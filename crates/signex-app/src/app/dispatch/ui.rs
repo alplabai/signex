@@ -84,27 +84,51 @@ impl Signex {
     /// `document_state` still occur — the user experience is that the
     /// non-main window behaves like "the active window" for the
     /// duration of its event.
+    ///
+    /// **Invariant:** any `Task<Message>` returned by the handler runs
+    /// AFTER the swap unwinds. If a handler ever chains
+    /// `Task::done(Message::CanvasEvent(..))` expecting to land back
+    /// in the window that produced the original event, it must use
+    /// `Message::CanvasEventInWindow { window_id, .. }` instead — the
+    /// plain `CanvasEvent` form always targets the main window.
+    ///
+    /// **Panic safety:** the swap is guarded with `catch_unwind` +
+    /// `resume_unwind` so a panicking handler still restores both the
+    /// canvas slot and `active_path` before the panic propagates.
     fn handle_canvas_event_in_window(
         &mut self,
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,
     ) -> iced::Task<Message> {
         use crate::app::state::WindowKind;
+        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
-        // Main window or an unknown window → just run the handler on
-        // the legacy canvas.
-        if self.ui_state.main_window_id == Some(window_id)
-            || !self.interaction_state.canvases.contains_key(&window_id)
-        {
+        // Main window → run the handler directly on the legacy canvas.
+        if self.ui_state.main_window_id == Some(window_id) {
             return self.handle_canvas_interaction_event(event);
         }
 
-        // Resolve the target tab path. If the window isn't an undocked
-        // tab (detached modal, detached panel), the canvas event makes
-        // no sense — drop it.
+        // Unknown window (closed mid-queue, or never had a canvas) —
+        // drop the event. Previously fell through to the main canvas,
+        // which could apply a stale undocked click to the main window
+        // during the race between `SecondaryWindowClosed` and a queued
+        // CanvasEvent.
+        if !self.interaction_state.canvases.contains_key(&window_id) {
+            return iced::Task::none();
+        }
+
+        // Resolve the target tab path. Non-tab windows (detached
+        // modals, detached panels) can't host a canvas today, so an
+        // event from one is nonsensical — drop it.
         let target_path = match self.ui_state.windows.get(&window_id) {
             Some(WindowKind::UndockedTab { path, .. }) => path.clone(),
-            _ => return iced::Task::none(),
+            _ => {
+                debug_assert!(
+                    false,
+                    "CanvasEventInWindow for a non-UndockedTab window: {window_id:?}"
+                );
+                return iced::Task::none();
+            }
         };
 
         // Swap the per-window canvas into the main slot and retarget
@@ -119,16 +143,29 @@ impl Signex {
         let saved_active_path = self.document_state.active_path.take();
         self.document_state.active_path = Some(target_path);
 
-        let task = self.handle_canvas_interaction_event(event);
+        // Run the handler. `AssertUnwindSafe` is needed because
+        // `&mut self` isn't `UnwindSafe` by default — we're accepting
+        // that a panicking handler may leave `self` in a partially
+        // mutated state, which is fine as long as the swap itself
+        // unwinds deterministically below.
+        let task_result = catch_unwind(AssertUnwindSafe(|| {
+            self.handle_canvas_interaction_event(event)
+        }));
 
-        // Restore: the user's event may have mutated the swapped
-        // canvas (now in the main slot). Put it back in the HashMap
-        // and bring the original main canvas home.
+        // Always-run cleanup (runs on success, error return, or panic
+        // via resume_unwind below): swap the canvases back and restore
+        // the saved active_path. The per-window canvas (now in the
+        // main slot) returns to the HashMap; the main canvas (held in
+        // `swapped_canvas`) returns to the main slot.
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
         self.interaction_state
             .canvases
             .insert(window_id, swapped_canvas);
         self.document_state.active_path = saved_active_path;
-        task
+
+        match task_result {
+            Ok(task) => task,
+            Err(payload) => resume_unwind(payload),
+        }
     }
 }

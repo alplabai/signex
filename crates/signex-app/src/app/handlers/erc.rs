@@ -235,24 +235,17 @@ impl Signex {
         let tab_count = self.document_state.tabs.len();
 
         // Pass A: seed the shared counter from every sheet's already-
-        // annotated symbols (cached + active). This happens inside
-        // annotate_with_seed's phase 2, but running a separate seed pass
-        // first ensures order-independence — without this, sheet B could
-        // reuse numbers it considers free that sheet A actually claims.
+        // annotated symbols. This happens inside annotate_with_seed's
+        // phase 2, but running a separate seed pass first ensures
+        // order-independence — without this, sheet B could reuse
+        // numbers it considers free that sheet A actually claims.
+        // Every open schematic tab's engine lives in the HashMap, so
+        // one pass over `engines.values()` covers active + background.
         let mut all_existing: Vec<String> = Vec::new();
-        if let Some(eng) = self.document_state.active_engine() {
-            for sym in &eng.document().symbols {
+        for engine in self.document_state.engines.values() {
+            for sym in &engine.document().symbols {
                 if !sym.is_power && !sym.reference.starts_with('#') {
                     all_existing.push(sym.reference.clone());
-                }
-            }
-        }
-        for tab in &self.document_state.tabs {
-            if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                for sym in &engine.document().symbols {
-                    if !sym.is_power && !sym.reference.starts_with('#') {
-                        all_existing.push(sym.reference.clone());
-                    }
                 }
             }
         }
