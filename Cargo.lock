@@ -1623,7 +1623,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "kicad-parser"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "signex-types",
  "thiserror 2.0.18",
@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "kicad-writer"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "kicad-parser",
  "signex-types",
@@ -2935,7 +2935,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "signex-engine"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "kicad-parser",
@@ -2970,7 +2970,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "signex-render",
@@ -2980,7 +2980,7 @@ dependencies = [
 
 [[package]]
 name = "signex-render"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "iced",
  "signex-types",
@@ -2989,7 +2989,7 @@ dependencies = [
 
 [[package]]
 name = "signex-types"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2999,7 +2999,7 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "iced",
  "signex-types",
