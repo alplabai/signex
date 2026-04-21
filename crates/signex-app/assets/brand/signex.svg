@@ -55,7 +55,7 @@
    id="stop1" />
 			<stop
    offset="1"
-   style="stop-color:#A472FF"
+   style="stop-color:#0F7A9D"
    id="stop2" />
 		</linearGradient>
 		<path
@@ -79,7 +79,7 @@
    id="stop3" />
 				<stop
    offset="1"
-   style="stop-color:#A472FF"
+   style="stop-color:#0F7A9D"
    id="stop4" />
 			</linearGradient>
 			<path
@@ -101,7 +101,7 @@
    id="stop5" />
 				<stop
    offset="1"
-   style="stop-color:#A472FF"
+   style="stop-color:#0F7A9D"
    id="stop6" />
 			</linearGradient>
 			<path
@@ -124,7 +124,7 @@
    id="stop7" />
 			<stop
    offset="1"
-   style="stop-color:#A472FF"
+   style="stop-color:#0F7A9D"
    id="stop8" />
 		</linearGradient>
 		<path
