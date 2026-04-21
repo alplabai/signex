@@ -302,6 +302,7 @@ pub enum ContextAction {
     Cut,
     Paste,
     SmartPaste,
+    OpenChildSheet,
     Delete,
     SelectAll,
     ZoomFit,

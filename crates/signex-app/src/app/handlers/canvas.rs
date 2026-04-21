@@ -1378,7 +1378,7 @@ impl Signex {
         })
     }
 
-    fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
+    pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
         let Some(path) = self.resolve_child_sheet_path(child_filename) else {
             return;
         };
@@ -1419,6 +1419,33 @@ impl Signex {
                     error
                 ));
             }
+        }
+    }
+
+    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
+        let Some(snapshot) = self.active_render_snapshot() else {
+            return false;
+        };
+
+        let filename = self
+            .interaction_state
+            .active_canvas()
+            .selected
+            .iter()
+            .find(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet)
+            .and_then(|item| {
+                snapshot
+                    .child_sheets
+                    .iter()
+                    .find(|sheet| sheet.uuid == item.uuid)
+                    .map(|sheet| sheet.filename.clone())
+            });
+
+        if let Some(filename) = filename {
+            self.open_or_focus_child_sheet(filename.as_str());
+            true
+        } else {
+            false
         }
     }
 }
