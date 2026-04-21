@@ -45,7 +45,7 @@ impl Signex {
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
         // defaults: Projects + Components + Signal on the left,
-        // Properties + ERC + Messages on the right, nothing on the bottom
+        // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
         let mut dock = match crate::fonts::read_dock_layout() {
             Some(saved) => saved,
@@ -55,8 +55,8 @@ impl Signex {
                 d.add_panel(PanelPosition::Left, PanelKind::Components);
                 d.add_panel(PanelPosition::Left, PanelKind::Signal);
                 d.add_panel(PanelPosition::Right, PanelKind::Properties);
-                d.add_panel(PanelPosition::Right, PanelKind::Erc);
                 d.add_panel(PanelPosition::Right, PanelKind::Messages);
+                d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
                 d
             }
         };
