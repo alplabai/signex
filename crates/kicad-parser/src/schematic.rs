@@ -1035,6 +1035,8 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
                 direction,
                 position,
                 rotation,
+                auto_generated: false,
+                user_moved: false,
             }
         })
         .collect();

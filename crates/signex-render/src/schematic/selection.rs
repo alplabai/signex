@@ -72,6 +72,15 @@ pub fn draw_selection_overlay(
                     draw_sheet_selection(frame, cs, transform);
                 }
             }
+            SelectedKind::SheetPin => {
+                if let Some(pin) = sheet
+                    .child_sheets
+                    .iter()
+                    .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == item.uuid))
+                {
+                    draw_point_selection(frame, pin.position.x, pin.position.y, transform);
+                }
+            }
             SelectedKind::BusEntry => {
                 if let Some(be) = sheet.bus_entries.iter().find(|b| b.uuid == item.uuid) {
                     let ex = be.position.x + be.size.0;

@@ -4,6 +4,12 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetPort {
+    pub name: String,
+    pub direction: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MirrorAxis {
     Horizontal,
@@ -51,6 +57,7 @@ pub enum CommandKind {
     AnnotateAll,
     MoveSymbolAbsolute,
     ReorderObjects,
+    ReconcileChildSheetPins,
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +188,12 @@ pub enum Command {
         items: Vec<SelectedItem>,
         direction: ReorderDirection,
     },
+    /// Reconcile parent-sheet symbolic pins for all child sheets that point
+    /// to `child_filename`, based on the exposed ports from that child.
+    ReconcileChildSheetPins {
+        child_filename: String,
+        ports: Vec<SheetPort>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,6 +249,7 @@ impl Command {
             Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
+            Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
         }
     }
 }
