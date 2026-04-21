@@ -46,6 +46,8 @@ impl Signex {
         &mut self,
         update: impl FnOnce(&mut SchematicTabSession) -> R,
     ) -> Option<R> {
+        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+
         // Temporarily remove the active engine from the HashMap so we
         // can hand the caller a `SchematicTabSession` (legacy API that
         // owns its engine). save/save_as mutate `session.path` — when
@@ -64,23 +66,42 @@ impl Signex {
             return None;
         };
 
-        let mut session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
-        let result = update(&mut session);
-        let (engine, title, new_path, dirty) = session.into_parts();
+        // Panic-safe update: if the closure panics, the engine would
+        // otherwise be dropped along with `session`. Catch + resume
+        // ensures the engine returns to the HashMap at its original
+        // path before the panic propagates.
+        let session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
+        let update_result = catch_unwind(AssertUnwindSafe(move || {
+            let mut session = session;
+            let r = update(&mut session);
+            (r, session.into_parts())
+        }));
 
-        if let Some(tab) = self
-            .document_state
-            .tabs
-            .get_mut(self.document_state.active_tab)
-        {
-            tab.title = title;
-            tab.path = new_path.clone();
-            tab.dirty = dirty;
+        match update_result {
+            Ok((result, (engine, title, new_path, dirty))) => {
+                if let Some(tab) = self
+                    .document_state
+                    .tabs
+                    .get_mut(self.document_state.active_tab)
+                {
+                    tab.title = title;
+                    tab.path = new_path.clone();
+                    tab.dirty = dirty;
+                }
+
+                self.document_state.engines.insert(new_path.clone(), engine);
+                self.document_state.active_path = Some(new_path);
+                Some(result)
+            }
+            Err(payload) => {
+                // Engine was consumed by the panicking session; the
+                // HashMap is now missing its entry. We can't restore
+                // the engine (it unwound), but we can at least clear
+                // `active_path` so callers don't see a dangling key.
+                self.document_state.active_path = None;
+                resume_unwind(payload);
+            }
         }
-
-        self.document_state.engines.insert(new_path.clone(), engine);
-        self.document_state.active_path = Some(new_path);
-        Some(result)
     }
 
     pub(crate) fn park_active_schematic_session(&mut self) {
