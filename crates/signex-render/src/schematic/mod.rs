@@ -615,13 +615,15 @@ pub fn render_schematic(
 
     // Z=2: Wires — per-wire colour overrides win over the theme wire
     // colour (net-colour flood from the Active Bar palette).
-    for w in &sheet.wires {
+    // Connected same-colour segments are chained into polylines so that
+    // 45° and 90° corners render with smooth LineJoin::Round.
+    wire::draw_wires(frame, &sheet.wires, transform, |w| {
         let base = wire_color_overrides
             .and_then(|o| o.get(&w.uuid))
             .map(to_iced)
             .unwrap_or(wire_color);
-        wire::draw_wire(frame, w, transform, dim(base, alpha_for(&w.uuid)));
-    }
+        dim(base, alpha_for(&w.uuid))
+    });
 
     // Z=3: Buses
     for b in &sheet.buses {
