@@ -249,7 +249,7 @@ impl Signex {
     }
 
     pub fn title(&self, _id: iced::window::Id) -> String {
-        "Signex".to_string()
+        format!("Signex {}", env!("CARGO_PKG_VERSION"))
     }
 
     pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
