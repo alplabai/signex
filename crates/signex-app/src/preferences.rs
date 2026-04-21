@@ -6,7 +6,7 @@
 
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_render::PowerPortStyle;
+use signex_render::{LabelStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::fonts;
@@ -57,6 +57,8 @@ pub enum PrefMsg {
     DraftFont(String),
     /// Update draft power port drawing style (applies as live preview).
     DraftPowerPortStyle(PowerPortStyle),
+    /// Update draft global/hier label drawing style (applies as live preview).
+    DraftLabelStyle(LabelStyle),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -111,6 +113,7 @@ pub fn view<'a>(
     saved_theme: ThemeId,
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
+    draft_label_style: LabelStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -121,6 +124,7 @@ pub fn view<'a>(
         saved_theme,
         draft_font,
         draft_power_port_style,
+        draft_label_style,
         custom_name,
         dirty,
         erc_overrides,
@@ -157,6 +161,7 @@ fn build_dialog<'a>(
     saved_theme: ThemeId,
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
+    draft_label_style: LabelStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -200,6 +205,7 @@ fn build_dialog<'a>(
             saved_theme,
             draft_font,
             draft_power_port_style,
+            draft_label_style,
             custom_name,
             erc_overrides,
         ),
@@ -330,6 +336,7 @@ fn build_content<'a>(
     saved_theme: ThemeId,
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
+    draft_label_style: LabelStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
@@ -339,6 +346,7 @@ fn build_content<'a>(
             saved_theme,
             draft_font,
             draft_power_port_style,
+            draft_label_style,
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
@@ -362,6 +370,7 @@ fn content_appearance<'a>(
     _saved_theme: ThemeId,
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
+    draft_label_style: LabelStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -510,6 +519,28 @@ fn content_appearance<'a>(
         text("Altium changes only rendering view. KiCad preserves library symbol appearance.")
             .size(10)
             .color(TEXT_MUT),
+    );
+    col = col.push(Space::new().height(16));
+    col = col.push(
+        row![
+            column![
+                text("Global/Hier Label Style").size(12).color(TEXT_PRI),
+                text("Controls multi-sheet and global label appearance.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                [LabelStyle::KiCad, LabelStyle::Altium],
+                Some(draft_label_style),
+                PrefMsg::DraftLabelStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
     );
     col = col.push(Space::new().height(20));
 

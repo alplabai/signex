@@ -1373,6 +1373,8 @@ mod tests {
                 direction: "input".to_string(),
                 position: Point { x: 12.0, y: 22.0 },
                 rotation: 0.0,
+                auto_generated: true,
+                user_moved: false,
             }],
             instances: vec![SheetInstance {
                 project: "Main".to_string(),

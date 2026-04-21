@@ -8,6 +8,7 @@ impl Signex {
         self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
         self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
+        self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -47,6 +48,7 @@ impl Signex {
                 self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
                 self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
                 self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
+                self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -61,12 +63,14 @@ impl Signex {
                 self.document_state.panel_ctx.tokens = tokens;
                 self.update_canvas_theme();
                 signex_render::set_power_port_style(self.ui_state.power_port_style);
+                signex_render::set_label_style(self.ui_state.label_style);
                 self.interaction_state.active_canvas_mut().clear_content_cache();
             }
             PrefMsg::Save => {
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
                 self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
+                self.ui_state.label_style = self.ui_state.preferences_draft_label_style;
                 self.update_canvas_theme();
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
                     self.ui_state
@@ -80,8 +84,10 @@ impl Signex {
                 self.document_state.panel_ctx.tokens = tokens;
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
                 signex_render::set_power_port_style(self.ui_state.power_port_style);
+                signex_render::set_label_style(self.ui_state.label_style);
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
+                crate::fonts::write_label_style_pref(self.ui_state.label_style);
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
@@ -116,7 +122,8 @@ impl Signex {
                     != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
                     || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style;
+                        != self.ui_state.power_port_style
+                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
             }
             PrefMsg::DraftFont(name) => {
                 self.ui_state.preferences_draft_font = name;
@@ -124,7 +131,8 @@ impl Signex {
                     != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
                     || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style;
+                        != self.ui_state.power_port_style
+                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
             }
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
@@ -134,7 +142,19 @@ impl Signex {
                     != self.ui_state.theme_id
                     || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
                     || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style;
+                        != self.ui_state.power_port_style
+                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
+            }
+            PrefMsg::DraftLabelStyle(style) => {
+                self.ui_state.preferences_draft_label_style = style;
+                signex_render::set_label_style(style);
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
+                    != self.ui_state.theme_id
+                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
+                    || self.ui_state.preferences_draft_power_port_style
+                        != self.ui_state.power_port_style
+                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {

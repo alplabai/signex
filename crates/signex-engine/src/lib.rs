@@ -5,13 +5,14 @@ mod patch;
 use std::path::{Path, PathBuf};
 
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SymbolTextField, TextTarget,
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort,
+    SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, Wire,
+    Bus, ChildSheet, Junction, Label, LabelType, NoConnect, SCHEMATIC_PT_TO_MM, SchematicSheet,
+    SelectedItem, SelectedKind, SheetPin, Symbol, TextNote, Wire, GRID_MM,
 };
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -955,7 +956,64 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::ReconcileChildSheetPins {
+                child_filename,
+                ports,
+            } => {
+                let mut changed = false;
+                for child in self
+                    .document
+                    .child_sheets
+                    .iter_mut()
+                    .filter(|child| child.filename == child_filename)
+                {
+                    changed |= reconcile_child_sheet_pins(child, &ports);
+                }
+
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SheetPinsReconciled,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
         }
+    }
+
+    /// Returns the ports this sheet exposes to a parent hierarchical symbol.
+    /// Hierarchical labels have precedence over global labels with the same name.
+    pub fn collect_exposed_sheet_ports(&self) -> Vec<SheetPort> {
+        let mut ports: std::collections::BTreeMap<String, (u8, String)> =
+            std::collections::BTreeMap::new();
+
+        for label in &self.document.labels {
+            let Some(priority) = port_label_priority(label.label_type) else {
+                continue;
+            };
+
+            let name = label.text.trim();
+            if name.is_empty() {
+                continue;
+            }
+
+            let direction = normalize_sheet_pin_direction(&label.shape).to_string();
+
+            match ports.get(name) {
+                Some((existing_priority, _)) if *existing_priority <= priority => {}
+                _ => {
+                    ports.insert(name.to_string(), (priority, direction));
+                }
+            }
+        }
+
+        ports
+            .into_iter()
+            .map(|(name, (_, direction))| SheetPort { name, direction })
+            .collect()
     }
 
     /// Is there at least one entry in the undo history? Used by the
@@ -1265,6 +1323,17 @@ impl Engine {
                     .iter()
                     .find(|text_note| text_note.uuid == item.uuid)
                     .map(|text_note| (text_note.position.x, text_note.position.y)),
+                SelectedKind::SheetPin => self
+                    .document
+                    .child_sheets
+                    .iter()
+                    .find_map(|child_sheet| {
+                        child_sheet
+                            .pins
+                            .iter()
+                            .find(|sheet_pin| sheet_pin.uuid == item.uuid)
+                    })
+                    .map(|sheet_pin| (sheet_pin.position.x, sheet_pin.position.y)),
                 SelectedKind::Wire => self
                     .document
                     .wires
@@ -1498,6 +1567,34 @@ impl Engine {
                 info.push((
                     "Size".into(),
                     format!("{:.1} x {:.1} mm", child_sheet.size.0, child_sheet.size.1),
+                ));
+            }
+            SelectedKind::SheetPin => {
+                let (sheet_name, sheet_file, sheet_pin) = self
+                    .document
+                    .child_sheets
+                    .iter()
+                    .find_map(|child_sheet| {
+                        child_sheet
+                            .pins
+                            .iter()
+                            .find(|sheet_pin| sheet_pin.uuid == item.uuid)
+                            .map(|sheet_pin| {
+                                (
+                                    child_sheet.name.clone(),
+                                    child_sheet.filename.clone(),
+                                    sheet_pin,
+                                )
+                            })
+                    })?;
+                info.push(("Type".into(), "Sheet Pin".into()));
+                info.push(("Sheet".into(), sheet_name));
+                info.push(("Sheet File".into(), sheet_file));
+                info.push(("Name".into(), sheet_pin.name.clone()));
+                info.push(("Direction".into(), format!("{:?}", sheet_pin.direction)));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", sheet_pin.position.x, sheet_pin.position.y),
                 ));
             }
             SelectedKind::Bus => {
@@ -1756,6 +1853,12 @@ impl Engine {
                 .text_notes
                 .iter()
                 .any(|text_note| text_note.uuid == item.uuid),
+            SelectedKind::SheetPin => self.document.child_sheets.iter().any(|child_sheet| {
+                child_sheet
+                    .pins
+                    .iter()
+                    .any(|sheet_pin| sheet_pin.uuid == item.uuid)
+            }),
             SelectedKind::Drawing => {
                 use signex_types::schematic::SchDrawing;
                 self.document.drawings.iter().any(|d| {
@@ -1900,9 +2003,37 @@ impl Engine {
                 .map(|child_sheet| {
                     child_sheet.position.x += dx;
                     child_sheet.position.y += dy;
+                    for sheet_pin in &mut child_sheet.pins {
+                        sheet_pin.position.x += dx;
+                        sheet_pin.position.y += dy;
+                    }
                     true
                 })
                 .unwrap_or(false),
+            SelectedKind::SheetPin => {
+                for child_idx in 0..self.document.child_sheets.len() {
+                    if let Some(pin_idx) = self.document.child_sheets[child_idx]
+                        .pins
+                        .iter()
+                        .position(|sheet_pin| sheet_pin.uuid == item.uuid)
+                    {
+                        let child = &self.document.child_sheets[child_idx];
+                        let (left_x, right_x, y_min, y_max) = (
+                            child.position.x,
+                            child.position.x + child.size.0,
+                            child.position.y + GRID_MM,
+                            (child.position.y + child.size.1 - GRID_MM)
+                                .max(child.position.y + GRID_MM),
+                        );
+
+                        let pin = &mut self.document.child_sheets[child_idx].pins[pin_idx];
+                        lock_sheet_pin_to_child_edge(pin, dx, dy, left_x, right_x, y_min, y_max);
+                        pin.user_moved = true;
+                        return true;
+                    }
+                }
+                false
+            }
             SelectedKind::BusEntry => self
                 .document
                 .bus_entries
@@ -2036,6 +2167,142 @@ impl Engine {
             _ => false,
         }
     }
+}
+
+fn port_label_priority(label_type: LabelType) -> Option<u8> {
+    match label_type {
+        LabelType::Hierarchical => Some(0),
+        LabelType::Global => Some(1),
+        _ => None,
+    }
+}
+
+fn normalize_sheet_pin_direction(direction_or_shape: &str) -> &'static str {
+    let normalized = direction_or_shape.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "input" => "input",
+        "output" => "output",
+        "bidirectional" => "bidirectional",
+        "tri_state" => "tri_state",
+        "passive" => "passive",
+        _ => "bidirectional",
+    }
+}
+
+fn pin_anchor_for_direction(child: &ChildSheet, direction: &str, slot: usize) -> (f64, f64, f64) {
+    let y_min = child.position.y + GRID_MM;
+    let y_max = (child.position.y + child.size.1 - GRID_MM).max(y_min);
+    let y = (y_min + GRID_MM * slot as f64).clamp(y_min, y_max);
+    if direction == "output" {
+        (child.position.x + child.size.0, y, 180.0)
+    } else {
+        (child.position.x, y, 0.0)
+    }
+}
+
+fn lock_sheet_pin_to_child_edge(
+    pin: &mut SheetPin,
+    dx: f64,
+    dy: f64,
+    left_x: f64,
+    right_x: f64,
+    y_min: f64,
+    y_max: f64,
+) {
+    let target_x = pin.position.x + dx;
+    let target_y = (pin.position.y + dy).clamp(y_min, y_max);
+
+    let dist_left = (target_x - left_x).abs();
+    let dist_right = (target_x - right_x).abs();
+    if dist_right < dist_left {
+        pin.position.x = right_x;
+        pin.position.y = target_y;
+        pin.rotation = 180.0;
+    } else {
+        pin.position.x = left_x;
+        pin.position.y = target_y;
+        pin.rotation = 0.0;
+    }
+}
+
+fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
+    lhs.uuid == rhs.uuid
+        && lhs.name == rhs.name
+        && lhs.direction == rhs.direction
+        && (lhs.position.x - rhs.position.x).abs() < 1e-9
+        && (lhs.position.y - rhs.position.y).abs() < 1e-9
+        && (lhs.rotation - rhs.rotation).abs() < 1e-9
+        && lhs.auto_generated == rhs.auto_generated
+        && lhs.user_moved == rhs.user_moved
+}
+
+fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
+    let before = child.pins.clone();
+    let mut existing = std::mem::take(&mut child.pins);
+    let mut next_pins = Vec::new();
+    let mut left_slot = 0usize;
+    let mut right_slot = 0usize;
+
+    for port in ports {
+        let direction = normalize_sheet_pin_direction(&port.direction).to_string();
+        let existing_idx = existing.iter().position(|pin| pin.name == port.name);
+
+        if let Some(idx) = existing_idx {
+            let mut pin = existing.swap_remove(idx);
+            pin.direction = direction.clone();
+            pin.auto_generated = true;
+            if !pin.user_moved {
+                let slot = if direction == "output" {
+                    let slot = right_slot;
+                    right_slot += 1;
+                    slot
+                } else {
+                    let slot = left_slot;
+                    left_slot += 1;
+                    slot
+                };
+                let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
+                pin.position.x = x;
+                pin.position.y = y;
+                pin.rotation = rotation;
+            }
+            next_pins.push(pin);
+        } else {
+            let slot = if direction == "output" {
+                let slot = right_slot;
+                right_slot += 1;
+                slot
+            } else {
+                let slot = left_slot;
+                left_slot += 1;
+                slot
+            };
+            let (x, y, rotation) = pin_anchor_for_direction(child, &direction, slot);
+            next_pins.push(SheetPin {
+                uuid: uuid::Uuid::new_v4(),
+                name: port.name.clone(),
+                direction,
+                position: signex_types::schematic::Point::new(x, y),
+                rotation,
+                auto_generated: true,
+                user_moved: false,
+            });
+        }
+    }
+
+    for pin in existing {
+        if !pin.auto_generated {
+            next_pins.push(pin);
+        }
+    }
+
+    child.pins = next_pins;
+
+    before.len() != child.pins.len()
+        || before
+            .iter()
+            .zip(child.pins.iter())
+            .any(|(lhs, rhs)| !same_sheet_pin(lhs, rhs))
 }
 
 fn inverse_field_display_delta(dx: f64, dy: f64) -> (f64, f64) {
@@ -2173,3 +2440,220 @@ impl_has_uuid!(
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{ChildSheet, FillType, Point, SheetPin};
+
+    fn test_sheet() -> SchematicSheet {
+        SchematicSheet {
+            uuid: uuid::Uuid::new_v4(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: "A4".to_string(),
+            root_sheet_page: "1".to_string(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: std::collections::HashMap::new(),
+            lib_symbols: std::collections::HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
+        let mut document = test_sheet();
+        document.labels.push(Label {
+            uuid: uuid::Uuid::new_v4(),
+            text: "ALERT".to_string(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            label_type: LabelType::Global,
+            shape: "output".to_string(),
+            font_size: 1.27,
+            justify: signex_types::schematic::HAlign::Left,
+        });
+        document.labels.push(Label {
+            uuid: uuid::Uuid::new_v4(),
+            text: "ALERT".to_string(),
+            position: Point::new(1.0, 1.0),
+            rotation: 0.0,
+            label_type: LabelType::Hierarchical,
+            shape: "input".to_string(),
+            font_size: 1.27,
+            justify: signex_types::schematic::HAlign::Left,
+        });
+
+        let engine = Engine::new(document).unwrap();
+        let ports = engine.collect_exposed_sheet_ports();
+
+        assert_eq!(ports.len(), 1);
+        assert_eq!(ports[0].name, "ALERT");
+        assert_eq!(ports[0].direction, "input");
+    }
+
+    #[test]
+    fn reconcile_child_sheet_pins_adds_new_and_removes_stale_auto_generated() {
+        let mut document = test_sheet();
+        document.child_sheets.push(ChildSheet {
+            uuid: uuid::Uuid::new_v4(),
+            name: "Child".to_string(),
+            filename: "child.kicad_sch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            fields_autoplaced: false,
+            pins: vec![
+                SheetPin {
+                    uuid: uuid::Uuid::new_v4(),
+                    name: "OLD_AUTO".to_string(),
+                    direction: "input".to_string(),
+                    position: Point::new(10.0, 22.0),
+                    rotation: 0.0,
+                    auto_generated: true,
+                    user_moved: false,
+                },
+                SheetPin {
+                    uuid: uuid::Uuid::new_v4(),
+                    name: "MANUAL".to_string(),
+                    direction: "input".to_string(),
+                    position: Point::new(10.0, 24.0),
+                    rotation: 0.0,
+                    auto_generated: false,
+                    user_moved: false,
+                },
+            ],
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        let result = engine
+            .execute(Command::ReconcileChildSheetPins {
+                child_filename: "child.kicad_sch".to_string(),
+                ports: vec![
+                    SheetPort {
+                        name: "SDA".to_string(),
+                        direction: "input".to_string(),
+                    },
+                    SheetPort {
+                        name: "SCL".to_string(),
+                        direction: "output".to_string(),
+                    },
+                ],
+            })
+            .unwrap();
+
+        assert!(result.changed);
+        let pins = &engine.document().child_sheets[0].pins;
+        assert!(pins.iter().any(|pin| pin.name == "MANUAL" && !pin.auto_generated));
+        assert!(pins.iter().any(|pin| pin.name == "SDA" && pin.auto_generated));
+        assert!(pins.iter().any(|pin| pin.name == "SCL" && pin.auto_generated));
+        assert!(!pins.iter().any(|pin| pin.name == "OLD_AUTO"));
+    }
+
+    #[test]
+    fn reconcile_preserves_position_for_user_moved_pin() {
+        let mut document = test_sheet();
+        let moved_uuid = uuid::Uuid::new_v4();
+        document.child_sheets.push(ChildSheet {
+            uuid: uuid::Uuid::new_v4(),
+            name: "Child".to_string(),
+            filename: "child.kicad_sch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: moved_uuid,
+                name: "SDA".to_string(),
+                direction: "input".to_string(),
+                position: Point::new(25.0, 33.0),
+                rotation: 90.0,
+                auto_generated: true,
+                user_moved: true,
+            }],
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        let _ = engine
+            .execute(Command::ReconcileChildSheetPins {
+                child_filename: "child.kicad_sch".to_string(),
+                ports: vec![SheetPort {
+                    name: "SDA".to_string(),
+                    direction: "output".to_string(),
+                }],
+            })
+            .unwrap();
+
+        let pin = engine.document().child_sheets[0]
+            .pins
+            .iter()
+            .find(|pin| pin.uuid == moved_uuid)
+            .unwrap();
+        assert_eq!(pin.position, Point::new(25.0, 33.0));
+        assert_eq!(pin.rotation, 90.0);
+        assert_eq!(pin.direction, "output");
+    }
+
+    #[test]
+    fn moving_sheet_pin_locks_to_nearest_sheet_edge() {
+        let mut document = test_sheet();
+        let pin_uuid = uuid::Uuid::new_v4();
+        let sheet_uuid = uuid::Uuid::new_v4();
+
+        document.child_sheets.push(ChildSheet {
+            uuid: sheet_uuid,
+            name: "Child".to_string(),
+            filename: "child.kicad_sch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: pin_uuid,
+                name: "SDA".to_string(),
+                direction: "input".to_string(),
+                position: Point::new(10.0, 25.0),
+                rotation: 0.0,
+                auto_generated: true,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+
+        let _ = engine
+            .execute(Command::MoveSelection {
+                items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
+                dx: 35.0,
+                dy: -100.0,
+            })
+            .unwrap();
+
+        let moved = engine.document().child_sheets[0]
+            .pins
+            .iter()
+            .find(|pin| pin.uuid == pin_uuid)
+            .unwrap();
+
+        assert_eq!(moved.position.x, 40.0);
+        assert_eq!(moved.rotation, 180.0);
+        assert_eq!(moved.position.y, 20.0 + GRID_MM);
+        assert!(moved.user_moved);
+    }
+}
