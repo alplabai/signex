@@ -50,6 +50,11 @@ OutputBaseFilename=signex-setup-{#ArchSuffix}-{#Version}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+; The .ico is produced by installer/build-icons.sh and lives next to this script.
+; Silently skipped if the file is absent (e.g. a first clone before running the script).
+#if FileExists("signex.ico")
+  SetupIconFile=signex.ico
+#endif
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed={#ArchAllowed}
@@ -66,11 +71,19 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#Binary}"; DestDir: "{app}"; Flags: ignoreversion
+#if FileExists("signex.ico")
+Source: "signex.ico"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
-Name: "{group}\Signex"; Filename: "{app}\signex.exe"
+#if FileExists("signex.ico")
+  #define IconOpt "; IconFilename: ""{app}\signex.ico"""
+#else
+  #define IconOpt ""
+#endif
+Name: "{group}\Signex"; Filename: "{app}\signex.exe"{#IconOpt}
 Name: "{group}\{cm:UninstallProgram,Signex}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Signex"; Filename: "{app}\signex.exe"; Tasks: desktopicon
+Name: "{autodesktop}\Signex"; Filename: "{app}\signex.exe"; Tasks: desktopicon{#IconOpt}
 
 [Run]
 Filename: "{app}\signex.exe"; Description: "{cm:LaunchProgram,Signex}"; Flags: nowait postinstall skipifsilent

@@ -200,7 +200,14 @@ impl Signex {
                 Task::none()
             }
             Message::ReattachTab(id) => {
+                // Pre-remove so the tab bar shows the reattached tab on
+                // the next view frame even before the OS-level close
+                // fires `SecondaryWindowClosed`. Clear the per-window
+                // canvas here too — otherwise `SecondaryWindowClosed`
+                // short-circuits on `windows.remove -> None` and the
+                // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
+                self.interaction_state.canvases.remove(&id);
                 iced::window::close(id)
             }
             Message::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
