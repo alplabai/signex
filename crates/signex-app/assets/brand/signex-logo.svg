@@ -13,19 +13,19 @@
 <defs>
 	<linearGradient id="sxg1" gradientUnits="userSpaceOnUse" x1="1507.6936" y1="2706.8792" x2="1507.6936" y2="1622.4879" gradientTransform="matrix(1 -0.0099 0.0099 1 -17.0079 15.8203)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<linearGradient id="sxg2" gradientUnits="userSpaceOnUse" x1="3008.5166" y1="2398.7129" x2="954.4917" y2="2398.7129" gradientTransform="matrix(0.9999 -0.0115 0.0115 0.9999 -21.5832 15.9509)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<linearGradient id="sxg3" gradientUnits="userSpaceOnUse" x1="2488.2627" y1="1306.6985" x2="2488.2627" y2="2447.3899" gradientTransform="matrix(0.9999 -0.0115 0.0115 0.9999 -21.5832 15.9509)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 	<linearGradient id="sxg4" gradientUnits="userSpaceOnUse" x1="826.5574" y1="1606.2859" x2="3408.311" y2="1606.2859" gradientTransform="matrix(1 -0.0099 0.0099 1 -17.0079 15.8203)">
 		<stop offset="0" style="stop-color:#3DD8FF"/>
-		<stop offset="1" style="stop-color:#A472FF"/>
+		<stop offset="1" style="stop-color:#0F7A9D"/>
 	</linearGradient>
 </defs>
 
