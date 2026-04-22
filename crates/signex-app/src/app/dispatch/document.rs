@@ -88,6 +88,48 @@ impl Signex {
                 self.handle_print_preview_close();
                 self.finish_update()
             }
+            Message::ExportPdfOpenDialog => {
+                self.handle_export_pdf_open_dialog();
+                self.finish_update()
+            }
+            Message::ExportPdfSetPageSize(page_size) => {
+                self.handle_export_pdf_set_page_size(page_size);
+                self.finish_update()
+            }
+            Message::ExportPdfSetOrientation(orientation) => {
+                self.handle_export_pdf_set_orientation(orientation);
+                self.finish_update()
+            }
+            Message::ExportPdfSetColourMode(colour_mode) => {
+                self.handle_export_pdf_set_colour_mode(colour_mode);
+                self.finish_update()
+            }
+            Message::ExportPdfSetTemplate(template_id) => {
+                self.handle_export_pdf_set_template(template_id);
+                self.finish_update()
+            }
+            Message::ExportPdfSetFitToPage(fit_to_page) => {
+                self.handle_export_pdf_set_fit_to_page(fit_to_page);
+                self.finish_update()
+            }
+            Message::ExportPdfSetIncludeTitleBlock(include) => {
+                self.handle_export_pdf_set_include_title_block(include);
+                self.finish_update()
+            }
+            Message::ExportPdfDialogCancel => {
+                self.handle_export_pdf_dialog_cancel();
+                self.finish_update()
+            }
+            Message::ExportPdfDialogConfirm => {
+                let task = self
+                    .handle_export_pdf_dialog_confirm()
+                    .unwrap_or_else(iced::Task::none);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::DismissExportError => {
+                self.handle_dismiss_export_error();
+                self.finish_update()
+            }
             _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }

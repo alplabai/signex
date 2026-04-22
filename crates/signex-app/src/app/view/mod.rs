@@ -204,6 +204,269 @@ impl Signex {
             .into()
     }
 
+    /// Export-error modal — plain "something went wrong, here's the
+    /// message" dialog with an OK button. Sits on top of the print-preview
+    /// overlay when both would otherwise render; dismiss_layer handles
+    /// click-outside-to-close.
+    fn view_export_error(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, row, text};
+        let msg = match &self.document_state.export_error {
+            Some(m) => m.clone(),
+            None => return iced::widget::Space::new().into(),
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let border_c = crate::styles::ti(tokens.border);
+        let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
+
+        let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
+            .padding([6, 20])
+            .on_press(Message::DismissExportError)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(err_red.into()),
+                text_color: iced::Color::WHITE,
+                border: iced::Border {
+                    radius: iced::border::Radius::from(4.0),
+                    ..iced::Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+
+        let body = column![
+            row![
+                text("\u{26A0}").size(24).color(err_red),
+                iced::widget::Space::new().width(10),
+                text("Export Failed").size(14).color(text_c),
+            ]
+            .align_y(iced::Alignment::Center),
+            iced::widget::Space::new().height(8),
+            text(msg).size(12).color(text_c),
+            iced::widget::Space::new().height(12),
+            row![
+                iced::widget::Space::new().width(Length::Fill),
+                ok_btn,
+            ],
+        ]
+        .padding(20);
+
+        let card = container(body)
+            .max_width(480)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(8.0),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 16.0,
+                },
+                ..container::Style::default()
+            });
+
+        container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    }
+
+    /// PDF export options dialog. Allows user to configure page size,
+    /// orientation, colour mode, template, fit-to-page, and title block
+    /// inclusion before proceeding to the file picker. Triggered by
+    /// File → Export → PDF… (Ctrl+Shift+P) or the Export PDF button in
+    /// Print Preview.
+    fn view_pdf_options_dialog(&self) -> Element<'_, Message> {
+        use iced::widget::{button, checkbox, column, container, row, text};
+
+        let dialog = match &self.document_state.pdf_options_dialog {
+            Some(d) => d,
+            None => return iced::widget::Space::new().into(),
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+
+        // Page size display helper
+        let page_size_display = |size: &signex_output::PageSize| {
+            match size {
+                signex_output::PageSize::IsoA0 => "ISO A0",
+                signex_output::PageSize::IsoA1 => "ISO A1",
+                signex_output::PageSize::IsoA2 => "ISO A2",
+                signex_output::PageSize::IsoA3 => "ISO A3",
+                signex_output::PageSize::IsoA4 => "ISO A4",
+                signex_output::PageSize::IsoA5 => "ISO A5",
+                signex_output::PageSize::AnsiA => "ANSI A",
+                signex_output::PageSize::AnsiB => "ANSI B",
+                signex_output::PageSize::AnsiC => "ANSI C",
+                signex_output::PageSize::AnsiD => "ANSI D",
+                signex_output::PageSize::AnsiE => "ANSI E",
+                signex_output::PageSize::UsLetter => "US Letter",
+                signex_output::PageSize::UsLegal => "US Legal",
+                signex_output::PageSize::Custom { .. } => "Custom",
+            }
+        };
+
+        let page_size_row = row![
+            text("Page Size").color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(page_size_display(&dialog.options.page_size)).color(text_c),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        // Orientation display
+        let orientation_text = match dialog.options.orientation {
+            signex_output::Orientation::Portrait => "Portrait",
+            signex_output::Orientation::Landscape => "Landscape",
+        };
+
+        let orientation_row = row![
+            text("Orientation").color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(orientation_text).color(text_c),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        // Colour mode display
+        let colour_mode_text = match dialog.options.colour_mode {
+            signex_output::ColourMode::Colour => "Colour",
+            signex_output::ColourMode::Grayscale => "Grayscale",
+            signex_output::ColourMode::BlackAndWhite => "Black & White",
+        };
+
+        let colour_mode_row = row![
+            text("Colour Mode").color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(colour_mode_text).color(text_c),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        // Sheet Template display
+        let template_text = dialog
+            .options
+            .sheet_template
+            .as_ref()
+            .and_then(|tid| signex_output::template::load_builtin(tid))
+            .map(|t| t.display_name)
+            .unwrap_or_else(|| "None".to_string());
+
+        let template_row = row![
+            text("Sheet Template").color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(template_text).color(text_c),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        // Checkboxes
+        let fit_to_page = matches!(dialog.options.scale, signex_output::PdfScale::FitToPage);
+        let fit_to_page_checkbox = row![
+            checkbox(fit_to_page).on_toggle(Message::ExportPdfSetFitToPage),
+            text("Fit to Page").size(12).color(text_c),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+
+        let title_block_checkbox = row![
+            checkbox(dialog.options.include_title_block)
+                .on_toggle(Message::ExportPdfSetIncludeTitleBlock),
+            text("Include Title Block").size(12).color(text_c),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+
+        let checkboxes = row![fit_to_page_checkbox, title_block_checkbox].spacing(24);
+
+        // Buttons
+        let cancel_btn = button(text("Cancel").size(12).color(text_c))
+            .padding([6, 18])
+            .on_press(Message::ExportPdfDialogCancel)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(panel_bg.into()),
+                text_color: text_c,
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..iced::widget::button::Style::default()
+            });
+
+        let export_btn = button(text("Export…").size(12).color(iced::Color::WHITE))
+            .padding([6, 18])
+            .on_press(Message::ExportPdfDialogConfirm)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(accent_c.into()),
+                text_color: iced::Color::WHITE,
+                border: iced::Border {
+                    radius: iced::border::Radius::from(4.0),
+                    ..iced::Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+
+        let bottom_bar = row![
+            iced::widget::Space::new().width(Length::Fill),
+            cancel_btn,
+            export_btn,
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        // Dialog body
+        let body = column![
+            text("Export PDF").size(14).color(text_c),
+            iced::widget::Space::new().height(12),
+            page_size_row,
+            orientation_row,
+            colour_mode_row,
+            template_row,
+            iced::widget::Space::new().height(4),
+            checkboxes,
+            iced::widget::Space::new().height(12),
+            bottom_bar,
+        ]
+        .spacing(8)
+        .padding(16);
+
+        // Dialog card
+        let card = container(body)
+            .max_width(420)
+            .padding(0)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(8.0),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 16.0,
+                },
+                ..container::Style::default()
+            });
+
+        container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    }
+
     /// Print Preview overlay. Shows thumbnails of every rendered page on
     /// the left, the selected page full-size on the right, with Export PDF
     /// and Close buttons at the bottom. Triggered by File → Print Preview
@@ -1836,6 +2099,23 @@ impl Signex {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
+
+        // PDF export options dialog — appears when the user clicks
+        // File → Export → PDF… (Ctrl+Shift+P) or Export PDF from Print Preview.
+        // Lets them configure page size, orientation, colour mode, template,
+        // and other options before the file picker appears.
+        if document.pdf_options_dialog.is_some() {
+            layers.push(Self::dismiss_layer(Message::ExportPdfDialogCancel));
+            layers.push(self.view_pdf_options_dialog());
+        }
+
+        // Export-error modal — appears when PDF / netlist / BOM export
+        // hits a user-actionable failure (write permission, invalid path,
+        // empty schematic). Dismiss via OK button or clicking outside.
+        if document.export_error.is_some() {
+            layers.push(Self::dismiss_layer(Message::DismissExportError));
+            layers.push(self.view_export_error());
+        }
 
         // Print preview overlay — appears on top of everything when the user
         // invokes File → Print Preview (Ctrl+P). Full-screen dim + dialog.
