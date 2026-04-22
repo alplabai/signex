@@ -1,0 +1,12 @@
+[package]
+name = "signex-output"
+description = "Output generation for Signex EDA — PDF, BOM, netlist, sheet templates, print preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+signex-types = { path = "../signex-types" }
+thiserror = { workspace = true }
+serde = { workspace = true }
