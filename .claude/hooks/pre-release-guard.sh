@@ -100,6 +100,24 @@ if [[ -d "$repo_dir/docs/internal/.git" ]] || [[ -f "$repo_dir/docs/internal/.gi
   fi
 fi
 
+# GitHub Wiki freshness — every release should bump at least one wiki page.
+# Soft-skip when git isn't available or the clone fails (offline, rate-limited,
+# wiki unreachable) so flaky network doesn't block a real release.
+if command -v git >/dev/null 2>&1; then
+  wiki_tmp=""
+  if command -v mktemp >/dev/null 2>&1; then
+    wiki_tmp=$(mktemp -d 2>/dev/null || mktemp -d -t signex-wiki-XXXXXX 2>/dev/null || echo "")
+  fi
+  if [[ -n "$wiki_tmp" ]]; then
+    if git clone --depth 1 --quiet https://github.com/alplabai/signex.wiki.git "$wiki_tmp" 2>/dev/null; then
+      if ! grep -rqF "v${version}" "$wiki_tmp" 2>/dev/null; then
+        missing+=("GitHub Wiki — no page references v${version}. Bump Home.md's version line and flip the Roadmap row (or add a feature page) at https://github.com/alplabai/signex/wiki before tagging.")
+      fi
+    fi
+    rm -rf "$wiki_tmp" 2>/dev/null
+  fi
+fi
+
 if (( ${#missing[@]} > 0 )); then
   reasons=""
   for item in "${missing[@]}"; do
@@ -132,7 +150,12 @@ Before re-running the push, do all of this in order, in this same session:
    surface changed, and any other progress-tracking files under
    docs/internal/docs/. Commit inside the submodule on a matching
    branch, push it, then bump the submodule pointer in the outer repo.
-6. **Commit all of the above** on a feature branch (chore/release-prep-${tag}),
+6. **GitHub Wiki** (separate repo: https://github.com/alplabai/signex.wiki.git)
+   — clone it, bump Home.md's "Current version" line to ${version}, flip
+   the Roadmap page's ${version} row to shipped, and add/update any
+   feature-specific pages for what shipped in ${version}. Commit and push
+   directly to the wiki's master branch — wikis don't use PRs.
+7. **Commit the main-repo changes** on a feature branch (chore/release-prep-${tag}),
    push it, open a PR against dev, get it merged into dev, then cascade
    dev → main via a normal release PR — and THEN tag and push.
 
