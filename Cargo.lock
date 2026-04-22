@@ -3141,6 +3141,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-output"
+version = "0.7.0"
+dependencies = [
+ "serde",
+ "signex-types",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "signex-render"
 version = "0.7.0"
 dependencies = [
