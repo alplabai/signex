@@ -211,6 +211,7 @@ impl Signex {
                 },
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
+                preview: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

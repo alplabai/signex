@@ -79,8 +79,10 @@ impl Signex {
                 self.finish_update()
             }
             Message::PrintPreviewExport => {
-                self.handle_print_preview_export();
-                self.finish_update()
+                let task = self
+                    .handle_print_preview_export()
+                    .unwrap_or_else(iced::Task::none);
+                iced::Task::batch([task, self.finish_update()])
             }
             Message::PrintPreviewClose => {
                 self.handle_print_preview_close();
