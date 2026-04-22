@@ -13,6 +13,8 @@ kicad-writer = { path = "../kicad-writer" }
 thiserror = { workspace = true }
 serde = { workspace = true }
 pdf-writer = { workspace = true }
+rust_xlsxwriter = { workspace = true }
+tiny-skia = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }
