@@ -1354,15 +1354,12 @@ impl Signex {
 
         // Borderless window needs its own edge-resize hit zones — the OS
         // frame would normally handle this, but `decorations: false`
-        // removes WS_THICKFRAME on Windows. 6 px strips on every side
-        // call `iced::window::drag_resize(id, Direction)` to kick the
-        // OS into a resize drag. Tab windows keep OS decorations so
-        // they don't need this scaffolding.
-        let main: Element<'_, Message> = if is_main_window {
-            Self::wrap_with_resize_edges(main.into())
-        } else {
-            main.into()
-        };
+        // removes WS_THICKFRAME on Windows. Tab windows keep OS
+        // decorations so they skip the overlay entirely. The overlay is
+        // applied later as a Stack layer over `main` so the content
+        // keeps its natural origin and overlay y-coordinates stay
+        // correct.
+        let main: Element<'_, Message> = main.into();
 
         let has_active_bar = self.has_active_schematic();
         let dragging_tab = ui.tab_dragging.is_some();
@@ -1396,22 +1393,37 @@ impl Signex {
                 overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
             let mut stack = iced::widget::Stack::new().push(main);
+            // Resize edges sit above the content but below functional
+            // overlays (Active Bar, menus, modals) so the 6 px border
+            // strip doesn't eat clicks on those.
+            if is_main_window {
+                stack = stack.push(Self::resize_edges_overlay());
+            }
             for overlay in overlays {
                 stack = stack.push(overlay);
             }
             stack.into()
+        } else if is_main_window {
+            iced::widget::Stack::new()
+                .push(main)
+                .push(Self::resize_edges_overlay())
+                .into()
         } else {
             main.into()
         }
     }
 
-    /// 6 px invisible mouse-area strips around the borderless main
-    /// window. Each strip asks the OS to start a resize drag in the
-    /// appropriate direction, with a matching `mouse::Interaction` so
-    /// the cursor flips to the right arrow shape on hover. The four
-    /// corners get their own 6×6 hit zones so diagonal resize works
-    /// where the OS frame would normally handle it.
-    fn wrap_with_resize_edges<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
+    /// Full-window-sized Stack overlay that anchors 6 px resize hit
+    /// zones at the borderless main window's edges and corners. Clicks
+    /// on the edges call `iced::window::drag_resize` via
+    /// `StartMainWindowResize`; anywhere in the middle is an empty
+    /// `Space` so events fall through to the content layer below.
+    ///
+    /// Used as a stack layer over `main` rather than as a structural
+    /// wrapper, so the content keeps its natural y-origin and overlay
+    /// coordinates (Active Bar, text edit, net-colour picker) stay
+    /// correct without a +EDGE correction everywhere.
+    fn resize_edges_overlay<'a>() -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;
@@ -1455,11 +1467,20 @@ impl Signex {
         let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
         let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
 
+        // Middle row: left/right edges frame a Fill/Fill empty Space so
+        // the whole overlay is window-sized and the centre passes
+        // clicks through.
+        let middle = row![left, Space::new().width(Length::Fill).height(Length::Fill), right]
+            .width(Length::Fill)
+            .height(Length::Fill);
+
         column![
-            row![nw, top, ne],
-            row![left, content, right],
-            row![sw, bottom, se],
+            row![nw, top, ne].width(Length::Fill).height(Length::Fixed(EDGE)),
+            middle,
+            row![sw, bottom, se].width(Length::Fill).height(Length::Fixed(EDGE)),
         ]
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
     }
 

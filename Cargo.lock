@@ -3103,6 +3103,7 @@ dependencies = [
  "signex-types",
  "signex-widgets",
  "uuid",
+ "windows-sys 0.61.2",
  "winres",
 ]
 
