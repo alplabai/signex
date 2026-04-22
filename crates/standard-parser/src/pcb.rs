@@ -6,6 +6,11 @@ use signex_types::property::PcbProperty;
 use signex_types::pcb::{
     BoardGraphic, BoardText, DrillDef, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadNet,
     PadShape, PadType, PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
+    PCB_COINCIDENCE_EPS, PCB_DEFAULT_CLEARANCE_MM, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
+    PCB_DEFAULT_PAD_SIZE_MM, PCB_DEFAULT_TEXT_SIZE_MM, PCB_DEFAULT_THICKNESS_MM,
+    PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM,
+    PCB_GRID_MM, PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM, PCB_TRACK_MIN_MM,
+    PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, PCB_ZONE_MIN_THICKNESS_MM,
 };
 
 use crate::error::ParseError;
@@ -163,46 +168,46 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             grid_size: s
                 .find("grid_origin")
                 .and_then(|g| g.arg(0)?.parse().ok())
-                .unwrap_or(1.27),
+                .unwrap_or(PCB_GRID_MM),
             trace_width: s
                 .find("trace_min")
                 .and_then(|t| t.first_arg()?.parse().ok())
-                .unwrap_or(0.2),
+                .unwrap_or(PCB_DEFAULT_CLEARANCE_MM),
             via_diameter: s
                 .find("via_size")
                 .and_then(|v| v.first_arg()?.parse().ok())
-                .unwrap_or(0.6),
+                .unwrap_or(PCB_DEFAULT_VIA_DIAMETER_MM),
             via_drill: s
                 .find("via_drill")
                 .and_then(|v| v.first_arg()?.parse().ok())
-                .unwrap_or(0.3),
+                .unwrap_or(PCB_DEFAULT_VIA_DRILL_MM),
             clearance: s
                 .find("clearance")
                 .and_then(|c| c.first_arg()?.parse().ok())
-                .unwrap_or(0.2),
+                .unwrap_or(PCB_DEFAULT_CLEARANCE_MM),
             track_min_width: s
                 .find("trace_min")
                 .and_then(|t| t.first_arg()?.parse().ok())
-                .unwrap_or(0.1),
+                .unwrap_or(PCB_TRACK_MIN_MM),
             via_min_diameter: s
                 .find("via_size")
                 .and_then(|v| v.first_arg()?.parse().ok())
-                .unwrap_or(0.4),
+                .unwrap_or(PCB_VIA_MIN_DIAMETER_MM),
             via_min_drill: s
                 .find("via_drill")
                 .and_then(|v| v.first_arg()?.parse().ok())
-                .unwrap_or(0.2),
+                .unwrap_or(PCB_VIA_MIN_DRILL_MM),
         })
     } else {
         Some(PcbSetup {
-            grid_size: 1.27,
-            trace_width: 0.25,
-            via_diameter: 0.6,
-            via_drill: 0.3,
-            clearance: 0.2,
-            track_min_width: 0.1,
-            via_min_diameter: 0.4,
-            via_min_drill: 0.2,
+            grid_size: PCB_GRID_MM,
+            trace_width: PCB_DEFAULT_TRACE_WIDTH_MM,
+            via_diameter: PCB_DEFAULT_VIA_DIAMETER_MM,
+            via_drill: PCB_DEFAULT_VIA_DRILL_MM,
+            clearance: PCB_DEFAULT_CLEARANCE_MM,
+            track_min_width: PCB_TRACK_MIN_MM,
+            via_min_diameter: PCB_VIA_MIN_DIAMETER_MM,
+            via_min_drill: PCB_VIA_MIN_DRILL_MM,
         })
     };
 
@@ -228,7 +233,10 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
                 if outline_points.is_empty()
                     || outline_points
                         .last()
-                        .map(|p: &Point| (p.x - s.x).abs() > 0.01 || (p.y - s.y).abs() > 0.01)
+                        .map(|p: &Point| {
+                            (p.x - s.x).abs() > PCB_COINCIDENCE_EPS
+                                || (p.y - s.y).abs() > PCB_COINCIDENCE_EPS
+                        })
                         .unwrap_or(true)
                 {
                     outline_points.push(s);
@@ -261,7 +269,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             let width = s
                 .find("width")
                 .and_then(|w| w.first_arg()?.parse().ok())
-                .unwrap_or(0.25);
+                .unwrap_or(PCB_DEFAULT_TRACE_WIDTH_MM);
             let layer = s
                 .find("layer")
                 .and_then(|l| l.first_arg())
@@ -291,11 +299,11 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             let diameter = v
                 .find("size")
                 .and_then(|s| s.first_arg()?.parse().ok())
-                .unwrap_or(0.6);
+                .unwrap_or(PCB_DEFAULT_VIA_DIAMETER_MM);
             let drill = v
                 .find("drill")
                 .and_then(|d| d.first_arg()?.parse().ok())
-                .unwrap_or(0.3);
+                .unwrap_or(PCB_DEFAULT_VIA_DRILL_MM);
             let layers = if let Some(l) = v.find("layers") {
                 vec![
                     l.arg(0).unwrap_or("F.Cu").to_string(),
@@ -350,11 +358,11 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             let clearance = z
                 .find("clearance")
                 .and_then(|c| c.first_arg()?.parse().ok())
-                .unwrap_or(0.2);
+                .unwrap_or(PCB_DEFAULT_CLEARANCE_MM);
             let min_thickness = z
                 .find("min_thickness")
                 .and_then(|m| m.first_arg()?.parse().ok())
-                .unwrap_or(0.254);
+                .unwrap_or(PCB_ZONE_MIN_THICKNESS_MM);
 
             // Outline polygon
             let outline: Vec<Point> = if let Some(poly) = z.find("polygon") {
@@ -376,11 +384,11 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             let thermal_gap = connect
                 .and_then(|c| c.find("thermal_gap"))
                 .and_then(|t| t.first_arg()?.parse().ok())
-                .unwrap_or(0.508);
+                .unwrap_or(PCB_THERMAL_GAP_MM);
             let thermal_width = connect
                 .and_then(|c| c.find("thermal_bridge_width"))
                 .and_then(|t| t.first_arg()?.parse().ok())
-                .unwrap_or(0.254);
+                .unwrap_or(PCB_THERMAL_BRIDGE_MM);
 
             Zone {
                 uuid: parse_uuid(z),
@@ -420,7 +428,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
             .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let end = g.find("end").map(|e| parse_point(e));
         board_graphics.push(BoardGraphic {
@@ -445,7 +453,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
             .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let end = g.find("end").map(|e| parse_point(e));
         // If on Edge.Cuts, also add to outline
@@ -481,7 +489,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
             .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let center = g.find("center").map(|c| parse_point(c));
         let end = g.find("end").map(|e| parse_point(e));
         let radius = if let (Some(c), Some(e)) = (&center, &end) {
@@ -511,7 +519,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
             .or_else(|| g.find("width").and_then(|w| w.first_arg()?.parse().ok()))
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let mid = g.find("mid").map(|m| parse_point(m));
         let end = g.find("end").map(|e| parse_point(e));
@@ -549,7 +557,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
                 .and_then(|e| e.find("font"))
                 .and_then(|f| f.find("size"))
                 .and_then(|s| s.first_arg()?.parse().ok())
-                .unwrap_or(1.0);
+                .unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
             BoardText {
                 uuid: parse_uuid(t),
                 text,
@@ -565,7 +573,7 @@ pub fn parse_pcb(content: &str) -> Result<PcbBoard, ParseError> {
         .find("general")
         .and_then(|g| g.find("thickness"))
         .and_then(|t| t.first_arg()?.parse().ok())
-        .unwrap_or(1.6);
+        .unwrap_or(PCB_DEFAULT_THICKNESS_MM);
 
     Ok(PcbBoard {
         uuid,
@@ -634,14 +642,14 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             let (pad_pos, _) = parse_at(p);
             let size = if let Some(sz) = p.find("size") {
                 Point {
-                    x: sz.arg(0).and_then(|s| s.parse().ok()).unwrap_or(1.0),
-                    y: sz.arg(1).and_then(|s| s.parse().ok()).unwrap_or(1.0),
+                    x: sz.arg(0).and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
+                    y: sz.arg(1).and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
                 }
             } else {
-                Point { x: 1.0, y: 1.0 }
+                Point { x: PCB_DEFAULT_PAD_SIZE_MM, y: PCB_DEFAULT_PAD_SIZE_MM }
             };
             let drill = p.find("drill").map(|d| DrillDef {
-                diameter: d.first_arg().and_then(|s| s.parse().ok()).unwrap_or(0.3),
+                diameter: d.first_arg().and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_VIA_DRILL_MM),
                 shape: String::new(),
             });
             let pad_layers: Vec<String> = if let Some(layers) = p.find("layers") {
@@ -698,7 +706,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .find("stroke")
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let end = g.find("end").map(|e| parse_point(e));
         graphics.push(FpGraphic {
@@ -728,7 +736,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .find("stroke")
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let center = g.find("center").map(|c| parse_point(c));
         let end = g.find("end").map(|e| parse_point(e));
         let radius = if let (Some(c), Some(e)) = (&center, &end) {
@@ -767,7 +775,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .and_then(|e| e.find("font"))
             .and_then(|f| f.find("size"))
             .and_then(|s| s.first_arg()?.parse().ok())
-            .unwrap_or(1.0);
+            .unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
         let display_text = match text_type {
             "reference" => "%R".to_string(),
             "value" => "%V".to_string(),
@@ -776,7 +784,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
         graphics.push(FpGraphic {
             graphic_type: "text".to_string(),
             layer: gl,
-            width: 0.1,
+            width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
             start: None,
             end: None,
             center: None,
@@ -800,7 +808,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .find("stroke")
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let mid = g.find("mid").map(|m| parse_point(m));
         let end = g.find("end").map(|e| parse_point(e));
@@ -831,7 +839,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .find("stroke")
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let pts: Vec<Point> = if let Some(pts_node) = g.find("pts") {
             pts_node
                 .find_all("xy")
@@ -879,7 +887,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
                     .and_then(|e| e.find("font"))
                     .and_then(|f| f.find("size"))
                     .and_then(|s| s.first_arg()?.parse().ok())
-                    .unwrap_or(1.0);
+                    .unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
                 let hidden = prop.find("effects").and_then(|e| e.find("hide")).is_some();
                 if hidden {
                     continue;
@@ -892,7 +900,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
                 graphics.push(FpGraphic {
                     graphic_type: "text".to_string(),
                     layer: gl,
-                    width: 0.1,
+                    width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
                     start: None,
                     end: None,
                     center: None,
@@ -918,7 +926,7 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             .find("stroke")
             .and_then(|s| s.find("width"))
             .and_then(|w| w.first_arg()?.parse().ok())
-            .unwrap_or(0.1);
+            .unwrap_or(PCB_DEFAULT_GRAPHIC_WIDTH_MM);
         let start = g.find("start").map(|s| parse_point(s));
         let end = g.find("end").map(|e| parse_point(e));
         let fill = g

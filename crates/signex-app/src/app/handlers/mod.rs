@@ -5,6 +5,7 @@ pub mod dock;
 pub mod document_files;
 pub mod document_tabs;
 pub mod editing_commands;
+pub mod erc;
 pub mod find_replace;
 pub mod menu;
 pub mod preferences;

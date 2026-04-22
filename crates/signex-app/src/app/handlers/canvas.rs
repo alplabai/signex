@@ -6,6 +6,36 @@ use crate::dock::DockMessage;
 use super::super::helpers::constrain_segments;
 use super::super::*;
 
+/// Default stroke width applied when the user hasn't edited the
+/// pre_placement Width value yet. Standard's "default line width"
+/// is ~0.15 mm in schematics; showing 0 in the properties panel
+/// used to confuse users because the line was still visible
+/// (renderer substitutes its own default for 0).
+const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
+
+/// Read the shape width + fill defaults out of the current
+/// pre_placement slot (TAB-configured) so shape tools pick up the
+/// user's Width/Fill edits when committing the next click.
+fn pre_placement_shape(
+    doc: &super::super::state::DocumentState,
+) -> (f64, signex_types::schematic::FillType) {
+    doc.panel_ctx
+        .pre_placement
+        .as_ref()
+        .map(|pp| {
+            let w = if pp.shape_width_mm > 0.0 {
+                pp.shape_width_mm
+            } else {
+                DEFAULT_SHAPE_STROKE_MM
+            };
+            (w, pp.shape_fill)
+        })
+        .unwrap_or((
+            DEFAULT_SHAPE_STROKE_MM,
+            signex_types::schematic::FillType::None,
+        ))
+}
+
 impl Signex {
     pub(crate) fn handle_layout_drag_started(&mut self, target: DragTarget) {
         crate::diagnostics::log_debug(format!("[drag] START {target:?}"));
@@ -21,6 +51,20 @@ impl Signex {
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
+        // Modal drag — accumulate delta into the per-modal offset so the
+        // dialog slides under the cursor.
+        if let Some((modal, last_x, last_y)) = self.ui_state.modal_dragging {
+            let dx = x - last_x;
+            let dy = y - last_y;
+            let entry = self
+                .ui_state
+                .modal_offsets
+                .entry(modal)
+                .or_insert((0.0, 0.0));
+            entry.0 += dx;
+            entry.1 += dy;
+            self.ui_state.modal_dragging = Some((modal, x, y));
+        }
         if let Some(target) = self.interaction_state.dragging {
             let pos = match target {
                 DragTarget::LeftPanel | DragTarget::RightPanel => x,
@@ -69,7 +113,15 @@ impl Signex {
         ) {
             let dx = x - ox;
             let dy = y - oy;
-            if (dx * dx + dy * dy).sqrt() > 20.0 {
+            // Undock when drag clearly exits tab-strip intent.
+            // Vertical exit keeps previous behavior, and a large horizontal
+            // sweep also counts as exit so users can drag a right-docked tab
+            // directly toward the left edge to re-dock there.
+            let moved_far = (dx * dx + dy * dy).sqrt() > 60.0;
+            let left_strip_vertically = dy.abs() > 28.0;
+            let left_strip_horizontally = dx.abs() > 180.0;
+            let left_strip = left_strip_vertically || left_strip_horizontally;
+            if moved_far && left_strip {
                 self.document_state
                     .dock
                     .update(DockMessage::UndockPanel(pos, idx));
@@ -85,16 +137,96 @@ impl Signex {
         }
     }
 
+    /// Returns the tab index to undock when the user is dragging a
+    /// document tab and the cursor crosses the main window boundary.
+    pub(crate) fn check_tab_auto_detach(&self, cursor_x: f32, cursor_y: f32) -> Option<usize> {
+        let (idx, _, _) = self.ui_state.tab_dragging?;
+        // Skip if this tab is already undocked (owned by another window).
+        let tab = self.document_state.tabs.get(idx)?;
+        if self.ui_state.windows.values().any(
+            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path, .. } if path == &tab.path),
+        ) {
+            return None;
+        }
+        let (ww, wh) = self.ui_state.window_size;
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past = cursor_x < -EDGE_THRESHOLD
+            || cursor_x > ww + EDGE_THRESHOLD
+            || cursor_y < -EDGE_THRESHOLD
+            || cursor_y > wh + EDGE_THRESHOLD;
+        if past { Some(idx) } else { None }
+    }
+
+    /// Scan the floating-panel list for one whose drag just crossed the
+    /// main window boundary. Returns the index into `dock.floating` so
+    /// the dispatcher can chain a `DetachFloatingPanel(idx)` task.
+    pub(crate) fn check_floating_panel_auto_detach(
+        &self,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) -> Option<usize> {
+        let (ww, wh) = self.ui_state.window_size;
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past = cursor_x < -EDGE_THRESHOLD
+            || cursor_x > ww + EDGE_THRESHOLD
+            || cursor_y < -EDGE_THRESHOLD
+            || cursor_y > wh + EDGE_THRESHOLD;
+        if !past {
+            return None;
+        }
+        self.document_state
+            .dock
+            .floating
+            .iter()
+            .position(|fp| fp.dragging)
+    }
+
+    /// Altium-style auto-detach. While the user drags a modal's title
+    /// bar, watch the cursor; if it crosses the main window boundary by
+    /// more than `EDGE_THRESHOLD`, pop the modal out into its own OS
+    /// window. Returns the modal that should detach, if any, so the
+    /// dispatcher can chain a `DetachModal` task onto the DragMove path.
+    pub(crate) fn check_modal_auto_detach(
+        &self,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) -> Option<super::super::state::ModalId> {
+        let (modal, _, _) = self.ui_state.modal_dragging?;
+        // Skip if it's already detached — another path owns it now.
+        if self
+            .ui_state
+            .windows
+            .values()
+            .any(|k| matches!(k, super::super::state::WindowKind::DetachedModal(m) if *m == modal))
+        {
+            return None;
+        }
+        let (ww, wh) = self.ui_state.window_size;
+        // Dead zone so a brief accidental graze doesn't flip the modal out.
+        const EDGE_THRESHOLD: f32 = 12.0;
+        let past_left = cursor_x < -EDGE_THRESHOLD;
+        let past_right = cursor_x > ww + EDGE_THRESHOLD;
+        let past_top = cursor_y < -EDGE_THRESHOLD;
+        let past_bottom = cursor_y > wh + EDGE_THRESHOLD;
+        if past_left || past_right || past_top || past_bottom {
+            Some(modal)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn handle_layout_drag_finished(&mut self) {
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;
             self.interaction_state.drag_start_pos = None;
+            self.ui_state.tab_dragging = None;
             return;
         }
 
         self.document_state.dock.tab_drag = None;
         self.interaction_state.tab_drag_origin = None;
+        self.ui_state.tab_dragging = None;
         let (mx, my) = self.interaction_state.last_mouse_pos;
         let (ww, wh) = self.ui_state.window_size;
         let dock_zone = 120.0;
@@ -145,8 +277,324 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
+                // Lasso auto-sample: while a lasso is anchored (>= 1
+                // vertex already committed), sample a new vertex each
+                // time the cursor moves more than SAMPLE_MIN from the
+                // last recorded point. Produces a freehand polyline
+                // between the two clicks (Altium's behaviour).
+                // Sample at a constant ~6 screen pixels so the lasso
+                // tracks the cursor at all zoom levels. At 100% zoom
+                // (scale=3 px/mm) that's 2.0 mm world; at 50% zoom
+                // we need 4.0 mm world for the same screen distance.
+                // `zoom_pct` comes from `camera.zoom_percent()` which
+                // is `scale/3 * 100`, so mm-per-6px = 200 / zoom_pct.
+                const SAMPLE_MIN_PX: f64 = 6.0;
+                let sample_min_mm = if zoom_pct > 1.0 {
+                    (SAMPLE_MIN_PX * 100.0) / (zoom_pct * 3.0)
+                } else {
+                    2.0
+                };
+                let sampled = if let Some(pts) = self.ui_state.lasso_polygon.as_mut()
+                    && let Some(&last) = pts.last()
+                {
+                    let dx = x as f64 - last.x;
+                    let dy = y as f64 - last.y;
+                    if (dx * dx + dy * dy).sqrt() >= sample_min_mm {
+                        pts.push(signex_types::schematic::Point::new(x as f64, y as f64));
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if sampled {
+                    self.sync_lasso_polygon_to_canvas();
+                }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
+                // Altium-style lasso: first click anchors the start,
+                // the cursor path auto-samples vertices, a second
+                // click closes the polygon and commits. Escape /
+                // right-click cancels.
+                if self.ui_state.lasso_polygon.is_some() {
+                    let (vx, vy) = if self.interaction_state.active_canvas_mut().snap_enabled
+                        && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
+                    {
+                        let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
+                        ((world_x / g).round() * g, (world_y / g).round() * g)
+                    } else {
+                        (world_x, world_y)
+                    };
+                    let has_start = self
+                        .ui_state
+                        .lasso_polygon
+                        .as_ref()
+                        .is_some_and(|v| !v.is_empty());
+                    if !has_start {
+                        // First click — anchor vertex 0.
+                        if let Some(poly) = self.ui_state.lasso_polygon.as_mut() {
+                            poly.push(signex_types::schematic::Point::new(vx, vy));
+                        }
+                        self.sync_lasso_polygon_to_canvas();
+                        return Task::none();
+                    }
+                    // Second click — close and commit. Append the
+                    // click position as the final vertex so the
+                    // polygon lands exactly where the user clicked.
+                    let mut pts = self.ui_state.lasso_polygon.take().unwrap_or_default();
+                    pts.push(signex_types::schematic::Point::new(vx, vy));
+                    if pts.len() >= 3 {
+                        let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
+                        if let Some(snapshot) = self.active_render_snapshot() {
+                            let filters = self.interaction_state.selection_filters.clone();
+                            self.interaction_state.active_canvas_mut().selected =
+                                signex_render::schematic::hit_test::hit_test_polygon(
+                                    snapshot, &poly,
+                                )
+                                .into_iter()
+                                .filter(|h| {
+                                    crate::app::handlers::selection_workflow::passes_filter(
+                                        h, snapshot, &filters,
+                                    )
+                                })
+                                .collect();
+                            self.update_selection_info();
+                        }
+                    }
+                    // `lasso_polygon` already drained via `.take()` above;
+                    // mirror the None into the canvas copy + invalidate
+                    // the overlay cache.
+                    self.sync_lasso_polygon_to_canvas();
+                    return Task::none();
+                }
+                // Net-colour flood: the user picked a swatch from the
+                // Active Bar and is now clicking a wire. Union-find the
+                // whole connected net and apply the colour (or clear it
+                // if alpha == 0). Colours stay in app state so the
+                // .standard_sch round-trips unchanged — Standard has no
+                // notion of per-wire override colours.
+                if let Some(pending) = self.ui_state.pending_net_color {
+                    // Snap the click point to the grid before hit
+                    // testing so the click lands where the pen ghost
+                    // previewed. Without this the cursor's raw world
+                    // coords can land a full grid cell off the nearest
+                    // wire — the visible pen snaps, but the hit target
+                    // was being missed.
+                    let (hit_x, hit_y) = if self.interaction_state.active_canvas_mut().snap_enabled
+                        && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
+                    {
+                        let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
+                        ((world_x / g).round() * g, (world_y / g).round() * g)
+                    } else {
+                        (world_x, world_y)
+                    };
+                    // Compute the net's wire uuids while only holding an
+                    // immutable snapshot borrow, then release it before
+                    // mutating ui_state.
+                    let net_wire_uuids: Vec<uuid::Uuid> = match self.active_render_snapshot() {
+                        None => Vec::new(),
+                        Some(snapshot) => {
+                            // Strict on-wire test: the snapped click
+                            // point must lie on a wire segment (point-
+                            // to-segment distance < 0.05 mm). The
+                            // general `hit_test` uses a 1.5 mm
+                            // tolerance so parallel wires on adjacent
+                            // grid points could each register; for
+                            // net-colour painting we only want the
+                            // wire directly under the pen.
+                            fn point_on_segment(
+                                px: f64,
+                                py: f64,
+                                ax: f64,
+                                ay: f64,
+                                bx: f64,
+                                by: f64,
+                            ) -> bool {
+                                let dx = bx - ax;
+                                let dy = by - ay;
+                                let len2 = dx * dx + dy * dy;
+                                if len2 == 0.0 {
+                                    let ddx = px - ax;
+                                    let ddy = py - ay;
+                                    return (ddx * ddx + ddy * ddy).sqrt() < 0.05;
+                                }
+                                let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+                                let t = t.clamp(0.0, 1.0);
+                                let cx = ax + t * dx;
+                                let cy = ay + t * dy;
+                                let ddx = px - cx;
+                                let ddy = py - cy;
+                                (ddx * ddx + ddy * ddy).sqrt() < 0.05
+                            }
+                            let hit = snapshot.wires.iter().find_map(|w| {
+                                if point_on_segment(
+                                    hit_x, hit_y, w.start.x, w.start.y, w.end.x, w.end.y,
+                                ) {
+                                    Some(signex_types::schematic::SelectedItem::new(
+                                        w.uuid,
+                                        signex_types::schematic::SelectedKind::Wire,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            });
+                            match hit {
+                                Some(h)
+                                    if h.kind == signex_types::schematic::SelectedKind::Wire =>
+                                {
+                                    fn q(p: &signex_types::schematic::Point) -> (i64, i64) {
+                                        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+                                    }
+                                    fn find(
+                                        parent: &mut std::collections::HashMap<
+                                            (i64, i64),
+                                            (i64, i64),
+                                        >,
+                                        x: (i64, i64),
+                                    ) -> (i64, i64) {
+                                        let p = *parent.entry(x).or_insert(x);
+                                        if p == x {
+                                            x
+                                        } else {
+                                            let r = find(parent, p);
+                                            parent.insert(x, r);
+                                            r
+                                        }
+                                    }
+                                    fn union(
+                                        parent: &mut std::collections::HashMap<
+                                            (i64, i64),
+                                            (i64, i64),
+                                        >,
+                                        a: (i64, i64),
+                                        b: (i64, i64),
+                                    ) {
+                                        let ra = find(parent, a);
+                                        let rb = find(parent, b);
+                                        if ra != rb {
+                                            parent.insert(ra, rb);
+                                        }
+                                    }
+                                    let mut parent: std::collections::HashMap<
+                                        (i64, i64),
+                                        (i64, i64),
+                                    > = std::collections::HashMap::new();
+                                    for w in &snapshot.wires {
+                                        union(&mut parent, q(&w.start), q(&w.end));
+                                    }
+                                    match snapshot.wires.iter().find(|w| w.uuid == h.uuid) {
+                                        None => Vec::new(),
+                                        Some(hw) => {
+                                            let root = find(&mut parent, q(&hw.start));
+                                            let mut ids: Vec<uuid::Uuid> = snapshot
+                                                .wires
+                                                .iter()
+                                                .filter(|w| find(&mut parent, q(&w.start)) == root)
+                                                .map(|w| w.uuid)
+                                                .collect();
+                                            // Junctions on this net should follow
+                                            // the colour — a junction's position
+                                            // is always a wire endpoint, so the
+                                            // union-find root test works with the
+                                            // same parent map.
+                                            for j in &snapshot.junctions {
+                                                let jq = q(&j.position);
+                                                if parent.contains_key(&jq)
+                                                    && find(&mut parent, jq) == root
+                                                {
+                                                    ids.push(j.uuid);
+                                                }
+                                            }
+                                            ids
+                                        }
+                                    }
+                                }
+                                _ => Vec::new(),
+                            }
+                        }
+                    };
+                    if !net_wire_uuids.is_empty() {
+                        // Dry-run the flood to see if anything will
+                        // actually change; only snapshot + apply when
+                        // there's a real diff. Clicking the same net
+                        // twice with the same colour was double-pushing
+                        // identical snapshots, forcing the user to hit
+                        // Ctrl+Z twice for a single visible change.
+                        let mut diff = false;
+                        for uuid in &net_wire_uuids {
+                            if pending.a == 0 {
+                                if self.ui_state.wire_color_overrides.contains_key(uuid) {
+                                    diff = true;
+                                    break;
+                                }
+                            } else {
+                                match self.ui_state.wire_color_overrides.get(uuid) {
+                                    Some(c) if *c == pending => {}
+                                    _ => {
+                                        diff = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if diff {
+                            self.ui_state
+                                .net_color_undo
+                                .push(self.ui_state.wire_color_overrides.clone());
+                            for uuid in net_wire_uuids {
+                                if pending.a == 0 {
+                                    self.ui_state.wire_color_overrides.remove(&uuid);
+                                } else {
+                                    self.ui_state.wire_color_overrides.insert(uuid, pending);
+                                }
+                            }
+                            self.interaction_state.active_canvas_mut().wire_color_overrides =
+                                self.ui_state.wire_color_overrides.clone();
+                            self.interaction_state.active_canvas_mut().clear_content_cache();
+                        }
+                    }
+                    // Altium-style continuous placement: stay armed
+                    // until the user right-clicks or presses Escape.
+                    // Empty-canvas clicks are no-ops; wire clicks keep
+                    // the pen ready for the next net. Return early so
+                    // the normal selection path doesn't run and pick
+                    // up the clicked wire as a selection.
+                    return Task::none();
+                }
+                // Z-order reference picker: the user previously chose
+                // Bring-To-Front-Of / Send-To-Back-Of on the Active Bar
+                // and is now clicking a reference item. Resolve the hit,
+                // emit a Reorder command, and clear the picker — matches
+                // Altium's "click the object to reference" convention.
+                if let Some(picker) = self.ui_state.reorder_picker {
+                    if let Some(snapshot) = self.active_render_snapshot() {
+                        let hit = signex_render::schematic::hit_test::hit_test(
+                            snapshot, world_x, world_y,
+                        );
+                        if let Some(reference) = hit {
+                            let direction = match picker {
+                                super::super::state::ReorderPicker::Above => {
+                                    signex_engine::ReorderDirection::JustAbove(reference.uuid)
+                                }
+                                super::super::state::ReorderPicker::Below => {
+                                    signex_engine::ReorderDirection::JustBelow(reference.uuid)
+                                }
+                            };
+                            let items = self.interaction_state.active_canvas_mut().selected.clone();
+                            self.apply_engine_command(
+                                signex_engine::Command::ReorderObjects { items, direction },
+                                false,
+                                true,
+                            );
+                        }
+                    }
+                    self.ui_state.reorder_picker = None;
+                    self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    return Task::none();
+                }
+
                 // Altium-style placement pause: while the ghost is frozen
                 // (TAB pressed, pre-placement form open), canvas clicks are
                 // suppressed so the user can edit properties without a
@@ -154,7 +602,7 @@ impl Signex {
                 // past Resume so the first click after Resume inherits the
                 // edited defaults — so key the gate on `placement_paused`,
                 // not on `pre_placement.is_some()`.
-                if self.interaction_state.canvas.placement_paused {
+                if self.interaction_state.active_canvas_mut().placement_paused {
                     return Task::none();
                 }
                 // A click outside the inline editor commits its current value
@@ -198,12 +646,12 @@ impl Signex {
                             self.interaction_state.wire_drawing = true;
                             self.interaction_state.wire_points.clear();
                             self.interaction_state.wire_points.push(pt);
-                            self.interaction_state.canvas.wire_preview =
+                            self.interaction_state.active_canvas_mut().wire_preview =
                                 self.interaction_state.wire_points.clone();
-                            self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode =
+                            self.interaction_state.active_canvas_mut().drawing_mode = true;
+                            self.interaction_state.active_canvas_mut().draw_mode =
                                 self.interaction_state.draw_mode;
-                            self.interaction_state.canvas.tool_preview = None;
+                            self.interaction_state.active_canvas_mut().tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
                             let segments =
                                 constrain_segments(start, pt, self.interaction_state.draw_mode);
@@ -223,7 +671,7 @@ impl Signex {
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.interaction_state.wire_points = vec![end_pt];
-                            self.interaction_state.canvas.wire_preview = vec![end_pt];
+                            self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Bus => {
@@ -232,12 +680,12 @@ impl Signex {
                             self.interaction_state.wire_drawing = true;
                             self.interaction_state.wire_points.clear();
                             self.interaction_state.wire_points.push(pt);
-                            self.interaction_state.canvas.wire_preview =
+                            self.interaction_state.active_canvas_mut().wire_preview =
                                 self.interaction_state.wire_points.clone();
-                            self.interaction_state.canvas.drawing_mode = true;
-                            self.interaction_state.canvas.draw_mode =
+                            self.interaction_state.active_canvas_mut().drawing_mode = true;
+                            self.interaction_state.active_canvas_mut().draw_mode =
                                 self.interaction_state.draw_mode;
-                            self.interaction_state.canvas.tool_preview = None;
+                            self.interaction_state.active_canvas_mut().tool_preview = None;
                         } else if let Some(&start) = self.interaction_state.wire_points.last() {
                             let segments =
                                 constrain_segments(start, pt, self.interaction_state.draw_mode);
@@ -255,7 +703,7 @@ impl Signex {
                             }
                             let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
                             self.interaction_state.wire_points = vec![end_pt];
-                            self.interaction_state.canvas.wire_preview = vec![end_pt];
+                            self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                         }
                     }
                     Tool::Component if self.interaction_state.pending_power.is_some() => {
@@ -328,6 +776,147 @@ impl Signex {
                             false,
                         );
                     }
+                    Tool::Line => {
+                        // Two-click: anchor → commit. First click
+                        // seeds shape_anchor; second click emits
+                        // SchDrawing::Line and re-arms for the next
+                        // line (matches Altium's stay-in-tool flow).
+                        let (pp_w, _) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.active_canvas_mut().shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Line));
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                            Some(start) => {
+                                let drawing = signex_types::schematic::SchDrawing::Line {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end: p,
+                                    width: pp_w,
+                                    stroke_color: None,
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                                // Re-arm with the just-placed endpoint
+                                // as the new anchor so chained segments
+                                // share vertices.
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.active_canvas_mut().shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Line));
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                        }
+                    }
+                    Tool::Rectangle => {
+                        // Two-click: corner → opposite-corner →
+                        // SchDrawing::Rect. Rearms blank for the
+                        // next rect.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.active_canvas_mut().shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Rect));
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                            Some(start) => {
+                                let drawing = signex_types::schematic::SchDrawing::Rect {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    start,
+                                    end: p,
+                                    width: pp_w,
+                                    fill: pp_fill,
+                                    stroke_color: None,
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                                self.interaction_state.shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                        }
+                    }
+                    Tool::Circle => {
+                        // Two-click: center → edge-point → commit as
+                        // SchDrawing::Circle with radius = |edge-center|.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        match self.interaction_state.shape_anchor.take() {
+                            None => {
+                                self.interaction_state.shape_anchor = Some(p);
+                                self.interaction_state.active_canvas_mut().shape_anchor =
+                                    Some((p, crate::canvas::ShapePreviewKind::Circle));
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                            Some(center) => {
+                                let dx = p.x - center.x;
+                                let dy = p.y - center.y;
+                                let radius = (dx * dx + dy * dy).sqrt();
+                                if radius > 0.01 {
+                                    let drawing = signex_types::schematic::SchDrawing::Circle {
+                                        uuid: uuid::Uuid::new_v4(),
+                                        center,
+                                        radius,
+                                        width: pp_w,
+                                        fill: pp_fill,
+                                        stroke_color: None,
+                                    };
+                                    self.apply_engine_command(
+                                        signex_engine::Command::PlaceSchDrawing { drawing },
+                                        false,
+                                        false,
+                                    );
+                                }
+                                self.interaction_state.shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().shape_anchor = None;
+                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            }
+                        }
+                    }
+                    Tool::Arc => {
+                        // 3-click arc: start → mid → end.
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        self.interaction_state.arc_points.push(p);
+                        if self.interaction_state.arc_points.len() >= 3 {
+                            let pts = std::mem::take(&mut self.interaction_state.arc_points);
+                            let drawing = signex_types::schematic::SchDrawing::Arc {
+                                uuid: uuid::Uuid::new_v4(),
+                                start: pts[0],
+                                mid: pts[1],
+                                end: pts[2],
+                                width: pp_w,
+                                fill: pp_fill,
+                                stroke_color: None,
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                        }
+                        self.interaction_state.active_canvas_mut().arc_points =
+                            self.interaction_state.arc_points.clone();
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    }
+                    Tool::Polyline => {
+                        // Click-by-click polyline. Enter / double-click commits.
+                        let p = signex_types::schematic::Point::new(wx, wy);
+                        self.interaction_state.polyline_points.push(p);
+                        self.interaction_state.active_canvas_mut().polyline_points =
+                            self.interaction_state.polyline_points.clone();
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    }
                     Tool::Text => {
                         let note_text = self
                             .document_state
@@ -387,8 +976,19 @@ impl Signex {
                             .panel_ctx
                             .pre_placement
                             .as_ref()
-                            .map(|pp| (pp.rotation, pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM, pp.justify_h))
-                            .unwrap_or((0.0, signex_types::schematic::SCHEMATIC_TEXT_MM, signex_types::schematic::HAlign::Left));
+                            .map(|pp| {
+                                (
+                                    pp.rotation,
+                                    pp.font_size_pt as f64
+                                        * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                                    pp.justify_h,
+                                )
+                            })
+                            .unwrap_or((
+                                0.0,
+                                signex_types::schematic::SCHEMATIC_TEXT_MM,
+                                signex_types::schematic::HAlign::Left,
+                            ));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
                             text,
@@ -442,11 +1042,11 @@ impl Signex {
                     (dx, dy)
                 };
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
-                    && !self.interaction_state.canvas.selected.is_empty()
+                    && !self.interaction_state.active_canvas_mut().selected.is_empty()
                 {
                     self.apply_engine_command(
                         signex_engine::Command::MoveSelection {
-                            items: self.interaction_state.canvas.selected.clone(),
+                            items: self.interaction_state.active_canvas().selected.clone(),
                             dx,
                             dy,
                         },
@@ -461,11 +1061,185 @@ impl Signex {
                 screen_x: _,
                 screen_y: _,
             } => {
+                // In Select mode, double-clicking a child-sheet symbol
+                // navigates into the referenced schematic.
+                let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
+                    && let Some(snapshot) = self.active_render_snapshot()
+                    && let Some(hit) =
+                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                    && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
+                {
+                    snapshot
+                        .child_sheets
+                        .iter()
+                        .find(|c| c.uuid == hit.uuid)
+                        .map(|child_sheet| child_sheet.filename.clone())
+                } else {
+                    None
+                };
+
+                if let Some(child_filename) = child_filename_to_open {
+                    self.open_or_focus_child_sheet(child_filename.as_str());
+                    return Task::none();
+                }
+
+                // Lasso already commits on the second single-click
+                // (see CanvasEvent::Clicked above), so by the time
+                // a DoubleClicked fires the polygon is already
+                // consumed. Fall through to the wire-drawing /
+                // inline-edit branches below.
+                //
+                // The canvas detects double-clicks (300ms / 3mm) and
+                // publishes DoubleClicked INSTEAD of Clicked for the
+                // second press. For multi-click shape tools that
+                // means the 2nd click would otherwise be eaten. Route
+                // DoubleClicked into the same commit path as Clicked.
+                match self.interaction_state.current_tool {
+                    Tool::Line => {
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(start) = self.interaction_state.shape_anchor.take() {
+                            let drawing = signex_types::schematic::SchDrawing::Line {
+                                uuid: uuid::Uuid::new_v4(),
+                                start,
+                                end: p,
+                                width: pre_placement_shape(&self.document_state).0,
+                                stroke_color: None,
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.shape_anchor = Some(p);
+                            self.interaction_state.active_canvas_mut().shape_anchor =
+                                Some((p, crate::canvas::ShapePreviewKind::Line));
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Rectangle => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(start) = self.interaction_state.shape_anchor.take() {
+                            let drawing = signex_types::schematic::SchDrawing::Rect {
+                                uuid: uuid::Uuid::new_v4(),
+                                start,
+                                end: p,
+                                width: pp_w,
+                                fill: pp_fill,
+                                stroke_color: None,
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.active_canvas_mut().shape_anchor = None;
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Circle => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        if let Some(center) = self.interaction_state.shape_anchor.take() {
+                            let dx = p.x - center.x;
+                            let dy = p.y - center.y;
+                            let radius = (dx * dx + dy * dy).sqrt();
+                            if radius > 0.01 {
+                                let drawing = signex_types::schematic::SchDrawing::Circle {
+                                    uuid: uuid::Uuid::new_v4(),
+                                    center,
+                                    radius,
+                                    width: pp_w,
+                                    fill: pp_fill,
+                                    stroke_color: None,
+                                };
+                                self.apply_engine_command(
+                                    signex_engine::Command::PlaceSchDrawing { drawing },
+                                    false,
+                                    false,
+                                );
+                            }
+                            self.interaction_state.active_canvas_mut().shape_anchor = None;
+                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        }
+                        return Task::none();
+                    }
+                    Tool::Arc => {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let p = signex_types::schematic::Point::new(world_x, world_y);
+                        self.interaction_state.arc_points.push(p);
+                        if self.interaction_state.arc_points.len() >= 3 {
+                            let pts = std::mem::take(&mut self.interaction_state.arc_points);
+                            let drawing = signex_types::schematic::SchDrawing::Arc {
+                                uuid: uuid::Uuid::new_v4(),
+                                start: pts[0],
+                                mid: pts[1],
+                                end: pts[2],
+                                width: pp_w,
+                                fill: pp_fill,
+                                stroke_color: None,
+                            };
+                            self.apply_engine_command(
+                                signex_engine::Command::PlaceSchDrawing { drawing },
+                                false,
+                                false,
+                            );
+                            self.interaction_state.active_canvas_mut().arc_points.clear();
+                        } else {
+                            self.interaction_state.active_canvas_mut().arc_points =
+                                self.interaction_state.arc_points.clone();
+                        }
+                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        return Task::none();
+                    }
+                    _ => {}
+                }
+
+                // Polyline closes on double-click. The canvas widget
+                // intercepts the 2nd click and publishes DoubleClicked
+                // INSTEAD OF Clicked, so the buffer has only one
+                // vertex at this point. Append the cursor as the
+                // final vertex, then commit if we now have >= 2.
+                if self.interaction_state.current_tool == Tool::Polyline {
+                    let p = signex_types::schematic::Point::new(world_x, world_y);
+                    // Avoid appending a duplicate of the anchor when
+                    // the user double-clicks on the same spot.
+                    let is_dup = self
+                        .interaction_state
+                        .polyline_points
+                        .last()
+                        .map(|last| (last.x - p.x).abs() < 0.01 && (last.y - p.y).abs() < 0.01)
+                        .unwrap_or(false);
+                    if !is_dup {
+                        self.interaction_state.polyline_points.push(p);
+                    }
+                    if self.interaction_state.polyline_points.len() >= 2 {
+                        let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+                        let pts = std::mem::take(&mut self.interaction_state.polyline_points);
+                        let drawing = signex_types::schematic::SchDrawing::Polyline {
+                            uuid: uuid::Uuid::new_v4(),
+                            points: pts,
+                            width: pp_w,
+                            fill: pp_fill,
+                            stroke_color: None,
+                        };
+                        self.apply_engine_command(
+                            signex_engine::Command::PlaceSchDrawing { drawing },
+                            false,
+                            false,
+                        );
+                    }
+                    self.interaction_state.active_canvas_mut().polyline_points.clear();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    return Task::none();
+                }
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.canvas.wire_preview.clear();
-                    self.interaction_state.canvas.drawing_mode = false;
+                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state.active_canvas_mut().drawing_mode = false;
                 } else if let Some(snapshot) = self.active_render_snapshot() {
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
@@ -521,17 +1295,17 @@ impl Signex {
                 );
             }
             CanvasEvent::CursorMoved => {
-                self.interaction_state.canvas.clear_bg_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.canvas.pending_fit.set(None);
+                self.interaction_state.active_canvas_mut().pending_fit.set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
-                    self.interaction_state.canvas.fit_to_paper();
-                    self.interaction_state.canvas.clear_bg_cache();
-                    self.interaction_state.canvas.clear_content_cache();
+                    self.interaction_state.active_canvas_mut().fit_to_paper();
+                    self.interaction_state.active_canvas_mut().clear_bg_cache();
+                    self.interaction_state.active_canvas_mut().clear_content_cache();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
                     self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -555,11 +1329,11 @@ impl Signex {
                         .iter()
                         .position(|s| s.uuid == hit.uuid)
                     {
-                        self.interaction_state.canvas.selected.remove(pos);
+                        self.interaction_state.active_canvas_mut().selected.remove(pos);
                     } else {
-                        self.interaction_state.canvas.selected.push(hit);
+                        self.interaction_state.active_canvas_mut().selected.push(hit);
                     }
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -575,6 +1349,104 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+    }
+
+    fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
+        let trimmed = child_filename.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let raw = std::path::PathBuf::from(trimmed);
+        if raw.is_absolute() {
+            return Some(raw);
+        }
+
+        let base_dir = self
+            .document_state
+            .project_path
+            .as_ref()
+            .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            .or_else(|| {
+                self.active_tab_path()
+                    .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            });
+
+        Some(match base_dir {
+            Some(base) => base.join(raw),
+            None => raw,
+        })
+    }
+
+    pub(crate) fn open_or_focus_child_sheet(&mut self, child_filename: &str) {
+        let Some(path) = self.resolve_child_sheet_path(child_filename) else {
+            return;
+        };
+
+        if !path.exists() {
+            crate::diagnostics::log_info(format!(
+                "Child-sheet file not found: {}",
+                path.display()
+            ));
+            return;
+        }
+
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == path)
+        {
+            if index != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = index;
+                self.sync_active_tab();
+            }
+            return;
+        }
+
+        match standard_parser::parse_schematic_file(&path) {
+            Ok(sheet) => {
+                let title = path
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Schematic".to_string());
+                self.open_schematic_tab(path, title, sheet);
+            }
+            Err(error) => {
+                crate::diagnostics::log_info(format!(
+                    "Failed to open child-sheet schematic from double-click: {}",
+                    error
+                ));
+            }
+        }
+    }
+
+    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
+        let Some(snapshot) = self.active_render_snapshot() else {
+            return false;
+        };
+
+        let filename = self
+            .interaction_state
+            .active_canvas()
+            .selected
+            .iter()
+            .find(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet)
+            .and_then(|item| {
+                snapshot
+                    .child_sheets
+                    .iter()
+                    .find(|sheet| sheet.uuid == item.uuid)
+                    .map(|sheet| sheet.filename.clone())
+            });
+
+        if let Some(filename) = filename {
+            self.open_or_focus_child_sheet(filename.as_str());
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -626,6 +1498,11 @@ fn primary_anchor_world(
             .iter()
             .find(|c| c.uuid == item.uuid)
             .map(|c| (c.position.x, c.position.y)),
+        SelectedKind::SheetPin => snap
+            .child_sheets
+            .iter()
+            .find_map(|c| c.pins.iter().find(|pin| pin.uuid == item.uuid))
+            .map(|pin| (pin.position.x, pin.position.y)),
         SelectedKind::SymbolRefField => snap
             .symbols
             .iter()
