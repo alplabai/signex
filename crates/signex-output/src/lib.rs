@@ -23,7 +23,7 @@ pub use pdf::{
 };
 pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
 pub use substitution::{SubstitutionContext, resolve};
-pub use template::{Template, TemplateId};
+pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 
 /// The universal exporter trait — one impl per output format.
 pub trait Exporter {
@@ -79,7 +79,4 @@ pub enum ExportError {
 
     #[error("template: {0}")]
     Template(#[from] template::TemplateError),
-
-    #[error("substitution: {0}")]
-    Substitution(#[from] substitution::SubstitutionError),
 }
