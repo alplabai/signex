@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use signex_types::pcb::PcbBoard;
-use signex_types::schematic::SchematicSheet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DrawMode {
@@ -39,10 +38,6 @@ impl SchematicTabSession {
         }
     }
 
-    pub fn document(&self) -> &SchematicSheet {
-        self.engine.document()
-    }
-
     pub fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
     }
@@ -70,25 +65,21 @@ impl SchematicTabSession {
     }
 }
 
+/// Per-tab auxiliary document payload. Schematic tabs keep their
+/// engine in `DocumentState::engines` (keyed by path) rather than in
+/// this enum; currently only PCB tabs carry a document here. Kept as
+/// an enum so future tab kinds (symbol editor, footprint editor, 3D
+/// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
 #[allow(dead_code, clippy::large_enum_variant)]
 pub enum TabDocument {
-    Schematic(SchematicTabSession),
     Pcb(PcbBoard),
 }
 
 impl TabDocument {
-    pub fn as_schematic(&self) -> Option<&SchematicSheet> {
-        match self {
-            Self::Schematic(session) => Some(session.document()),
-            Self::Pcb(_) => None,
-        }
-    }
-
     #[allow(dead_code)]
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
-            Self::Schematic(_) => None,
             Self::Pcb(board) => Some(board),
         }
     }
@@ -117,6 +108,10 @@ pub enum Tool {
     Line,
     Rectangle,
     Circle,
+    /// 3-click arc: first click = start, second = mid, third = end.
+    Arc,
+    /// Click-by-click polyline; Enter / double-click commits.
+    Polyline,
 }
 
 impl std::fmt::Display for Tool {
@@ -133,6 +128,8 @@ impl std::fmt::Display for Tool {
             Tool::Line => write!(f, "Draw Line"),
             Tool::Rectangle => write!(f, "Draw Rectangle"),
             Tool::Circle => write!(f, "Draw Circle"),
+            Tool::Arc => write!(f, "Draw Arc"),
+            Tool::Polyline => write!(f, "Draw Polygon"),
         }
     }
 }

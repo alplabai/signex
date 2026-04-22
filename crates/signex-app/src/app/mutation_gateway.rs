@@ -61,7 +61,7 @@ impl Signex {
             return false;
         }
 
-        let Some(engine) = self.document_state.engine.as_mut() else {
+        let Some(engine) = self.document_state.active_engine_mut() else {
             return false;
         };
 
@@ -105,7 +105,7 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        let Some(engine) = self.document_state.engine.as_mut() else {
+        let Some(engine) = self.document_state.active_engine_mut() else {
             return false;
         };
 
@@ -130,7 +130,7 @@ impl Signex {
     }
 
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
-        let invalidation = if let Some(engine) = self.document_state.engine.as_mut() {
+        let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             let Some(steps) = self.interaction_state.undo_stack.peek_undo_engine_steps() else {
                 return false;
             };
@@ -165,7 +165,7 @@ impl Signex {
     }
 
     pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
-        let invalidation = if let Some(engine) = self.document_state.engine.as_mut() {
+        let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             let Some(steps) = self.interaction_state.undo_stack.peek_redo_engine_steps() else {
                 return false;
             };
@@ -218,9 +218,9 @@ impl Signex {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
         if clear_overlay_cache {
-            self.interaction_state.canvas.clear_overlay_cache();
+            self.interaction_state.active_canvas_mut().clear_overlay_cache();
         }
         if update_selection_info {
             self.update_selection_info();

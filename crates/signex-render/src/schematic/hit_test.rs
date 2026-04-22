@@ -43,6 +43,9 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
 
     // Child sheets
     for cs in &sheet.child_sheets {
+        if let Some(pin) = cs.pins.iter().find(|pin| hit_child_sheet_pin(pin, wx, wy)) {
+            return Some(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+        }
         if hit_child_sheet(cs, wx, wy) {
             return Some(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
         }
@@ -110,57 +113,661 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
         }
     }
 
+    // Graphic drawings — line / rect / circle / arc / polyline.
+    // Shapes placed by the Active Bar shape tools live here.
+    for d in &sheet.drawings {
+        if let Some(uuid) = hit_drawing(d, wx, wy) {
+            return Some(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
+
     None
 }
 
-/// Find all elements within a rectangular region (rubber-band selection).
-pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
-    let mut result = Vec::new();
+/// True iff `probe` (radians) falls within the arc going from
+/// `start_angle` through `mid_angle` to `end_angle` (also radians).
+/// Handles both CW / CCW sweeps and the wrap across ±π.
+fn angle_in_arc_sweep(probe: f64, start: f64, mid: f64, end: f64) -> bool {
+    use std::f64::consts::TAU;
+    let norm = |a: f64| -> f64 {
+        let mut t = a % TAU;
+        if t < 0.0 {
+            t += TAU;
+        }
+        t
+    };
+    let ccw_dist = |a: f64, b: f64| -> f64 {
+        let d = b - a;
+        if d < 0.0 { d + TAU } else { d }
+    };
+    let s = norm(start);
+    let m = norm(mid);
+    let e = norm(end);
+    let p = norm(probe);
+    // Walk CCW from s: does it reach m before e?
+    let s_to_m = ccw_dist(s, m);
+    let s_to_e = ccw_dist(s, e);
+    let s_to_p = ccw_dist(s, p);
+    if s_to_m <= s_to_e {
+        // CCW sweep; probe is inside iff it's hit before reaching end CCW.
+        s_to_p <= s_to_e
+    } else {
+        // CW sweep; equivalent to probe reaching start after going CCW from end.
+        let e_to_p = ccw_dist(e, p);
+        let e_to_s = ccw_dist(e, s);
+        e_to_p <= e_to_s
+    }
+}
 
+/// Distance from point `(px, py)` to the infinite line through `(ax, ay)` → `(bx, by)`,
+/// clamped to the segment. Returns `None` for a degenerate zero-length segment.
+fn dist_point_segment(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> Option<f64> {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-9 {
+        return None;
+    }
+    let t = (((px - ax) * dx) + ((py - ay) * dy)) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let cx = ax + t * dx;
+    let cy = ay + t * dy;
+    let ex = px - cx;
+    let ey = py - cy;
+    Some((ex * ex + ey * ey).sqrt())
+}
+
+fn hit_drawing(
+    drawing: &signex_types::schematic::SchDrawing,
+    wx: f64,
+    wy: f64,
+) -> Option<uuid::Uuid> {
+    use signex_types::schematic::SchDrawing;
+    let tol = HIT_TOLERANCE;
+    match drawing {
+        SchDrawing::Line {
+            uuid, start, end, ..
+        } => {
+            if dist_point_segment(wx, wy, start.x, start.y, end.x, end.y)
+                .map(|d| d <= tol)
+                .unwrap_or(false)
+            {
+                Some(*uuid)
+            } else {
+                None
+            }
+        }
+        SchDrawing::Rect {
+            uuid,
+            start,
+            end,
+            fill,
+            ..
+        } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled && wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1 {
+                return Some(*uuid);
+            }
+            // Outline test — click on any of 4 edges within tolerance.
+            let edges = [
+                (x0, y0, x1, y0),
+                (x1, y0, x1, y1),
+                (x1, y1, x0, y1),
+                (x0, y1, x0, y0),
+            ];
+            for (ax, ay, bx, by) in edges {
+                if dist_point_segment(wx, wy, ax, ay, bx, by)
+                    .map(|d| d <= tol)
+                    .unwrap_or(false)
+                {
+                    return Some(*uuid);
+                }
+            }
+            None
+        }
+        SchDrawing::Circle {
+            uuid,
+            center,
+            radius,
+            fill,
+            ..
+        } => {
+            let dx = wx - center.x;
+            let dy = wy - center.y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled && dist <= *radius + tol {
+                return Some(*uuid);
+            }
+            if (dist - *radius).abs() <= tol {
+                Some(*uuid)
+            } else {
+                None
+            }
+        }
+        SchDrawing::Arc {
+            uuid,
+            start,
+            mid,
+            end,
+            ..
+        } => {
+            // Real-arc hit test: the click must be on the circle of
+            // the arc (distance to center ≈ radius) AND within the
+            // angular sweep. Chord approximation captured empty
+            // canvas near the arc's bulge, so users couldn't
+            // deselect by clicking near it.
+            let Some((cx, cy, r)) =
+                crate::schematic::circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+            else {
+                // Degenerate / collinear — fall back to the chord check.
+                for (a, b) in [(start, mid), (mid, end)] {
+                    if dist_point_segment(wx, wy, a.x, a.y, b.x, b.y)
+                        .map(|d| d <= tol)
+                        .unwrap_or(false)
+                    {
+                        return Some(*uuid);
+                    }
+                }
+                return None;
+            };
+            let dx = wx - cx;
+            let dy = wy - cy;
+            let d = (dx * dx + dy * dy).sqrt();
+            if (d - r).abs() > tol {
+                return None;
+            }
+            // Angular sweep check: click angle must fall within the
+            // arc's span, where the span is determined by walking
+            // from start → end via mid (same direction used by the
+            // renderer).
+            let click_angle = dy.atan2(dx);
+            let sa = (start.y - cy).atan2(start.x - cx);
+            let ma = (mid.y - cy).atan2(mid.x - cx);
+            let ea = (end.y - cy).atan2(end.x - cx);
+            if angle_in_arc_sweep(click_angle, sa, ma, ea) {
+                Some(*uuid)
+            } else {
+                None
+            }
+        }
+        SchDrawing::Polyline {
+            uuid, points, fill, ..
+        } => {
+            if points.len() < 2 {
+                return None;
+            }
+            let filled = !matches!(fill, signex_types::schematic::FillType::None);
+            if filled {
+                let poly: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
+                if point_in_polygon(wx, wy, &poly) {
+                    return Some(*uuid);
+                }
+            }
+            for pair in points.windows(2) {
+                if dist_point_segment(wx, wy, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
+                    .map(|d| d <= tol)
+                    .unwrap_or(false)
+                {
+                    return Some(*uuid);
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Altium-style rubber-band selection mode. Governs how
+/// `hit_test_rect` classifies hits relative to the drag rectangle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectionMode {
+    /// Only items fully contained within the rectangle are selected
+    /// (Altium's "Window" / default left-to-right drag).
+    #[default]
+    Inside,
+    /// Any item that the rectangle touches is selected — point items
+    /// at least partially inside the box and segments (wires/buses)
+    /// that cross the box boundary. Matches Altium's "Crossing" /
+    /// right-to-left drag semantics.
+    Touching,
+}
+
+/// Find all elements within a rectangular region (rubber-band
+/// selection). Uses `SelectionMode::Inside` for backwards compatibility.
+pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
+    hit_test_rect_mode(sheet, rect, SelectionMode::Inside)
+}
+
+/// Ray-cast point-in-polygon test. `poly` is a closed polygon in CCW
+/// or CW order (direction doesn't matter). Uses the even-odd rule.
+fn point_in_polygon(px: f64, py: f64, poly: &[(f64, f64)]) -> bool {
+    if poly.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let n = poly.len();
+    let mut j = n - 1;
+    for i in 0..n {
+        let (xi, yi) = poly[i];
+        let (xj, yj) = poly[j];
+        // Even-odd ray cast. The `(yi > py) != (yj > py)` guard
+        // guarantees `py` lies strictly between yi and yj, so
+        // `yj - yi != 0` — no epsilon needed.
+        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Segment-segment intersection test (ignoring endpoint-touch since
+/// lasso polygons don't usually touch wire endpoints exactly — if
+/// they do, the containment test covers it).
+fn segments_intersect(p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), p4: (f64, f64)) -> bool {
+    let d = (p4.0 - p3.0) * (p1.1 - p3.1) - (p4.1 - p3.1) * (p1.0 - p3.0);
+    let e = (p2.0 - p1.0) * (p1.1 - p3.1) - (p2.1 - p1.1) * (p1.0 - p3.0);
+    let f = (p4.0 - p3.0) * (p2.1 - p1.1) - (p4.1 - p3.1) * (p2.0 - p1.0);
+    if f.abs() < 1e-12 {
+        return false;
+    }
+    let t = d / f;
+    let u = e / f;
+    (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)
+}
+
+/// Altium-style lasso selection. `polygon` is the closed polygon in
+/// world space (the lasso's vertex list, implicitly closed — the last
+/// edge is `polygon[n-1] → polygon[0]`). Items with a point inside the
+/// polygon select; wire/bus segments select if either endpoint is
+/// inside OR any polygon edge crosses the segment.
+pub fn hit_test_polygon(
+    sheet: &SchematicRenderSnapshot,
+    polygon: &[(f64, f64)],
+) -> Vec<SelectedItem> {
+    if polygon.len() < 3 {
+        return Vec::new();
+    }
+    let edges: Vec<((f64, f64), (f64, f64))> = (0..polygon.len())
+        .map(|i| (polygon[i], polygon[(i + 1) % polygon.len()]))
+        .collect();
+    let segment_crosses_polygon = |a: (f64, f64), b: (f64, f64)| -> bool {
+        edges
+            .iter()
+            .any(|(e1, e2)| segments_intersect(a, b, *e1, *e2))
+    };
+    let mut result = Vec::new();
     for sym in &sheet.symbols {
-        if rect.contains(sym.position.x, sym.position.y) {
+        if point_in_polygon(sym.position.x, sym.position.y, polygon) {
             result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
         }
     }
     for w in &sheet.wires {
-        if rect.contains(w.start.x, w.start.y) && rect.contains(w.end.x, w.end.y) {
+        let a = (w.start.x, w.start.y);
+        let b = (w.end.x, w.end.y);
+        if point_in_polygon(a.0, a.1, polygon)
+            || point_in_polygon(b.0, b.1, polygon)
+            || segment_crosses_polygon(a, b)
+        {
             result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
         }
     }
-    for b in &sheet.buses {
-        if rect.contains(b.start.x, b.start.y) && rect.contains(b.end.x, b.end.y) {
-            result.push(SelectedItem::new(b.uuid, SelectedKind::Bus));
+    for bus in &sheet.buses {
+        let a = (bus.start.x, bus.start.y);
+        let b = (bus.end.x, bus.end.y);
+        if point_in_polygon(a.0, a.1, polygon)
+            || point_in_polygon(b.0, b.1, polygon)
+            || segment_crosses_polygon(a, b)
+        {
+            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
         }
     }
     for j in &sheet.junctions {
-        if rect.contains(j.position.x, j.position.y) {
+        if point_in_polygon(j.position.x, j.position.y, polygon) {
             result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
         }
     }
     for nc in &sheet.no_connects {
-        if rect.contains(nc.position.x, nc.position.y) {
+        if point_in_polygon(nc.position.x, nc.position.y, polygon) {
             result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
         }
     }
     for lbl in &sheet.labels {
-        if rect.contains(lbl.position.x, lbl.position.y) {
+        if point_in_polygon(lbl.position.x, lbl.position.y, polygon) {
             result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
         }
     }
     for tn in &sheet.text_notes {
-        if rect.contains(tn.position.x, tn.position.y) {
+        if point_in_polygon(tn.position.x, tn.position.y, polygon) {
+            result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
+        }
+    }
+    // Child sheets have real extent — a lasso that clips through
+    // a sheet symbol should pick it up even when the center is
+    // outside. Test every corner + every edge against the lasso.
+    for cs in &sheet.child_sheets {
+        for pin in &cs.pins {
+            if point_in_polygon(pin.position.x, pin.position.y, polygon) {
+                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+            }
+        }
+        let x0 = cs.position.x;
+        let y0 = cs.position.y;
+        let x1 = x0 + cs.size.0;
+        let y1 = y0 + cs.size.1;
+        let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+        let any_corner_in = corners
+            .iter()
+            .any(|&(x, y)| point_in_polygon(x, y, polygon));
+        let any_edge_crosses = corners
+            .iter()
+            .zip(corners.iter().cycle().skip(1))
+            .any(|(&a, &b)| segment_crosses_polygon(a, b));
+        if any_corner_in || any_edge_crosses {
+            result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
+        }
+    }
+    // Symbol ref/val fields — lasso independently picks detached
+    // fields dragged away from their body so rename workflows
+    // aren't stranded when the field has moved.
+    for sym in &sheet.symbols {
+        if let Some(ref tp) = sym.ref_text
+            && !tp.hidden
+            && point_in_polygon(tp.position.x, tp.position.y, polygon)
+        {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
+        }
+        if let Some(ref tp) = sym.val_text
+            && !tp.hidden
+            && point_in_polygon(tp.position.x, tp.position.y, polygon)
+        {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
+        }
+    }
+    // Graphic drawings — lasso picks any drawing whose endpoints /
+    // bounds overlap the polygon or whose edges cross it.
+    for d in &sheet.drawings {
+        use signex_types::schematic::SchDrawing;
+        let (hit, uuid) = match d {
+            SchDrawing::Line {
+                uuid, start, end, ..
+            } => {
+                let inside = point_in_polygon(start.x, start.y, polygon)
+                    || point_in_polygon(end.x, end.y, polygon);
+                let crosses = segment_crosses_polygon((start.x, start.y), (end.x, end.y));
+                (inside || crosses, *uuid)
+            }
+            SchDrawing::Rect {
+                uuid, start, end, ..
+            } => {
+                let x0 = start.x.min(end.x);
+                let x1 = start.x.max(end.x);
+                let y0 = start.y.min(end.y);
+                let y1 = start.y.max(end.y);
+                let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+                let any_corner_in = corners
+                    .iter()
+                    .any(|&(x, y)| point_in_polygon(x, y, polygon));
+                let any_edge_crosses = corners
+                    .iter()
+                    .zip(corners.iter().cycle().skip(1))
+                    .any(|(&a, &b)| segment_crosses_polygon(a, b));
+                (any_corner_in || any_edge_crosses, *uuid)
+            }
+            SchDrawing::Circle { uuid, center, .. } => {
+                (point_in_polygon(center.x, center.y, polygon), *uuid)
+            }
+            SchDrawing::Arc {
+                uuid,
+                start,
+                mid,
+                end,
+                ..
+            } => {
+                let inside = point_in_polygon(start.x, start.y, polygon)
+                    || point_in_polygon(mid.x, mid.y, polygon)
+                    || point_in_polygon(end.x, end.y, polygon);
+                (inside, *uuid)
+            }
+            SchDrawing::Polyline { uuid, points, .. } => {
+                let any_inside = points.iter().any(|p| point_in_polygon(p.x, p.y, polygon));
+                let any_crosses = points.windows(2).any(|pair| {
+                    segment_crosses_polygon((pair[0].x, pair[0].y), (pair[1].x, pair[1].y))
+                });
+                (any_inside || any_crosses, *uuid)
+            }
+        };
+        if hit {
+            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
+    result
+}
+
+/// Returns true if a segment from `(x1,y1)` to `(x2,y2)` overlaps
+/// the rectangle at all — either endpoint inside, or the segment
+/// crossing any of the four edges.
+fn seg_overlaps_rect(rect: &Aabb, x1: f64, y1: f64, x2: f64, y2: f64) -> bool {
+    if rect.contains(x1, y1) || rect.contains(x2, y2) {
+        return true;
+    }
+    // Liang-Barsky line-clipping: solve the parametric line against
+    // each rect edge; segment crosses when the accepted t-range is
+    // non-empty within [0,1].
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let p = [-dx, dx, -dy, dy];
+    let q = [
+        x1 - rect.min_x,
+        rect.max_x - x1,
+        y1 - rect.min_y,
+        rect.max_y - y1,
+    ];
+    let mut u1 = 0.0_f64;
+    let mut u2 = 1.0_f64;
+    for i in 0..4 {
+        if p[i] == 0.0 {
+            if q[i] < 0.0 {
+                return false;
+            }
+        } else {
+            let t = q[i] / p[i];
+            if p[i] < 0.0 {
+                if t > u2 {
+                    return false;
+                }
+                if t > u1 {
+                    u1 = t;
+                }
+            } else {
+                if t < u1 {
+                    return false;
+                }
+                if t < u2 {
+                    u2 = t;
+                }
+            }
+        }
+    }
+    u1 <= u2
+}
+
+/// Mode-aware rubber-band selection.
+pub fn hit_test_rect_mode(
+    sheet: &SchematicRenderSnapshot,
+    rect: &Aabb,
+    mode: SelectionMode,
+) -> Vec<SelectedItem> {
+    let pt_match = |inside: bool| -> bool {
+        // Both modes treat point items the same — inside the box.
+        // `Touching` differs from `Inside` only for segments, where
+        // crossing the boundary counts.
+        let _ = mode;
+        inside
+    };
+    let seg_match = |a_in: bool, b_in: bool, crosses: bool| -> bool {
+        match mode {
+            SelectionMode::Inside => a_in && b_in,
+            SelectionMode::Touching => a_in || b_in || crosses,
+        }
+    };
+    let mut result = Vec::new();
+    for sym in &sheet.symbols {
+        if pt_match(rect.contains(sym.position.x, sym.position.y)) {
+            result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+        }
+    }
+    for w in &sheet.wires {
+        let a = rect.contains(w.start.x, w.start.y);
+        let b = rect.contains(w.end.x, w.end.y);
+        let crosses = matches!(mode, SelectionMode::Touching)
+            && seg_overlaps_rect(rect, w.start.x, w.start.y, w.end.x, w.end.y);
+        if seg_match(a, b, crosses) {
+            result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
+        }
+    }
+    for bus in &sheet.buses {
+        let a = rect.contains(bus.start.x, bus.start.y);
+        let b = rect.contains(bus.end.x, bus.end.y);
+        let crosses = matches!(mode, SelectionMode::Touching)
+            && seg_overlaps_rect(rect, bus.start.x, bus.start.y, bus.end.x, bus.end.y);
+        if seg_match(a, b, crosses) {
+            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
+        }
+    }
+    for j in &sheet.junctions {
+        if pt_match(rect.contains(j.position.x, j.position.y)) {
+            result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
+        }
+    }
+    for nc in &sheet.no_connects {
+        if pt_match(rect.contains(nc.position.x, nc.position.y)) {
+            result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
+        }
+    }
+    for lbl in &sheet.labels {
+        if pt_match(rect.contains(lbl.position.x, lbl.position.y)) {
+            result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
+        }
+    }
+    for tn in &sheet.text_notes {
+        if pt_match(rect.contains(tn.position.x, tn.position.y)) {
             result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
         }
     }
     for cs in &sheet.child_sheets {
+        for pin in &cs.pins {
+            if pt_match(rect.contains(pin.position.x, pin.position.y)) {
+                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+            }
+        }
         let cx = cs.position.x + cs.size.0 / 2.0;
         let cy = cs.position.y + cs.size.1 / 2.0;
-        if rect.contains(cx, cy) {
+        if pt_match(rect.contains(cx, cy)) {
             result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
         }
     }
-
+    for d in &sheet.drawings {
+        if drawing_in_rect(d, rect, mode) {
+            let uuid = drawing_uuid(d);
+            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+        }
+    }
     result
+}
+
+fn drawing_uuid(d: &signex_types::schematic::SchDrawing) -> uuid::Uuid {
+    use signex_types::schematic::SchDrawing;
+    match d {
+        SchDrawing::Line { uuid, .. }
+        | SchDrawing::Rect { uuid, .. }
+        | SchDrawing::Circle { uuid, .. }
+        | SchDrawing::Arc { uuid, .. }
+        | SchDrawing::Polyline { uuid, .. } => *uuid,
+    }
+}
+
+fn drawing_in_rect(
+    d: &signex_types::schematic::SchDrawing,
+    rect: &Aabb,
+    mode: SelectionMode,
+) -> bool {
+    use signex_types::schematic::SchDrawing;
+    let touching = matches!(mode, SelectionMode::Touching);
+    match d {
+        SchDrawing::Line { start, end, .. } => {
+            let a = rect.contains(start.x, start.y);
+            let b = rect.contains(end.x, end.y);
+            let crosses = touching && seg_overlaps_rect(rect, start.x, start.y, end.x, end.y);
+            match mode {
+                SelectionMode::Inside => a && b,
+                SelectionMode::Touching => a || b || crosses,
+            }
+        }
+        SchDrawing::Rect { start, end, .. } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            match mode {
+                SelectionMode::Inside => rect.contains(x0, y0) && rect.contains(x1, y1),
+                SelectionMode::Touching => {
+                    // Overlap test between rect bboxes.
+                    !(rect.max_x < x0 || rect.min_x > x1 || rect.max_y < y0 || rect.min_y > y1)
+                }
+            }
+        }
+        SchDrawing::Circle { center, radius, .. } => {
+            match mode {
+                SelectionMode::Inside => {
+                    rect.contains(center.x - *radius, center.y - *radius)
+                        && rect.contains(center.x + *radius, center.y + *radius)
+                }
+                SelectionMode::Touching => {
+                    // Circle bbox overlaps rect.
+                    let cx0 = center.x - *radius;
+                    let cx1 = center.x + *radius;
+                    let cy0 = center.y - *radius;
+                    let cy1 = center.y + *radius;
+                    !(rect.max_x < cx0 || rect.min_x > cx1 || rect.max_y < cy0 || rect.min_y > cy1)
+                }
+            }
+        }
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            let a = rect.contains(start.x, start.y);
+            let b = rect.contains(mid.x, mid.y);
+            let c = rect.contains(end.x, end.y);
+            match mode {
+                SelectionMode::Inside => a && b && c,
+                SelectionMode::Touching => {
+                    a || b
+                        || c
+                        || seg_overlaps_rect(rect, start.x, start.y, mid.x, mid.y)
+                        || seg_overlaps_rect(rect, mid.x, mid.y, end.x, end.y)
+                }
+            }
+        }
+        SchDrawing::Polyline { points, .. } => {
+            let all_inside = points.iter().all(|p| rect.contains(p.x, p.y));
+            match mode {
+                SelectionMode::Inside => all_inside,
+                SelectionMode::Touching => {
+                    if points.iter().any(|p| rect.contains(p.x, p.y)) {
+                        return true;
+                    }
+                    points.windows(2).any(|pair| {
+                        seg_overlaps_rect(rect, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
+                    })
+                }
+            }
+        }
+    }
 }
 
 fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {
@@ -223,6 +830,12 @@ fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
         cs.position.y + cs.size.1,
     )
     .contains(wx, wy)
+}
+
+fn hit_child_sheet_pin(pin: &SheetPin, wx: f64, wy: f64) -> bool {
+    let dx = wx - pin.position.x;
+    let dy = wy - pin.position.y;
+    (dx * dx + dy * dy).sqrt() <= HIT_TOLERANCE
 }
 
 /// Hit-test a text property (reference or value field).

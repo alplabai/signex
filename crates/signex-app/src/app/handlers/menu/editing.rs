@@ -21,7 +21,40 @@ impl Signex {
             MenuMessage::Duplicate => Some(self.update(Message::Duplicate)),
             MenuMessage::Find => Some(self.update(Message::OpenFind)),
             MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
-            MenuMessage::Annotate | MenuMessage::Erc | MenuMessage::GenerateBom => {
+            MenuMessage::Annotate => Some(self.update(Message::OpenAnnotateDialog)),
+            MenuMessage::AnnotateReset => Some(self.update(Message::OpenAnnotateResetConfirm)),
+            // Alt+A shortcut-style: run incremental annotate without opening
+            // the dialog. Matches Altium "Annotate Schematics Quietly".
+            MenuMessage::AnnotateQuietly => {
+                Some(self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)))
+            }
+            // Shift+Alt+A: force reset + renumber without confirm dialog.
+            MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
+                signex_engine::AnnotateMode::ResetAndRenumber,
+            ))),
+            // Reset Duplicate Designators — scan every sheet (active,
+            // cached, and on-disk project sheets), find references
+            // that appear on more than one symbol across the project,
+            // reset just those to `{prefix}?`. Other designators keep
+            // their current value. Saves unopened sheets through
+            // standard-writer so the fix is project-wide.
+            MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
+            MenuMessage::AnnotateBack => {
+                crate::diagnostics::log_info(
+                    "Back-annotate from PCB lands with the PCB editor (v2.0)",
+                );
+                Some(Task::none())
+            }
+            MenuMessage::AnnotateSheets => {
+                crate::diagnostics::log_info(
+                    "Number Schematic Sheets is a v1.1 feature (hierarchical design)",
+                );
+                Some(Task::none())
+            }
+            MenuMessage::Erc => Some(self.update(Message::OpenErcDialog)),
+            MenuMessage::ToggleAutoFocus => Some(self.update(Message::ToggleAutoFocus)),
+            MenuMessage::GenerateBom => {
+                crate::diagnostics::log_info("Generate BOM is v0.8 scope");
                 Some(Task::none())
             }
             _ => None,

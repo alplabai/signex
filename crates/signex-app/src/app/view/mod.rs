@@ -1,13 +1,16 @@
 use iced::widget::{canvas, column, container, row};
 use iced::{Element, Length};
 
+mod dialogs;
+mod translate;
+
 use super::*;
 
 impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
-        let canvas = &self.interaction_state.canvas;
+        let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
 
         // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
@@ -27,6 +30,19 @@ impl Signex {
             items.push(self.ctx_menu_item_disabled("Align", Some(SUBMENU_ARROW)));
             items.push(self.ctx_menu_item_disabled("Unions", Some(SUBMENU_ARROW)));
             items.push(self.ctx_menu_item_disabled("Snippets", Some(SUBMENU_ARROW)));
+        }
+
+        let child_sheet_selected = canvas
+            .selected
+            .iter()
+            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
+        if child_sheet_selected {
+            items.push(self.ctx_menu_item_kb(
+                "Open Child Sheet",
+                "Enter",
+                ContextAction::OpenChildSheet,
+            ));
+            items.push(self.ctx_menu_sep());
         }
 
         items.push(self.ctx_menu_item_disabled("Cross Probe", None));
@@ -188,11 +204,1039 @@ impl Signex {
             .into()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
+        // Secondary windows (detached modals, future undocked tabs) render
+        // just their own content — no menu / dock / canvas. The main
+        // window's view_main drops any overlay whose modal is currently
+        // detached so we don't double-render.
+        if let Some(kind) = self.ui_state.windows.get(&window_id) {
+            return match kind {
+                super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
+                // Undocked tab = full duplicate of the main app view.
+                // Shared Signex state means edits sync automatically; the
+                // only difference between main and undocked is the OS
+                // window id they render into.
+                super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
+                super::state::WindowKind::DetachedPanel(kind) => {
+                    let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
+                        .map(crate::dock::DockMessage::Panel)
+                        .map(Message::Dock);
+                    iced::widget::container(iced::widget::scrollable(panel))
+                        .padding(8)
+                        .into()
+                }
+            };
+        }
+        self.view_main_for(window_id)
+    }
+
+    /// Cursor-following translucent preview of a tab being dragged.
+    /// Shape matches the real tab bar entry — rounded container with
+    /// the title text, the ↗ undock indicator, and the × close icon —
+    /// so it reads as "the tab itself is moving". The ghost is
+    /// non-interactive; it just shows what the user is carrying.
+    fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
+        use iced::widget::{Space, container, row, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border = crate::styles::ti(tokens.border);
+        let active_bg = crate::styles::ti(tokens.hover);
+        // Slight translucency so the user still sees the tab bar
+        // underneath — reads as "ghost" rather than a solid widget.
+        let bg = iced::Color {
+            a: 0.88,
+            ..active_bg
+        };
+        let tab_like = container(
+            row![
+                text(title.to_string()).size(11).color(text_c),
+                Space::new().width(6),
+                text("\u{2197}".to_string()).size(12).color(text_muted),
+                Space::new().width(4),
+                text("\u{00D7}".to_string()).size(14).color(text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 10])
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Background::Color(bg)),
+            border: iced::Border {
+                width: 1.0,
+                radius: 0.0.into(),
+                color: border,
+            },
+            text_color: Some(text_c),
+            ..container::Style::default()
+        });
+        // Anchor near the cursor (right + below) so the pointer
+        // remains visible while the ghost trails it.
+        let (cx, cy) = self.interaction_state.last_mouse_pos;
+        super::view::translate::Translate::new(tab_like, (cx + 10.0, cy + 6.0)).into()
+    }
+
+    /// Altium-style Move Selection dialog. Two numeric inputs plus
+    /// OK / Cancel. No header drag region on the body itself — the
+    /// modal opens borderless so the OS-window-drag handler owns that.
+    fn view_move_selection_body(&self) -> Element<'_, Message> {
+        use iced::widget::{Space, button, column, container, row, text, text_input};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let ms = &self.ui_state.move_selection;
+        let selection_count = self.interaction_state.active_canvas().selected.len();
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Move Selection").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseMoveSelectionDialog),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::MoveSelection,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
+            column![
+                text(label).size(10).color(text_muted),
+                text_input("0.00", value)
+                    .on_input(msg)
+                    .padding([4, 8])
+                    .size(12),
+            ]
+            .spacing(4)
+        };
+
+        let body = container(
+            column![
+                text(format!("{} item(s) selected", selection_count))
+                    .size(11)
+                    .color(text_muted),
+                Space::new().height(12),
+                row![
+                    field("ΔX (mm)", &ms.dx, Message::MoveSelectionDxChanged),
+                    Space::new().width(14),
+                    field("ΔY (mm)", &ms.dy, Message::MoveSelectionDyChanged),
+                ]
+                .align_y(iced::Alignment::Start),
+            ]
+            .spacing(0),
+        )
+        .padding([14, 14]);
+
+        let ok_enabled = selection_count > 0;
+        let ok_bg = if ok_enabled {
+            iced::Color::from_rgb(0.00, 0.47, 0.84)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+        };
+        let ok_fg = if ok_enabled {
+            iced::Color::WHITE
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
+        };
+        let mut ok_btn = button(container(text("Apply").size(11).color(ok_fg)).padding([4, 14]))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(ok_bg)),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..iced::Border::default()
+                },
+                text_color: ok_fg,
+                ..iced::widget::button::Style::default()
+            });
+        if ok_enabled {
+            ok_btn = ok_btn.on_press(Message::MoveSelectionApply);
+        }
+
+        let footer = container(
+            row![
+                Space::new().width(iced::Length::Fill),
+                button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+                    .on_press(Message::CloseMoveSelectionDialog)
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04
+                        ),)),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    }),
+                Space::new().width(8),
+                ok_btn,
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14]);
+
+        container(
+            column![header, body, footer]
+                .width(iced::Length::Fixed(420.0))
+                .height(iced::Length::Fixed(240.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
+    /// Compact X close button shared by the detached-modal bodies.
+    fn view_close_x(&self, message: Message) -> Element<'_, Message> {
+        use iced::widget::{button, container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text_secondary);
+        let border = crate::styles::ti(tokens.border);
+        button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
+            .on_press(message)
+            .style(
+                move |_: &iced::Theme, status: iced::widget::button::Status| {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                        )),
+                        _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.03,
+                        ))),
+                    };
+                    iced::widget::button::Style {
+                        background: bg,
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border,
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    }
+                },
+            )
+            .into()
+    }
+
+    /// Altium F5 Net Color palette — list of net labels with a per-net
+    /// color picker. Ships with a 10-swatch palette; a full ColorPicker
+    /// widget can replace it later without changing the message contract.
+    fn view_net_color_palette_body(&self) -> Element<'_, Message> {
+        use iced::widget::{Space, button, column, container, row, scrollable, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Net Colors").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseNetColorPalette),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::NetColorPalette,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        // Gather unique net labels from the active snapshot.
+        let mut nets: Vec<String> = self
+            .interaction_state
+            .canvas
+            .active_snapshot()
+            .map(|s| {
+                s.labels
+                    .iter()
+                    .filter(|l| {
+                        matches!(
+                            l.label_type,
+                            signex_types::schematic::LabelType::Net
+                                | signex_types::schematic::LabelType::Global
+                                | signex_types::schematic::LabelType::Hierarchical
+                        )
+                    })
+                    .map(|l| l.text.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect()
+            })
+            .unwrap_or_default();
+        nets.sort();
+
+        const PALETTE: &[(u8, u8, u8)] = &[
+            (0xE0, 0x54, 0x54),
+            (0xE0, 0xB0, 0x4A),
+            (0x78, 0xC2, 0x6A),
+            (0x42, 0xB8, 0xE0),
+            (0x6F, 0x77, 0xE0),
+            (0xB0, 0x6F, 0xE0),
+            (0xE0, 0x6F, 0xB0),
+            (0xC2, 0xA0, 0x78),
+            (0x78, 0xC2, 0xA0),
+            (0xA0, 0xA0, 0xA0),
+        ];
+
+        let mut rows_col = column![].spacing(4);
+        if nets.is_empty() {
+            rows_col = rows_col.push(
+                text("No net labels on the active sheet.")
+                    .size(11)
+                    .color(text_muted),
+            );
+        } else {
+            for net in nets {
+                let current = self.ui_state.net_colors.get(&net).copied();
+                let mut swatches = row![].spacing(4).align_y(iced::Alignment::Center);
+                for (r, g, b) in PALETTE {
+                    let is_current = current.is_some_and(|c| c.r == *r && c.g == *g && c.b == *b);
+                    let swatch_color = iced::Color::from_rgb8(*r, *g, *b);
+                    let border_w = if is_current { 2.0_f32 } else { 1.0_f32 };
+                    let net_copy = net.clone();
+                    let r_c = *r;
+                    let g_c = *g;
+                    let b_c = *b;
+                    swatches =
+                        swatches.push(
+                            button(container(Space::new().width(14).height(14)).style(
+                                move |_: &iced::Theme| container::Style {
+                                    background: Some(iced::Background::Color(swatch_color)),
+                                    border: iced::Border {
+                                        width: border_w,
+                                        radius: 2.0.into(),
+                                        color: text_c,
+                                    },
+                                    ..container::Style::default()
+                                },
+                            ))
+                            .on_press(Message::NetColorSet {
+                                net: net_copy.clone(),
+                                color: Some(signex_types::theme::Color {
+                                    r: r_c,
+                                    g: g_c,
+                                    b: b_c,
+                                    a: 255,
+                                }),
+                            })
+                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                                border: iced::Border::default(),
+                                ..iced::widget::button::Style::default()
+                            }),
+                        );
+                }
+                // Clear-override button
+                let net_clear = net.clone();
+                swatches = swatches.push(
+                    button(container(text("×").size(10).color(text_c)).padding([0, 6]))
+                        .on_press(Message::NetColorSet {
+                            net: net_clear,
+                            color: None,
+                        })
+                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            ))),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            text_color: text_c,
+                            ..iced::widget::button::Style::default()
+                        }),
+                );
+
+                rows_col = rows_col.push(
+                    row![
+                        text(net)
+                            .size(11)
+                            .color(text_c)
+                            .width(iced::Length::FillPortion(2)),
+                        swatches,
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .padding([2, 8]),
+                );
+            }
+        }
+
+        container(
+            column![
+                header,
+                container(scrollable(rows_col).height(iced::Length::Fill))
+                    .padding([14, 14])
+                    .height(iced::Length::Fill),
+            ]
+            .width(iced::Length::Fixed(520.0))
+            .height(iced::Length::Fixed(480.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
+    /// Altium-style Parameter Manager — a scrolling table listing every
+    /// placed symbol with columns for reference / value / footprint and
+    /// a "Parameter" column that reveals the union of custom fields
+    /// across the design. Each cell is a text_input so the user can edit
+    /// values inline. Changes route through Command::SetSymbolField so
+    /// undo/redo / dirty-flagging behaves.
+    fn view_parameter_manager_body(&self) -> Element<'_, Message> {
+        use iced::widget::{Space, column, container, row, scrollable, text, text_input};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header = iced::widget::mouse_area(
+            container(
+                row![
+                    text("Parameter Manager").size(14).color(text_c),
+                    Space::new().width(iced::Length::Fill),
+                    self.view_close_x(Message::CloseParameterManager),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([10, 14])
+            .style(crate::styles::toolbar_strip(tokens)),
+        )
+        .on_press(Message::StartDetachedWindowDrag(
+            super::state::ModalId::ParameterManager,
+        ))
+        .interaction(iced::mouse::Interaction::Grab);
+
+        // Collect all parameter keys across symbols (besides the built-
+        // in reference / value / footprint). Keeps the table compact —
+        // only columns that someone actually uses show up.
+        let Some(engine) = self.document_state.active_engine() else {
+            return container(
+                column![
+                    header,
+                    container(text("No active schematic.").size(11).color(text_muted))
+                        .padding([14, 14]),
+                ]
+                .width(iced::Length::Fixed(900.0))
+                .height(iced::Length::Fixed(560.0)),
+            )
+            .style(crate::styles::context_menu(tokens))
+            .into();
+        };
+        let doc = engine.document();
+        let mut keys: Vec<String> = doc
+            .symbols
+            .iter()
+            .filter(|s| !s.is_power)
+            .flat_map(|s| s.fields.keys().cloned())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        keys.sort();
+
+        let header_row = {
+            let mut r = row![
+                text("Reference")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(100.0)),
+                text("Value")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(160.0)),
+                text("Footprint")
+                    .size(10)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(200.0)),
+            ];
+            for k in &keys {
+                r = r.push(
+                    text(k.clone())
+                        .size(10)
+                        .color(text_muted)
+                        .width(iced::Length::Fixed(140.0)),
+                );
+            }
+            r.padding([4, 8])
+        };
+
+        let mut rows_col = column![].spacing(2);
+        rows_col = rows_col.push(header_row);
+        for sym in &doc.symbols {
+            if sym.is_power {
+                continue;
+            }
+            let mut r = row![
+                text(sym.reference.clone())
+                    .size(11)
+                    .color(text_c)
+                    .width(iced::Length::Fixed(100.0)),
+                text(sym.value.clone())
+                    .size(11)
+                    .color(text_c)
+                    .width(iced::Length::Fixed(160.0)),
+                text(sym.footprint.clone())
+                    .size(11)
+                    .color(text_muted)
+                    .width(iced::Length::Fixed(200.0)),
+            ];
+            for k in &keys {
+                let v = sym.fields.get(k).cloned().unwrap_or_default();
+                let sym_uuid = sym.uuid;
+                let k_str = k.clone();
+                r = r.push(
+                    text_input("", &v)
+                        .on_input(move |new_val| Message::ParameterManagerEdit {
+                            symbol_uuid: sym_uuid,
+                            key: k_str.clone(),
+                            value: new_val,
+                        })
+                        .padding([2, 6])
+                        .size(11)
+                        .width(iced::Length::Fixed(140.0)),
+                );
+            }
+            rows_col = rows_col.push(r.padding([2, 8]));
+        }
+
+        container(
+            column![
+                header,
+                container(
+                    scrollable(rows_col)
+                        .direction(scrollable::Direction::Both {
+                            vertical: scrollable::Scrollbar::default(),
+                            horizontal: scrollable::Scrollbar::default(),
+                        })
+                        .height(iced::Length::Fill),
+                )
+                .padding([14, 14])
+                .height(iced::Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    ..container::Style::default()
+                }),
+            ]
+            .width(iced::Length::Fixed(900.0))
+            .height(iced::Length::Fixed(560.0)),
+        )
+        .style(crate::styles::context_menu(tokens))
+        .into()
+    }
+
+    /// Custom net-colour picker modal. Grid of quick-pick swatches on
+    /// the left, precise R / G / B / hex on the right, live preview
+    /// and OK / Cancel at the bottom. Ships with a 24-color palette
+    /// matching the common Altium net-colour presets plus a handful of
+    /// EDA-specific diagnostic colours.
+    fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
+        use super::contracts::Channel;
+        use iced::widget::{Space, button, column, container, row, text, text_input};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let draft = self.ui_state.net_color_custom.draft;
+
+        // Expanded 48-swatch palette arranged as 6 cols × 8 rows so
+        // the Quick Pick grid fills the modal's left column. First
+        // three rows are "standard" hues, next three rows are shade
+        // variants, and the last two rows hold greys / light pastels /
+        // schematic-specific high-contrast hues.
+        const PALETTE: &[(u8, u8, u8)] = &[
+            // Row 1 — primaries (bright)
+            (0xEF, 0x44, 0x44), // Red
+            (0xF9, 0x73, 0x16), // Orange
+            (0xEA, 0xB3, 0x08), // Yellow
+            (0x22, 0xC5, 0x5E), // Green
+            (0x06, 0xB6, 0xD4), // Cyan
+            (0x3B, 0x82, 0xF6), // Blue
+            // Row 2 — pinks + magentas + purples
+            (0xF4, 0x72, 0xB6), // Pink 400
+            (0xE1, 0x14, 0x8C), // Hot Pink
+            (0xD9, 0x46, 0xEF), // Fuchsia
+            (0xA8, 0x55, 0xF7), // Purple
+            (0x8B, 0x5C, 0xF6), // Violet
+            (0x6D, 0x28, 0xD9), // Indigo
+            // Row 3 — greens + teals + lime
+            (0x84, 0xCC, 0x16), // Lime
+            (0x10, 0xB9, 0x81), // Emerald
+            (0x14, 0xB8, 0xA6), // Teal
+            (0x0E, 0xA5, 0xE9), // Sky
+            (0x60, 0xA5, 0xFA), // Light Blue
+            (0x2D, 0xD4, 0xBF), // Turquoise
+            // Row 4 — dark variants
+            (0x9F, 0x12, 0x39), // Wine
+            (0xB4, 0x53, 0x09), // Rust
+            (0xA1, 0x6A, 0x3C), // Brown
+            (0x16, 0xA3, 0x4A), // Dark Green
+            (0x15, 0x5E, 0x75), // Deep Cyan
+            (0x1E, 0x40, 0xAF), // Deep Blue
+            // Row 5 — extra dark / night hues
+            (0x7F, 0x1D, 0x1D), // Deep Red
+            (0x78, 0x35, 0x0F), // Auburn
+            (0x5B, 0x21, 0xB6), // Royal Purple
+            (0x3B, 0x0A, 0x45), // Eggplant
+            (0x1E, 0x3A, 0x8A), // Navy
+            (0x0F, 0x17, 0x2A), // Midnight
+            // Row 6 — pastels
+            (0xFE, 0xCA, 0xCA), // Pastel Red
+            (0xFE, 0xD7, 0xAA), // Pastel Orange
+            (0xFE, 0xF0, 0x8A), // Pastel Yellow
+            (0xBB, 0xF7, 0xD0), // Pastel Green
+            (0xA5, 0xF3, 0xFC), // Pastel Cyan
+            (0xBF, 0xDB, 0xFE), // Pastel Blue
+            // Row 7 — muted + desaturated
+            (0x64, 0x74, 0x8B), // Slate
+            (0x78, 0x71, 0x6C), // Stone
+            (0x4B, 0x55, 0x63), // Dark Slate
+            (0x9C, 0xA3, 0xAF), // Gray
+            (0xD1, 0xD5, 0xDB), // Light Gray
+            (0xFF, 0xFF, 0xFF), // White
+            // Row 8 — schematic diagnostic colors
+            (0xFF, 0x00, 0xFF), // Bright Magenta
+            (0x00, 0xFF, 0xFF), // Bright Cyan
+            (0xFF, 0xFF, 0x00), // Bright Yellow
+            (0x00, 0xFF, 0x00), // Bright Green
+            (0xFF, 0xA5, 0x00), // Bright Orange
+            (0x1F, 0x23, 0x2A), // Ink
+        ];
+
+        let swatch_btn =
+            |r: u8, g: u8, b: u8| -> Element<'_, Message> {
+                let col = iced::Color::from_rgb8(r, g, b);
+                let is_current = (draft.r - col.r).abs() < 0.01
+                    && (draft.g - col.g).abs() < 0.01
+                    && (draft.b - col.b).abs() < 0.01;
+                let sw = iced::Color::from_rgb8(r, g, b);
+                let border_w = if is_current { 2.0 } else { 1.0 };
+                let border_col = if is_current {
+                    iced::Color::WHITE
+                } else {
+                    iced::Color::from_rgba(0.2, 0.2, 0.22, 0.9)
+                };
+                button(container(Space::new().width(24).height(20)).style(
+                    move |_: &iced::Theme| container::Style {
+                        background: Some(iced::Background::Color(sw)),
+                        border: iced::Border {
+                            width: border_w,
+                            radius: 3.0.into(),
+                            color: border_col,
+                        },
+                        ..container::Style::default()
+                    },
+                ))
+                .padding(0)
+                .on_press(Message::NetColorCustomDraft(col))
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                    border: iced::Border::default(),
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
+            };
+
+        // Build the 6 × 4 palette grid row by row.
+        let mut palette_col = column![].spacing(6);
+        for chunk in PALETTE.chunks(6) {
+            let mut r_el = row![].spacing(6);
+            for (r, g, b) in chunk {
+                r_el = r_el.push(swatch_btn(*r, *g, *b));
+            }
+            palette_col = palette_col.push(r_el);
+        }
+
+        // RGB inputs — parse as u8, clamp on submit. Uses the
+        // `draft` colour as the current value so swatch clicks and
+        // text edits stay in sync.
+        let channel_row =
+            |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
+                let v255 = (value * 255.0).round() as i32;
+                row![
+                    text(label)
+                        .size(11)
+                        .color(text_muted)
+                        .width(iced::Length::Fixed(16.0)),
+                    text_input("0", &v255.to_string())
+                        .size(11)
+                        .padding([3, 8])
+                        .width(iced::Length::Fixed(70.0))
+                        .on_input(move |s| Message::NetColorCustomChannel(chan, s)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .spacing(6)
+                .into()
+            };
+
+        let preview_hex = format!(
+            "#{:02X}{:02X}{:02X}",
+            (draft.r * 255.0).round() as u8,
+            (draft.g * 255.0).round() as u8,
+            (draft.b * 255.0).round() as u8,
+        );
+        let preview_box = container(Space::new().width(iced::Length::Fill).height(32)).style(
+            move |_: &iced::Theme| container::Style {
+                background: Some(iced::Background::Color(draft)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..container::Style::default()
+            },
+        );
+
+        let rgb_col = column![
+            text("Custom RGB").size(11).color(text_c),
+            Space::new().height(6),
+            channel_row("R", draft.r, Channel::R),
+            channel_row("G", draft.g, Channel::G),
+            channel_row("B", draft.b, Channel::B),
+            Space::new().height(10),
+            preview_box,
+            Space::new().height(4),
+            text(preview_hex).size(10).color(text_muted),
+        ]
+        .spacing(4)
+        .width(iced::Length::Fixed(150.0));
+
+        let body = row![
+            column![
+                text("Quick Pick").size(11).color(text_c),
+                Space::new().height(6),
+                palette_col,
+            ]
+            .spacing(0)
+            .width(iced::Length::Fill),
+            Space::new().width(16),
+            rgb_col,
+        ];
+
+        let footer = row![
+            Space::new().width(iced::Length::Fill),
+            button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]),)
+                .on_press(Message::NetColorCustomShow(false))
+                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }),
+            Space::new().width(8),
+            button(
+                container(text("Use Color").size(11).color(iced::Color::WHITE)).padding([4, 14]),
+            )
+            .on_press(Message::NetColorCustomSubmit(draft))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.00, 0.47, 0.84,
+                ))),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..iced::Border::default()
+                },
+                text_color: iced::Color::WHITE,
+                ..iced::widget::button::Style::default()
+            }),
+        ]
+        .align_y(iced::Alignment::Center);
+
+        let card = container(
+            column![
+                container(
+                    row![
+                        text("Pick Net Color").size(13).color(text_c),
+                        Space::new().width(iced::Length::Fill),
+                        self.view_close_x(Message::NetColorCustomShow(false)),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14])
+                .style(crate::styles::toolbar_strip(
+                    &self.document_state.panel_ctx.tokens
+                )),
+                container(body).padding([14, 14]),
+                container(footer).padding([10, 14]),
+            ]
+            .width(iced::Length::Fixed(430.0)),
+        )
+        .style(crate::styles::context_menu(
+            &self.document_state.panel_ctx.tokens,
+        ));
+
+        // Anchor below the Active Bar Net Color button (rightmost icon).
+        let (ww, _wh) = self.ui_state.window_size;
+        let card_w = 430.0;
+        let x = ((ww - card_w) * 0.5).max(0.0);
+        let y = crate::menu_bar::MENU_BAR_HEIGHT
+            + if self.document_state.tabs.is_empty() {
+                0.0
+            } else {
+                28.0
+            }
+            + 80.0;
+        // Wrap in a mouse_area with on_press(Noop) so clicks inside the
+        // card are captured and DON'T fall through to the dismiss
+        // layer sitting beneath. Without this, clicking on the card's
+        // background / between swatches closes the picker.
+        let card_capturing = iced::widget::mouse_area(card).on_press(Message::Noop);
+        super::view::translate::Translate::new(card_capturing, (x, y)).into()
+    }
+
+    /// Custom chrome for the borderless main window. Replaces the OS
+    /// title bar with a 36 px strip:
+    ///
+    /// `[wordmark + menus] [drag] [search bar] [drag] [min│max│×]`
+    ///
+    /// The drag zones are the only mouse-area clickable regions — menu
+    /// buttons, search, and window controls keep their own click
+    /// handlers. Double-click on a drag zone toggles maximize.
+    fn view_main_window_chrome<'a>(
+        &self,
+        menu_row: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Element<'a, Message> {
+        use iced::widget::{Space, button, container, mouse_area, row, svg, text};
+        use iced::{Alignment, Background, Border, Color, Length};
+        use std::sync::LazyLock;
+
+        // Window-control SVG icons (10×10 strokes, tinted via svg::Style
+        // per theme).
+        static H_MIN: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_min.svg"
+            ))
+        });
+        static H_MAX: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_max.svg"
+            ))
+        });
+        static H_CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_close.svg"
+            ))
+        });
+        static H_SEARCH: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/search.svg"
+            ))
+        });
+
+        let text_c = crate::styles::ti(tokens.text);
+        let muted_c = crate::styles::ti(tokens.text_secondary);
+        let hover_c = crate::styles::ti(tokens.hover);
+        let search_bg = crate::styles::ti(tokens.panel_bg);
+        let search_border = crate::styles::ti(tokens.border);
+        // Windows-native destructive red for the close hover — overrides
+        // the theme hover so close reads as destructive at a glance.
+        let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+        let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
+
+        let chrome_btn = |handle: svg::Handle,
+                          msg: Message,
+                          hover_bg: Color,
+                          hover_icon: Color|
+         -> Element<'static, Message> {
+            let icon = svg(handle)
+                .width(10)
+                .height(10)
+                .style(move |_: &iced::Theme, _| svg::Style {
+                    color: Some(text_c),
+                });
+            button(
+                container(icon)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center),
+            )
+            .width(46)
+            .height(btn_h)
+            .padding(0)
+            .on_press(msg)
+            .style(move |_: &iced::Theme, status: button::Status| {
+                let hovered = matches!(
+                    status,
+                    button::Status::Hovered | button::Status::Pressed
+                );
+                button::Style {
+                    background: if hovered {
+                        Some(Background::Color(hover_bg))
+                    } else {
+                        None
+                    },
+                    text_color: if hovered { hover_icon } else { text_c },
+                    border: Border::default(),
+                    ..Default::default()
+                }
+            })
+            .into()
+        };
+
+        let controls = row![
+            chrome_btn((*H_MIN).clone(), Message::MinimizeMainWindow, hover_c, text_c),
+            chrome_btn(
+                (*H_MAX).clone(),
+                Message::ToggleMaximizeMainWindow,
+                hover_c,
+                text_c,
+            ),
+            chrome_btn(
+                (*H_CLOSE).clone(),
+                Message::CloseMainWindow,
+                close_hover,
+                Color::WHITE,
+            ),
+        ];
+
+        // Left-pad the menu row so the wordmark doesn't sit flush against
+        // the window edge; controls stay flush-right so their hover boxes
+        // touch the corner like in Windows' native chrome.
+        let menu_padded = container(menu_row).padding(iced::Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 8.0,
+        });
+
+        // Search bar placeholder — visual only for now. Matches VS Code's
+        // central command palette peek: rounded rect with search icon
+        // and muted prompt text.
+        let search_icon = svg((*H_SEARCH).clone())
+            .width(12)
+            .height(12)
+            .style(move |_: &iced::Theme, _| svg::Style {
+                color: Some(muted_c),
+            });
+        let search_bar: Element<'_, Message> = container(
+            row![
+                search_icon,
+                text("Search files, symbols, commands…")
+                    .size(11)
+                    .color(muted_c),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 10.0,
+            bottom: 0.0,
+            left: 10.0,
+        })
+        .width(440)
+        .height(24)
+        .align_y(iced::alignment::Vertical::Center)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(search_bg)),
+            border: Border {
+                color: search_border,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into();
+
+        // Drag zones on either side of the search bar. Double-click
+        // toggles maximize (Windows title-bar convention).
+        let drag_zone = || -> Element<'static, Message> {
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .on_press(Message::StartMainWindowDrag)
+            .on_double_click(Message::ToggleMaximizeMainWindow)
+            .into()
+        };
+
+        // `width(Length::Fill)` on the row is load-bearing: without it, the
+        // drag zones' Fill-width collapses to 0 because their parent (this
+        // row) is Shrink, and the chrome loses all its draggable real
+        // estate the moment menus + search + controls consume their
+        // natural widths.
+        let inner = row![
+            menu_padded,
+            drag_zone(),
+            search_bar,
+            drag_zone(),
+            controls,
+        ]
+        .width(Length::Fill)
+        .align_y(Alignment::Center);
+
+        container(inner)
+            .width(Length::Fill)
+            .height(btn_h)
+            .style(crate::styles::toolbar_strip(tokens))
+            .into()
+    }
+
+    fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
+        use super::state::ModalId;
+        match modal {
+            ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
+            ModalId::ErcDialog => self.view_erc_dialog_body(),
+            ModalId::AnnotateResetConfirm => self.view_annotate_reset_confirm_body(),
+            // Stubs — these modals don't yet have extractable bodies; fall
+            // back to a placeholder so the window is non-empty until their
+            // body helpers land.
+            ModalId::MoveSelection => self.view_move_selection_body(),
+            ModalId::NetColorPalette => self.view_net_color_palette_body(),
+            ModalId::ParameterManager => self.view_parameter_manager_body(),
+            ModalId::Preferences | ModalId::FindReplace | ModalId::CloseTabConfirm => {
+                iced::widget::container(iced::widget::text("Detached modal"))
+                    .padding(20)
+                    .into()
+            }
+        }
+    }
+
+    fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let menu = menu_bar::view(&document.panel_ctx.tokens).map(Message::Menu);
+        // Context-aware menu: each leaf gates on whether its action
+        // makes sense in the current app state. `has_schematic` /
+        // `has_selection` drive most entries; undo / redo consult
+        // the engine's history so they grey out when empty.
+        let menu_ctx = crate::menu_bar::MenuContext {
+            has_schematic: self.has_active_schematic(),
+            has_pcb: self.has_active_pcb(),
+            has_project: document.project_path.is_some(),
+            has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
+            can_undo: document
+                .engine_for_window(window_id, ui)
+                .map(|e| e.can_undo())
+                .unwrap_or(false),
+            can_redo: document
+                .engine_for_window(window_id, ui)
+                .map(|e| e.can_redo())
+                .unwrap_or(false),
+        };
+        let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -212,7 +1256,7 @@ impl Signex {
             left_has_panels && !left_collapsed,
             true,
         );
-        let center = self.view_center();
+        let center = self.view_center(window_id);
         let right_handle = self.view_resize_handle(
             DragTarget::RightPanel,
             right_has_panels && !right_collapsed,
@@ -251,15 +1295,55 @@ impl Signex {
         )
         .map(Message::StatusBar);
 
-        let mut main = column![menu];
-        if !document.tabs.is_empty() {
+        // Partition tabs across windows: main owns every tab that isn't
+        // currently rendered by an undocked-tab window; each undocked
+        // window owns exactly its one tab. Closing a tab in one window
+        // can no longer reach tabs that belong to the other.
+        let all_undocked_paths: std::collections::HashSet<std::path::PathBuf> = ui
+            .windows
+            .values()
+            .filter_map(|kind| match kind {
+                super::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .collect();
+        let is_main_window = ui.main_window_id == Some(window_id);
+
+        // Main window is borderless: wordmark + menus + drag + search +
+        // min/max/close in a single 36 px row. Undocked tab windows keep
+        // their OS chrome and use the plain styled strip.
+        let top_chrome: Element<'_, Message> = if is_main_window {
+            self.view_main_window_chrome(menu_row, &document.panel_ctx.tokens)
+        } else {
+            menu_bar::wrap_plain(menu_row, &document.panel_ctx.tokens)
+        };
+        let mut main = column![top_chrome];
+        let visible_paths: std::collections::HashSet<std::path::PathBuf> = if is_main_window {
+            document
+                .tabs
+                .iter()
+                .map(|t| t.path.clone())
+                .filter(|p| !all_undocked_paths.contains(p))
+                .collect()
+        } else {
+            match ui.windows.get(&window_id) {
+                Some(super::state::WindowKind::UndockedTab { path, .. }) => {
+                    std::iter::once(path.clone()).collect()
+                }
+                _ => std::collections::HashSet::new(),
+            }
+        };
+        if !document.tabs.is_empty() && !visible_paths.is_empty() {
+            let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
+                    dragging,
+                    &visible_paths,
                     &document.panel_ctx.tokens,
                 )
-                .map(Message::Tab),
+                .map(move |msg| Message::Tab { window_id, msg }),
             );
         }
         let main = main
@@ -268,7 +1352,17 @@ impl Signex {
             .push(bottom)
             .push(status);
 
+        // Borderless window needs its own edge-resize hit zones — the OS
+        // frame would normally handle this, but `decorations: false`
+        // removes WS_THICKFRAME on Windows. Tab windows keep OS
+        // decorations so they skip the overlay entirely. The overlay is
+        // applied later as a Stack layer over `main` so the content
+        // keeps its natural origin and overlay y-coordinates stay
+        // correct.
+        let main: Element<'_, Message> = main.into();
+
         let has_active_bar = self.has_active_schematic();
+        let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
@@ -278,18 +1372,116 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.close_tab_confirm.is_some()
-            || !document.dock.floating.is_empty();
+            || ui.annotate_dialog_open
+            || ui.annotate_reset_confirm
+            || ui.erc_dialog_open
+            || !document.dock.floating.is_empty()
+            || dragging_tab
+            || ui.net_color_custom.show;
 
         if needs_overlay {
-            let overlays = self.collect_overlays();
+            let mut overlays = self.collect_overlays();
+            // Tab drag ghost: while a tab is being dragged, follow the
+            // cursor with a translucent copy of the tab label (Altium
+            // parity — see the user's screenshot). Gives direct visual
+            // feedback that the tab is being moved and will drop
+            // wherever the user releases, including into a new window
+            // past the edge.
+            if let Some((tab_idx, _, _)) = ui.tab_dragging
+                && let Some(tab) = document.tabs.get(tab_idx)
+            {
+                overlays.push(self.view_tab_drag_ghost(&tab.title));
+            }
             let mut stack = iced::widget::Stack::new().push(main);
+            // Resize edges sit above the content but below functional
+            // overlays (Active Bar, menus, modals) so the 6 px border
+            // strip doesn't eat clicks on those.
+            if is_main_window {
+                stack = stack.push(Self::resize_edges_overlay());
+            }
             for overlay in overlays {
                 stack = stack.push(overlay);
             }
             stack.into()
+        } else if is_main_window {
+            iced::widget::Stack::new()
+                .push(main)
+                .push(Self::resize_edges_overlay())
+                .into()
         } else {
             main.into()
         }
+    }
+
+    /// Full-window-sized Stack overlay that anchors 6 px resize hit
+    /// zones at the borderless main window's edges and corners. Clicks
+    /// on the edges call `iced::window::drag_resize` via
+    /// `StartMainWindowResize`; anywhere in the middle is an empty
+    /// `Space` so events fall through to the content layer below.
+    ///
+    /// Used as a stack layer over `main` rather than as a structural
+    /// wrapper, so the content keeps its natural y-origin and overlay
+    /// coordinates (Active Bar, text edit, net-colour picker) stay
+    /// correct without a +EDGE correction everywhere.
+    fn resize_edges_overlay<'a>() -> Element<'a, Message> {
+        use iced::mouse::Interaction;
+        use iced::widget::{Space, column, mouse_area, row};
+        use iced::window::Direction;
+
+        const EDGE: f32 = 6.0;
+
+        let straight = |direction: Direction,
+                        cursor: Interaction,
+                        horizontal: bool|
+         -> Element<'a, Message> {
+            let (w, h) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
+            };
+            mouse_area(Space::new().width(w).height(h))
+                .on_press(Message::StartMainWindowResize(direction))
+                .interaction(cursor)
+                .into()
+        };
+
+        let corner = |direction: Direction,
+                      cursor: Interaction|
+         -> Element<'a, Message> {
+            mouse_area(
+                Space::new()
+                    .width(Length::Fixed(EDGE))
+                    .height(Length::Fixed(EDGE)),
+            )
+            .on_press(Message::StartMainWindowResize(direction))
+            .interaction(cursor)
+            .into()
+        };
+
+        let top = straight(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
+        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
+        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
+        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
+        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
+        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+
+        // Middle row: left/right edges frame a Fill/Fill empty Space so
+        // the whole overlay is window-sized and the centre passes
+        // clicks through.
+        let middle = row![left, Space::new().width(Length::Fill).height(Length::Fill), right]
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        column![
+            row![nw, top, ne].width(Length::Fill).height(Length::Fixed(EDGE)),
+            middle,
+            row![sw, bottom, se].width(Length::Fill).height(Length::Fixed(EDGE)),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn view_dock_panel(
@@ -381,12 +1573,40 @@ impl Signex {
             .into()
     }
 
-    fn view_center(&self) -> Element<'_, Message> {
-        if self.has_active_schematic() {
-            canvas(&self.interaction_state.canvas)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+    fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
+        let is_main = self.ui_state.main_window_id == Some(window_id);
+        let has_schematic = if is_main {
+            self.has_active_schematic()
+        } else {
+            // An undocked tab window renders if its path still has a
+            // live engine in the HashMap. Falls back to the main
+            // predicate when the window has already been dropped from
+            // the windows map (mid-close frame).
+            self.document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some()
+        };
+        if has_schematic {
+            // Canvas events from non-main windows need to carry the
+            // window_id through to the dispatch layer so the right
+            // per-window canvas receives the mutation. Keyboard
+            // shortcuts that synthesize `Message::CanvasEvent` keep
+            // targeting the main canvas unchanged.
+            let base: Element<'_, Message> =
+                canvas(self.interaction_state.canvas_for_window(window_id))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into();
+            if is_main {
+                base
+            } else {
+                base.map(move |msg| match msg {
+                    Message::CanvasEvent(event) => {
+                        Message::CanvasEventInWindow { window_id, event }
+                    }
+                    other => other,
+                })
+            }
         } else if self.has_active_pcb() {
             canvas(&self.interaction_state.pcb_canvas)
                 .width(Length::Fill)
@@ -432,6 +1652,14 @@ impl Signex {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
+
+        // Custom net-colour picker. Bespoke modal (not the iced_aw
+        // ColorPicker) because the user needs a quick-pick palette +
+        // precise RGB inputs side-by-side.
+        if ui.net_color_custom.show {
+            layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
+            layers.push(self.view_net_color_custom_picker());
+        }
 
         // Altium-style pause overlay: big centered "Placement Paused" card
         // with a Resume button. Clicking Resume clears `pre_placement`,
@@ -601,16 +1829,12 @@ impl Signex {
             layers.push(Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
             )));
-            layers.push(
-                container(column![
-                    iced::widget::Space::new().height(ab_y),
-                    container(row![iced::widget::Space::new().width(adjusted_x), dropdown])
-                        .width(ww),
-                ])
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center)
-                .into(),
-            );
+            // Absolute-position the dropdown with Translate so the
+            // column can auto-size to its widest label. The old
+            // column+row+Space wrapping forced a fixed-width column
+            // which clipped labels like "Elliptical Arc".
+            layers
+                .push(super::view::translate::Translate::new(dropdown, (adjusted_x, ab_y)).into());
         }
 
         if let Some(ref ctx_menu) = interaction.context_menu {
@@ -632,18 +1856,58 @@ impl Signex {
 
         if ui.panel_list_open {
             let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
+            let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
             let has_sch = document.panel_ctx.has_schematic;
             let has_pcb = document.panel_ctx.has_pcb;
+            // Build a lookup of currently-open panel kinds so each row
+            // can show a ✓ mark. A panel counts as "open" if it lives in
+            // any dock region, floats on top, or owns a detached OS
+            // window.
+            let docked: std::collections::HashSet<crate::panels::PanelKind> = [
+                crate::dock::PanelPosition::Left,
+                crate::dock::PanelPosition::Right,
+                crate::dock::PanelPosition::Bottom,
+            ]
+            .iter()
+            .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
+            .collect();
+            let floating: std::collections::HashSet<crate::panels::PanelKind> =
+                document.dock.floating.iter().map(|fp| fp.kind).collect();
+            let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
+                .windows
+                .values()
+                .filter_map(|w| match w {
+                    super::state::WindowKind::DetachedPanel(k) => Some(*k),
+                    _ => None,
+                })
+                .collect();
+            let is_open = |k: crate::panels::PanelKind| {
+                docked.contains(&k) || floating.contains(&k) || detached.contains(&k)
+            };
             let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
                 .iter()
                 .filter(|&&kind| {
                     (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
                 })
                 .map(|&kind| {
+                    // Altium parity: a leading ✓ column marks open panels
+                    // so the user can see at a glance which ones are
+                    // already somewhere on screen. Clicking an open panel
+                    // still fires OpenPanel — the dock brings it forward.
+                    let check = if is_open(kind) { "\u{2713}" } else { "" };
                     iced::widget::button(
-                        iced::widget::text(kind.label().to_string())
-                            .size(11)
-                            .color(text_c),
+                        iced::widget::row![
+                            iced::widget::container(
+                                iced::widget::text(check.to_string())
+                                    .size(11)
+                                    .color(text_muted),
+                            )
+                            .width(Length::Fixed(16.0)),
+                            iced::widget::text(kind.label().to_string())
+                                .size(11)
+                                .color(text_c),
+                        ]
+                        .align_y(iced::Alignment::Center),
                     )
                     .padding([4, 12])
                     .width(Length::Fill)
@@ -653,24 +1917,29 @@ impl Signex {
                 })
                 .collect();
 
-            let popup = container(
-                iced::widget::scrollable(column(panel_items).spacing(0).width(180)).height(300),
-            )
-            .padding([6, 0])
-            .style(crate::styles::context_menu(&document.panel_ctx.tokens));
+            // Drop the scrollable wrapper — the list fits the window at
+            // full height (15-ish panels × 21 px each = ~315 px) and a
+            // menu-style popup reads cleaner without a scrollbar.
+            let popup = container(column(panel_items).spacing(0).width(210))
+                .padding([6, 0])
+                .style(crate::styles::context_menu(&document.panel_ctx.tokens));
 
             layers.push(Self::dismiss_layer(Message::TogglePanelList));
-            layers.push(
-                container(
-                    container(popup)
-                        .align_x(iced::alignment::Horizontal::Right)
-                        .align_y(iced::alignment::Vertical::Bottom)
-                        .padding([15, 10]),
-                )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            );
+            // Anchor the popup directly above the "Panels" button in the
+            // bottom-right of the status bar. Approx: popup 210 px wide,
+            // 22 px per row × visible rows + 12 px vertical padding.
+            // Status bar sits at y = wh - 22, so we place the popup so
+            // its bottom edge lands just above it.
+            let (ww, wh) = ui.window_size;
+            let visible_rows = crate::panels::ALL_PANELS
+                .iter()
+                .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
+                .count() as f32;
+            let popup_w = 210.0_f32;
+            let popup_h = visible_rows * 22.0 + 12.0;
+            let left = (ww - popup_w - 10.0).max(0.0);
+            let top = (wh - popup_h - 26.0).max(0.0);
+            layers.push(translate::Translate::new(Element::from(popup), (left, top)).into());
         }
 
         if let Some(fp) = document.dock.floating.iter().find(|fp| fp.dragging) {
@@ -716,22 +1985,15 @@ impl Signex {
             }
         }
 
-        let (ww, wh) = ui.window_size;
         for i in 0..document.dock.floating.len() {
             if let Some(panel_widget) = document.dock.view_floating_panel(i, &document.panel_ctx) {
                 let fp = &document.dock.floating[i];
-                let max_x = (ww - fp.width).max(0.0);
-                let px = fp.x.clamp(0.0, max_x);
-                let py = fp.y.clamp(0.0, wh - 40.0).max(0.0);
+                // No clamp — panels follow Altium behaviour and may be
+                // dragged anywhere, even past the window edge. The OS clips
+                // at the window boundary; within that, Translate renders
+                // the panel at fp.(x, y) without resizing it.
                 layers.push(
-                    column![
-                        iced::widget::Space::new().height(py),
-                        row![
-                            iced::widget::Space::new().width(px),
-                            panel_widget.map(Message::Dock),
-                        ],
-                    ]
-                    .into(),
+                    translate::Translate::new(panel_widget.map(Message::Dock), (fp.x, fp.y)).into(),
                 );
             }
         }
@@ -743,8 +2005,10 @@ impl Signex {
                 ui.theme_id,
                 &ui.preferences_draft_font,
                 ui.preferences_draft_power_port_style,
+                ui.preferences_draft_label_style,
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
+                &ui.erc_severity_override,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
@@ -756,17 +2020,38 @@ impl Signex {
             layers.push(dialog);
         }
 
-        if let Some(idx) = ui.close_tab_confirm {
-            if let Some(tab) = document.tabs.get(idx) {
-                layers.push(self.view_close_tab_confirm(&tab.title));
-            }
+        if let Some(idx) = ui.close_tab_confirm
+            && let Some(tab) = document.tabs.get(idx)
+        {
+            layers.push(self.view_close_tab_confirm(&tab.title));
+        }
+
+        // Skip overlay rendering for any modal whose detached OS window
+        // owns the view. Without this guard the user sees the modal in
+        // both the main window and the popped-out window at the same
+        // time.
+        let modal_detached = |m: super::state::ModalId| -> bool {
+            ui.windows
+                .values()
+                .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m))
+        };
+
+        if ui.annotate_dialog_open && !modal_detached(super::state::ModalId::AnnotateDialog) {
+            layers.push(self.view_annotate_dialog());
+        }
+        if ui.annotate_reset_confirm && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
+        {
+            layers.push(self.view_annotate_reset_confirm());
+        }
+        if ui.erc_dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
+            layers.push(self.view_erc_dialog());
         }
 
         layers
     }
 
     fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
-        use iced::widget::{button, text, Space};
+        use iced::widget::{Space, button, text};
         use iced::{Background, Border, Color, Theme};
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -786,22 +2071,19 @@ impl Signex {
             } else {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.04)
             };
-            button(
-                container(text(label.to_string()).size(12).color(label_color))
-                    .padding([5, 14]),
-            )
-            .on_press(msg)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    color: border_c,
-                },
-                text_color: label_color,
-                ..iced::widget::button::Style::default()
-            })
-            .into()
+            button(container(text(label.to_string()).size(12).color(label_color)).padding([5, 14]))
+                .on_press(msg)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(Background::Color(bg)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 4.0.into(),
+                        color: border_c,
+                    },
+                    text_color: label_color,
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
         };
 
         let dialog = container(

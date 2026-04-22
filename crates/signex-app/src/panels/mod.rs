@@ -1,7 +1,9 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
+use iced::mouse;
+use iced::widget::canvas;
 use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -9,7 +11,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum PanelKind {
     Projects,
@@ -17,6 +19,7 @@ pub enum PanelKind {
     Navigator,
     Properties,
     Filter,
+    Erc,
     Messages,
     Signal,
     Drc,
@@ -43,6 +46,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Filter,
     PanelKind::SchFilter,
     PanelKind::SchList,
+    PanelKind::Erc,
     PanelKind::Messages,
     PanelKind::Signal,
     PanelKind::Drc,
@@ -65,6 +69,7 @@ impl PanelKind {
             PanelKind::Navigator
                 | PanelKind::Properties
                 | PanelKind::Filter
+                | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
                 | PanelKind::Signal
@@ -88,6 +93,7 @@ impl PanelKind {
             PanelKind::Navigator => "Navigator",
             PanelKind::Properties => "Properties",
             PanelKind::Filter => "Filter",
+            PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
             PanelKind::Signal => "Signal",
             PanelKind::Drc => "DRC",
@@ -129,6 +135,30 @@ pub struct LibrarySymbolEntry {
     pub symbol_name: String,
     pub library_name: String,
     pub pin_count: usize,
+}
+
+/// Flattened ERC diagnostic row for the ERC panel.
+///
+/// The app flattens per-sheet ERC caches into this list so the panel can
+/// present one navigable table across the entire project.
+#[derive(Debug, Clone)]
+pub struct ErcDiagnosticEntry {
+    pub global_index: usize,
+    pub sheet_name: String,
+    pub sheet_path: std::path::PathBuf,
+    pub severity: ErcSeverityLite,
+    pub rule_label: &'static str,
+    pub message: String,
+    pub world_x: f64,
+    pub world_y: f64,
+    pub select: Option<signex_types::schematic::SelectedItem>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErcSeverityLite {
+    Error,
+    Warning,
+    Info,
 }
 
 pub struct PanelContext {
@@ -194,6 +224,18 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// Transient numeric-input buffers for the drawing properties
+    /// panel — keyed on DrawingFieldId. Keeps half-typed strings
+    /// ("", "-", "2.") alive between rerenders so fields can be
+    /// fully erased and retyped. Reset when selection changes.
+    pub drawing_edit_buf: std::collections::HashMap<DrawingFieldId, String>,
+    /// UUID that owns the current drawing_edit_buf. When
+    /// `selected_uuid` changes the handler clears the buffer.
+    pub drawing_edit_buf_for: Option<uuid::Uuid>,
+    /// The live SchDrawing matching `selected_uuid` when a single
+    /// drawing is selected. Feeds the mini preview canvas in the
+    /// Properties panel so the shape renders true-to-life.
+    pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -201,6 +243,10 @@ pub struct PanelContext {
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
+    /// Flattened ERC diagnostics from the most recent Run-ERC pass.
+    pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
+    /// Focused ERC diagnostic index used by prev/next navigation arrows.
+    pub erc_focus_index: Option<usize>,
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
@@ -340,6 +386,40 @@ pub struct PrePlacementData {
     /// Most-recent cursor world position (for the X/Y readout).
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
+    /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
+    /// Polygon). 0 = Standard default ≈ 0.15 mm.
+    pub shape_width_mm: f64,
+    /// Fill style for shapes that support it (Rect / Circle / Polygon).
+    pub shape_fill: signex_types::schematic::FillType,
+}
+
+/// Stable identifiers for every numeric drawing-field editor so the
+/// panel keeps a transient string buffer per field across rerenders.
+/// Erasing a text_input leaves an empty string in the buffer until
+/// the user types a valid f64, at which point UpdateDrawingEdit fires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DrawingFieldId {
+    LineStartX,
+    LineStartY,
+    LineEndX,
+    LineEndY,
+    LineWidth,
+    RectStartX,
+    RectStartY,
+    RectWidth,
+    RectHeight,
+    RectBorder,
+    CircleCenterX,
+    CircleCenterY,
+    CircleRadius,
+    CircleBorder,
+    ArcCenterX,
+    ArcCenterY,
+    ArcRadius,
+    ArcStartAngle,
+    ArcEndAngle,
+    ArcWidth,
+    PolyBorder,
 }
 
 /// Distinguishes placement flavors so the pre-placement form only shows
@@ -356,6 +436,11 @@ pub enum PrePlacementKind {
     PowerPort,
     TextNote,
     Component,
+    Line,
+    Rectangle,
+    Circle,
+    Arc,
+    Polygon,
     Other,
 }
 
@@ -365,6 +450,15 @@ pub enum PrePlacementKind {
 pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
+    RunErc,
+    /// Clear the current ERC violations list and canvas markers.
+    ClearErc,
+    /// Focus a specific ERC diagnostic row from the global flattened list.
+    FocusErcViolation(usize),
+    /// Focus previous ERC diagnostic row in the global list.
+    FocusPrevErcDiagnostic,
+    /// Focus next ERC diagnostic row in the global list.
+    FocusNextErcDiagnostic,
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -429,6 +523,15 @@ pub enum PanelMsg {
     TogglePrePlacementBold,
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
+    SetPrePlacementShapeWidth(f64),
+    SetPrePlacementShapeFill(signex_types::schematic::FillType),
+    UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
+    /// Numeric text_input keystroke for a drawing field. The string
+    /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
+    /// partial input survives between frames; the handler parses
+    /// best-effort and fires UpdateDrawingEdit when the value is a
+    /// valid f64.
+    DrawingFieldTyping(DrawingFieldId, String),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -489,6 +592,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
+        PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
         PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
@@ -523,6 +627,47 @@ fn chevron_down() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
     H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
         .clone()
+}
+
+// Draft shape icons (16×16). Stylistic draft only — safe to replace
+// with final assets later by dropping equivalent files at the same
+// paths. Loaded once and cached via OnceLock.
+const SVG_SHAPE_LINE: &[u8] = include_bytes!("../../assets/icons/shape_line.svg");
+const SVG_SHAPE_RECT: &[u8] = include_bytes!("../../assets/icons/shape_rect.svg");
+const SVG_SHAPE_CIRCLE: &[u8] = include_bytes!("../../assets/icons/shape_circle.svg");
+const SVG_SHAPE_ARC: &[u8] = include_bytes!("../../assets/icons/shape_arc.svg");
+const SVG_SHAPE_POLYGON: &[u8] = include_bytes!("../../assets/icons/shape_polygon.svg");
+
+fn shape_icon_handle(elem_type: &str) -> Option<svg::Handle> {
+    static LINE: OnceLock<svg::Handle> = OnceLock::new();
+    static RECT: OnceLock<svg::Handle> = OnceLock::new();
+    static CIRCLE: OnceLock<svg::Handle> = OnceLock::new();
+    static ARC: OnceLock<svg::Handle> = OnceLock::new();
+    static POLY: OnceLock<svg::Handle> = OnceLock::new();
+    match elem_type {
+        "Line" => Some(
+            LINE.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_LINE))
+                .clone(),
+        ),
+        "Rectangle" => Some(
+            RECT.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_RECT))
+                .clone(),
+        ),
+        "Circle" => Some(
+            CIRCLE
+                .get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_CIRCLE))
+                .clone(),
+        ),
+        "Arc" => Some(
+            ARC.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_ARC))
+                .clone(),
+        ),
+        "Polygon" => Some(
+            POLY.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_POLYGON))
+                .clone(),
+        ),
+        _ => None,
+    }
 }
 
 /// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
@@ -1624,9 +1769,7 @@ fn view_selected_element_properties<'a>(
                             );
                         } else {
                             for (name, value) in &section_params {
-                                c = c.push(form_input_row(
-                                    name, value, muted, input_bg, input_bdr,
-                                ));
+                                c = c.push(form_input_row(name, value, muted, input_bg, input_bdr));
                             }
                         }
                         c
@@ -1909,6 +2052,9 @@ fn view_selected_element_properties<'a>(
                 ));
             }
         }
+        Some(signex_types::schematic::SelectedKind::Drawing) => {
+            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+        }
         _ => {
             // Generic read-only properties for other types
             let info: Vec<(String, String)> = ctx
@@ -2105,6 +2251,39 @@ fn view_pre_placement<'a>(
                 c
             },
         ));
+    } else if matches!(
+        kind,
+        PrePlacementKind::Line
+            | PrePlacementKind::Rectangle
+            | PrePlacementKind::Circle
+            | PrePlacementKind::Arc
+            | PrePlacementKind::Polygon
+    ) {
+        // Shape tools — Altium-style Width + Fill so users can
+        // preconfigure the next placement via TAB.
+        let width = pp.shape_width_mm;
+        let fill = pp.shape_fill;
+        let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
+        col = col.push(collapsible_section(
+            "preplace_shape",
+            "Properties",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_edit_row_f64(
+                    "Width (mm)",
+                    width,
+                    muted,
+                    PanelMsg::SetPrePlacementShapeWidth,
+                ));
+                if show_fill {
+                    c = c.push(shape_fill_row(fill, muted, border_c));
+                }
+                c
+            },
+        ));
     } else {
         col = col.push(
             container(
@@ -2119,6 +2298,93 @@ fn view_pre_placement<'a>(
     container(scrollable(col).width(Length::Fill))
         .width(Length::Fill)
         .into()
+}
+
+/// Numeric edit row used by the shape pre-placement form. Writes on
+/// submit — partial text mid-type doesn't panic via parse failure.
+fn form_edit_row_f64<'a>(
+    label: &'a str,
+    value: f64,
+    muted: Color,
+    on_submit: impl Fn(f64) -> PanelMsg + 'a + Clone,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{row, text, text_input};
+    let buf = format!("{value:.3}");
+    let on_submit_cb = on_submit.clone();
+    row![
+        text(label)
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        text_input("", &buf)
+            .size(11)
+            .on_input(move |s| {
+                if let Ok(v) = s.parse::<f64>() {
+                    on_submit_cb(v)
+                } else {
+                    PanelMsg::Noop
+                }
+            })
+            .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn shape_fill_row<'a>(
+    current: signex_types::schematic::FillType,
+    muted: Color,
+    _border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{button, row, text};
+    use signex_types::schematic::FillType;
+    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        button(text(label).size(10))
+            .padding([3, 8])
+            .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
+            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Fill")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("None", FillType::None, current == FillType::None),
+            tile("Outline", FillType::Outline, current == FillType::Outline),
+            tile(
+                "Background",
+                FillType::Background,
+                current == FillType::Background
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 fn view_properties_general<'a>(
@@ -3971,6 +4237,165 @@ fn seg_btn<'a>(
     .into()
 }
 
+// ─── ERC Panel ────────────────────────────────────────────────
+
+fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    col = col.push(
+        row![
+            section_title("ERC", &ctx.tokens),
+            Space::new().width(Length::Fill).height(Length::Shrink),
+            iced::widget::button(
+                text("Run ERC (F8)")
+                    .size(11)
+                    .color(theme_ext::text_primary(&ctx.tokens)),
+            )
+            .padding([3, 10])
+            .on_press(PanelMsg::RunErc)
+            .style(crate::styles::menu_item(&ctx.tokens)),
+            Space::new().width(6).height(Length::Shrink),
+            iced::widget::button(
+                text("Clear")
+                    .size(11)
+                    .color(theme_ext::text_secondary(&ctx.tokens)),
+            )
+            .padding([3, 10])
+            .on_press(PanelMsg::ClearErc)
+            .style(crate::styles::menu_item(&ctx.tokens)),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(separator(&ctx.tokens));
+
+    if ctx.erc_diagnostics.is_empty() {
+        col = col.push(
+            text("No ERC diagnostics yet")
+                .size(10)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+        col = col.push(
+            text("Run ERC to populate project-wide diagnostics")
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+        );
+        return col.into();
+    }
+
+    let errors = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Error)
+        .count();
+    let warnings = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Warning)
+        .count();
+    let infos = ctx
+        .erc_diagnostics
+        .iter()
+        .filter(|v| v.severity == ErcSeverityLite::Info)
+        .count();
+    let focus_label = if let Some(i) = ctx.erc_focus_index {
+        format!("{}/{}", i + 1, ctx.erc_diagnostics.len())
+    } else {
+        format!("0/{}", ctx.erc_diagnostics.len())
+    };
+
+    col = col.push(
+        row![
+            text("ERC Diagnostic Results")
+                .size(10)
+                .color(theme_ext::text_primary(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{errors} errors"))
+                .size(10)
+                .color(theme_ext::error_color(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{warnings} warnings"))
+                .size(10)
+                .color(theme_ext::warning_color(&ctx.tokens)),
+            Space::new().width(8).height(Length::Shrink),
+            text(format!("{infos} info"))
+                .size(10)
+                .color(theme_ext::accent(&ctx.tokens)),
+            Space::new().width(Length::Fill).height(Length::Shrink),
+            iced::widget::button(text("<").size(11))
+                .padding([1, 6])
+                .on_press(PanelMsg::FocusPrevErcDiagnostic)
+                .style(crate::styles::menu_item(&ctx.tokens)),
+            Space::new().width(4).height(Length::Shrink),
+            text(focus_label)
+                .size(9)
+                .color(theme_ext::text_secondary(&ctx.tokens)),
+            Space::new().width(4).height(Length::Shrink),
+            iced::widget::button(text(">").size(11))
+                .padding([1, 6])
+                .on_press(PanelMsg::FocusNextErcDiagnostic)
+                .style(crate::styles::menu_item(&ctx.tokens)),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+
+    for v in &ctx.erc_diagnostics {
+        let sev_color = match v.severity {
+            ErcSeverityLite::Error => theme_ext::error_color(&ctx.tokens),
+            ErcSeverityLite::Warning => theme_ext::warning_color(&ctx.tokens),
+            ErcSeverityLite::Info => theme_ext::accent(&ctx.tokens),
+        };
+        let sev_label = match v.severity {
+            ErcSeverityLite::Error => "E",
+            ErcSeverityLite::Warning => "W",
+            ErcSeverityLite::Info => "I",
+        };
+        let is_focused = ctx.erc_focus_index == Some(v.global_index);
+        let row_bg = if is_focused {
+            Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
+        } else {
+            None
+        };
+        col = col.push(
+            iced::widget::button(
+                row![
+                    text(sev_label).size(9).color(sev_color),
+                    Space::new().width(4).height(Length::Shrink),
+                    text(v.rule_label)
+                        .size(9)
+                        .color(theme_ext::text_primary(&ctx.tokens)),
+                    Space::new().width(6).height(Length::Shrink),
+                    text(v.message.clone())
+                        .size(9)
+                        .color(theme_ext::text_secondary(&ctx.tokens)),
+                    Space::new().width(6).height(Length::Shrink),
+                    text(format!(
+                        "{}  ({:.2}, {:.2})  {}",
+                        v.sheet_name,
+                        v.world_x,
+                        v.world_y,
+                        v.sheet_path.display()
+                    ))
+                    .size(9)
+                    .color(theme_ext::text_secondary(&ctx.tokens)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .width(Length::Fill),
+            )
+            .width(Length::Fill)
+            .padding([2, 6])
+            .on_press(PanelMsg::FocusErcViolation(v.global_index))
+            .style(move |_theme: &Theme, status: iced::widget::button::Status| {
+                let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
+                iced::widget::button::Style {
+                    background: row_bg.clone().or(base.background),
+                    ..base
+                }
+            }),
+        );
+    }
+
+    col.into()
+}
+
 // ─── Messages Panel ───────────────────────────────────────────
 
 fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
@@ -3980,7 +4405,7 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             section_title("Messages", &ctx.tokens),
             Space::new().width(Length::Fill).height(Length::Shrink),
             text(format!("level {}", ctx.diagnostics_level))
-                .size(9)
+                .size(10)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
         .align_y(iced::Alignment::Center),
@@ -3999,7 +4424,57 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     } else {
-        for entry in ctx.diagnostics.iter().rev() {
+        // Table header — mirrors Altium's Messages panel with fixed
+        // columns for id, level, source tag, and the message body.
+        let muted = theme_ext::text_secondary(&ctx.tokens);
+        let primary = theme_ext::text_primary(&ctx.tokens);
+        let border = theme_ext::border_color(&ctx.tokens);
+        let header_bg = theme_ext::to_color(&ctx.tokens.hover);
+        let row_bg = theme_ext::to_color(&ctx.tokens.panel_bg);
+        // Alt-row tint: pull a darker variant from the panel background
+        // by shifting alpha. iced::Color lets us blend cheaply.
+        let alt_bg = Color {
+            a: row_bg.a,
+            r: (row_bg.r - 0.02).max(0.0),
+            g: (row_bg.g - 0.02).max(0.0),
+            b: (row_bg.b - 0.02).max(0.0),
+        };
+
+        let th = |label: &str| -> Element<'a, PanelMsg> {
+            container(text(label.to_string()).size(11).color(muted))
+                .padding([4, 8])
+                .into()
+        };
+        // Header row — background fill, no border (separator line
+        // below sits in its own element so the table reads as a grid
+        // of horizontal rules instead of individually framed boxes).
+        col = col.push(
+            container(
+                row![
+                    container(th("#")).width(Length::Fixed(48.0)),
+                    container(th("Level")).width(Length::Fixed(64.0)),
+                    container(th("Source")).width(Length::Fixed(180.0)),
+                    container(th("Message")).width(Length::Fill),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .style(move |_theme: &Theme| iced::widget::container::Style {
+                background: Some(Background::Color(header_bg)),
+                ..iced::widget::container::Style::default()
+            }),
+        );
+        let separator = |bg: Color| -> Element<'a, PanelMsg> {
+            container(Space::new())
+                .height(Length::Fixed(1.0))
+                .width(Length::Fill)
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(Background::Color(bg)),
+                    ..iced::widget::container::Style::default()
+                })
+                .into()
+        };
+        col = col.push(separator(border));
+        for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
             let level_color = match entry.level {
                 crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
                 crate::diagnostics::DiagnosticLevel::Warning => {
@@ -4011,41 +4486,879 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     theme_ext::text_secondary(&ctx.tokens)
                 }
             };
-
+            let bg = if i % 2 == 0 { row_bg } else { alt_bg };
+            let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
+                container(text(label).size(size).color(color))
+                    .padding([4, 8])
+                    .into()
+            };
             col = col.push(
                 container(
-                    column![
-                        row![
-                            text(format!("#{}", entry.id))
-                                .size(9)
-                                .color(theme_ext::text_secondary(&ctx.tokens)),
-                            Space::new().width(6).height(Length::Shrink),
-                            text(entry.level.label()).size(9).color(level_color),
-                            Space::new().width(6).height(Length::Shrink),
-                            text(entry.code.as_str())
-                                .size(9)
-                                .color(theme_ext::text_secondary(&ctx.tokens)),
-                        ]
-                        .align_y(iced::Alignment::Center),
-                        text(entry.message.as_str())
-                            .size(10)
-                            .color(theme_ext::text_primary(&ctx.tokens)),
+                    row![
+                        container(cell(format!("#{}", entry.id), muted, 11.0))
+                            .width(Length::Fixed(48.0)),
+                        container(cell(entry.level.label().to_string(), level_color, 11.0,))
+                            .width(Length::Fixed(64.0)),
+                        container(cell(entry.code.as_str().to_string(), muted, 11.0))
+                            .width(Length::Fixed(180.0)),
+                        container(cell(entry.message.as_str().to_string(), primary, 12.0))
+                            .width(Length::Fill),
                     ]
-                    .spacing(3),
+                    .align_y(iced::Alignment::Center),
                 )
-                .padding([5, 6])
+                // No border on the row — the explicit separator line
+                // drawn below is the grid. Boxes around each entry
+                // (the previous look) were too heavy for a log table.
                 .style(move |_theme: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(theme_ext::to_color(&ctx.tokens.panel_bg))),
-                    border: Border {
-                        width: 1.0,
-                        radius: 0.0.into(),
-                        color: theme_ext::border_color(&ctx.tokens),
-                    },
+                    background: Some(Background::Color(bg)),
                     ..iced::widget::container::Style::default()
                 }),
             );
+            // One-pixel horizontal rule between rows — no right / left
+            // borders so the table reads as a stack of records with
+            // shared separators, matching Altium's Messages panel.
+            col = col.push(separator(border));
         }
     }
 
     container(col).width(Length::Fill).into()
+}
+
+// ─── Drawing properties editor (post-placement) ──────────────────
+
+fn view_drawing_properties<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    _primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use signex_types::schematic::FillType;
+    let get = |key: &str| -> String {
+        ctx.selection_info
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default()
+    };
+    let parse_pair = |s: &str| -> (f64, f64) {
+        let parts: Vec<&str> = s.split(',').collect();
+        let x = parts
+            .first()
+            .and_then(|p| p.trim().parse::<f64>().ok())
+            .unwrap_or(0.0);
+        let y = parts
+            .get(1)
+            .and_then(|p| p.trim().parse::<f64>().ok())
+            .unwrap_or(0.0);
+        (x, y)
+    };
+    let parse_f64 = |s: &str| -> f64 { s.trim().parse::<f64>().ok().unwrap_or(0.0) };
+    let parse_fill = |s: &str| -> FillType {
+        match s {
+            "Outline" => FillType::Outline,
+            "Background" => FillType::Background,
+            _ => FillType::None,
+        }
+    };
+
+    let elem_type = get("Type");
+    // Line + Arc store their stroke in the `Width` key; Rect / Circle
+    // / Polygon put stroke under `Border` and use `Width` for the
+    // X-dimension (Rect) or nothing (Circle / Polygon). Picking the
+    // wrong one here pre-fills the input with the X-dim or 0.
+    let stroke_w = match elem_type.as_str() {
+        "Line" | "Arc" => parse_f64(&get("Width")),
+        _ => parse_f64(&get("Border")),
+    };
+    let fill = parse_fill(&get("Fill"));
+    let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
+
+    let mut col = Column::new().spacing(0).width(Length::Fill);
+    // Header: shape icon + type label. Draft SVGs live at
+    // assets/icons/shape_*.svg and can be swapped out for final art
+    // without touching the panel code.
+    let header_row: Element<'a, PanelMsg> = if let Some(icon) = shape_icon_handle(&elem_type) {
+        row![
+            iced::widget::svg(icon).width(16).height(16),
+            text(elem_type.clone())
+                .size(11)
+                .color(Color::from_rgb(0.90, 0.90, 0.92)),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        text(elem_type.clone())
+            .size(11)
+            .color(Color::from_rgb(0.90, 0.90, 0.92))
+            .into()
+    };
+    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
+    col = col.push(thin_sep(border_c));
+
+    // Live preview canvas — shows the selected shape at panel scale
+    // with optional radius/angle annotations so edits to the rows
+    // below re-render the preview immediately.
+    if let Some(drawing) = &ctx.selected_drawing {
+        let preview = DrawingPreview {
+            drawing: drawing.clone(),
+            stroke: Color::from_rgb(0.94, 0.74, 0.28),
+            fill: Color::from_rgb(0.94, 0.74, 0.28),
+            muted,
+            accent: Color::from_rgb(0.24, 0.62, 0.97),
+        };
+        let canvas_w: Element<'a, PanelMsg> = iced::widget::canvas(preview)
+            .width(Length::Fill)
+            .height(Length::Fixed(160.0))
+            .into();
+        col = col.push(
+            container(canvas_w)
+                .padding([8, 12])
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 0.6))),
+                    border: Border {
+                        width: 1.0,
+                        color: border_c,
+                        radius: 0.0.into(),
+                    },
+                    ..container::Style::default()
+                }),
+        );
+    }
+
+    let buf = &ctx.drawing_edit_buf;
+    match elem_type.as_str() {
+        "Line" => {
+            let (sx, sy) = parse_pair(&get("Start"));
+            let (ex, ey) = parse_pair(&get("End"));
+            col = col.push(collapsible_section(
+                "draw_line",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(drawing_num_row(
+                        "Start X",
+                        DrawingFieldId::LineStartX,
+                        sx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Start Y",
+                        DrawingFieldId::LineStartY,
+                        sy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End X",
+                        DrawingFieldId::LineEndX,
+                        ex,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End Y",
+                        DrawingFieldId::LineEndY,
+                        ey,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width (mm)",
+                        DrawingFieldId::LineWidth,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
+                    c
+                },
+            ));
+        }
+        "Rectangle" => {
+            let (px, py) = parse_pair(&get("Position"));
+            let w_mm = parse_f64(&get("Width"));
+            let h_mm = parse_f64(&get("Height"));
+            col = col.push(collapsible_section(
+                "draw_rect",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(drawing_num_row(
+                        "Position X",
+                        DrawingFieldId::RectStartX,
+                        px,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Position Y",
+                        DrawingFieldId::RectStartY,
+                        py,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width (mm)",
+                        DrawingFieldId::RectWidth,
+                        w_mm,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Height (mm)",
+                        DrawingFieldId::RectHeight,
+                        h_mm,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::RectBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        "Circle" => {
+            let (cx, cy) = parse_pair(&get("Center"));
+            let radius = parse_f64(&get("Radius"));
+            col = col.push(collapsible_section(
+                "draw_circle",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(drawing_num_row(
+                        "Center X",
+                        DrawingFieldId::CircleCenterX,
+                        cx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Center Y",
+                        DrawingFieldId::CircleCenterY,
+                        cy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Radius",
+                        DrawingFieldId::CircleRadius,
+                        radius,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::CircleBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        "Arc" => {
+            let (cx, cy) = parse_pair(&get("Center"));
+            let radius = parse_f64(&get("Radius"));
+            let start_angle = parse_f64(&get("Start Angle"));
+            let end_angle = parse_f64(&get("End Angle"));
+            col = col.push(collapsible_section(
+                "draw_arc",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(drawing_num_row(
+                        "Center X",
+                        DrawingFieldId::ArcCenterX,
+                        cx,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Center Y",
+                        DrawingFieldId::ArcCenterY,
+                        cy,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Radius",
+                        DrawingFieldId::ArcRadius,
+                        radius,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Start Angle",
+                        DrawingFieldId::ArcStartAngle,
+                        start_angle,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "End Angle",
+                        DrawingFieldId::ArcEndAngle,
+                        end_angle,
+                        buf,
+                        muted,
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Width",
+                        DrawingFieldId::ArcWidth,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
+                    c
+                },
+            ));
+        }
+        "Polygon" => {
+            let vert_count = parse_f64(&get("Vertices")) as i32;
+            col = col.push(collapsible_section(
+                "draw_poly",
+                "Properties",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(prop_kv_row(
+                        "Vertices",
+                        &vert_count.to_string(),
+                        muted,
+                        Color::from_rgb(0.90, 0.90, 0.92),
+                    ));
+                    c = c.push(drawing_num_row(
+                        "Border",
+                        DrawingFieldId::PolyBorder,
+                        stroke_w,
+                        buf,
+                        muted,
+                    ));
+                    if show_fill {
+                        c = c.push(drawing_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            ));
+        }
+        _ => {
+            for (key, value) in &ctx.selection_info {
+                if key != "Type" {
+                    col = col.push(prop_kv_row(
+                        key,
+                        value,
+                        muted,
+                        Color::from_rgb(0.9, 0.9, 0.92),
+                    ));
+                }
+            }
+        }
+    }
+    // Stroke colour swatch row — applies to every drawing kind that
+    // matched a known variant above. Reads the current stored colour
+    // from the live SchDrawing so the active tile highlights correctly.
+    if matches!(
+        elem_type.as_str(),
+        "Line" | "Rectangle" | "Circle" | "Arc" | "Polygon"
+    ) {
+        let current_color = ctx.selected_drawing.as_ref().and_then(|d| match d {
+            signex_types::schematic::SchDrawing::Line { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Rect { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Circle { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
+            | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+        });
+        col = col.push(drawing_stroke_color_row(current_color, muted));
+    }
+    col.into()
+}
+
+/// Buffer-backed numeric row — survives empty / partial input so the
+/// user can erase and retype the whole value. Emits DrawingFieldTyping
+/// on every keystroke; the handler commits to the engine when the
+/// string parses as f64.
+fn drawing_num_row<'a>(
+    label: &'a str,
+    field: DrawingFieldId,
+    stored_value: f64,
+    buf: &std::collections::HashMap<DrawingFieldId, String>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::{row, text, text_input};
+    let display = buf
+        .get(&field)
+        .cloned()
+        .unwrap_or_else(|| format!("{stored_value:.3}"));
+    row![
+        text(label)
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        text_input("", &display)
+            .size(11)
+            .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
+            .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Altium-style stroke colour swatch row. A small preset palette
+/// (Theme/Red/Green/Blue/Yellow/Orange/White/Black) lets the user
+/// recolour a placed shape without committing to a full colour
+/// picker. Each tile dispatches UpdateDrawingEdit::StrokeColor.
+fn drawing_stroke_color_row<'a>(
+    current: Option<signex_types::schematic::StrokeColor>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use iced::widget::{button, row, text};
+    use signex_types::schematic::StrokeColor;
+    let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
+    let tile = |label: &'static str,
+                stored: Option<StrokeColor>,
+                active: bool,
+                fill_color: Color|
+     -> Element<'a, PanelMsg> {
+        button(text(label).size(9))
+            .padding([3, 6])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(fill_color)),
+                border: Border {
+                    width: if active { 2.0 } else { 1.0 },
+                    radius: 3.0.into(),
+                    color: if active {
+                        Color::from_rgb(1.0, 1.0, 1.0)
+                    } else {
+                        Color::from_rgb(0.28, 0.28, 0.32)
+                    },
+                },
+                text_color: Color::WHITE,
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    let is_active = |c: Option<StrokeColor>| -> bool {
+        match (current, c) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
+    };
+    let theme_active = current.is_none();
+    row![
+        text("Color")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile(
+                "Auto",
+                None,
+                theme_active,
+                Color::from_rgba(0.28, 0.28, 0.32, 0.6),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE5, 0x3E, 0x3E)),
+                is_active(Some(rgb(0xE5, 0x3E, 0x3E))),
+                Color::from_rgb(0.90, 0.24, 0.24),
+            ),
+            tile(
+                "",
+                Some(rgb(0x3E, 0xA5, 0x44)),
+                is_active(Some(rgb(0x3E, 0xA5, 0x44))),
+                Color::from_rgb(0.24, 0.65, 0.27),
+            ),
+            tile(
+                "",
+                Some(rgb(0x3C, 0x85, 0xD6)),
+                is_active(Some(rgb(0x3C, 0x85, 0xD6))),
+                Color::from_rgb(0.24, 0.52, 0.84),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE6, 0xB7, 0x1E)),
+                is_active(Some(rgb(0xE6, 0xB7, 0x1E))),
+                Color::from_rgb(0.90, 0.72, 0.12),
+            ),
+            tile(
+                "",
+                Some(rgb(0xE0, 0xE0, 0xE0)),
+                is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
+                Color::from_rgb(0.88, 0.88, 0.88),
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn drawing_fill_row<'a>(
+    current: signex_types::schematic::FillType,
+    muted: Color,
+    _border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_types::schematic::FillType;
+    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        iced::widget::button(text(label).size(10))
+            .padding([3, 8])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Fill")
+            .size(10)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("None", FillType::None, current == FillType::None),
+            tile("Outline", FillType::Outline, current == FillType::Outline),
+            tile(
+                "Background",
+                FillType::Background,
+                current == FillType::Background,
+            ),
+        ]
+        .spacing(4)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+// ─── Drawing preview widget ─────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct DrawingPreview {
+    pub drawing: signex_types::schematic::SchDrawing,
+    pub stroke: Color,
+    pub fill: Color,
+    pub muted: Color,
+    pub accent: Color,
+}
+
+impl<Message> canvas::Program<Message> for DrawingPreview {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        use signex_types::schematic::SchDrawing;
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let pad = 14.0_f32;
+        let view_w = (bounds.width - 2.0 * pad).max(20.0);
+        let view_h = (bounds.height - 2.0 * pad).max(20.0);
+        let cx_px = bounds.width / 2.0;
+        let cy_px = bounds.height / 2.0;
+
+        let (min_x, min_y, max_x, max_y) = shape_preview_bbox(&self.drawing);
+        let span_w = (max_x - min_x).abs().max(0.1);
+        let span_h = (max_y - min_y).abs().max(0.1);
+        let scale = (view_w as f64 / span_w).min(view_h as f64 / span_h) as f32;
+        let wcx = (min_x + max_x) * 0.5;
+        let wcy = (min_y + max_y) * 0.5;
+        let w2s = |wx: f64, wy: f64| -> Point {
+            Point::new(
+                cx_px + ((wx - wcx) as f32) * scale,
+                cy_px + ((wy - wcy) as f32) * scale,
+            )
+        };
+
+        let stroke = canvas::Stroke::default()
+            .with_color(self.stroke)
+            .with_width(1.8);
+        let dashed = canvas::Stroke::default()
+            .with_color(Color {
+                a: 0.4,
+                ..self.muted
+            })
+            .with_width(1.0);
+        let annotation = canvas::Stroke::default()
+            .with_color(self.accent)
+            .with_width(1.4);
+
+        match &self.drawing {
+            SchDrawing::Line { start, end, .. } => {
+                frame.stroke(
+                    &canvas::Path::line(w2s(start.x, start.y), w2s(end.x, end.y)),
+                    stroke,
+                );
+                let dot = |f: &mut canvas::Frame, p: Point| {
+                    f.fill(&canvas::Path::circle(p, 3.0), self.accent);
+                };
+                dot(&mut frame, w2s(start.x, start.y));
+                dot(&mut frame, w2s(end.x, end.y));
+            }
+            SchDrawing::Rect {
+                start, end, fill, ..
+            } => {
+                let x0 = start.x.min(end.x);
+                let x1 = start.x.max(end.x);
+                let y0 = start.y.min(end.y);
+                let y1 = start.y.max(end.y);
+                let a = w2s(x0, y0);
+                let b = w2s(x1, y1);
+                let rect_pos = Point::new(a.x.min(b.x), a.y.min(b.y));
+                let rect_size =
+                    iced::Size::new((b.x - a.x).abs().max(1.0), (b.y - a.y).abs().max(1.0));
+                let path = canvas::Path::rectangle(rect_pos, rect_size);
+                if !matches!(fill, signex_types::schematic::FillType::None) {
+                    frame.fill(
+                        &path,
+                        Color {
+                            a: 0.25,
+                            ..self.fill
+                        },
+                    );
+                }
+                frame.stroke(&path, stroke);
+            }
+            SchDrawing::Circle {
+                center,
+                radius,
+                fill,
+                ..
+            } => {
+                let cp = w2s(center.x, center.y);
+                let rs = (*radius as f32) * scale;
+                let path = canvas::Path::circle(cp, rs.max(1.0));
+                if !matches!(fill, signex_types::schematic::FillType::None) {
+                    frame.fill(
+                        &path,
+                        Color {
+                            a: 0.22,
+                            ..self.fill
+                        },
+                    );
+                }
+                frame.stroke(&path, stroke);
+                let spoke = canvas::Path::line(cp, Point::new(cp.x + rs, cp.y));
+                frame.stroke(&spoke, annotation);
+            }
+            SchDrawing::Arc {
+                start, mid, end, ..
+            } => {
+                if let Some((cxw, cyw, rw)) =
+                    circumcircle_points_local((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+                {
+                    let cp = w2s(cxw, cyw);
+                    let rs = (rw as f32) * scale;
+                    frame.stroke(&canvas::Path::circle(cp, rs.max(1.0)), dashed);
+                    let sa = (start.y - cyw).atan2(start.x - cxw);
+                    let ea = (end.y - cyw).atan2(end.x - cxw);
+                    let ma = (mid.y - cyw).atan2(mid.x - cxw);
+                    let (from, to) = arc_sweep_local(sa, ma, ea);
+                    let steps = 64_usize;
+                    let mut prev = w2s(start.x, start.y);
+                    for i in 1..=steps {
+                        let t = i as f64 / steps as f64;
+                        let a = from + (to - from) * t;
+                        let wx = cxw + rw * a.cos();
+                        let wy = cyw + rw * a.sin();
+                        let next = w2s(wx, wy);
+                        frame.stroke(&canvas::Path::line(prev, next), stroke);
+                        prev = next;
+                    }
+                    frame.stroke(&canvas::Path::line(cp, w2s(start.x, start.y)), annotation);
+                    frame.stroke(&canvas::Path::line(cp, w2s(end.x, end.y)), annotation);
+                } else {
+                    frame.stroke(
+                        &canvas::Path::line(w2s(start.x, start.y), w2s(mid.x, mid.y)),
+                        stroke,
+                    );
+                    frame.stroke(
+                        &canvas::Path::line(w2s(mid.x, mid.y), w2s(end.x, end.y)),
+                        stroke,
+                    );
+                }
+            }
+            SchDrawing::Polyline { points, fill, .. } => {
+                if points.len() >= 2 {
+                    let close = !matches!(fill, signex_types::schematic::FillType::None)
+                        && points.len() >= 3;
+                    let path = canvas::Path::new(|b| {
+                        let first = w2s(points[0].x, points[0].y);
+                        b.move_to(first);
+                        for p in &points[1..] {
+                            b.line_to(w2s(p.x, p.y));
+                        }
+                        if close {
+                            b.close();
+                        }
+                    });
+                    if close {
+                        frame.fill(
+                            &path,
+                            Color {
+                                a: 0.22,
+                                ..self.fill
+                            },
+                        );
+                    }
+                    frame.stroke(&path, stroke);
+                    for p in points {
+                        let sp = w2s(p.x, p.y);
+                        frame.fill(&canvas::Path::circle(sp, 2.5), self.accent);
+                    }
+                }
+            }
+        }
+
+        vec![frame.into_geometry()]
+    }
+}
+
+fn shape_preview_bbox(d: &signex_types::schematic::SchDrawing) -> (f64, f64, f64, f64) {
+    use signex_types::schematic::SchDrawing;
+    match d {
+        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => (
+            start.x.min(end.x),
+            start.y.min(end.y),
+            start.x.max(end.x),
+            start.y.max(end.y),
+        ),
+        SchDrawing::Circle { center, radius, .. } => (
+            center.x - *radius,
+            center.y - *radius,
+            center.x + *radius,
+            center.y + *radius,
+        ),
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            let xs = [start.x, mid.x, end.x];
+            let ys = [start.y, mid.y, end.y];
+            let min_x = xs.iter().cloned().fold(f64::INFINITY, f64::min);
+            let max_x = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let min_y = ys.iter().cloned().fold(f64::INFINITY, f64::min);
+            let max_y = ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            (min_x, min_y, max_x, max_y)
+        }
+        SchDrawing::Polyline { points, .. } => {
+            if points.is_empty() {
+                return (-1.0, -1.0, 1.0, 1.0);
+            }
+            let mut min_x = f64::INFINITY;
+            let mut max_x = f64::NEG_INFINITY;
+            let mut min_y = f64::INFINITY;
+            let mut max_y = f64::NEG_INFINITY;
+            for p in points {
+                min_x = min_x.min(p.x);
+                min_y = min_y.min(p.y);
+                max_x = max_x.max(p.x);
+                max_y = max_y.max(p.y);
+            }
+            (min_x, min_y, max_x, max_y)
+        }
+    }
+}
+
+fn circumcircle_points_local(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+) -> Option<(f64, f64, f64)> {
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let (cx, cy) = c;
+    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if d.abs() < 1e-9 {
+        return None;
+    }
+    let ux = ((ax * ax + ay * ay) * (by - cy)
+        + (bx * bx + by * by) * (cy - ay)
+        + (cx * cx + cy * cy) * (ay - by))
+        / d;
+    let uy = ((ax * ax + ay * ay) * (cx - bx)
+        + (bx * bx + by * by) * (ax - cx)
+        + (cx * cx + cy * cy) * (bx - ax))
+        / d;
+    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
+    Some((ux, uy, r))
+}
+
+fn arc_sweep_local(s: f64, m: f64, e: f64) -> (f64, f64) {
+    use std::f64::consts::TAU;
+    let norm = |a: f64| -> f64 {
+        let mut t = a % TAU;
+        if t < 0.0 {
+            t += TAU;
+        }
+        t
+    };
+    let ccw = |a: f64, b: f64| -> f64 {
+        let d = b - a;
+        if d < 0.0 { d + TAU } else { d }
+    };
+    let sn = norm(s);
+    let mn = norm(m);
+    let en = norm(e);
+    let s_to_m = ccw(sn, mn);
+    let s_to_e = ccw(sn, en);
+    if s_to_m <= s_to_e {
+        (s, s + s_to_e)
+    } else {
+        (s, s - (TAU - s_to_e))
+    }
 }

@@ -58,7 +58,7 @@ impl Signex {
                     false,
                     false,
                 );
-                self.interaction_state.canvas.selected = vec![sch::SelectedItem {
+                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::Label,
                 }];
@@ -86,7 +86,7 @@ impl Signex {
                     false,
                     false,
                 );
-                self.interaction_state.canvas.selected = vec![sch::SelectedItem {
+                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::TextNote,
                 }];
@@ -132,7 +132,7 @@ impl Signex {
                     false,
                     false,
                 );
-                self.interaction_state.canvas.selected = vec![sch::SelectedItem {
+                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
                     uuid,
                     kind: sch::SelectedKind::Symbol,
                 }];
@@ -233,6 +233,36 @@ impl Signex {
                                     String::new(),
                                 ),
                             },
+                            Tool::Line => (
+                                PrePlacementKind::Line,
+                                "Line".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Rectangle => (
+                                PrePlacementKind::Rectangle,
+                                "Rectangle".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Circle => (
+                                PrePlacementKind::Circle,
+                                "Full Circle".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Arc => (
+                                PrePlacementKind::Arc,
+                                "Arc".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::Polyline => (
+                                PrePlacementKind::Polygon,
+                                "Polygon".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             _ => (
                                 PrePlacementKind::Other,
                                 format!("{}", self.interaction_state.current_tool),
@@ -291,6 +321,20 @@ impl Signex {
                         .as_ref()
                         .map(|pp| pp.justify_v)
                         .unwrap_or_default();
+                    let prev_shape_width = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_width_mm)
+                        .unwrap_or(0.0);
+                    let prev_shape_fill = self
+                        .document_state
+                        .panel_ctx
+                        .pre_placement
+                        .as_ref()
+                        .map(|pp| pp.shape_fill)
+                        .unwrap_or(signex_types::schematic::FillType::None);
                     let label_text_for_commit = label_text.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
@@ -308,6 +352,8 @@ impl Signex {
                             underline: false,
                             cursor_x_mm: self.ui_state.cursor_x,
                             cursor_y_mm: self.ui_state.cursor_y,
+                            shape_width_mm: prev_shape_width,
+                            shape_fill: prev_shape_fill,
                         });
                     self.document_state
                         .dock
@@ -317,7 +363,7 @@ impl Signex {
                     // the pre-placement form edits the properties used by
                     // the next click. Placement resumes when the user hits
                     // Resume or Enter.
-                    self.interaction_state.canvas.placement_paused = true;
+                    self.interaction_state.active_canvas_mut().placement_paused = true;
                     let _ = label_text_for_commit;
                 }
                 self.finish_update()
@@ -327,24 +373,24 @@ impl Signex {
                 // Keep `pre_placement` alive so the next click consumes the
                 // values the user just edited — only un-pause the canvas and
                 // close any transient selection the dock picked up.
-                self.interaction_state.canvas.placement_paused = false;
-                self.interaction_state.canvas.selected.clear();
+                self.interaction_state.active_canvas_mut().placement_paused = false;
+                self.interaction_state.active_canvas_mut().selected.clear();
                 self.update_selection_info();
                 self.finish_update()
             }
             Message::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.canvas.draw_mode = self.interaction_state.draw_mode;
+                self.interaction_state.active_canvas_mut().draw_mode = self.interaction_state.draw_mode;
                 self.finish_update()
             }
             Message::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.canvas.wire_preview.clear();
-                    self.interaction_state.canvas.drawing_mode = false;
+                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state.active_canvas_mut().drawing_mode = false;
                     self.interaction_state.current_tool = Tool::Select;
-                    self.interaction_state.canvas.tool_preview = None;
+                    self.interaction_state.active_canvas_mut().tool_preview = None;
                 }
                 self.finish_update()
             }
@@ -353,7 +399,7 @@ impl Signex {
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near
                 // the crosshair until the first click.
-                self.interaction_state.canvas.tool_preview = match tool {
+                self.interaction_state.active_canvas_mut().tool_preview = match tool {
                     Tool::Wire => Some("Wire".to_string()),
                     Tool::Bus => Some("Bus".to_string()),
                     Tool::BusEntry => Some("Bus Entry".to_string()),
@@ -375,7 +421,7 @@ impl Signex {
                 // the user sees a sample "Text" glyph at the cursor. Other
                 // tools with ghosts arm them from their placement preset.
                 if tool == Tool::Text {
-                    self.interaction_state.canvas.ghost_text =
+                    self.interaction_state.active_canvas_mut().ghost_text =
                         Some(signex_types::schematic::TextNote {
                             uuid: uuid::Uuid::new_v4(),
                             text: "Text".to_string(),

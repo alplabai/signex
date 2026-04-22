@@ -6,9 +6,9 @@ impl Signex {
     pub(super) fn dispatch_routed_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Menu(msg) => self.handle_menu_message(msg),
-            Message::Tab(msg) => {
-                self.handle_document_tab_message(msg);
-                self.finish_update()
+            Message::Tab { window_id, msg } => {
+                let task = self.handle_document_tab_message(window_id, msg);
+                Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),

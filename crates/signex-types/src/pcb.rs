@@ -6,6 +6,64 @@ use crate::property::PcbProperty;
 pub use crate::schematic::Point;
 
 // ---------------------------------------------------------------------------
+// PCB domain constants
+// ---------------------------------------------------------------------------
+
+/// Standard PCB board thickness in mm (1.6 mm = 63 mil).
+pub const PCB_DEFAULT_THICKNESS_MM: f64 = 1.6;
+
+/// Default PCB grid size in mm (1.27 mm = 50 mil).
+pub const PCB_GRID_MM: f64 = 1.27;
+
+/// Default trace / segment width in mm (0.25 mm = ~10 mil).
+pub const PCB_DEFAULT_TRACE_WIDTH_MM: f64 = 0.25;
+
+/// Minimum trace width fallback in mm (0.1 mm = ~4 mil).
+pub const PCB_TRACK_MIN_MM: f64 = 0.1;
+
+/// Default via finished-hole diameter in mm (0.6 mm = ~24 mil).
+pub const PCB_DEFAULT_VIA_DIAMETER_MM: f64 = 0.6;
+
+/// Default via drill diameter in mm (0.3 mm = ~12 mil).
+pub const PCB_DEFAULT_VIA_DRILL_MM: f64 = 0.3;
+
+/// Minimum via diameter fallback in mm (0.4 mm = ~16 mil).
+pub const PCB_VIA_MIN_DIAMETER_MM: f64 = 0.4;
+
+/// Minimum via drill fallback in mm (0.2 mm = ~8 mil).
+pub const PCB_VIA_MIN_DRILL_MM: f64 = 0.2;
+
+/// Default design-rule clearance in mm (0.2 mm = ~8 mil).
+pub const PCB_DEFAULT_CLEARANCE_MM: f64 = 0.2;
+
+/// Default copper-zone minimum fill thickness in mm (0.254 mm = 10 mil).
+pub const PCB_ZONE_MIN_THICKNESS_MM: f64 = 0.254;
+
+/// Default copper-zone thermal relief gap in mm (0.508 mm = 20 mil).
+pub const PCB_THERMAL_GAP_MM: f64 = 0.508;
+
+/// Default copper-zone thermal bridge width in mm (0.254 mm = 10 mil).
+pub const PCB_THERMAL_BRIDGE_MM: f64 = 0.254;
+
+/// Default graphic / silkscreen line width in mm (0.1 mm = ~4 mil).
+pub const PCB_DEFAULT_GRAPHIC_WIDTH_MM: f64 = 0.1;
+
+/// Default pad size (width and height) in mm (1.0 mm = ~39 mil).
+pub const PCB_DEFAULT_PAD_SIZE_MM: f64 = 1.0;
+
+/// Default PCB text / fp_text font size in mm (1.0 mm = ~39 mil).
+pub const PCB_DEFAULT_TEXT_SIZE_MM: f64 = 1.0;
+
+/// Stroke thickness for PCB text in mm (0.15 mm = ~6 mil).
+pub const PCB_TEXT_THICKNESS_MM: f64 = 0.15;
+
+/// Vertical offset for auto-placed Reference / Value fp_text in mm (2.0 mm = ~79 mil).
+pub const PCB_FP_TEXT_OFFSET_MM: f64 = 2.0;
+
+/// Point-coincidence epsilon for outline deduplication (0.01 mm).
+pub const PCB_COINCIDENCE_EPS: f64 = 0.01;
+
+// ---------------------------------------------------------------------------
 // Pad / Via enums
 // ---------------------------------------------------------------------------
 

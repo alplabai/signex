@@ -112,6 +112,20 @@ fn stroke_default_node(width: f64) -> SExpr {
     )
 }
 
+fn stroke_colored_node(width: f64, color: Option<StrokeColor>) -> SExpr {
+    let mut children = vec![
+        node("width", vec![atom(width)]),
+        node("type", vec![raw("default")]),
+    ];
+    if let Some(c) = color {
+        children.push(node(
+            "color",
+            vec![atom(c.r), atom(c.g), atom(c.b), atom(c.a)],
+        ));
+    }
+    node("stroke", children)
+}
+
 fn fill_type_node(fill: FillType) -> SExpr {
     node("fill", vec![node("type", vec![raw(fill_type_str(fill))])])
 }
@@ -535,11 +549,12 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
             start,
             end,
             width,
+            stroke_color,
         } => node(
             "polyline",
             vec![
                 points_node(&[*start, *end]),
-                stroke_default_node(*width),
+                stroke_colored_node(*width, *stroke_color),
                 node("uuid", vec![atom(uuid.to_string())]),
             ],
         ),
@@ -548,11 +563,12 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
             points,
             width,
             fill,
+            stroke_color,
         } => node(
             "polyline",
             vec![
                 points_node(points),
-                stroke_default_node(*width),
+                stroke_colored_node(*width, *stroke_color),
                 fill_type_node(*fill),
                 node("uuid", vec![atom(uuid.to_string())]),
             ],
@@ -563,12 +579,13 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
             radius,
             width,
             fill,
+            stroke_color,
         } => node(
             "circle",
             vec![
                 node("center", vec![atom(center.x), atom(center.y)]),
                 node("radius", vec![atom(*radius)]),
-                stroke_default_node(*width),
+                stroke_colored_node(*width, *stroke_color),
                 fill_type_node(*fill),
                 node("uuid", vec![atom(uuid.to_string())]),
             ],
@@ -580,13 +597,14 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
             end,
             width,
             fill,
+            stroke_color,
         } => node(
             "arc",
             vec![
                 node("start", vec![atom(start.x), atom(start.y)]),
                 node("mid", vec![atom(mid.x), atom(mid.y)]),
                 node("end", vec![atom(end.x), atom(end.y)]),
-                stroke_default_node(*width),
+                stroke_colored_node(*width, *stroke_color),
                 fill_type_node(*fill),
                 node("uuid", vec![atom(uuid.to_string())]),
             ],
@@ -597,12 +615,13 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
             end,
             width,
             fill,
+            stroke_color,
         } => node(
             "rectangle",
             vec![
                 node("start", vec![atom(start.x), atom(start.y)]),
                 node("end", vec![atom(end.x), atom(end.y)]),
-                stroke_default_node(*width),
+                stroke_colored_node(*width, *stroke_color),
                 fill_type_node(*fill),
                 node("uuid", vec![atom(uuid.to_string())]),
             ],
@@ -1328,6 +1347,7 @@ mod tests {
             end: Point { x: 3.0, y: 4.0 },
             width: 0.15,
             fill: FillType::Background,
+            stroke_color: None,
         };
 
         let out = render(drawing_node(&drawing), 2);
@@ -1353,6 +1373,8 @@ mod tests {
                 direction: "input".to_string(),
                 position: Point { x: 12.0, y: 22.0 },
                 rotation: 0.0,
+                auto_generated: true,
+                user_moved: false,
             }],
             instances: vec![SheetInstance {
                 project: "Main".to_string(),

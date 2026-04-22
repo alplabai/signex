@@ -480,6 +480,66 @@ pub(super) fn field_effective_style(
     (draw_rot, h, v)
 }
 
+/// Find the circle passing through three non-collinear points.
+/// Returns `(cx, cy, radius)` in world space. Returns `None` when
+/// the three points are collinear (determinant ≈ 0), in which case
+/// callers should fall back to chord-segment rendering.
+pub fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let (cx, cy) = c;
+    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if d.abs() < 1e-9 {
+        return None;
+    }
+    let ux = ((ax * ax + ay * ay) * (by - cy)
+        + (bx * bx + by * by) * (cy - ay)
+        + (cx * cx + cy * cy) * (ay - by))
+        / d;
+    let uy = ((ax * ax + ay * ay) * (cx - bx)
+        + (bx * bx + by * by) * (ax - cx)
+        + (cx * cx + cy * cy) * (bx - ax))
+        / d;
+    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
+    Some((ux, uy, r))
+}
+
+/// Given start / mid / end angles (radians) around a circle center,
+/// return the `(from, to)` sweep that passes through `mid`.  The
+/// returned `to` may be outside `[-π, π]` so `from → to` covers the
+/// right arc direction for linear interpolation. Handles the case
+/// where the arc wraps across the ±π branch cut.
+pub fn arc_sweep(start: f64, mid: f64, end: f64) -> (f64, f64) {
+    use std::f64::consts::TAU;
+    // Normalise to [0, 2π).
+    let norm = |a: f64| -> f64 {
+        let mut t = a % TAU;
+        if t < 0.0 {
+            t += TAU;
+        }
+        t
+    };
+    let s = norm(start);
+    let m = norm(mid);
+    let e = norm(end);
+    // CCW distance from `a` to `b` in [0, 2π).
+    let ccw = |a: f64, b: f64| -> f64 {
+        let d = b - a;
+        if d < 0.0 { d + TAU } else { d }
+    };
+    // Walk CCW from s: does we hit m before e?
+    let s_to_m = ccw(s, m);
+    let s_to_e = ccw(s, e);
+    if s_to_m <= s_to_e {
+        // CCW sweep start → end via mid.
+        (start, start + s_to_e)
+    } else {
+        // CW sweep: negative direction to reach end via mid.
+        let cw_dist = TAU - s_to_e;
+        (start, start - cw_dist)
+    }
+}
+
 /// Transform a local library-space point through a symbol instance's
 /// position, rotation, and mirror state, returning a world-space point.
 pub fn instance_transform(
@@ -516,6 +576,10 @@ pub fn render_schematic(
     transform: &ScreenTransform,
     colors: &CanvasColors,
     _bounds: Rectangle,
+    focus: Option<&std::collections::HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<
+        &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    >,
 ) {
     let body_color = to_iced(&colors.body);
     let body_fill_color = to_iced(&colors.body_fill);
@@ -529,34 +593,66 @@ pub fn render_schematic(
     let power_color = to_iced(&colors.power);
     let power_style = crate::power_port_style();
 
+    // AutoFocus: dim non-selected items so the focus set stands out.
+    // When `focus` is None, every item draws at full alpha (normal mode).
+    // When Some, items NOT in the set get their color alpha scaled to
+    // `AUTO_FOCUS_DIM` so the selection reads as the spotlight. 0.28 is
+    // low enough to visibly recede but high enough that the context is
+    // still readable.
+    const AUTO_FOCUS_DIM: f32 = 0.28;
+    let alpha_for = |uuid: &uuid::Uuid| -> f32 {
+        match focus {
+            Some(set) if !set.contains(uuid) => AUTO_FOCUS_DIM,
+            _ => 1.0,
+        }
+    };
+    let dim = |c: iced::Color, a: f32| -> iced::Color { iced::Color { a: c.a * a, ..c } };
+
     // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
     for d in &sheet.drawings {
         drawing::draw_sch_drawing(frame, d, transform, body_color);
     }
 
-    // Z=2: Wires
-    for w in &sheet.wires {
-        wire::draw_wire(frame, w, transform, wire_color);
-    }
+    // Z=2: Wires — per-wire colour overrides win over the theme wire
+    // colour (net-colour flood from the Active Bar palette).
+    // Connected same-colour segments are chained into polylines so that
+    // 45° and 90° corners render with smooth LineJoin::Round.
+    wire::draw_wires(frame, &sheet.wires, transform, |w| {
+        let base = wire_color_overrides
+            .and_then(|o| o.get(&w.uuid))
+            .map(to_iced)
+            .unwrap_or(wire_color);
+        dim(base, alpha_for(&w.uuid))
+    });
 
     // Z=3: Buses
     for b in &sheet.buses {
-        wire::draw_bus(frame, b, transform, bus_color);
+        wire::draw_bus(frame, b, transform, dim(bus_color, alpha_for(&b.uuid)));
     }
 
     // Z=4: Bus entries
     for be in &sheet.bus_entries {
-        wire::draw_bus_entry(frame, be, transform, bus_color);
+        wire::draw_bus_entry(frame, be, transform, dim(bus_color, alpha_for(&be.uuid)));
     }
 
-    // Z=5: Junctions
+    // Z=5: Junctions — honour per-uuid colour overrides so a junction
+    // on a net-coloured net renders in the same colour as the wires.
     for j in &sheet.junctions {
-        junction::draw_junction(frame, j, transform, junction_color);
+        let base = wire_color_overrides
+            .and_then(|o| o.get(&j.uuid))
+            .map(to_iced)
+            .unwrap_or(junction_color);
+        junction::draw_junction(frame, j, transform, dim(base, alpha_for(&j.uuid)));
     }
 
     // Z=6: No-connect markers
     for nc in &sheet.no_connects {
-        junction::draw_no_connect(frame, nc, transform, no_connect_color);
+        junction::draw_no_connect(
+            frame,
+            nc,
+            transform,
+            dim(no_connect_color, alpha_for(&nc.uuid)),
+        );
     }
 
     // Z=7-9: Labels (net, global, hierarchical, power)
@@ -567,33 +663,34 @@ pub fn render_schematic(
             LabelType::Hierarchical => to_iced(&colors.hier_label),
             LabelType::Power => to_iced(&colors.power),
         };
-        label::draw_label(frame, lbl, transform, color, body_fill_color);
+        label::draw_label(
+            frame,
+            lbl,
+            transform,
+            dim(color, alpha_for(&lbl.uuid)),
+            body_fill_color,
+        );
     }
 
     // Z=10-11: Symbol bodies + pins
     for sym in &sheet.symbols {
+        let a = alpha_for(&sym.uuid);
+        let body_c = dim(body_color, a);
+        let body_fill_c = dim(body_fill_color, a);
+        let pin_c = dim(pin_color, a);
+        let power_c = dim(power_color, a);
+        let reference_c = dim(reference_color, a);
+        let value_c = dim(value_color, a);
         if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
-            // Altium mode: always render the built-in power marker style,
-            // independent of library symbol body details.
-            // Power-port label uses the same color as the symbol body —
-            // Altium convention.
-            draw_builtin_power(frame, sym, transform, power_color, power_color);
+            draw_builtin_power(frame, sym, transform, power_c, power_c);
             continue;
         }
 
         if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-            symbol::draw_symbol(
-                frame,
-                sym,
-                lib_sym,
-                transform,
-                body_color,
-                body_fill_color,
-                pin_color,
-            );
+            symbol::draw_symbol(frame, sym, lib_sym, transform, body_c, body_fill_c, pin_c);
 
             // Pins
-            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_color);
+            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_c);
 
             // Reference text — power symbols (#PWR refs) are always hidden
             if let Some(ref ref_text) = sym.ref_text
@@ -608,7 +705,7 @@ pub fn render_schematic(
                     sym,
                     dpos,
                     transform,
-                    reference_color,
+                    reference_c,
                 );
             }
 
@@ -617,32 +714,33 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(
-                    frame,
-                    &sym.value,
-                    val_text,
-                    sym,
-                    dpos,
-                    transform,
-                    value_color,
-                );
+                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_c);
             }
         } else if sym.is_power {
-            // Built-in Altium-style power symbol rendering (no lib_symbol needed)
-            // Power-port label uses the same color as the symbol body —
-            // Altium convention.
-            draw_builtin_power(frame, sym, transform, power_color, power_color);
+            draw_builtin_power(frame, sym, transform, power_c, power_c);
         }
     }
 
     // Z=11b: Child sheets (hierarchical sheets)
     for child in &sheet.child_sheets {
-        drawing::draw_child_sheet(frame, child, transform, body_color, body_fill_color);
+        let a = alpha_for(&child.uuid);
+        drawing::draw_child_sheet(
+            frame,
+            child,
+            transform,
+            dim(body_color, a),
+            dim(body_fill_color, a),
+        );
     }
 
     // Z=12: Text notes
     for tn in &sheet.text_notes {
-        text::draw_text_note(frame, tn, transform, to_iced(&colors.body));
+        text::draw_text_note(
+            frame,
+            tn,
+            transform,
+            dim(to_iced(&colors.body), alpha_for(&tn.uuid)),
+        );
     }
 }
 

@@ -141,7 +141,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_duplicate_requested(&mut self) {
-        if self.interaction_state.canvas.selected.is_empty() || !self.has_active_schematic() {
+        if self.interaction_state.active_canvas().selected.is_empty() || !self.has_active_schematic() {
             return;
         }
 
@@ -155,11 +155,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_selection_copy_requested(&mut self) {
-        let Some(engine) = self.document_state.engine.as_ref() else {
+        let Some(engine) = self.document_state.active_engine() else {
             return;
         };
 
-        let clipboard = engine.collect_selection_clipboard(&self.interaction_state.canvas.selected);
+        let clipboard = engine.collect_selection_clipboard(&self.interaction_state.active_canvas().selected);
 
         self.interaction_state.clipboard_wires = clipboard.wires;
         self.interaction_state.clipboard_buses = clipboard.buses;

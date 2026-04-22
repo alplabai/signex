@@ -14,8 +14,8 @@ use std::sync::{OnceLock, RwLock};
 /// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 
-pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
+pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
 /// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square.
 /// Cap height ≈ 72 % of em-square → scale up by 1/0.72 so visual sizes match Standard.
@@ -26,6 +26,22 @@ pub enum PowerPortStyle {
     Standard,
     #[default]
     Altium,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LabelStyle {
+    #[default]
+    Standard,
+    Altium,
+}
+
+impl std::fmt::Display for LabelStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LabelStyle::Standard => write!(f, "Standard"),
+            LabelStyle::Altium => write!(f, "Altium"),
+        }
+    }
 }
 
 impl std::fmt::Display for PowerPortStyle {
@@ -45,6 +61,7 @@ struct CanvasTextConfig {
     bold: bool,
     italic: bool,
     power_port_style: PowerPortStyle,
+    label_style: LabelStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -74,6 +91,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             bold: false,
             italic: false,
             power_port_style: PowerPortStyle::Altium,
+            label_style: LabelStyle::Standard,
         })
     })
 }
@@ -112,6 +130,19 @@ pub fn power_port_style() -> PowerPortStyle {
         .read()
         .map(|c| c.power_port_style)
         .unwrap_or(PowerPortStyle::Altium)
+}
+
+pub fn set_label_style(style: LabelStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.label_style = style;
+    }
+}
+
+pub fn label_style() -> LabelStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.label_style)
+        .unwrap_or(LabelStyle::Standard)
 }
 
 pub fn canvas_font() -> iced::Font {

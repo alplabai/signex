@@ -1,0 +1,11 @@
+[package]
+name = "signex-erc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+signex-types.workspace = true
+signex-render.workspace = true
+uuid.workspace = true
+serde.workspace = true

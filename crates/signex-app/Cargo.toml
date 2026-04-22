@@ -23,6 +23,20 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
+signex-erc = { workspace = true }
+signex-erc-dsl = { workspace = true }
 rfd = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+# DwmSetWindowAttribute for DWMWA_WINDOW_CORNER_PREFERENCE — used by
+# `src/chrome.rs` to restore Windows 11 rounded corners on the borderless
+# main window (which loses them when `decorations: false` strips the
+# WS_THICKFRAME DWM relies on). 0.61 aligns with what winit already pulls
+# so there's no extra copy in the dep graph.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }

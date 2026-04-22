@@ -15,6 +15,7 @@ use signex_types::schematic::{HAlign, Label, LabelType};
 
 use super::ScreenTransform;
 use super::text::display_text_content;
+use crate::LabelStyle;
 
 pub fn draw_label(
     frame: &mut canvas::Frame,
@@ -35,20 +36,139 @@ pub fn draw_label(
 
     match label.label_type {
         LabelType::Net => draw_net_label(frame, label, transform, color, screen_font),
-        LabelType::Global => draw_global_label(
-            frame,
-            label,
-            transform,
-            color,
-            body_fill,
-            screen_font,
-            font_size_mm,
-        ),
+        LabelType::Global => {
+            if matches!(crate::label_style(), LabelStyle::Altium) {
+                draw_port_label_altium(
+                    frame,
+                    label,
+                    transform,
+                    color,
+                    body_fill,
+                    screen_font,
+                    font_size_mm,
+                );
+            } else {
+                draw_global_label(
+                    frame,
+                    label,
+                    transform,
+                    color,
+                    body_fill,
+                    screen_font,
+                    font_size_mm,
+                );
+            }
+        }
         LabelType::Hierarchical => {
-            draw_hier_label(frame, label, transform, color, screen_font, font_size_mm)
+            if matches!(crate::label_style(), LabelStyle::Altium) {
+                draw_port_label_altium(
+                    frame,
+                    label,
+                    transform,
+                    color,
+                    body_fill,
+                    screen_font,
+                    font_size_mm,
+                );
+            } else {
+                draw_hier_label(frame, label, transform, color, screen_font, font_size_mm);
+            }
         }
         LabelType::Power => {}
     }
+}
+
+fn draw_port_label_altium(
+    frame: &mut canvas::Frame,
+    label: &Label,
+    transform: &ScreenTransform,
+    color: Color,
+    body_fill: Color,
+    screen_font: f32,
+    font_size_mm: f64,
+) {
+    // Altium-like unified port rendering for Global + Hier labels.
+    // Net labels stay untouched in draw_net_label().
+    // Long names need extra body width and right-tip breathing room so
+    // text does not visually collide with the closing arrow notch.
+    let spin = label_spin_style(label);
+    let fs = font_size_mm;
+    let h = fs * 1.4;
+    let arrow_w = h * 0.5;
+    let base_pad = fs * 0.3;
+    let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
+    let extra_body = if text_w > fs * 4.0 { fs * 0.8 } else { fs * 0.0 };
+    let right_breathing = fs * 0.45;
+    let lx = label.position.x;
+    let ly = label.position.y;
+    let sw = (transform.scale * 0.15).clamp(0.5, 2.0);
+
+    if matches!(spin, SpinStyle::Left | SpinStyle::Right) {
+        let conn_right = matches!(spin, SpinStyle::Right);
+        let dir: f64 = if conn_right { 1.0 } else { -1.0 };
+        let body_w = text_w + base_pad * 2.0 + extra_body + right_breathing;
+        let bsx = lx + dir * arrow_w;
+        let bex = lx + dir * (arrow_w + body_w);
+        let tip = lx + dir * (arrow_w + body_w + arrow_w);
+
+        let pts = vec![
+            (lx, ly),
+            (bsx, ly - h / 2.0),
+            (bex, ly - h / 2.0),
+            (tip, ly),
+            (bex, ly + h / 2.0),
+            (bsx, ly + h / 2.0),
+        ];
+        draw_shape_closed_filled(frame, &pts, transform, color, sw, Some(body_fill));
+    } else {
+        let (sx, sy) = transform.world_to_screen(lx, ly);
+        let ra = if matches!(spin, SpinStyle::Up) {
+            -std::f32::consts::FRAC_PI_2
+        } else {
+            std::f32::consts::FRAC_PI_2
+        };
+        let s_h = transform.world_len(h);
+        let s_arr = transform.world_len(arrow_w);
+        let s_body = transform.world_len(text_w + base_pad * 2.0 + extra_body + right_breathing);
+        let s_tip = s_arr + s_body + s_arr;
+        frame.with_save(|f| {
+            f.translate(iced::Vector::new(sx, sy));
+            f.rotate(ra);
+            let pts_s = [
+                iced::Point::new(0.0, 0.0),
+                iced::Point::new(s_arr, -s_h / 2.0),
+                iced::Point::new(s_arr + s_body, -s_h / 2.0),
+                iced::Point::new(s_tip, 0.0),
+                iced::Point::new(s_arr + s_body, s_h / 2.0),
+                iced::Point::new(s_arr, s_h / 2.0),
+            ];
+            let pth = canvas::Path::new(|b: &mut path::Builder| {
+                b.move_to(pts_s[0]);
+                for &p in &pts_s[1..] {
+                    b.line_to(p);
+                }
+                b.close();
+            });
+            f.fill(&pth, body_fill);
+            f.stroke(
+                &pth,
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width((transform.scale * 0.15).clamp(0.5, 2.0)),
+            );
+        });
+    }
+
+    let text_offset = schematic_text_offset_global(label, spin, font_size_mm);
+    draw_spin_text(
+        frame,
+        label,
+        transform,
+        color,
+        screen_font,
+        text_offset,
+        true,
+    );
 }
 
 // Net label: plain text, no slash/anchor line.
