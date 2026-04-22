@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_output::{
     ExportContext, Exporter, NetlistExporter, NetlistOptions, PdfExporter, PdfOptions,
-    ProjectMetadata, SheetSnapshot,
+    ProjectMetadata, SheetSnapshot, PreviewRasterizer, PreviewOptions,
 };
 
 use super::super::super::*;
@@ -130,6 +130,53 @@ impl Signex {
         }
 
         Task::none()
+    }
+
+    pub(crate) fn handle_print_preview_requested(&mut self) {
+        if !self.document_state.has_active_engine() {
+            log::warn!("Print preview: no active schematic");
+            return;
+        }
+
+        let ctx = match build_export_context(&self.document_state) {
+            Some(c) => c,
+            None => {
+                log::warn!("Print preview: no active schematic");
+                return;
+            }
+        };
+
+        let rasterizer = PreviewRasterizer;
+        let opts = PreviewOptions {
+            pdf: PdfOptions::default(),
+            dpi: 96.0,
+        };
+
+        let pages = rasterizer.rasterize(&ctx, &opts);
+
+        if pages.is_empty() {
+            log::warn!("Print preview: no pages rendered");
+            return;
+        }
+
+        // Store preview state in document_state.
+        // TODO: Add preview field to DocumentState
+        log::info!("Print preview: rendered {} page(s)", pages.len());
+    }
+
+    pub(crate) fn handle_print_preview_select_page(&mut self, _idx: usize) {
+        // TODO: Update selected page index in preview state
+        log::debug!("Print preview: select page {}", _idx);
+    }
+
+    pub(crate) fn handle_print_preview_export(&mut self) {
+        // Reuse the PDF export flow
+        self.handle_export_pdf_requested();
+    }
+
+    pub(crate) fn handle_print_preview_close(&mut self) {
+        // TODO: Clear preview state from document_state
+        log::debug!("Print preview: closed");
     }
 }
 
