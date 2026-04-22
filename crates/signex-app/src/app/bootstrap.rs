@@ -212,6 +212,9 @@ impl Signex {
                 standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
+                pdf_options_dialog: None,
+                pending_pdf_options: None,
+                export_error: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -390,8 +393,12 @@ impl Signex {
                         Message::Tool(ToolMessage::SelectTool(Tool::Component))
                     }
                     // Ctrl+P: Print Preview
-                    (keyboard::Key::Character(c), m) if c == "p" && m.command() => {
+                    (keyboard::Key::Character(c), m) if c == "p" && m.command() && !m.shift() => {
                         Message::PrintPreviewRequested
+                    }
+                    // Ctrl+Shift+P: Export PDF options dialog
+                    (keyboard::Key::Character(c), m) if c == "P" && m.command() && m.shift() => {
+                        Message::ExportPdfOpenDialog
                     }
                     // Ctrl+, open Preferences
                     (keyboard::Key::Character(c), m) if c == "," && m.command() => {
