@@ -10,12 +10,17 @@ use std::path::PathBuf;
 use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
+pub mod bom;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
 pub mod substitution;
 pub mod template;
 
+pub use bom::{
+    BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, BomOutput, BomTable, BomError,
+    BomMetadata, rollup,
+};
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
     ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
@@ -71,6 +76,9 @@ pub struct ProjectMetadata {
 
 #[derive(Debug, Error)]
 pub enum ExportError {
+    #[error("bom: {0}")]
+    Bom(#[from] bom::BomError),
+
     #[error("pdf: {0}")]
     Pdf(#[from] pdf::PdfError),
 
