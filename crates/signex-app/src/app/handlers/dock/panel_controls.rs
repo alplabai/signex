@@ -9,9 +9,9 @@ impl Signex {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
             _ => crate::panels::paper_dimensions(&ctx.paper_size),
         };
-        self.interaction_state.canvas.paper_width_mm = w;
-        self.interaction_state.canvas.paper_height_mm = h;
-        self.interaction_state.canvas.clear_bg_cache();
+        self.interaction_state.active_canvas_mut().paper_width_mm = w;
+        self.interaction_state.active_canvas_mut().paper_height_mm = h;
+        self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
     pub(super) fn handle_dock_panel_control_message(
@@ -22,16 +22,37 @@ impl Signex {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
             }
+            crate::panels::PanelMsg::RunErc => {
+                let _ = self.handle_run_erc();
+                self.refresh_panel_ctx();
+            }
+            crate::panels::PanelMsg::ClearErc => {
+                self.ui_state.erc_violations.clear();
+                self.ui_state.erc_violations_by_path.clear();
+                self.ui_state.erc_focus_global_index = None;
+                self.interaction_state.active_canvas_mut().erc_markers.clear();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.refresh_panel_ctx();
+            }
+            crate::panels::PanelMsg::FocusErcViolation(idx) => {
+                let _ = self.handle_focus_erc_diagnostic_index(*idx);
+            }
+            crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
+                let _ = self.handle_focus_erc_diagnostic_offset(-1);
+            }
+            crate::panels::PanelMsg::FocusNextErcDiagnostic => {
+                let _ = self.handle_focus_erc_diagnostic_offset(1);
+            }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.canvas.grid_visible = self.ui_state.grid_visible;
+                self.interaction_state.active_canvas_mut().grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.canvas.snap_enabled = self.ui_state.snap_enabled;
+                self.interaction_state.active_canvas_mut().snap_enabled = self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -56,13 +77,13 @@ impl Signex {
                 }
                 // Mirror the edit to whichever ghost is armed so the live
                 // preview reflects the user's typed net/port/text name.
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.text = text.clone();
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_symbol {
                     g.value = text.clone();
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.text = text.clone();
                 }
             }
@@ -75,13 +96,13 @@ impl Signex {
                 if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
                     pre_placement.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_symbol {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_symbol {
                     g.rotation = *rotation;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.rotation = *rotation;
                 }
             }
@@ -95,10 +116,10 @@ impl Signex {
                     pp.font_size_pt = *pt;
                 }
                 let fs_mm = *pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM;
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.font_size = fs_mm;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.font_size = fs_mm;
                 }
             }
@@ -106,10 +127,10 @@ impl Signex {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.justify_h = *h;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_label {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.justify = *h;
                 }
-                if let Some(g) = &mut self.interaction_state.canvas.ghost_text {
+                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
                     g.justify_h = *h;
                 }
             }
@@ -133,24 +154,99 @@ impl Signex {
                     pp.underline = !pp.underline;
                 }
             }
+            crate::panels::PanelMsg::SetPrePlacementShapeWidth(w) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.shape_width_mm = (*w).max(0.0);
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementShapeFill(f) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.shape_fill = *f;
+                }
+            }
+            crate::panels::PanelMsg::DrawingFieldTyping(field_id, text) => {
+                // Rebind the buffer ownership when selection changes
+                // so a prior drawing's half-typed text doesn't bleed
+                // into the newly selected one.
+                let current_uuid = self.document_state.panel_ctx.selected_uuid;
+                if self.document_state.panel_ctx.drawing_edit_buf_for != current_uuid {
+                    self.document_state.panel_ctx.drawing_edit_buf.clear();
+                    self.document_state.panel_ctx.drawing_edit_buf_for = current_uuid;
+                }
+                self.document_state
+                    .panel_ctx
+                    .drawing_edit_buf
+                    .insert(*field_id, text.clone());
+                // Emit the engine update only when the string parses
+                // cleanly — empty / partial input stays in the buffer
+                // so the user can keep typing.
+                if let Ok(v) = text.trim().parse::<f64>() {
+                    use crate::app::contracts::DrawingFieldEdit as E;
+                    use crate::panels::DrawingFieldId as F;
+                    let edit = match field_id {
+                        F::LineStartX => E::LineStartX(v),
+                        F::LineStartY => E::LineStartY(v),
+                        F::LineEndX => E::LineEndX(v),
+                        F::LineEndY => E::LineEndY(v),
+                        F::LineWidth => E::Width(v),
+                        F::RectStartX => E::RectStartX(v),
+                        F::RectStartY => E::RectStartY(v),
+                        F::RectWidth => E::RectWidthMm(v),
+                        F::RectHeight => E::RectHeightMm(v),
+                        F::RectBorder => E::Width(v),
+                        F::CircleCenterX => E::CircleCenterX(v),
+                        F::CircleCenterY => E::CircleCenterY(v),
+                        F::CircleRadius => E::CircleRadius(v),
+                        F::CircleBorder => E::Width(v),
+                        F::ArcCenterX => E::ArcCenterX(v),
+                        F::ArcCenterY => E::ArcCenterY(v),
+                        F::ArcRadius => E::ArcRadius(v),
+                        F::ArcStartAngle => E::ArcStartAngle(v),
+                        F::ArcEndAngle => E::ArcEndAngle(v),
+                        F::ArcWidth => E::Width(v),
+                        F::PolyBorder => E::Width(v),
+                    };
+                    if let Some(uuid) = current_uuid.filter(|_| {
+                        matches!(
+                            self.document_state.panel_ctx.selected_kind,
+                            Some(signex_types::schematic::SelectedKind::Drawing)
+                        )
+                    }) {
+                        let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
+                    }
+                }
+            }
+            crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
+                // Fire the engine-side update only if exactly one
+                // drawing is selected — the panel shows post-placement
+                // fields only in that case.
+                if let Some(uuid) = self.document_state.panel_ctx.selected_uuid.filter(|_| {
+                    matches!(
+                        self.document_state.panel_ctx.selected_kind,
+                        Some(signex_types::schematic::SelectedKind::Drawing)
+                    )
+                }) {
+                    let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
+                }
+            }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
                 // OK button: resume placement but keep pre_placement so the
                 // next click uses the values the user just edited.
-                self.interaction_state.canvas.placement_paused = false;
+                self.interaction_state.active_canvas_mut().placement_paused = false;
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
-                self.interaction_state.canvas.snap_grid_mm = *size as f64;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
-                self.interaction_state.canvas.visible_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().visible_grid_mm = *size as f64;
                 self.interaction_state.pcb_canvas.visible_grid_mm = *size as f64;
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnapHotspots => {
@@ -170,15 +266,15 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
                 self.document_state.panel_ctx.canvas_font_size = *size;
                 signex_render::set_canvas_font_size(*size);
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
@@ -187,8 +283,8 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
@@ -197,8 +293,8 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.canvas.clear_content_cache();
-                self.interaction_state.canvas.clear_overlay_cache();
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_overlay_cache();
             }
             crate::panels::PanelMsg::OpenCanvasFontPopup => {
                 self.document_state.panel_ctx.canvas_font_popup_open = true;
@@ -233,8 +329,8 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetSheetColor(color) => {
                 self.document_state.panel_ctx.sheet_color = *color;
-                self.interaction_state.canvas.theme_paper = color.to_color();
-                self.interaction_state.canvas.clear_bg_cache();
+                self.interaction_state.active_canvas_mut().theme_paper = color.to_color();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
             }
             crate::panels::PanelMsg::DragComponentsSplit => {
                 self.interaction_state.dragging = Some(DragTarget::ComponentsSplit);

@@ -6,6 +6,24 @@ use crate::panels::PanelKind;
 
 use super::*;
 
+/// Load the 256×256 PNG bundled by `installer/build-icons.sh` into an
+/// [`iced::window::Icon`]. When `has_bundled_icon` isn't set (i.e. the PNG
+/// hasn't been generated yet) this returns `None` and the window opens with
+/// the platform default icon.
+fn bundled_window_icon() -> Option<iced::window::Icon> {
+    #[cfg(has_bundled_icon)]
+    {
+        let bytes: &[u8] = include_bytes!("../../assets/brand/generated/signex-256.png");
+        let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+        let (w, h) = img.dimensions();
+        iced::window::icon::from_rgba(img.into_raw(), w, h).ok()
+    }
+    #[cfg(not(has_bundled_icon))]
+    {
+        None
+    }
+}
+
 fn selection_slot_from_key(key: &str) -> Option<usize> {
     match key {
         "1" => Some(0),
@@ -24,12 +42,26 @@ impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
 
     pub fn new() -> (Self, Task<Message>) {
-        let mut dock = DockArea::new();
-        dock.add_panel(PanelPosition::Left, PanelKind::Projects);
-        dock.add_panel(PanelPosition::Left, PanelKind::Components);
-        dock.add_panel(PanelPosition::Right, PanelKind::Properties);
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Messages);
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
+        // Default panel layout — restored from disk if a previous
+        // session persisted one, otherwise seeded with the Altium-ish
+        // defaults: Projects + Components + Signal on the left,
+        // Properties + Messages on the right, ERC on the bottom
+        // (user's request — bottom is reserved for future log tails).
+        let mut dock = match crate::fonts::read_dock_layout() {
+            Some(saved) => saved,
+            None => {
+                let mut d = DockArea::new();
+                d.add_panel(PanelPosition::Left, PanelKind::Projects);
+                d.add_panel(PanelPosition::Left, PanelKind::Components);
+                d.add_panel(PanelPosition::Left, PanelKind::Signal);
+                d.add_panel(PanelPosition::Right, PanelKind::Properties);
+                d.add_panel(PanelPosition::Right, PanelKind::Messages);
+                d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
+                d
+            }
+        };
+        // Silence unused-mut when read_dock_layout returns Some.
+        let _ = &mut dock;
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -43,7 +75,7 @@ impl Signex {
             kicad_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
         }
 
-        let app = Self {
+        let mut app = Self {
             ui_state: UiState {
                 theme_id: ThemeId::Signex,
                 unit: Unit::Mm,
@@ -72,15 +104,45 @@ impl Signex {
                 preferences_draft_font: String::new(),
                 power_port_style: crate::fonts::read_power_port_style_pref(),
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
+                label_style: crate::fonts::read_label_style_pref(),
+                preferences_draft_label_style: crate::fonts::read_label_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
                 close_tab_confirm: None,
+                erc_violations: Vec::new(),
+                erc_violations_by_path: std::collections::HashMap::new(),
+                erc_focus_global_index: None,
+                erc_severity_override: crate::fonts::read_erc_severity_overrides(),
+                net_colors: std::collections::HashMap::new(),
+                auto_focus: false,
+                annotate_dialog_open: false,
+                annotate_order: crate::app::state::AnnotateOrder::AcrossThenDown,
+                erc_dialog_open: false,
+                annotate_reset_confirm: false,
+                modal_offsets: std::collections::HashMap::new(),
+                modal_dragging: None,
+                tab_dragging: None,
+                main_window_id: None,
+                windows: std::collections::HashMap::new(),
+                move_selection: crate::app::state::MoveSelectionState::default(),
+                net_color_palette_open: false,
+                parameter_manager_open: false,
+                reorder_picker: None,
+                pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
+                annotate_locked: std::collections::HashSet::new(),
+                selection_mode: signex_render::schematic::hit_test::SelectionMode::default(),
+                pending_net_color: None,
+                wire_color_overrides: std::collections::HashMap::new(),
+                lasso_polygon: None,
+                net_color_undo: Vec::new(),
+                net_color_custom: crate::app::state::NetColorCustomState::default(),
             },
             document_state: DocumentState {
                 dock,
                 tabs: vec![],
                 active_tab: 0,
-                engine: None,
+                engines: std::collections::HashMap::new(),
+                active_path: None,
                 project_path: None,
                 project_data: None,
                 panel_ctx: crate::panels::PanelContext {
@@ -125,9 +187,14 @@ impl Signex {
                     selected_uuid: None,
                     selected_kind: None,
                     selection_info: vec![],
+                    drawing_edit_buf: std::collections::HashMap::new(),
+                    drawing_edit_buf_for: None,
+                    selected_drawing: None,
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
+                    erc_diagnostics: Vec::new(),
+                    erc_focus_index: None,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL
@@ -148,6 +215,7 @@ impl Signex {
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
                 canvas: sch_canvas,
+                canvases: std::collections::HashMap::new(),
                 pcb_canvas,
                 dragging: None,
                 drag_start_pos: None,
@@ -156,6 +224,9 @@ impl Signex {
                 undo_stack: crate::undo::UndoStack::new(100),
                 wire_points: Vec::new(),
                 wire_drawing: false,
+                arc_points: Vec::new(),
+                polyline_points: Vec::new(),
+                shape_anchor: None,
                 clipboard_wires: Vec::new(),
                 clipboard_buses: Vec::new(),
                 clipboard_labels: Vec::new(),
@@ -185,14 +256,39 @@ impl Signex {
             app.ui_state.canvas_font_italic,
         );
         signex_render::set_power_port_style(app.ui_state.power_port_style);
-        (app, Task::none())
+        signex_render::set_label_style(app.ui_state.label_style);
+
+        // Multi-window (Phase 1): open the main OS window here. Phase 2
+        // will open additional windows on demand when the user drags a
+        // modal off the main window, and Phase 3 will do the same for
+        // undocked tabs. The returned Task produces the settled Id once
+        // winit confirms the window is mapped.
+        let (main_id, open_task) = iced::window::open(iced::window::Settings {
+            size: iced::Size::new(1400.0, 900.0),
+            icon: bundled_window_icon(),
+            // Borderless main window: the custom chrome in
+            // `Signex::view_main_window_chrome` supplies wordmark +
+            // menus + drag zone + search bar + min/max/close. Edge
+            // resize handles inside `view_main_for` add 6 px strips
+            // that call `iced::window::drag_resize` per direction so
+            // the user can still drag-resize the window.
+            decorations: false,
+            ..Default::default()
+        });
+        app.ui_state.main_window_id = Some(main_id);
+        let boot_task = open_task.map(Message::MainWindowOpened);
+        (app, boot_task)
     }
 
-    pub fn title(&self) -> String {
-        "Signex".to_string()
+    pub fn title(&self, _id: iced::window::Id) -> String {
+        format!("Signex {}", env!("CARGO_PKG_VERSION"))
     }
 
-    pub fn theme(&self) -> Theme {
+    pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
+        Some(self.resolve_theme())
+    }
+
+    fn resolve_theme(&self) -> Theme {
         let id = if self.ui_state.preferences_open {
             self.ui_state.preferences_draft_theme
         } else {
@@ -313,6 +409,30 @@ impl Signex {
                     (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                         Message::CanvasEvent(CanvasEvent::FitAll)
                     }
+                    (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
+                    (keyboard::Key::Named(keyboard::key::Named::F9), _) => Message::ToggleAutoFocus,
+                    // F5: Net color palette (Altium convention).
+                    (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
+                        Message::OpenNetColorPalette
+                    }
+                    // Shift+S: cycle rubber-band selection mode
+                    // (Inside → Outside → TouchingLine).
+                    (keyboard::Key::Character(c), m) if c == "S" && m.shift() && !m.command() => {
+                        Message::CycleSelectionMode
+                    }
+                    // Enter also closes the in-flight lasso (in
+                    // addition to a second canvas click). Useful
+                    // when the user's cursor is somewhere they'd
+                    // rather not drop a final vertex.
+                    (keyboard::Key::Named(keyboard::key::Named::Enter), _) => Message::LassoCommit,
+                    // Alt+A: annotate (Altium convention, incremental)
+                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
+                        Message::Annotate(signex_engine::AnnotateMode::Incremental)
+                    }
+                    // Shift+Alt+A: reset and renumber
+                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() && m.shift() => {
+                        Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
+                    }
                     // Delete selected
                     (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
                         Message::DeleteSelected
@@ -399,13 +519,33 @@ impl Signex {
         // app updates when idle, which noticeably hurts smoothness on macOS.
         let drag_active = self.interaction_state.dragging.is_some()
             || self.document_state.dock.tab_drag.is_some()
+            || self.ui_state.modal_dragging.is_some()
+            || self.ui_state.tab_dragging.is_some()
             || self
                 .document_state
                 .dock
                 .floating
                 .iter()
                 .any(|fp| fp.dragging);
-        let mouse_sub = if drag_active {
+        let modal_drag_active = self.ui_state.modal_dragging.is_some();
+        let mouse_sub = if modal_drag_active {
+            // Modal drag takes priority — release ends the modal drag
+            // specifically (not the generic DragEnd).
+            iced::event::listen().map(|event| match event {
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Message::DragMove(position.x, position.y)
+                }
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )) => Message::ModalDragEnd,
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
+                _ => Message::Noop,
+            })
+        } else if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                     Message::DragMove(position.x, position.y)
@@ -413,27 +553,53 @@ impl Signex {
                 iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                     iced::mouse::Button::Left,
                 )) => Message::DragEnd,
-                // Any click dismisses context menu
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
-                iced::Event::Window(iced::window::Event::Resized(size)) => {
-                    Message::WindowResized(size.width, size.height)
-                }
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
                 _ => Message::Noop,
             })
         } else {
+            // Always track the cursor so `last_mouse_pos` is fresh when the
+            // user starts a modal drag — otherwise the first delta is huge
+            // and the dialog jumps. DragMove is a no-op when no drag is
+            // active (it just updates last_mouse_pos).
             iced::event::listen().map(|event| match event {
-                // Any click dismisses context menu
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Message::DragMove(position.x, position.y)
+                }
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::CloseContextMenu,
-                iced::Event::Window(iced::window::Event::Resized(size)) => {
-                    Message::WindowResized(size.width, size.height)
-                }
+                // Window::Resized intentionally omitted — the
+                // `window::resize_events()` subscription below carries
+                // the window id so we can drop non-main resizes. If
+                // we also forwarded the raw event here, a detached
+                // modal's resize would clobber the main window's size.
                 _ => Message::Noop,
             })
         };
-        Subscription::batch([kbd, mouse_sub])
+        // Window-close events from winit: routed so Phase 2/3 can drop
+        // detached-modal / undocked-tab entries from ui_state.windows.
+        let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
+        // Window-resize subscription. `iced::event::listen()`'s
+        // Window::Resized event doesn't fire on the very first frame —
+        // subscribing to `window::resize_events()` directly gets the
+        // initial physical size so dropdowns position correctly without
+        // a manual resize.
+        // Fire a WindowResizedFor for every OS resize event, carrying
+        // the window id so the dispatcher can ignore resizes of
+        // detached modal / undocked-tab windows. A plain WindowResized
+        // without the id would clobber `ui_state.window_size` with
+        // e.g. the 420x240 size of the Move dialog, which then shifts
+        // the Active-Bar dropdowns on the main window.
+        let window_resize = iced::window::resize_events()
+            .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
+
+        Subscription::batch([kbd, mouse_sub, window_close, window_resize])
     }
 }

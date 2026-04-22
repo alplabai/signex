@@ -43,7 +43,7 @@ impl Signex {
                     signex_types::schematic::LabelType::Global,
                     "bidirectional".to_string(),
                 ));
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "PORT".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -60,7 +60,7 @@ impl Signex {
                     signex_types::schematic::LabelType::Hierarchical,
                     String::new(),
                 ));
-                self.interaction_state.canvas.ghost_label = Some(signex_types::schematic::Label {
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text: "SHEET".to_string(),
                     position: signex_types::schematic::Point::new(0.0, 0.0),
@@ -93,14 +93,20 @@ impl Signex {
             | ActiveBarAction::PlaceGraphic => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
-            // Arcs / ellipses fall back to the circle tool.
-            ActiveBarAction::DrawArc
-            | ActiveBarAction::DrawEllipticalArc
-            | ActiveBarAction::DrawEllipse => {
+            // Arc — dedicated 3-click tool. Elliptical / ellipse still
+            // fall back to Circle until v1.2 curves land.
+            ActiveBarAction::DrawArc => {
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
+            }
+            ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
             }
-            // Polygon / bezier — multi-click line approximation.
-            ActiveBarAction::DrawPolygon | ActiveBarAction::DrawBezier => {
+            // Polygon — click-by-click freeform. Bezier still falls back
+            // to Line until v1.2 curves.
+            ActiveBarAction::DrawPolygon => {
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
+            }
+            ActiveBarAction::DrawBezier => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
             }
             // Harness + signal integrity directives — not yet implemented.
@@ -112,29 +118,121 @@ impl Signex {
                     "Harness tools are planned for v1.1 (Advanced Schematic)",
                 );
             }
-            ActiveBarAction::PlaceParameterSet
-            | ActiveBarAction::PlaceDiffPair
-            | ActiveBarAction::PlaceBlanket
-            | ActiveBarAction::PlaceCompileMask => {
-                crate::diagnostics::log_info(
-                    "Directive tool not yet implemented — coming with v0.7 ERC",
-                );
+            ActiveBarAction::PlaceParameterSet => {
+                // Parameter Set — attaches named params to a net. Arm a
+                // label-tool ghost with a "PARAM=VALUE" default so the
+                // user drops + edits inline. Bulk edits go through the
+                // Parameter Manager (Design menu).
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                self.interaction_state.pending_port = None;
+                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
+                    uuid: uuid::Uuid::new_v4(),
+                    text: "PARAM=VALUE".to_string(),
+                    position: signex_types::schematic::Point::new(0.0, 0.0),
+                    rotation: 0.0,
+                    label_type: signex_types::schematic::LabelType::Net,
+                    shape: String::new(),
+                    font_size: 1.8,
+                    justify: signex_types::schematic::HAlign::Left,
+                });
             }
-            // Net-color palette (F5 / sidebar). The underlying net-color model
-            // isn't in place yet, but surface feedback so clicks don't silently
-            // swallow and the action shows up in diagnostics.
+            ActiveBarAction::PlaceDiffPair => {
+                // DiffPair directive — attaches a differential-pair rule.
+                // Ships as a text note until the PCB router's constraint
+                // model lands in v2.1.
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                self.interaction_state.active_canvas_mut().ghost_text =
+                    Some(signex_types::schematic::TextNote {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "DIFF_PAIR".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        font_size: 1.8,
+                        justify_h: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::default(),
+                    });
+            }
+            ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
+                // Blanket / Compile Mask — rectangular rule areas.
+                // Placement is Tool::Rectangle for v0.7; rule/mask
+                // semantics are a v1.1 (Advanced Schematic) item.
+                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+            }
+            // Net-color palette — arms pending_net_color so the next
+            // canvas click on a wire floods its whole net with the
+            // selected colour. Colours stay in app state only; nothing
+            // is written back to the .kicad_sch so KiCad round-trips
+            // unchanged.
             ActiveBarAction::NetColorBlue
             | ActiveBarAction::NetColorLightGreen
             | ActiveBarAction::NetColorLightBlue
             | ActiveBarAction::NetColorRed
             | ActiveBarAction::NetColorFuchsia
             | ActiveBarAction::NetColorYellow
-            | ActiveBarAction::NetColorDarkGreen
-            | ActiveBarAction::ClearNetColor
-            | ActiveBarAction::ClearAllNetColors => {
-                crate::diagnostics::log_info(
-                    "Net-color override not yet implemented — planned for v0.7",
-                );
+            | ActiveBarAction::NetColorDarkGreen => {
+                let c = match action {
+                    ActiveBarAction::NetColorBlue => (0x3B, 0x82, 0xF6),
+                    ActiveBarAction::NetColorLightGreen => (0x86, 0xEF, 0xAC),
+                    ActiveBarAction::NetColorLightBlue => (0x7D, 0xD3, 0xFC),
+                    ActiveBarAction::NetColorRed => (0xEF, 0x44, 0x44),
+                    ActiveBarAction::NetColorFuchsia => (0xEC, 0x48, 0x99),
+                    ActiveBarAction::NetColorYellow => (0xFA, 0xCC, 0x15),
+                    ActiveBarAction::NetColorDarkGreen => (0x16, 0xA3, 0x4A),
+                    _ => (0xFF, 0xFF, 0xFF),
+                };
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
+                    r: c.0,
+                    g: c.1,
+                    b: c.2,
+                    a: 255,
+                });
+                // Sync to canvas so mouse_interaction can show a pen
+                // cursor while armed.
+                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
+                crate::diagnostics::log_info("Net-color armed — click a wire to flood its net");
+            }
+            ActiveBarAction::NetColorCustom => {
+                // Open the custom colour picker modal. Pre-seed the
+                // draft from whatever is currently armed so reopening
+                // the picker after a custom pick doesn't reset it.
+                let seed = self
+                    .ui_state
+                    .pending_net_color
+                    .filter(|c| c.a != 0)
+                    .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
+                    .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
+                self.ui_state.net_color_custom.draft = seed;
+                self.ui_state.net_color_custom.show = true;
+            }
+            ActiveBarAction::ClearNetColor => {
+                // Arm "clear one" — next click removes the override on
+                // the wires of the clicked net.
+                self.ui_state.pending_net_color = None;
+                self.interaction_state.active_canvas_mut().pending_net_color = None;
+                // A distinct armed state: use a sentinel color (alpha 0)
+                // to mean "clear mode". Simpler than a second enum — we
+                // still read pending_net_color at click time.
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                });
+                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
+                crate::diagnostics::log_info("Click a wire to clear its net-color override");
+            }
+            ActiveBarAction::ClearAllNetColors => {
+                if !self.ui_state.wire_color_overrides.is_empty() {
+                    self.ui_state
+                        .net_color_undo
+                        .push(self.ui_state.wire_color_overrides.clone());
+                }
+                self.ui_state.wire_color_overrides.clear();
+                self.interaction_state.active_canvas_mut().wire_color_overrides.clear();
+                self.ui_state.pending_net_color = None;
+                self.interaction_state.active_canvas_mut().pending_net_color = None;
+                self.interaction_state.active_canvas_mut().clear_content_cache();
+                crate::diagnostics::log_info("Cleared all net-color overrides");
             }
             _ => {}
         }
@@ -148,11 +246,11 @@ impl Signex {
         // the specific power-port name and arm the ghost_symbol.
         let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
         self.interaction_state.pending_power = Some((net_name.to_string(), lib_id.to_string()));
-        self.interaction_state.canvas.tool_preview = Some(net_name.to_string());
+        self.interaction_state.active_canvas_mut().tool_preview = Some(net_name.to_string());
         // Live preview: build a ghost power-port symbol that follows the
         // cursor so the user sees the actual shape (bars / bar / triangle)
         // before committing to a click.
-        self.interaction_state.canvas.ghost_symbol = Some(signex_types::schematic::Symbol {
+        self.interaction_state.active_canvas_mut().ghost_symbol = Some(signex_types::schematic::Symbol {
             uuid: uuid::Uuid::new_v4(),
             lib_id: lib_id.to_string(),
             reference: String::new(),
