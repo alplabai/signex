@@ -50,7 +50,11 @@ impl Signex {
             | Message::SaveFileAs(_)
             | Message::SchematicLoaded(_)
             | Message::ExportPdfFinished(_)
-            | Message::ExportNetlistFinished(_) => self.dispatch_document_message(message),
+            | Message::ExportNetlistFinished(_)
+            | Message::PrintPreviewRequested
+            | Message::PrintPreviewSelectPage(_)
+            | Message::PrintPreviewExport
+            | Message::PrintPreviewClose => self.dispatch_document_message(message),
             Message::TogglePanelList
             | Message::OpenPanel(_)
             | Message::OpenFind
