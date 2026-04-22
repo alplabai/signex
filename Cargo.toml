@@ -58,6 +58,7 @@ signex-render = { path = "crates/signex-render" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
+signex-output = { path = "crates/signex-output" }
 
 [profile.release]
 lto = "thin"

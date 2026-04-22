@@ -34,6 +34,8 @@ pub enum MenuMessage {
     OpenProject,
     Save,
     SaveAs,
+    ExportPdf,
+    ExportNetlist,
     // Edit
     Undo,
     Redo,
@@ -160,6 +162,24 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             .spacing(2.0)
     };
 
+    let export_menu = Item::with_menu(
+        text("Export"),
+        menu_template(vec![
+            leaf_if(
+                "PDF...",
+                Some("Ctrl+Shift+P"),
+                MenuMessage::ExportPdf,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Netlist (Standard .net)...",
+                None,
+                MenuMessage::ExportNetlist,
+                ctx.has_schematic,
+            ),
+        ]),
+    );
+
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
@@ -173,6 +193,8 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::SaveAs,
                 ctx.has_schematic,
             ),
+            separator(mc),
+            export_menu,
             separator(mc),
             leaf_stub("Exit", None, mc),
         ]),

@@ -62,6 +62,14 @@ impl Signex {
                 self.load_schematic_into_active_tab(*sheet);
                 self.finish_update()
             }
+            Message::ExportPdfFinished(result) => {
+                let task = self.handle_export_pdf_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::ExportNetlistFinished(result) => {
+                let task = self.handle_export_netlist_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
             _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }

@@ -3,6 +3,7 @@ use iced::Task;
 use super::super::*;
 
 mod editing;
+mod export;
 mod file_commands;
 mod panel_commands;
 mod placement;
