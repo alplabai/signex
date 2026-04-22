@@ -35,46 +35,22 @@ Outputs:
 These generated files are regenerated from SVG each release and do not need
 to live in git; CI runs the script before packaging.
 
-## Runtime window icon (TODO)
+## Runtime window icon
 
-The main window currently opens without an icon. To embed it:
+Wired. `crates/signex-app/src/app/bootstrap.rs::bundled_window_icon` reads
+`assets/brand/generated/signex-256.png` via `include_bytes!` and passes the
+result to `iced::window::open`. The embed is gated on the `has_bundled_icon`
+cfg (declared in `build.rs`), so the app still builds and runs if the PNG
+hasn't been generated yet — it just opens with the platform default icon.
 
-1. Add `image = { version = "0.25", default-features = false, features = ["png"] }` to `Cargo.toml`.
-2. Commit `signex-256.png` to `assets/brand/generated/` (or generate it in `build.rs`).
-3. In `bootstrap.rs`, before `iced::window::open(...)`:
+## Windows `.exe` icon
 
-```rust
-let icon_bytes = include_bytes!("../assets/brand/generated/signex-256.png");
-let img = image::load_from_memory(icon_bytes).ok().map(|i| i.to_rgba8());
-let icon = img.and_then(|i| {
-    let (w, h) = i.dimensions();
-    iced::window::icon::from_rgba(i.into_raw(), w, h).ok()
-});
+Wired. `crates/signex-app/build.rs::embed_windows_exe_icon` uses `winres` to
+compile `installer/windows/signex.ico` into `signex.exe` on Windows builds,
+and also embeds `signex.manifest` for per-monitor v2 DPI awareness. Both
+files have `cargo:rerun-if-changed` hints so regenerating the ICO / editing
+the manifest triggers a rebuild.
 
-iced::window::open(iced::window::Settings {
-    size: iced::Size::new(1400.0, 900.0),
-    icon,
-    ..Default::default()
-})
-```
-
-## Windows `.exe` icon (TODO)
-
-The installer's icon is wired via `SetupIconFile` in `signex.iss`, but the
-compiled `signex.exe` itself does not embed an icon yet. To embed:
-
-1. Add `winres = "0.1"` to `[build-dependencies]` in `signex-app/Cargo.toml`.
-2. Create `signex-app/build.rs`:
-
-```rust
-fn main() {
-    #[cfg(windows)]
-    {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("assets/brand/generated/signex.ico");
-        let _ = res.compile();
-    }
-}
-```
-
-3. Regenerate `signex.ico` via `installer/build-icons.sh` before building on Windows.
+Regenerate the bitmaps with `installer/build-icons.sh` (requires
+rsvg-convert / magick / inkscape) or `py tools/build_icons.py` (pure-Python,
+requires `pip install resvg-py pillow`).
