@@ -34,6 +34,7 @@ pub enum MenuMessage {
     OpenProject,
     Save,
     SaveAs,
+    PrintPreview,
     ExportPdf,
     ExportNetlist,
     // Edit
@@ -194,6 +195,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             separator(mc),
+            leaf_if(
+                "Print Preview...",
+                Some("Ctrl+P"),
+                MenuMessage::PrintPreview,
+                ctx.has_schematic,
+            ),
             export_menu,
             separator(mc),
             leaf_stub("Exit", None, mc),

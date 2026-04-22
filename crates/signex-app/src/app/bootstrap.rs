@@ -388,6 +388,10 @@ impl Signex {
                     (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Component))
                     }
+                    // Ctrl+P: Print Preview
+                    (keyboard::Key::Character(c), m) if c == "p" && m.command() => {
+                        Message::PrintPreviewRequested
+                    }
                     // Ctrl+, open Preferences
                     (keyboard::Key::Character(c), m) if c == "," && m.command() => {
                         Message::OpenPreferences

@@ -70,6 +70,22 @@ impl Signex {
                 let task = self.handle_export_netlist_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
+            Message::PrintPreviewRequested => {
+                self.handle_print_preview_requested();
+                self.finish_update()
+            }
+            Message::PrintPreviewSelectPage(idx) => {
+                self.handle_print_preview_select_page(idx);
+                self.finish_update()
+            }
+            Message::PrintPreviewExport => {
+                self.handle_print_preview_export();
+                self.finish_update()
+            }
+            Message::PrintPreviewClose => {
+                self.handle_print_preview_close();
+                self.finish_update()
+            }
             _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
