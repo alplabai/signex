@@ -38,6 +38,8 @@ impl Signex {
                 |path| path.map(Message::SaveFileAs).unwrap_or(Message::Noop),
             )),
             MenuMessage::NewProject => Some(Task::none()),
+            MenuMessage::ExportPdf => self.handle_export_pdf_requested(),
+            MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             _ => None,
         }
     }

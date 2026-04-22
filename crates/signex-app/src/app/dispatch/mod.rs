@@ -48,7 +48,9 @@ impl Signex {
             | Message::Duplicate
             | Message::SaveFile
             | Message::SaveFileAs(_)
-            | Message::SchematicLoaded(_) => self.dispatch_document_message(message),
+            | Message::SchematicLoaded(_)
+            | Message::ExportPdfFinished(_)
+            | Message::ExportNetlistFinished(_) => self.dispatch_document_message(message),
             Message::TogglePanelList
             | Message::OpenPanel(_)
             | Message::OpenFind

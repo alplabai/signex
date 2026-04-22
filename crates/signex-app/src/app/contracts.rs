@@ -262,6 +262,10 @@ pub enum Message {
     /// Polygon editable rows). Engine replaces the stored drawing by
     /// uuid with full undo.
     UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
+    /// Completion of PDF export — carries either the saved path or error.
+    ExportPdfFinished(Result<std::path::PathBuf, String>),
+    /// Completion of netlist export — carries either the saved path or error.
+    ExportNetlistFinished(Result<std::path::PathBuf, String>),
     Noop,
 }
 
