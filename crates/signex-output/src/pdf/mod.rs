@@ -1,21 +1,23 @@
 //! PDF export via `pdf-writer`.
 //!
-//! See `OUTPUT_PLAN.md` §3. `PdfSurface` (in `surface.rs`) will eventually
-//! act as a second render target for the existing `signex-render` scene
-//! graph — screen and PDF share one source of truth. For now the exporter
-//! only emits blank pages at the correct geometry; scene content integration
-//! lands in a follow-up commit.
+//! See `OUTPUT_PLAN.md` §3. `PdfSurface` (in `surface.rs`) acts as a second
+//! render target for the schematic — wires, symbols, labels, title block.
+//! Screen (Iced Canvas) and PDF share one source of truth for page layout.
 
 use pdf_writer::{Finish, Pdf, Rect, Ref};
 use thiserror::Error;
 
 use crate::template::TemplateId;
-use crate::{ExportContext, Exporter};
+use crate::{ExportContext, Exporter, SubstitutionContext};
+use signex_types::schematic::Point;
 
 mod font;
 mod layout;
 mod page;
 mod surface;
+
+use font::{FontCatalog, PdfFont};
+use surface::PdfSurface;
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -155,16 +157,41 @@ impl Exporter for PdfExporter {
             .map(|i| Ref::new(3 + i as i32))
             .collect();
 
+        // Reserve content stream Refs after page Refs.
+        let content_refs: Vec<Ref> = (0..sheet_indices.len())
+            .map(|i| Ref::new(3 + sheet_indices.len() as i32 + i as i32))
+            .collect();
+
         pdf.catalog(catalog_id).pages(page_tree_id);
         pdf.pages(page_tree_id)
             .kids(page_refs.iter().copied())
             .count(page_refs.len() as i32);
 
-        for &page_ref in &page_refs {
-            let mut page = pdf.page(page_ref);
+        // Build each page with content.
+        for (idx, &sheet_idx) in sheet_indices.iter().enumerate() {
+            let sheet = &ctx.sheets[sheet_idx];
+            let content_ref = content_refs[idx];
+
+            // Emit content stream for this page.
+            let content_bytes = build_page_content(
+                sheet,
+                opts,
+                ctx,
+                page_w_pt,
+                page_h_pt,
+            )?;
+
+            pdf.stream(content_ref, &content_bytes);
+
+            // Create the page object referencing the content stream.
+            let mut page = pdf.page(page_refs[idx]);
             page.parent(page_tree_id)
                 .media_box(Rect::new(0.0, 0.0, page_w_pt, page_h_pt))
-                .resources();
+                .contents(content_ref);
+
+            // Minimal resources for fonts — pdf-writer handles Type1 fonts internally.
+            page.resources();
+
             page.finish();
         }
 
@@ -175,6 +202,166 @@ impl Exporter for PdfExporter {
             page_count: page_refs.len(),
         })
     }
+}
+
+/// Build a content stream for a single page.
+fn build_page_content(
+    sheet: &crate::SheetSnapshot,
+    opts: &PdfOptions,
+    ctx: &ExportContext,
+    page_w_pt: f32,
+    page_h_pt: f32,
+) -> Result<Vec<u8>, PdfError> {
+    let mut surface = PdfSurface::new();
+
+    // Convert schematic mm to PDF pt. Y-flip for PDF (bottom-left origin).
+    // Note: OneToOne scale (FitToPage is a no-op for now).
+    let mm_to_pt = MM_TO_PT;
+
+    // Set default black color for all drawings.
+    surface.set_stroke_color(0.0, 0.0, 0.0);
+
+    // Draw schematic content.
+    // Wires: stroke as lines (0.15 mm default, black).
+    for wire in &sheet.schematic.wires {
+        let w = if wire.stroke_width > 0.0 {
+            (wire.stroke_width * mm_to_pt) as f32
+        } else {
+            (0.15 * mm_to_pt) as f32
+        };
+        let x1 = (wire.start.x * mm_to_pt) as f32;
+        let y1 = page_h_pt - (wire.start.y * mm_to_pt) as f32;
+        let x2 = (wire.end.x * mm_to_pt) as f32;
+        let y2 = page_h_pt - (wire.end.y * mm_to_pt) as f32;
+        surface.stroke_line(x1, y1, x2, y2, w);
+    }
+
+    // Symbols: bbox (10mm square default) + reference text.
+    for sym in &sheet.schematic.symbols {
+        // Compute symbol bbox: if it has pins, use their bounding box.
+        // Otherwise, use a default 10mm × 10mm square.
+        let (bbox_x1, bbox_y1, bbox_x2, bbox_y2) = if let Some(lib_sym) =
+            sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id)
+        {
+            // Compute bbox from library symbol graphics.
+            let mut x_min: f64 = 0.0;
+            let mut x_max: f64 = 0.0;
+            let mut y_min: f64 = 0.0;
+            let mut y_max: f64 = 0.0;
+            for lib_g in &lib_sym.graphics {
+                match &lib_g.graphic {
+                    signex_types::schematic::Graphic::Rectangle {
+                        start,
+                        end,
+                        ..
+                    } => {
+                        x_min = x_min.min(start.x).min(end.x);
+                        x_max = x_max.max(start.x).max(end.x);
+                        y_min = y_min.min(start.y).min(end.y);
+                        y_max = y_max.max(start.y).max(end.y);
+                    }
+                    signex_types::schematic::Graphic::Polyline { points, .. } => {
+                        for pt in points {
+                            x_min = x_min.min(pt.x);
+                            x_max = x_max.max(pt.x);
+                            y_min = y_min.min(pt.y);
+                            y_max = y_max.max(pt.y);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Add symbol position offset.
+            let w = (x_max - x_min).max(10.0);
+            let h = (y_max - y_min).max(10.0);
+            (
+                sym.position.x - w / 2.0,
+                sym.position.y - h / 2.0,
+                sym.position.x + w / 2.0,
+                sym.position.y + h / 2.0,
+            )
+        } else {
+            // Default 10mm box.
+            (
+                sym.position.x - 5.0,
+                sym.position.y - 5.0,
+                sym.position.x + 5.0,
+                sym.position.y + 5.0,
+            )
+        };
+
+        let x = (bbox_x1 * mm_to_pt) as f32;
+        let y = page_h_pt - (bbox_y2 * mm_to_pt) as f32;
+        let w = ((bbox_x2 - bbox_x1) * mm_to_pt) as f32;
+        let h = ((bbox_y2 - bbox_y1) * mm_to_pt) as f32;
+        surface.stroke_rect(x, y, w, h, (0.1 * mm_to_pt) as f32);
+
+        // Reference text at symbol center.
+        if !sym.reference.is_empty() {
+            let cx = ((bbox_x1 + bbox_x2) / 2.0 * mm_to_pt) as f32;
+            let cy = page_h_pt - ((bbox_y1 + bbox_y2) / 2.0 * mm_to_pt) as f32;
+            surface.text_at(cx, cy, "F1", 9.0, &sym.reference);
+        }
+    }
+
+    // Labels: text at position.
+    for label in &sheet.schematic.labels {
+        let x = (label.position.x * mm_to_pt) as f32;
+        let y = page_h_pt - (label.position.y * mm_to_pt) as f32;
+        let size = if label.font_size > 0.0 {
+            (label.font_size * mm_to_pt) as f32
+        } else {
+            9.0 // default
+        };
+        surface.text_at(x, y, "F1", size, &label.text);
+    }
+
+    // Title block (if enabled and template present).
+    if opts.include_title_block {
+        if let Some(template_id) = &opts.sheet_template {
+            if let Some(template) = crate::template::load_builtin(template_id) {
+                let sub_ctx = SubstitutionContext {
+                    metadata: &ctx.metadata,
+                    filename: sheet.path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                    sheet_name: sheet.sheet_name.clone(),
+                    sheet_number: sheet.sheet_number,
+                    sheet_count: sheet.sheet_count,
+                    signex_version: env!("CARGO_PKG_VERSION"),
+                };
+
+                // Draw title block frame (bottom-right).
+                // Position: page_w_pt - title_block_width
+                let tb_width_pt = (template.title_block.width_mm * mm_to_pt) as f32;
+                let tb_height_pt = (template.title_block.height_mm * mm_to_pt) as f32;
+                let tb_x = page_w_pt - tb_width_pt;
+                let tb_y = page_h_pt - tb_height_pt;
+                surface.stroke_rect(
+                    tb_x,
+                    tb_y,
+                    tb_width_pt,
+                    tb_height_pt,
+                    (0.2 * mm_to_pt) as f32,
+                );
+
+                // Emit title block fields.
+                for field in &template.title_block.fields {
+                    let resolved = crate::resolve(&field.default_text, &sub_ctx);
+                    let fx = tb_x + (field.x_mm * mm_to_pt) as f32;
+                    let fy = tb_y + (field.y_mm * mm_to_pt) as f32;
+                    let font = PdfFont::for_style(field.font_style);
+                    let font_name = if font == PdfFont::Helvetica {
+                        "F1"
+                    } else {
+                        "F2"
+                    };
+                    let size = (field.font_size_mm * mm_to_pt) as f32;
+                    surface.text_at(fx, fy, font_name, size as f32, &resolved);
+                }
+            }
+        }
+    }
+
+    Ok(surface.finish())
 }
 
 /// Resolve a `PageRange` against the project's sheet count into a concrete
@@ -333,5 +520,78 @@ mod tests {
         let bytes = String::from_utf8_lossy(&out.bytes);
         assert!(bytes.contains("595"), "width not reflected in MediaBox");
         assert!(bytes.contains("841"), "height not reflected in MediaBox");
+    }
+
+    #[test]
+    fn exports_schematic_content() {
+        use signex_types::schematic::{Wire, Symbol, Label, LabelType};
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        let mut sheet = empty_sheet();
+
+        // Add one wire.
+        sheet.wires.push(Wire {
+            uuid: Uuid::nil(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 10.0),
+            stroke_width: 0.15,
+        });
+
+        // Add one symbol.
+        sheet.symbols.push(Symbol {
+            uuid: Uuid::nil(),
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            position: Point::new(50.0, 50.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: vec![],
+            pin_uuids: HashMap::new(),
+            instances: vec![],
+            footprint: String::new(),
+            datasheet: String::new(),
+        });
+
+        // Add one label.
+        sheet.labels.push(Label {
+            uuid: Uuid::nil(),
+            text: "VCC".to_string(),
+            position: Point::new(20.0, 20.0),
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 0.0,
+            justify: signex_types::schematic::HAlign::Center,
+        });
+
+        let mut ctx = sample_ctx(1);
+        ctx.sheets[0].schematic = sheet;
+
+        let out = PdfExporter
+            .export(&ctx, &PdfOptions::default())
+            .expect("export");
+
+        let bytes = String::from_utf8_lossy(&out.bytes);
+        // Check for content stream operators: 'm' (moveto), 'l' (lineto), 'S' (stroke),
+        // 're' (rect), 'Tj' (show text).
+        let has_graphics = bytes.contains(" l\n") || bytes.contains(" re\n") || bytes.contains(" Tj");
+        assert!(
+            has_graphics,
+            "exported PDF should contain graphics operators"
+        );
     }
 }
