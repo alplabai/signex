@@ -3128,6 +3128,7 @@ dependencies = [
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",
+ "signex-output",
  "signex-render",
  "signex-types",
  "signex-widgets",
@@ -3173,6 +3174,8 @@ dependencies = [
 name = "signex-output"
 version = "0.7.0"
 dependencies = [
+ "kicad-parser",
+ "kicad-writer",
  "pdf-writer",
  "serde",
  "signex-types",

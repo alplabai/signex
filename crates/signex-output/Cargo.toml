@@ -8,6 +8,8 @@ repository.workspace = true
 
 [dependencies]
 signex-types = { path = "../signex-types" }
+standard-parser = { path = "../standard-parser" }
+standard-writer = { path = "../standard-writer" }
 thiserror = { workspace = true }
 serde = { workspace = true }
 pdf-writer = { workspace = true }
