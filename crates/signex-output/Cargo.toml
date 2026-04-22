@@ -10,3 +10,7 @@ repository.workspace = true
 signex-types = { path = "../signex-types" }
 thiserror = { workspace = true }
 serde = { workspace = true }
+pdf-writer = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
