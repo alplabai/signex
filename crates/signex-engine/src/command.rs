@@ -4,6 +4,12 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetPort {
+    pub name: String,
+    pub direction: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MirrorAxis {
     Horizontal,
@@ -46,6 +52,12 @@ pub enum CommandKind {
     PlaceNoConnect,
     PlaceBusEntry,
     PlaceTextNote,
+    PlaceSchDrawing,
+    UpdateSchDrawing,
+    AnnotateAll,
+    MoveSymbolAbsolute,
+    ReorderObjects,
+    ReconcileChildSheetPins,
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +121,16 @@ pub enum Command {
         value: String,
         footprint: String,
     },
+    /// Set a single custom parameter/field on a symbol. `reference`,
+    /// `value`, and `footprint` have dedicated `UpdateSymbolFields`
+    /// above — this handles every other key in `symbol.fields`, for
+    /// example the Parameter Manager editing `Manufacturer` or `PartNo`.
+    /// Empty `value` removes the field.
+    SetSymbolField {
+        symbol_id: Uuid,
+        key: String,
+        value: String,
+    },
     PlaceWireSegment {
         wire: Wire,
     },
@@ -133,6 +155,69 @@ pub enum Command {
     PlaceTextNote {
         text_note: TextNote,
     },
+    /// Append a freeform graphic (line / rect / circle / arc / polyline)
+    /// to the sheet's drawings list. Used by the Arc 3-click tool and
+    /// the Polyline click-by-click tool.
+    PlaceSchDrawing {
+        drawing: signex_types::schematic::SchDrawing,
+    },
+    /// Replace an existing SchDrawing by uuid — used by the drawing
+    /// properties panel for per-field edits (angle, radius, vertex
+    /// coords, fill, width).
+    UpdateSchDrawing {
+        drawing: signex_types::schematic::SchDrawing,
+    },
+    /// Auto-annotate every symbol whose reference ends in `?` with a unique
+    /// sequential designator per prefix (R?, C?, U?, …). Applied in a
+    /// deterministic order so re-running produces the same layout.
+    AnnotateAll {
+        mode: AnnotateMode,
+    },
+    /// Absolute positioning of a single symbol. Used by the Properties
+    /// panel's future X/Y edit fields and by scripted moves; distinct from
+    /// MoveSelection which takes a delta.
+    MoveSymbolAbsolute {
+        symbol_id: Uuid,
+        x: f64,
+        y: f64,
+    },
+    /// File-order reorder — moves the given selection to the start or end
+    /// of each type vector. KiCad schematic has no explicit z-order, so
+    /// render order is file order; this command mutates that.
+    ReorderObjects {
+        items: Vec<SelectedItem>,
+        direction: ReorderDirection,
+    },
+    /// Reconcile parent-sheet symbolic pins for all child sheets that point
+    /// to `child_filename`, based on the exposed ports from that child.
+    ReconcileChildSheetPins {
+        child_filename: String,
+        ports: Vec<SheetPort>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReorderDirection {
+    /// Move to the end of the vector so it renders on top (Bring To Front).
+    ToFront,
+    /// Move to the start of the vector so it renders behind (Send To Back).
+    ToBack,
+    /// Move just after the reference item's slot — renders on top of
+    /// the reference but below anything above it.
+    JustAbove(Uuid),
+    /// Move just before the reference item's slot — renders behind the
+    /// reference but on top of anything below it.
+    JustBelow(Uuid),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnotateMode {
+    /// Only assign a number when the reference ends in `?`.
+    Incremental,
+    /// Reset every reference to `<prefix>?` then renumber from 1.
+    ResetAndRenumber,
+    /// Drop every reference number back to `?`. Useful before Reset.
+    ResetOnly,
 }
 
 impl Command {
@@ -150,6 +235,7 @@ impl Command {
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
+            Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
@@ -158,6 +244,12 @@ impl Command {
             Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
             Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
+            Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
+            Command::UpdateSchDrawing { .. } => CommandKind::UpdateSchDrawing,
+            Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
+            Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
+            Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
+            Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
         }
     }
 }

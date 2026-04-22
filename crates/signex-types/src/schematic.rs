@@ -493,6 +493,10 @@ pub struct SheetPin {
     pub position: Point,
     #[serde(default)]
     pub rotation: f64,
+    #[serde(default)]
+    pub auto_generated: bool,
+    #[serde(default)]
+    pub user_moved: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -518,6 +522,18 @@ pub struct ChildSheet {
 // Schematic drawing primitives
 // ---------------------------------------------------------------------------
 
+/// Optional RGBA override parsed from KiCad's `(stroke ... (color r g b a))`.
+/// `None` means "use the theme's default drawing colour" — the renderer
+/// falls back to CanvasColors.outline. Stored per-drawing so users can
+/// recolour individual shapes without disturbing the sheet theme.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct StrokeColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SchDrawing {
@@ -527,6 +543,8 @@ pub enum SchDrawing {
         end: Point,
         #[serde(default)]
         width: f64,
+        #[serde(default)]
+        stroke_color: Option<StrokeColor>,
     },
     Rect {
         uuid: Uuid,
@@ -536,6 +554,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         fill: FillType,
+        #[serde(default)]
+        stroke_color: Option<StrokeColor>,
     },
     Circle {
         uuid: Uuid,
@@ -545,6 +565,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         fill: FillType,
+        #[serde(default)]
+        stroke_color: Option<StrokeColor>,
     },
     Arc {
         uuid: Uuid,
@@ -555,6 +577,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         fill: FillType,
+        #[serde(default)]
+        stroke_color: Option<StrokeColor>,
     },
     Polyline {
         uuid: Uuid,
@@ -563,6 +587,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         fill: FillType,
+        #[serde(default)]
+        stroke_color: Option<StrokeColor>,
     },
 }
 
@@ -628,6 +654,8 @@ pub enum SelectedKind {
     Junction,
     NoConnect,
     Label,
+    /// Hierarchical sheet pin rendered on a child-sheet symbol.
+    SheetPin,
     TextNote,
     ChildSheet,
     Drawing,

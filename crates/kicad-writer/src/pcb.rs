@@ -1,27 +1,13 @@
-use std::fmt::Write;
-
 use signex_types::property::PcbProperty;
-use signex_types::pcb::*;
-
-use crate::sexpr_render::{
-    at_node, atom, effects_node, hide_yes_node, node, write_rendered_sexpr, SExpr,
+use signex_types::pcb::{
+    BoardGraphic, BoardText, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadShape, PadType,
+    PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
+    PCB_DEFAULT_TEXT_SIZE_MM, PCB_FP_TEXT_OFFSET_MM, PCB_TEXT_THICKNESS_MM,
 };
 
-// String's Write impl is infallible -- these macros avoid many `.unwrap()` calls.
-macro_rules! w {
-    ($dst:expr, $($arg:tt)*) => { let _ = write!($dst, $($arg)*); };
-}
-macro_rules! wln {
-    ($dst:expr, $($arg:tt)*) => { let _ = writeln!($dst, $($arg)*); };
-}
-
-// ---------------------------------------------------------------------------
-// KiCad S-expression string escaping
-// ---------------------------------------------------------------------------
-
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
+use crate::sexpr_render::{
+    atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr, SExpr,
+};
 
 // ---------------------------------------------------------------------------
 // Enum-to-KiCad-string helpers
@@ -70,211 +56,367 @@ fn fmt_f64(v: f64) -> String {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Low-level node builders
+// ---------------------------------------------------------------------------
+
+/// Numeric value through `fmt_f64` (strips trailing zeros, no f64 Display quirks).
+fn coord(v: f64) -> SExpr {
+    raw(fmt_f64(v))
+}
+
+/// `(at X Y [ROT])` using coord() for consistent float formatting.
+fn at_coord(x: f64, y: f64, rotation: Option<f64>) -> SExpr {
+    let mut items = vec![coord(x), coord(y)];
+    if let Some(r) = rotation {
+        items.push(coord(r));
+    }
+    node("at", items)
+}
+
+/// `(uuid "UUID")`.
+fn uuid_node(u: impl std::fmt::Display) -> SExpr {
+    node("uuid", [atom(u.to_string())])
+}
+
+/// `(layer "NAME")`.
+fn layer_node(l: &str) -> SExpr {
+    node("layer", [atom(l)])
+}
+
+/// `(stroke (width W) (type default))`.
+fn stroke_node(width: f64) -> SExpr {
+    node("stroke", [
+        node("width", [coord(width)]),
+        node("type", [raw("default")]),
+    ])
+}
+
+/// `(pts (xy X Y) ...)`.
+fn pts_node(points: &[Point]) -> SExpr {
+    node("pts", points.iter().map(|p| node("xy", [coord(p.x), coord(p.y)])))
+}
+
+// ---------------------------------------------------------------------------
+// PCB text helpers
+// ---------------------------------------------------------------------------
+
 fn pcb_text_effects_node(font_size: f64) -> SExpr {
-    effects_node(font_size, Some(0.15), false, false, Vec::new())
+    effects_node(font_size, Some(PCB_TEXT_THICKNESS_MM), false, false, Vec::new())
 }
 
 fn pcb_property_node(property: &PcbProperty) -> SExpr {
     let position = property.position.unwrap_or(Point { x: 0.0, y: 0.0 });
-    let mut items = vec![atom(&property.key), atom(&property.value)];
-
-    items.push(at_node(
+    let mut items: Vec<SExpr> = vec![atom(&property.key), atom(&property.value)];
+    items.push(at_coord(
         position.x,
         position.y,
         (property.rotation != 0.0).then_some(property.rotation),
     ));
-
     if let Some(layer) = &property.layer {
-        items.push(node("layer", vec![atom(layer)]));
+        items.push(layer_node(layer));
     }
     if property.hidden {
         items.push(hide_yes_node());
     }
-    items.push(pcb_text_effects_node(property.font_size.unwrap_or(1.0)));
+    items.push(pcb_text_effects_node(
+        property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM),
+    ));
     node("property", items)
 }
 
 fn board_text_node(text: &BoardText) -> SExpr {
-    let mut items = vec![atom(&text.text)];
-    items.push(at_node(
+    let mut items: Vec<SExpr> = vec![atom(&text.text)];
+    items.push(at_coord(
         text.position.x,
         text.position.y,
         (text.rotation != 0.0).then_some(text.rotation),
     ));
-    items.push(node("layer", vec![atom(&text.layer)]));
+    items.push(layer_node(&text.layer));
     items.push(pcb_text_effects_node(text.font_size));
-    items.push(node("uuid", vec![atom(text.uuid.to_string())]));
+    items.push(uuid_node(text.uuid));
     node("gr_text", items)
 }
 
 // ---------------------------------------------------------------------------
-// Public entry point
+// Section builders
 // ---------------------------------------------------------------------------
 
-/// Serialize a [`PcbBoard`] to the KiCad `.kicad_pcb` S-expression format.
-pub fn write_pcb(board: &PcbBoard) -> String {
-    let mut out = String::with_capacity(64 * 1024);
-
-    wln!(out, "(kicad_pcb");
-    wln!(out, "  (version {})", board.version);
-    wln!(out, "  (generator \"signex\")");
-    wln!(out, "  (generator_version \"0.1\")");
-    wln!(out, "  (general");
-    wln!(out, "    (thickness {})", fmt_f64(board.thickness));
-    wln!(out, "    (uuid \"{}\")", board.uuid);
-    wln!(out, "  )");
-
-    // Paper size
-    wln!(out, "  (paper \"A4\")");
-
-    // Layers
-    write_layers(&mut out, &board.layers);
-
-    // Setup
-    if let Some(ref setup) = board.setup {
-        write_setup(&mut out, setup);
-    }
-
-    // Nets
-    for net in &board.nets {
-        wln!(out, "  (net {} \"{}\")", net.number, escape(&net.name));
-    }
-
-    // Footprints
-    for fp in &board.footprints {
-        write_footprint(&mut out, fp);
-    }
-
-    // Board-level graphics
-    for g in &board.graphics {
-        write_board_graphic(&mut out, g);
-    }
-
-    // Board-level texts
-    for t in &board.texts {
-        write_board_text(&mut out, t);
-    }
-
-    // Segments (traces)
-    for seg in &board.segments {
-        wln!(out, "  (segment");
-        wln!(
-            out,
-            "    (start {} {})",
-            fmt_f64(seg.start.x),
-            fmt_f64(seg.start.y)
-        );
-        wln!(
-            out,
-            "    (end {} {})",
-            fmt_f64(seg.end.x),
-            fmt_f64(seg.end.y)
-        );
-        wln!(out, "    (width {})", fmt_f64(seg.width));
-        wln!(out, "    (layer \"{}\")", escape(&seg.layer));
-        wln!(out, "    (net {})", seg.net);
-        wln!(out, "    (uuid \"{}\")", seg.uuid);
-        wln!(out, "  )");
-    }
-
-    // Vias
-    for v in &board.vias {
-        write_via(&mut out, v);
-    }
-
-    // Zones
-    for z in &board.zones {
-        write_zone(&mut out, z);
-    }
-
-    wln!(out, ")");
-    out
+fn build_general(board: &PcbBoard) -> SExpr {
+    node("general", [
+        node("thickness", [coord(board.thickness)]),
+        uuid_node(&board.uuid),
+    ])
 }
 
-// ---------------------------------------------------------------------------
-// Section writers
-// ---------------------------------------------------------------------------
+fn build_layer(l: &LayerDef) -> SExpr {
+    // (ID "NAME" TYPE) — ID and TYPE are unquoted raw tokens, NAME is quoted.
+    SExpr::List(vec![raw(l.id.to_string()), atom(&l.name), raw(&l.layer_type)])
+}
 
-fn write_layers(out: &mut String, layers: &[LayerDef]) {
-    wln!(out, "  (layers");
-    for l in layers {
-        wln!(
-            out,
-            "    ({} \"{}\" {})",
-            l.id,
-            escape(&l.name),
-            escape(&l.layer_type)
-        );
+fn build_layers(layers: &[LayerDef]) -> SExpr {
+    node("layers", layers.iter().map(build_layer))
+}
+
+fn build_setup(_setup: &PcbSetup) -> SExpr {
+    node("setup", [
+        node("pad_to_mask_clearance", [raw("0")]),
+        node("pcbplotparams", [
+            node("layerselection", [raw("0x00010fc_ffffffff")]),
+            node("plot_on_all_layers_selection", [raw("0x0000000_00000000")]),
+        ]),
+    ])
+}
+
+fn build_net_class(setup: &PcbSetup) -> SExpr {
+    node("net_class", [
+        atom("Default"),
+        atom(""),
+        node("clearance", [coord(setup.clearance)]),
+        node("trace_width", [coord(setup.trace_width)]),
+        node("via_dia", [coord(setup.via_diameter)]),
+        node("via_drill", [coord(setup.via_drill)]),
+        node("uvia_dia", [coord(setup.via_min_diameter)]),
+        node("uvia_drill", [coord(setup.via_min_drill)]),
+    ])
+}
+
+fn build_net(net: &NetDef) -> SExpr {
+    SExpr::List(vec![raw("net"), raw(net.number.to_string()), atom(&net.name)])
+}
+
+fn build_segment(s: &Segment) -> SExpr {
+    node("segment", [
+        node("start", [coord(s.start.x), coord(s.start.y)]),
+        node("end", [coord(s.end.x), coord(s.end.y)]),
+        node("width", [coord(s.width)]),
+        layer_node(&s.layer),
+        node("net", [raw(s.net.to_string())]),
+        uuid_node(s.uuid),
+    ])
+}
+
+fn build_via(v: &Via) -> SExpr {
+    let mut items: Vec<SExpr> = vec![
+        at_coord(v.position.x, v.position.y, None),
+        node("size", [coord(v.diameter)]),
+        node("drill", [coord(v.drill)]),
+    ];
+    if v.layers.len() >= 2 {
+        items.push(node("layers", [atom(&v.layers[0]), atom(&v.layers[1])]));
     }
-    wln!(out, "  )");
+    items.push(node("net", [raw(v.net.to_string())]));
+    items.push(uuid_node(v.uuid));
+    node(via_type_str(v.via_type), items)
 }
 
-fn write_setup(out: &mut String, setup: &PcbSetup) {
-    wln!(out, "  (setup");
-    wln!(out, "    (pad_to_mask_clearance 0)");
-    wln!(out, "    (pcbplotparams");
-    wln!(out, "      (layerselection 0x00010fc_ffffffff)");
-    wln!(
-        out,
-        "      (plot_on_all_layers_selection 0x0000000_00000000)"
-    );
-    wln!(out, "    )");
-    wln!(out, "  )");
-    // Net classes with defaults from setup
-    wln!(out, "  (net_class \"Default\" \"\"");
-    wln!(out, "    (clearance {})", fmt_f64(setup.clearance));
-    wln!(out, "    (trace_width {})", fmt_f64(setup.trace_width));
-    wln!(out, "    (via_dia {})", fmt_f64(setup.via_diameter));
-    wln!(out, "    (via_drill {})", fmt_f64(setup.via_drill));
-    wln!(out, "    (uvia_dia {})", fmt_f64(setup.via_min_diameter));
-    wln!(out, "    (uvia_drill {})", fmt_f64(setup.via_min_drill));
-    wln!(out, "  )");
+fn build_zone(z: &Zone) -> SExpr {
+    let mut items: Vec<SExpr> = vec![
+        node("net", [raw(z.net.to_string())]),
+        node("net_name", [atom(&z.net_name)]),
+        layer_node(&z.layer),
+        uuid_node(z.uuid),
+    ];
+    if z.priority > 0 {
+        items.push(node("priority", [raw(z.priority.to_string())]));
+    }
+    let mut fill_items: Vec<SExpr> = Vec::new();
+    if z.thermal_relief {
+        fill_items.push(node("thermal_relief", []));
+        fill_items.push(node("thermal_gap", [coord(z.thermal_gap)]));
+        fill_items.push(node("thermal_bridge_width", [coord(z.thermal_width)]));
+    }
+    items.push(node("fill", fill_items));
+    items.push(node("min_thickness", [coord(z.min_thickness)]));
+    if z.clearance > 0.0 {
+        items.push(node("clearance", [coord(z.clearance)]));
+    }
+    if !z.outline.is_empty() {
+        items.push(node("polygon", [pts_node(&z.outline)]));
+    }
+    node("zone", items)
 }
 
-fn write_footprint(out: &mut String, fp: &Footprint) {
-    wln!(out, "  (footprint \"{}\"", escape(&fp.footprint_id));
+fn build_board_graphic(g: &BoardGraphic) -> Option<SExpr> {
+    match g.graphic_type.as_str() {
+        "line" => {
+            let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
+            Some(node("gr_line", [
+                node("start", [coord(s.x), coord(s.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        "rect" => {
+            let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
+            Some(node("gr_rect", [
+                node("start", [coord(s.x), coord(s.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        "circle" => {
+            let c = g.center.as_ref()?;
+            Some(node("gr_circle", [
+                node("center", [coord(c.x), coord(c.y)]),
+                node("end", [coord(c.x + g.radius), coord(c.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        "arc" => {
+            let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
+            Some(node("gr_arc", [
+                node("start", [coord(s.x), coord(s.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        _ => None,
+    }
+}
+
+fn build_fp_graphic(g: &FpGraphic) -> Option<SExpr> {
+    match g.graphic_type.as_str() {
+        "line" => {
+            let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
+            Some(node("fp_line", [
+                node("start", [coord(s.x), coord(s.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        "rect" => {
+            let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
+            let mut items = vec![
+                node("start", [coord(s.x), coord(s.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+            ];
+            if g.fill == "solid" {
+                items.push(node("fill", [raw("solid")]));
+            }
+            items.push(layer_node(&g.layer));
+            Some(node("fp_rect", items))
+        }
+        "circle" => {
+            let c = g.center.as_ref()?;
+            let mut items = vec![
+                node("center", [coord(c.x), coord(c.y)]),
+                node("end", [coord(c.x + g.radius), coord(c.y)]),
+                stroke_node(g.width),
+            ];
+            if g.fill == "solid" {
+                items.push(node("fill", [raw("solid")]));
+            }
+            items.push(layer_node(&g.layer));
+            Some(node("fp_circle", items))
+        }
+        "arc" => {
+            let (s, m, e) = (g.start.as_ref()?, g.mid.as_ref()?, g.end.as_ref()?);
+            Some(node("fp_arc", [
+                node("start", [coord(s.x), coord(s.y)]),
+                node("mid", [coord(m.x), coord(m.y)]),
+                node("end", [coord(e.x), coord(e.y)]),
+                stroke_node(g.width),
+                layer_node(&g.layer),
+            ]))
+        }
+        "poly" => {
+            if g.points.len() < 2 {
+                return None;
+            }
+            let mut items = vec![pts_node(&g.points), stroke_node(g.width)];
+            if g.fill == "solid" {
+                items.push(node("fill", [raw("solid")]));
+            }
+            items.push(layer_node(&g.layer));
+            Some(node("fp_poly", items))
+        }
+        "text" => {
+            let pos = g.position.as_ref()?;
+            let fs = if g.font_size != 0.0 {
+                g.font_size
+            } else {
+                PCB_DEFAULT_TEXT_SIZE_MM
+            };
+            Some(node("fp_text", [
+                raw("user"),
+                atom(&g.text),
+                at_coord(pos.x, pos.y, (g.rotation != 0.0).then_some(g.rotation)),
+                layer_node(&g.layer),
+                pcb_text_effects_node(fs),
+            ]))
+        }
+        _ => None,
+    }
+}
+
+fn build_fp_pad(p: &Pad) -> SExpr {
+    let mut items: Vec<SExpr> = vec![
+        atom(&p.number),
+        raw(pad_type_str(p.pad_type)),
+        raw(pad_shape_str(p.shape)),
+        at_coord(p.position.x, p.position.y, None),
+        node("size", [coord(p.size.x), coord(p.size.y)]),
+    ];
+    if let Some(ref drill) = p.drill {
+        if !drill.shape.is_empty() {
+            items.push(node("drill", [raw(&drill.shape), coord(drill.diameter)]));
+        } else {
+            items.push(node("drill", [coord(drill.diameter)]));
+        }
+    }
+    items.push(node("layers", p.layers.iter().map(|l| atom(l))));
+    if p.roundrect_ratio != 0.0 {
+        items.push(node("roundrect_rratio", [coord(p.roundrect_ratio)]));
+    }
+    if let Some(ref net) = p.net {
+        items.push(node("net", [raw(net.number.to_string()), atom(&net.name)]));
+    }
+    items.push(uuid_node(p.uuid));
+    node("pad", items)
+}
+
+fn build_footprint(fp: &Footprint) -> SExpr {
+    let mut items: Vec<SExpr> = vec![atom(&fp.footprint_id)];
     if fp.locked {
-        wln!(out, "    (locked yes)");
+        items.push(node("locked", [raw("yes")]));
     }
-    wln!(out, "    (layer \"{}\")", escape(&fp.layer));
-    if fp.rotation != 0.0 {
-        wln!(
-            out,
-            "    (at {} {} {})",
-            fmt_f64(fp.position.x),
-            fmt_f64(fp.position.y),
-            fmt_f64(fp.rotation)
-        );
-    } else {
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(fp.position.x),
-            fmt_f64(fp.position.y)
-        );
-    }
-    wln!(out, "    (uuid \"{}\")", fp.uuid);
+    items.push(layer_node(&fp.layer));
+    items.push(at_coord(
+        fp.position.x,
+        fp.position.y,
+        (fp.rotation != 0.0).then_some(fp.rotation),
+    ));
+    items.push(uuid_node(fp.uuid));
 
     let properties = effective_footprint_properties(fp);
     for property in &properties {
-        write_footprint_property(out, property);
+        items.push(pcb_property_node(property));
     }
-
-    // Footprint graphics
     for g in &fp.graphics {
         if is_property_backed_text_graphic(g, &properties) {
             continue;
         }
-        write_fp_graphic(out, g);
+        if let Some(expr) = build_fp_graphic(g) {
+            items.push(expr);
+        }
     }
-
-    // Pads
     for p in &fp.pads {
-        write_fp_pad(out, p);
+        items.push(build_fp_pad(p));
     }
 
-    wln!(out, "  )");
+    node("footprint", items)
 }
+
+// ---------------------------------------------------------------------------
+// Footprint property helpers (unchanged logic, uses pcb_property_node above)
+// ---------------------------------------------------------------------------
 
 fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
     if fp.properties.is_empty() {
@@ -282,19 +424,19 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -2.0 }),
+                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
             PcbProperty {
                 key: "Value".to_string(),
                 value: fp.value.clone(),
-                position: Some(Point { x: 0.0, y: 2.0 }),
+                position: Some(Point { x: 0.0, y: PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.Fab".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
         ];
@@ -309,28 +451,28 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
         }
     }
 
-    if !properties.iter().any(|property| property.key == "Reference") {
+    if !properties.iter().any(|p| p.key == "Reference") {
         properties.insert(
             0,
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -2.0 }),
+                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
-                font_size: Some(1.0),
+                font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
                 hidden: false,
             },
         );
     }
-    if !properties.iter().any(|property| property.key == "Value") {
+    if !properties.iter().any(|p| p.key == "Value") {
         properties.push(PcbProperty {
             key: "Value".to_string(),
             value: fp.value.clone(),
-            position: Some(Point { x: 0.0, y: 2.0 }),
+            position: Some(Point { x: 0.0, y: PCB_FP_TEXT_OFFSET_MM }),
             rotation: 0.0,
             layer: Some("F.Fab".to_string()),
-            font_size: Some(1.0),
+            font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
             hidden: false,
         });
     }
@@ -338,357 +480,69 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
     properties
 }
 
-fn write_footprint_property(out: &mut String, property: &PcbProperty) {
-    write_rendered_sexpr(out, 4, pcb_property_node(property));
-}
-
 fn is_property_backed_text_graphic(g: &FpGraphic, properties: &[PcbProperty]) -> bool {
     if g.graphic_type != "text" {
         return false;
     }
-
     let Some(position) = g.position else {
         return false;
     };
-
-    properties.iter().filter(|property| !property.hidden).any(|property| {
-        let Some(property_pos) = property.position else {
-            return false;
-        };
-        let Some(property_layer) = property.layer.as_deref() else {
-            return false;
-        };
-        let display_text = match property.key.as_str() {
-            "Reference" => "%R",
-            "Value" => "%V",
-            _ => property.value.as_str(),
-        };
-        let property_font_size = property.font_size.unwrap_or(1.0);
-
-        g.layer == property_layer
-            && g.text == display_text
-            && g.rotation == property.rotation
-            && g.font_size == property_font_size
-            && position == property_pos
-    })
+    properties
+        .iter()
+        .filter(|p| !p.hidden)
+        .any(|property| {
+            let Some(property_pos) = property.position else {
+                return false;
+            };
+            let Some(property_layer) = property.layer.as_deref() else {
+                return false;
+            };
+            let display_text = match property.key.as_str() {
+                "Reference" => "%R",
+                "Value" => "%V",
+                _ => property.value.as_str(),
+            };
+            let property_font_size = property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
+            g.layer == property_layer
+                && g.text == display_text
+                && g.rotation == property.rotation
+                && g.font_size == property_font_size
+                && position == property_pos
+        })
 }
 
-fn write_fp_graphic(out: &mut String, g: &FpGraphic) {
-    match g.graphic_type.as_str() {
-        "line" => {
-            if let (Some(s), Some(e)) = (&g.start, &g.end) {
-                wln!(out, "    (fp_line");
-                wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "      (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(out, "    )");
-            }
-        }
-        "rect" => {
-            if let (Some(s), Some(e)) = (&g.start, &g.end) {
-                wln!(out, "    (fp_rect");
-                wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "      (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                if g.fill == "solid" {
-                    wln!(out, "      (fill solid)");
-                }
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(out, "    )");
-            }
-        }
-        "circle" => {
-            if let Some(c) = &g.center {
-                let r = g.radius;
-                wln!(out, "    (fp_circle");
-                wln!(out, "      (center {} {})", fmt_f64(c.x), fmt_f64(c.y));
-                wln!(out, "      (end {} {})", fmt_f64(c.x + r), fmt_f64(c.y));
-                wln!(
-                    out,
-                    "      (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                if g.fill == "solid" {
-                    wln!(out, "      (fill solid)");
-                }
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(out, "    )");
-            }
-        }
-        "arc" => {
-            if let (Some(s), Some(m), Some(e)) = (&g.start, &g.mid, &g.end) {
-                wln!(out, "    (fp_arc");
-                wln!(out, "      (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "      (mid {} {})", fmt_f64(m.x), fmt_f64(m.y));
-                wln!(out, "      (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "      (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(out, "    )");
-            }
-        }
-        "poly" => {
-            if g.points.len() >= 2 {
-                wln!(out, "    (fp_poly");
-                w!(out, "      (pts");
-                for p in &g.points {
-                    w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
-                }
-                wln!(out, ")");
-                wln!(
-                    out,
-                    "      (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                if g.fill == "solid" {
-                    wln!(out, "      (fill solid)");
-                }
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(out, "    )");
-            }
-        }
-        "text" => {
-            if let Some(pos) = &g.position {
-                let fs = if g.font_size != 0.0 { g.font_size } else { 1.0 };
-                wln!(out, "    (fp_text user \"{}\"", escape(&g.text));
-                if g.rotation != 0.0 {
-                    wln!(
-                        out,
-                        "      (at {} {} {})",
-                        fmt_f64(pos.x),
-                        fmt_f64(pos.y),
-                        fmt_f64(g.rotation)
-                    );
-                } else {
-                    wln!(out, "      (at {} {})", fmt_f64(pos.x), fmt_f64(pos.y));
-                }
-                wln!(out, "      (layer \"{}\")", escape(&g.layer));
-                wln!(
-                    out,
-                    "      (effects (font (size {} {}) (thickness 0.15)))",
-                    fmt_f64(fs),
-                    fmt_f64(fs)
-                );
-                wln!(out, "    )");
-            }
-        }
-        _ => {}
-    }
-}
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
 
-fn write_fp_pad(out: &mut String, p: &Pad) {
-    w!(
-        out,
-        "    (pad \"{}\" {} {}",
-        escape(&p.number),
-        pad_type_str(p.pad_type),
-        pad_shape_str(p.shape)
-    );
-    wln!(out, "");
-    wln!(
-        out,
-        "      (at {} {})",
-        fmt_f64(p.position.x),
-        fmt_f64(p.position.y)
-    );
-    wln!(
-        out,
-        "      (size {} {})",
-        fmt_f64(p.size.x),
-        fmt_f64(p.size.y)
-    );
+/// Serialize a [`PcbBoard`] to the KiCad `.kicad_pcb` S-expression format.
+pub fn write_pcb(board: &PcbBoard) -> String {
+    let mut children: Vec<SExpr> = vec![
+        node("version", [raw(board.version.to_string())]),
+        node("generator", [atom("signex")]),
+        node("generator_version", [atom("0.1")]),
+        build_general(board),
+        node("paper", [atom("A4")]),
+        build_layers(&board.layers),
+    ];
 
-    if let Some(ref drill) = p.drill {
-        if !drill.shape.is_empty() {
-            wln!(
-                out,
-                "      (drill {} {})",
-                escape(&drill.shape),
-                fmt_f64(drill.diameter)
-            );
-        } else {
-            wln!(out, "      (drill {})", fmt_f64(drill.diameter));
-        }
+    if let Some(ref setup) = board.setup {
+        children.push(build_setup(setup));
+        children.push(build_net_class(setup));
     }
 
-    w!(out, "      (layers");
-    for l in &p.layers {
-        w!(out, " \"{}\"", escape(l));
-    }
-    wln!(out, ")");
+    children.extend(board.nets.iter().map(build_net));
+    children.extend(board.footprints.iter().map(build_footprint));
+    children.extend(board.graphics.iter().filter_map(build_board_graphic));
+    children.extend(board.texts.iter().map(board_text_node));
+    children.extend(board.segments.iter().map(build_segment));
+    children.extend(board.vias.iter().map(build_via));
+    children.extend(board.zones.iter().map(build_zone));
 
-    if p.roundrect_ratio != 0.0 {
-        wln!(
-            out,
-            "      (roundrect_rratio {})",
-            fmt_f64(p.roundrect_ratio)
-        );
-    }
-
-    if let Some(ref net) = p.net {
-        wln!(out, "      (net {} \"{}\")", net.number, escape(&net.name));
-    }
-
-    wln!(out, "      (uuid \"{}\")", p.uuid);
-    wln!(out, "    )");
-}
-
-fn write_via(out: &mut String, v: &Via) {
-    let kw = via_type_str(v.via_type);
-    wln!(out, "  ({}", kw);
-    wln!(
-        out,
-        "    (at {} {})",
-        fmt_f64(v.position.x),
-        fmt_f64(v.position.y)
-    );
-    wln!(out, "    (size {})", fmt_f64(v.diameter));
-    wln!(out, "    (drill {})", fmt_f64(v.drill));
-    if v.layers.len() >= 2 {
-        wln!(
-            out,
-            "    (layers \"{}\" \"{}\")",
-            escape(&v.layers[0]),
-            escape(&v.layers[1])
-        );
-    }
-    wln!(out, "    (net {})", v.net);
-    wln!(out, "    (uuid \"{}\")", v.uuid);
-    wln!(out, "  )");
-}
-
-fn write_zone(out: &mut String, z: &Zone) {
-    wln!(out, "  (zone");
-    wln!(out, "    (net {})", z.net);
-    wln!(out, "    (net_name \"{}\")", escape(&z.net_name));
-    wln!(out, "    (layer \"{}\")", escape(&z.layer));
-    wln!(out, "    (uuid \"{}\")", z.uuid);
-    if z.priority > 0 {
-        wln!(out, "    (priority {})", z.priority);
-    }
-    // Fill settings
-    wln!(out, "    (fill");
-    if z.thermal_relief {
-        wln!(out, "      (thermal_relief)");
-        wln!(out, "      (thermal_gap {})", fmt_f64(z.thermal_gap));
-        wln!(
-            out,
-            "      (thermal_bridge_width {})",
-            fmt_f64(z.thermal_width)
-        );
-    }
-    wln!(out, "    )");
-    wln!(out, "    (min_thickness {})", fmt_f64(z.min_thickness));
-    if z.clearance > 0.0 {
-        wln!(out, "    (clearance {})", fmt_f64(z.clearance));
-    }
-    // Polygon outline
-    if !z.outline.is_empty() {
-        wln!(out, "    (polygon");
-        w!(out, "      (pts");
-        for p in &z.outline {
-            w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
-        }
-        wln!(out, ")");
-        wln!(out, "    )");
-    }
-    wln!(out, "  )");
-}
-
-fn write_board_graphic(out: &mut String, g: &BoardGraphic) {
-    match g.graphic_type.as_str() {
-        "line" => {
-            if let (Some(s), Some(e)) = (&g.start, &g.end) {
-                wln!(out, "  (gr_line");
-                wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "    (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "    (layer \"{}\")", escape(&g.layer));
-                wln!(out, "  )");
-            }
-        }
-        "rect" => {
-            if let (Some(s), Some(e)) = (&g.start, &g.end) {
-                wln!(out, "  (gr_rect");
-                wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "    (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "    (layer \"{}\")", escape(&g.layer));
-                wln!(out, "  )");
-            }
-        }
-        "circle" => {
-            if let Some(c) = &g.center {
-                let r = g.radius;
-                wln!(out, "  (gr_circle");
-                wln!(out, "    (center {} {})", fmt_f64(c.x), fmt_f64(c.y));
-                wln!(out, "    (end {} {})", fmt_f64(c.x + r), fmt_f64(c.y));
-                wln!(
-                    out,
-                    "    (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "    (layer \"{}\")", escape(&g.layer));
-                wln!(out, "  )");
-            }
-        }
-        "arc" => {
-            if let (Some(s), Some(e)) = (&g.start, &g.end) {
-                wln!(out, "  (gr_arc");
-                wln!(out, "    (start {} {})", fmt_f64(s.x), fmt_f64(s.y));
-                wln!(out, "    (end {} {})", fmt_f64(e.x), fmt_f64(e.y));
-                wln!(
-                    out,
-                    "    (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "    (layer \"{}\")", escape(&g.layer));
-                wln!(out, "  )");
-            }
-        }
-        "poly" => {
-            if g.points.len() >= 2 {
-                wln!(out, "  (gr_poly");
-                w!(out, "    (pts");
-                for p in &g.points {
-                    w!(out, " (xy {} {})", fmt_f64(p.x), fmt_f64(p.y));
-                }
-                wln!(out, ")");
-                wln!(
-                    out,
-                    "    (stroke (width {}) (type default))",
-                    fmt_f64(g.width)
-                );
-                wln!(out, "    (layer \"{}\")", escape(&g.layer));
-                wln!(out, "  )");
-            }
-        }
-        _ => {}
-    }
-}
-
-fn write_board_text(out: &mut String, t: &BoardText) {
-    write_rendered_sexpr(out, 2, board_text_node(t));
+    let pcb = node("kicad_pcb", children);
+    let mut out = String::with_capacity(64 * 1024);
+    write_rendered_sexpr(&mut out, 0, pcb);
+    out
 }
 
 #[cfg(test)]
@@ -703,7 +557,6 @@ mod tests {
 
     #[test]
     fn writes_footprint_property_as_expected_sexpr() {
-        let mut out = String::new();
         let property = PcbProperty {
             key: "MPN".to_string(),
             value: "RC0603FR-0710KL".to_string(),
@@ -713,24 +566,23 @@ mod tests {
             font_size: Some(1.2),
             hidden: true,
         };
-
-        write_footprint_property(&mut out, &property);
-
+        let mut out = String::new();
+        write_rendered_sexpr(&mut out, 4, pcb_property_node(&property));
         assert_fragment_matches(
             out.trim(),
             list(vec![
                 raw("property"),
                 atom("MPN"),
                 atom("RC0603FR-0710KL"),
-                list(vec![raw("at"), atom(1.0_f64), atom(3.0_f64), atom(180.0_f64)]),
+                list(vec![raw("at"), raw("1"), raw("3"), raw("180")]),
                 list(vec![raw("layer"), atom("Cmts.User")]),
                 list(vec![raw("hide"), raw("yes")]),
                 list(vec![
                     raw("effects"),
                     list(vec![
                         raw("font"),
-                        list(vec![raw("size"), atom(1.2_f64), atom(1.2_f64)]),
-                        list(vec![raw("thickness"), atom(0.15_f64)]),
+                        list(vec![raw("size"), raw("1.2"), raw("1.2")]),
+                        list(vec![raw("thickness"), raw("0.15")]),
                     ]),
                 ]),
             ]),
@@ -739,7 +591,6 @@ mod tests {
 
     #[test]
     fn writes_board_text_as_expected_sexpr() {
-        let mut out = String::new();
         let text = BoardText {
             uuid: Default::default(),
             text: "HELLO".to_string(),
@@ -748,9 +599,8 @@ mod tests {
             layer: "F.SilkS".to_string(),
             font_size: 1.5,
         };
-
-        write_board_text(&mut out, &text);
-
+        let mut out = String::new();
+        write_rendered_sexpr(&mut out, 2, board_text_node(&text));
         assert_fragment_matches(
             out.trim(),
             kicad_parser::sexpr!((
@@ -803,7 +653,7 @@ mod tests {
         };
 
         let mut out = String::new();
-        write_footprint(&mut out, &fp);
+        write_rendered_sexpr(&mut out, 2, build_footprint(&fp));
 
         let parsed = kicad_parser::sexpr::parse(&out).unwrap();
         let property = parsed

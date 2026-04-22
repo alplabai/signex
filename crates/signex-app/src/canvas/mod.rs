@@ -111,6 +111,70 @@ pub struct SchematicCanvas {
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
+    /// When true, non-selected items dim on the canvas (F9). Synced
+    /// from `ui_state.auto_focus` so the renderer can compute a focus
+    /// uuid set without reaching back into app state.
+    pub auto_focus: bool,
+    /// ERC violations to highlight on the canvas — Altium-style marker
+    /// dots + primary-item halos. Synced from `ui_state.erc_violations`
+    /// after each ERC run so the overlay renders without the canvas
+    /// reaching back into app state.
+    pub erc_markers: Vec<ErcMarker>,
+    /// Armed net-color from the Active Bar palette. `Some(c)` with a
+    /// non-zero alpha means the next wire click floods that colour
+    /// onto the whole connected net; alpha 0 signals "clear one".
+    /// Drives the pen cursor drawn over the canvas.
+    pub pending_net_color: Option<signex_types::theme::Color>,
+    /// Per-wire colour overrides consulted when drawing wires. Synced
+    /// from `ui_state.wire_color_overrides` on every canvas rebuild.
+    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// In-flight lasso polygon in world space. Synced from
+    /// `ui_state.lasso_polygon` so the overlay draw can render the
+    /// committed vertices + rubber-band to the cursor without
+    /// reaching into app state.
+    pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
+    /// In-flight 3-click arc (start, mid) while Tool::Arc is active.
+    /// Mirrors `interaction_state.arc_points` for the preview draw.
+    pub arc_points: Vec<signex_types::schematic::Point>,
+    /// In-flight polyline vertices while Tool::Polyline is active.
+    /// Mirrors `interaction_state.polyline_points`.
+    pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// When the BringToFrontOf / SendToBackOf picker is armed, show
+    /// the gray-X placement cursor so the user knows the next click
+    /// is a reference pick, not a selection. Synced from
+    /// `ui_state.reorder_picker.is_some()` at the top of each view().
+    pub reorder_picker_armed: bool,
+    /// Two-click shape anchor + which shape is being drawn. Used by
+    /// the rubber-band preview for Line / Rectangle / Circle.
+    pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapePreviewKind {
+    Line,
+    Rect,
+    Circle,
+}
+
+/// Canvas-side projection of an ERC violation — just enough to draw
+/// its marker without pulling the full Violation type into the render
+/// crate.
+#[derive(Debug, Clone)]
+pub struct ErcMarker {
+    pub x: f64,
+    pub y: f64,
+    pub severity: ErcMarkerSeverity,
+    /// Uuid of the primary offending item (label, wire, symbol, …).
+    /// Reserved for a future halo/highlight pass; unused today.
+    #[allow(dead_code)]
+    pub primary_uuid: Option<uuid::Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErcMarkerSeverity {
+    Error,
+    Warning,
+    Info,
 }
 
 impl SchematicCanvas {
@@ -161,7 +225,30 @@ impl SchematicCanvas {
             visible_grid_mm: 2.54,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
+            auto_focus: false,
+            erc_markers: Vec::new(),
+            pending_net_color: None,
+            wire_color_overrides: std::collections::HashMap::new(),
+            lasso_polygon: None,
+            arc_points: Vec::new(),
+            polyline_points: Vec::new(),
+            reorder_picker_armed: false,
+            shape_anchor: None,
         }
+    }
+
+    /// Compute the "focus" uuid set when auto_focus is on — members of
+    /// the current selection. Returns None when auto_focus is off; the
+    /// renderer then draws every item at full alpha.
+    fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
+        if !self.auto_focus {
+            return None;
+        }
+        let mut set = std::collections::HashSet::new();
+        for item in &self.selected {
+            set.insert(item.uuid);
+        }
+        Some(set)
     }
 
     pub fn clear_overlay_cache(&mut self) {
@@ -692,6 +779,8 @@ impl canvas::Program<Message> for SchematicCanvas {
         let effective_snapshot: Option<&signex_render::schematic::SchematicRenderSnapshot> =
             shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
 
+        let focus_set = self.auto_focus_set();
+        let focus_ref = focus_set.as_ref();
         let content = if state.panning || drag_offset.is_some() {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
             if let Some(snapshot) = effective_snapshot {
@@ -701,6 +790,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &live_transform,
                     &self.canvas_colors,
                     bounds,
+                    focus_ref,
+                    Some(&self.wire_color_overrides),
                 );
             }
             frame.into_geometry()
@@ -721,11 +812,181 @@ impl canvas::Program<Message> for SchematicCanvas {
                         &live_transform,
                         &self.canvas_colors,
                         bounds,
+                        focus_ref,
+                        Some(&self.wire_color_overrides),
                     );
                 }
             })
         };
         layers.push(content);
+
+        // Layer 2.5: AutoFocus dim — when F9 is on and a selection
+        // exists, fade everything outside the selection bbox + margin
+        // with a translucent dark overlay. Uses four rects forming a
+        // frame around the bbox, so 2D paths can express the hole
+        // without compositing modes.
+        if self.auto_focus
+            && !self.selected.is_empty()
+            && let Some(snapshot) = effective_snapshot
+        {
+            use signex_types::schematic::SelectedKind;
+            let mut xs: Vec<f32> = Vec::new();
+            let mut ys: Vec<f32> = Vec::new();
+            let mut push_pt = |x: f64, y: f64, r: f32| {
+                xs.push(x as f32 - r);
+                xs.push(x as f32 + r);
+                ys.push(y as f32 - r);
+                ys.push(y as f32 + r);
+            };
+            for item in &self.selected {
+                match item.kind {
+                    SelectedKind::Symbol
+                    | SelectedKind::SymbolRefField
+                    | SelectedKind::SymbolValField => {
+                        if let Some(s) = snapshot.symbols.iter().find(|s| s.uuid == item.uuid) {
+                            push_pt(s.position.x, s.position.y, 8.0);
+                        }
+                    }
+                    SelectedKind::Wire => {
+                        if let Some(w) = snapshot.wires.iter().find(|w| w.uuid == item.uuid) {
+                            push_pt(w.start.x, w.start.y, 1.0);
+                            push_pt(w.end.x, w.end.y, 1.0);
+                        }
+                    }
+                    SelectedKind::Bus => {
+                        if let Some(b) = snapshot.buses.iter().find(|b| b.uuid == item.uuid) {
+                            push_pt(b.start.x, b.start.y, 1.0);
+                            push_pt(b.end.x, b.end.y, 1.0);
+                        }
+                    }
+                    SelectedKind::Label => {
+                        if let Some(l) = snapshot.labels.iter().find(|l| l.uuid == item.uuid) {
+                            push_pt(l.position.x, l.position.y, 4.0);
+                        }
+                    }
+                    SelectedKind::Junction | SelectedKind::NoConnect => {
+                        if let Some(j) = snapshot.junctions.iter().find(|j| j.uuid == item.uuid) {
+                            push_pt(j.position.x, j.position.y, 1.0);
+                        } else if let Some(nc) =
+                            snapshot.no_connects.iter().find(|n| n.uuid == item.uuid)
+                        {
+                            push_pt(nc.position.x, nc.position.y, 1.0);
+                        }
+                    }
+                    SelectedKind::TextNote => {
+                        if let Some(tn) = snapshot.text_notes.iter().find(|t| t.uuid == item.uuid) {
+                            push_pt(tn.position.x, tn.position.y, 6.0);
+                        }
+                    }
+                    SelectedKind::ChildSheet => {
+                        if let Some(cs) = snapshot.child_sheets.iter().find(|c| c.uuid == item.uuid)
+                        {
+                            push_pt(cs.position.x, cs.position.y, 0.0);
+                            push_pt(cs.position.x + cs.size.0, cs.position.y + cs.size.1, 0.0);
+                        }
+                    }
+                    SelectedKind::SheetPin => {
+                        if let Some(pin) = snapshot
+                            .child_sheets
+                            .iter()
+                            .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == item.uuid))
+                        {
+                            push_pt(pin.position.x, pin.position.y, 2.0);
+                        }
+                    }
+                    SelectedKind::Drawing => {
+                        use signex_types::schematic::SchDrawing;
+                        if let Some(d) = snapshot.drawings.iter().find(|d| {
+                            let u = match d {
+                                SchDrawing::Line { uuid, .. }
+                                | SchDrawing::Rect { uuid, .. }
+                                | SchDrawing::Circle { uuid, .. }
+                                | SchDrawing::Arc { uuid, .. }
+                                | SchDrawing::Polyline { uuid, .. } => *uuid,
+                            };
+                            u == item.uuid
+                        }) {
+                            match d {
+                                SchDrawing::Line { start, end, .. } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Rect { start, end, .. } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Circle { center, radius, .. } => {
+                                    push_pt(center.x, center.y, *radius as f32);
+                                }
+                                SchDrawing::Arc {
+                                    start, mid, end, ..
+                                } => {
+                                    push_pt(start.x, start.y, 1.0);
+                                    push_pt(mid.x, mid.y, 1.0);
+                                    push_pt(end.x, end.y, 1.0);
+                                }
+                                SchDrawing::Polyline { points, .. } => {
+                                    for p in points {
+                                        push_pt(p.x, p.y, 1.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if !xs.is_empty() && !ys.is_empty() {
+                let min_x = xs.iter().cloned().fold(f32::INFINITY, f32::min);
+                let max_x = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let min_y = ys.iter().cloned().fold(f32::INFINITY, f32::min);
+                let max_y = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let p_min = state
+                    .camera
+                    .world_to_screen(iced::Point::new(min_x, min_y), bounds);
+                let p_max = state
+                    .camera
+                    .world_to_screen(iced::Point::new(max_x, max_y), bounds);
+                let margin = 30.0_f32;
+                let sx0 = p_min.x.min(p_max.x) - margin;
+                let sy0 = p_min.y.min(p_max.y) - margin;
+                let sx1 = p_min.x.max(p_max.x) + margin;
+                let sy1 = p_min.y.max(p_max.y) + margin;
+                let dim = iced::Color::from_rgba(0.05, 0.05, 0.08, 0.55);
+                let dim_frame = {
+                    let mut f = canvas::Frame::new(renderer, bounds.size());
+                    let bw = bounds.width;
+                    let bh = bounds.height;
+                    // Top
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, 0.0),
+                        iced::Size::new(bw, sy0.max(0.0)),
+                        dim,
+                    );
+                    // Bottom
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, sy1.min(bh)),
+                        iced::Size::new(bw, (bh - sy1).max(0.0)),
+                        dim,
+                    );
+                    // Left
+                    let mid_h = (sy1.min(bh) - sy0.max(0.0)).max(0.0);
+                    f.fill_rectangle(
+                        iced::Point::new(0.0, sy0.max(0.0)),
+                        iced::Size::new(sx0.max(0.0), mid_h),
+                        dim,
+                    );
+                    // Right
+                    f.fill_rectangle(
+                        iced::Point::new(sx1.min(bw), sy0.max(0.0)),
+                        iced::Size::new((bw - sx1).max(0.0), mid_h),
+                        dim,
+                    );
+                    f.into_geometry()
+                };
+                layers.push(dim_frame);
+            }
+        }
 
         // Layer 3: selection overlay — always uses live camera (redrawn each frame)
         // During drag we use the shifted snapshot so the selection rectangle
@@ -747,6 +1008,58 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.selected,
                     &transform,
                 );
+                // Altium-style ERC markers: filled circle + concentric
+                // stroke at each violation's world position, colored by
+                // severity. Drawn in the overlay layer so they sit on
+                // top of wires and symbols but under the selection
+                // highlight.
+                for m in &self.erc_markers {
+                    let (sx, sy) = transform.world_to_screen(m.x, m.y);
+                    let (fill, stroke) = match m.severity {
+                        ErcMarkerSeverity::Error => (
+                            Color::from_rgba(0.95, 0.25, 0.25, 0.6),
+                            Color::from_rgb(0.95, 0.25, 0.25),
+                        ),
+                        ErcMarkerSeverity::Warning => (
+                            Color::from_rgba(0.98, 0.72, 0.20, 0.6),
+                            Color::from_rgb(0.98, 0.72, 0.20),
+                        ),
+                        ErcMarkerSeverity::Info => (
+                            Color::from_rgba(0.30, 0.55, 0.85, 0.55),
+                            Color::from_rgb(0.30, 0.55, 0.85),
+                        ),
+                    };
+                    // Outer soft halo so the marker is visible at low zoom.
+                    let halo = canvas::Path::circle(iced::Point::new(sx, sy), 16.0);
+                    frame.fill(&halo, Color::from_rgba(fill.r, fill.g, fill.b, 0.18));
+                    // Core dot — filled bright + hard stroke so it stays
+                    // legible over wires and text.
+                    let dot = canvas::Path::circle(iced::Point::new(sx, sy), 7.0);
+                    frame.fill(&dot, fill);
+                    frame.stroke(
+                        &dot,
+                        canvas::Stroke::default().with_color(stroke).with_width(2.0),
+                    );
+                    // Cross-hair inside the dot (Altium's "X" marker).
+                    let cross_len = 4.0_f32;
+                    let v1 = canvas::Path::line(
+                        iced::Point::new(sx - cross_len, sy - cross_len),
+                        iced::Point::new(sx + cross_len, sy + cross_len),
+                    );
+                    let v2 = canvas::Path::line(
+                        iced::Point::new(sx - cross_len, sy + cross_len),
+                        iced::Point::new(sx + cross_len, sy - cross_len),
+                    );
+                    let white = Color::WHITE;
+                    frame.stroke(
+                        &v1,
+                        canvas::Stroke::default().with_color(white).with_width(1.5),
+                    );
+                    frame.stroke(
+                        &v2,
+                        canvas::Stroke::default().with_color(white).with_width(1.5),
+                    );
+                }
             };
             if drag_offset.is_some() {
                 let mut frame = canvas::Frame::new(renderer, bounds.size());
@@ -765,20 +1078,296 @@ impl canvas::Program<Message> for SchematicCanvas {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
 
             if let Some(cursor_pos) = cursor.position_in(bounds) {
-                let crosshair_color = Color::from_rgba8(255, 255, 255, 0.3);
-                let h_line = canvas::Path::line(
-                    iced::Point::new(0.0, cursor_pos.y),
-                    iced::Point::new(bounds.width, cursor_pos.y),
-                );
-                let v_line = canvas::Path::line(
-                    iced::Point::new(cursor_pos.x, 0.0),
-                    iced::Point::new(cursor_pos.x, bounds.height),
-                );
-                let stroke = canvas::Stroke::default()
-                    .with_color(crosshair_color)
-                    .with_width(0.5);
-                frame.stroke(&h_line, stroke);
-                frame.stroke(&v_line, stroke);
+                // Snap cursor visuals to the grid so they match where
+                // the click will commit.
+                let cursor_pos = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                    let w = state.camera.screen_to_world(cursor_pos, bounds);
+                    let g = self.snap_grid_mm as f32;
+                    let snapped_w = iced::Point::new((w.x / g).round() * g, (w.y / g).round() * g);
+                    state.camera.world_to_screen(snapped_w, bounds)
+                } else {
+                    cursor_pos
+                };
+
+                // Altium-style placement crosshair: a cyan diagonal
+                // X at the cursor, ~28 px across (double the earlier
+                // +). Same shape, size, and colour everywhere a
+                // placement / tool mode is active so the cursor
+                // affordance is uniform.
+                let placement_active = self.pending_net_color.is_some()
+                    || self.lasso_polygon.is_some()
+                    || self.drawing_mode
+                    || self.tool_preview.is_some()
+                    || self.ghost_label.is_some()
+                    || self.ghost_symbol.is_some()
+                    || self.ghost_text.is_some()
+                    || !self.arc_points.is_empty()
+                    || !self.polyline_points.is_empty()
+                    || self.reorder_picker_armed
+                    || self.shape_anchor.is_some();
+                if placement_active {
+                    let len = 14.0_f32;
+                    let a = canvas::Path::line(
+                        iced::Point::new(cursor_pos.x - len, cursor_pos.y - len),
+                        iced::Point::new(cursor_pos.x + len, cursor_pos.y + len),
+                    );
+                    let b = canvas::Path::line(
+                        iced::Point::new(cursor_pos.x - len, cursor_pos.y + len),
+                        iced::Point::new(cursor_pos.x + len, cursor_pos.y - len),
+                    );
+                    // Plain gray X — no outline. Neutral so it reads
+                    // on both the dark canvas background and the
+                    // yellow paper fill without competing with the
+                    // theme's accent colours.
+                    let stroke = canvas::Stroke::default()
+                        .with_color(Color::from_rgba(0.55, 0.55, 0.58, 0.9))
+                        .with_width(1.5);
+                    frame.stroke(&a, stroke);
+                    frame.stroke(&b, stroke);
+                }
+
+                // Net-color pen affordance — a diagonal "pencil" mark
+                // anchored to the cursor, filled with the armed color.
+                // iced's mouse cursor set only exposes Crosshair, so we
+                // paint our own pencil glyph on the canvas to make the
+                // mode visually obvious.
+                if let Some(c) = self.pending_net_color {
+                    let body = if c.a == 0 {
+                        // Clear-mode sentinel — render a grey pencil so
+                        // the user still sees the armed state.
+                        Color::from_rgb(0.75, 0.75, 0.75)
+                    } else {
+                        Color::from_rgb8(c.r, c.g, c.b)
+                    };
+                    let tip = iced::Point::new(cursor_pos.x + 4.0, cursor_pos.y + 4.0);
+                    let butt = iced::Point::new(cursor_pos.x + 22.0, cursor_pos.y + 22.0);
+                    // Shaft (fat colored line)
+                    let shaft = canvas::Path::line(tip, butt);
+                    frame.stroke(
+                        &shaft,
+                        canvas::Stroke::default().with_color(body).with_width(6.0),
+                    );
+                    // Dark outline for contrast on light backgrounds
+                    frame.stroke(
+                        &shaft,
+                        canvas::Stroke::default()
+                            .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.45))
+                            .with_width(1.0),
+                    );
+                    // Small triangle at tip to look like a pencil nib
+                    let nib = canvas::Path::new(|b| {
+                        b.move_to(tip);
+                        b.line_to(iced::Point::new(tip.x + 3.0, tip.y - 2.0));
+                        b.line_to(iced::Point::new(tip.x - 2.0, tip.y + 3.0));
+                        b.close();
+                    });
+                    frame.fill(&nib, Color::from_rgb(0.15, 0.15, 0.15));
+                }
+
+                // Two-click shape rubber-band — line from anchor to
+                // cursor, or rect / circle sized by the cursor offset.
+                // Commits on the second click via the tool's branch
+                // in CanvasEvent::Clicked.
+                if let Some((anchor, kind)) = self.shape_anchor {
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let p_a = state.camera.world_to_screen(
+                        iced::Point::new(anchor.x as f32, anchor.y as f32),
+                        bounds,
+                    );
+                    let p_b = state
+                        .camera
+                        .world_to_screen(iced::Point::new(snap_x as f32, snap_y as f32), bounds);
+                    let accent = Color::from_rgb(0.94, 0.74, 0.28);
+                    let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
+                    match kind {
+                        crate::canvas::ShapePreviewKind::Line => {
+                            frame.stroke(&canvas::Path::line(p_a, p_b), stroke);
+                        }
+                        crate::canvas::ShapePreviewKind::Rect => {
+                            let x0 = p_a.x.min(p_b.x);
+                            let y0 = p_a.y.min(p_b.y);
+                            let w = (p_a.x - p_b.x).abs();
+                            let h = (p_a.y - p_b.y).abs();
+                            frame.stroke(
+                                &canvas::Path::rectangle(
+                                    iced::Point::new(x0, y0),
+                                    iced::Size::new(w.max(0.1), h.max(0.1)),
+                                ),
+                                stroke,
+                            );
+                        }
+                        crate::canvas::ShapePreviewKind::Circle => {
+                            let dx = p_b.x - p_a.x;
+                            let dy = p_b.y - p_a.y;
+                            let r = (dx * dx + dy * dy).sqrt().max(0.5);
+                            frame.stroke(&canvas::Path::circle(p_a, r), stroke);
+                            // Small center dot for Altium-style feedback.
+                            frame.fill(&canvas::Path::circle(p_a, 2.0), accent);
+                        }
+                    }
+                }
+
+                // Polyline-in-progress preview — solid segments between
+                // committed vertices plus a dashed rubber-band to the
+                // snapped cursor. Commits on Enter or double-click.
+                if !self.polyline_points.is_empty() {
+                    let accent = Color::from_rgb(0.94, 0.74, 0.28);
+                    let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
+                    for pair in self.polyline_points.windows(2) {
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(pair[0].x as f32, pair[0].y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(pair[1].x as f32, pair[1].y as f32),
+                            bounds,
+                        );
+                        frame.stroke(&canvas::Path::line(p1, p2), stroke);
+                    }
+                    if let Some(last) = self.polyline_points.last() {
+                        let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                            let g = self.snap_grid_mm;
+                            (
+                                (cursor_world.x as f64 / g).round() * g,
+                                (cursor_world.y as f64 / g).round() * g,
+                            )
+                        } else {
+                            (cursor_world.x as f64, cursor_world.y as f64)
+                        };
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(last.x as f32, last.y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(snap_x as f32, snap_y as f32),
+                            bounds,
+                        );
+                        let dashed = canvas::Stroke::default()
+                            .with_color(Color { a: 0.6, ..accent })
+                            .with_width(1.0);
+                        frame.stroke(&canvas::Path::line(p1, p2), dashed);
+                    }
+                }
+
+                // Arc-in-progress preview — draw committed spans
+                // between consecutive clicks. With 0 clicks: nothing.
+                // 1 click: a dashed line to the cursor (start → current).
+                // 2 clicks: a dashed 3-point curve (start → mid → cursor).
+                if !self.arc_points.is_empty() {
+                    let accent = Color::from_rgb(0.94, 0.74, 0.28);
+                    let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                        let g = self.snap_grid_mm;
+                        (
+                            (cursor_world.x as f64 / g).round() * g,
+                            (cursor_world.y as f64 / g).round() * g,
+                        )
+                    } else {
+                        (cursor_world.x as f64, cursor_world.y as f64)
+                    };
+                    let dashed = canvas::Stroke::default()
+                        .with_color(Color { a: 0.6, ..accent })
+                        .with_width(1.0);
+                    // Draw committed anchors.
+                    for p in &self.arc_points {
+                        let sp = state
+                            .camera
+                            .world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
+                        let ring = canvas::Path::circle(sp, 4.0);
+                        frame.stroke(
+                            &ring,
+                            canvas::Stroke::default().with_color(accent).with_width(1.5),
+                        );
+                    }
+                    // Rubber-band from last anchor to cursor.
+                    if let Some(last) = self.arc_points.last() {
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(last.x as f32, last.y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(snap_x as f32, snap_y as f32),
+                            bounds,
+                        );
+                        frame.stroke(&canvas::Path::line(p1, p2), dashed);
+                    }
+                }
+
+                // Lasso-in-progress preview — solid segments between
+                // vertices plus a rubber-band dashed line from the
+                // last vertex to the cursor. Same colour as the
+                // selection accent so it reads as "selection in
+                // progress".
+                if let Some(lasso) = &self.lasso_polygon
+                    && !lasso.is_empty()
+                {
+                    // Use the selection overlay colour so lasso
+                    // reads as "selection in progress" — same as
+                    // the box-select rubber-band.
+                    let accent = Color::from_rgb(0.24, 0.62, 0.97);
+                    let stroke = canvas::Stroke::default().with_color(accent).with_width(1.5);
+                    // Segments between committed vertices.
+                    for pair in lasso.windows(2) {
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(pair[0].x as f32, pair[0].y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(pair[1].x as f32, pair[1].y as f32),
+                            bounds,
+                        );
+                        frame.stroke(&canvas::Path::line(p1, p2), stroke);
+                    }
+                    // Rubber-band from last vertex → cursor (snapped).
+                    if let Some(last) = lasso.last() {
+                        let cursor_world = state.camera.screen_to_world(cursor_pos, bounds);
+                        let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
+                            let g = self.snap_grid_mm;
+                            (
+                                (cursor_world.x as f64 / g).round() * g,
+                                (cursor_world.y as f64 / g).round() * g,
+                            )
+                        } else {
+                            (cursor_world.x as f64, cursor_world.y as f64)
+                        };
+                        let p1 = state.camera.world_to_screen(
+                            iced::Point::new(last.x as f32, last.y as f32),
+                            bounds,
+                        );
+                        let p2 = state.camera.world_to_screen(
+                            iced::Point::new(snap_x as f32, snap_y as f32),
+                            bounds,
+                        );
+                        let dashed = canvas::Stroke::default()
+                            .with_color(Color { a: 0.6, ..accent })
+                            .with_width(1.0);
+                        frame.stroke(&canvas::Path::line(p1, p2), dashed);
+                    }
+                    // Small circle at the first vertex to hint
+                    // "click here to close the polygon".
+                    if lasso.len() >= 3 {
+                        let first = lasso[0];
+                        let p = state.camera.world_to_screen(
+                            iced::Point::new(first.x as f32, first.y as f32),
+                            bounds,
+                        );
+                        let ring = canvas::Path::circle(p, 5.0);
+                        frame.stroke(
+                            &ring,
+                            canvas::Stroke::default().with_color(accent).with_width(1.5),
+                        );
+                    }
+                }
 
                 // Wire-in-progress rubber-band preview
                 if self.drawing_mode && !self.wire_preview.is_empty() {
@@ -1025,26 +1614,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                     } else {
                         cursor_pos
                     };
-                    let marker_color = Color::from_rgba(0.2, 0.85, 1.0, 0.95);
-                    let arm = 7.0;
-                    let stroke = canvas::Stroke::default()
-                        .with_color(marker_color)
-                        .with_width(1.8);
-                    // Diagonal X so it doesn't overlap the grid crosshair.
-                    frame.stroke(
-                        &canvas::Path::line(
-                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y - arm),
-                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y + arm),
-                        ),
-                        stroke,
-                    );
-                    frame.stroke(
-                        &canvas::Path::line(
-                            iced::Point::new(snapped_screen.x + arm, snapped_screen.y - arm),
-                            iced::Point::new(snapped_screen.x - arm, snapped_screen.y + arm),
-                        ),
-                        stroke,
-                    );
+                    // No cyan X here — the unified gray placement X
+                    // painted earlier already sits at the cursor for
+                    // every tool. Keep only the tool-name chip.
                     // Tool-name tag beside the marker. Dark text on a
                     // semi-opaque light chip so it reads on any canvas bg.
                     let tag_x = snapped_screen.x + 14.0;
@@ -1218,6 +1790,22 @@ impl canvas::Program<Message> for SchematicCanvas {
                                     draw_x(&mut frame, s);
                                 }
                             }
+                            SelectedKind::SheetPin => {
+                                if let Some(pin) = snap
+                                    .child_sheets
+                                    .iter()
+                                    .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == sel.uuid))
+                                {
+                                    let s = state.camera.world_to_screen(
+                                        iced::Point::new(
+                                            (pin.position.x + dxf) as f32,
+                                            (pin.position.y + dyf) as f32,
+                                        ),
+                                        bounds,
+                                    );
+                                    draw_x(&mut frame, s);
+                                }
+                            }
                             SelectedKind::Symbol => {
                                 if let Some(sym) = snap.symbols.iter().find(|s| s.uuid == sel.uuid)
                                     && let Some(lib_sym) = snap.lib_symbols.get(&sym.lib_id)
@@ -1294,6 +1882,12 @@ impl canvas::Program<Message> for SchematicCanvas {
         _bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> mouse::Interaction {
+        // Single cursor shape across every canvas mode: default arrow
+        // for idle, native pan / move cursors while dragging. No
+        // mode-specific shape swaps (the OS Crosshair is white + tiny
+        // on Windows so invisible on yellow paper anyway). Visual
+        // feedback for armed modes comes from overlay glyphs — the
+        // net-colour pencil and the lasso polygon preview.
         if state.panning {
             mouse::Interaction::Grabbing
         } else if state.move_dragging {
@@ -1392,6 +1986,53 @@ fn shift_snapshot_for_selection(
     for cs in out.child_sheets.iter_mut() {
         if is_selected(cs.uuid, SelectedKind::ChildSheet) {
             cs.position = shift(cs.position);
+            for pin in &mut cs.pins {
+                pin.position = shift(pin.position);
+            }
+        } else {
+            for pin in &mut cs.pins {
+                if is_selected(pin.uuid, SelectedKind::SheetPin) {
+                    pin.position = shift(pin.position);
+                }
+            }
+        }
+    }
+    use signex_types::schematic::SchDrawing;
+    for d in out.drawings.iter_mut() {
+        let uuid = match d {
+            SchDrawing::Line { uuid, .. }
+            | SchDrawing::Rect { uuid, .. }
+            | SchDrawing::Circle { uuid, .. }
+            | SchDrawing::Arc { uuid, .. }
+            | SchDrawing::Polyline { uuid, .. } => *uuid,
+        };
+        if !is_selected(uuid, SelectedKind::Drawing) {
+            continue;
+        }
+        match d {
+            SchDrawing::Line { start, end, .. } => {
+                *start = shift(*start);
+                *end = shift(*end);
+            }
+            SchDrawing::Rect { start, end, .. } => {
+                *start = shift(*start);
+                *end = shift(*end);
+            }
+            SchDrawing::Circle { center, .. } => {
+                *center = shift(*center);
+            }
+            SchDrawing::Arc {
+                start, mid, end, ..
+            } => {
+                *start = shift(*start);
+                *mid = shift(*mid);
+                *end = shift(*end);
+            }
+            SchDrawing::Polyline { points, .. } => {
+                for p in points {
+                    *p = shift(*p);
+                }
+            }
         }
     }
     out

@@ -60,6 +60,9 @@ impl Signex {
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
+        let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
+        let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
+        let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -70,6 +73,7 @@ impl Signex {
         let custom_paper_w_mm = self.document_state.panel_ctx.custom_paper_w_mm;
         let custom_paper_h_mm = self.document_state.panel_ctx.custom_paper_h_mm;
         let sheet_color = self.document_state.panel_ctx.sheet_color;
+        let erc_diagnostics = self.build_erc_diagnostic_entries();
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
             project_name,
@@ -187,9 +191,14 @@ impl Signex {
             selected_uuid,
             selected_kind,
             selection_info,
+            drawing_edit_buf,
+            drawing_edit_buf_for,
+            selected_drawing,
             component_filter,
             collapsed_sections,
             pre_placement,
+            erc_diagnostics,
+            erc_focus_index: self.ui_state.erc_focus_global_index,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
@@ -213,14 +222,41 @@ impl Signex {
 
     pub(crate) fn sync_active_tab(&mut self) {
         self.sync_visible_document_from_active_tab();
+        // ERC results are cached per-sheet. On tab switch, repoint the visible
+        // list/markers at the newly active sheet instead of dropping results.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| t.path.clone());
+        self.refresh_active_erc_from_cache(active_path.as_ref());
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
     }
 
+    /// Refresh `panel_ctx` selection fields from the active canvas.
+    ///
+    /// NOTE: `panel_ctx` is shared across every window — the dock
+    /// panels, Properties panel, and status bar all read these
+    /// fields. When an undocked window handles a canvas event via
+    /// the swap trick, "active canvas" refers to the undocked
+    /// window's canvas for the duration of the event, so this
+    /// function writes THAT window's selection into the shared
+    /// panel_ctx. End result: main-window panels reflect the
+    /// most-recently-interacted-with window's selection. This is
+    /// intentional "last-touched wins" behaviour.
     pub(crate) fn update_selection_info(&mut self) {
-        let selected = &self.interaction_state.canvas.selected;
+        // AutoFocus dims every item not in the current selection, so any
+        // selection change must invalidate the cached content layer to
+        // reflect the new focus set.
+        if self.ui_state.auto_focus {
+            self.interaction_state.active_canvas_mut().clear_content_cache();
+        }
+        let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
+        self.document_state.panel_ctx.selected_drawing = None;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -232,12 +268,41 @@ impl Signex {
             return;
         }
 
-        if let Some(engine) = self.document_state.engine.as_ref()
+        // Borrow `engines` + `panel_ctx` as disjoint fields so the
+        // compiler can split the mutation below. Going through
+        // `active_engine()` would keep the whole `DocumentState`
+        // borrowed for the duration of the block.
+        let active_path = self.document_state.active_path.clone();
+        if let Some(path) = active_path
+            && let Some(engine) = self.document_state.engines.get(&path)
             && let Some(details) = engine.describe_single_selection(selected)
         {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // Cache the live SchDrawing for the Properties preview
+            // widget — only when the single selection is a drawing.
+            if matches!(
+                details.selected_kind,
+                signex_types::schematic::SelectedKind::Drawing
+            ) {
+                use signex_types::schematic::SchDrawing;
+                self.document_state.panel_ctx.selected_drawing = engine
+                    .document()
+                    .drawings
+                    .iter()
+                    .find(|d| {
+                        let u = match d {
+                            SchDrawing::Line { uuid, .. }
+                            | SchDrawing::Rect { uuid, .. }
+                            | SchDrawing::Circle { uuid, .. }
+                            | SchDrawing::Arc { uuid, .. }
+                            | SchDrawing::Polyline { uuid, .. } => *uuid,
+                        };
+                        u == details.selected_uuid
+                    })
+                    .cloned();
+            }
         }
     }
 
@@ -251,7 +316,7 @@ impl Signex {
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
-        self.interaction_state.canvas.set_theme_colors(
+        self.interaction_state.active_canvas_mut().set_theme_colors(
             signex_render::colors::to_iced(&colors.background),
             signex_render::colors::to_iced(&colors.grid),
             signex_render::colors::to_iced(&colors.paper),
@@ -260,9 +325,9 @@ impl Signex {
             signex_render::colors::to_iced(&colors.background),
             signex_render::colors::to_iced(&colors.grid),
         );
-        self.interaction_state.canvas.canvas_colors = colors;
+        self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }

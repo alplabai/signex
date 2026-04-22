@@ -72,6 +72,15 @@ pub fn draw_selection_overlay(
                     draw_sheet_selection(frame, cs, transform);
                 }
             }
+            SelectedKind::SheetPin => {
+                if let Some(pin) = sheet
+                    .child_sheets
+                    .iter()
+                    .find_map(|cs| cs.pins.iter().find(|pin| pin.uuid == item.uuid))
+                {
+                    draw_point_selection(frame, pin.position.x, pin.position.y, transform);
+                }
+            }
             SelectedKind::BusEntry => {
                 if let Some(be) = sheet.bus_entries.iter().find(|b| b.uuid == item.uuid) {
                     let ex = be.position.x + be.size.0;
@@ -80,7 +89,20 @@ pub fn draw_selection_overlay(
                     draw_rect_highlight(frame, &aabb, transform);
                 }
             }
-            SelectedKind::Drawing => {}
+            SelectedKind::Drawing => {
+                if let Some(d) = sheet.drawings.iter().find(|d| {
+                    let u = match d {
+                        SchDrawing::Line { uuid, .. }
+                        | SchDrawing::Rect { uuid, .. }
+                        | SchDrawing::Circle { uuid, .. }
+                        | SchDrawing::Arc { uuid, .. }
+                        | SchDrawing::Polyline { uuid, .. } => *uuid,
+                    };
+                    u == item.uuid
+                }) {
+                    draw_drawing_selection(frame, d, transform);
+                }
+            }
             SelectedKind::SymbolRefField => {
                 if let Some(sym) = sheet.symbols.iter().find(|s| s.uuid == item.uuid)
                     && let Some(ref rt) = sym.ref_text
@@ -562,4 +584,94 @@ fn ext(min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64, x: f6
     *min_y = min_y.min(y);
     *max_x = max_x.max(x);
     *max_y = max_y.max(y);
+}
+
+/// Highlight a graphic drawing. For each shape kind we either repaint
+/// the geometry in the selection colour (line / arc / polyline) or
+/// surround it with a thin selection bbox (rect / circle).
+fn draw_drawing_selection(
+    frame: &mut canvas::Frame,
+    drawing: &SchDrawing,
+    transform: &ScreenTransform,
+) {
+    let stroke = canvas::Stroke::default()
+        .with_color(SEL_COLOR)
+        .with_width(2.0);
+    match drawing {
+        SchDrawing::Line { start, end, .. } => {
+            let (sx, sy) = transform.world_to_screen(start.x, start.y);
+            let (ex, ey) = transform.world_to_screen(end.x, end.y);
+            frame.stroke(
+                &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(ex, ey)),
+                stroke,
+            );
+        }
+        SchDrawing::Rect { start, end, .. } => {
+            let x0 = start.x.min(end.x);
+            let x1 = start.x.max(end.x);
+            let y0 = start.y.min(end.y);
+            let y1 = start.y.max(end.y);
+            let aabb = Aabb::new(x0, y0, x1, y1).expand(0.5);
+            draw_rect_highlight(frame, &aabb, transform);
+        }
+        SchDrawing::Circle { center, radius, .. } => {
+            let (cx, cy) = transform.world_to_screen(center.x, center.y);
+            let rs = transform.world_len(*radius).abs();
+            frame.stroke(&canvas::Path::circle(iced::Point::new(cx, cy), rs), stroke);
+        }
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            // Fit the circle through the three stored points and
+            // sample the arc between start_angle → end_angle so the
+            // highlight traces the actual curve, not the chords.
+            if let Some((cx_w, cy_w, radius_w)) =
+                crate::schematic::circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+            {
+                let start_angle = (start.y - cy_w).atan2(start.x - cx_w);
+                let mid_angle = (mid.y - cy_w).atan2(mid.x - cx_w);
+                let end_angle = (end.y - cy_w).atan2(end.x - cx_w);
+                let (from, to) = crate::schematic::arc_sweep(start_angle, mid_angle, end_angle);
+                let steps = 48_usize;
+                let mut prev = transform.world_to_screen(start.x, start.y);
+                for i in 1..=steps {
+                    let t = i as f64 / steps as f64;
+                    let a = from + (to - from) * t;
+                    let wx = cx_w + radius_w * a.cos();
+                    let wy = cy_w + radius_w * a.sin();
+                    let (sx, sy) = transform.world_to_screen(wx, wy);
+                    frame.stroke(
+                        &canvas::Path::line(
+                            iced::Point::new(prev.0, prev.1),
+                            iced::Point::new(sx, sy),
+                        ),
+                        stroke,
+                    );
+                    prev = (sx, sy);
+                }
+            } else {
+                let (sx, sy) = transform.world_to_screen(start.x, start.y);
+                let (mx, my) = transform.world_to_screen(mid.x, mid.y);
+                let (ex, ey) = transform.world_to_screen(end.x, end.y);
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(mx, my)),
+                    stroke,
+                );
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(mx, my), iced::Point::new(ex, ey)),
+                    stroke,
+                );
+            }
+        }
+        SchDrawing::Polyline { points, .. } => {
+            for pair in points.windows(2) {
+                let (sx, sy) = transform.world_to_screen(pair[0].x, pair[0].y);
+                let (ex, ey) = transform.world_to_screen(pair[1].x, pair[1].y);
+                frame.stroke(
+                    &canvas::Path::line(iced::Point::new(sx, sy), iced::Point::new(ex, ey)),
+                    stroke,
+                );
+            }
+        }
+    }
 }

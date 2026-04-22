@@ -26,6 +26,9 @@ impl Signex {
         }
 
         self.document_state.dock.update(msg);
+        // Persist the new layout so it survives restart. Cheap: one
+        // JSON round-trip on the prefs file per dock mutation.
+        crate::fonts::write_dock_layout(&self.document_state.dock);
         self.finish_update()
     }
 }
