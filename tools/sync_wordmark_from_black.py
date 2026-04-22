@@ -45,9 +45,10 @@ def replace_text11_d(svg_text: str, new_d: str) -> str:
     if not m:
         raise RuntimeError('text11 path not found in target')
     old_block = m.group(1)
-    new_block = D_ATTR.sub(f'd="{new_d}"', old_block, count=1)
-    if new_block == old_block:
-        raise RuntimeError('failed to substitute d in target')
+    if not D_ATTR.search(old_block):
+        raise RuntimeError('d= not found in target text11 path')
+    # lambda avoids re.sub's backreference interpretation of \g<...>, \1 etc.
+    new_block = D_ATTR.sub(lambda _m: f'd="{new_d}"', old_block, count=1)
     return svg_text[: m.start()] + new_block + svg_text[m.end() :]
 
 
