@@ -8,6 +8,8 @@ repository.workspace = true
 
 [dependencies]
 signex-types = { path = "../signex-types" }
+kicad-parser = { path = "../kicad-parser" }
+kicad-writer = { path = "../kicad-writer" }
 thiserror = { workspace = true }
 serde = { workspace = true }
 pdf-writer = { workspace = true }
