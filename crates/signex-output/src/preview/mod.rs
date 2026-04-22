@@ -1,8 +1,14 @@
 //! Print preview. See `OUTPUT_PLAN.md` §6.
 //!
-//! Reuses the PDF pipeline's `PdfSurface`; instead of emitting a PDF file,
-//! rasterises each page via `tiny-skia` into an Iced image for on-screen
-//! display. Byte-for-byte matches what PDF export produces.
+//! Rasterises pages via `tiny-skia` into RGBA pixel buffers for on-screen
+//! display. The same scene graph rendering logic as PDF export but to pixels
+//! instead of PDF operators.
+//!
+//! **Note on text rendering:** tiny-skia has no built-in text rasterisation.
+//! We render text as hollow rectangles with estimated dimensions
+//! (char_count × 0.6 × font_size_px) so users recognise text placement in
+//! the preview even without glyph rendering. This is acceptable for preview
+//! fidelity; the actual PDF renders glyphs correctly via font subsetting.
 
 use crate::ExportContext;
 use crate::pdf::PdfOptions;
@@ -11,28 +17,79 @@ mod rasterize;
 
 pub struct PreviewRasterizer;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PreviewOptions {
     pub pdf: PdfOptions,
+    /// Screen resolution in DPI. Default: 96 (standard screen DPI).
     pub dpi: f64,
 }
 
-/// A single rasterised page ready for Iced to display. Actual bitmap layout
-/// is filled in when the rasteriser lands.
+impl Default for PreviewOptions {
+    fn default() -> Self {
+        Self {
+            pdf: PdfOptions::default(),
+            dpi: 96.0,
+        }
+    }
+}
+
+/// A single rasterised page ready for Iced to display.
 #[derive(Debug, Clone)]
 pub struct PreviewPage {
+    /// 1-based page number in the export.
     pub page_number: usize,
+    /// Width in pixels at the preview DPI.
     pub width_px: u32,
+    /// Height in pixels at the preview DPI.
     pub height_px: u32,
+    /// RGBA bytes (width_px × height_px × 4 bytes per pixel).
     pub rgba: Vec<u8>,
 }
 
 impl PreviewRasterizer {
+    /// Rasterise all sheets in the export context to RGBA bitmaps.
+    ///
+    /// Returns a vec of preview pages, one per sheet in sheet order.
+    /// If a page fails to rasterise (e.g., dimensions too small), it is skipped.
     pub fn rasterize(
         &self,
-        _ctx: &ExportContext,
-        _opts: &PreviewOptions,
+        ctx: &ExportContext,
+        opts: &PreviewOptions,
     ) -> Vec<PreviewPage> {
-        todo!("preview rasteriser — implemented alongside PdfSurface in a follow-up PR")
+        let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
+
+        ctx.sheets
+            .iter()
+            .filter_map(|sheet| {
+                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts.dpi, ctx)
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_page_structure() {
+        // Test that PreviewPage can be constructed and has the right fields.
+        let page = PreviewPage {
+            page_number: 1,
+            width_px: 100,
+            height_px: 200,
+            rgba: vec![255; 100 * 200 * 4], // White page
+        };
+
+        assert_eq!(page.page_number, 1);
+        assert_eq!(page.width_px, 100);
+        assert_eq!(page.height_px, 200);
+        assert_eq!(page.rgba.len(), 100 * 200 * 4);
+    }
+
+    #[test]
+    fn preview_options_default() {
+        let opts = PreviewOptions::default();
+        assert_eq!(opts.dpi, 96.0);
     }
 }
