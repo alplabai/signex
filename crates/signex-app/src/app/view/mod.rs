@@ -1172,6 +1172,11 @@ impl Signex {
             .into()
         };
 
+        // `width(Length::Fill)` on the row is load-bearing: without it, the
+        // drag zones' Fill-width collapses to 0 because their parent (this
+        // row) is Shrink, and the chrome loses all its draggable real
+        // estate the moment menus + search + controls consume their
+        // natural widths.
         let inner = row![
             menu_padded,
             drag_zone(),
@@ -1179,6 +1184,7 @@ impl Signex {
             drag_zone(),
             controls,
         ]
+        .width(Length::Fill)
         .align_y(Alignment::Center);
 
         container(inner)
@@ -1399,10 +1405,12 @@ impl Signex {
         }
     }
 
-    /// 6 px invisible mouse-area strips on every edge of the main
+    /// 6 px invisible mouse-area strips around the borderless main
     /// window. Each strip asks the OS to start a resize drag in the
     /// appropriate direction, with a matching `mouse::Interaction` so
-    /// the cursor flips to the right arrow shape on hover.
+    /// the cursor flips to the right arrow shape on hover. The four
+    /// corners get their own 6×6 hit zones so diagonal resize works
+    /// where the OS frame would normally handle it.
     fn wrap_with_resize_edges<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
@@ -1410,9 +1418,9 @@ impl Signex {
 
         const EDGE: f32 = 6.0;
 
-        let edge = |direction: Direction,
-                    cursor: Interaction,
-                    horizontal: bool|
+        let straight = |direction: Direction,
+                        cursor: Interaction,
+                        horizontal: bool|
          -> Element<'a, Message> {
             let (w, h) = if horizontal {
                 (Length::Fill, Length::Fixed(EDGE))
@@ -1425,12 +1433,34 @@ impl Signex {
                 .into()
         };
 
-        let top = edge(Direction::North, Interaction::ResizingVertically, true);
-        let bottom = edge(Direction::South, Interaction::ResizingVertically, true);
-        let left = edge(Direction::West, Interaction::ResizingHorizontally, false);
-        let right = edge(Direction::East, Interaction::ResizingHorizontally, false);
+        let corner = |direction: Direction,
+                      cursor: Interaction|
+         -> Element<'a, Message> {
+            mouse_area(
+                Space::new()
+                    .width(Length::Fixed(EDGE))
+                    .height(Length::Fixed(EDGE)),
+            )
+            .on_press(Message::StartMainWindowResize(direction))
+            .interaction(cursor)
+            .into()
+        };
 
-        column![top, row![left, content, right], bottom].into()
+        let top = straight(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
+        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
+        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
+        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
+        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
+        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+
+        column![
+            row![nw, top, ne],
+            row![left, content, right],
+            row![sw, bottom, se],
+        ]
+        .into()
     }
 
     fn view_dock_panel(

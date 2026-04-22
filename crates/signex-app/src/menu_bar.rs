@@ -429,14 +429,15 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
     // by toolbar background luminance so custom themes also resolve
-    // correctly. SVG is ~3.08:1 (viewBox 1600×520), so 74×24 keeps the
-    // lockup proportions and gives the text some breathing room.
+    // correctly. SVG is ~3.08:1 (viewBox 1600×520), so 96×31 keeps the
+    // lockup proportions and gives the wordmark enough pixel height to
+    // stay readable against the 36 px chrome strip.
     let handle = if is_dark_surface(tokens.toolbar_bg) {
         (*BRAND_WORDMARK_WHITE).clone()
     } else {
         (*BRAND_WORDMARK_BLACK).clone()
     };
-    let wordmark = svg(handle).width(74).height(24);
+    let wordmark = svg(handle).width(96).height(31);
 
     // Just the wordmark + menu roots. The caller decides how to wrap this
     // (plain strip on secondary windows, draggable chrome with window
