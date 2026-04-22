@@ -51,6 +51,9 @@ fi
 version="${tag#v}"
 repo_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
 changelog="$repo_dir/CHANGELOG.md"
+claude_md="$repo_dir/.claude/CLAUDE.md"
+readme="$repo_dir/README.md"
+internal_plan="$repo_dir/docs/internal/docs/MASTER_PLAN.md"
 
 if [[ ! -f "$changelog" ]]; then
   cat >&2 <<EOF
@@ -59,13 +62,54 @@ EOF
   exit 0
 fi
 
-# Look for a heading like "## [0.7.0]" or "## 0.7.0". Accept any format
-# that names the version in a level-2 heading.
+# Collect every docs-first check that failed so the reminder tells the
+# session exactly what's still stale, instead of surfacing them one at a
+# time across repeated push attempts.
+missing=()
+
 if ! grep -qE "^##\s+\[?${version}\]?" "$changelog"; then
+  missing+=("CHANGELOG.md — no \"## [${version}]\" section")
+fi
+
+if [[ -f "$readme" ]] && ! grep -qF "v${version}" "$readme"; then
+  missing+=("README.md — version badge / status table still references the previous tag")
+fi
+
+if [[ -f "$claude_md" ]] && ! grep -qE "v${version}.*✅" "$claude_md"; then
+  missing+=(".claude/CLAUDE.md — v${version} is not flipped to ✅ in the Versioning section")
+fi
+
+# Submodule progress markers are the step that was silently skipped on
+# v0.7.0: check MASTER_PLAN.md actually references the current version
+# and doesn't still mark it as 🔄 / "in flight".
+if [[ -f "$internal_plan" ]]; then
+  if ! grep -qF "v${version}" "$internal_plan"; then
+    missing+=("docs/internal/docs/MASTER_PLAN.md — no mention of v${version}; progress markers not updated")
+  elif grep -qE "v${version}.*🔄|v${version}.*in[ -]flight|v${version}.*in progress" "$internal_plan"; then
+    missing+=("docs/internal/docs/MASTER_PLAN.md — v${version} still marked 🔄 / in flight")
+  fi
+fi
+
+# If the submodule has any uncommitted work, the pointer bump hasn't
+# happened yet — that means the outer commit is about to tag a stale
+# submodule SHA.
+if [[ -d "$repo_dir/docs/internal/.git" ]] || [[ -f "$repo_dir/docs/internal/.git" ]]; then
+  if ! git -C "$repo_dir/docs/internal" diff --quiet 2>/dev/null || \
+     ! git -C "$repo_dir/docs/internal" diff --cached --quiet 2>/dev/null; then
+    missing+=("docs/internal submodule — uncommitted changes; commit + push inside submodule first, then back-bump the pointer in the outer repo")
+  fi
+fi
+
+if (( ${#missing[@]} > 0 )); then
+  reasons=""
+  for item in "${missing[@]}"; do
+    reasons+="  - ${item}"$'\n'
+  done
   cat <<EOF
 <system-reminder>
-Blocked pushing tag ${tag}: CHANGELOG.md has no "## [${version}]" entry.
+Blocked pushing tag ${tag} — docs-first checklist is incomplete:
 
+${reasons}
 Release binaries are built from the tagged commit — if CHANGELOG.md and
 README / ROADMAP / CLAUDE.md don't already reflect the new version at
 tag time, source downloads from the GitHub Release carry stale docs and
@@ -92,8 +136,8 @@ Before re-running the push, do all of this in order, in this same session:
    push it, open a PR against dev, get it merged into dev, then cascade
    dev → main via a normal release PR — and THEN tag and push.
 
-Do the work now. When CHANGELOG.md has the ${version} section committed,
-the re-run of this push will succeed.
+Do the work now. When every item above is fixed, the re-run of this
+push will succeed.
 </system-reminder>
 EOF
   # exit 2 tells Claude Code to treat the stderr/stdout as a feedback
