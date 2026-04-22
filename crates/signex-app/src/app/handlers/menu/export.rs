@@ -9,6 +9,109 @@ use signex_output::{
 use super::super::super::*;
 
 impl Signex {
+    pub(crate) fn handle_export_pdf_open_dialog(&mut self) {
+        if !self.document_state.has_active_engine() {
+            log::warn!("PDF export: no active schematic");
+            return;
+        }
+
+        self.document_state.pdf_options_dialog = Some(crate::app::state::PdfOptionsDialogState {
+            options: signex_output::PdfOptions::default(),
+        });
+    }
+
+    pub(crate) fn handle_export_pdf_set_page_size(&mut self, page_size: signex_output::PageSize) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.page_size = page_size;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_orientation(
+        &mut self,
+        orientation: signex_output::Orientation,
+    ) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.orientation = orientation;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_colour_mode(&mut self, colour_mode: signex_output::ColourMode) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.colour_mode = colour_mode;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_template(
+        &mut self,
+        template_id: Option<signex_output::TemplateId>,
+    ) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.sheet_template = template_id;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_fit_to_page(&mut self, fit_to_page: bool) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.scale = if fit_to_page {
+                signex_output::PdfScale::FitToPage
+            } else {
+                signex_output::PdfScale::OneToOne
+            };
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_include_title_block(&mut self, include: bool) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.include_title_block = include;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_dialog_cancel(&mut self) {
+        self.document_state.pdf_options_dialog = None;
+    }
+
+    pub(crate) fn handle_export_pdf_dialog_confirm(&mut self) -> Option<Task<Message>> {
+        if !self.document_state.has_active_engine() {
+            log::warn!("PDF export: no active schematic");
+            return Some(Task::none());
+        }
+
+        // Clone the options from the dialog before clearing it.
+        let options = self
+            .document_state
+            .pdf_options_dialog
+            .as_ref()
+            .map(|d| d.options.clone());
+
+        self.document_state.pdf_options_dialog = None;
+
+        let options = options.unwrap_or_default();
+
+        // Stash options in the document state so handle_export_pdf_finished can access them.
+        // We'll use a pending_pdf_options field (add next).
+        self.document_state.pending_pdf_options = Some(options);
+
+        Some(Task::perform(
+            async {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Export PDF")
+                    .add_filter("PDF", &["pdf"])
+                    .set_file_name("schematic.pdf")
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            |path| {
+                if let Some(path) = path {
+                    Message::ExportPdfFinished(Ok(path))
+                } else {
+                    Message::Noop
+                }
+            },
+        ))
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn handle_export_pdf_requested(&mut self) -> Option<Task<Message>> {
         if !self.document_state.has_active_engine() {
             log::warn!("PDF export: no active schematic");
@@ -50,12 +153,20 @@ impl Signex {
         let ctx = match build_export_context(&self.document_state) {
             Some(c) => c,
             None => {
-                log::warn!("PDF export: no active schematic");
+                self.document_state.export_error =
+                    Some("Cannot export PDF: no active schematic.".to_string());
                 return Task::none();
             }
         };
 
-        match PdfExporter.export(&ctx, &PdfOptions::default()) {
+        // Use pending options if they were set by the dialog, otherwise fall back to defaults.
+        let options = self
+            .document_state
+            .pending_pdf_options
+            .take()
+            .unwrap_or_default();
+
+        match PdfExporter.export(&ctx, &options) {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {
                 Ok(()) => log::info!(
                     "Wrote {} ({} page(s), {} bytes)",
@@ -63,9 +174,17 @@ impl Signex {
                     output.page_count,
                     output.bytes.len(),
                 ),
-                Err(e) => log::error!("PDF write failed: {e}"),
+                Err(e) => {
+                    self.document_state.export_error = Some(format!(
+                        "Could not write PDF to {}:\n{e}",
+                        save_path.display(),
+                    ));
+                }
             },
-            Err(e) => log::error!("PDF export failed: {e}"),
+            Err(e) => {
+                self.document_state.export_error =
+                    Some(format!("PDF export failed: {e}"));
+            }
         }
 
         Task::none()
@@ -124,12 +243,24 @@ impl Signex {
                     save_path.display(),
                     output.bytes.len(),
                 ),
-                Err(e) => log::error!("Netlist write failed: {e}"),
+                Err(e) => {
+                    self.document_state.export_error = Some(format!(
+                        "Could not write netlist to {}:\n{e}",
+                        save_path.display(),
+                    ));
+                }
             },
-            Err(e) => log::error!("Netlist export failed: {e}"),
+            Err(e) => {
+                self.document_state.export_error =
+                    Some(format!("Netlist export failed: {e}"));
+            }
         }
 
         Task::none()
+    }
+
+    pub(crate) fn handle_dismiss_export_error(&mut self) {
+        self.document_state.export_error = None;
     }
 
     pub(crate) fn handle_print_preview_requested(&mut self) {
@@ -175,9 +306,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
-        // Close the preview overlay and reuse the PDF export flow.
+        // Close the preview overlay and open the PDF options dialog.
         self.document_state.preview = None;
-        self.handle_export_pdf_requested()
+        Some(self.update(Message::ExportPdfOpenDialog))
     }
 
     pub(crate) fn handle_print_preview_close(&mut self) {

@@ -274,6 +274,17 @@ pub struct DocumentState {
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is open.
     pub preview: Option<PreviewState>,
+    /// PDF export options dialog state. `Some` while the user is configuring
+    /// PDF export options before choosing a save path.
+    pub pdf_options_dialog: Option<PdfOptionsDialogState>,
+    /// Pending PDF options stashed from the dialog while the file picker
+    /// is running. Used by handle_export_pdf_finished to apply user-selected
+    /// options instead of defaults. Cleared after export.
+    pub pending_pdf_options: Option<signex_output::PdfOptions>,
+    /// User-visible export error. `Some(msg)` while the error modal is shown.
+    /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
+    /// itself (not the file dialog) fails. Cleared by DismissExportError.
+    pub export_error: Option<String>,
 }
 
 /// Open-print-preview state — rasterised pages + which one is currently
@@ -282,6 +293,12 @@ pub struct DocumentState {
 pub struct PreviewState {
     pub pages: Vec<signex_output::PreviewPage>,
     pub selected: usize,
+}
+
+/// PDF export options dialog state. Holds the current option selections
+/// until the user confirms (ExportPdfDialogConfirm) or cancels.
+pub struct PdfOptionsDialogState {
+    pub options: signex_output::PdfOptions,
 }
 
 impl DocumentState {

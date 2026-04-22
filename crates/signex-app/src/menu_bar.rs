@@ -167,7 +167,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         text("Export"),
         menu_template(vec![
             leaf_if(
-                "PDF...",
+                "PDF…",
                 Some("Ctrl+Shift+P"),
                 MenuMessage::ExportPdf,
                 ctx.has_schematic,

@@ -49,12 +49,22 @@ impl Signex {
             | Message::SaveFile
             | Message::SaveFileAs(_)
             | Message::SchematicLoaded(_)
+            | Message::ExportPdfOpenDialog
+            | Message::ExportPdfSetPageSize(_)
+            | Message::ExportPdfSetOrientation(_)
+            | Message::ExportPdfSetColourMode(_)
+            | Message::ExportPdfSetTemplate(_)
+            | Message::ExportPdfSetFitToPage(_)
+            | Message::ExportPdfSetIncludeTitleBlock(_)
+            | Message::ExportPdfDialogCancel
+            | Message::ExportPdfDialogConfirm
             | Message::ExportPdfFinished(_)
             | Message::ExportNetlistFinished(_)
             | Message::PrintPreviewRequested
             | Message::PrintPreviewSelectPage(_)
             | Message::PrintPreviewExport
-            | Message::PrintPreviewClose => self.dispatch_document_message(message),
+            | Message::PrintPreviewClose
+            | Message::DismissExportError => self.dispatch_document_message(message),
             Message::TogglePanelList
             | Message::OpenPanel(_)
             | Message::OpenFind
