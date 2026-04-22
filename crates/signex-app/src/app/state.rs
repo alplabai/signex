@@ -272,6 +272,16 @@ pub struct DocumentState {
     pub panel_ctx: crate::panels::PanelContext,
     pub kicad_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
+    /// Print-preview overlay state. `Some` while the preview dialog is open.
+    pub preview: Option<PreviewState>,
+}
+
+/// Open-print-preview state — rasterised pages + which one is currently
+/// shown full-size. Pages are produced by `signex_output::PreviewRasterizer`
+/// when the user invokes File → Print Preview (Ctrl+P).
+pub struct PreviewState {
+    pub pages: Vec<signex_output::PreviewPage>,
+    pub selected: usize,
 }
 
 impl DocumentState {
