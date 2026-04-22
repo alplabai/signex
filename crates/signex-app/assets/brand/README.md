@@ -13,7 +13,7 @@ Canonical source SVGs for the Signex mark and wordmark. All logos derive from th
 All variants use the site/brand gradient:
 
 - Stop 0 · `#3DD8FF` (electric cyan)
-- Stop 1 · `#A472FF` (violet)
+- Stop 1 · `#0F7A9D` (dark cyan)
 
 ## Regenerating platform bitmaps
 
