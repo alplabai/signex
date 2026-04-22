@@ -15,10 +15,8 @@ impl Signex {
 
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
         self.document_state
-            .engine
-            .as_ref()
+            .active_engine()
             .map(|engine| engine.document())
-            .or_else(|| self.active_tab_cached_schematic())
     }
 
     pub(crate) fn active_pcb(&self) -> Option<&PcbBoard> {
@@ -37,105 +35,95 @@ impl Signex {
     pub(crate) fn active_render_snapshot(
         &self,
     ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
-        self.interaction_state.canvas.active_snapshot()
+        self.interaction_state.active_canvas().active_snapshot()
     }
 
     pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
         self.interaction_state.pcb_canvas.active_snapshot()
     }
 
-    fn active_tab_cached_schematic(&self) -> Option<&SchematicSheet> {
-        self.active_tab_cached_document()
-            .and_then(TabDocument::as_schematic)
-    }
-
     pub(crate) fn with_active_schematic_session_mut<R>(
         &mut self,
         update: impl FnOnce(&mut SchematicTabSession) -> R,
     ) -> Option<R> {
-        let engine = self.document_state.engine.take()?;
-        let Some((title, path, dirty)) = self
+        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+
+        // Temporarily remove the active engine from the HashMap so we
+        // can hand the caller a `SchematicTabSession` (legacy API that
+        // owns its engine). save/save_as mutate `session.path` — when
+        // that happens, we reinsert at the new key so the HashMap
+        // follows the tab's on-disk location.
+        let old_path = self.document_state.active_path.clone()?;
+        let engine = self.document_state.engines.remove(&old_path)?;
+
+        let Some((title, _tab_path, dirty)) = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
             .map(|tab| (tab.title.clone(), tab.path.clone(), tab.dirty))
         else {
-            self.document_state.engine = Some(engine);
+            self.document_state.engines.insert(old_path, engine);
             return None;
         };
 
-        let mut session = SchematicTabSession::new(engine, title, path, dirty);
-        let result = update(&mut session);
-        let (engine, title, path, dirty) = session.into_parts();
+        // Panic-safe update: if the closure panics, the engine would
+        // otherwise be dropped along with `session`. Catch + resume
+        // ensures the engine returns to the HashMap at its original
+        // path before the panic propagates.
+        let session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
+        let update_result = catch_unwind(AssertUnwindSafe(move || {
+            let mut session = session;
+            let r = update(&mut session);
+            (r, session.into_parts())
+        }));
 
-        if let Some(tab) = self
-            .document_state
-            .tabs
-            .get_mut(self.document_state.active_tab)
-        {
-            tab.title = title;
-            tab.path = path;
-            tab.dirty = dirty;
-        }
-
-        self.document_state.engine = Some(engine);
-        Some(result)
-    }
-
-    pub(crate) fn park_active_schematic_session(&mut self) {
-        let Some(engine) = self.document_state.engine.take() else {
-            return;
-        };
-
-        if let Some(tab) = self
-            .document_state
-            .tabs
-            .get_mut(self.document_state.active_tab)
-        {
-            tab.cached_document = Some(TabDocument::Schematic(SchematicTabSession::new(
-                engine,
-                tab.title.clone(),
-                tab.path.clone(),
-                tab.dirty,
-            )));
-        } else {
-            self.document_state.engine = Some(engine);
-        }
-    }
-
-    fn activate_active_schematic_session(&mut self) -> bool {
-        let cached_document = self
-            .document_state
-            .tabs
-            .get_mut(self.document_state.active_tab)
-            .and_then(|tab| tab.cached_document.take());
-
-        match cached_document {
-            Some(TabDocument::Schematic(session)) => {
-                let (engine, title, path, dirty) = session.into_parts();
+        match update_result {
+            Ok((result, (engine, title, new_path, dirty))) => {
                 if let Some(tab) = self
                     .document_state
                     .tabs
                     .get_mut(self.document_state.active_tab)
                 {
                     tab.title = title;
-                    tab.path = path;
+                    tab.path = new_path.clone();
                     tab.dirty = dirty;
                 }
-                self.document_state.engine = Some(engine);
-                true
+
+                self.document_state.engines.insert(new_path.clone(), engine);
+                self.document_state.active_path = Some(new_path);
+                Some(result)
             }
-            Some(other_document) => {
-                if let Some(tab) = self
-                    .document_state
-                    .tabs
-                    .get_mut(self.document_state.active_tab)
-                {
-                    tab.cached_document = Some(other_document);
-                }
-                false
+            Err(payload) => {
+                // Engine was consumed by the panicking session; the
+                // HashMap is now missing its entry. We can't restore
+                // the engine (it unwound), but we can at least clear
+                // `active_path` so callers don't see a dangling key.
+                self.document_state.active_path = None;
+                resume_unwind(payload);
             }
-            None => self.document_state.engine.is_some(),
+        }
+    }
+
+    pub(crate) fn park_active_schematic_session(&mut self) {
+        // HashMap storage means engines never move — every schematic
+        // tab's engine lives keyed by its on-disk path regardless of
+        // which tab is active. Kept as an API seam so callers about to
+        // swap `active_tab` don't need to know the storage changed.
+    }
+
+    fn activate_active_schematic_session(&mut self) -> bool {
+        // Point `active_path` at the active tab's schematic engine if
+        // one exists. Returns true iff the active engine is now live
+        // and ready for `active_engine()` lookups.
+        let path = self.active_tab_path();
+        if let Some(p) = path.as_ref()
+            && self.document_state.engines.contains_key(p)
+        {
+            self.document_state.active_path = path;
+            true
+        } else {
+            self.document_state.active_path = None;
+            false
         }
     }
 
@@ -147,35 +135,43 @@ impl Signex {
     }
 
     fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
-        self.document_state.engine = schematic.and_then(|sheet| {
-            signex_engine::Engine::new_with_path(sheet, self.active_tab_path()).ok()
-        });
+        let path = self.active_tab_path();
+        match (path, schematic) {
+            (Some(p), Some(sheet)) => {
+                match signex_engine::Engine::new_with_path(sheet, Some(p.clone())) {
+                    Ok(engine) => {
+                        self.document_state.engines.insert(p.clone(), engine);
+                        self.document_state.active_path = Some(p);
+                    }
+                    Err(_) => self.document_state.clear_active_engine(),
+                }
+            }
+            _ => self.document_state.clear_active_engine(),
+        }
     }
 
     pub(crate) fn sync_canvas_from_visible_schematic(
         &mut self,
         invalidation: signex_render::schematic::RenderInvalidation,
     ) {
-        if let Some(engine) = self.document_state.engine.as_ref() {
-            if let Some(cache) = self.interaction_state.canvas.render_cache.as_mut() {
+        // Active engine drives the render cache — if it's gone the
+        // cache is cleared. There is no parked-schematic fallback with
+        // HashMap storage: an open schematic tab always has its engine
+        // resident in `document_state.engines`.
+        if let Some(engine) = self.document_state.active_engine() {
+            if let Some(cache) = self.interaction_state.active_canvas_mut().render_cache.as_mut() {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.interaction_state.canvas.set_render_cache(Some(
+                self.interaction_state.active_canvas_mut().set_render_cache(Some(
                     signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
                 ));
             }
             return;
         }
 
-        let rebuilt_cache = self
-            .active_tab_cached_schematic()
-            .map(signex_render::schematic::SchematicRenderCache::from_sheet);
-
-        if let Some(cache) = rebuilt_cache {
-            self.interaction_state.canvas.set_render_cache(Some(cache));
-        } else {
-            self.interaction_state.canvas.set_render_cache(None);
-        }
+        self.interaction_state
+            .active_canvas_mut()
+            .set_render_cache(None);
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
@@ -222,29 +218,39 @@ impl Signex {
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
         self.interaction_state.editing_text = None;
 
-        match self.active_tab_cached_document() {
-            Some(TabDocument::Schematic(_)) => {
-                if self.activate_active_schematic_session() {
-                    self.apply_loaded_schematic(None, true, false, false, false);
-                }
+        // Schematic tabs store their engine in `document_state.engines`,
+        // keyed by the tab's path. PCB tabs still hold their board in
+        // `cached_document`. Dispatch on whichever backing storage owns
+        // the active tab's document.
+        let active_path = self.active_tab_path();
+        let is_schematic = active_path
+            .as_ref()
+            .map(|p| self.document_state.engines.contains_key(p))
+            .unwrap_or(false);
+        let is_pcb = matches!(
+            self.active_tab_cached_document(),
+            Some(TabDocument::Pcb(_))
+        );
+
+        if is_schematic {
+            if self.activate_active_schematic_session() {
+                self.apply_loaded_schematic(None, true, false, false, false);
             }
-            Some(TabDocument::Pcb(_)) => {
-                self.apply_loaded_pcb_document(false, false);
-            }
-            None => {
-                self.apply_loaded_empty_document(false);
-            }
+        } else if is_pcb {
+            self.apply_loaded_pcb_document(false, false);
+        } else {
+            self.apply_loaded_empty_document(false);
         }
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        self.document_state.engine = None;
-        self.interaction_state.canvas.set_render_cache(None);
-        self.interaction_state.canvas.selected.clear();
-        self.interaction_state.canvas.wire_preview.clear();
-        self.interaction_state.canvas.drawing_mode = false;
-        self.interaction_state.canvas.clear_content_cache();
-        self.interaction_state.canvas.clear_overlay_cache();
+        self.document_state.clear_active_engine();
+        self.interaction_state.active_canvas_mut().set_render_cache(None);
+        self.interaction_state.active_canvas_mut().selected.clear();
+        self.interaction_state.active_canvas_mut().wire_preview.clear();
+        self.interaction_state.active_canvas_mut().drawing_mode = false;
+        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
     }
 
@@ -288,18 +294,18 @@ impl Signex {
         if let Some(schematic) = schematic {
             self.sync_engine_from_schematic(Some(schematic));
         }
-        if self.document_state.engine.is_none() {
+        if !self.document_state.has_active_engine() {
             return;
         }
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
 
         if fit_to_paper {
-            self.interaction_state.canvas.fit_to_paper();
+            self.interaction_state.active_canvas_mut().fit_to_paper();
         }
         if clear_bg_cache {
-            self.interaction_state.canvas.clear_bg_cache();
+            self.interaction_state.active_canvas_mut().clear_bg_cache();
         }
-        self.interaction_state.canvas.clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_content_cache();
 
         let _ = commit_to_active_tab;
 
@@ -372,4 +378,3 @@ impl Signex {
         self.document_state.panel_ctx.paper_size = document_summary.7;
     }
 }
-

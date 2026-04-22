@@ -35,8 +35,8 @@ impl Signex {
             FindReplaceMsg::SelectResult(index) => {
                 self.ui_state.find_replace.selected_index = Some(index);
                 if let Some(hit) = self.ui_state.find_replace.matches.get(index) {
-                    self.interaction_state.canvas.selected = vec![hit.item];
-                    self.interaction_state.canvas.clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().selected = vec![hit.item];
+                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -157,8 +157,8 @@ impl Signex {
         if let Some(index) = self.ui_state.find_replace.selected_index
             && let Some(hit) = self.ui_state.find_replace.matches.get(index)
         {
-            self.interaction_state.canvas.selected = vec![hit.item];
-            self.interaction_state.canvas.clear_overlay_cache();
+            self.interaction_state.active_canvas_mut().selected = vec![hit.item];
+            self.interaction_state.active_canvas_mut().clear_overlay_cache();
             self.update_selection_info();
         }
     }

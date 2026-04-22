@@ -52,6 +52,17 @@ pub enum DockMessage {
     TabDragStart(PanelPosition, usize),
     /// Mouse released on a tab — if no undock happened, treat as click → select.
     TabClick(PanelPosition, usize),
+    /// Reorder tabs within a dock region. `from` is the dragged tab's
+    /// original index, `to` is the index of the tab it was released
+    /// on. Currently produced by the internal TabClick handler — not
+    /// emitted directly by the UI yet (left available for a future
+    /// pointer-tracking drop indicator).
+    #[allow(dead_code)]
+    ReorderTab {
+        pos: PanelPosition,
+        from: usize,
+        to: usize,
+    },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Move a floating panel by delta.
@@ -181,18 +192,47 @@ impl DockArea {
             DockMessage::TabDragStart(pos, idx) => {
                 self.tab_drag = Some((pos, idx));
             }
+            DockMessage::ReorderTab { pos, from, to } => {
+                let region = match pos {
+                    PanelPosition::Left => &mut self.left,
+                    PanelPosition::Right => &mut self.right,
+                    PanelPosition::Bottom => &mut self.bottom,
+                };
+                if from < region.panels.len() && to < region.panels.len() {
+                    let panel = region.panels.remove(from);
+                    region.panels.insert(to, panel);
+                    region.active = to;
+                }
+            }
             DockMessage::TabClick(pos, idx) => {
-                // Mouse-up on tab: if UndockPanel did not fire, treat as click → select.
-                if self.tab_drag.is_some() {
-                    self.tab_drag = None;
-                    let region = match pos {
-                        PanelPosition::Left => &mut self.left,
-                        PanelPosition::Right => &mut self.right,
-                        PanelPosition::Bottom => &mut self.bottom,
-                    };
-                    if idx < region.panels.len() {
-                        region.active = idx;
-                        region.collapsed = false;
+                // Mouse-up on tab: if UndockPanel did not fire, treat
+                // as click → select. If the drag started on a
+                // different tab in the same region, reorder the
+                // panels vector instead so the user can drag tabs to
+                // shuffle them within the strip.
+                if let Some((drag_pos, from)) = self.tab_drag.take() {
+                    if drag_pos == pos && from != idx {
+                        let region = match pos {
+                            PanelPosition::Left => &mut self.left,
+                            PanelPosition::Right => &mut self.right,
+                            PanelPosition::Bottom => &mut self.bottom,
+                        };
+                        if from < region.panels.len() && idx < region.panels.len() {
+                            let panel = region.panels.remove(from);
+                            region.panels.insert(idx, panel);
+                            region.active = idx;
+                            region.collapsed = false;
+                        }
+                    } else {
+                        let region = match pos {
+                            PanelPosition::Left => &mut self.left,
+                            PanelPosition::Right => &mut self.right,
+                            PanelPosition::Bottom => &mut self.bottom,
+                        };
+                        if idx < region.panels.len() {
+                            region.active = idx;
+                            region.collapsed = false;
+                        }
                     }
                 }
             }
@@ -288,6 +328,16 @@ impl DockArea {
         }
     }
 
+    /// Panels currently docked in `position`, in display order. Used
+    /// by the Panels menu to mark open panels with a ✓.
+    pub fn panel_kinds(&self, position: PanelPosition) -> &[panels::PanelKind] {
+        match position {
+            PanelPosition::Left => &self.left.panels,
+            PanelPosition::Right => &self.right.panels,
+            PanelPosition::Bottom => &self.bottom.panels,
+        }
+    }
+
     pub fn view_region<'a>(
         &'a self,
         position: PanelPosition,
@@ -343,13 +393,22 @@ impl DockArea {
                 iced::Color::TRANSPARENT
             };
 
+            // Visual feedback while dragging: give the source tab a
+            // brighter border + tinted background so the user sees
+            // which tab they grabbed.
+            let is_dragging_this =
+                matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
             // No manual width — Iced's layout engine measures the text.
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
             // Length::Fill which would expand the tab to the panel width.
             let label_el = container(text(label).size(11).color(text_c))
                 .padding([5, 10])
-                .style(styles::dock_tab_container(&ctx.tokens, is_active));
+                .style(styles::dock_tab_container_dragging(
+                    &ctx.tokens,
+                    is_active,
+                    is_dragging_this,
+                ));
             let tab = mouse_area(
                 container(label_el)
                     .padding(iced::Padding {
@@ -393,16 +452,36 @@ impl DockArea {
             .style(button::text)
             .on_press(DockMessage::ToggleCollapse(position));
 
-        // Header: [tabs (shrink)] [spacer (fill)] [buttons (shrink)]
-        let header = row![
-            tab_row,
+        // Title of the currently active panel — drawn in the top bar
+        // so the user can see the panel name without scanning the tab
+        // row.
+        let active_title = region
+            .panels
+            .get(region.active)
+            .map(|p| p.label().to_string())
+            .unwrap_or_default();
+        let title_bar = row![
+            container(
+                text(active_title)
+                    .size(11)
+                    .color(styles::ti(ctx.tokens.text)),
+            )
+            .padding([5, 10]),
             Space::new().width(Length::Fill),
             collapse_btn,
             close_btn,
         ]
         .spacing(0)
-        .align_y(iced::Alignment::End)
+        .align_y(iced::Alignment::Center)
         .width(Length::Fill);
+
+        // Bottom tab strip — just the tab buttons + overflow arrows.
+        // Collapse / close moved up to the title bar so they're always
+        // visible alongside the active panel name.
+        let tab_strip = row![tab_row, Space::new().width(Length::Fill),]
+            .spacing(0)
+            .align_y(iced::Alignment::End)
+            .width(Length::Fill);
 
         // Panel content
         let content: Element<'_, DockMessage> =
@@ -412,8 +491,10 @@ impl DockArea {
                 text("").into()
             };
 
+        // Altium parity: title + collapse/close on top, tabs on the
+        // bottom. Content grows between them.
         column![
-            container(header)
+            container(title_bar)
                 .width(Length::Fill)
                 .padding([0, 4])
                 .style(styles::tab_bar_strip(&ctx.tokens)),
@@ -421,6 +502,10 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),
+            container(tab_strip)
+                .width(Length::Fill)
+                .padding([0, 4])
+                .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
         .into()
     }

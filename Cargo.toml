@@ -8,10 +8,12 @@ members = [
     "crates/kicad-writer",
     "crates/signex-render",
     "crates/signex-widgets",
+    "crates/signex-erc",
+    "crates/signex-erc-dsl",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.7.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
@@ -39,6 +41,10 @@ anyhow = "1"
 # File dialogs
 rfd = "0.17.2"
 
+# DSL parser
+chumsky = "0.12"
+regex = "1"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
@@ -46,6 +52,8 @@ kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
 signex-widgets = { path = "crates/signex-widgets" }
+signex-erc = { path = "crates/signex-erc" }
+signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 
 [profile.release]
 lto = "thin"

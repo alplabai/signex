@@ -8,7 +8,17 @@
     "allow": [
       "WebSearch",
       "mcp__plugin_everything-claude-code_github__get_file_contents",
-      "mcp__plugin_everything-claude-code_sequential-thinking__sequentialthinking"
+      "mcp__plugin_everything-claude-code_sequential-thinking__sequentialthinking",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(curl -s \"https://crates.io/api/v1/crates/chumsky\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(v['num']\\) for v in d['versions'][:8]]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(v['num']\\) for v in d['versions'][:15]]\")",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs"
     ]
   }
 }
