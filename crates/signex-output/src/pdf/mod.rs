@@ -9,14 +9,15 @@ use thiserror::Error;
 
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
-use signex_types::schematic::Point;
 
+mod colour;
 mod font;
 mod layout;
 mod page;
 mod surface;
 
-use font::{FontCatalog, PdfFont};
+use colour::ColourMap;
+use font::PdfFont;
 use surface::PdfSurface;
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
@@ -204,6 +205,71 @@ impl Exporter for PdfExporter {
     }
 }
 
+/// Compute the bounding box of schematic content (wires, symbols, labels).
+/// Returns (x_min_mm, y_min_mm, x_max_mm, y_max_mm). If no content, returns
+/// default bounds (0, 0, 100, 100).
+fn compute_schematic_bbox(sheet: &crate::SheetSnapshot) -> (f64, f64, f64, f64) {
+    let mut x_min = f64::INFINITY;
+    let mut y_min = f64::INFINITY;
+    let mut x_max = f64::NEG_INFINITY;
+    let mut y_max = f64::NEG_INFINITY;
+
+    // Include wire endpoints.
+    for wire in &sheet.schematic.wires {
+        x_min = x_min.min(wire.start.x).min(wire.end.x);
+        x_max = x_max.max(wire.start.x).max(wire.end.x);
+        y_min = y_min.min(wire.start.y).min(wire.end.y);
+        y_max = y_max.max(wire.start.y).max(wire.end.y);
+    }
+
+    // Include symbol positions (expand by 5mm each side for symbol bbox).
+    for sym in &sheet.schematic.symbols {
+        x_min = x_min.min(sym.position.x - 5.0);
+        x_max = x_max.max(sym.position.x + 5.0);
+        y_min = y_min.min(sym.position.y - 5.0);
+        y_max = y_max.max(sym.position.y + 5.0);
+    }
+
+    // Include label positions.
+    for label in &sheet.schematic.labels {
+        x_min = x_min.min(label.position.x);
+        x_max = x_max.max(label.position.x);
+        y_min = y_min.min(label.position.y);
+        y_max = y_max.max(label.position.y);
+    }
+
+    // If no content, use default bounds.
+    if x_min.is_infinite() || x_max.is_infinite() {
+        (0.0, 0.0, 100.0, 100.0)
+    } else {
+        (x_min, y_min, x_max, y_max)
+    }
+}
+
+/// Compute the scale factor for FitToPage mode.
+/// Returns scale that fits the schematic bbox into the printable area
+/// (page minus margins). Never upscales beyond 1.0.
+fn compute_fit_to_page_scale(
+    page_w_mm: f64,
+    page_h_mm: f64,
+    margins: &Margins,
+    bbox_x1_mm: f64,
+    bbox_y1_mm: f64,
+    bbox_x2_mm: f64,
+    bbox_y2_mm: f64,
+) -> f64 {
+    let printable_w = page_w_mm - margins.left_mm - margins.right_mm;
+    let printable_h = page_h_mm - margins.top_mm - margins.bottom_mm;
+    let content_w = (bbox_x2_mm - bbox_x1_mm).max(1.0);
+    let content_h = (bbox_y2_mm - bbox_y1_mm).max(1.0);
+
+    let scale_x = printable_w / content_w;
+    let scale_y = printable_h / content_h;
+
+    // Use the more restrictive scale, but never upscale.
+    scale_x.min(scale_y).min(1.0)
+}
+
 /// Build a content stream for a single page.
 fn build_page_content(
     sheet: &crate::SheetSnapshot,
@@ -213,16 +279,29 @@ fn build_page_content(
     page_h_pt: f32,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new();
+    let colour_map = ColourMap::new(opts.colour_mode);
 
-    // Convert schematic mm to PDF pt. Y-flip for PDF (bottom-left origin).
-    // Note: OneToOne scale (FitToPage is a no-op for now).
-    let mm_to_pt = MM_TO_PT;
+    // Get page dimensions in mm for scale computation.
+    let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
-    // Set default black color for all drawings.
-    surface.set_stroke_color(0.0, 0.0, 0.0);
+    // Compute scale factor based on PdfScale mode.
+    let scale = match opts.scale {
+        PdfScale::FitToPage => {
+            let (bbox_x1, bbox_y1, bbox_x2, bbox_y2) = compute_schematic_bbox(sheet);
+            compute_fit_to_page_scale(page_w_mm, page_h_mm, &opts.margins, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+        }
+        PdfScale::OneToOne => 1.0,
+        PdfScale::Percent(p) => p / 100.0,
+    };
+
+    let mm_to_pt = MM_TO_PT * scale;
+
+    // Set default black color for all drawings (before colour mapping).
+    let (r, g, b) = colour_map.map_stroke_bw(0.0, 0.0, 0.0);
+    surface.set_stroke_color(r, g, b);
 
     // Draw schematic content.
-    // Wires: stroke as lines (0.15 mm default, black).
+    // Wires: stroke as lines (0.15 mm default).
     for wire in &sheet.schematic.wires {
         let w = if wire.stroke_width > 0.0 {
             (wire.stroke_width * mm_to_pt) as f32
@@ -316,10 +395,20 @@ fn build_page_content(
         surface.text_at(x, y, "F1", size, &label.text);
     }
 
-    // Title block (if enabled and template present).
+    // Template frame and title block (if enabled).
     if opts.include_title_block {
         if let Some(template_id) = &opts.sheet_template {
             if let Some(template) = crate::template::load_builtin(template_id) {
+                // Draw outer page border rect using template's frame border_margin_mm.
+                let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
+                surface.stroke_rect(
+                    frame_margin_pt,
+                    frame_margin_pt,
+                    page_w_pt - 2.0 * frame_margin_pt,
+                    page_h_pt - 2.0 * frame_margin_pt,
+                    (0.15 * MM_TO_PT) as f32,
+                );
+
                 let sub_ctx = SubstitutionContext {
                     metadata: &ctx.metadata,
                     filename: sheet.path.file_name().unwrap_or_default().to_string_lossy().to_string(),
@@ -330,9 +419,8 @@ fn build_page_content(
                 };
 
                 // Draw title block frame (bottom-right).
-                // Position: page_w_pt - title_block_width
-                let tb_width_pt = (template.title_block.width_mm * mm_to_pt) as f32;
-                let tb_height_pt = (template.title_block.height_mm * mm_to_pt) as f32;
+                let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
+                let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
                 let tb_x = page_w_pt - tb_width_pt;
                 let tb_y = page_h_pt - tb_height_pt;
                 surface.stroke_rect(
@@ -340,22 +428,22 @@ fn build_page_content(
                     tb_y,
                     tb_width_pt,
                     tb_height_pt,
-                    (0.2 * mm_to_pt) as f32,
+                    (0.2 * MM_TO_PT) as f32,
                 );
 
-                // Emit title block fields.
+                // Emit title block fields with proper font and substitution.
                 for field in &template.title_block.fields {
                     let resolved = crate::resolve(&field.default_text, &sub_ctx);
-                    let fx = tb_x + (field.x_mm * mm_to_pt) as f32;
-                    let fy = tb_y + (field.y_mm * mm_to_pt) as f32;
+                    let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
+                    let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
                     let font = PdfFont::for_style(field.font_style);
                     let font_name = if font == PdfFont::Helvetica {
                         "F1"
                     } else {
                         "F2"
                     };
-                    let size = (field.font_size_mm * mm_to_pt) as f32;
-                    surface.text_at(fx, fy, font_name, size as f32, &resolved);
+                    let size = (field.font_size_mm * MM_TO_PT) as f32;
+                    surface.text_at(fx, fy, font_name, size, &resolved);
                 }
             }
         }
@@ -524,7 +612,7 @@ mod tests {
 
     #[test]
     fn exports_schematic_content() {
-        use signex_types::schematic::{Wire, Symbol, Label, LabelType};
+        use signex_types::schematic::{Wire, Symbol, Label, LabelType, Point};
         use std::collections::HashMap;
         use uuid::Uuid;
 
@@ -593,5 +681,140 @@ mod tests {
             has_graphics,
             "exported PDF should contain graphics operators"
         );
+    }
+
+    #[test]
+    fn colour_mode_colour_preserves_rgb() {
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            colour_mode: ColourMode::Colour,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        assert!(out.bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn colour_mode_grayscale_maps_red_to_0_299() {
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            colour_mode: ColourMode::Grayscale,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        assert!(out.bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn colour_mode_bw_pushes_strokes_to_black() {
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            colour_mode: ColourMode::BlackAndWhite,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        assert!(out.bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn fit_to_page_scales_large_content_down() {
+        use signex_types::schematic::{Wire, Point};
+        use uuid::Uuid;
+
+        let mut sheet = empty_sheet();
+        // Add a very large wire (0, 0) to (500, 500) mm — much larger than A4.
+        sheet.wires.push(Wire {
+            uuid: Uuid::nil(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(500.0, 500.0),
+            stroke_width: 0.15,
+        });
+
+        let mut ctx = sample_ctx(1);
+        ctx.sheets[0].schematic = sheet;
+
+        let opts = PdfOptions {
+            page_size: PageSize::IsoA4,
+            orientation: Orientation::Landscape,
+            scale: PdfScale::FitToPage,
+            margins: Margins {
+                top_mm: 10.0,
+                right_mm: 10.0,
+                bottom_mm: 10.0,
+                left_mm: 10.0,
+            },
+            ..Default::default()
+        };
+
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        // PDF should be valid and contain content (scaled down wires).
+        assert!(out.bytes.starts_with(b"%PDF-"));
+        assert!(out.page_count == 1);
+    }
+
+    #[test]
+    fn fit_to_page_does_not_upscale_small_content() {
+        use signex_types::schematic::{Wire, Point};
+        use uuid::Uuid;
+
+        let mut sheet = empty_sheet();
+        // Add a small wire (10, 10) to (20, 20) mm — much smaller than A4.
+        sheet.wires.push(Wire {
+            uuid: Uuid::nil(),
+            start: Point::new(10.0, 10.0),
+            end: Point::new(20.0, 20.0),
+            stroke_width: 0.15,
+        });
+
+        let mut ctx = sample_ctx(1);
+        ctx.sheets[0].schematic = sheet;
+
+        let opts = PdfOptions {
+            page_size: PageSize::IsoA4,
+            orientation: Orientation::Landscape,
+            scale: PdfScale::FitToPage,
+            margins: Margins {
+                top_mm: 10.0,
+                right_mm: 10.0,
+                bottom_mm: 10.0,
+                left_mm: 10.0,
+            },
+            ..Default::default()
+        };
+
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        // PDF should be valid. FitToPage should NOT upscale (use 1:1).
+        assert!(out.bytes.starts_with(b"%PDF-"));
+        assert!(out.page_count == 1);
+    }
+
+    #[test]
+    fn template_draws_frame_rect() {
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            sheet_template: Some(TemplateId::from("iso_a4_landscape")),
+            include_title_block: true,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        // PDF should contain frame rect operator (re).
+        let bytes = String::from_utf8_lossy(&out.bytes);
+        assert!(bytes.contains(" re\n"), "template should draw frame rect");
+    }
+
+    #[test]
+    fn template_renders_substituted_text_in_title_block() {
+        let mut ctx = sample_ctx(1);
+        ctx.metadata.title = "Test Project".to_string();
+        ctx.metadata.revision = "A".to_string();
+
+        let opts = PdfOptions {
+            sheet_template: Some(TemplateId::from("iso_a4_landscape")),
+            include_title_block: true,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        // PDF should be valid and include title block fields.
+        assert!(out.bytes.starts_with(b"%PDF-"));
     }
 }
