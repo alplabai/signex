@@ -46,6 +46,9 @@ rfd = "0.17.2"
 chumsky = "0.12"
 regex = "1"
 
+# Output generation
+pdf-writer = "0.14"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
