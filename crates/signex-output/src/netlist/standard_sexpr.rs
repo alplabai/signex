@@ -33,7 +33,7 @@ impl NetGraph {
     }
 
     /// Add a new node (pin endpoint) to the graph.
-    fn add_node(&mut self) -> usize {
+    pub fn add_node(&mut self) -> usize {
         let idx = self.nodes.len();
         self.nodes.push(NetNode {
             parent: idx,
@@ -43,7 +43,7 @@ impl NetGraph {
     }
 
     /// Union two nodes via union-find.
-    fn union(&mut self, a: usize, b: usize) {
+    pub fn union(&mut self, a: usize, b: usize) {
         let root_a = self.find_root(a);
         let root_b = self.find_root(b);
         if root_a != root_b {
@@ -52,7 +52,7 @@ impl NetGraph {
     }
 
     /// Find the root of a node.
-    fn find_root(&mut self, mut idx: usize) -> usize {
+    pub fn find_root(&mut self, mut idx: usize) -> usize {
         while self.nodes[idx].parent != idx {
             let parent = self.nodes[idx].parent;
             idx = parent;
@@ -61,7 +61,7 @@ impl NetGraph {
     }
 
     /// Set the name for a net (at its root).
-    fn set_net_name(&mut self, idx: usize, name: String) {
+    pub fn set_net_name(&mut self, idx: usize, name: String) {
         let root = self.find_root(idx);
         if name.len() > 0 {
             self.net_names.insert(root, name);
@@ -69,7 +69,7 @@ impl NetGraph {
     }
 
     /// Add a pin to the net.
-    fn add_pin(&mut self, node_idx: usize, ref_des: String, pin_number: String, pin_type: String) {
+    pub fn add_pin(&mut self, node_idx: usize, ref_des: String, pin_number: String, pin_type: String) {
         let root = self.find_root(node_idx);
         self.node_to_pins
             .entry(root)
@@ -78,7 +78,31 @@ impl NetGraph {
     }
 }
 
-/// Build nets from schematic sheet: wires, junctions, labels.
+/// Transform a local library coordinate to global schematic coordinate.
+/// Implements the same transform as the render system (instance_transform).
+fn transform_pin_position(sym: &Symbol, local_pos: &Point) -> Point {
+    // Step 1: Flip Y — Standard library coords are Y-up, schematic is Y-down.
+    let x = local_pos.x;
+    let y = -local_pos.y;
+
+    // Step 2: Rotate by NEGATIVE angle (counter-clockwise in Y-down coords).
+    let rad = -sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let rx = x * cos - y * sin;
+    let ry = x * sin + y * cos;
+
+    // Step 3: Mirror applied AFTER rotation (Standard convention).
+    let rx = if sym.mirror_y { -rx } else { rx };
+    let ry = if sym.mirror_x { -ry } else { ry };
+
+    // Step 4: Translate to world position.
+    Point::new(rx + sym.position.x, ry + sym.position.y)
+}
+
+/// Build nets from multiple schematic sheets: wires, junctions, labels.
+/// Handles multi-sheet hierarchies by unifying Global/Hierarchical labels
+/// with the same name across sheets.
 pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
     let mut graph = NetGraph::new();
 
@@ -88,7 +112,7 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
 
     let pos_key = |p: Point| format!("{:.2}_{:.2}", p.x, p.y);
 
-    // Create nodes for each symbol pin
+    // Create nodes for each symbol pin, using proper pin position transform (Fix 1).
     let mut pin_positions: BTreeMap<String, (String, String, String)> = BTreeMap::new();
     for sym in symbols {
         // Skip power ports
@@ -101,7 +125,8 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
             for lib_pin in &lib_sym.pins {
                 // For now, assume unit 1 (no multi-unit handling yet)
                 if lib_pin.unit == 0 || lib_pin.unit == sym.unit {
-                    let global_pos = sym.position;
+                    // FIX 1: Use proper pin position transform instead of just sym.position
+                    let global_pos = transform_pin_position(sym, &lib_pin.pin.position);
                     let key = pos_key(global_pos);
                     let pin_type = format!("{:?}", lib_pin.pin.pin_type).to_lowercase();
                     pin_positions.insert(
@@ -161,11 +186,34 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
         }
     }
 
-    // Process labels: assign net names
+    // FIX 2: Process labels with mid-wire binding.
+    // Labels can bind at endpoints, junctions, or anywhere on a wire.
     for label in &sheet.labels {
         let label_key = pos_key(label.position);
-        if let Some(&label_idx) = pos_to_node.get(&label_key) {
-            graph.set_net_name(label_idx, label.text.clone());
+        let mut label_idx = pos_to_node.get(&label_key).copied();
+
+        // If label is not at an existing node, check if it lies on a wire
+        if label_idx.is_none() {
+            for wire in &sheet.wires {
+                if point_on_segment(label.position, wire.start, wire.end, tolerance) {
+                    // Label binds to this wire; union with both endpoints
+                    let start_key = pos_key(wire.start);
+                    let end_key = pos_key(wire.end);
+                    let start_idx = *pos_to_node
+                        .entry(start_key)
+                        .or_insert_with(|| graph.add_node());
+                    let end_idx = *pos_to_node
+                        .entry(end_key)
+                        .or_insert_with(|| graph.add_node());
+                    graph.union(start_idx, end_idx);
+                    label_idx = Some(start_idx);
+                    break;
+                }
+            }
+        }
+
+        if let Some(idx) = label_idx {
+            graph.set_net_name(idx, label.text.clone());
         }
     }
 
@@ -180,7 +228,7 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
 }
 
 /// Check if point p lies on the segment from a to b (within tolerance).
-fn point_on_segment(p: Point, a: Point, b: Point, tol: f64) -> bool {
+pub fn point_on_segment(p: Point, a: Point, b: Point, tol: f64) -> bool {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
     let len_sq = dx * dx + dy * dy;
