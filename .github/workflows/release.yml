@@ -198,13 +198,62 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Extract CHANGELOG entry for this tag
+        id: notes
+        shell: bash
+        run: |
+          # Strip the leading "v" so CHANGELOG headings like
+          # "## [0.7.0] — 2026-04-22" match regardless of tag prefix.
+          TAG="${{ steps.version.outputs.version }}"
+          VER="${TAG#v}"
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "no CHANGELOG.md — will fall back to auto-generated notes"
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Pull the section from "## [VER]" (or "## VER") up to the
+          # next "## " heading. python3 because bash regex across lines
+          # is painful and the runner always has python.
+          python3 - "$VER" > release-notes.md <<'PY'
+          import re, sys
+          from pathlib import Path
+          ver = sys.argv[1]
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # Match "## [VER]" or "## VER" as the section heading.
+          pat = re.compile(
+              rf"^##\s+\[?{re.escape(ver)}\]?.*?(?=^##\s+|\Z)",
+              re.DOTALL | re.MULTILINE,
+          )
+          m = pat.search(text)
+          if not m:
+              sys.exit(1)
+          # Drop the heading line — GitHub already renders the tag as
+          # the release title, so the duplicate "## [0.7.0]" on top of
+          # the body looks noisy.
+          body = m.group(0).split("\n", 1)[1] if "\n" in m.group(0) else m.group(0)
+          print(body.strip())
+          PY
+          if [[ -s release-notes.md ]]; then
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+            echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+            echo "----- CHANGELOG extract for $VER -----"
+            cat release-notes.md
+          else
+            echo "no $VER section in CHANGELOG.md — falling back to auto-generated notes"
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Signex ${{ steps.version.outputs.version }}
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
-          generate_release_notes: true
+          # Prefer the hand-authored CHANGELOG section; fall back to
+          # GitHub's auto-generated PR-title summary if we couldn't
+          # find one (so a missed update never blocks the release).
+          body_path: ${{ steps.notes.outputs.has_notes == 'true' && steps.notes.outputs.path || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.has_notes != 'true' }}
           # Explicit list — the installer stack is what users want, the
           # tarball/zip are fallbacks for scripted installs.
           files: |
