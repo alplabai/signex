@@ -3,6 +3,17 @@
 //! See `OUTPUT_PLAN.md` §3. `PdfSurface` (in `surface.rs`) acts as a second
 //! render target for the schematic — wires, symbols, labels, title block.
 //! Screen (Iced Canvas) and PDF share one source of truth for page layout.
+//!
+//! ## Font Embedding Strategy (v0.8)
+//!
+//! Roboto and Iosevka TTF files are embedded at compile time and their bytes
+//! are available to the PDF exporter via the `PdfFont` enum. The current
+//! implementation uses font base names (e.g., "Roboto", "Iosevka") as PDF
+//! font references. Full Type0 composite font dict emission with FontFile2
+//! streams is deferred to v0.9 to keep v0.8 scope tight.
+//!
+//! TODO(v0.9): Emit PDF Type0 font dictionaries with embedded TTF streams,
+//! and update `PdfSurface::text_at()` to reference fonts via aliases like "F1".
 
 use pdf_writer::{Finish, Pdf, Rect, Ref};
 use thiserror::Error;
@@ -379,7 +390,8 @@ fn build_page_content(
         if !sym.reference.is_empty() {
             let cx = ((bbox_x1 + bbox_x2) / 2.0 * mm_to_pt) as f32;
             let cy = page_h_pt - ((bbox_y1 + bbox_y2) / 2.0 * mm_to_pt) as f32;
-            surface.text_at(cx, cy, "F1", 9.0, &sym.reference);
+            // Use Iosevka for schematic text
+            surface.text_at(cx, cy, PdfFont::IosevkaRegular.base_name(), 9.0, &sym.reference);
         }
     }
 
@@ -392,7 +404,8 @@ fn build_page_content(
         } else {
             9.0 // default
         };
-        surface.text_at(x, y, "F1", size, &label.text);
+        // Use Iosevka for schematic labels
+        surface.text_at(x, y, PdfFont::IosevkaRegular.base_name(), size, &label.text);
     }
 
     // Template frame and title block (if enabled).
@@ -437,11 +450,9 @@ fn build_page_content(
                     let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
                     let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
                     let font = PdfFont::for_style(field.font_style);
-                    let font_name = if font == PdfFont::Helvetica {
-                        "F1"
-                    } else {
-                        "F2"
-                    };
+                    // Use font base name as font reference (e.g., "Roboto", "Iosevka")
+                    // TODO(v0.9): Emit font dicts to PDF and reference via aliases like "F1"
+                    let font_name = font.base_name();
                     let size = (field.font_size_mm * MM_TO_PT) as f32;
                     surface.text_at(fx, fy, font_name, size, &resolved);
                 }
