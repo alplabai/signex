@@ -11,6 +11,7 @@
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases/tag/v0.7.0"><img src="https://img.shields.io/badge/version-v0.7.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
+  <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
 
@@ -19,6 +20,7 @@
   <a href="#screenshots">Screenshots</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
+  <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
@@ -160,6 +162,19 @@ cargo clippy --workspace -- -D warnings  # Lint
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **v5.0** | |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
+
+## Documentation
+
+The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
+guide — installation, quick start, keyboard shortcuts, feature-by-feature
+walkthroughs for every v0.1–v0.7 capability (ERC, annotation, multi-window
+editing, hierarchical sheets, net-color pen, themes, and more), plus an FAQ
+and roadmap.
+
+Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
+to open your first KiCad project, or jump straight to
+**[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
+for the full Altium-compatible reference.
 
 ## Contributing
 
