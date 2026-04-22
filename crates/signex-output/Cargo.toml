@@ -15,6 +15,7 @@ serde = { workspace = true }
 pdf-writer = { workspace = true }
 rust_xlsxwriter = { workspace = true }
 tiny-skia = { workspace = true }
+ttf-parser = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }

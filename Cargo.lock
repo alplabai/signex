@@ -3711,6 +3711,7 @@ dependencies = [
  "signex-types",
  "thiserror 2.0.18",
  "tiny-skia",
+ "ttf-parser",
  "uuid",
 ]
 
