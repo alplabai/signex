@@ -93,8 +93,14 @@ impl Signex {
                 // exactly that size (OS DPI scaling, display clamps).
                 // Without this, Active-Bar dropdown positions are off
                 // until the user physically resizes the window.
-                iced::window::size(id)
-                    .map(move |size| Message::WindowResizedFor(id, size.width, size.height))
+                let size_task = iced::window::size(id)
+                    .map(move |size| Message::WindowResizedFor(id, size.width, size.height));
+                // Re-add Windows 11 DWM rounded corners + drop shadow
+                // (silently no-ops on Windows 10 and non-Windows). Has
+                // to run after the HWND is alive, hence here rather than
+                // in bootstrap.
+                let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
+                iced::Task::batch([size_task, corners_task])
             }
             Message::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
