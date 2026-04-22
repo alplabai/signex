@@ -46,6 +46,26 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - Each version gets its own branch from dev when work starts. No placeholder branches.
 - Every merge to main gets a version tag (e.g., `v0.6.0`).
 
+## Release Flow
+
+**Docs-first.** The tagged commit ships to users, so `CHANGELOG.md`, `README.md`, `docs/ROADMAP.md`, and `.claude/CLAUDE.md` must already reflect the new version **before** the tag is created. The release workflow reads the matching `CHANGELOG.md` section as the GitHub Release body — no entry, no rich release notes.
+
+Release cut for version `vX.Y.Z`:
+
+1. **Prep branch** `chore/release-prep-vX.Y.Z` off `dev`:
+   - Add `## [X.Y.Z] — <today>` section in `CHANGELOG.md` with feature-level detail (model on the v0.7.0 entry).
+   - Bump version badge in `README.md`; flip `vX.Y` row in the Roadmap table from In Progress → Done; bump the Status line.
+   - Flip `vX.Y.Z` in the Versioning section of `.claude/CLAUDE.md` from 🔄 → ✅.
+   - Update `docs/internal` submodule progress markers (MASTER_PLAN, ARCHITECTURE if architectural change). Commit inside submodule, push, back-bump the submodule pointer in the outer repo.
+2. **PR** `chore/release-prep-vX.Y.Z` → `dev`, merge.
+3. **PR** `dev` → `main`, merge (CI runs here).
+4. **Tag** `vX.Y.Z` on main's new tip; push the tag.
+   - `release.yml` builds installers and extracts the `CHANGELOG.md` section as the release body.
+   - PostToolUse hook fires and reminds Claude to sync `../signex-website`.
+5. **Close** the `vX.Y.Z` milestone.
+
+The pre-release guard (`.claude/hooks/pre-release-guard.sh`) blocks step 4 with exit 2 if step 1's `CHANGELOG.md` entry is missing, so the docs-first order can't be skipped accidentally.
+
 ## Conventions
 
 - **Coordinate system:** i64 nanometers internally. KiCad uses mm floats — convert at parse/write boundary.
@@ -70,7 +90,7 @@ main                    # Protected. Stable releases only. Tagged vX.Y.Z.
 - v0.4.0 — Schematic Viewer ✅
 - v0.5.0 — Schematic Editor (selection, wire drawing, undo/redo) ✅
 - v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) ✅
-- v0.7.0 — Validation & ERC + multi-window (11 ERC rules, annotation, pin matrix, per-window engine/canvas via `iced::daemon` — undocked tabs are fully interactive) 🔄
+- v0.7.0 — Validation & ERC + multi-window (11 ERC rules, annotation, pin matrix, per-window engine/canvas via `iced::daemon` — undocked tabs are fully interactive) ✅
 - v0.8.0 — Output Generation (PDF, BOM, netlist)
 - v0.9.0 — Library & Polish (symbol/footprint editor, installers)
 - v1.0.0 — Community Preview (schematic-only early access)

@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/milestone/7"><img src="https://img.shields.io/badge/version-v0.7--dev-orange.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.7.0"><img src="https://img.shields.io/badge/version-v0.7.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
@@ -37,7 +37,7 @@ get a better editor without leaving the ecosystem they trust.
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.7 (ERC validation + multi-window editing)
+> **Status:** Early development — v0.7.0 shipped; next up v0.8 (PDF / BOM / netlist output)
 > in progress. [Join the discussion](https://github.com/alplabai/signex/discussions)
 > or check the [roadmap](#roadmap).
 
@@ -147,8 +147,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Schematic Viewer — render all elements, multi-sheet nav | v0.4 | Done |
 | Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
-| Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | **In Progress** |
-| Output — PDF, BOM, netlist | v0.8 | |
+| Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
+| Output — PDF, BOM, netlist | v0.8 | **In Progress** |
 | Library & Polish — symbol/footprint editor, installers | v0.9 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
