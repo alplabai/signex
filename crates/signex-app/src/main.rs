@@ -5,6 +5,7 @@
 mod active_bar;
 mod app;
 mod canvas;
+mod chrome;
 mod diagnostics;
 mod dock;
 mod find_replace;
