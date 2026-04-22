@@ -266,6 +266,13 @@ impl Signex {
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
             size: iced::Size::new(1400.0, 900.0),
             icon: bundled_window_icon(),
+            // Borderless main window: the custom chrome in
+            // `Signex::view_main_window_chrome` supplies wordmark +
+            // menus + drag zone + search bar + min/max/close. Edge
+            // resize handles inside `view_main_for` add 6 px strips
+            // that call `iced::window::drag_resize` per direction so
+            // the user can still drag-resize the window.
+            decorations: false,
             ..Default::default()
         });
         app.ui_state.main_window_id = Some(main_id);

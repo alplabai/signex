@@ -21,22 +21,55 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=assets/brand/generated/signex-256.png");
 
+    // Cargo doesn't track files referenced transitively by `include_bytes!`,
+    // so brand / chrome SVGs that get embedded in the binary need explicit
+    // rerun-if-changed hints. Without this, editing a logo SVG leaves the
+    // last-built binary bytes in place.
+    for svg in [
+        "assets/brand/signex-logo.svg",
+        "assets/brand/signex-logo-white.svg",
+        "assets/brand/signex-logo-black.svg",
+        "assets/brand/signex-mark.svg",
+        "assets/brand/signex.svg",
+        "assets/icons/chrome/window_min.svg",
+        "assets/icons/chrome/window_max.svg",
+        "assets/icons/chrome/window_restore.svg",
+        "assets/icons/chrome/window_close.svg",
+        "assets/icons/chrome/search.svg",
+    ] {
+        println!("cargo:rerun-if-changed={svg}");
+    }
+
     embed_windows_exe_icon();
 }
 
 #[cfg(windows)]
 fn embed_windows_exe_icon() {
     let ico = Path::new("../../installer/windows/signex.ico");
+    let manifest = Path::new("signex.manifest");
     println!("cargo:rerun-if-changed=../../installer/windows/signex.ico");
-    if !ico.exists() {
+    println!("cargo:rerun-if-changed=signex.manifest");
+
+    let has_ico = ico.exists();
+    let has_manifest = manifest.exists();
+    if !has_ico && !has_manifest {
         return;
     }
+
     let mut res = winres::WindowsResource::new();
-    res.set_icon(ico.to_str().expect("ico path is valid UTF-8"));
+    if has_ico {
+        res.set_icon(ico.to_str().expect("ico path is valid UTF-8"));
+    }
+    if has_manifest {
+        // Per-monitor v2 DPI awareness so Windows renders the wgpu
+        // surface at native device pixels instead of bitmap-stretching
+        // it at >100 % scaling or on high-DPI ultrawides.
+        res.set_manifest_file(manifest.to_str().expect("manifest path is valid UTF-8"));
+    }
     if let Err(e) = res.compile() {
         // Don't fail the build over this — the app still runs, just without
-        // an embedded Explorer/taskbar icon.
-        eprintln!("cargo:warning=winres failed to embed icon: {e}");
+        // an embedded Explorer/taskbar icon or DPI manifest.
+        eprintln!("cargo:warning=winres failed to embed resources: {e}");
     }
 }
 

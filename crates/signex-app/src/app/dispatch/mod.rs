@@ -224,6 +224,26 @@ impl Signex {
             Message::StartDetachedWindowDrag(modal) => {
                 self.handle_start_detached_window_drag(modal)
             }
+            Message::StartMainWindowDrag => match self.ui_state.main_window_id {
+                Some(id) => iced::window::drag(id),
+                None => Task::none(),
+            },
+            Message::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
+                Some(id) => iced::window::drag_resize(id, direction),
+                None => Task::none(),
+            },
+            Message::MinimizeMainWindow => match self.ui_state.main_window_id {
+                Some(id) => iced::window::minimize(id, true),
+                None => Task::none(),
+            },
+            Message::ToggleMaximizeMainWindow => match self.ui_state.main_window_id {
+                Some(id) => iced::window::toggle_maximize(id),
+                None => Task::none(),
+            },
+            Message::CloseMainWindow => match self.ui_state.main_window_id {
+                Some(id) => iced::window::close(id),
+                None => Task::none(),
+            },
             Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
             Message::CloseMoveSelectionDialog => {
                 let _ = self.handle_close_move_selection_dialog();

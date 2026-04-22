@@ -2,14 +2,27 @@
 //!
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
 //! iced_aw handles all overlay positioning, hover-to-switch, and keyboard navigation.
+//! Anchored on the left by the Signex wordmark (brand/signex-logo.svg).
 
-use iced::widget::{button, container, row, text};
+use std::sync::LazyLock;
+
+use iced::widget::{button, container, row, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
 
 use crate::styles;
+
+/// Horizontal mark + lowercase "signex" wordmark, rendered in white so it
+/// reads on dark themes. Loaded once at startup and cloned cheaply.
+static BRAND_WORDMARK_WHITE: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-white.svg"))
+});
+/// Same lockup in near-black for light themes.
+static BRAND_WORDMARK_BLACK: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-black.svg"))
+});
 
 // ─── Messages ─────────────────────────────────────────────────
 
@@ -88,7 +101,7 @@ pub struct MenuContext {
 
 // ─── Constants ────────────────────────────────────────────────
 
-pub const MENU_BAR_HEIGHT: f32 = 28.0;
+pub const MENU_BAR_HEIGHT: f32 = 36.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
 
 /// Extracted theme colors (all Copy+ʼstatic so closures remain ʼstatic).
@@ -414,10 +427,45 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         path_border: Border::default(),
     });
 
-    container(row![mb].align_y(iced::Alignment::Center))
+    // Wordmark — white on dark themes, near-black on light themes. Picked
+    // by toolbar background luminance so custom themes also resolve
+    // correctly. SVG is ~3.08:1 (viewBox 1600×520), so 74×24 keeps the
+    // lockup proportions and gives the text some breathing room.
+    let handle = if is_dark_surface(tokens.toolbar_bg) {
+        (*BRAND_WORDMARK_WHITE).clone()
+    } else {
+        (*BRAND_WORDMARK_BLACK).clone()
+    };
+    let wordmark = svg(handle).width(74).height(24);
+
+    // Just the wordmark + menu roots. The caller decides how to wrap this
+    // (plain strip on secondary windows, draggable chrome with window
+    // controls on the borderless main window).
+    row![wordmark, mb]
+        .spacing(10)
+        .align_y(iced::Alignment::Center)
+        .into()
+}
+
+/// Wrap a menu element in the toolbar-strip styled container used on
+/// secondary (undocked-tab) windows that keep their OS title bar.
+pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
+    container(menu)
+        .padding([0, 8])
         .width(Length::Fill)
         .style(styles::toolbar_strip(tokens))
         .into()
+}
+
+/// Perceptual-luminance test used to pick the white/black wordmark and
+/// (later) matching chrome icons. Mirrors the sRGB Y' coefficients so
+/// cyan/green tones don't fool the check like a naive (r+g+b)/3 would.
+fn is_dark_surface(c: signex_types::theme::Color) -> bool {
+    let r = c.r as f32 / 255.0;
+    let g = c.g as f32 / 255.0;
+    let b = c.b as f32 / 255.0;
+    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    lum < 0.5
 }
 
 // ─── Private helpers ─────────────────────────────────────────

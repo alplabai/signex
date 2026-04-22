@@ -194,6 +194,19 @@ pub enum Message {
     /// the detached modal even though `decorations: false` removed the
     /// native title bar.
     StartDetachedWindowDrag(super::state::ModalId),
+    /// User pressed on empty chrome (menu-bar row outside buttons) — start
+    /// an OS-level window drag for the main borderless window. The chrome
+    /// is the replacement for the OS title bar.
+    StartMainWindowDrag,
+    /// User pressed one of the 6 px edge strips around the borderless
+    /// main window — ask the OS to start a resize drag in that
+    /// direction. Replaces the WS_THICKFRAME edges we lose when
+    /// decorations are disabled.
+    StartMainWindowResize(iced::window::Direction),
+    /// Custom min/max/close buttons in the borderless main-window chrome.
+    MinimizeMainWindow,
+    ToggleMaximizeMainWindow,
+    CloseMainWindow,
     /// Open the Move Selection dialog (Altium numeric ΔX / ΔY move).
     OpenMoveSelectionDialog,
     CloseMoveSelectionDialog,
