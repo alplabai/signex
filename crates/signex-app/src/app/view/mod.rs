@@ -1003,6 +1003,191 @@ impl Signex {
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 
+    /// Custom chrome for the borderless main window. Replaces the OS
+    /// title bar with a 36 px strip:
+    ///
+    /// `[wordmark + menus] [drag] [search bar] [drag] [min│max│×]`
+    ///
+    /// The drag zones are the only mouse-area clickable regions — menu
+    /// buttons, search, and window controls keep their own click
+    /// handlers. Double-click on a drag zone toggles maximize.
+    fn view_main_window_chrome<'a>(
+        &self,
+        menu_row: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Element<'a, Message> {
+        use iced::widget::{Space, button, container, mouse_area, row, svg, text};
+        use iced::{Alignment, Background, Border, Color, Length};
+        use std::sync::LazyLock;
+
+        // Window-control SVG icons (10×10 strokes, tinted via svg::Style
+        // per theme).
+        static H_MIN: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_min.svg"
+            ))
+        });
+        static H_MAX: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_max.svg"
+            ))
+        });
+        static H_CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/window_close.svg"
+            ))
+        });
+        static H_SEARCH: LazyLock<svg::Handle> = LazyLock::new(|| {
+            svg::Handle::from_memory(include_bytes!(
+                "../../../assets/icons/chrome/search.svg"
+            ))
+        });
+
+        let text_c = crate::styles::ti(tokens.text);
+        let muted_c = crate::styles::ti(tokens.text_secondary);
+        let hover_c = crate::styles::ti(tokens.hover);
+        let search_bg = crate::styles::ti(tokens.panel_bg);
+        let search_border = crate::styles::ti(tokens.border);
+        // Windows-native destructive red for the close hover — overrides
+        // the theme hover so close reads as destructive at a glance.
+        let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+        let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
+
+        let chrome_btn = |handle: svg::Handle,
+                          msg: Message,
+                          hover_bg: Color,
+                          hover_icon: Color|
+         -> Element<'static, Message> {
+            let icon = svg(handle)
+                .width(10)
+                .height(10)
+                .style(move |_: &iced::Theme, _| svg::Style {
+                    color: Some(text_c),
+                });
+            button(
+                container(icon)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center),
+            )
+            .width(46)
+            .height(btn_h)
+            .padding(0)
+            .on_press(msg)
+            .style(move |_: &iced::Theme, status: button::Status| {
+                let hovered = matches!(
+                    status,
+                    button::Status::Hovered | button::Status::Pressed
+                );
+                button::Style {
+                    background: if hovered {
+                        Some(Background::Color(hover_bg))
+                    } else {
+                        None
+                    },
+                    text_color: if hovered { hover_icon } else { text_c },
+                    border: Border::default(),
+                    ..Default::default()
+                }
+            })
+            .into()
+        };
+
+        let controls = row![
+            chrome_btn((*H_MIN).clone(), Message::MinimizeMainWindow, hover_c, text_c),
+            chrome_btn(
+                (*H_MAX).clone(),
+                Message::ToggleMaximizeMainWindow,
+                hover_c,
+                text_c,
+            ),
+            chrome_btn(
+                (*H_CLOSE).clone(),
+                Message::CloseMainWindow,
+                close_hover,
+                Color::WHITE,
+            ),
+        ];
+
+        // Left-pad the menu row so the wordmark doesn't sit flush against
+        // the window edge; controls stay flush-right so their hover boxes
+        // touch the corner like in Windows' native chrome.
+        let menu_padded = container(menu_row).padding(iced::Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 8.0,
+        });
+
+        // Search bar placeholder — visual only for now. Matches VS Code's
+        // central command palette peek: rounded rect with search icon
+        // and muted prompt text.
+        let search_icon = svg((*H_SEARCH).clone())
+            .width(12)
+            .height(12)
+            .style(move |_: &iced::Theme, _| svg::Style {
+                color: Some(muted_c),
+            });
+        let search_bar: Element<'_, Message> = container(
+            row![
+                search_icon,
+                text("Search files, symbols, commands…")
+                    .size(11)
+                    .color(muted_c),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 10.0,
+            bottom: 0.0,
+            left: 10.0,
+        })
+        .width(440)
+        .height(24)
+        .align_y(iced::alignment::Vertical::Center)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(search_bg)),
+            border: Border {
+                color: search_border,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into();
+
+        // Drag zones on either side of the search bar. Double-click
+        // toggles maximize (Windows title-bar convention).
+        let drag_zone = || -> Element<'static, Message> {
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .on_press(Message::StartMainWindowDrag)
+            .on_double_click(Message::ToggleMaximizeMainWindow)
+            .into()
+        };
+
+        let inner = row![
+            menu_padded,
+            drag_zone(),
+            search_bar,
+            drag_zone(),
+            controls,
+        ]
+        .align_y(Alignment::Center);
+
+        container(inner)
+            .width(Length::Fill)
+            .height(btn_h)
+            .style(crate::styles::toolbar_strip(tokens))
+            .into()
+    }
+
     fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
         use super::state::ModalId;
         match modal {
@@ -1045,7 +1230,7 @@ impl Signex {
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
         };
-        let menu = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
+        let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -1104,7 +1289,6 @@ impl Signex {
         )
         .map(Message::StatusBar);
 
-        let mut main = column![menu];
         // Partition tabs across windows: main owns every tab that isn't
         // currently rendered by an undocked-tab window; each undocked
         // window owns exactly its one tab. Closing a tab in one window
@@ -1118,6 +1302,16 @@ impl Signex {
             })
             .collect();
         let is_main_window = ui.main_window_id == Some(window_id);
+
+        // Main window is borderless: wordmark + menus + drag + search +
+        // min/max/close in a single 36 px row. Undocked tab windows keep
+        // their OS chrome and use the plain styled strip.
+        let top_chrome: Element<'_, Message> = if is_main_window {
+            self.view_main_window_chrome(menu_row, &document.panel_ctx.tokens)
+        } else {
+            menu_bar::wrap_plain(menu_row, &document.panel_ctx.tokens)
+        };
+        let mut main = column![top_chrome];
         let visible_paths: std::collections::HashSet<std::path::PathBuf> = if is_main_window {
             document
                 .tabs
@@ -1151,6 +1345,18 @@ impl Signex {
             .push(bottom_handle)
             .push(bottom)
             .push(status);
+
+        // Borderless window needs its own edge-resize hit zones — the OS
+        // frame would normally handle this, but `decorations: false`
+        // removes WS_THICKFRAME on Windows. 6 px strips on every side
+        // call `iced::window::drag_resize(id, Direction)` to kick the
+        // OS into a resize drag. Tab windows keep OS decorations so
+        // they don't need this scaffolding.
+        let main: Element<'_, Message> = if is_main_window {
+            Self::wrap_with_resize_edges(main.into())
+        } else {
+            main.into()
+        };
 
         let has_active_bar = self.has_active_schematic();
         let dragging_tab = ui.tab_dragging.is_some();
@@ -1191,6 +1397,40 @@ impl Signex {
         } else {
             main.into()
         }
+    }
+
+    /// 6 px invisible mouse-area strips on every edge of the main
+    /// window. Each strip asks the OS to start a resize drag in the
+    /// appropriate direction, with a matching `mouse::Interaction` so
+    /// the cursor flips to the right arrow shape on hover.
+    fn wrap_with_resize_edges<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
+        use iced::mouse::Interaction;
+        use iced::widget::{Space, column, mouse_area, row};
+        use iced::window::Direction;
+
+        const EDGE: f32 = 6.0;
+
+        let edge = |direction: Direction,
+                    cursor: Interaction,
+                    horizontal: bool|
+         -> Element<'a, Message> {
+            let (w, h) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
+            };
+            mouse_area(Space::new().width(w).height(h))
+                .on_press(Message::StartMainWindowResize(direction))
+                .interaction(cursor)
+                .into()
+        };
+
+        let top = edge(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = edge(Direction::South, Interaction::ResizingVertically, true);
+        let left = edge(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = edge(Direction::East, Interaction::ResizingHorizontally, false);
+
+        column![top, row![left, content, right], bottom].into()
     }
 
     fn view_dock_panel(
