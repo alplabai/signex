@@ -146,37 +146,42 @@ impl Signex {
             }
         };
 
-        let rasterizer = PreviewRasterizer;
-        let opts = PreviewOptions {
-            pdf: PdfOptions::default(),
-            dpi: 96.0,
-        };
-
-        let pages = rasterizer.rasterize(&ctx, &opts);
+        let pages = PreviewRasterizer.rasterize(
+            &ctx,
+            &PreviewOptions {
+                pdf: PdfOptions::default(),
+                dpi: 96.0,
+            },
+        );
 
         if pages.is_empty() {
             log::warn!("Print preview: no pages rendered");
             return;
         }
 
-        // Store preview state in document_state.
-        // TODO: Add preview field to DocumentState
         log::info!("Print preview: rendered {} page(s)", pages.len());
+        self.document_state.preview = Some(crate::app::state::PreviewState {
+            pages,
+            selected: 0,
+        });
     }
 
-    pub(crate) fn handle_print_preview_select_page(&mut self, _idx: usize) {
-        // TODO: Update selected page index in preview state
-        log::debug!("Print preview: select page {}", _idx);
+    pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            if idx < preview.pages.len() {
+                preview.selected = idx;
+            }
+        }
     }
 
-    pub(crate) fn handle_print_preview_export(&mut self) {
-        // Reuse the PDF export flow
-        self.handle_export_pdf_requested();
+    pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        // Close the preview overlay and reuse the PDF export flow.
+        self.document_state.preview = None;
+        self.handle_export_pdf_requested()
     }
 
     pub(crate) fn handle_print_preview_close(&mut self) {
-        // TODO: Clear preview state from document_state
-        log::debug!("Print preview: closed");
+        self.document_state.preview = None;
     }
 }
 

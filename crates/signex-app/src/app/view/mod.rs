@@ -204,6 +204,190 @@ impl Signex {
             .into()
     }
 
+    /// Print Preview overlay. Shows thumbnails of every rendered page on
+    /// the left, the selected page full-size on the right, with Export PDF
+    /// and Close buttons at the bottom. Triggered by File → Print Preview
+    /// (Ctrl+P); disappears on Close or when the export completes.
+    fn view_print_preview(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, image, mouse_area, row, scrollable, text};
+
+        let preview = match &self.document_state.preview {
+            Some(p) => p,
+            None => return iced::widget::Space::new().into(),
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::ti(tokens.hover);
+
+        // Left rail: one thumbnail button per rendered page. Bounded width
+        // and scrollable so 20-sheet projects don't break the layout.
+        let mut thumbs: iced::widget::Column<'_, Message> =
+            column![].spacing(4).padding(8);
+        for (i, page) in preview.pages.iter().enumerate() {
+            let selected = i == preview.selected;
+            let thumb_handle = image::Handle::from_rgba(
+                page.width_px,
+                page.height_px,
+                page.rgba.clone(),
+            );
+            let thumb = image(thumb_handle)
+                .content_fit(iced::ContentFit::Contain)
+                .width(120)
+                .height(85);
+            let card_bg = if selected { hover_c } else { panel_bg };
+            let card_border = if selected { accent_c } else { border_c };
+            let card = container(
+                column![
+                    thumb,
+                    text(format!("Page {}", page.page_number)).size(10).color(text_c)
+                ]
+                .spacing(2)
+                .align_x(iced::Alignment::Center),
+            )
+            .padding(4)
+            .width(132)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(card_bg.into()),
+                border: iced::Border {
+                    color: card_border,
+                    width: if selected { 2.0 } else { 1.0 },
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..container::Style::default()
+            });
+            thumbs = thumbs.push(
+                mouse_area(card).on_press(Message::PrintPreviewSelectPage(i)),
+            );
+        }
+        let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
+
+        // Centre: the selected page rendered full-size, constrained to a
+        // reasonable viewport.
+        let selected_page = &preview.pages[preview.selected];
+        let full_handle = image::Handle::from_rgba(
+            selected_page.width_px,
+            selected_page.height_px,
+            selected_page.rgba.clone(),
+        );
+        let full_image = container(
+            image(full_handle)
+                .content_fit(iced::ContentFit::Contain)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(16)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Color::WHITE.into()),
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: iced::border::Radius::from(2.0),
+            },
+            ..container::Style::default()
+        });
+
+        let page_caption = text(format!(
+            "Page {} of {} — {}×{} px",
+            selected_page.page_number,
+            preview.pages.len(),
+            selected_page.width_px,
+            selected_page.height_px,
+        ))
+        .size(11)
+        .color(text_muted);
+
+        let centre = column![full_image, page_caption]
+            .spacing(6)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        // Bottom bar: Export PDF + Close
+        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
+            .padding([6, 14])
+            .on_press(Message::PrintPreviewExport)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(accent_c.into()),
+                text_color: iced::Color::WHITE,
+                border: iced::Border {
+                    radius: iced::border::Radius::from(4.0),
+                    ..iced::Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+        let close_btn = button(text("Close").size(12).color(text_c))
+            .padding([6, 14])
+            .on_press(Message::PrintPreviewClose)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(panel_bg.into()),
+                text_color: text_c,
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..iced::widget::button::Style::default()
+            });
+
+        let bottom_bar = row![
+            text(format!(
+                "{} page(s) — preview at 96 DPI",
+                preview.pages.len()
+            ))
+            .size(11)
+            .color(text_muted),
+            iced::widget::Space::new().width(Length::Fill),
+            close_btn,
+            export_btn,
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        // Dialog body: title + thumbnails/content row + bottom bar
+        let body = column![
+            text("Print Preview").size(14).color(text_c),
+            row![thumb_rail, iced::widget::Space::new().width(8), centre]
+                .width(Length::Fill)
+                .height(Length::Fill),
+            bottom_bar,
+        ]
+        .spacing(8)
+        .padding(12);
+
+        // Dialog card sized to leave a margin around the edges
+        let card = container(body)
+            .max_width(1100)
+            .max_height(780)
+            .padding(0)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(8.0),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 16.0,
+                },
+                ..container::Style::default()
+            });
+
+        container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    }
+
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         // Secondary windows (detached modals, future undocked tabs) render
         // just their own content — no menu / dock / canvas. The main
@@ -1652,6 +1836,13 @@ impl Signex {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
+
+        // Print preview overlay — appears on top of everything when the user
+        // invokes File → Print Preview (Ctrl+P). Full-screen dim + dialog.
+        if document.preview.is_some() {
+            layers.push(Self::dismiss_layer(Message::PrintPreviewClose));
+            layers.push(self.view_print_preview());
+        }
 
         // Custom net-colour picker. Bespoke modal (not the iced_aw
         // ColorPicker) because the user needs a quick-pick palette +
