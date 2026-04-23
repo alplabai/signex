@@ -32,9 +32,9 @@ mod page;
 mod surface;
 
 use colour::ColourMap;
-use font::PdfFont;
-use layout::PageTransform;
+use font::{PdfFont, best_alias_for_text, sanitize_pdf_text, text_advance_pt};
 use surface::PdfSurface;
+use crate::svg::{SvgElement, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign};
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -259,104 +259,104 @@ fn build_page_content(
 
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
-    // Build the coordinate transform: mm → PDF points with FitToPage offset.
-    // `units_per_mm` for PDF points = 72/25.4.
-    let xform = PageTransform::new(
-        sheet,
-        page_w_mm,
-        page_h_mm,
-        &opts.margins,
-        &opts.scale,
-        MM_TO_PT,
-    );
+    // Explicit two-step pipeline:
+    // schematic sheet -> SVG render context -> PDF content stream operators.
+    let svg_ctx = SvgRenderContext::from_sheet(sheet, opts, page_w_mm, page_h_mm, MM_TO_PT);
 
     // Set default colour for all drawings.
     let (r, g, b) = colour_map.map_stroke_bw(0.0, 0.0, 0.0);
     surface.set_stroke_color(r, g, b);
 
-    // Draw wires.
-    for wire in &sheet.schematic.wires {
-        let w = if wire.stroke_width > 0.0 {
-            (wire.stroke_width * xform.mm_to_unit) as f32
-        } else {
-            (0.15 * xform.mm_to_unit) as f32
-        };
-        let x1 = xform.x(wire.start.x);
-        let y1 = xform.pdf_y(wire.start.y, page_h_pt);
-        let x2 = xform.x(wire.end.x);
-        let y2 = xform.pdf_y(wire.end.y, page_h_pt);
-        surface.stroke_line(x1, y1, x2, y2, w);
-    }
-
-    // Draw symbols.
-    for sym in &sheet.schematic.symbols {
-        let (bbox_x1, bbox_y1, bbox_x2, bbox_y2) = if let Some(lib_sym) =
-            sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id)
-        {
-            let mut x_min: f64 = 0.0;
-            let mut x_max: f64 = 0.0;
-            let mut y_min: f64 = 0.0;
-            let mut y_max: f64 = 0.0;
-            for lib_g in &lib_sym.graphics {
-                match &lib_g.graphic {
-                    signex_types::schematic::Graphic::Rectangle { start, end, .. } => {
-                        x_min = x_min.min(start.x).min(end.x);
-                        x_max = x_max.max(start.x).max(end.x);
-                        y_min = y_min.min(start.y).min(end.y);
-                        y_max = y_max.max(start.y).max(end.y);
-                    }
-                    signex_types::schematic::Graphic::Polyline { points, .. } => {
-                        for pt in points {
-                            x_min = x_min.min(pt.x);
-                            x_max = x_max.max(pt.x);
-                            y_min = y_min.min(pt.y);
-                            y_max = y_max.max(pt.y);
+    // Render all mapped schematic elements from the intermediate SVG page.
+    for element in &svg_ctx.elements {
+        match element {
+            SvgElement::Path { commands, style } => {
+                let mut path_ops = String::new();
+                for cmd in commands {
+                    match cmd {
+                        SvgPathCommand::MoveTo(p) => {
+                            path_ops.push_str(&format!("{} {} m\n", p.x, page_h_pt - p.y));
                         }
+                        SvgPathCommand::LineTo(p) => {
+                            path_ops.push_str(&format!("{} {} l\n", p.x, page_h_pt - p.y));
+                        }
+                        SvgPathCommand::CubicTo(c1, c2, p) => {
+                            path_ops.push_str(&format!(
+                                "{} {} {} {} {} {} c\n",
+                                c1.x,
+                                page_h_pt - c1.y,
+                                c2.x,
+                                page_h_pt - c2.y,
+                                p.x,
+                                page_h_pt - p.y
+                            ));
+                        }
+                        SvgPathCommand::Close => path_ops.push_str("h\n"),
                     }
-                    _ => {}
+                }
+
+                if let Some((r, g, b)) = style.stroke_rgb {
+                    let (sr, sg, sb) = colour_map.map_stroke_bw(r, g, b);
+                    surface.set_stroke_color(sr, sg, sb);
+                }
+                if let Some((r, g, b)) = style.fill_rgb {
+                    let (fr, fg, fb) = colour_map.map_stroke_bw(r, g, b);
+                    surface.set_fill_color(fr, fg, fb);
+                }
+                surface.set_stroke_width(style.stroke_width.max(0.1));
+                surface.raw_operator(&path_ops);
+
+                match (style.stroke_rgb.is_some(), style.fill_rgb.is_some()) {
+                    (true, true) => surface.raw_operator("B\n"),
+                    (true, false) => surface.raw_operator("S\n"),
+                    (false, true) => surface.raw_operator("f\n"),
+                    (false, false) => {}
                 }
             }
-            let w = (x_max - x_min).max(10.0);
-            let h = (y_max - y_min).max(10.0);
-            (
-                sym.position.x - w / 2.0,
-                sym.position.y - h / 2.0,
-                sym.position.x + w / 2.0,
-                sym.position.y + h / 2.0,
-            )
-        } else {
-            (
-                sym.position.x - 5.0,
-                sym.position.y - 5.0,
-                sym.position.x + 5.0,
-                sym.position.y + 5.0,
-            )
-        };
+            SvgElement::Text {
+                x,
+                y,
+                font_alias,
+                size_pt,
+                align,
+                v_align,
+                rotation_deg,
+                fill_rgb,
+                text,
+            } => {
+                let (sr, sg, sb) = colour_map.map_stroke_bw(fill_rgb.0, fill_rgb.1, fill_rgb.2);
+                surface.set_fill_color(sr, sg, sb);
 
-        let sx = xform.x(bbox_x1);
-        // PDF rect origin is bottom-left; bbox_y2 is the schematic bottom edge.
-        let sy = xform.pdf_y(bbox_y2, page_h_pt);
-        let sw = ((bbox_x2 - bbox_x1) * xform.mm_to_unit) as f32;
-        let sh = ((bbox_y2 - bbox_y1) * xform.mm_to_unit) as f32;
-        surface.stroke_rect(sx, sy, sw, sh, (0.1 * xform.mm_to_unit) as f32);
+                let safe_text = sanitize_pdf_text(text);
+                let chosen_alias = best_alias_for_text(font_alias, &safe_text);
+                let text_w = text_advance_pt(chosen_alias, &safe_text, *size_pt);
+                let asc = size_pt * 0.8;
+                let desc = -size_pt * 0.2;
+                let draw_x = match align {
+                    SvgTextAlign::Left => *x,
+                    SvgTextAlign::Center => *x - text_w * 0.5,
+                    SvgTextAlign::Right => *x - text_w,
+                };
+                let draw_y = match v_align {
+                    SvgTextVAlign::Top => *y + asc,
+                    SvgTextVAlign::Center => *y + (asc + desc) * 0.5,
+                    SvgTextVAlign::Bottom => *y + desc,
+                };
 
-        if !sym.reference.is_empty() {
-            let cx = xform.x((bbox_x1 + bbox_x2) / 2.0);
-            let cy = xform.pdf_y((bbox_y1 + bbox_y2) / 2.0, page_h_pt);
-            surface.text_at(cx, cy, PdfFont::IosevkaRegular.alias(), 9.0, &sym.reference);
+                if rotation_deg.abs() > 0.001 {
+                    surface.text_at_rotated(
+                        draw_x,
+                        page_h_pt - draw_y,
+                        chosen_alias,
+                        *size_pt,
+                        &safe_text,
+                        -*rotation_deg,
+                    );
+                } else {
+                    surface.text_at(draw_x, page_h_pt - draw_y, chosen_alias, *size_pt, &safe_text);
+                }
+            }
         }
-    }
-
-    // Draw labels.
-    for label in &sheet.schematic.labels {
-        let x = xform.x(label.position.x);
-        let y = xform.pdf_y(label.position.y, page_h_pt);
-        let size = if label.font_size > 0.0 {
-            (label.font_size * xform.mm_to_unit) as f32
-        } else {
-            9.0
-        };
-        surface.text_at(x, y, PdfFont::IosevkaRegular.alias(), size, &label.text);
     }
 
     // Template frame and title block (if enabled).

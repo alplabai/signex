@@ -281,6 +281,9 @@ pub struct DocumentState {
     /// is running. Used by handle_export_pdf_finished to apply user-selected
     /// options instead of defaults. Cleared after export.
     pub pending_pdf_options: Option<signex_output::PdfOptions>,
+    /// Optional PDF options seed copied from Print Preview controls.
+    /// When present, the next PDF options dialog opens with this seed.
+    pub pdf_options_seed: Option<signex_output::PdfOptions>,
     /// User-visible export error. `Some(msg)` while the error modal is shown.
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
     /// itself (not the file dialog) fails. Cleared by DismissExportError.
@@ -292,13 +295,17 @@ pub struct DocumentState {
 /// when the user invokes File → Print Preview (Ctrl+P).
 pub struct PreviewState {
     pub pages: Vec<signex_output::PreviewPage>,
+    pub page_handles: Vec<iced::widget::image::Handle>,
     pub selected: usize,
+    pub pdf_options: signex_output::PdfOptions,
+    pub specific_page_input: String,
 }
 
 /// PDF export options dialog state. Holds the current option selections
 /// until the user confirms (ExportPdfDialogConfirm) or cancels.
 pub struct PdfOptionsDialogState {
     pub options: signex_output::PdfOptions,
+    pub specific_page_input: String,
 }
 
 impl DocumentState {

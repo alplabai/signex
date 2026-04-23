@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_output::{
     BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, ExportContext, Exporter,
-    NetlistExporter, NetlistOptions, PageSize, PdfExporter, PdfOptions, PreviewOptions,
+    NetlistExporter, NetlistOptions, PageRange, PageSize, PdfExporter, PdfOptions, PreviewOptions,
     PreviewRasterizer, ProjectMetadata, SheetSnapshot,
 };
 
@@ -16,8 +16,11 @@ impl Signex {
             return;
         }
 
-        // Pre-populate page size from the document's own paper declaration.
-        let options = if let Some(active_path) = self.document_state.active_path.as_ref() {
+        // Prefer a seed copied from Print Preview controls. Otherwise pre-populate
+        // from the active document's paper declaration.
+        let options = if let Some(seed) = self.document_state.pdf_options_seed.take() {
+            seed
+        } else if let Some(active_path) = self.document_state.active_path.as_ref() {
             if let Some(engine) = self.document_state.engines.get(active_path) {
                 let paper_str = engine.document().paper_size.as_str();
                 let page_size = PageSize::from_standard_str(paper_str);
@@ -34,8 +37,14 @@ impl Signex {
             PdfOptions::default()
         };
 
+        let specific_page_input = match &options.page_range {
+            PageRange::Specific(pages) if !pages.is_empty() => pages[0].to_string(),
+            _ => "1".to_string(),
+        };
+
         self.document_state.pdf_options_dialog = Some(crate::app::state::PdfOptionsDialogState {
             options,
+            specific_page_input,
         });
     }
 
@@ -85,6 +94,33 @@ impl Signex {
         }
     }
 
+    pub(crate) fn handle_export_pdf_set_page_range_all(&mut self) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.page_range = PageRange::All;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_page_range_current(&mut self) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.page_range = PageRange::Current;
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_page_range_specific(&mut self) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.options.page_range = PageRange::Specific(vec![1]);
+            if dialog.specific_page_input.trim().is_empty() {
+                dialog.specific_page_input = "1".to_string();
+            }
+        }
+    }
+
+    pub(crate) fn handle_export_pdf_set_specific_page_input(&mut self, value: String) {
+        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
+            dialog.specific_page_input = value;
+        }
+    }
+
     pub(crate) fn handle_export_pdf_dialog_cancel(&mut self) {
         self.document_state.pdf_options_dialog = None;
     }
@@ -95,16 +131,28 @@ impl Signex {
             return Some(Task::none());
         }
 
-        // Clone the options from the dialog before clearing it.
-        let options = self
-            .document_state
-            .pdf_options_dialog
-            .as_ref()
-            .map(|d| d.options.clone());
+        let dialog = match self.document_state.pdf_options_dialog.as_ref() {
+            Some(d) => d,
+            None => return Some(Task::none()),
+        };
+
+        let mut options = dialog.options.clone();
+        if matches!(options.page_range, PageRange::Specific(_)) {
+            let page = dialog.specific_page_input.trim().parse::<usize>().ok();
+            let page = match page {
+                Some(p) if p > 0 => p,
+                _ => {
+                    self.document_state.export_error = Some(
+                        "Specific page must be a positive page number (1, 2, 3, ...)."
+                            .to_string(),
+                    );
+                    return Some(Task::none());
+                }
+            };
+            options.page_range = PageRange::Specific(vec![page]);
+        }
 
         self.document_state.pdf_options_dialog = None;
-
-        let options = options.unwrap_or_default();
 
         // Stash options in the document state so handle_export_pdf_finished can access them.
         // We'll use a pending_pdf_options field (add next).
@@ -412,7 +460,7 @@ impl Signex {
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
-                pdf: pdf_opts,
+                pdf: pdf_opts.clone(),
                 dpi: 96.0,
             },
         );
@@ -422,10 +470,24 @@ impl Signex {
             return;
         }
 
+        let page_handles: Vec<iced::widget::image::Handle> = pages
+            .iter()
+            .map(|page| {
+                iced::widget::image::Handle::from_rgba(
+                    page.width_px,
+                    page.height_px,
+                    page.rgba.clone(),
+                )
+            })
+            .collect();
+
         log::info!("Print preview: rendered {} page(s)", pages.len());
         self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
+            page_handles,
             selected: 0,
+            pdf_options: pdf_opts,
+            specific_page_input: "1".to_string(),
         });
     }
 
@@ -437,7 +499,62 @@ impl Signex {
         }
     }
 
+    pub(crate) fn handle_print_preview_set_colour_mode(&mut self, mode: signex_output::ColourMode) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.colour_mode = mode;
+        }
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_set_page_range_all(&mut self) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.page_range = PageRange::All;
+        }
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_set_page_range_current(&mut self) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.page_range = PageRange::Current;
+        }
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_set_page_range_specific(&mut self) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.page_range = PageRange::Specific(vec![1]);
+            if preview.specific_page_input.trim().is_empty() {
+                preview.specific_page_input = "1".to_string();
+            }
+        }
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_set_specific_page_input(&mut self, value: String) {
+        let parsed_page = value.trim().parse::<usize>().ok();
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.specific_page_input = value;
+            if let Some(page) = parsed_page.filter(|p| *p > 0) {
+                preview.pdf_options.page_range = PageRange::Specific(vec![page]);
+            }
+        }
+        if parsed_page.map(|p| p > 0).unwrap_or(false) {
+            self.rerasterize_print_preview();
+        }
+    }
+
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        if let Some(preview) = self.document_state.preview.as_ref() {
+            let mut seed = preview.pdf_options.clone();
+            if matches!(seed.page_range, PageRange::Specific(_)) {
+                if let Ok(page) = preview.specific_page_input.trim().parse::<usize>() {
+                    if page > 0 {
+                        seed.page_range = PageRange::Specific(vec![page]);
+                    }
+                }
+            }
+            self.document_state.pdf_options_seed = Some(seed);
+        }
         // Close the preview overlay and open the PDF options dialog.
         self.document_state.preview = None;
         Some(self.update(Message::ExportPdfOpenDialog))
@@ -445,6 +562,57 @@ impl Signex {
 
     pub(crate) fn handle_print_preview_close(&mut self) {
         self.document_state.preview = None;
+    }
+
+    fn rerasterize_print_preview(&mut self) {
+        let (pdf_opts, selected, specific_page_input) = match self.document_state.preview.as_ref() {
+            Some(preview) => (
+                preview.pdf_options.clone(),
+                preview.selected,
+                preview.specific_page_input.clone(),
+            ),
+            None => return,
+        };
+
+        let ctx = match build_export_context(&self.document_state) {
+            Some(c) => c,
+            None => return,
+        };
+
+        let pages = PreviewRasterizer.rasterize(
+            &ctx,
+            &PreviewOptions {
+                pdf: pdf_opts.clone(),
+                dpi: 96.0,
+            },
+        );
+
+        if pages.is_empty() {
+            self.document_state.export_error = Some(
+                "Preview has no pages for the selected range. Check page range input."
+                    .to_string(),
+            );
+            return;
+        }
+
+        let page_handles: Vec<iced::widget::image::Handle> = pages
+            .iter()
+            .map(|page| {
+                iced::widget::image::Handle::from_rgba(
+                    page.width_px,
+                    page.height_px,
+                    page.rgba.clone(),
+                )
+            })
+            .collect();
+
+        self.document_state.preview = Some(crate::app::state::PreviewState {
+            selected: selected.min(pages.len().saturating_sub(1)),
+            pages,
+            page_handles,
+            pdf_options: pdf_opts,
+            specific_page_input,
+        });
     }
 }
 
