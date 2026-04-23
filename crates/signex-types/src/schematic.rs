@@ -443,8 +443,12 @@ pub struct Label {
     pub font_size: f64,
     #[serde(default)]
     pub justify: HAlign,
-    #[serde(default)]
+    #[serde(default = "default_label_v_align")]
     pub justify_v: VAlign,
+}
+
+fn default_label_v_align() -> VAlign {
+    VAlign::Bottom
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
