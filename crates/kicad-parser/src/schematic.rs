@@ -851,10 +851,24 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         .and_then(|f| f.find("size"))
         .and_then(|s| s.arg_f64(0))
         .unwrap_or(SCHEMATIC_TEXT_MM);
+    // KiCad may emit multiple justify tokens (e.g. "left bottom").
+    // Preserve the horizontal part regardless of token order.
     let justify = effects
         .and_then(|e| e.find("justify"))
-        .and_then(|j| j.first_arg())
-        .map(|v| parse_halign(v))
+        .map(|j| {
+            let mut parsed = HAlign::Left;
+            for child in j.children().iter().skip(1) {
+                if let SExpr::Atom(token) = child {
+                    match token.as_str() {
+                        "left" => parsed = HAlign::Left,
+                        "right" => parsed = HAlign::Right,
+                        "center" => parsed = HAlign::Center,
+                        _ => {}
+                    }
+                }
+            }
+            parsed
+        })
         .unwrap_or(HAlign::Left);
     Label {
         uuid: parse_uuid(node),
@@ -1695,6 +1709,25 @@ mod tests {
         assert!(matches!(label.label_type, LabelType::Net));
         assert_eq!(label.position.x, 20.0);
     }
+
+        #[test]
+        fn parse_label_justify_reads_horizontal_token_independent_of_order() {
+                let content = r#"(kicad_sch
+    (version 20231120)
+    (generator "eeschema")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (label "L1"
+        (at 10 10 0)
+        (effects (font (size 1.27 1.27)) (justify bottom right))
+        (uuid "00000000-0000-0000-0000-000000000002")
+    )
+)"#;
+
+                let sheet = parse_schematic(content).unwrap();
+                assert_eq!(sheet.labels.len(), 1);
+                assert_eq!(sheet.labels[0].justify, HAlign::Right);
+        }
 
     #[test]
     fn parse_no_connect_has_uuid() {
