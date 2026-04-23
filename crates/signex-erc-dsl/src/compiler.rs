@@ -278,7 +278,7 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
             .args
             .first()
             .and_then(|a| parse_pin_type(a.as_str_value()))
-            .map(|t| net.pin_types.iter().any(|x| *x == t))
+            .map(|t| net.pin_types.contains(&t))
             .unwrap_or(false),
         ("name_matches", Subject::Net(net)) => {
             if let Some(regex) = &helper.regex_arg {

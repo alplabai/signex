@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_output::{
     BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, ExportContext, Exporter,
-    NetlistExporter, NetlistOptions, PdfExporter, PdfOptions, PreviewOptions, PreviewRasterizer,
-    ProjectMetadata, SheetSnapshot,
+    NetlistExporter, NetlistOptions, PageSize, PdfExporter, PdfOptions, PreviewOptions,
+    PreviewRasterizer, ProjectMetadata, SheetSnapshot,
 };
 
 use super::super::super::*;
@@ -16,8 +16,26 @@ impl Signex {
             return;
         }
 
+        // Pre-populate page size from the document's own paper declaration.
+        let options = if let Some(active_path) = self.document_state.active_path.as_ref() {
+            if let Some(engine) = self.document_state.engines.get(active_path) {
+                let paper_str = engine.document().paper_size.as_str();
+                let page_size = PageSize::from_standard_str(paper_str);
+                let orientation = PageSize::default_orientation_for_standard(paper_str);
+                PdfOptions {
+                    page_size,
+                    orientation,
+                    ..PdfOptions::default()
+                }
+            } else {
+                PdfOptions::default()
+            }
+        } else {
+            PdfOptions::default()
+        };
+
         self.document_state.pdf_options_dialog = Some(crate::app::state::PdfOptionsDialogState {
-            options: signex_output::PdfOptions::default(),
+            options,
         });
     }
 
@@ -373,10 +391,28 @@ impl Signex {
             }
         };
 
+        // Derive page size and orientation from the active schematic document
+        // so the preview matches the actual sheet dimensions rather than
+        // always defaulting to A4 landscape.
+        let pdf_opts = {
+            let paper_str = ctx
+                .sheets
+                .first()
+                .map(|s| s.schematic.paper_size.as_str())
+                .unwrap_or("A4");
+            let page_size = PageSize::from_standard_str(paper_str);
+            let orientation = PageSize::default_orientation_for_standard(paper_str);
+            PdfOptions {
+                page_size,
+                orientation,
+                ..PdfOptions::default()
+            }
+        };
+
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
-                pdf: PdfOptions::default(),
+                pdf: pdf_opts,
                 dpi: 96.0,
             },
         );

@@ -27,12 +27,13 @@ use crate::{ExportContext, Exporter, SubstitutionContext};
 
 mod colour;
 mod font;
-mod layout;
+pub(crate) mod layout;
 mod page;
 mod surface;
 
 use colour::ColourMap;
 use font::PdfFont;
+use layout::PageTransform;
 use surface::PdfSurface;
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
@@ -245,71 +246,6 @@ impl Exporter for PdfExporter {
     }
 }
 
-/// Compute the bounding box of schematic content (wires, symbols, labels).
-/// Returns (x_min_mm, y_min_mm, x_max_mm, y_max_mm). If no content, returns
-/// default bounds (0, 0, 100, 100).
-fn compute_schematic_bbox(sheet: &crate::SheetSnapshot) -> (f64, f64, f64, f64) {
-    let mut x_min = f64::INFINITY;
-    let mut y_min = f64::INFINITY;
-    let mut x_max = f64::NEG_INFINITY;
-    let mut y_max = f64::NEG_INFINITY;
-
-    // Include wire endpoints.
-    for wire in &sheet.schematic.wires {
-        x_min = x_min.min(wire.start.x).min(wire.end.x);
-        x_max = x_max.max(wire.start.x).max(wire.end.x);
-        y_min = y_min.min(wire.start.y).min(wire.end.y);
-        y_max = y_max.max(wire.start.y).max(wire.end.y);
-    }
-
-    // Include symbol positions (expand by 5mm each side for symbol bbox).
-    for sym in &sheet.schematic.symbols {
-        x_min = x_min.min(sym.position.x - 5.0);
-        x_max = x_max.max(sym.position.x + 5.0);
-        y_min = y_min.min(sym.position.y - 5.0);
-        y_max = y_max.max(sym.position.y + 5.0);
-    }
-
-    // Include label positions.
-    for label in &sheet.schematic.labels {
-        x_min = x_min.min(label.position.x);
-        x_max = x_max.max(label.position.x);
-        y_min = y_min.min(label.position.y);
-        y_max = y_max.max(label.position.y);
-    }
-
-    // If no content, use default bounds.
-    if x_min.is_infinite() || x_max.is_infinite() {
-        (0.0, 0.0, 100.0, 100.0)
-    } else {
-        (x_min, y_min, x_max, y_max)
-    }
-}
-
-/// Compute the scale factor for FitToPage mode.
-/// Returns scale that fits the schematic bbox into the printable area
-/// (page minus margins). Never upscales beyond 1.0.
-fn compute_fit_to_page_scale(
-    page_w_mm: f64,
-    page_h_mm: f64,
-    margins: &Margins,
-    bbox_x1_mm: f64,
-    bbox_y1_mm: f64,
-    bbox_x2_mm: f64,
-    bbox_y2_mm: f64,
-) -> f64 {
-    let printable_w = page_w_mm - margins.left_mm - margins.right_mm;
-    let printable_h = page_h_mm - margins.top_mm - margins.bottom_mm;
-    let content_w = (bbox_x2_mm - bbox_x1_mm).max(1.0);
-    let content_h = (bbox_y2_mm - bbox_y1_mm).max(1.0);
-
-    let scale_x = printable_w / content_w;
-    let scale_y = printable_h / content_h;
-
-    // Use the more restrictive scale, but never upscale.
-    scale_x.min(scale_y).min(1.0)
-}
-
 /// Build a content stream for a single page.
 fn build_page_content(
     sheet: &crate::SheetSnapshot,
@@ -321,59 +257,49 @@ fn build_page_content(
     let mut surface = PdfSurface::new();
     let colour_map = ColourMap::new(opts.colour_mode);
 
-    // Get page dimensions in mm for scale computation.
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
-    // Compute scale factor based on PdfScale mode.
-    let scale = match opts.scale {
-        PdfScale::FitToPage => {
-            let (bbox_x1, bbox_y1, bbox_x2, bbox_y2) = compute_schematic_bbox(sheet);
-            compute_fit_to_page_scale(page_w_mm, page_h_mm, &opts.margins, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-        }
-        PdfScale::OneToOne => 1.0,
-        PdfScale::Percent(p) => p / 100.0,
-    };
+    // Build the coordinate transform: mm → PDF points with FitToPage offset.
+    // `units_per_mm` for PDF points = 72/25.4.
+    let xform = PageTransform::new(
+        sheet,
+        page_w_mm,
+        page_h_mm,
+        &opts.margins,
+        &opts.scale,
+        MM_TO_PT,
+    );
 
-    let mm_to_pt = MM_TO_PT * scale;
-
-    // Set default black color for all drawings (before colour mapping).
+    // Set default colour for all drawings.
     let (r, g, b) = colour_map.map_stroke_bw(0.0, 0.0, 0.0);
     surface.set_stroke_color(r, g, b);
 
-    // Draw schematic content.
-    // Wires: stroke as lines (0.15 mm default).
+    // Draw wires.
     for wire in &sheet.schematic.wires {
         let w = if wire.stroke_width > 0.0 {
-            (wire.stroke_width * mm_to_pt) as f32
+            (wire.stroke_width * xform.mm_to_unit) as f32
         } else {
-            (0.15 * mm_to_pt) as f32
+            (0.15 * xform.mm_to_unit) as f32
         };
-        let x1 = (wire.start.x * mm_to_pt) as f32;
-        let y1 = page_h_pt - (wire.start.y * mm_to_pt) as f32;
-        let x2 = (wire.end.x * mm_to_pt) as f32;
-        let y2 = page_h_pt - (wire.end.y * mm_to_pt) as f32;
+        let x1 = xform.x(wire.start.x);
+        let y1 = xform.pdf_y(wire.start.y, page_h_pt);
+        let x2 = xform.x(wire.end.x);
+        let y2 = xform.pdf_y(wire.end.y, page_h_pt);
         surface.stroke_line(x1, y1, x2, y2, w);
     }
 
-    // Symbols: bbox (10mm square default) + reference text.
+    // Draw symbols.
     for sym in &sheet.schematic.symbols {
-        // Compute symbol bbox: if it has pins, use their bounding box.
-        // Otherwise, use a default 10mm × 10mm square.
         let (bbox_x1, bbox_y1, bbox_x2, bbox_y2) = if let Some(lib_sym) =
             sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id)
         {
-            // Compute bbox from library symbol graphics.
             let mut x_min: f64 = 0.0;
             let mut x_max: f64 = 0.0;
             let mut y_min: f64 = 0.0;
             let mut y_max: f64 = 0.0;
             for lib_g in &lib_sym.graphics {
                 match &lib_g.graphic {
-                    signex_types::schematic::Graphic::Rectangle {
-                        start,
-                        end,
-                        ..
-                    } => {
+                    signex_types::schematic::Graphic::Rectangle { start, end, .. } => {
                         x_min = x_min.min(start.x).min(end.x);
                         x_max = x_max.max(start.x).max(end.x);
                         y_min = y_min.min(start.y).min(end.y);
@@ -390,7 +316,6 @@ fn build_page_content(
                     _ => {}
                 }
             }
-            // Add symbol position offset.
             let w = (x_max - x_min).max(10.0);
             let h = (y_max - y_min).max(10.0);
             (
@@ -400,7 +325,6 @@ fn build_page_content(
                 sym.position.y + h / 2.0,
             )
         } else {
-            // Default 10mm box.
             (
                 sym.position.x - 5.0,
                 sym.position.y - 5.0,
@@ -409,31 +333,29 @@ fn build_page_content(
             )
         };
 
-        let x = (bbox_x1 * mm_to_pt) as f32;
-        let y = page_h_pt - (bbox_y2 * mm_to_pt) as f32;
-        let w = ((bbox_x2 - bbox_x1) * mm_to_pt) as f32;
-        let h = ((bbox_y2 - bbox_y1) * mm_to_pt) as f32;
-        surface.stroke_rect(x, y, w, h, (0.1 * mm_to_pt) as f32);
+        let sx = xform.x(bbox_x1);
+        // PDF rect origin is bottom-left; bbox_y2 is the schematic bottom edge.
+        let sy = xform.pdf_y(bbox_y2, page_h_pt);
+        let sw = ((bbox_x2 - bbox_x1) * xform.mm_to_unit) as f32;
+        let sh = ((bbox_y2 - bbox_y1) * xform.mm_to_unit) as f32;
+        surface.stroke_rect(sx, sy, sw, sh, (0.1 * xform.mm_to_unit) as f32);
 
-        // Reference text at symbol center.
         if !sym.reference.is_empty() {
-            let cx = ((bbox_x1 + bbox_x2) / 2.0 * mm_to_pt) as f32;
-            let cy = page_h_pt - ((bbox_y1 + bbox_y2) / 2.0 * mm_to_pt) as f32;
-            // Use Iosevka for schematic text
+            let cx = xform.x((bbox_x1 + bbox_x2) / 2.0);
+            let cy = xform.pdf_y((bbox_y1 + bbox_y2) / 2.0, page_h_pt);
             surface.text_at(cx, cy, PdfFont::IosevkaRegular.alias(), 9.0, &sym.reference);
         }
     }
 
-    // Labels: text at position.
+    // Draw labels.
     for label in &sheet.schematic.labels {
-        let x = (label.position.x * mm_to_pt) as f32;
-        let y = page_h_pt - (label.position.y * mm_to_pt) as f32;
+        let x = xform.x(label.position.x);
+        let y = xform.pdf_y(label.position.y, page_h_pt);
         let size = if label.font_size > 0.0 {
-            (label.font_size * mm_to_pt) as f32
+            (label.font_size * xform.mm_to_unit) as f32
         } else {
-            9.0 // default
+            9.0
         };
-        // Use Iosevka for schematic labels
         surface.text_at(x, y, PdfFont::IosevkaRegular.alias(), size, &label.text);
     }
 
@@ -441,7 +363,6 @@ fn build_page_content(
     if opts.include_title_block {
         if let Some(template_id) = &opts.sheet_template {
             if let Some(template) = crate::template::load_builtin(template_id) {
-                // Draw outer page border rect using template's frame border_margin_mm.
                 let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
                 surface.stroke_rect(
                     frame_margin_pt,
@@ -453,14 +374,18 @@ fn build_page_content(
 
                 let sub_ctx = SubstitutionContext {
                     metadata: &ctx.metadata,
-                    filename: sheet.path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                    filename: sheet
+                        .path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
                     sheet_name: sheet.sheet_name.clone(),
                     sheet_number: sheet.sheet_number,
                     sheet_count: sheet.sheet_count,
                     signex_version: env!("CARGO_PKG_VERSION"),
                 };
 
-                // Draw title block frame (bottom-right).
                 let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
                 let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
                 let tb_x = page_w_pt - tb_width_pt;
@@ -473,7 +398,6 @@ fn build_page_content(
                     (0.2 * MM_TO_PT) as f32,
                 );
 
-                // Emit title block fields with proper font and substitution.
                 for field in &template.title_block.fields {
                     let resolved = crate::resolve(&field.default_text, &sub_ctx);
                     let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;

@@ -61,7 +61,7 @@ impl PreviewRasterizer {
         ctx.sheets
             .iter()
             .filter_map(|sheet| {
-                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts.dpi, ctx)
+                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx)
             })
             .collect()
     }
