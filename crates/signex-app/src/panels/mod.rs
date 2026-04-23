@@ -499,6 +499,8 @@ pub enum PanelMsg {
     EditLabelText(uuid::Uuid, String),
     /// Edit a label's horizontal justification.
     EditLabelJustifyH(uuid::Uuid, signex_types::schematic::HAlign),
+    /// Edit a label direction preset (rotation + horizontal justify).
+    EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
     /// Edit a label's rotation (degrees).
     EditLabelRotation(uuid::Uuid, f64),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
@@ -1979,7 +1981,13 @@ fn view_selected_element_properties<'a>(
                         c = c.push(form_label("Justification", muted));
                         c = c.push(
                             container(justification_grid(
-                                id, justify_h, input_bg, input_bdr, primary, muted,
+                                id,
+                                rotation_deg,
+                                justify_h,
+                                input_bg,
+                                input_bdr,
+                                primary,
+                                muted,
                             ))
                             .padding([4, 8]),
                         );
@@ -3851,6 +3859,7 @@ fn net_params_add_bar<'a>(
 /// but don't mutate the label.
 fn justification_grid(
     id: uuid::Uuid,
+    rotation_deg: f64,
     h: signex_types::schematic::HAlign,
     input_bg: Color,
     input_bdr: Color,
@@ -3935,63 +3944,68 @@ fn justification_grid(
         })
         .into()
     };
-    // Only the middle-row cell of the matching column lights up — labels in
-    // KiCad have no vertical-justify field, so the top/bottom rows of the
-    // 9-grid are visual controls only (a future addition).
-    let hl_mid = |target: HAlign| -> bool { h == target };
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum LabelDir {
+        Left,
+        Up,
+        Right,
+        Down,
+    }
+
+    let normalize_rot = |deg: f64| {
+        let r = (deg.round() as i32) % 360;
+        if r < 0 { r + 360 } else { r }
+    };
+
+    let current_dir = {
+        match normalize_rot(rotation_deg) {
+            90 => LabelDir::Up,
+            270 => LabelDir::Down,
+            180 => {
+                if matches!(h, HAlign::Right) {
+                    LabelDir::Right
+                } else {
+                    LabelDir::Left
+                }
+            }
+            _ => {
+                if matches!(h, HAlign::Right) {
+                    LabelDir::Left
+                } else {
+                    LabelDir::Right
+                }
+            }
+        }
+    };
+
+    let to_msg = |dir: LabelDir| -> PanelMsg {
+        match dir {
+            LabelDir::Right => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Left),
+            LabelDir::Left => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Right),
+            LabelDir::Up => PanelMsg::EditLabelDirection(id, 90.0, HAlign::Left),
+            LabelDir::Down => PanelMsg::EditLabelDirection(id, 270.0, HAlign::Left),
+        }
+    };
+
+    let hl = |dir: LabelDir| current_dir == dir;
+
     iced::widget::column![
         iced::widget::row![
-            cell(
-                &ICON_TL,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
-            ),
-            cell(
-                &ICON_T,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
-            ),
-            cell(
-                &ICON_TR,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
-            ),
+            cell(&ICON_TL, hl(LabelDir::Up), to_msg(LabelDir::Up)),
+            cell(&ICON_T, hl(LabelDir::Up), to_msg(LabelDir::Up)),
+            cell(&ICON_TR, hl(LabelDir::Up), to_msg(LabelDir::Up)),
         ]
         .spacing(2),
         iced::widget::row![
-            cell(
-                &ICON_L,
-                hl_mid(HAlign::Left),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
-            ),
-            cell(
-                &ICON_C,
-                hl_mid(HAlign::Center),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
-            ),
-            cell(
-                &ICON_R,
-                hl_mid(HAlign::Right),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
-            ),
+            cell(&ICON_L, hl(LabelDir::Left), to_msg(LabelDir::Left)),
+            cell(&ICON_C, false, to_msg(current_dir)),
+            cell(&ICON_R, hl(LabelDir::Right), to_msg(LabelDir::Right)),
         ]
         .spacing(2),
         iced::widget::row![
-            cell(
-                &ICON_BL,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
-            ),
-            cell(
-                &ICON_B,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
-            ),
-            cell(
-                &ICON_BR,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
-            ),
+            cell(&ICON_BL, hl(LabelDir::Down), to_msg(LabelDir::Down)),
+            cell(&ICON_B, hl(LabelDir::Down), to_msg(LabelDir::Down)),
+            cell(&ICON_BR, hl(LabelDir::Down), to_msg(LabelDir::Down)),
         ]
         .spacing(2),
     ]

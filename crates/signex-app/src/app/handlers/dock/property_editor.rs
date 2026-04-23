@@ -155,6 +155,18 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditLabelDirection(uuid, deg, h) => {
+                self.apply_engine_command(
+                    signex_engine::Command::UpdateLabelProps {
+                        label_id: *uuid,
+                        font_size_mm: None,
+                        justify: Some(*h),
+                        rotation_degrees: Some(*deg),
+                    },
+                    true,
+                    true,
+                );
+            }
             crate::panels::PanelMsg::EditLabelRotation(uuid, deg) => {
                 self.apply_engine_command(
                     signex_engine::Command::UpdateLabelProps {
