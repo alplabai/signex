@@ -52,6 +52,26 @@ struct RichRun {
     text: String,
     scale: f32,
     baseline_offset: f32,
+    kind: RichRunKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RichRunKind {
+    Normal,
+    Overbar,
+    Subscript,
+    Superscript,
+}
+
+// Keep horizontal advance in sync with label metric tuning (`label_text_aabb`).
+const GLYPH_ADVANCE_FACTOR: f32 = 0.55;
+
+fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
+    match (prev, next) {
+        // KiCad keeps suffix indices visually tight to the preceding glyph.
+        (RichRunKind::Normal | RichRunKind::Overbar, RichRunKind::Subscript | RichRunKind::Superscript) => -size * 0.16,
+        _ => 0.0,
+    }
 }
 
 fn rich_runs(input: &str) -> Vec<RichRun> {
@@ -62,26 +82,36 @@ fn rich_runs(input: &str) -> Vec<RichRun> {
             text: expanded,
             scale: 1.0,
             baseline_offset: 0.0,
+            kind: RichRunKind::Normal,
         }];
     }
 
     segments
         .into_iter()
         .map(|segment| match segment {
-            RichSegment::Normal(text) | RichSegment::Overbar(text) => RichRun {
+            RichSegment::Normal(text) => RichRun {
                 text,
                 scale: 1.0,
                 baseline_offset: 0.0,
+                kind: RichRunKind::Normal,
+            },
+            RichSegment::Overbar(text) => RichRun {
+                text,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Overbar,
             },
             RichSegment::Subscript(text) => RichRun {
                 text,
                 scale: 0.72,
-                baseline_offset: 0.26,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Subscript,
             },
             RichSegment::Superscript(text) => RichRun {
                 text,
                 scale: 0.72,
                 baseline_offset: -0.34,
+                kind: RichRunKind::Superscript,
             },
         })
         .filter(|run| !run.text.is_empty())
@@ -357,7 +387,7 @@ pub fn draw_rich_text(
     let runs = rich_runs(input);
     let total_w: f32 = runs
         .iter()
-        .map(|run| run.text.chars().count() as f32 * size * run.scale * 0.6)
+        .map(|run| run.text.chars().count() as f32 * size * run.scale * GLYPH_ADVANCE_FACTOR)
         .sum();
 
     let mut cursor_x = match h_align {
@@ -372,7 +402,12 @@ pub fn draw_rich_text(
         iced::alignment::Vertical::Bottom => anchor.y - size * 0.2,
     };
 
+    let mut prev_kind: Option<RichRunKind> = None;
     for run in runs {
+        if let Some(prev) = prev_kind {
+            cursor_x += run_pair_kerning(prev, run.kind, size);
+        }
+
         let run_size = size * run.scale;
         let run_y = base_y + size * run.baseline_offset;
         let text = canvas::Text {
@@ -400,7 +435,8 @@ pub fn draw_rich_text(
             frame.fill_text(text);
         }
 
-        cursor_x += run.text.chars().count() as f32 * run_size * 0.6;
+        cursor_x += run.text.chars().count() as f32 * run_size * GLYPH_ADVANCE_FACTOR;
+        prev_kind = Some(run.kind);
     }
 }
 
@@ -654,4 +690,36 @@ pub fn draw_text_prop(
     let rad = -(draw_rotation.to_radians() as f32);
 
     draw_rich_text(frame, &evaluated, sp, color, screen_font, h_align, v_align, rad);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RichRunKind, run_pair_kerning};
+
+    #[test]
+    fn kerning_tightens_normal_to_subscript_gap() {
+        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Subscript, 10.0);
+        assert!(k < 0.0);
+    }
+
+    #[test]
+    fn kerning_does_not_affect_normal_to_normal() {
+        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Normal, 10.0);
+        assert_eq!(k, 0.0);
+    }
+
+    #[test]
+    fn subscript_keeps_same_baseline_as_normal() {
+        let runs = super::rich_runs("DIVIDED-S_{3}");
+        let s_run = runs
+            .iter()
+            .find(|run| run.kind == RichRunKind::Normal && run.text.ends_with('S'))
+            .expect("normal run with S should exist");
+        let sub_run = runs
+            .iter()
+            .find(|run| run.kind == RichRunKind::Subscript && run.text == "3")
+            .expect("subscript run should exist");
+
+        assert_eq!(s_run.baseline_offset, sub_run.baseline_offset);
+    }
 }

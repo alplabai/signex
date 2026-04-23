@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Write};
+use std::collections::BTreeMap;
 
 use signex_types::property::SchematicProperty;
 use signex_types::schematic::*;
@@ -7,11 +7,6 @@ use crate::sexpr_render::{
     SExpr, at_node, atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr,
     yes_no_node,
 };
-
-// String's Write impl is infallible -- these macros avoid many `.unwrap()` calls.
-macro_rules! wln {
-    ($dst:expr, $($arg:tt)*) => { let _ = writeln!($dst, $($arg)*); };
-}
 
 // ---------------------------------------------------------------------------
 // KiCad S-expression string escaping
@@ -629,6 +624,186 @@ fn drawing_node(drawing: &SchDrawing) -> SExpr {
     }
 }
 
+fn title_block_node(sheet: &SchematicSheet) -> Option<SExpr> {
+    if sheet.title_block.is_empty() {
+        return None;
+    }
+
+    let mut children = Vec::new();
+    if let Some(title) = sheet.title_block.get("title") {
+        children.push(node("title", vec![atom(title)]));
+    }
+    if let Some(date) = sheet.title_block.get("date") {
+        children.push(node("date", vec![atom(date)]));
+    }
+    if let Some(rev) = sheet.title_block.get("rev") {
+        children.push(node("rev", vec![atom(rev)]));
+    }
+    if let Some(company) = sheet.title_block.get("company") {
+        children.push(node("company", vec![atom(company)]));
+    }
+    for i in 1..=9 {
+        let key = format!("comment_{}", i);
+        if let Some(comment) = sheet.title_block.get(&key) {
+            children.push(node("comment", vec![atom(i), atom(comment)]));
+        }
+    }
+
+    Some(node("title_block", children))
+}
+
+fn junction_node(j: &Junction) -> SExpr {
+    node(
+        "junction",
+        vec![
+            at_node(j.position.x, j.position.y, None),
+            node("diameter", vec![atom(0)]),
+            node("color", vec![atom(0), atom(0), atom(0), atom(0)]),
+            node("uuid", vec![atom(j.uuid.to_string())]),
+        ],
+    )
+}
+
+fn no_connect_node(nc: &NoConnect) -> SExpr {
+    node(
+        "no_connect",
+        vec![
+            at_node(nc.position.x, nc.position.y, None),
+            node("uuid", vec![atom(nc.uuid.to_string())]),
+        ],
+    )
+}
+
+fn bus_node(b: &Bus) -> SExpr {
+    node(
+        "bus",
+        vec![
+            node("pts", vec![xy_node(b.start), xy_node(b.end)]),
+            node(
+                "stroke",
+                vec![
+                    node("width", vec![atom(0)]),
+                    node("type", vec![raw("default")]),
+                    node("color", vec![atom(0), atom(0), atom(0), atom(0)]),
+                ],
+            ),
+            node("uuid", vec![atom(b.uuid.to_string())]),
+        ],
+    )
+}
+
+fn bus_entry_node(be: &BusEntry) -> SExpr {
+    node(
+        "bus_entry",
+        vec![
+            at_node(be.position.x, be.position.y, None),
+            node("size", vec![atom(be.size.0), atom(be.size.1)]),
+            node(
+                "stroke",
+                vec![
+                    node("width", vec![atom(0)]),
+                    node("type", vec![raw("default")]),
+                    node("color", vec![atom(0), atom(0), atom(0), atom(0)]),
+                ],
+            ),
+            node("uuid", vec![atom(be.uuid.to_string())]),
+        ],
+    )
+}
+
+fn wire_node(wire: &Wire) -> SExpr {
+    node(
+        "wire",
+        vec![
+            node("pts", vec![xy_node(wire.start), xy_node(wire.end)]),
+            node(
+                "stroke",
+                vec![node("width", vec![atom(0)]), node("type", vec![raw("default")])],
+            ),
+            node("uuid", vec![atom(wire.uuid.to_string())]),
+        ],
+    )
+}
+
+fn no_erc_node(ne: &NoConnect) -> SExpr {
+    node(
+        "no_erc",
+        vec![
+            at_node(ne.position.x, ne.position.y, None),
+            node("uuid", vec![atom(ne.uuid.to_string())]),
+        ],
+    )
+}
+
+fn label_node(l: &Label) -> SExpr {
+    let keyword = label_type_keyword(l.label_type);
+    let mut items = vec![atom(&l.text)];
+    if !l.shape.is_empty() {
+        items.push(node("shape", vec![raw(l.shape.as_str())]));
+    }
+    items.push(at_node(l.position.x, l.position.y, Some(l.rotation)));
+
+    let justify = if l.justify == HAlign::Left {
+        node("justify", vec![raw("bottom")])
+    } else {
+        node("justify", vec![raw(halign_str(l.justify)), raw("bottom")])
+    };
+    items.push(effects_node(l.font_size, None, false, false, vec![justify]));
+    items.push(node("uuid", vec![atom(l.uuid.to_string())]));
+
+    node(keyword, items)
+}
+
+fn root_sheet_instance_node(sheet: &SchematicSheet) -> SExpr {
+    node(
+        "path",
+        vec![atom("/"), node("page", vec![atom(&sheet.root_sheet_page)])],
+    )
+}
+
+fn kicad_sch_root_node(sheet: &SchematicSheet) -> SExpr {
+    let mut items = vec![
+        node("version", vec![atom(sheet.version)]),
+        node("generator", vec![atom("signex")]),
+        node("generator_version", vec![atom("0.1")]),
+        node("uuid", vec![atom(sheet.uuid.to_string())]),
+        node("paper", vec![atom(&sheet.paper_size)]),
+    ];
+
+    if let Some(title_block) = title_block_node(sheet) {
+        items.push(title_block);
+    }
+
+    if !sheet.lib_symbols.is_empty() {
+        let mut lib_ids: Vec<_> = sheet.lib_symbols.keys().collect();
+        lib_ids.sort();
+        let mut lib_children = Vec::new();
+        for id in lib_ids {
+            lib_children.push(lib_symbol_node(&sheet.lib_symbols[id]));
+        }
+        items.push(node("lib_symbols", lib_children));
+    }
+
+    items.extend(sheet.junctions.iter().map(junction_node));
+    items.extend(sheet.no_connects.iter().map(no_connect_node));
+    items.extend(sheet.buses.iter().map(bus_node));
+    items.extend(sheet.bus_entries.iter().map(bus_entry_node));
+    items.extend(sheet.wires.iter().map(wire_node));
+    items.extend(sheet.labels.iter().map(label_node));
+    items.extend(sheet.symbols.iter().map(symbol_node));
+    items.extend(sheet.no_erc_directives.iter().map(no_erc_node));
+    items.extend(sheet.text_notes.iter().map(text_note_node));
+    items.extend(sheet.drawings.iter().map(drawing_node));
+    items.extend(sheet.child_sheets.iter().map(child_sheet_node));
+
+    items.push(node(
+        "sheet_instances",
+        vec![root_sheet_instance_node(sheet)],
+    ));
+
+    node("kicad_sch", items)
+}
+
 fn effects_with_justify_node(justify_tokens: &[&str]) -> SExpr {
     let mut extras = Vec::new();
     if !justify_tokens.is_empty() {
@@ -842,161 +1017,7 @@ fn lib_symbol_node(lib: &LibSymbol) -> SExpr {
 /// Serialize a [`SchematicSheet`] to the KiCad `.kicad_sch` S-expression format.
 pub fn write_schematic(sheet: &SchematicSheet) -> String {
     let mut out = String::with_capacity(64 * 1024);
-
-    wln!(out, "(kicad_sch");
-    wln!(out, "  (version {})", sheet.version);
-    wln!(out, "  (generator \"signex\")");
-    wln!(out, "  (generator_version \"0.1\")");
-    wln!(out, "  (uuid \"{}\")", sheet.uuid);
-    wln!(out, "  (paper \"{}\")", sheet.paper_size);
-
-    // Title block
-    write_title_block(&mut out, sheet);
-
-    // lib_symbols — sort keys for deterministic output order
-    if !sheet.lib_symbols.is_empty() {
-        wln!(out, "  (lib_symbols");
-        let mut lib_ids: Vec<_> = sheet.lib_symbols.keys().collect();
-        lib_ids.sort();
-        for id in lib_ids {
-            let lib = &sheet.lib_symbols[id];
-            write_lib_symbol(&mut out, id, lib);
-        }
-        wln!(out, "  )");
-    }
-
-    // Junctions
-    for j in &sheet.junctions {
-        wln!(out, "  (junction");
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(j.position.x),
-            fmt_f64(j.position.y)
-        );
-        wln!(out, "    (diameter 0)");
-        wln!(out, "    (color 0 0 0 0)");
-        wln!(out, "    (uuid \"{}\")", j.uuid);
-        wln!(out, "  )");
-    }
-
-    // No connects
-    for nc in &sheet.no_connects {
-        wln!(out, "  (no_connect");
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(nc.position.x),
-            fmt_f64(nc.position.y)
-        );
-        wln!(out, "    (uuid \"{}\")", nc.uuid);
-        wln!(out, "  )");
-    }
-
-    // Buses
-    for b in &sheet.buses {
-        wln!(out, "  (bus");
-        wln!(out, "    (pts");
-        wln!(
-            out,
-            "      (xy {} {}) (xy {} {})",
-            fmt_f64(b.start.x),
-            fmt_f64(b.start.y),
-            fmt_f64(b.end.x),
-            fmt_f64(b.end.y)
-        );
-        wln!(out, "    )");
-        wln!(out, "    (stroke (width 0) (type default) (color 0 0 0 0))");
-        wln!(out, "    (uuid \"{}\")", b.uuid);
-        wln!(out, "  )");
-    }
-
-    // Bus entries
-    for be in &sheet.bus_entries {
-        wln!(out, "  (bus_entry");
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(be.position.x),
-            fmt_f64(be.position.y)
-        );
-        wln!(
-            out,
-            "    (size {} {})",
-            fmt_f64(be.size.0),
-            fmt_f64(be.size.1)
-        );
-        wln!(out, "    (stroke (width 0) (type default) (color 0 0 0 0))");
-        wln!(out, "    (uuid \"{}\")", be.uuid);
-        wln!(out, "  )");
-    }
-
-    // Wires
-    for wire in &sheet.wires {
-        wln!(out, "  (wire");
-        wln!(out, "    (pts");
-        wln!(
-            out,
-            "      (xy {} {}) (xy {} {})",
-            fmt_f64(wire.start.x),
-            fmt_f64(wire.start.y),
-            fmt_f64(wire.end.x),
-            fmt_f64(wire.end.y)
-        );
-        wln!(out, "    )");
-        wln!(out, "    (stroke");
-        wln!(out, "      (width 0)");
-        wln!(out, "      (type default)");
-        wln!(out, "    )");
-        wln!(out, "    (uuid \"{}\")", wire.uuid);
-        wln!(out, "  )");
-    }
-
-    // Labels
-    for l in &sheet.labels {
-        write_label(&mut out, l);
-    }
-
-    // Symbols (instances)
-    for sym in &sheet.symbols {
-        write_symbol(&mut out, sym);
-    }
-
-    // No ERC directives
-    for ne in &sheet.no_erc_directives {
-        wln!(out, "  (no_erc");
-        wln!(
-            out,
-            "    (at {} {})",
-            fmt_f64(ne.position.x),
-            fmt_f64(ne.position.y)
-        );
-        wln!(out, "    (uuid \"{}\")", ne.uuid);
-        wln!(out, "  )");
-    }
-
-    // Text notes
-    for note in &sheet.text_notes {
-        write_text_note(&mut out, note);
-    }
-
-    // Drawing objects
-    for d in &sheet.drawings {
-        write_drawing(&mut out, d);
-    }
-
-    // Child sheets
-    for cs in &sheet.child_sheets {
-        write_child_sheet(&mut out, cs);
-    }
-
-    wln!(out, "  (sheet_instances");
-    wln!(out, "    (path \"/\"");
-    wln!(out, "      (page \"{}\")", escape(&sheet.root_sheet_page));
-    wln!(out, "    )");
-    wln!(out, "  )");
-
-    wln!(out, ")");
+    write_rendered_sexpr(&mut out, 0, kicad_sch_root_node(sheet));
     out
 }
 
@@ -1004,62 +1025,8 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
 // Section writers
 // ---------------------------------------------------------------------------
 
-fn write_title_block(out: &mut String, sheet: &SchematicSheet) {
-    if sheet.title_block.is_empty() {
-        return;
-    }
-    wln!(out, "  (title_block");
-    if let Some(title) = sheet.title_block.get("title") {
-        wln!(out, "    (title \"{}\")", escape(title));
-    }
-    if let Some(date) = sheet.title_block.get("date") {
-        wln!(out, "    (date \"{}\")", escape(date));
-    }
-    if let Some(rev) = sheet.title_block.get("rev") {
-        wln!(out, "    (rev \"{}\")", escape(rev));
-    }
-    if let Some(company) = sheet.title_block.get("company") {
-        wln!(out, "    (company \"{}\")", escape(company));
-    }
-    for i in 1..=9 {
-        let key = format!("comment_{}", i);
-        if let Some(comment) = sheet.title_block.get(&key) {
-            wln!(out, "    (comment {} \"{}\")", i, escape(comment));
-        }
-    }
-    wln!(out, "  )");
-}
-
 fn write_label(out: &mut String, l: &Label) {
-    let keyword = label_type_keyword(l.label_type);
-    wln!(out, "  ({} \"{}\"", keyword, escape(&l.text));
-    if !l.shape.is_empty() {
-        wln!(out, "    (shape {})", escape(&l.shape));
-    }
-    wln!(
-        out,
-        "    (at {} {} {})",
-        fmt_f64(l.position.x),
-        fmt_f64(l.position.y),
-        fmt_f64(l.rotation)
-    );
-    wln!(out, "    (effects");
-    wln!(out, "      (font");
-    wln!(
-        out,
-        "        (size {} {})",
-        fmt_f64(l.font_size),
-        fmt_f64(l.font_size)
-    );
-    wln!(out, "      )");
-    let needs_justify = l.justify != HAlign::Left
-        || matches!(l.label_type, LabelType::Global | LabelType::Hierarchical);
-    if needs_justify {
-        wln!(out, "      (justify {})", halign_str(l.justify));
-    }
-    wln!(out, "    )");
-    wln!(out, "    (uuid \"{}\")", l.uuid);
-    wln!(out, "  )");
+    write_rendered_sexpr(out, 2, label_node(l));
 }
 
 fn write_symbol(out: &mut String, sym: &Symbol) {
@@ -1318,6 +1285,45 @@ mod tests {
 
         let out = render(lib_pin_node(&pin), 8);
         assert!(out.contains("(hide yes)"));
+    }
+
+    #[test]
+    fn writes_global_label_without_forced_left_justify() {
+        let mut out = String::new();
+        let label = Label {
+            uuid: Default::default(),
+            text: "NET_A".to_string(),
+            position: Point { x: 10.0, y: 10.0 },
+            rotation: 0.0,
+            label_type: LabelType::Global,
+            shape: "input".to_string(),
+            font_size: SCHEMATIC_TEXT_MM,
+            justify: HAlign::Left,
+        };
+
+        write_label(&mut out, &label);
+
+        assert!(!out.contains("(justify left)"));
+        assert!(out.contains("(justify bottom)"));
+    }
+
+    #[test]
+    fn writes_right_aligned_label_with_bottom_vertical_justify() {
+        let mut out = String::new();
+        let label = Label {
+            uuid: Default::default(),
+            text: "NET_B".to_string(),
+            position: Point { x: 20.0, y: 5.0 },
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: SCHEMATIC_TEXT_MM,
+            justify: HAlign::Right,
+        };
+
+        write_label(&mut out, &label);
+
+        assert!(out.contains("(justify right bottom)"));
     }
 
     #[test]
