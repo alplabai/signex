@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use signex_types::markup::{
-    ExpressionEvalContext, RichSegment, evaluate_expressions, parse_markup,
+    ExpressionEvalContext, RichSegment, evaluate_expressions, kicad_auto_net_name_from_pins,
+    parse_markup,
 };
 use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
@@ -293,7 +294,9 @@ pub fn build_symbol_pin_net_lookup(
         }
     }
 
-    let mut out: HashMap<Uuid, HashMap<String, String>> = HashMap::new();
+    let mut root_pins: HashMap<Node, Vec<(String, String)>> = HashMap::new();
+    let mut pin_entries: Vec<(Uuid, String, Node)> = Vec::new();
+
     for sym in &snapshot.symbols {
         let Some(lib) = snapshot.lib_symbols.get(&sym.lib_id) else {
             continue;
@@ -304,15 +307,33 @@ pub fn build_symbol_pin_net_lookup(
             }
             let world = transform_pin_position(sym, &lp.pin.position);
             let root = find(&mut parent, q(world));
-            let net_name = root_name
-                .get(&root)
-                .map(|(_, n)| n.clone())
-                .unwrap_or_default();
-            if !net_name.is_empty() {
-                out.entry(sym.uuid)
-                    .or_default()
-                    .insert(lp.pin.number.clone(), net_name);
-            }
+            root_pins
+                .entry(root)
+                .or_default()
+                .push((sym.reference.clone(), lp.pin.number.clone()));
+            pin_entries.push((sym.uuid, lp.pin.number.clone(), root));
+        }
+    }
+
+    let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
+    for root in root_pins.keys().copied() {
+        let named = root_name.get(&root).map(|(_, n)| n.clone()).unwrap_or_default();
+        if !named.is_empty() {
+            resolved_root_name.insert(root, named);
+            continue;
+        }
+        let auto = root_pins
+            .get(&root)
+            .and_then(|pins| kicad_auto_net_name_from_pins(pins))
+            .unwrap_or_default();
+        resolved_root_name.insert(root, auto);
+    }
+
+    let mut out: HashMap<Uuid, HashMap<String, String>> = HashMap::new();
+    for (sym_uuid, pin_number, root) in pin_entries {
+        let net_name = resolved_root_name.get(&root).cloned().unwrap_or_default();
+        if !net_name.is_empty() {
+            out.entry(sym_uuid).or_default().insert(pin_number, net_name);
         }
     }
 
