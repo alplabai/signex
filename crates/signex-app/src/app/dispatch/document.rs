@@ -130,6 +130,16 @@ impl Signex {
                 self.handle_dismiss_export_error();
                 self.finish_update()
             }
+            Message::ExportBomRequested => {
+                let task = self
+                    .handle_export_bom_requested()
+                    .unwrap_or_else(iced::Task::none);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::ExportBomFinished(result) => {
+                let task = self.handle_export_bom_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
             _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
