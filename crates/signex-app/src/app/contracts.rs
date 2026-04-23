@@ -149,6 +149,12 @@ pub enum Message {
     /// window — lets us stash the id so `view(id)` knows which window is
     /// the primary app shell versus a detached modal / undocked tab.
     MainWindowOpened(iced::window::Id),
+    /// OS-reported scale factor for the main window. Fired on window
+    /// open and on every main-window resize (winit emits a resize event
+    /// when Windows moves the window across monitors with different
+    /// scale factors). Stored in `ui_state.main_window_scale` and used
+    /// by the menu bar to pick the crispest wordmark PNG tier.
+    MainWindowScaleChanged(f32),
     /// Fired when any secondary (non-main) window closes. Cleans up the
     /// corresponding entry in `ui_state.windows` so the app can re-attach
     /// the modal or tab to the main window's overlay stack.
