@@ -9,14 +9,6 @@ use crate::sexpr_render::{
 };
 
 // ---------------------------------------------------------------------------
-// KiCad S-expression string escaping
-// ---------------------------------------------------------------------------
-
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-// ---------------------------------------------------------------------------
 // Enum-to-KiCad-string helpers
 // ---------------------------------------------------------------------------
 
@@ -80,23 +72,6 @@ fn label_type_keyword(lt: LabelType) -> &'static str {
         LabelType::Net | LabelType::Power => "label",
         LabelType::Global => "global_label",
         LabelType::Hierarchical => "hierarchical_label",
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Float formatting: strip trailing zeros for cleaner output
-// ---------------------------------------------------------------------------
-
-fn fmt_f64(v: f64) -> String {
-    if v == v.trunc() {
-        // Integer value -- emit without decimal cruft
-        format!("{}", v as i64)
-    } else {
-        // Trim trailing zeros
-        let s = format!("{:.6}", v);
-        let s = s.trim_end_matches('0');
-        let s = s.trim_end_matches('.');
-        s.to_string()
     }
 }
 
@@ -755,7 +730,8 @@ fn label_node(l: &Label) -> SExpr {
             vec![raw(halign_str(l.justify)), raw(valign_str(l.justify_v))],
         )
     };
-    items.push(effects_node(l.font_size, None, false, false, vec![justify]));
+    let extras = vec![justify];
+    items.push(effects_node(l.font_size, None, false, false, extras));
     items.push(node("uuid", vec![atom(l.uuid.to_string())]));
 
     node(keyword, items)
@@ -1032,30 +1008,16 @@ pub fn write_schematic(sheet: &SchematicSheet) -> String {
 // Section writers
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn write_label(out: &mut String, l: &Label) {
     write_rendered_sexpr(out, 2, label_node(l));
-}
-
-fn write_symbol(out: &mut String, sym: &Symbol) {
-    write_rendered_sexpr(out, 2, symbol_node(sym));
-}
-
-fn write_text_note(out: &mut String, note: &TextNote) {
-    write_rendered_sexpr(out, 2, text_note_node(note));
-}
-
-fn write_drawing(out: &mut String, d: &SchDrawing) {
-    write_rendered_sexpr(out, 2, drawing_node(d));
-}
-
-fn write_child_sheet(out: &mut String, cs: &ChildSheet) {
-    write_rendered_sexpr(out, 2, child_sheet_node(cs));
 }
 
 // ---------------------------------------------------------------------------
 // lib_symbol writer
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn write_lib_symbol(out: &mut String, _id: &str, lib: &LibSymbol) {
     write_rendered_sexpr(out, 4, lib_symbol_node(lib));
 }
@@ -1333,6 +1295,29 @@ mod tests {
         write_label(&mut out, &label);
 
         assert!(out.contains("(justify right bottom)"));
+        }
+
+        #[test]
+        fn roundtrip_preserves_label_vertical_justify() {
+                let content = r#"(kicad_sch
+    (version 20231120)
+    (generator "eeschema")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (label "DIVIDED-S_{1}"
+        (at 20 20 90)
+        (effects (font (size 1.27 1.27)) (justify right top))
+        (uuid "00000000-0000-0000-0000-000000000002")
+    )
+)"#;
+
+                let parsed = kicad_parser::parse_schematic(content).expect("parse");
+                let rendered = write_schematic(&parsed);
+                let reparsed = kicad_parser::parse_schematic(&rendered).expect("reparse");
+
+                assert_eq!(reparsed.labels.len(), 1);
+                assert_eq!(reparsed.labels[0].justify, HAlign::Right);
+                assert_eq!(reparsed.labels[0].justify_v, VAlign::Top);
     }
 
     #[test]

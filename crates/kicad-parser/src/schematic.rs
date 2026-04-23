@@ -82,12 +82,11 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
-    // KiCad property texts (Reference/Value/custom fields) are baseline-anchored
-    // by default in schematic editor behavior. When a justify token is omitted
-    // or only horizontal token is present (e.g. `(justify left)`), treating the
-    // vertical axis as Bottom matches on-canvas placement more closely.
+    // KiCad property texts (Reference/Value/custom fields) default to centered
+    // alignment on unspecified axes. For example `(justify left)` means
+    // horizontal left + vertical center.
     let mut justify_h = HAlign::Left;
-    let mut justify_v = VAlign::Bottom;
+    let mut justify_v = VAlign::Center;
     let mut seen_h = false;
     let mut seen_v = false;
     if let Some(j) = justify {
@@ -1923,7 +1922,7 @@ mod tests {
     }
 
         #[test]
-        fn parse_property_justify_left_defaults_vertical_to_bottom() {
+        fn parse_property_justify_left_defaults_vertical_to_center() {
                 let content = r#"(kicad_sch
     (version 20231120)
     (generator "eeschema")
@@ -1945,7 +1944,7 @@ mod tests {
                 let sym = &sheet.symbols[0];
                 let value_text = sym.val_text.as_ref().expect("value text exists");
                 assert_eq!(value_text.justify_h, HAlign::Left);
-                assert_eq!(value_text.justify_v, VAlign::Bottom);
+                assert_eq!(value_text.justify_v, VAlign::Center);
         }
 
             #[test]
