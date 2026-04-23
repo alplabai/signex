@@ -65,6 +65,17 @@ pub enum DockMessage {
     },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
+    /// Pointer entered a dock tab — feeds the hover highlight on
+    /// inactive tabs. Container-style tabs can't read `button::Status`,
+    /// so we track the hovered tab in `DockArea::hovered_tab` via
+    /// `mouse_area::on_enter` / `on_exit`.
+    TabHoverEnter(PanelPosition, usize),
+    /// Pointer left the named dock tab. Carries the tab's coords so we
+    /// only clear `hovered_tab` when the exit matches the currently
+    /// hovered tab — otherwise a fast move from A to B where iced
+    /// fires `on_enter(B)` before `on_exit(A)` would blow the new
+    /// hover away and leave the highlight stuck off.
+    TabHoverExit(PanelPosition, usize),
     /// Move a floating panel by delta.
     #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
@@ -105,6 +116,9 @@ pub struct DockArea {
     pub floating: Vec<FloatingPanel>,
     /// Active tab drag: (region, tab index). Set on mouse-down, cleared on release or undock.
     pub tab_drag: Option<(PanelPosition, usize)>,
+    /// Dock tab currently under the pointer, for Altium-style hover
+    /// highlight on inactive tabs. `None` when no tab is hovered.
+    pub hovered_tab: Option<(PanelPosition, usize)>,
 }
 
 impl DockArea {
@@ -130,6 +144,7 @@ impl DockArea {
             },
             floating: Vec::new(),
             tab_drag: None,
+            hovered_tab: None,
         }
     }
 
@@ -191,6 +206,14 @@ impl DockArea {
             }
             DockMessage::TabDragStart(pos, idx) => {
                 self.tab_drag = Some((pos, idx));
+            }
+            DockMessage::TabHoverEnter(pos, idx) => {
+                self.hovered_tab = Some((pos, idx));
+            }
+            DockMessage::TabHoverExit(pos, idx) => {
+                if self.hovered_tab == Some((pos, idx)) {
+                    self.hovered_tab = None;
+                }
             }
             DockMessage::ReorderTab { pos, from, to } => {
                 let region = match pos {
@@ -398,6 +421,8 @@ impl DockArea {
             // which tab they grabbed.
             let is_dragging_this =
                 matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
+            let is_hovered =
+                matches!(self.hovered_tab, Some((p, idx)) if p == position && idx == i);
             // No manual width — Iced's layout engine measures the text.
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
@@ -408,6 +433,7 @@ impl DockArea {
                     &ctx.tokens,
                     is_active,
                     is_dragging_this,
+                    is_hovered,
                 ));
             let tab = mouse_area(
                 container(label_el)
@@ -419,6 +445,8 @@ impl DockArea {
                     })
                     .style(styles::tab_underline(line_c)),
             )
+            .on_enter(DockMessage::TabHoverEnter(position, i))
+            .on_exit(DockMessage::TabHoverExit(position, i))
             .on_press(DockMessage::TabDragStart(position, i))
             .on_release(DockMessage::TabClick(position, i));
 
