@@ -286,6 +286,10 @@ pub enum Message {
     ExportPdfFinished(Result<std::path::PathBuf, String>),
     /// Completion of netlist export — carries either the saved path or error.
     ExportNetlistFinished(Result<std::path::PathBuf, String>),
+    /// User invoked File → Export → Bill of Materials…
+    ExportBomRequested,
+    /// Completion of BOM export — carries either the saved path or error.
+    ExportBomFinished(Result<std::path::PathBuf, String>),
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     PrintPreviewRequested,
     /// User selected a page in the print preview thumbnail list.
