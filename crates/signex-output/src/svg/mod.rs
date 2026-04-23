@@ -3,13 +3,17 @@
 //! This module is the canonical geometry bridge:
 //! schematic page -> SVG path elements -> PDF / preview backends.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 
 use signex_types::schematic::{
     FillType, Graphic, HAlign, LabelType, LibSymbol, Pin, Point, SchDrawing, Symbol, TextProp,
     VAlign,
 };
-use signex_types::markup::{RichSegment, parse_markup};
+use signex_types::markup::{
+    ExpressionEvalContext, RichSegment, evaluate_expressions, expand_kicad_char_escapes,
+    parse_markup,
+};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
@@ -307,9 +311,22 @@ impl SvgRenderContext {
 
         // Full symbol body graphics from library definitions.
         for sym in &sheet.schematic.symbols {
+            let symbol_vars = symbol_eval_variables(sym);
+            let mut refdes_vars = HashMap::new();
+            if !sym.uuid.is_nil() && !sym.reference.is_empty() {
+                refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
+            }
+            let symbol_eval_ctx = ExpressionEvalContext {
+                current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
+                current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
+                at_variables: Some(&symbol_vars),
+                refdes_variables: Some(&refdes_vars),
+                ..ExpressionEvalContext::default()
+            };
+
             if let Some(lib) = sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id) {
                 push_symbol_lib_graphics(&mut elements, sym, lib, &xform);
-                push_symbol_pins(&mut elements, sym, lib, &xform);
+                push_symbol_pins(&mut elements, sym, lib, &xform, &symbol_eval_ctx);
             } else {
                 // Fallback if library is missing.
                 elements.push(rect_path(
@@ -342,7 +359,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
                     rotation_deg: field_effective_style(ref_text, sym).0 as f32,
                     fill_rgb: (0.1, 0.1, 0.1),
-                    text: normalize_kicad_text(&sym.reference),
+                    text: normalize_kicad_text_with_ctx(&sym.reference, &symbol_eval_ctx),
                 });
             }
 
@@ -359,7 +376,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(val_text, sym).2),
                     rotation_deg: field_effective_style(val_text, sym).0 as f32,
                     fill_rgb: (0.2, 0.2, 0.2),
-                    text: normalize_kicad_text(&sym.value),
+                    text: normalize_kicad_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
         }
@@ -798,6 +815,7 @@ fn push_symbol_pins(
     sym: &Symbol,
     lib: &LibSymbol,
     xform: &PageTransform,
+    eval_ctx: &ExpressionEvalContext<'_>,
 ) {
     for lp in &lib.pins {
         if lp.unit != 0 && lp.unit != sym.unit {
@@ -857,6 +875,9 @@ fn push_symbol_pins(
         };
 
         if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
+            let mut pin_eval_ctx = eval_ctx.clone();
+            pin_eval_ctx.current_pin = Some(pin.number.as_str());
+
             let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
                 let (nwx, nwy) = (wx1, wy1);
                 if wdx.abs() > wdy.abs() {
@@ -903,11 +924,14 @@ fn push_symbol_pins(
                 v_align,
                 rotation_deg,
                 fill_rgb: (0.12, 0.12, 0.12),
-                text: normalize_kicad_text(&pin.name),
+                text: normalize_kicad_text_with_ctx(&pin.name, &pin_eval_ctx),
             });
         }
 
         if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+            let mut pin_eval_ctx = eval_ctx.clone();
+            pin_eval_ctx.current_pin = Some(pin.number.as_str());
+
             let mid = Point::new(
                 pin.position.x + dir_x * length * 0.5,
                 pin.position.y + dir_y * length * 0.5,
@@ -928,7 +952,7 @@ fn push_symbol_pins(
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
                 fill_rgb: (0.1, 0.1, 0.1),
-                text: normalize_kicad_text(&pin.number),
+                text: normalize_kicad_text_with_ctx(&pin.number, &pin_eval_ctx),
             });
         }
     }
@@ -1185,18 +1209,29 @@ fn symbol_fill_colour() -> (f32, f32, f32) {
     (0.93, 0.93, 0.56)
 }
 
+fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
+    let mut vars = sym.fields.clone();
+    for prop in &sym.custom_properties {
+        if !prop.key.is_empty() {
+            vars.insert(prop.key.clone(), prop.value.clone());
+        }
+    }
+    vars.entry("refdes".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("reference".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("value".to_string())
+        .or_insert_with(|| sym.value.clone());
+    vars
+}
+
 fn normalize_kicad_text(input: &str) -> String {
-    input
-        .replace("{slash}", "/")
-        .replace("{backslash}", "\\")
-    .replace("{tilde}", "~")
-    .replace("{colon}", ":")
-    .replace("{dollar}", "$")
-    .replace("{space}", " ")
-        .replace("{dblquote}", "\"")
-        .replace("{lt}", "<")
-        .replace("{gt}", ">")
-        .replace("{bar}", "|")
+    normalize_kicad_text_with_ctx(input, &ExpressionEvalContext::default())
+}
+
+fn normalize_kicad_text_with_ctx(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
+    let evaluated = evaluate_expressions(input, ctx);
+    expand_kicad_char_escapes(&evaluated)
 }
 
 #[derive(Clone, Copy)]
