@@ -2,8 +2,11 @@
 
 use iced::Color;
 use iced::widget::canvas;
+use std::collections::HashMap;
 
-use signex_types::markup::{RichSegment, parse_markup};
+use signex_types::markup::{
+    ExpressionEvalContext, RichSegment, evaluate_expressions, parse_markup,
+};
 use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
 use super::{ScreenTransform, field_effective_style};
@@ -81,6 +84,40 @@ fn rich_runs(input: &str) -> Vec<RichRun> {
         })
         .filter(|run| !run.text.is_empty())
         .collect()
+}
+
+fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
+    let mut vars = sym.fields.clone();
+    for prop in &sym.custom_properties {
+        if !prop.key.is_empty() {
+            vars.insert(prop.key.clone(), prop.value.clone());
+        }
+    }
+    vars.entry("refdes".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("reference".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("value".to_string())
+        .or_insert_with(|| sym.value.clone());
+    vars
+}
+
+pub fn evaluate_symbol_text(content: &str, sym: &Symbol, current_pin: Option<&str>) -> String {
+    let at_vars = symbol_eval_variables(sym);
+    let mut refdes_vars = HashMap::new();
+    if !sym.uuid.is_nil() && !sym.reference.is_empty() {
+        refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
+    }
+
+    let ctx = ExpressionEvalContext {
+        current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
+        current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
+        current_pin,
+        at_variables: Some(&at_vars),
+        refdes_variables: Some(&refdes_vars),
+        ..ExpressionEvalContext::default()
+    };
+    evaluate_expressions(content, &ctx)
 }
 
 pub fn draw_rich_text(
@@ -354,6 +391,11 @@ pub fn draw_text_prop(
         return;
     }
 
+    let evaluated = evaluate_symbol_text(content, sym, None);
+    if evaluated.is_empty() {
+        return;
+    }
+
     // All symbol ref/val text renders at 10 pt (1.8 mm).
     let font_size_mm = crate::SCHEMATIC_TEXT_MM;
     let _stored = prop.font_size;
@@ -381,5 +423,5 @@ pub fn draw_text_prop(
     // Iced CW-positive, Y-down; KiCad field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
-    draw_rich_text(frame, content, sp, color, screen_font, h_align, v_align, rad);
+    draw_rich_text(frame, &evaluated, sp, color, screen_font, h_align, v_align, rad);
 }
