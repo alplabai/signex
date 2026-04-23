@@ -37,6 +37,13 @@ pub struct UiState {
     pub right_width: f32,
     pub bottom_height: f32,
     pub window_size: (f32, f32),
+    /// OS-reported scale factor for the main window (1.0 at 100 %,
+    /// 1.25 at 125 %, 2.0 at 200 %, etc.). Populated on
+    /// `MainWindowOpened` and refreshed on every main-window resize,
+    /// which also fires when Windows moves the window to a different
+    /// monitor. Used to pick the 1×/2×/3× wordmark PNG so the brand
+    /// lockup stays 1:1 with device pixels.
+    pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
     pub find_replace: crate::find_replace::FindReplaceState,

@@ -1871,6 +1871,11 @@ impl Signex {
                 .engine_for_window(window_id, ui)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
+            // Secondary windows (detached modal, undocked tab) borrow
+            // the main window's scale. Good enough until per-window
+            // scale tracking lands — it's only wrong if the user drags
+            // a secondary window onto a monitor with a different DPI.
+            scale_factor: ui.main_window_scale,
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
