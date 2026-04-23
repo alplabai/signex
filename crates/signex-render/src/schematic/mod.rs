@@ -54,6 +54,7 @@ pub struct ScreenTransform {
 #[derive(Debug, Clone)]
 pub struct SchematicRenderSnapshot {
     pub paper_size: String,
+    pub root_sheet_page: String,
     pub symbols: Vec<Symbol>,
     pub wires: Vec<Wire>,
     pub junctions: Vec<Junction>,
@@ -72,6 +73,7 @@ impl SchematicRenderSnapshot {
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self {
             paper_size: sheet.paper_size.clone(),
+            root_sheet_page: sheet.root_sheet_page.clone(),
             symbols: sheet.symbols.clone(),
             wires: sheet.wires.clone(),
             junctions: sheet.junctions.clone(),
@@ -673,6 +675,13 @@ pub fn render_schematic(
     }
 
     // Z=10-11: Symbol bodies + pins
+    let global_refdes = text::build_global_refdes_lookup(sheet);
+    let pin_net_lookup = text::build_symbol_pin_net_lookup(sheet);
+    let cell = {
+        let page = sheet.root_sheet_page.trim();
+        if page.is_empty() { None } else { Some(page) }
+    };
+
     for sym in &sheet.symbols {
         let a = alpha_for(&sym.uuid);
         let body_c = dim(body_color, a);
@@ -690,7 +699,16 @@ pub fn render_schematic(
             symbol::draw_symbol(frame, sym, lib_sym, transform, body_c, body_fill_c, pin_c);
 
             // Pins
-            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_c);
+            pin::draw_symbol_pins(
+                frame,
+                sym,
+                lib_sym,
+                transform,
+                pin_c,
+                cell,
+                Some(&global_refdes),
+                Some(&pin_net_lookup),
+            );
 
             // Reference text — power symbols (#PWR refs) are always hidden
             if let Some(ref ref_text) = sym.ref_text
@@ -706,6 +724,9 @@ pub fn render_schematic(
                     dpos,
                     transform,
                     reference_c,
+                    cell,
+                    Some(&global_refdes),
+                    pin_net_lookup.get(&sym.uuid),
                 );
             }
 
@@ -714,7 +735,18 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_c);
+                text::draw_text_prop(
+                    frame,
+                    &sym.value,
+                    val_text,
+                    sym,
+                    dpos,
+                    transform,
+                    value_c,
+                    cell,
+                    Some(&global_refdes),
+                    pin_net_lookup.get(&sym.uuid),
+                );
             }
         } else if sym.is_power {
             draw_builtin_power(frame, sym, transform, power_c, power_c);
