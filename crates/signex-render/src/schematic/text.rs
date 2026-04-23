@@ -3,6 +3,7 @@
 use iced::Color;
 use iced::widget::canvas;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use signex_types::markup::{
     ExpressionEvalContext, RichSegment, evaluate_expressions, parse_markup,
@@ -103,6 +104,17 @@ fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
 }
 
 pub fn evaluate_symbol_text(content: &str, sym: &Symbol, current_pin: Option<&str>) -> String {
+    evaluate_symbol_text_with_context(content, sym, current_pin, None, None, None)
+}
+
+pub fn evaluate_symbol_text_with_context(
+    content: &str,
+    sym: &Symbol,
+    current_pin: Option<&str>,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    pin_net_names: Option<&HashMap<String, String>>,
+) -> String {
     let at_vars = symbol_eval_variables(sym);
     let mut refdes_vars = HashMap::new();
     if !sym.uuid.is_nil() && !sym.reference.is_empty() {
@@ -113,11 +125,198 @@ pub fn evaluate_symbol_text(content: &str, sym: &Symbol, current_pin: Option<&st
         current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
         current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
         current_pin,
+        cell,
         at_variables: Some(&at_vars),
-        refdes_variables: Some(&refdes_vars),
+        refdes_variables: global_refdes.or(Some(&refdes_vars)),
+        net_name_by_pin: pin_net_names,
         ..ExpressionEvalContext::default()
     };
     evaluate_expressions(content, &ctx)
+}
+
+pub fn build_global_refdes_lookup(snapshot: &super::SchematicRenderSnapshot) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for sym in &snapshot.symbols {
+        if sym.reference.is_empty() {
+            continue;
+        }
+        out.entry(sym.uuid.to_string())
+            .or_insert_with(|| sym.reference.clone());
+        out.entry(sym.reference.clone())
+            .or_insert_with(|| sym.reference.clone());
+
+        for instance in &sym.instances {
+            if instance.path.is_empty() {
+                continue;
+            }
+            out.entry(instance.path.clone())
+                .or_insert_with(|| sym.reference.clone());
+            let trimmed = instance.path.trim_matches('/');
+            if !trimmed.is_empty() {
+                out.entry(trimmed.to_string())
+                    .or_insert_with(|| sym.reference.clone());
+            }
+        }
+    }
+    out
+}
+
+pub fn build_symbol_pin_net_lookup(
+    snapshot: &super::SchematicRenderSnapshot,
+) -> HashMap<Uuid, HashMap<String, String>> {
+    type Node = (i64, i64);
+
+    fn q(p: signex_types::schematic::Point) -> Node {
+        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    }
+
+    fn find(parent: &mut HashMap<Node, Node>, x: Node) -> Node {
+        let p = *parent.entry(x).or_insert(x);
+        if p == x {
+            x
+        } else {
+            let r = find(parent, p);
+            parent.insert(x, r);
+            r
+        }
+    }
+
+    fn union(parent: &mut HashMap<Node, Node>, a: Node, b: Node) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent.insert(ra, rb);
+        }
+    }
+
+    fn point_on_segment(
+        p: signex_types::schematic::Point,
+        a: signex_types::schematic::Point,
+        b: signex_types::schematic::Point,
+        tol: f64,
+    ) -> bool {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len_sq = dx * dx + dy * dy;
+        if len_sq < tol * tol {
+            return (p.x - a.x).abs() < tol && (p.y - a.y).abs() < tol;
+        }
+        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq;
+        if !(0.0..=1.0).contains(&t) {
+            return false;
+        }
+        let proj_x = a.x + t * dx;
+        let proj_y = a.y + t * dy;
+        (p.x - proj_x).abs() < tol && (p.y - proj_y).abs() < tol
+    }
+
+    fn transform_pin_position(sym: &Symbol, local_pos: &signex_types::schematic::Point) -> signex_types::schematic::Point {
+        let x = local_pos.x;
+        let y = -local_pos.y;
+
+        let rad = -sym.rotation.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        let rx = x * cos - y * sin;
+        let ry = x * sin + y * cos;
+
+        let rx = if sym.mirror_y { -rx } else { rx };
+        let ry = if sym.mirror_x { -ry } else { ry };
+
+        signex_types::schematic::Point::new(rx + sym.position.x, ry + sym.position.y)
+    }
+
+    fn label_priority(kind: signex_types::schematic::LabelType) -> u8 {
+        match kind {
+            signex_types::schematic::LabelType::Global => 4,
+            signex_types::schematic::LabelType::Power => 3,
+            signex_types::schematic::LabelType::Hierarchical => 2,
+            signex_types::schematic::LabelType::Net => 1,
+        }
+    }
+
+    let mut parent: HashMap<Node, Node> = HashMap::new();
+    let tolerance = 0.01;
+
+    for wire in &snapshot.wires {
+        union(&mut parent, q(wire.start), q(wire.end));
+    }
+
+    for junction in &snapshot.junctions {
+        let j = q(junction.position);
+        parent.entry(j).or_insert(j);
+        for wire in &snapshot.wires {
+            if wire.start == junction.position
+                || wire.end == junction.position
+                || point_on_segment(junction.position, wire.start, wire.end, tolerance)
+            {
+                union(&mut parent, j, q(wire.start));
+                union(&mut parent, j, q(wire.end));
+            }
+        }
+    }
+
+    let mut label_root_by_name: HashMap<String, Node> = HashMap::new();
+    let mut root_name: HashMap<Node, (u8, String)> = HashMap::new();
+
+    for label in &snapshot.labels {
+        let mut n = q(label.position);
+        parent.entry(n).or_insert(n);
+        for wire in &snapshot.wires {
+            if point_on_segment(label.position, wire.start, wire.end, tolerance) {
+                union(&mut parent, q(wire.start), q(wire.end));
+                union(&mut parent, n, q(wire.start));
+                n = q(wire.start);
+                break;
+            }
+        }
+
+        let mut root = find(&mut parent, n);
+        if matches!(label.label_type, signex_types::schematic::LabelType::Global | signex_types::schematic::LabelType::Hierarchical)
+            && !label.text.is_empty()
+        {
+            if let Some(existing) = label_root_by_name.get(&label.text).copied() {
+                union(&mut parent, root, existing);
+                root = find(&mut parent, root);
+            }
+            label_root_by_name.insert(label.text.clone(), root);
+        }
+
+        if !label.text.is_empty() {
+            let priority = label_priority(label.label_type);
+            match root_name.get(&root) {
+                Some((p, _)) if *p >= priority => {}
+                _ => {
+                    root_name.insert(root, (priority, label.text.clone()));
+                }
+            }
+        }
+    }
+
+    let mut out: HashMap<Uuid, HashMap<String, String>> = HashMap::new();
+    for sym in &snapshot.symbols {
+        let Some(lib) = snapshot.lib_symbols.get(&sym.lib_id) else {
+            continue;
+        };
+        for lp in &lib.pins {
+            if !(lp.unit == 0 || lp.unit == sym.unit) {
+                continue;
+            }
+            let world = transform_pin_position(sym, &lp.pin.position);
+            let root = find(&mut parent, q(world));
+            let net_name = root_name
+                .get(&root)
+                .map(|(_, n)| n.clone())
+                .unwrap_or_default();
+            if !net_name.is_empty() {
+                out.entry(sym.uuid)
+                    .or_default()
+                    .insert(lp.pin.number.clone(), net_name);
+            }
+        }
+    }
+
+    out
 }
 
 pub fn draw_rich_text(
@@ -386,12 +585,22 @@ pub fn draw_text_prop(
     display_pos: (f64, f64),
     transform: &ScreenTransform,
     color: Color,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    pin_net_names: Option<&HashMap<String, String>>,
 ) {
     if content.is_empty() {
         return;
     }
 
-    let evaluated = evaluate_symbol_text(content, sym, None);
+    let evaluated = evaluate_symbol_text_with_context(
+        content,
+        sym,
+        None,
+        cell,
+        global_refdes,
+        pin_net_names,
+    );
     if evaluated.is_empty() {
         return;
     }

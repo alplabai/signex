@@ -9,11 +9,12 @@
 use iced::Color;
 use iced::widget::canvas::{self, LineCap, LineJoin, path};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::{display_text_with_overbars, draw_rich_text, evaluate_symbol_text};
+use super::text::{display_text_with_overbars, draw_rich_text, evaluate_symbol_text_with_context};
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -77,6 +78,9 @@ pub fn draw_symbol_pins(
     lib: &LibSymbol,
     transform: &ScreenTransform,
     pin_color: Color,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    net_name_by_symbol_pin: Option<&HashMap<Uuid, HashMap<String, String>>>,
 ) {
     let visible_pins: Vec<&Pin> = lib
         .pins
@@ -108,6 +112,9 @@ pub fn draw_symbol_pins(
                 index: stack_index,
                 total: stack_total,
             },
+            cell,
+            global_refdes,
+            net_name_by_symbol_pin,
         );
     }
 }
@@ -135,6 +142,9 @@ fn draw_pin(
     transform: &ScreenTransform,
     pin_color: Color,
     stack: StackPlacement,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    net_name_by_symbol_pin: Option<&HashMap<Uuid, HashMap<String, String>>>,
 ) {
     if !pin.visible {
         return;
@@ -191,7 +201,15 @@ fn draw_pin(
         && !pin.name.is_empty()
         && pin.name != "~"
     {
-        let evaluated_pin_name = evaluate_symbol_text(&pin.name, sym, Some(pin.number.as_str()));
+        let pin_nets = net_name_by_symbol_pin.and_then(|m| m.get(&sym.uuid));
+        let evaluated_pin_name = evaluate_symbol_text_with_context(
+            &pin.name,
+            sym,
+            Some(pin.number.as_str()),
+            cell,
+            global_refdes,
+            pin_nets,
+        );
 
         // Standard pin-name placement has two modes keyed on `pin_name_offset`:
         //
@@ -349,7 +367,15 @@ fn draw_pin(
 
     // Pin number (inside the body, along the pin line)
     if screen_font >= 1.0 && lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
-        let evaluated_pin_number = evaluate_symbol_text(&pin.number, sym, Some(pin.number.as_str()));
+        let pin_nets = net_name_by_symbol_pin.and_then(|m| m.get(&sym.uuid));
+        let evaluated_pin_number = evaluate_symbol_text_with_context(
+            &pin.number,
+            sym,
+            Some(pin.number.as_str()),
+            cell,
+            global_refdes,
+            pin_nets,
+        );
 
         // Number is placed at the midpoint of the pin line.
         let mid = Point::new(

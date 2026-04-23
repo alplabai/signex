@@ -83,6 +83,12 @@ pub struct SvgRenderContext {
     pub svg_document: String,
 }
 
+pub struct SvgEvaluatorInputs<'a> {
+    pub global_refdes: &'a HashMap<String, String>,
+    pub net_name_by_symbol_pin: &'a HashMap<String, HashMap<String, String>>,
+    pub cell: &'a str,
+}
+
 impl SvgRenderContext {
     pub fn from_sheet(
         sheet: &SheetSnapshot,
@@ -90,6 +96,7 @@ impl SvgRenderContext {
         page_w_mm: f64,
         page_h_mm: f64,
         units_per_mm: f64,
+        eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
     ) -> Self {
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
@@ -319,14 +326,27 @@ impl SvgRenderContext {
             let symbol_eval_ctx = ExpressionEvalContext {
                 current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
                 current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
+                cell: eval_inputs.map(|e| e.cell),
                 at_variables: Some(&symbol_vars),
-                refdes_variables: Some(&refdes_vars),
+                refdes_variables: eval_inputs
+                    .map(|e| e.global_refdes)
+                    .or(Some(&refdes_vars)),
                 ..ExpressionEvalContext::default()
             };
 
+            let symbol_pin_nets = eval_inputs
+                .and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
+
             if let Some(lib) = sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id) {
                 push_symbol_lib_graphics(&mut elements, sym, lib, &xform);
-                push_symbol_pins(&mut elements, sym, lib, &xform, &symbol_eval_ctx);
+                push_symbol_pins(
+                    &mut elements,
+                    sym,
+                    lib,
+                    &xform,
+                    &symbol_eval_ctx,
+                    symbol_pin_nets,
+                );
             } else {
                 // Fallback if library is missing.
                 elements.push(rect_path(
@@ -816,6 +836,7 @@ fn push_symbol_pins(
     lib: &LibSymbol,
     xform: &PageTransform,
     eval_ctx: &ExpressionEvalContext<'_>,
+    pin_net_names: Option<&HashMap<String, String>>,
 ) {
     for lp in &lib.pins {
         if lp.unit != 0 && lp.unit != sym.unit {
@@ -877,6 +898,7 @@ fn push_symbol_pins(
         if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
             let mut pin_eval_ctx = eval_ctx.clone();
             pin_eval_ctx.current_pin = Some(pin.number.as_str());
+            pin_eval_ctx.net_name_by_pin = pin_net_names;
 
             let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
                 let (nwx, nwy) = (wx1, wy1);
@@ -931,6 +953,7 @@ fn push_symbol_pins(
         if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
             let mut pin_eval_ctx = eval_ctx.clone();
             pin_eval_ctx.current_pin = Some(pin.number.as_str());
+            pin_eval_ctx.net_name_by_pin = pin_net_names;
 
             let mid = Point::new(
                 pin.position.x + dir_x * length * 0.5,
@@ -1802,7 +1825,7 @@ mod tests {
         });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
-        let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4);
+        let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None);
         assert!(svg.svg_document.starts_with("<svg"));
         assert!(svg.svg_document.contains("<path"));
         assert!(svg.svg_document.contains("</svg>"));
@@ -1813,7 +1836,7 @@ mod tests {
         let sheet = empty_sheet_snapshot();
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
-        let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4);
+        let svg = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 96.0 / 25.4, None);
         let rgba = svg.rasterize_rgba((w_mm * 96.0 / 25.4) as u32, (h_mm * 96.0 / 25.4) as u32);
         assert!(rgba.is_some());
     }
