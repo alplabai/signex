@@ -82,16 +82,46 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
-    let mut justify_h = HAlign::Center;
-    let mut justify_v = VAlign::Center;
+    // KiCad property texts (Reference/Value/custom fields) are baseline-anchored
+    // by default in schematic editor behavior. When a justify token is omitted
+    // or only horizontal token is present (e.g. `(justify left)`), treating the
+    // vertical axis as Bottom matches on-canvas placement more closely.
+    let mut justify_h = HAlign::Left;
+    let mut justify_v = VAlign::Bottom;
+    let mut seen_h = false;
+    let mut seen_v = false;
     if let Some(j) = justify {
         for child in j.children() {
             if let SExpr::Atom(s) = child {
                 match s.as_str() {
-                    "left" => justify_h = HAlign::Left,
-                    "right" => justify_h = HAlign::Right,
-                    "top" => justify_v = VAlign::Top,
-                    "bottom" => justify_v = VAlign::Bottom,
+                    "left" => {
+                        justify_h = HAlign::Left;
+                        seen_h = true;
+                    }
+                    "right" => {
+                        justify_h = HAlign::Right;
+                        seen_h = true;
+                    }
+                    "top" => {
+                        justify_v = VAlign::Top;
+                        seen_v = true;
+                    }
+                    "bottom" => {
+                        justify_v = VAlign::Bottom;
+                        seen_v = true;
+                    }
+                    // KiCad may emit explicit `center` in some contexts. Treat it
+                    // as center for any axis not already pinned by a directional token.
+                    "center" => {
+                        if !seen_h {
+                            justify_h = HAlign::Center;
+                            seen_h = true;
+                        }
+                        if !seen_v {
+                            justify_v = VAlign::Center;
+                            seen_v = true;
+                        }
+                    }
                     "mirror" => {} // ignore mirror for now
                     _ => {}
                 }
@@ -852,24 +882,27 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         .and_then(|s| s.arg_f64(0))
         .unwrap_or(SCHEMATIC_TEXT_MM);
     // KiCad may emit multiple justify tokens (e.g. "left bottom").
-    // Preserve the horizontal part regardless of token order.
-    let justify = effects
+    // Preserve both horizontal and vertical parts regardless of token order.
+    let (justify, justify_v) = effects
         .and_then(|e| e.find("justify"))
         .map(|j| {
-            let mut parsed = HAlign::Left;
-            for child in j.children().iter().skip(1) {
+            let mut parsed_h = HAlign::Left;
+            let mut parsed_v = VAlign::Bottom;
+            for child in j.children() {
                 if let SExpr::Atom(token) = child {
                     match token.as_str() {
-                        "left" => parsed = HAlign::Left,
-                        "right" => parsed = HAlign::Right,
-                        "center" => parsed = HAlign::Center,
+                        "left" => parsed_h = HAlign::Left,
+                        "right" => parsed_h = HAlign::Right,
+                        "center" => parsed_h = HAlign::Center,
+                        "top" => parsed_v = VAlign::Top,
+                        "bottom" => parsed_v = VAlign::Bottom,
                         _ => {}
                     }
                 }
             }
-            parsed
+            (parsed_h, parsed_v)
         })
-        .unwrap_or(HAlign::Left);
+        .unwrap_or((HAlign::Left, VAlign::Bottom));
     Label {
         uuid: parse_uuid(node),
         text: node.first_arg().unwrap_or("").to_string(),
@@ -879,6 +912,7 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         shape,
         font_size,
         justify,
+        justify_v,
     }
 }
 
@@ -1727,6 +1761,7 @@ mod tests {
                 let sheet = parse_schematic(content).unwrap();
                 assert_eq!(sheet.labels.len(), 1);
                 assert_eq!(sheet.labels[0].justify, HAlign::Right);
+                assert_eq!(sheet.labels[0].justify_v, VAlign::Bottom);
         }
 
     #[test]
@@ -1886,6 +1921,84 @@ mod tests {
         assert!(parsed.in_pos_files);
         assert!(!parsed.duplicate_pin_numbers_are_jumpers);
     }
+
+        #[test]
+        fn parse_property_justify_left_defaults_vertical_to_bottom() {
+                let content = r#"(kicad_sch
+    (version 20231120)
+    (generator "eeschema")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 100 50 0)
+        (unit 1)
+        (uuid "00000000-0000-0000-0000-000000000011")
+        (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left)))
+        (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left)))
+        (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+        (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    )
+)"#;
+
+                let sheet = parse_schematic(content).unwrap();
+                let sym = &sheet.symbols[0];
+                let value_text = sym.val_text.as_ref().expect("value text exists");
+                assert_eq!(value_text.justify_h, HAlign::Left);
+                assert_eq!(value_text.justify_v, VAlign::Bottom);
+        }
+
+            #[test]
+            fn parse_property_justify_center_sets_both_axes_to_center() {
+                let content = r#"(kicad_sch
+            (version 20231120)
+            (generator "eeschema")
+            (uuid "00000000-0000-0000-0000-000000000001")
+            (paper "A4")
+            (symbol
+            (lib_id "Device:R")
+            (at 100 50 0)
+            (unit 1)
+            (uuid "00000000-0000-0000-0000-000000000011")
+            (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify center)))
+            (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify center)))
+            (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            )
+        )"#;
+
+                let sheet = parse_schematic(content).unwrap();
+                let sym = &sheet.symbols[0];
+                let value_text = sym.val_text.as_ref().expect("value text exists");
+                assert_eq!(value_text.justify_h, HAlign::Center);
+                assert_eq!(value_text.justify_v, VAlign::Center);
+            }
+
+            #[test]
+            fn parse_property_justify_left_center_keeps_left_and_centers_vertical() {
+                let content = r#"(kicad_sch
+            (version 20231120)
+            (generator "eeschema")
+            (uuid "00000000-0000-0000-0000-000000000001")
+            (paper "A4")
+            (symbol
+            (lib_id "Device:R")
+            (at 100 50 0)
+            (unit 1)
+            (uuid "00000000-0000-0000-0000-000000000011")
+            (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left center)))
+            (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left center)))
+            (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            )
+        )"#;
+
+                let sheet = parse_schematic(content).unwrap();
+                let sym = &sheet.symbols[0];
+                let value_text = sym.val_text.as_ref().expect("value text exists");
+                assert_eq!(value_text.justify_h, HAlign::Left);
+                assert_eq!(value_text.justify_v, VAlign::Center);
+            }
 
     #[test]
     fn parse_lib_symbol_preserves_pin_hide_flag() {
