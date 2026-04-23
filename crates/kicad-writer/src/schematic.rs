@@ -743,10 +743,17 @@ fn label_node(l: &Label) -> SExpr {
     }
     items.push(at_node(l.position.x, l.position.y, Some(l.rotation)));
 
-    let justify = if l.justify == HAlign::Left {
+    // Keep the compact `(justify bottom)` form for the default
+    // left-horizontal + bottom-vertical case so round-tripping a KiCad
+    // file with no explicit alignment doesn't grow it; otherwise emit
+    // the full `(justify <h> <v>)` pair.
+    let justify = if l.justify == HAlign::Left && l.justify_v == VAlign::Bottom {
         node("justify", vec![raw("bottom")])
     } else {
-        node("justify", vec![raw(halign_str(l.justify)), raw("bottom")])
+        node(
+            "justify",
+            vec![raw(halign_str(l.justify)), raw(valign_str(l.justify_v))],
+        )
     };
     items.push(effects_node(l.font_size, None, false, false, vec![justify]));
     items.push(node("uuid", vec![atom(l.uuid.to_string())]));
@@ -1299,6 +1306,7 @@ mod tests {
             shape: "input".to_string(),
             font_size: SCHEMATIC_TEXT_MM,
             justify: HAlign::Left,
+            justify_v: VAlign::Bottom,
         };
 
         write_label(&mut out, &label);
@@ -1319,6 +1327,7 @@ mod tests {
             shape: String::new(),
             font_size: SCHEMATIC_TEXT_MM,
             justify: HAlign::Right,
+            justify_v: VAlign::Bottom,
         };
 
         write_label(&mut out, &label);
