@@ -647,7 +647,13 @@ impl Signex {
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
+            .align_y(iced::alignment::Vertical::Top)
+            .padding(iced::Padding {
+                top: 32.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
+            })
             .into()
     }
 
@@ -2085,10 +2091,21 @@ impl Signex {
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
+        // Opaque semi-transparent backdrop that blocks interaction with underlying content.
+        // Clicking anywhere on it triggers the on_press message (modal dismiss).
+        const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
-                .height(Length::Fill),
+                .height(Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(
+                        iced::Background::Color(
+                            iced::Color::from_rgba(0.0, 0.0, 0.0, BACKDROP_OPACITY)
+                        )
+                    ),
+                    ..container::Style::default()
+                }),
         )
         .on_press(on_press)
         .into()
