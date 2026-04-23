@@ -289,3 +289,121 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{
+        LibPin, LibSymbol, Pin, PinElectricalType, PinShape, SchematicSheet, Symbol,
+    };
+    use std::path::PathBuf;
+
+    fn empty_sheet() -> SchematicSheet {
+        SchematicSheet {
+            uuid: uuid::Uuid::nil(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: "A4".to_string(),
+            root_sheet_page: "1".to_string(),
+            symbols: vec![],
+            wires: vec![],
+            junctions: vec![],
+            labels: vec![],
+            child_sheets: vec![],
+            no_connects: vec![],
+            text_notes: vec![],
+            buses: vec![],
+            bus_entries: vec![],
+            drawings: vec![],
+            no_erc_directives: vec![],
+            title_block: HashMap::new(),
+            lib_symbols: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn isolated_pin_uses_kicad_auto_net_name() {
+        let symbol_uuid = uuid::Uuid::new_v4();
+
+        let mut sheet = empty_sheet();
+        sheet.symbols.push(Symbol {
+            uuid: symbol_uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: Point::new(10.0, 10.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: vec![],
+            pin_uuids: HashMap::new(),
+            instances: vec![],
+        });
+
+        sheet.lib_symbols.insert(
+            "Device:R".to_string(),
+            LibSymbol {
+                id: "Device:R".to_string(),
+                reference: String::new(),
+                value: String::new(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                description: String::new(),
+                keywords: String::new(),
+                fp_filters: String::new(),
+                in_bom: true,
+                on_board: true,
+                in_pos_files: true,
+                duplicate_pin_numbers_are_jumpers: false,
+                graphics: vec![],
+                pins: vec![LibPin {
+                    unit: 1,
+                    body_style: 1,
+                    pin: Pin {
+                        pin_type: PinElectricalType::Passive,
+                        shape: PinShape::Line,
+                        position: Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        length: 2.54,
+                        name: "P".to_string(),
+                        number: "1".to_string(),
+                        visible: true,
+                        name_visible: true,
+                        number_visible: true,
+                    },
+                }],
+                show_pin_numbers: true,
+                show_pin_names: true,
+                pin_name_offset: 0.0,
+            },
+        );
+
+        let ctx_sheet = SheetSnapshot {
+            path: PathBuf::from("sheet_1.kicad_sch"),
+            schematic: sheet,
+            sheet_name: "Sheet1".to_string(),
+            sheet_number: 1,
+            sheet_count: 1,
+        };
+
+        let lookup = build_pin_net_lookup(&[ctx_sheet]);
+        let pin_map = lookup
+            .get(&symbol_uuid.to_string())
+            .expect("symbol net map should exist");
+        assert_eq!(pin_map.get("1").cloned(), Some("Net-(R1-Pad1)".to_string()));
+    }
+}
