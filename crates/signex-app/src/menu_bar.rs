@@ -2,11 +2,14 @@
 //!
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
 //! iced_aw handles all overlay positioning, hover-to-switch, and keyboard navigation.
-//! Anchored on the left by the Signex wordmark (brand/signex-logo.svg).
+//! Anchored on the left by the Signex wordmark — PNGs rasterised from
+//! `brand/signex-logo-{white,black}.svg` into `brand/generated/` at 1×/2×/3×
+//! the on-screen 96×31 logical size. Regenerate via
+//! `python installer/build-wordmark.py`.
 
 use std::sync::LazyLock;
 
-use iced::widget::{button, container, row, svg, text};
+use iced::widget::{button, container, image, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
@@ -14,15 +17,66 @@ use signex_types::theme::ThemeTokens;
 
 use crate::styles;
 
-/// Horizontal mark + lowercase "signex" wordmark, rendered in white so it
-/// reads on dark themes. Loaded once at startup and cloned cheaply.
-static BRAND_WORDMARK_WHITE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-white.svg"))
+/// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
+/// 1× / 2× / 3× the on-screen 96×31 logical size. Picked at view-time by
+/// window scale factor so the lockup renders 1:1 with device pixels —
+/// which is the only way to get crisp path-text at a size this small
+/// (resvg's path rasterization has no font hinting, so a single SVG
+/// stretched across DPI tiers aliases at the stems). Regenerate with
+/// `python installer/build-wordmark.py` after editing the source SVGs.
+static BRAND_WORDMARK_WHITE_1X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-1x.png").as_slice(),
+    )
 });
-/// Same lockup in near-black for light themes.
-static BRAND_WORDMARK_BLACK: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-black.svg"))
+static BRAND_WORDMARK_WHITE_2X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-2x.png").as_slice(),
+    )
 });
+static BRAND_WORDMARK_WHITE_3X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-3x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_1X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-1x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_2X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-2x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_3X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-3x.png").as_slice(),
+    )
+});
+
+/// Logical on-screen size of the wordmark (matches the SVG aspect of
+/// 1600:520 → ~3.08:1). Changing this requires regenerating the PNGs at
+/// matching multiples via `build-wordmark.py`. Stored as `f32` because
+/// `iced::widget::Image::{width,height}` take `impl Into<Length>` and
+/// `Length` implements `From<f32>` but not `From<u16>`.
+const WORDMARK_LOGICAL_W: f32 = 96.0;
+const WORDMARK_LOGICAL_H: f32 = 31.0;
+
+/// Pick the PNG tier that will render closest to 1:1 with device pixels
+/// at the given OS scale factor. The small slack (`+ 0.05`) absorbs
+/// floating-point jitter — at exactly 1.0 we want the 1× asset, not the
+/// 2× downsampled to 96 px.
+fn wordmark_tier(scale: f32) -> u8 {
+    let s = if scale > 0.0 { scale } else { 1.0 };
+    if s <= 1.05 {
+        1
+    } else if s <= 2.05 {
+        2
+    } else {
+        3
+    }
+}
 
 // ─── Messages ─────────────────────────────────────────────────
 
@@ -88,7 +142,7 @@ pub enum MenuMessage {
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct MenuContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
@@ -101,6 +155,26 @@ pub struct MenuContext {
     pub has_selection: bool,
     pub can_undo: bool,
     pub can_redo: bool,
+    /// OS scale factor of the window hosting this menu bar. Drives the
+    /// wordmark PNG tier picker (1× / 2× / 3×) so the lockup is rendered
+    /// at 1:1 with device pixels. Defaults to 1.0 before the main
+    /// window opens and for detached-modal / undocked-tab windows until
+    /// per-window scale tracking lands.
+    pub scale_factor: f32,
+}
+
+impl Default for MenuContext {
+    fn default() -> Self {
+        Self {
+            has_schematic: false,
+            has_pcb: false,
+            has_project: false,
+            has_selection: false,
+            can_undo: false,
+            can_redo: false,
+            scale_factor: 1.0,
+        }
+    }
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -465,15 +539,25 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
     // by toolbar background luminance so custom themes also resolve
-    // correctly. SVG is ~3.08:1 (viewBox 1600×520), so 96×31 keeps the
-    // lockup proportions and gives the wordmark enough pixel height to
-    // stay readable against the 36 px chrome strip.
-    let handle = if is_dark_surface(tokens.toolbar_bg) {
-        (*BRAND_WORDMARK_WHITE).clone()
-    } else {
-        (*BRAND_WORDMARK_BLACK).clone()
+    // correctly. The asset is a PNG pre-rasterised at 1×/2×/3× the
+    // on-screen 96×31 logical size; `wordmark_tier` picks the one that
+    // matches the window's scale factor so text edges stay crisp at
+    // 100 %, 125 %, 150 %, 200 %, 300 % Windows scaling. Filter method
+    // is Linear so fractional in-between scales (e.g. 1.5×) downsample
+    // cleanly from the 2× asset rather than hard-pixelating.
+    let dark = is_dark_surface(tokens.toolbar_bg);
+    let handle = match (dark, wordmark_tier(ctx.scale_factor)) {
+        (true, 1) => (*BRAND_WORDMARK_WHITE_1X).clone(),
+        (true, 2) => (*BRAND_WORDMARK_WHITE_2X).clone(),
+        (true, _) => (*BRAND_WORDMARK_WHITE_3X).clone(),
+        (false, 1) => (*BRAND_WORDMARK_BLACK_1X).clone(),
+        (false, 2) => (*BRAND_WORDMARK_BLACK_2X).clone(),
+        (false, _) => (*BRAND_WORDMARK_BLACK_3X).clone(),
     };
-    let wordmark = svg(handle).width(96).height(31);
+    let wordmark = image(handle)
+        .width(WORDMARK_LOGICAL_W)
+        .height(WORDMARK_LOGICAL_H)
+        .filter_method(image::FilterMethod::Linear);
 
     // Just the wordmark + menu roots. The caller decides how to wrap this
     // (plain strip on secondary windows, draggable chrome with window

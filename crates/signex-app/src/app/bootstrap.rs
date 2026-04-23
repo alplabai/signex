@@ -96,6 +96,7 @@ impl Signex {
                 right_width: 220.0,
                 bottom_height: 120.0,
                 window_size: (1400.0, 900.0),
+                main_window_scale: 1.0,
                 panel_list_open: false,
                 preferences_open: false,
                 find_replace: crate::find_replace::FindReplaceState::default(),

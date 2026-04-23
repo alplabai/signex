@@ -110,7 +110,18 @@ impl Signex {
                 // that would otherwise clobber the main-window state.
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
+                    // Windows fires a resize event whenever DWM moves
+                    // the window to a monitor with a different DPI, so
+                    // re-querying the scale factor here keeps the
+                    // wordmark-PNG tier picker in sync after a
+                    // cross-monitor drag.
+                    return iced::window::scale_factor(id)
+                        .map(Message::MainWindowScaleChanged);
                 }
+                Task::none()
+            }
+            Message::MainWindowScaleChanged(scale) => {
+                self.ui_state.main_window_scale = scale;
                 Task::none()
             }
             Message::MainWindowOpened(id) => {
@@ -122,12 +133,17 @@ impl Signex {
                 // until the user physically resizes the window.
                 let size_task = iced::window::size(id)
                     .map(move |size| Message::WindowResizedFor(id, size.width, size.height));
+                // Stash the scale factor so the wordmark PNG picker
+                // can render at native device-pixel count. Re-queried
+                // on every resize to track monitor moves.
+                let scale_task = iced::window::scale_factor(id)
+                    .map(Message::MainWindowScaleChanged);
                 // Re-add Windows 11 DWM rounded corners + drop shadow
                 // (silently no-ops on Windows 10 and non-Windows). Has
                 // to run after the HWND is alive, hence here rather than
                 // in bootstrap.
                 let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
-                iced::Task::batch([size_task, corners_task])
+                iced::Task::batch([size_task, scale_task, corners_task])
             }
             Message::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
