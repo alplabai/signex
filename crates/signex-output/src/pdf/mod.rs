@@ -20,7 +20,10 @@
 //! intended Roboto/Iosevka typeface.
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
-use signex_types::markup::{RichSegment, parse_markup};
+use signex_types::markup::{
+    ExpressionEvalContext, RichSegment, evaluate_expressions, expand_standard_char_escapes,
+    parse_markup,
+};
 use thiserror::Error;
 
 use crate::template::TemplateId;
@@ -360,6 +363,7 @@ fn build_page_content(
                     let run_size = *size_pt * run.scale;
                     let run_text = sanitize_pdf_text(&run.text);
                     let run_y = draw_y + *size_pt * run.baseline_offset;
+                    let run_advance = text_advance_pt(chosen_alias, &run_text, run_size);
 
                     if rotation_deg.abs() > 0.001 {
                         surface.text_at_rotated(
@@ -374,7 +378,21 @@ fn build_page_content(
                         surface.text_at(cursor_x, page_h_pt - run_y, chosen_alias, run_size, &run_text);
                     }
 
-                    cursor_x += text_advance_pt(chosen_alias, &run_text, run_size);
+                    if run.overbar && run_advance > 0.1 {
+                        surface.set_stroke_color(sr, sg, sb);
+                        surface.set_stroke_width((run_size * 0.08).max(0.25));
+                        let y_bar = run_y - run_size * 0.78;
+                        let (x1, y1, x2, y2) = if rotation_deg.abs() > 0.001 {
+                            let (rx1, ry1) = rotate_about(cursor_x, y_bar, cursor_x, run_y, -*rotation_deg);
+                            let (rx2, ry2) = rotate_about(cursor_x + run_advance, y_bar, cursor_x, run_y, -*rotation_deg);
+                            (rx1, ry1, rx2, ry2)
+                        } else {
+                            (cursor_x, y_bar, cursor_x + run_advance, y_bar)
+                        };
+                        surface.stroke_line(x1, page_h_pt - y1, x2, page_h_pt - y2, (run_size * 0.08).max(0.25));
+                    }
+
+                    cursor_x += run_advance;
                 }
             }
         }
@@ -471,6 +489,7 @@ struct PdfTextRun {
     text: String,
     scale: f32,
     baseline_offset: f32,
+    overbar: bool,
 }
 
 fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
@@ -481,26 +500,36 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
             text: expanded,
             scale: 1.0,
             baseline_offset: 0.0,
+            overbar: false,
         }];
     }
 
     segments
         .into_iter()
         .map(|seg| match seg {
-            RichSegment::Normal(t) | RichSegment::Overbar(t) => PdfTextRun {
+            RichSegment::Normal(t) => PdfTextRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
+                overbar: false,
+            },
+            RichSegment::Overbar(t) => PdfTextRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                overbar: true,
             },
             RichSegment::Subscript(t) => PdfTextRun {
                 text: t,
                 scale: 0.72,
                 baseline_offset: 0.26,
+                overbar: false,
             },
             RichSegment::Superscript(t) => PdfTextRun {
                 text: t,
                 scale: 0.72,
                 baseline_offset: -0.34,
+                overbar: false,
             },
         })
         .filter(|run| !run.text.is_empty())
@@ -508,13 +537,18 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
 }
 
 fn normalize_standard_text(input: &str) -> String {
-    input
-        .replace("{slash}", "/")
-        .replace("{backslash}", "\\")
-        .replace("{dblquote}", "\"")
-        .replace("{lt}", "<")
-        .replace("{gt}", ">")
-        .replace("{bar}", "|")
+    let ctx = ExpressionEvalContext::default();
+    let evaluated = evaluate_expressions(input, &ctx);
+    expand_standard_char_escapes(&evaluated)
+}
+
+fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, f32) {
+    let rad = rotation_deg.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let dx = px - ox;
+    let dy = py - oy;
+    (ox + dx * cos - dy * sin, oy + dx * sin + dy * cos)
 }
 
 #[cfg(test)]

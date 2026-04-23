@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::{display_text_with_overbars, draw_rich_text};
+use super::text::{display_text_with_overbars, draw_rich_text, evaluate_symbol_text};
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -191,6 +191,8 @@ fn draw_pin(
         && !pin.name.is_empty()
         && pin.name != "~"
     {
+        let evaluated_pin_name = evaluate_symbol_text(&pin.name, sym, Some(pin.number.as_str()));
+
         // Standard pin-name placement has two modes keyed on `pin_name_offset`:
         //
         // * offset > 0  — name along the pin, INSIDE body, at
@@ -272,7 +274,7 @@ fn draw_pin(
         // flush against the cap-height). Any overbar segments are drawn as
         // a separate stroke above the text with a small visible gap, which
         // matches Standard's look.
-        let (plain, overbars) = display_text_with_overbars(&pin.name);
+        let (plain, overbars) = display_text_with_overbars(&evaluated_pin_name);
 
         // Determine whether the pin runs vertically on screen.
         let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
@@ -347,6 +349,8 @@ fn draw_pin(
 
     // Pin number (inside the body, along the pin line)
     if screen_font >= 1.0 && lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+        let evaluated_pin_number = evaluate_symbol_text(&pin.number, sym, Some(pin.number.as_str()));
+
         // Number is placed at the midpoint of the pin line.
         let mid = Point::new(
             pin.position.x + dir_x * len * 0.5,
@@ -391,7 +395,7 @@ fn draw_pin(
         );
         draw_rich_text(
             frame,
-            &pin.number,
+            &evaluated_pin_number,
             stack_np,
             pin_color,
             num_font,
