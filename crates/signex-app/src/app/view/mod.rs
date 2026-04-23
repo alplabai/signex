@@ -1782,7 +1782,7 @@ impl Signex {
             left: 10.0,
         })
         .width(440)
-        .height(24)
+        .height(28)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(search_bg)),
