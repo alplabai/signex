@@ -11,7 +11,7 @@
 use iced::Color;
 use iced::widget::canvas::{self, path};
 
-use signex_types::schematic::{HAlign, Label, LabelType};
+use signex_types::schematic::{HAlign, Label, LabelType, VAlign};
 
 use super::ScreenTransform;
 use super::text::draw_rich_text;
@@ -167,7 +167,6 @@ fn draw_port_label_altium(
         color,
         screen_font,
         text_offset,
-        true,
     );
 }
 
@@ -181,7 +180,7 @@ fn draw_net_label(
     screen_font: f32,
 ) {
     let offset = schematic_text_offset_net(label, crate::SCHEMATIC_TEXT_MM);
-    draw_spin_text(frame, label, transform, color, screen_font, offset, false);
+    draw_spin_text(frame, label, transform, color, screen_font, offset);
 }
 
 fn draw_global_label(
@@ -319,7 +318,6 @@ fn draw_global_label(
         color,
         screen_font,
         text_offset,
-        true,
     );
 }
 
@@ -405,7 +403,6 @@ fn draw_hier_label(
         color,
         screen_font,
         text_offset,
-        true,
     );
 }
 
@@ -544,10 +541,10 @@ fn approx_text_width_mm(text: &str, font_size_mm: f64) -> f64 {
     super::text::visible_char_count(text) as f64 * font_size_mm * 0.6
 }
 
-fn schematic_text_offset_net(label: &Label, _font_size_mm: f64) -> (f64, f64) {
-    // Altium places the net-label baseline right on the wire — just the
-    // pen width's worth of clearance above the anchor.
-    let dist = pen_width_mm();
+fn schematic_text_offset_net(label: &Label, font_size_mm: f64) -> (f64, f64) {
+    // KiCad shows net labels with visible breathing room from the anchor wire.
+    // Use a font-relative offset instead of pen-width-only clearance.
+    let dist = text_offset_mm(font_size_mm);
     match label_spin_style(label) {
         SpinStyle::Up | SpinStyle::Bottom => (-dist, 0.0),
         SpinStyle::Left | SpinStyle::Right => (0.0, -dist),
@@ -590,7 +587,6 @@ fn draw_spin_text(
     color: Color,
     screen_font: f32,
     offset_mm: (f64, f64),
-    center_vertical: bool,
 ) {
     let spin = label_spin_style(label);
     let wx = label.position.x + offset_mm.0;
@@ -601,10 +597,10 @@ fn draw_spin_text(
         SpinStyle::Left | SpinStyle::Bottom => iced::alignment::Horizontal::Right,
         SpinStyle::Right | SpinStyle::Up => iced::alignment::Horizontal::Left,
     };
-    let v_align = if center_vertical {
-        iced::alignment::Vertical::Center
-    } else {
-        iced::alignment::Vertical::Bottom
+    let v_align = match label.justify_v {
+        VAlign::Top => iced::alignment::Vertical::Top,
+        VAlign::Center => iced::alignment::Vertical::Center,
+        VAlign::Bottom => iced::alignment::Vertical::Bottom,
     };
 
     match spin {
