@@ -72,6 +72,7 @@ impl PdfSurface {
     }
 
     /// Fill a rectangle (top-left at (x, y), width w, height h) with RGB color.
+    #[allow(dead_code)] // Reserved for v0.9 template backgrounds / fills.
     pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32) {
         self.write_operator(&format!("{} {} {} rg\n", r, g, b));
         self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
