@@ -443,6 +443,8 @@ pub struct Label {
     pub font_size: f64,
     #[serde(default)]
     pub justify: HAlign,
+    #[serde(default)]
+    pub justify_v: VAlign,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

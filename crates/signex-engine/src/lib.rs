@@ -1017,6 +1017,7 @@ mod tests {
             shape: "output".to_string(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         });
         document.labels.push(Label {
             uuid: uuid::Uuid::new_v4(),
@@ -1027,6 +1028,7 @@ mod tests {
             shape: "input".to_string(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         });
 
         let engine = Engine::new(document).unwrap();
