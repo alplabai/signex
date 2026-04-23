@@ -5,6 +5,43 @@
 use super::{Orientation, PageSize};
 
 impl PageSize {
+    /// Parse a Standard `(paper "...")` string into a `PageSize`.
+    ///
+    /// Standard uses strings like `"A4"`, `"A3"`, `"A"`, `"B"`, `"USLetter"`,
+    /// `"USLegal"`. Unknown strings fall back to `IsoA4`.
+    pub fn from_standard_str(s: &str) -> Self {
+        match s.trim() {
+            "A0" => PageSize::IsoA0,
+            "A1" => PageSize::IsoA1,
+            "A2" => PageSize::IsoA2,
+            "A3" => PageSize::IsoA3,
+            "A4" => PageSize::IsoA4,
+            "A5" => PageSize::IsoA5,
+            "A" => PageSize::AnsiA,
+            "B" => PageSize::AnsiB,
+            "C" => PageSize::AnsiC,
+            "D" => PageSize::AnsiD,
+            "E" => PageSize::AnsiE,
+            "USLetter" => PageSize::UsLetter,
+            "USLegal" => PageSize::UsLegal,
+            _ => PageSize::IsoA4,
+        }
+    }
+
+    /// Derive orientation from a Standard paper-size string.
+    ///
+    /// Standard schematics default to landscape for A-series except A4 which is
+    /// portrait, and landscape for all ANSI sizes. The `portrait` flag in the
+    /// Standard `(paper ...)` node overrides this; pass it when present.
+    pub fn default_orientation_for_standard(s: &str) -> Orientation {
+        match s.trim() {
+            // A4 is conventionally portrait in Standard schematics.
+            "A4" | "A5" => Orientation::Portrait,
+            // Everything else defaults to landscape.
+            _ => Orientation::Landscape,
+        }
+    }
+
     /// Portrait `(width_mm, height_mm)`. For landscape, swap them.
     pub fn portrait_dimensions_mm(self) -> (f64, f64) {
         match self {
@@ -84,5 +121,31 @@ mod tests {
         let (a4_w, _) = PageSize::IsoA4.portrait_dimensions_mm();
         let (_, a3_h) = PageSize::IsoA3.portrait_dimensions_mm();
         assert_eq!(a3_h, 2.0 * a4_w);
+    }
+
+    #[test]
+    fn standard_paper_strings_round_trip() {
+        assert!(matches!(PageSize::from_standard_str("A4"), PageSize::IsoA4));
+        assert!(matches!(PageSize::from_standard_str("A3"), PageSize::IsoA3));
+        assert!(matches!(PageSize::from_standard_str("A"), PageSize::AnsiA));
+        assert!(matches!(PageSize::from_standard_str("USLetter"), PageSize::UsLetter));
+        // Unknown string falls back to A4.
+        assert!(matches!(PageSize::from_standard_str("unknown"), PageSize::IsoA4));
+    }
+
+    #[test]
+    fn standard_orientation_defaults() {
+        assert!(matches!(
+            PageSize::default_orientation_for_standard("A4"),
+            Orientation::Portrait
+        ));
+        assert!(matches!(
+            PageSize::default_orientation_for_standard("A3"),
+            Orientation::Landscape
+        ));
+        assert!(matches!(
+            PageSize::default_orientation_for_standard("A"),
+            Orientation::Landscape
+        ));
     }
 }
