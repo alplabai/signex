@@ -231,6 +231,7 @@ pub fn dock_tab_container_dragging(
     tokens: &ThemeTokens,
     is_active: bool,
     is_dragging: bool,
+    is_hovered: bool,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
     let border_c = ti(tokens.border);
@@ -239,12 +240,21 @@ pub fn dock_tab_container_dragging(
         a: tab_active.a * 0.35,
         ..tab_active
     };
+    // Hover fill sits between inactive and active so hovering an
+    // inactive tab reads as a lift without being confused with the
+    // selected tab. Matches Altium's subtle tab hover.
+    let hover_fill = iced::Color {
+        a: tab_active.a * 0.70,
+        ..tab_active
+    };
     let drag_fill = iced::Color { a: 0.22, ..accent };
     move |_: &Theme| container::Style {
         background: Some(Background::Color(if is_dragging {
             drag_fill
         } else if is_active {
             tab_active
+        } else if is_hovered {
+            hover_fill
         } else {
             inactive_fill
         })),
