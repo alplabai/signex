@@ -12,13 +12,12 @@ use signex_types::schematic::{Point, SchematicSheet, Symbol};
 
 // Union-find for net connectivity
 #[derive(Clone)]
-struct NetNode {
+pub(super) struct NetNode {
     parent: usize,
-    name: String,
 }
 
 pub struct NetGraph {
-    pub nodes: Vec<NetNode>,
+    nodes: Vec<NetNode>,
     pub net_names: HashMap<usize, String>, // root index -> net name
     pub node_to_pins: HashMap<usize, Vec<(String, String, String)>>, // root -> (ref, pin_number, pin_type)
 }
@@ -35,10 +34,7 @@ impl NetGraph {
     /// Add a new node (pin endpoint) to the graph.
     pub fn add_node(&mut self) -> usize {
         let idx = self.nodes.len();
-        self.nodes.push(NetNode {
-            parent: idx,
-            name: String::new(),
-        });
+        self.nodes.push(NetNode { parent: idx });
         idx
     }
 

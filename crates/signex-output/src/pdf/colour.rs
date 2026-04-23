@@ -51,6 +51,7 @@ impl ColourMap {
     }
 
     /// Map a fill colour for B&W mode — white for any colour.
+    #[allow(dead_code)] // Used once fill operations are added in v0.9.
     pub fn map_fill_bw(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         if matches!(self.mode, ColourMode::BlackAndWhite) {
             if is_approximately_white(r, g, b) {

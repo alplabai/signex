@@ -1,11 +1,15 @@
 //! Font embedding + subsetting for PDFs.
 //!
-//! v0.8.0 embeds Roboto (title blocks) and Iosevka (canvas text) as PDF Type0
-//! composite CIDFont entries. Full font bytes are embedded (subsetting deferred
-//! to v0.9 — contributes ~30-40 KB per PDF but is much simpler to maintain).
+//! v0.8 references PDF standard-14 Type1 fonts (Helvetica variants + Courier
+//! variants) via short aliases `F1`–`F4`. The alias-to-`/BaseFont` mapping is
+//! emitted once per PDF; every page points at the same four font objects.
 //!
-//! Maps `template::FontStyle` to embedded variants. FontCatalog tracks refs
-//! for each registered font and can emit their Font dictionaries at PDF write time.
+//! The Roboto + Iosevka TTF bytes below are bundled at compile time but NOT
+//! yet wired into the PDF pipeline — they're parked for v0.9 when the Type0
+//! composite-font dict + FontFile2 stream emission lands. The `#[allow(dead_code)]`
+//! annotations that follow are deliberate.
+
+#![allow(dead_code)]
 
 use pdf_writer::Ref;
 use ttf_parser::Face;
@@ -28,6 +32,15 @@ pub enum PdfFont {
 }
 
 impl PdfFont {
+    /// Every variant of the enum — handy for allocating refs / emitting
+    /// the /Font resources dict without duplicating the match list.
+    pub const ALL: [PdfFont; 4] = [
+        PdfFont::RobotoRegular,
+        PdfFont::RobotoBold,
+        PdfFont::IosevkaRegular,
+        PdfFont::IosevkaBold,
+    ];
+
     /// Map template FontStyle to the appropriate font.
     /// Normal → Roboto, Bold → Roboto Bold, Italic/BoldItalic → Iosevka.
     pub fn for_style(style: FontStyle) -> Self {
@@ -39,7 +52,33 @@ impl PdfFont {
         }
     }
 
-    /// PostScript base name for this font (used in /BaseFont).
+    /// Short alias used inside content streams (`/F1 9 Tf ...`). Matches the
+    /// keys emitted in the page's /Font resources dict.
+    pub fn alias(&self) -> &'static str {
+        match self {
+            PdfFont::RobotoRegular => "F1",
+            PdfFont::RobotoBold => "F2",
+            PdfFont::IosevkaRegular => "F3",
+            PdfFont::IosevkaBold => "F4",
+        }
+    }
+
+    /// PDF standard-14 Type1 font name we fall back to while full Type0
+    /// composite-font emission is deferred to v0.9. Roboto → Helvetica,
+    /// Iosevka → Courier (monospace). Every PDF reader ships these by
+    /// spec, so text always renders even without a /FontFile2 stream.
+    pub fn standard_ps_name(&self) -> &'static str {
+        match self {
+            PdfFont::RobotoRegular => "Helvetica",
+            PdfFont::RobotoBold => "Helvetica-Bold",
+            PdfFont::IosevkaRegular => "Courier",
+            PdfFont::IosevkaBold => "Courier-Bold",
+        }
+    }
+
+    /// PostScript base name for this font (used in /BaseFont). Matches the
+    /// embedded TTF — used once full Type0 emission lands in v0.9.
+    #[allow(dead_code)]
     pub fn base_name(&self) -> &'static str {
         match self {
             PdfFont::RobotoRegular => "Roboto",
@@ -124,6 +163,16 @@ mod tests {
         assert_eq!(PdfFont::RobotoBold.base_name(), "Roboto-Bold");
         assert_eq!(PdfFont::IosevkaRegular.base_name(), "Iosevka");
         assert_eq!(PdfFont::IosevkaBold.base_name(), "Iosevka-Bold");
+    }
+
+    #[test]
+    fn aliases_and_standard_fallbacks() {
+        assert_eq!(PdfFont::RobotoRegular.alias(), "F1");
+        assert_eq!(PdfFont::IosevkaBold.alias(), "F4");
+        assert_eq!(PdfFont::RobotoRegular.standard_ps_name(), "Helvetica");
+        assert_eq!(PdfFont::RobotoBold.standard_ps_name(), "Helvetica-Bold");
+        assert_eq!(PdfFont::IosevkaRegular.standard_ps_name(), "Courier");
+        assert_eq!(PdfFont::IosevkaBold.standard_ps_name(), "Courier-Bold");
     }
 
     #[test]
