@@ -971,7 +971,7 @@ impl Signex {
                         // Pick up the rotation / font size / justification
                         // the user edited in the TAB pre-placement form so
                         // the first click matches what they configured.
-                        let (pp_rot, pp_fs_mm, pp_justify) = self
+                        let (pp_rot, pp_fs_mm, pp_justify_h, pp_justify_v) = self
                             .document_state
                             .panel_ctx
                             .pre_placement
@@ -982,12 +982,14 @@ impl Signex {
                                     pp.font_size_pt as f64
                                         * signex_types::schematic::SCHEMATIC_PT_TO_MM,
                                     pp.justify_h,
+                                    pp.justify_v,
                                 )
                             })
                             .unwrap_or((
                                 0.0,
                                 signex_types::schematic::SCHEMATIC_TEXT_MM,
                                 signex_types::schematic::HAlign::Left,
+                                signex_types::schematic::VAlign::Bottom,
                             ));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
@@ -997,8 +999,8 @@ impl Signex {
                             label_type,
                             shape,
                             font_size: pp_fs_mm,
-                            justify: pp_justify,
-                            justify_v: signex_types::schematic::VAlign::Bottom,
+                            justify: pp_justify_h,
+                            justify_v: pp_justify_v,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceLabel { label },
