@@ -141,6 +141,16 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
     out
 }
 
+/// Standard-style unnamed net fallback: `Net-(<refdes>-Pad<pin>)`.
+///
+/// Uses lexicographically smallest `(refdes, pin)` pair for deterministic
+/// naming, matching the netlist side policy.
+pub fn standard_auto_net_name_from_pins(pins: &[(String, String)]) -> Option<String> {
+    pins.iter()
+        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        .map(|(r, p)| format!("Net-({r}-Pad{p})"))
+}
+
 /// Parse Standard markup into rich text segments.
 pub fn parse_markup(input: &str) -> Vec<RichSegment> {
     if input.is_empty() {
@@ -491,5 +501,18 @@ mod tests {
         let ctx = ExpressionEvalContext::default();
         let out = evaluate_expressions("${refdes:U1} @{foo} NET_NAME(1)", &ctx);
         assert_eq!(out, "${refdes:U1} @{foo} NET_NAME(1)");
+    }
+
+    #[test]
+    fn standard_auto_net_name_uses_lowest_pair() {
+        let pins = vec![
+            ("U2".to_string(), "5".to_string()),
+            ("R1".to_string(), "2".to_string()),
+            ("R1".to_string(), "1".to_string()),
+        ];
+        assert_eq!(
+            standard_auto_net_name_from_pins(&pins),
+            Some("Net-(R1-Pad1)".to_string())
+        );
     }
 }

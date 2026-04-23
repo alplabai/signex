@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use signex_types::markup::standard_auto_net_name_from_pins;
 use signex_types::schematic::{LabelType, Point, Symbol, SymbolInstance};
 
 use crate::SheetSnapshot;
@@ -235,7 +236,9 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
         }
     }
 
-    let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut root_pins: HashMap<Node, Vec<(String, String)>> = HashMap::new();
+    let mut pin_entries: Vec<(String, String, Node)> = Vec::new();
+
     for (sheet_idx, snap) in sheets.iter().enumerate() {
         for sym in &snap.schematic.symbols {
             let Some(lib_sym) = snap.schematic.lib_symbols.get(&sym.lib_id) else {
@@ -249,18 +252,38 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
                 let world = transform_pin_position(sym, &lib_pin.pin.position);
                 let node = (sheet_idx, q(world).0, q(world).1);
                 let root = find(&mut parent, node);
-                let net_name = root_name
-                    .get(&root)
-                    .map(|(_, n)| n.clone())
-                    .unwrap_or_default();
 
-                if !net_name.is_empty() {
-                    result
-                        .entry(sym.uuid.to_string())
-                        .or_default()
-                        .insert(lib_pin.pin.number.clone(), net_name);
-                }
+                root_pins
+                    .entry(root)
+                    .or_default()
+                    .push((sym.reference.clone(), lib_pin.pin.number.clone()));
+                pin_entries.push((sym.uuid.to_string(), lib_pin.pin.number.clone(), root));
             }
+        }
+    }
+
+    let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
+    for root in root_pins.keys().copied() {
+        let named = root_name.get(&root).map(|(_, n)| n.clone()).unwrap_or_default();
+        if !named.is_empty() {
+            resolved_root_name.insert(root, named);
+            continue;
+        }
+        let auto = root_pins
+            .get(&root)
+            .and_then(|pins| standard_auto_net_name_from_pins(pins))
+            .unwrap_or_default();
+        resolved_root_name.insert(root, auto);
+    }
+
+    let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for (sym_uuid, pin_number, root) in pin_entries {
+        let net_name = resolved_root_name.get(&root).cloned().unwrap_or_default();
+        if !net_name.is_empty() {
+            result
+                .entry(sym_uuid)
+                .or_default()
+                .insert(pin_number, net_name);
         }
     }
 
