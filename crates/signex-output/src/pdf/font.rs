@@ -104,6 +104,122 @@ impl PdfFont {
     }
 }
 
+/// Resolve alias (`F1`..`F4`) to PdfFont.
+pub fn font_for_alias(alias: &str) -> PdfFont {
+    match alias {
+        "F1" => PdfFont::RobotoRegular,
+        "F2" => PdfFont::RobotoBold,
+        "F3" => PdfFont::IosevkaRegular,
+        "F4" => PdfFont::IosevkaBold,
+        _ => PdfFont::RobotoRegular,
+    }
+}
+
+/// Choose the most suitable alias for the given text.
+/// Keeps the preferred alias when glyph coverage is full.
+pub fn best_alias_for_text(preferred_alias: &str, text: &str) -> &'static str {
+    let preferred = font_for_alias(preferred_alias);
+    if glyph_coverage(preferred, text) >= 1.0 {
+        return preferred.alias();
+    }
+
+    let mut best = preferred;
+    let mut best_cov = glyph_coverage(preferred, text);
+    for candidate in PdfFont::ALL {
+        let cov = glyph_coverage(candidate, text);
+        if cov > best_cov {
+            best_cov = cov;
+            best = candidate;
+        }
+    }
+
+    best.alias()
+}
+
+/// Convert text to a PDF-safe Latin-1-ish representation so standard-14
+/// font fallback does not drop characters.
+pub fn sanitize_pdf_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        let mapped = match ch {
+            'Ğ' => 'G',
+            'ğ' => 'g',
+            'İ' => 'I',
+            'ı' => 'i',
+            'Ş' => 'S',
+            'ş' => 's',
+            'Ç' => 'C',
+            'ç' => 'c',
+            'Ö' => 'O',
+            'ö' => 'o',
+            'Ü' => 'U',
+            'ü' => 'u',
+            _ => ch,
+        };
+
+        let code = mapped as u32;
+        if (0x20..=0x7E).contains(&code) || (0xA0..=0xFF).contains(&code) {
+            out.push(mapped);
+        } else if mapped == '\n' || mapped == '\r' || mapped == '\t' {
+            out.push(' ');
+        } else {
+            out.push('?');
+        }
+    }
+    out
+}
+
+/// Approximate text advance using embedded TTF metrics at the given size.
+pub fn text_advance_pt(alias: &str, text: &str, size_pt: f32) -> f32 {
+    let font = font_for_alias(alias);
+    let Some(face) = font.face() else {
+        return size_pt.max(1.0) * text.chars().count() as f32 * 0.5;
+    };
+
+    let upm = face.units_per_em() as f32;
+    if upm <= 0.0 {
+        return size_pt.max(1.0) * text.chars().count() as f32 * 0.5;
+    }
+
+    let scale = size_pt.max(1.0) / upm;
+    let mut advance = 0.0_f32;
+    for ch in text.chars() {
+        if let Some(gid) = face.glyph_index(ch) {
+            advance += face
+                .glyph_hor_advance(gid)
+                .map(|v| v as f32 * scale)
+                .unwrap_or(upm * scale * 0.5);
+        } else {
+            advance += upm * scale * 0.5;
+        }
+    }
+    advance
+}
+
+fn glyph_coverage(font: PdfFont, text: &str) -> f32 {
+    let Some(face) = font.face() else {
+        return 0.0;
+    };
+
+    let mut total = 0usize;
+    let mut ok = 0usize;
+    for ch in text.chars() {
+        if ch.is_control() {
+            continue;
+        }
+        total += 1;
+        if face.glyph_index(ch).is_some() {
+            ok += 1;
+        }
+    }
+
+    if total == 0 {
+        1.0
+    } else {
+        ok as f32 / total as f32
+    }
+}
+
 /// A catalog of fonts used in the PDF, mapped to their pdf-writer Refs.
 #[derive(Debug, Default)]
 pub struct FontCatalog {

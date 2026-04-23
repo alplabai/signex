@@ -11,7 +11,7 @@
 //! fidelity; the actual PDF renders glyphs correctly via font subsetting.
 
 use crate::ExportContext;
-use crate::pdf::PdfOptions;
+use crate::pdf::{PageRange, PdfOptions};
 
 mod rasterize;
 
@@ -57,13 +57,44 @@ impl PreviewRasterizer {
         opts: &PreviewOptions,
     ) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
+        let sheet_indices = resolve_page_range_preview(&opts.pdf.page_range, ctx.sheets.len());
 
-        ctx.sheets
-            .iter()
+        sheet_indices
+            .into_iter()
+            .filter_map(|idx| ctx.sheets.get(idx))
             .filter_map(|sheet| {
                 rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx)
             })
             .collect()
+    }
+}
+
+fn resolve_page_range_preview(range: &PageRange, sheet_count: usize) -> Vec<usize> {
+    match range {
+        PageRange::All => (0..sheet_count).collect(),
+        PageRange::Current => {
+            if sheet_count > 0 {
+                vec![0]
+            } else {
+                Vec::new()
+            }
+        }
+        PageRange::Specific(pages) => pages
+            .iter()
+            .copied()
+            .filter(|p| *p > 0 && *p <= sheet_count)
+            .map(|p| p - 1)
+            .collect(),
+        PageRange::Range(start, end) => {
+            if *start == 0 || *end == 0 || *start > sheet_count || *end > sheet_count {
+                return Vec::new();
+            }
+            if start <= end {
+                (start - 1..*end).collect()
+            } else {
+                (end - 1..*start).collect()
+            }
+        }
     }
 }
 

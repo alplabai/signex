@@ -277,6 +277,14 @@ pub enum Message {
     ExportPdfSetFitToPage(bool),
     /// User toggled the "Include Title Block" checkbox in the PDF options dialog.
     ExportPdfSetIncludeTitleBlock(bool),
+    /// User changed page-range mode to export all sheets.
+    ExportPdfSetPageRangeAll,
+    /// User changed page-range mode to export only the active sheet.
+    ExportPdfSetPageRangeCurrent,
+    /// User changed page-range mode to export one specific page number.
+    ExportPdfSetPageRangeSpecific,
+    /// User edited the specific page number input in the PDF options dialog.
+    ExportPdfSetSpecificPageInput(String),
     /// User clicked Cancel in the PDF options dialog.
     ExportPdfDialogCancel,
     /// User clicked Export in the PDF options dialog — proceed with file
@@ -294,6 +302,16 @@ pub enum Message {
     PrintPreviewRequested,
     /// User selected a page in the print preview thumbnail list.
     PrintPreviewSelectPage(usize),
+    /// User changed preview colour mode.
+    PrintPreviewSetColourMode(signex_output::ColourMode),
+    /// User changed preview page range to all sheets.
+    PrintPreviewSetPageRangeAll,
+    /// User changed preview page range to current sheet.
+    PrintPreviewSetPageRangeCurrent,
+    /// User changed preview page range to one specific page.
+    PrintPreviewSetPageRangeSpecific,
+    /// User edited the specific page input in preview.
+    PrintPreviewSetSpecificPageInput(String),
     /// User clicked the "Export PDF" button in the preview dialog.
     PrintPreviewExport,
     /// User closed the print preview dialog.

@@ -1226,11 +1226,19 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .and_then(|v| v.first_arg())
         .unwrap_or("")
         .to_string();
-    let paper_size = root
-        .find("paper")
-        .and_then(|v| v.first_arg())
-        .unwrap_or("A4")
-        .to_string();
+    let paper_size = if let Some(paper_node) = root.find("paper") {
+        let size = paper_node.first_arg().unwrap_or("A4");
+        let orientation = paper_node.arg(1).unwrap_or("");
+        if orientation.eq_ignore_ascii_case("portrait") {
+            format!("{size} portrait")
+        } else if orientation.eq_ignore_ascii_case("landscape") {
+            format!("{size} landscape")
+        } else {
+            size.to_string()
+        }
+    } else {
+        "A4".to_string()
+    };
     let root_sheet_page = parse_root_sheet_page(&root);
     let uuid = parse_uuid(&root);
 

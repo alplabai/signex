@@ -56,6 +56,10 @@ impl Signex {
             | Message::ExportPdfSetTemplate(_)
             | Message::ExportPdfSetFitToPage(_)
             | Message::ExportPdfSetIncludeTitleBlock(_)
+            | Message::ExportPdfSetPageRangeAll
+            | Message::ExportPdfSetPageRangeCurrent
+            | Message::ExportPdfSetPageRangeSpecific
+            | Message::ExportPdfSetSpecificPageInput(_)
             | Message::ExportPdfDialogCancel
             | Message::ExportPdfDialogConfirm
             | Message::ExportPdfFinished(_)
@@ -64,6 +68,11 @@ impl Signex {
             | Message::ExportBomFinished(_)
             | Message::PrintPreviewRequested
             | Message::PrintPreviewSelectPage(_)
+            | Message::PrintPreviewSetColourMode(_)
+            | Message::PrintPreviewSetPageRangeAll
+            | Message::PrintPreviewSetPageRangeCurrent
+            | Message::PrintPreviewSetPageRangeSpecific
+            | Message::PrintPreviewSetSpecificPageInput(_)
             | Message::PrintPreviewExport
             | Message::PrintPreviewClose
             | Message::DismissExportError => self.dispatch_document_message(message),

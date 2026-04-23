@@ -282,7 +282,7 @@ impl Signex {
     /// File → Export → PDF… (Ctrl+Shift+P) or the Export PDF button in
     /// Print Preview.
     fn view_pdf_options_dialog(&self) -> Element<'_, Message> {
-        use iced::widget::{button, checkbox, column, container, row, text};
+        use iced::widget::{button, checkbox, column, container, row, text, text_input};
 
         let dialog = match &self.document_state.pdf_options_dialog {
             Some(d) => d,
@@ -352,6 +352,23 @@ impl Signex {
         .spacing(12)
         .align_y(iced::Alignment::Center);
 
+        let page_range_text = match &dialog.options.page_range {
+            signex_output::PageRange::All => "All Sheets".to_string(),
+            signex_output::PageRange::Current => "Current Sheet".to_string(),
+            signex_output::PageRange::Specific(_) => {
+                format!("Specific Page ({})", dialog.specific_page_input)
+            }
+            signex_output::PageRange::Range(a, b) => format!("Range ({a}-{b})"),
+        };
+
+        let page_range_row = row![
+            text("Page Range").color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(page_range_text).color(text_c),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
         // Sheet Template display
         let template_text = dialog
             .options
@@ -387,6 +404,90 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         let checkboxes = row![fit_to_page_checkbox, title_block_checkbox].spacing(24);
+
+        let mode_button = |label: &'static str, selected: bool, msg: Message| {
+            let selected_bg = accent_c;
+            let selected_text = iced::Color::WHITE;
+            let default_bg = panel_bg;
+            let default_text = text_c;
+            button(text(label).size(11).color(if selected {
+                selected_text
+            } else {
+                default_text
+            }))
+            .padding([4, 10])
+            .on_press(msg)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(if selected {
+                    selected_bg.into()
+                } else {
+                    default_bg.into()
+                }),
+                text_color: if selected { selected_text } else { default_text },
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..iced::widget::button::Style::default()
+            })
+        };
+
+        let colour_controls = row![
+            mode_button(
+                "Colour",
+                matches!(dialog.options.colour_mode, signex_output::ColourMode::Colour),
+                Message::ExportPdfSetColourMode(signex_output::ColourMode::Colour),
+            ),
+            mode_button(
+                "Grayscale",
+                matches!(dialog.options.colour_mode, signex_output::ColourMode::Grayscale),
+                Message::ExportPdfSetColourMode(signex_output::ColourMode::Grayscale),
+            ),
+            mode_button(
+                "B/W",
+                matches!(dialog.options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                Message::ExportPdfSetColourMode(signex_output::ColourMode::BlackAndWhite),
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let page_range_controls = row![
+            mode_button(
+                "All Sheets",
+                matches!(dialog.options.page_range, signex_output::PageRange::All),
+                Message::ExportPdfSetPageRangeAll,
+            ),
+            mode_button(
+                "Current",
+                matches!(dialog.options.page_range, signex_output::PageRange::Current),
+                Message::ExportPdfSetPageRangeCurrent,
+            ),
+            mode_button(
+                "Specific",
+                matches!(dialog.options.page_range, signex_output::PageRange::Specific(_)),
+                Message::ExportPdfSetPageRangeSpecific,
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let specific_page_input: Element<'_, Message> = if matches!(dialog.options.page_range, signex_output::PageRange::Specific(_)) {
+            row![
+                text("Page").size(11).color(text_c),
+                text_input::<Message, iced::Theme, iced::Renderer>("1", &dialog.specific_page_input)
+                    .on_input(|value| Message::ExportPdfSetSpecificPageInput(value))
+                    .padding([4, 8])
+                    .size(12)
+                    .width(80),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            iced::widget::Space::new().height(0).into()
+        };
 
         // Buttons
         let cancel_btn = button(text("Cancel").size(12).color(text_c))
@@ -431,6 +532,10 @@ impl Signex {
             page_size_row,
             orientation_row,
             colour_mode_row,
+            colour_controls,
+            page_range_row,
+            page_range_controls,
+            specific_page_input,
             template_row,
             iced::widget::Space::new().height(4),
             checkboxes,
@@ -472,7 +577,7 @@ impl Signex {
     /// and Close buttons at the bottom. Triggered by File → Print Preview
     /// (Ctrl+P); disappears on Close or when the export completes.
     fn view_print_preview(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, image, mouse_area, row, scrollable, text};
+        use iced::widget::{button, column, container, image, mouse_area, opaque, row, scrollable, text, text_input};
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -487,18 +592,99 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
         let hover_c = crate::styles::ti(tokens.hover);
 
+        let mode_button = |label: &'static str, selected: bool, msg: Message| {
+            let selected_bg = accent_c;
+            let selected_text = iced::Color::WHITE;
+            let default_bg = panel_bg;
+            let default_text = text_c;
+            button(text(label).size(11).color(if selected {
+                selected_text
+            } else {
+                default_text
+            }))
+            .padding([4, 10])
+            .on_press(msg)
+            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                background: Some(if selected {
+                    selected_bg.into()
+                } else {
+                    default_bg.into()
+                }),
+                text_color: if selected { selected_text } else { default_text },
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..iced::widget::button::Style::default()
+            })
+        };
+
+        let colour_controls = row![
+            text("Colour").size(11).color(text_muted),
+            mode_button(
+                "Color",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
+            ),
+            mode_button(
+                "Gray",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
+            ),
+            mode_button(
+                "B/W",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let range_controls = row![
+            text("Pages").size(11).color(text_muted),
+            mode_button(
+                "All",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
+                Message::PrintPreviewSetPageRangeAll,
+            ),
+            mode_button(
+                "Current",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
+                Message::PrintPreviewSetPageRangeCurrent,
+            ),
+            mode_button(
+                "Specific",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
+                Message::PrintPreviewSetPageRangeSpecific,
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let specific_page_input: Element<'_, Message> = if matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)) {
+            row![
+                text("Page").size(11).color(text_muted),
+                text_input::<Message, iced::Theme, iced::Renderer>("1", &preview.specific_page_input)
+                    .on_input(|value| Message::PrintPreviewSetSpecificPageInput(value))
+                    .padding([4, 8])
+                    .size(12)
+                    .width(80),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            iced::widget::Space::new().height(0).into()
+        };
+
         // Left rail: one thumbnail button per rendered page. Bounded width
         // and scrollable so 20-sheet projects don't break the layout.
         let mut thumbs: iced::widget::Column<'_, Message> =
             column![].spacing(4).padding(8);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
-            let thumb_handle = image::Handle::from_rgba(
-                page.width_px,
-                page.height_px,
-                page.rgba.clone(),
-            );
-            let thumb = image(thumb_handle)
+            let thumb = image(preview.page_handles[i].clone())
                 .content_fit(iced::ContentFit::Contain)
                 .width(120)
                 .height(85);
@@ -532,13 +718,8 @@ impl Signex {
         // Centre: the selected page rendered full-size, constrained to a
         // reasonable viewport.
         let selected_page = &preview.pages[preview.selected];
-        let full_handle = image::Handle::from_rgba(
-            selected_page.width_px,
-            selected_page.height_px,
-            selected_page.rgba.clone(),
-        );
         let full_image = container(
-            image(full_handle)
+            image(preview.page_handles[preview.selected].clone())
                 .content_fit(iced::ContentFit::Contain)
                 .width(Length::Fill)
                 .height(Length::Fill),
@@ -615,6 +796,8 @@ impl Signex {
         // Dialog body: title + thumbnails/content row + bottom bar
         let body = column![
             text("Print Preview").size(14).color(text_c),
+            row![colour_controls, iced::widget::Space::new().width(12), range_controls, specific_page_input]
+                .align_y(iced::Alignment::Center),
             row![thumb_rail, iced::widget::Space::new().width(8), centre]
                 .width(Length::Fill)
                 .height(Length::Fill),
@@ -624,7 +807,7 @@ impl Signex {
         .padding(12);
 
         // Dialog card sized to leave a margin around the edges
-        let card = container(body)
+        let card = opaque(container(body)
             .max_width(1100)
             .max_height(780)
             .padding(0)
@@ -641,7 +824,7 @@ impl Signex {
                     blur_radius: 16.0,
                 },
                 ..container::Style::default()
-            });
+            }));
 
         container(card)
             .width(Length::Fill)
@@ -2147,6 +2330,17 @@ impl Signex {
         if ui.net_color_custom.show {
             layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
             layers.push(self.view_net_color_custom_picker());
+        }
+
+        // Blocking modals must own the overlay stack. If we keep adding
+        // tool/menu overlays after these, they can end up visually above
+        // the modal and make the dialog look broken.
+        let has_blocking_modal = document.pdf_options_dialog.is_some()
+            || document.export_error.is_some()
+            || document.preview.is_some()
+            || ui.net_color_custom.show;
+        if has_blocking_modal {
+            return layers;
         }
 
         // Altium-style pause overlay: big centered "Placement Paused" card
