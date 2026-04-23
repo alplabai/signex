@@ -16,6 +16,9 @@ pub struct PdfSurface {
     current_stroke_r: f32,
     current_stroke_g: f32,
     current_stroke_b: f32,
+    current_fill_r: f32,
+    current_fill_g: f32,
+    current_fill_b: f32,
     current_stroke_width: f32,
 }
 
@@ -26,6 +29,9 @@ impl PdfSurface {
             current_stroke_r: 0.0,
             current_stroke_g: 0.0,
             current_stroke_b: 0.0,
+            current_fill_r: 0.0,
+            current_fill_g: 0.0,
+            current_fill_b: 0.0,
             current_stroke_width: 0.0,
         }
     }
@@ -48,15 +54,34 @@ impl PdfSurface {
         }
     }
 
+    /// Set non-stroking color (fill/text). Emits `rg` only if changed.
+    pub fn set_fill_color(&mut self, r: f32, g: f32, b: f32) {
+        if (self.current_fill_r - r).abs() > 1e-5
+            || (self.current_fill_g - g).abs() > 1e-5
+            || (self.current_fill_b - b).abs() > 1e-5
+        {
+            self.write_operator(&format!("{} {} {} rg\n", r, g, b));
+            self.current_fill_r = r;
+            self.current_fill_g = g;
+            self.current_fill_b = b;
+        }
+    }
+
     /// Set stroke width (in points). Emits `w` operator only if changed.
-    fn set_stroke_width(&mut self, width: f32) {
+    pub fn set_stroke_width(&mut self, width: f32) {
         if (self.current_stroke_width - width).abs() > 1e-5 {
             self.write_operator(&format!("{} w\n", width));
             self.current_stroke_width = width;
         }
     }
 
+    /// Emit a raw operator string into the content stream.
+    pub fn raw_operator(&mut self, op: &str) {
+        self.write_operator(op);
+    }
+
     /// Stroke a line from (x1, y1) to (x2, y2).
+    #[allow(dead_code)]
     pub fn stroke_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width_pt: f32) {
         self.set_stroke_width(width_pt);
         self.write_operator(&format!("{} {} m\n", x1, y1));
@@ -86,6 +111,28 @@ impl PdfSurface {
         self.write_operator("BT\n");
         self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
         self.write_operator(&format!("{} {} Td\n", x, y));
+        self.write_operator(&format!("({}) Tj\n", escaped));
+        self.write_operator("ET\n");
+    }
+
+    /// Emit rotated text at (x, y) with a text matrix.
+    pub fn text_at_rotated(
+        &mut self,
+        x: f32,
+        y: f32,
+        font_name: &str,
+        size_pt: f32,
+        text: &str,
+        rotation_deg: f32,
+    ) {
+        let escaped = escape_pdf_string(text);
+        let rad = rotation_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+
+        self.write_operator("BT\n");
+        self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
+        self.write_operator(&format!("{} {} {} {} {} {} Tm\n", cos, sin, -sin, cos, x, y));
         self.write_operator(&format!("({}) Tj\n", escaped));
         self.write_operator("ET\n");
     }
