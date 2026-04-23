@@ -52,6 +52,7 @@ impl Signex {
                     shape,
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: sch::HAlign::Left,
+                    justify_v: sch::VAlign::Bottom,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },

@@ -37,6 +37,7 @@ impl Signex {
                     shape: String::new(),
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify: signex_types::schematic::HAlign::Left,
+                    justify_v: signex_types::schematic::VAlign::Bottom,
                 });
                 task
             }

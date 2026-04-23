@@ -674,6 +674,7 @@ mod tests {
             shape: String::new(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Center,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         };
 
         let sheet = SchematicSheet {
@@ -957,6 +958,7 @@ mod tests {
             shape: String::new(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Center,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         };
 
         let sheet = SchematicSheet {
@@ -1040,6 +1042,7 @@ mod tests {
             shape: String::new(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Center,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         };
 
         let sheet1 = SchematicSheet {
@@ -1081,6 +1084,7 @@ mod tests {
             shape: String::new(),
             font_size: 1.27,
             justify: signex_types::schematic::HAlign::Center,
+            justify_v: signex_types::schematic::VAlign::Bottom,
         };
 
         let sheet2 = SchematicSheet {

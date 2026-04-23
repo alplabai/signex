@@ -998,6 +998,7 @@ impl Signex {
                             shape,
                             font_size: pp_fs_mm,
                             justify: pp_justify,
+                            justify_v: signex_types::schematic::VAlign::Bottom,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceLabel { label },
