@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use iced::Task;
 use signex_output::{
-    ExportContext, Exporter, NetlistExporter, NetlistOptions, PdfExporter, PdfOptions,
-    ProjectMetadata, SheetSnapshot, PreviewRasterizer, PreviewOptions,
+    BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, ExportContext, Exporter,
+    NetlistExporter, NetlistOptions, PdfExporter, PdfOptions, PreviewOptions, PreviewRasterizer,
+    ProjectMetadata, SheetSnapshot,
 };
 
 use super::super::super::*;
@@ -261,6 +262,101 @@ impl Signex {
 
     pub(crate) fn handle_dismiss_export_error(&mut self) {
         self.document_state.export_error = None;
+    }
+
+    pub(crate) fn handle_export_bom_requested(&mut self) -> Option<Task<Message>> {
+        if !self.document_state.has_active_engine() {
+            log::warn!("BOM export: no active schematic");
+            return Some(Task::none());
+        }
+
+        Some(Task::perform(
+            async {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Export Bill of Materials")
+                    .add_filter("CSV (.csv)", &["csv"])
+                    .add_filter("Excel (.xlsx)", &["xlsx"])
+                    .add_filter("HTML (.html)", &["html", "htm"])
+                    .set_file_name("bom.csv")
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            |path| {
+                if let Some(path) = path {
+                    Message::ExportBomFinished(Ok(path))
+                } else {
+                    Message::Noop
+                }
+            },
+        ))
+    }
+
+    pub(crate) fn handle_export_bom_finished(
+        &mut self,
+        result: Result<PathBuf, String>,
+    ) -> Task<Message> {
+        let save_path = match result {
+            Ok(p) => p,
+            Err(e) => {
+                log::info!("BOM export cancelled: {e}");
+                return Task::none();
+            }
+        };
+
+        let ctx = match build_export_context(&self.document_state) {
+            Some(c) => c,
+            None => {
+                self.document_state.export_error =
+                    Some("Cannot export BOM: no active schematic.".to_string());
+                return Task::none();
+            }
+        };
+
+        let format = match save_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
+            Some("xlsx") => BomFormat::Xlsx,
+            Some("html") | Some("htm") => BomFormat::Html,
+            _ => BomFormat::Csv,
+        };
+
+        let opts = BomOptions {
+            columns: vec![
+                BomColumn::Reference,
+                BomColumn::Qty,
+                BomColumn::Value,
+                BomColumn::Footprint,
+                BomColumn::Description,
+            ],
+            grouping: BomGrouping::Grouped,
+            format,
+            include_dnp: false,
+        };
+
+        match BomExporter.export(&ctx, &opts) {
+            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
+                Ok(()) => log::info!(
+                    "Wrote {} ({} bytes)",
+                    save_path.display(),
+                    output.bytes.len(),
+                ),
+                Err(e) => {
+                    self.document_state.export_error = Some(format!(
+                        "Could not write BOM to {}:\n{e}",
+                        save_path.display(),
+                    ));
+                }
+            },
+            Err(e) => {
+                self.document_state.export_error = Some(format!("BOM export failed: {e}"));
+            }
+        }
+
+        Task::none()
     }
 
     pub(crate) fn handle_print_preview_requested(&mut self) {

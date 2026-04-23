@@ -37,6 +37,7 @@ pub enum MenuMessage {
     PrintPreview,
     ExportPdf,
     ExportNetlist,
+    ExportBom,
     // Edit
     Undo,
     Redo,
@@ -176,6 +177,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 "Netlist (Standard .net)...",
                 None,
                 MenuMessage::ExportNetlist,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Bill of Materials…",
+                None,
+                MenuMessage::ExportBom,
                 ctx.has_schematic,
             ),
         ]),

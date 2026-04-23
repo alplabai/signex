@@ -60,6 +60,8 @@ impl Signex {
             | Message::ExportPdfDialogConfirm
             | Message::ExportPdfFinished(_)
             | Message::ExportNetlistFinished(_)
+            | Message::ExportBomRequested
+            | Message::ExportBomFinished(_)
             | Message::PrintPreviewRequested
             | Message::PrintPreviewSelectPage(_)
             | Message::PrintPreviewExport
