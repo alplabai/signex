@@ -41,6 +41,23 @@ if [[ -f "$SCRIPT_DIR/Signex.icns" ]]; then
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Signex" "$CONTENTS/Info.plist" || true
 fi
 
+# Ad-hoc codesign the bundle.
+#
+# Apple Silicon (arm64) macOS refuses to launch any executable that
+# isn't at least ad-hoc signed — the user sees "Signex is damaged and
+# can't be opened" or "cannot be verified" (issue #49 on an M3 Pro).
+# Ad-hoc signing (`--sign -`) doesn't need a Developer ID certificate
+# and doesn't vouch for origin, but it's enough for the kernel to
+# accept the binary. Users still need to right-click → Open on first
+# launch to bypass Gatekeeper's unidentified-developer warning because
+# the DMG carries the downloaded-from-internet quarantine flag; that's
+# documented in the release notes / README.
+#
+# Notarisation is the proper long-term fix but needs an Apple Developer
+# Program membership + signing credentials in CI secrets. Until then
+# ad-hoc signing is the minimum viable shipping state for arm64.
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 # Assemble the DMG contents: the .app plus a symlink to /Applications so
 # the user can drag-and-drop to install.
 DMG_STAGING="$WORK_DIR/dmg-staging"
