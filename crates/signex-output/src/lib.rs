@@ -11,6 +11,7 @@ use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
 pub mod bom;
+mod expression;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
