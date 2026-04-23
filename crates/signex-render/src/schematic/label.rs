@@ -14,7 +14,7 @@ use iced::widget::canvas::{self, path};
 use signex_types::schematic::{HAlign, Label, LabelType};
 
 use super::ScreenTransform;
-use super::text::display_text_content;
+use super::text::draw_rich_text;
 use crate::LabelStyle;
 
 pub fn draw_label(
@@ -609,16 +609,16 @@ fn draw_spin_text(
 
     match spin {
         SpinStyle::Left | SpinStyle::Right => {
-            frame.fill_text(canvas::Text {
-                content: display_text_content(&label.text),
-                position: sp,
+            draw_rich_text(
+                frame,
+                &label.text,
+                sp,
                 color,
-                size: iced::Pixels(screen_font),
-                font: crate::canvas_font(),
-                align_x: h_align.into(),
-                align_y: v_align,
-                ..canvas::Text::default()
-            });
+                screen_font,
+                h_align,
+                v_align,
+                0.0,
+            );
         }
         SpinStyle::Up | SpinStyle::Bottom => {
             let rad = if matches!(spin, SpinStyle::Up) {
@@ -626,27 +626,7 @@ fn draw_spin_text(
             } else {
                 std::f32::consts::FRAC_PI_2
             };
-
-            // iced 0.14 text ignores frame rotation; transform glyph paths
-            // at the lyon level so rotation is baked into coordinates.
-            use iced::widget::canvas::path::lyon_path::math as lyon_math;
-            let t = lyon_math::Transform::identity()
-                .then_rotate(lyon_math::Angle::radians(rad))
-                .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-            let text = canvas::Text {
-                content: display_text_content(&label.text),
-                position: iced::Point::ORIGIN,
-                color,
-                size: iced::Pixels(screen_font),
-                font: crate::canvas_font(),
-                align_x: h_align.into(),
-                align_y: v_align,
-                ..canvas::Text::default()
-            };
-            text.draw_with(|path, color| {
-                let rotated = path.transform(&t);
-                frame.fill(&rotated, color);
-            });
+            draw_rich_text(frame, &label.text, sp, color, screen_font, h_align, v_align, rad);
         }
     }
 }
