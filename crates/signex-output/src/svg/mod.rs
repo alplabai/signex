@@ -127,7 +127,7 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(wire.end.x), xform.px_y(wire.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some((0.0, 0.0, 0.0)),
+                    stroke_rgb: Some(wire_colour()),
                     fill_rgb: None,
                     stroke_width: (stroke_mm * xform.mm_to_unit) as f32,
                 },
@@ -141,7 +141,7 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some((0.28, 0.28, 0.28)),
+                    stroke_rgb: Some(bus_colour()),
                     fill_rgb: None,
                     stroke_width: (0.3 * xform.mm_to_unit) as f32,
                 },
@@ -161,7 +161,7 @@ impl SvgRenderContext {
                     )),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some((0.22, 0.22, 0.22)),
+                    stroke_rgb: Some(entry_colour()),
                     fill_rgb: None,
                     stroke_width: (0.2 * xform.mm_to_unit) as f32,
                 },
@@ -180,8 +180,8 @@ impl SvgRenderContext {
                 side,
                 side,
                 SvgStyle {
-                    stroke_rgb: Some((0.05, 0.05, 0.05)),
-                    fill_rgb: Some((0.05, 0.05, 0.05)),
+                    stroke_rgb: Some(junction_colour()),
+                    fill_rgb: Some(junction_colour()),
                     stroke_width: 0.8,
                 },
             ));
@@ -192,7 +192,7 @@ impl SvgRenderContext {
             let cx = xform.x(nc.position.x);
             let cy = xform.px_y(nc.position.y);
             let style = SvgStyle {
-                stroke_rgb: Some((0.22, 0.22, 0.22)),
+                stroke_rgb: Some(no_connect_colour()),
                 fill_rgb: None,
                 stroke_width: 0.8,
             };
@@ -223,7 +223,7 @@ impl SvgRenderContext {
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: label.rotation as f32,
                 fill_rgb: label_colour(label.label_type),
-                text: label.text.clone(),
+                text: normalize_kicad_text(&label.text),
             });
         }
 
@@ -238,7 +238,7 @@ impl SvgRenderContext {
                 v_align: valign_to_svg(note.justify_v),
                 rotation_deg: note.rotation as f32,
                 fill_rgb: (0.14, 0.14, 0.14),
-                text: note.text.clone(),
+                text: normalize_kicad_text(&note.text),
             });
         }
 
@@ -272,7 +272,7 @@ impl SvgRenderContext {
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: (0.18, 0.18, 0.18),
-                    text: child.name.clone(),
+                    text: normalize_kicad_text(&child.name),
                 });
             }
             if !child.filename.is_empty() {
@@ -285,7 +285,7 @@ impl SvgRenderContext {
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: (0.25, 0.25, 0.25),
-                    text: child.filename.clone(),
+                    text: normalize_kicad_text(&child.filename),
                 });
             }
         }
@@ -331,7 +331,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
                     rotation_deg: field_effective_style(ref_text, sym).0 as f32,
                     fill_rgb: (0.1, 0.1, 0.1),
-                    text: sym.reference.clone(),
+                    text: normalize_kicad_text(&sym.reference),
                 });
             }
 
@@ -348,7 +348,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(val_text, sym).2),
                     rotation_deg: field_effective_style(val_text, sym).0 as f32,
                     fill_rgb: (0.2, 0.2, 0.2),
-                    text: sym.value.clone(),
+                    text: normalize_kicad_text(&sym.value),
                 });
             }
         }
@@ -603,8 +603,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -632,8 +632,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -651,8 +651,8 @@ fn push_symbol_lib_graphics(
                     xform.px_y(wcy),
                     r,
                     SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 ));
@@ -678,8 +678,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -706,8 +706,8 @@ fn push_symbol_lib_graphics(
                         ),
                     ],
                     style: SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -733,7 +733,7 @@ fn push_symbol_lib_graphics(
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: *rotation as f32,
                     fill_rgb: (0.15, 0.15, 0.15),
-                    text: text.clone(),
+                    text: normalize_kicad_text(text),
                 });
             }
             Graphic::TextBox {
@@ -757,8 +757,8 @@ fn push_symbol_lib_graphics(
                     x2 - x1,
                     y2 - y1,
                     SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
-                        fill_rgb: fill_to_rgb(*fill, (0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(symbol_stroke_colour()),
+                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 ));
@@ -775,7 +775,7 @@ fn push_symbol_lib_graphics(
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: (0.15, 0.15, 0.15),
-                    text: text.clone(),
+                    text: normalize_kicad_text(text),
                 });
             }
         }
@@ -822,7 +822,7 @@ fn push_symbol_pins(
                 SvgPathCommand::LineTo(pt(xform.x(wx2), xform.px_y(wy2))),
             ],
             style: SvgStyle {
-                stroke_rgb: Some((0.1, 0.1, 0.1)),
+                stroke_rgb: Some(symbol_stroke_colour()),
                 fill_rgb: None,
                 stroke_width: (0.15 * xform.mm_to_unit) as f32,
             },
@@ -875,7 +875,7 @@ fn push_symbol_pins(
                     0.0
                 },
                 fill_rgb: (0.12, 0.12, 0.12),
-                text: pin.name.clone(),
+                text: normalize_kicad_text(&pin.name),
             });
         }
 
@@ -891,7 +891,7 @@ fn push_symbol_pins(
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
                 fill_rgb: (0.1, 0.1, 0.1),
-                text: pin.number.clone(),
+                text: normalize_kicad_text(&pin.number),
             });
         }
     }
@@ -1097,7 +1097,7 @@ fn fill_to_rgb(fill: FillType, stroke: (f32, f32, f32)) -> Option<(f32, f32, f32
     match fill {
         FillType::None => None,
         FillType::Outline => Some(stroke),
-        FillType::Background => Some((0.96, 0.96, 0.96)),
+        FillType::Background => Some(symbol_fill_colour()),
     }
 }
 
@@ -1118,6 +1118,49 @@ fn label_colour(label_type: LabelType) -> (f32, f32, f32) {
         LabelType::Hierarchical => (0.28, 0.2, 0.06),
         LabelType::Power => (0.42, 0.09, 0.09),
     }
+}
+
+fn wire_colour() -> (f32, f32, f32) {
+    (0.09, 0.21, 0.66)
+}
+
+fn bus_colour() -> (f32, f32, f32) {
+    (0.1, 0.2, 0.56)
+}
+
+fn entry_colour() -> (f32, f32, f32) {
+    (0.12, 0.24, 0.62)
+}
+
+fn junction_colour() -> (f32, f32, f32) {
+    (0.03, 0.56, 0.2)
+}
+
+fn no_connect_colour() -> (f32, f32, f32) {
+    (0.78, 0.18, 0.18)
+}
+
+fn symbol_stroke_colour() -> (f32, f32, f32) {
+    (0.53, 0.41, 0.04)
+}
+
+fn symbol_fill_colour() -> (f32, f32, f32) {
+    (0.93, 0.93, 0.56)
+}
+
+fn normalize_kicad_text(input: &str) -> String {
+    let mut out = input
+        .replace("{slash}", "/")
+        .replace("{backslash}", "\\")
+        .replace("{dblquote}", "\"")
+        .replace("{lt}", "<")
+        .replace("{gt}", ">")
+        .replace("{bar}", "|");
+
+    // Readable fallback for sub/superscript token forms.
+    out = out.replace("_{", "_").replace("^{", "^");
+    out = out.replace('{', "").replace('}', "");
+    out
 }
 
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
