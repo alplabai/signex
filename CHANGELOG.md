@@ -6,6 +6,31 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-04-24
+
+Patch release addressing a macOS launch failure on Apple Silicon.
+
+### Fixed
+
+- **macOS (Apple Silicon) cannot launch the shipped `.app`** (#49). The
+  DMG-packaged bundle was unsigned; arm64 macOS refuses to execute any
+  binary without at least an ad-hoc signature, so users on M-series
+  Macs saw "Signex is damaged and can't be opened" / "cannot be
+  verified" immediately after dragging the app to Applications. The
+  installer script now ad-hoc signs the bundle (`codesign --force
+  --deep --sign -`) as part of DMG assembly. This is the minimum
+  viable shipping state for arm64 until a Developer ID certificate
+  and notarisation credentials are wired into CI.
+
+### Known issues / workarounds
+
+- The DMG still carries the downloaded-from-internet quarantine flag,
+  so first-launch users will see a "cannot be verified" Gatekeeper
+  prompt. Bypass it with **right-click → Open** on the app icon the
+  first time, or run
+  `xattr -dr com.apple.quarantine /Applications/Signex.app` in
+  Terminal. Subsequent launches work without prompts.
+
 ## [0.7.0] — 2026-04-22
 
 The schematic-phase release. Adds ERC & validation, project-wide annotation, real multi-window architecture via `iced::daemon`, per-window engine/canvas, borderless chrome, and a full Signex brand rollout. Every v0.7.x sub-feature ships under this one tag.
