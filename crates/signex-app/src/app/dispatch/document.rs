@@ -78,6 +78,26 @@ impl Signex {
                 self.handle_print_preview_select_page(idx);
                 self.finish_update()
             }
+            Message::PrintPreviewSetColourMode(mode) => {
+                self.handle_print_preview_set_colour_mode(mode);
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPageRangeAll => {
+                self.handle_print_preview_set_page_range_all();
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPageRangeCurrent => {
+                self.handle_print_preview_set_page_range_current();
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPageRangeSpecific => {
+                self.handle_print_preview_set_page_range_specific();
+                self.finish_update()
+            }
+            Message::PrintPreviewSetSpecificPageInput(value) => {
+                self.handle_print_preview_set_specific_page_input(value);
+                self.finish_update()
+            }
             Message::PrintPreviewExport => {
                 let task = self
                     .handle_print_preview_export()
@@ -114,6 +134,22 @@ impl Signex {
             }
             Message::ExportPdfSetIncludeTitleBlock(include) => {
                 self.handle_export_pdf_set_include_title_block(include);
+                self.finish_update()
+            }
+            Message::ExportPdfSetPageRangeAll => {
+                self.handle_export_pdf_set_page_range_all();
+                self.finish_update()
+            }
+            Message::ExportPdfSetPageRangeCurrent => {
+                self.handle_export_pdf_set_page_range_current();
+                self.finish_update()
+            }
+            Message::ExportPdfSetPageRangeSpecific => {
+                self.handle_export_pdf_set_page_range_specific();
+                self.finish_update()
+            }
+            Message::ExportPdfSetSpecificPageInput(value) => {
+                self.handle_export_pdf_set_specific_page_input(value);
                 self.finish_update()
             }
             Message::ExportPdfDialogCancel => {

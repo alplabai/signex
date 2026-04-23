@@ -14,6 +14,7 @@ pub mod bom;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
+pub mod svg;
 pub mod substitution;
 pub mod template;
 

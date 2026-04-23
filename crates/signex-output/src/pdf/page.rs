@@ -5,18 +5,26 @@
 use super::{Orientation, PageSize};
 
 impl PageSize {
+    fn paper_base_token(s: &str) -> &str {
+        s.split_whitespace().next().unwrap_or(s).trim()
+    }
+
     /// Parse a KiCad `(paper "...")` string into a `PageSize`.
     ///
     /// KiCad uses strings like `"A4"`, `"A3"`, `"A"`, `"B"`, `"USLetter"`,
     /// `"USLegal"`. Unknown strings fall back to `IsoA4`.
     pub fn from_kicad_str(s: &str) -> Self {
-        match s.trim() {
+        match Self::paper_base_token(s) {
             "A0" => PageSize::IsoA0,
             "A1" => PageSize::IsoA1,
             "A2" => PageSize::IsoA2,
             "A3" => PageSize::IsoA3,
             "A4" => PageSize::IsoA4,
             "A5" => PageSize::IsoA5,
+            "B5" => PageSize::Custom {
+                width_mm: 257.0,
+                height_mm: 182.0,
+            },
             "A" => PageSize::AnsiA,
             "B" => PageSize::AnsiB,
             "C" => PageSize::AnsiC,
@@ -24,6 +32,12 @@ impl PageSize {
             "E" => PageSize::AnsiE,
             "USLetter" => PageSize::UsLetter,
             "USLegal" => PageSize::UsLegal,
+            "Letter" => PageSize::UsLetter,
+            "Legal" => PageSize::UsLegal,
+            "Tabloid" => PageSize::Custom {
+                width_mm: 431.8,
+                height_mm: 279.4,
+            },
             _ => PageSize::IsoA4,
         }
     }
@@ -34,11 +48,14 @@ impl PageSize {
     /// portrait, and landscape for all ANSI sizes. The `portrait` flag in the
     /// KiCad `(paper ...)` node overrides this; pass it when present.
     pub fn default_orientation_for_kicad(s: &str) -> Orientation {
-        match s.trim() {
-            // A4 is conventionally portrait in KiCad schematics.
-            "A4" | "A5" => Orientation::Portrait,
-            // Everything else defaults to landscape.
-            _ => Orientation::Landscape,
+        let lower = s.to_ascii_lowercase();
+        if lower.contains("portrait") {
+            Orientation::Portrait
+        } else if lower.contains("landscape") {
+            Orientation::Landscape
+        } else {
+            // Signex schematic editor and panel defaults are landscape.
+            Orientation::Landscape
         }
     }
 
@@ -137,7 +154,7 @@ mod tests {
     fn kicad_orientation_defaults() {
         assert!(matches!(
             PageSize::default_orientation_for_kicad("A4"),
-            Orientation::Portrait
+            Orientation::Landscape
         ));
         assert!(matches!(
             PageSize::default_orientation_for_kicad("A3"),
@@ -146,6 +163,10 @@ mod tests {
         assert!(matches!(
             PageSize::default_orientation_for_kicad("A"),
             Orientation::Landscape
+        ));
+        assert!(matches!(
+            PageSize::default_orientation_for_kicad("A4 portrait"),
+            Orientation::Portrait
         ));
     }
 }
