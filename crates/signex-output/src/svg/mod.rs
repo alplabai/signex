@@ -215,14 +215,24 @@ impl SvgRenderContext {
 
         for label in &sheet.schematic.labels {
             let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale);
+            let spin = label_spin_style(label.justify, label.rotation);
+            let (off_x, off_y) = match label.label_type {
+                LabelType::Net => schematic_text_offset_net(spin),
+                LabelType::Global => schematic_text_offset_global(&label.shape, spin),
+                LabelType::Hierarchical => {
+                    schematic_text_offset_hier(&label.text, signex_types::schematic::SCHEMATIC_TEXT_MM, spin)
+                }
+                LabelType::Power => (0.0, 0.0),
+            };
+            let (align, v_align, rot) = spin_text_style(spin);
             elements.push(SvgElement::Text {
-                x: xform.x(label.position.x),
-                y: xform.px_y(label.position.y),
+                x: xform.x(label.position.x + off_x),
+                y: xform.px_y(label.position.y + off_y),
                 font_alias: "F3",
                 size_pt,
-                align: halign_to_svg(label.justify),
-                v_align: SvgTextVAlign::Center,
-                rotation_deg: label.rotation as f32,
+                align,
+                v_align,
+                rotation_deg: rot,
                 fill_rgb: label_colour(label.label_type),
                 text: normalize_kicad_text(&label.text),
             });
@@ -847,16 +857,41 @@ fn push_symbol_pins(
         };
 
         if lib.show_pin_names && pin.name_visible && !pin.name.is_empty() && pin.name != "~" {
-            let name_pos = if lib.pin_name_offset.abs() < 0.01 {
-                // KiCad offset=0 mode: put name perpendicular to tip.
-                let perp = (-wdy, wdx);
-                (wx1 + perp.0 * 0.8, wy1 + perp.1 * 0.8)
+            let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
+                let (nwx, nwy) = (wx1, wy1);
+                if wdx.abs() > wdy.abs() {
+                    ((nwx, nwy + 0.508), SvgTextAlign::Center, SvgTextVAlign::Bottom, 0.0)
+                } else {
+                    ((nwx + 0.508, nwy), SvgTextAlign::Left, SvgTextVAlign::Center, 0.0)
+                }
             } else {
-                // Along pin into body.
-                (
+                let name_pos = (
                     wx2 + wdx * lib.pin_name_offset,
                     wy2 + wdy * lib.pin_name_offset,
-                )
+                );
+                if wdx.abs() > wdy.abs() {
+                    (
+                        name_pos,
+                        if wdx > 0.0 {
+                            SvgTextAlign::Left
+                        } else {
+                            SvgTextAlign::Right
+                        },
+                        SvgTextVAlign::Center,
+                        0.0,
+                    )
+                } else {
+                    (
+                        name_pos,
+                        SvgTextAlign::Center,
+                        if wdy > 0.0 {
+                            SvgTextVAlign::Top
+                        } else {
+                            SvgTextVAlign::Bottom
+                        },
+                        0.0,
+                    )
+                }
             };
 
             out.push(SvgElement::Text {
@@ -864,31 +899,32 @@ fn push_symbol_pins(
                 y: xform.px_y(name_pos.1),
                 font_alias: "F1",
                 size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
-                align: if wdx >= 0.0 {
-                    SvgTextAlign::Left
-                } else {
-                    SvgTextAlign::Right
-                },
-                v_align: SvgTextVAlign::Center,
-                rotation_deg: if wdx.abs() < wdy.abs() {
-                    if wdy < 0.0 { 90.0 } else { -90.0 }
-                } else {
-                    0.0
-                },
+                align,
+                v_align,
+                rotation_deg,
                 fill_rgb: (0.12, 0.12, 0.12),
                 text: normalize_kicad_text(&pin.name),
             });
         }
 
         if lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
-            // Number just inside body end.
-            let num_pos = (wx2 - wdx * 0.6, wy2 - wdy * 0.6);
+            let mid = Point::new(
+                pin.position.x + dir_x * length * 0.5,
+                pin.position.y + dir_y * length * 0.5,
+            );
+            let (mwx, mwy) = symbol_world_point(sym, &mid);
+            let (perp_x, perp_y, align) = if wdx.abs() >= wdy.abs() {
+                (0.0, 0.8, SvgTextAlign::Center)
+            } else {
+                (-0.8, 0.0, SvgTextAlign::Right)
+            };
+            let num_pos = (mwx + perp_x, mwy + perp_y);
             out.push(SvgElement::Text {
                 x: xform.x(num_pos.0),
                 y: xform.px_y(num_pos.1),
                 font_alias: "F3",
-                size_pt: (1.0 * xform.mm_to_unit) as f32,
-                align: SvgTextAlign::Center,
+                size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                align,
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
                 fill_rgb: (0.1, 0.1, 0.1),
@@ -1153,10 +1189,102 @@ fn normalize_kicad_text(input: &str) -> String {
     input
         .replace("{slash}", "/")
         .replace("{backslash}", "\\")
+    .replace("{tilde}", "~")
+    .replace("{colon}", ":")
+    .replace("{dollar}", "$")
+    .replace("{space}", " ")
         .replace("{dblquote}", "\"")
         .replace("{lt}", "<")
         .replace("{gt}", ">")
         .replace("{bar}", "|")
+}
+
+#[derive(Clone, Copy)]
+enum SpinStyle {
+    Left,
+    Right,
+    Up,
+    Bottom,
+}
+
+fn label_spin_style(justify: HAlign, rotation: f64) -> SpinStyle {
+    let rot = normalize_rotation(rotation);
+    let vertical = rot == 90 || rot == 270;
+
+    if vertical {
+        if matches!(justify, HAlign::Right) {
+            SpinStyle::Bottom
+        } else {
+            SpinStyle::Up
+        }
+    } else if matches!(justify, HAlign::Right) {
+        SpinStyle::Left
+    } else {
+        SpinStyle::Right
+    }
+}
+
+fn schematic_text_offset_net(spin: SpinStyle) -> (f64, f64) {
+    let dist = 0.15;
+    match spin {
+        SpinStyle::Up | SpinStyle::Bottom => (-dist, 0.0),
+        SpinStyle::Left | SpinStyle::Right => (0.0, -dist),
+    }
+}
+
+fn schematic_text_offset_hier(text: &str, font_size_mm: f64, spin: SpinStyle) -> (f64, f64) {
+    let dist = font_size_mm * 0.4
+        + (parse_markup(&normalize_kicad_text(text))
+            .iter()
+            .map(|seg| match seg {
+                RichSegment::Normal(t)
+                | RichSegment::Subscript(t)
+                | RichSegment::Superscript(t)
+                | RichSegment::Overbar(t) => t.chars().count(),
+            })
+            .sum::<usize>() as f64)
+            * font_size_mm
+            * 0.6;
+    match spin {
+        SpinStyle::Left => (-dist, 0.0),
+        SpinStyle::Up => (0.0, -dist),
+        SpinStyle::Right => (dist, 0.0),
+        SpinStyle::Bottom => (0.0, dist),
+    }
+}
+
+fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64, f64) {
+    let mut horiz = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.5;
+    let vert = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.0715;
+
+    if matches!(shape, "input" | "bidirectional" | "tri_state") {
+        horiz += signex_types::schematic::SCHEMATIC_TEXT_MM * 0.75;
+    }
+
+    match spin {
+        SpinStyle::Left => (-horiz, vert),
+        SpinStyle::Up => (vert, -horiz),
+        SpinStyle::Right => (horiz, vert),
+        SpinStyle::Bottom => (vert, horiz),
+    }
+}
+
+fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, f32) {
+    let align = match spin {
+        SpinStyle::Left | SpinStyle::Bottom => SvgTextAlign::Right,
+        SpinStyle::Right | SpinStyle::Up => SvgTextAlign::Left,
+    };
+    let rotation = match spin {
+        SpinStyle::Up => -90.0,
+        SpinStyle::Bottom => 90.0,
+        _ => 0.0,
+    };
+    (align, SvgTextVAlign::Bottom, rotation)
+}
+
+fn normalize_rotation(deg: f64) -> i32 {
+    let r = (deg.round() as i32) % 360;
+    if r < 0 { r + 360 } else { r }
 }
 
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
@@ -1231,6 +1359,7 @@ fn draw_text_outline(
     paint.set_color(rgb_to_color(fill_rgb.0, fill_rgb.1, fill_rgb.2));
 
     for run in &runs {
+        let run_start = pen_x;
         let run_size = base_size * run.scale;
         let run_scale = run_size / units_per_em;
         let run_baseline = baseline_y + base_size * run.baseline_offset;
@@ -1257,6 +1386,22 @@ fn draw_text_outline(
                 pen_x += glyph_advance(&face, gid, run_scale);
             } else {
                 pen_x += run_size * 0.5;
+            }
+        }
+
+        if run.overbar && pen_x > run_start {
+            let overbar_y = run_baseline - run_size * 0.78;
+            let (x1, y1) = rotate_about(run_start, overbar_y, x, y, rotation_deg);
+            let (x2, y2) = rotate_about(pen_x, overbar_y, x, y, rotation_deg);
+            let mut pb = PathBuilder::new();
+            pb.move_to(x1, y1);
+            pb.line_to(x2, y2);
+            if let Some(path) = pb.finish() {
+                let stroke = Stroke {
+                    width: (run_size * 0.08).max(0.5),
+                    ..Stroke::default()
+                };
+                pixmap.stroke_path(&path, &paint, &stroke, Default::default(), None);
             }
         }
     }
@@ -1290,6 +1435,7 @@ struct MarkupRun {
     text: String,
     scale: f32,
     baseline_offset: f32,
+    overbar: bool,
 }
 
 fn markup_runs(input: &str) -> Vec<MarkupRun> {
@@ -1300,30 +1446,49 @@ fn markup_runs(input: &str) -> Vec<MarkupRun> {
             text: expanded,
             scale: 1.0,
             baseline_offset: 0.0,
+            overbar: false,
         }];
     }
 
     segments
         .into_iter()
         .map(|seg| match seg {
-            RichSegment::Normal(t) | RichSegment::Overbar(t) => MarkupRun {
+            RichSegment::Normal(t) => MarkupRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
+                overbar: false,
+            },
+            RichSegment::Overbar(t) => MarkupRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                overbar: true,
             },
             RichSegment::Subscript(t) => MarkupRun {
                 text: t,
                 scale: 0.72,
                 baseline_offset: 0.26,
+                overbar: false,
             },
             RichSegment::Superscript(t) => MarkupRun {
                 text: t,
                 scale: 0.72,
                 baseline_offset: -0.34,
+                overbar: false,
             },
         })
         .filter(|run| !run.text.is_empty())
         .collect()
+}
+
+fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, f32) {
+    let rad = rotation_deg.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let dx = px - ox;
+    let dy = py - oy;
+    (ox + dx * cos - dy * sin, oy + dx * sin + dy * cos)
 }
 
 fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {
