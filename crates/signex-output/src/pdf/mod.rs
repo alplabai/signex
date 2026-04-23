@@ -20,6 +20,7 @@
 //! intended Roboto/Iosevka typeface.
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
+use signex_types::markup::{RichSegment, parse_markup};
 use thiserror::Error;
 
 use crate::template::TemplateId;
@@ -327,9 +328,17 @@ fn build_page_content(
                 let (sr, sg, sb) = colour_map.map_stroke_bw(fill_rgb.0, fill_rgb.1, fill_rgb.2);
                 surface.set_fill_color(sr, sg, sb);
 
-                let safe_text = sanitize_pdf_text(text);
-                let chosen_alias = best_alias_for_text(font_alias, &safe_text);
-                let text_w = text_advance_pt(chosen_alias, &safe_text, *size_pt);
+                let runs = pdf_markup_runs(text);
+                let plain_text: String = runs.iter().map(|r| r.text.as_str()).collect();
+                let preferred_text = sanitize_pdf_text(&plain_text);
+                let chosen_alias = best_alias_for_text(font_alias, &preferred_text);
+                let text_w: f32 = runs
+                    .iter()
+                    .map(|run| {
+                        let t = sanitize_pdf_text(&run.text);
+                        text_advance_pt(chosen_alias, &t, *size_pt * run.scale)
+                    })
+                    .sum();
                 let asc = size_pt * 0.8;
                 let desc = -size_pt * 0.2;
                 let draw_x = match align {
@@ -343,17 +352,29 @@ fn build_page_content(
                     SvgTextVAlign::Bottom => *y + desc,
                 };
 
-                if rotation_deg.abs() > 0.001 {
-                    surface.text_at_rotated(
-                        draw_x,
-                        page_h_pt - draw_y,
-                        chosen_alias,
-                        *size_pt,
-                        &safe_text,
-                        -*rotation_deg,
-                    );
-                } else {
-                    surface.text_at(draw_x, page_h_pt - draw_y, chosen_alias, *size_pt, &safe_text);
+                let mut cursor_x = draw_x;
+                for run in runs {
+                    if run.text.is_empty() {
+                        continue;
+                    }
+                    let run_size = *size_pt * run.scale;
+                    let run_text = sanitize_pdf_text(&run.text);
+                    let run_y = draw_y + *size_pt * run.baseline_offset;
+
+                    if rotation_deg.abs() > 0.001 {
+                        surface.text_at_rotated(
+                            cursor_x,
+                            page_h_pt - run_y,
+                            chosen_alias,
+                            run_size,
+                            &run_text,
+                            -*rotation_deg,
+                        );
+                    } else {
+                        surface.text_at(cursor_x, page_h_pt - run_y, chosen_alias, run_size, &run_text);
+                    }
+
+                    cursor_x += text_advance_pt(chosen_alias, &run_text, run_size);
                 }
             }
         }
@@ -443,6 +464,57 @@ fn resolve_page_range(range: &PageRange, sheet_count: usize) -> Result<Vec<usize
             }
         }
     }
+}
+
+#[derive(Clone)]
+struct PdfTextRun {
+    text: String,
+    scale: f32,
+    baseline_offset: f32,
+}
+
+fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
+    let expanded = normalize_kicad_text(input);
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return vec![PdfTextRun {
+            text: expanded,
+            scale: 1.0,
+            baseline_offset: 0.0,
+        }];
+    }
+
+    segments
+        .into_iter()
+        .map(|seg| match seg {
+            RichSegment::Normal(t) | RichSegment::Overbar(t) => PdfTextRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+            },
+            RichSegment::Subscript(t) => PdfTextRun {
+                text: t,
+                scale: 0.72,
+                baseline_offset: 0.26,
+            },
+            RichSegment::Superscript(t) => PdfTextRun {
+                text: t,
+                scale: 0.72,
+                baseline_offset: -0.34,
+            },
+        })
+        .filter(|run| !run.text.is_empty())
+        .collect()
+}
+
+fn normalize_kicad_text(input: &str) -> String {
+    input
+        .replace("{slash}", "/")
+        .replace("{backslash}", "\\")
+        .replace("{dblquote}", "\"")
+        .replace("{lt}", "<")
+        .replace("{gt}", ">")
+        .replace("{bar}", "|")
 }
 
 #[cfg(test)]
