@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 
 use iced::widget::{button, container, image, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use iced_aw::menu::{Item, Menu, MenuBar};
+use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
 
@@ -83,6 +83,15 @@ fn wordmark_tier(scale: f32) -> u8 {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum MenuMessage {
+    /// No-op dispatched by passive menu-bar roots ("File", "Edit", …) and
+    /// submenu headers ("Export", "Annotation"). iced's `button` widget
+    /// (0.14, `src/button.rs:342`) forces `Status::Disabled` whenever
+    /// `on_press` is `None`, which means the hover style never fires. By
+    /// wiring these buttons to `NoOp` we unlock `Status::Hovered` so the
+    /// highlight shows on pointer-over alone, even before iced_aw opens a
+    /// dropdown. The message is swallowed by `handle_menu_message` via
+    /// its `Task::none()` fallthrough — no handler needs to match it.
+    NoOp,
     // File
     NewProject,
     OpenProject,
@@ -182,6 +191,16 @@ impl Default for MenuContext {
 pub const MENU_BAR_HEIGHT: f32 = 36.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
 
+/// Menu typography scale. Labels are the baseline; shortcuts ride a step
+/// smaller so they read as metadata; the submenu chevron rides a step
+/// larger because the `›` glyph is optically lighter than Latin letters
+/// at the same pixel height and would otherwise look shrunken next to the
+/// label. Exposed as constants so every menu row pulls from the same
+/// scale — no `size(11)`/`size(12)`/`size(14)` sprinkled around.
+const MENU_LABEL_SIZE: f32 = 12.0;
+const MENU_SHORTCUT_SIZE: f32 = 11.0;
+const MENU_CHEVRON_SIZE: f32 = 18.0;
+
 /// Extracted theme colors (all Copy+ʼstatic so closures remain ʼstatic).
 #[derive(Clone, Copy)]
 struct MenuColors {
@@ -234,12 +253,28 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let menu_template = |items| {
         Menu::new(items)
             .max_width(DROPDOWN_WIDTH)
-            .offset(4.0)
+            // Sit a couple of pixels below the bar — offset(0) overlaps
+            // the bar's bottom row because the dropdown's 1px border
+            // paints on the same pixel as the bar's baseline.
+            .offset(2.0)
             .spacing(2.0)
+            // iced_aw paints the dropdown's background quad at
+            // `items.x - padding.left` (see `pad_rectangle` in
+            // `iced_aw/src/widget/menu/menu_tree.rs`). Any positive
+            // left-padding here drags the visible dropdown LEFT of the
+            // root button's highlight box. Zero on the left keeps the
+            // dropdown's left border flush with the root's layout
+            // bounds, matching Altium's alignment.
+            .padding(iced::Padding {
+                top: 5.0,
+                right: 5.0,
+                bottom: 5.0,
+                left: 0.0,
+            })
     };
 
     let export_menu = Item::with_menu(
-        text("Export"),
+        submenu_item_btn("Export", mc),
         menu_template(vec![
             leaf_if(
                 "PDF…",
@@ -518,6 +553,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     .padding([1, 4])
     .close_on_item_click_global(true)
     .close_on_background_click_global(true)
+    // `Backdrop` paints `styling.path` behind the active root while its
+    // dropdown is open, so "File / Edit / Place / …" stays visibly lit
+    // after the pointer leaves the root and enters the submenu — matches
+    // Altium. `FakeHovering` (the default) only affects items inside the
+    // dropdown and leaves the root dark.
+    .draw_path(DrawPath::Backdrop)
     .style(move |_theme: &Theme, _status| menu_style::Style {
         bar_background: Background::Color(mc.toolbar_bg),
         bar_border: Border::default(),
@@ -534,7 +575,11 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             blur_radius: 8.0,
         },
         path: Background::Color(mc.hover),
-        path_border: Border::default(),
+        path_border: Border {
+            width: 1.0,
+            radius: 2.0.into(),
+            color: mc.border,
+        },
     });
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
@@ -592,11 +637,41 @@ fn is_dark_surface(c: signex_types::theme::Color) -> bool {
 // ─── Private helpers ─────────────────────────────────────────
 
 /// Root-level menu button (top bar).
+///
+/// Altium paints a subtle framed highlight behind the label on hover and
+/// keeps it lit while the dropdown is open. `button::Status::Hovered` covers
+/// the pointer case; `Pressed` is the "menu is open" state (iced_aw holds
+/// the root in Pressed while its submenu is visible).
 fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
-    button(text(label).size(12).color(mc.text))
-        .padding([3, 10])
-        .style(button::text)
+    let hover_bg = mc.hover;
+    let border = mc.border;
+    let text_c = mc.text;
+    button(text(label).size(MENU_LABEL_SIZE).color(text_c))
+        // Tight horizontal padding so the highlight box hugs the label —
+        // Altium's root buttons don't extend far past their text. A wide
+        // highlight pushes the dropdown's anchor (iced_aw uses the
+        // button's layout bounds) out to the left of where the label
+        // sits, which reads as "dropdown starts too far left."
+        .padding([7, 6])
+        .on_press(MenuMessage::NoOp)
+        .style(move |_: &Theme, status: button::Status| {
+            let lit = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: if lit {
+                    Some(Background::Color(hover_bg))
+                } else {
+                    None
+                },
+                text_color: text_c,
+                border: Border {
+                    width: if lit { 1.0 } else { 0.0 },
+                    radius: 2.0.into(),
+                    color: border,
+                },
+                ..button::Style::default()
+            }
+        })
         .into()
 }
 
@@ -625,18 +700,23 @@ fn leaf_stub(
 fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
     let r = row![
-        text(label).size(12).color(mc.text),
+        text(label).size(MENU_LABEL_SIZE).color(mc.text),
         iced::widget::Space::new().width(Length::Fill),
-        text("›".to_string()).size(14).color(mc.text_muted),
+        text("›".to_string())
+            .size(MENU_CHEVRON_SIZE)
+            .color(mc.text_muted),
     ]
     .spacing(8)
     .align_y(iced::Alignment::Center);
     button(r)
-        .padding([4, 10])
+        // Match the padding used by `menu_item_btn` so Export sits on the
+        // same left/right grid as the normal leaf rows (Save, Open…).
+        .padding([4, 12])
         .width(Length::Fill)
+        .on_press(MenuMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
             let bg = match status {
-                button::Status::Hovered => {
+                button::Status::Hovered | button::Status::Pressed => {
                     Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
                 }
                 _ => None,
@@ -678,7 +758,7 @@ fn menu_item_btn(
     let label = label.to_owned();
     let mut r = row![
         text(label)
-            .size(12)
+            .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
     ]
@@ -691,7 +771,7 @@ fn menu_item_btn(
         r = r.push(iced::widget::Space::new().width(Length::Fill));
         r = r.push(
             text(sc)
-                .size(11)
+                .size(MENU_SHORTCUT_SIZE)
                 .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),
         );
