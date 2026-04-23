@@ -11,6 +11,7 @@
 //! fidelity; the actual PDF renders glyphs correctly via font subsetting.
 
 use crate::ExportContext;
+use crate::expression::build_expression_tables;
 use crate::pdf::{PageRange, PdfOptions};
 
 mod rasterize;
@@ -57,13 +58,14 @@ impl PreviewRasterizer {
         opts: &PreviewOptions,
     ) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
+        let expr_tables = build_expression_tables(&ctx.sheets);
         let sheet_indices = resolve_page_range_preview(&opts.pdf.page_range, ctx.sheets.len());
 
         sheet_indices
             .into_iter()
             .filter_map(|idx| ctx.sheets.get(idx))
             .filter_map(|sheet| {
-                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx)
+                rasterize::rasterize_page(sheet, page_w_mm, page_h_mm, opts, ctx, &expr_tables)
             })
             .collect()
     }

@@ -28,6 +28,7 @@ use thiserror::Error;
 
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
+use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_value};
 
 mod colour;
 mod font;
@@ -38,7 +39,10 @@ mod surface;
 use colour::ColourMap;
 use font::{PdfFont, best_alias_for_text, sanitize_pdf_text, text_advance_pt};
 use surface::PdfSurface;
-use crate::svg::{SvgElement, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign};
+use crate::svg::{
+    SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign,
+    SvgTextVAlign,
+};
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -164,6 +168,7 @@ impl Exporter for PdfExporter {
         }
 
         let sheet_indices = resolve_page_range(&opts.page_range, ctx.sheets.len())?;
+        let expr_tables = build_expression_tables(&ctx.sheets);
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
         let page_h_pt = (page_h_mm * MM_TO_PT) as f32;
@@ -218,6 +223,7 @@ impl Exporter for PdfExporter {
                 ctx,
                 page_w_pt,
                 page_h_pt,
+                &expr_tables,
             )?;
 
             pdf.stream(content_ref, &content_bytes);
@@ -257,6 +263,7 @@ fn build_page_content(
     ctx: &ExportContext,
     page_w_pt: f32,
     page_h_pt: f32,
+    expr_tables: &ExpressionTables,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new();
     let colour_map = ColourMap::new(opts.colour_mode);
@@ -265,7 +272,20 @@ fn build_page_content(
 
     // Explicit two-step pipeline:
     // schematic sheet -> SVG render context -> PDF content stream operators.
-    let svg_ctx = SvgRenderContext::from_sheet(sheet, opts, page_w_mm, page_h_mm, MM_TO_PT);
+    let cell = sheet_cell_value(sheet);
+    let eval_inputs = SvgEvaluatorInputs {
+        global_refdes: &expr_tables.global_refdes,
+        net_name_by_symbol_pin: &expr_tables.net_name_by_symbol_pin,
+        cell: &cell,
+    };
+    let svg_ctx = SvgRenderContext::from_sheet(
+        sheet,
+        opts,
+        page_w_mm,
+        page_h_mm,
+        MM_TO_PT,
+        Some(&eval_inputs),
+    );
 
     // Set default colour for all drawings.
     let (r, g, b) = colour_map.map_stroke_bw(0.0, 0.0, 0.0);
