@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::{display_text_content, display_text_with_overbars};
+use super::text::{display_text_with_overbars, draw_rich_text};
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -389,17 +389,16 @@ fn draw_pin(
             np.x + (line_dx / line_len) * fanout_step_px * stack_center,
             np.y + (line_dy / line_len) * fanout_step_px * stack_center,
         );
-        let text = canvas::Text {
-            content: display_text_content(&pin.number),
-            position: stack_np,
-            color: pin_color,
-            size: iced::Pixels(num_font),
-            font: crate::canvas_font(),
-            align_x: num_align.into(),
-            align_y: iced::alignment::Vertical::Center,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(text);
+        draw_rich_text(
+            frame,
+            &pin.number,
+            stack_np,
+            pin_color,
+            num_font,
+            num_align,
+            iced::alignment::Vertical::Center,
+            0.0,
+        );
     }
 }
 

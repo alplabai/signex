@@ -9,6 +9,7 @@ use signex_types::schematic::{
     FillType, Graphic, HAlign, LabelType, LibSymbol, Pin, Point, SchDrawing, Symbol, TextProp,
     VAlign,
 };
+use signex_types::markup::{RichSegment, parse_markup};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
@@ -1149,18 +1150,13 @@ fn symbol_fill_colour() -> (f32, f32, f32) {
 }
 
 fn normalize_kicad_text(input: &str) -> String {
-    let mut out = input
+    input
         .replace("{slash}", "/")
         .replace("{backslash}", "\\")
         .replace("{dblquote}", "\"")
         .replace("{lt}", "<")
         .replace("{gt}", ">")
-        .replace("{bar}", "|");
-
-    // Readable fallback for sub/superscript token forms.
-    out = out.replace("_{", "_").replace("^{", "^");
-    out = out.replace('{', "").replace('}', "");
-    out
+        .replace("{bar}", "|")
 }
 
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
@@ -1211,8 +1207,9 @@ fn draw_text_outline(
     if units_per_em <= 0.0 {
         return;
     }
-    let scale = size_pt.max(1.0) / units_per_em;
-    let advance = measure_text_advance(&face, text, scale);
+    let runs = markup_runs(text);
+    let base_size = size_pt.max(1.0);
+    let advance = measure_text_advance_runs(&face, &runs, base_size, units_per_em);
 
     let start_x = match align {
         SvgTextAlign::Left => x,
@@ -1220,8 +1217,9 @@ fn draw_text_outline(
         SvgTextAlign::Right => x - advance,
     };
 
-    let asc = face.ascender() as f32 * scale;
-    let desc = face.descender() as f32 * scale;
+    let base_scale = base_size / units_per_em;
+    let asc = face.ascender() as f32 * base_scale;
+    let desc = face.descender() as f32 * base_scale;
     let baseline_y = match v_align {
         SvgTextVAlign::Top => y + asc,
         SvgTextVAlign::Center => y + (asc + desc) * 0.5,
@@ -1232,45 +1230,100 @@ fn draw_text_outline(
     let mut paint = Paint::default();
     paint.set_color(rgb_to_color(fill_rgb.0, fill_rgb.1, fill_rgb.2));
 
-    for ch in text.chars() {
-        if ch == '\n' || ch == '\r' {
-            continue;
-        }
+    for run in &runs {
+        let run_size = base_size * run.scale;
+        let run_scale = run_size / units_per_em;
+        let run_baseline = baseline_y + base_size * run.baseline_offset;
 
-        if let Some(gid) = face.glyph_index(ch) {
-            let mut builder = TinyPathOutlineBuilder::new(
-                pen_x,
-                baseline_y,
-                scale,
-                x,
-                y,
-                rotation_deg,
-            );
-            if face.outline_glyph(gid, &mut builder).is_some()
-                && let Some(path) = builder.finish()
-            {
-                pixmap.fill_path(&path, &paint, FillRule::Winding, Default::default(), None);
+        for ch in run.text.chars() {
+            if ch == '\n' || ch == '\r' {
+                continue;
             }
-            pen_x += glyph_advance(&face, gid, scale);
-        } else {
-            pen_x += size_pt * 0.5;
+
+            if let Some(gid) = face.glyph_index(ch) {
+                let mut builder = TinyPathOutlineBuilder::new(
+                    pen_x,
+                    run_baseline,
+                    run_scale,
+                    x,
+                    y,
+                    rotation_deg,
+                );
+                if face.outline_glyph(gid, &mut builder).is_some()
+                    && let Some(path) = builder.finish()
+                {
+                    pixmap.fill_path(&path, &paint, FillRule::Winding, Default::default(), None);
+                }
+                pen_x += glyph_advance(&face, gid, run_scale);
+            } else {
+                pen_x += run_size * 0.5;
+            }
         }
     }
 }
 
-fn measure_text_advance(face: &Face<'_>, text: &str, scale: f32) -> f32 {
+fn measure_text_advance_runs(
+    face: &Face<'_>,
+    runs: &[MarkupRun],
+    base_size: f32,
+    units_per_em: f32,
+) -> f32 {
     let mut advance = 0.0_f32;
-    for ch in text.chars() {
-        if ch == '\n' || ch == '\r' {
-            continue;
-        }
-        if let Some(gid) = face.glyph_index(ch) {
-            advance += glyph_advance(face, gid, scale);
-        } else {
-            advance += 0.5 * scale * face.units_per_em() as f32;
+    for run in runs {
+        let run_scale = (base_size * run.scale) / units_per_em;
+        for ch in run.text.chars() {
+            if ch == '\n' || ch == '\r' {
+                continue;
+            }
+            if let Some(gid) = face.glyph_index(ch) {
+                advance += glyph_advance(face, gid, run_scale);
+            } else {
+                advance += 0.5 * run_scale * face.units_per_em() as f32;
+            }
         }
     }
     advance
+}
+
+#[derive(Clone)]
+struct MarkupRun {
+    text: String,
+    scale: f32,
+    baseline_offset: f32,
+}
+
+fn markup_runs(input: &str) -> Vec<MarkupRun> {
+    let expanded = normalize_kicad_text(input);
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return vec![MarkupRun {
+            text: expanded,
+            scale: 1.0,
+            baseline_offset: 0.0,
+        }];
+    }
+
+    segments
+        .into_iter()
+        .map(|seg| match seg {
+            RichSegment::Normal(t) | RichSegment::Overbar(t) => MarkupRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+            },
+            RichSegment::Subscript(t) => MarkupRun {
+                text: t,
+                scale: 0.72,
+                baseline_offset: 0.26,
+            },
+            RichSegment::Superscript(t) => MarkupRun {
+                text: t,
+                scale: 0.72,
+                baseline_offset: -0.34,
+            },
+        })
+        .filter(|run| !run.text.is_empty())
+        .collect()
 }
 
 fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {

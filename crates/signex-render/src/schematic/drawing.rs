@@ -7,7 +7,7 @@ use iced::widget::canvas::{self, path};
 use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 
 use super::ScreenTransform;
-use super::text::display_text_content;
+use super::text::draw_rich_text;
 
 /// Resolve the per-drawing stroke colour: falls back to the theme
 /// `color` when the drawing has no `stroke_color` override.
@@ -271,33 +271,35 @@ pub fn draw_child_sheet(
     if font_size < 1.0 {
         return;
     }
-    let text = canvas::Text {
-        content: display_text_content(&child.name),
-        position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
-        color: body_color,
-        size: iced::Pixels(font_size),
-        font: crate::canvas_font(),
-        ..canvas::Text::default()
-    };
-    frame.fill_text(text);
+    draw_rich_text(
+        frame,
+        &child.name,
+        iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
+        body_color,
+        font_size,
+        iced::alignment::Horizontal::Left,
+        iced::alignment::Vertical::Top,
+        0.0,
+    );
 
     // Filename text (smaller, below name)
     let small_font = (font_size * 0.75).abs();
     if small_font < 1.0 {
         return;
     }
-    let file_text = canvas::Text {
-        content: display_text_content(&child.filename),
-        position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
-        color: Color {
+    draw_rich_text(
+        frame,
+        &child.filename,
+        iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
+        Color {
             a: body_color.a * 0.7,
             ..body_color
         },
-        size: iced::Pixels(small_font),
-        font: crate::canvas_font(),
-        ..canvas::Text::default()
-    };
-    frame.fill_text(file_text);
+        small_font,
+        iced::alignment::Horizontal::Left,
+        iced::alignment::Vertical::Top,
+        0.0,
+    );
 
     // Draw sheet pins — stub direction and label placement driven by rotation:
     //   0°   = left edge  (stub exits left,  label inside-right)
@@ -348,17 +350,16 @@ pub fn draw_child_sheet(
         let dot = canvas::Path::circle(pp, (transform.scale * 0.3).max(2.0));
         frame.fill(&dot, body_color);
 
-        let pin_text = canvas::Text {
-            content: display_text_content(&pin.name),
-            position: iced::Point::new(pp.x + text_off_x, pp.y + text_off_y),
-            color: body_color,
-            size: iced::Pixels(small_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(pin_text);
+        draw_rich_text(
+            frame,
+            &pin.name,
+            iced::Point::new(pp.x + text_off_x, pp.y + text_off_y),
+            body_color,
+            small_font,
+            h_align,
+            v_align,
+            0.0,
+        );
     }
 }
 

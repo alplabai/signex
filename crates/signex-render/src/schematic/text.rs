@@ -42,6 +42,111 @@ pub fn display_text_content(input: &str) -> String {
     out
 }
 
+#[derive(Clone)]
+struct RichRun {
+    text: String,
+    scale: f32,
+    baseline_offset: f32,
+}
+
+fn rich_runs(input: &str) -> Vec<RichRun> {
+    let expanded = expand_backslash_escapes(&expand_char_escapes(input));
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return vec![RichRun {
+            text: expanded,
+            scale: 1.0,
+            baseline_offset: 0.0,
+        }];
+    }
+
+    segments
+        .into_iter()
+        .map(|segment| match segment {
+            RichSegment::Normal(text) | RichSegment::Overbar(text) => RichRun {
+                text,
+                scale: 1.0,
+                baseline_offset: 0.0,
+            },
+            RichSegment::Subscript(text) => RichRun {
+                text,
+                scale: 0.72,
+                baseline_offset: 0.26,
+            },
+            RichSegment::Superscript(text) => RichRun {
+                text,
+                scale: 0.72,
+                baseline_offset: -0.34,
+            },
+        })
+        .filter(|run| !run.text.is_empty())
+        .collect()
+}
+
+pub fn draw_rich_text(
+    frame: &mut canvas::Frame,
+    input: &str,
+    anchor: iced::Point,
+    color: Color,
+    size: f32,
+    h_align: iced::alignment::Horizontal,
+    v_align: iced::alignment::Vertical,
+    rotation_rad: f32,
+) {
+    if input.is_empty() || size < 1.0 {
+        return;
+    }
+
+    let runs = rich_runs(input);
+    let total_w: f32 = runs
+        .iter()
+        .map(|run| run.text.chars().count() as f32 * size * run.scale * 0.6)
+        .sum();
+
+    let mut cursor_x = match h_align {
+        iced::alignment::Horizontal::Left => anchor.x,
+        iced::alignment::Horizontal::Center => anchor.x - total_w * 0.5,
+        iced::alignment::Horizontal::Right => anchor.x - total_w,
+    };
+
+    let base_y = match v_align {
+        iced::alignment::Vertical::Top => anchor.y + size * 0.8,
+        iced::alignment::Vertical::Center => anchor.y + size * 0.3,
+        iced::alignment::Vertical::Bottom => anchor.y - size * 0.2,
+    };
+
+    for run in runs {
+        let run_size = size * run.scale;
+        let run_y = base_y + size * run.baseline_offset;
+        let text = canvas::Text {
+            content: run.text.clone(),
+            position: iced::Point::new(cursor_x, run_y),
+            color,
+            size: iced::Pixels(run_size),
+            font: crate::canvas_font(),
+            align_x: iced::alignment::Horizontal::Left.into(),
+            align_y: iced::alignment::Vertical::Bottom,
+            ..canvas::Text::default()
+        };
+
+        if rotation_rad.abs() > 0.001 {
+            use iced::widget::canvas::path::lyon_path::math as lyon_math;
+            let t = lyon_math::Transform::identity()
+                .then_translate(lyon_math::Vector::new(-anchor.x, -anchor.y))
+                .then_rotate(lyon_math::Angle::radians(rotation_rad))
+                .then_translate(lyon_math::Vector::new(anchor.x, anchor.y));
+            text.draw_with(|path, fill| {
+                let rotated = path.transform(&t);
+                frame.fill(&rotated, fill);
+            });
+        } else {
+            frame.fill_text(text);
+        }
+
+        cursor_x += run.text.chars().count() as f32 * run_size * 0.6;
+    }
+}
+
 /// Plain display string + ordered list of `(start_char_idx, char_count)` pairs
 /// identifying overbar regions. Used by renderers that draw the overbar as a
 /// separate stroke (with a visible gap above the glyphs) instead of relying on
@@ -213,31 +318,16 @@ pub fn draw_text_note(
 
     let rad = -(note.rotation.to_radians() as f32);
 
-    let text = canvas::Text {
-        content: display_text_content(&note.text),
-        position: iced::Point::ORIGIN,
+    draw_rich_text(
+        frame,
+        &note.text,
+        sp,
         color,
-        size: iced::Pixels(screen_font),
-        font: crate::canvas_font(),
-        align_x: h_align.into(),
-        align_y: v_align,
-        ..canvas::Text::default()
-    };
-    if rad.abs() > 0.001 {
-        use iced::widget::canvas::path::lyon_path::math as lyon_math;
-        let t = lyon_math::Transform::identity()
-            .then_rotate(lyon_math::Angle::radians(rad))
-            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-        text.draw_with(|path, color| {
-            let rotated = path.transform(&t);
-            frame.fill(&rotated, color);
-        });
-    } else {
-        frame.fill_text(canvas::Text {
-            position: sp,
-            ..text
-        });
-    }
+        screen_font,
+        h_align,
+        v_align,
+        rad,
+    );
 }
 
 /// Draw a property text (reference, value, or other field).
@@ -291,29 +381,5 @@ pub fn draw_text_prop(
     // Iced CW-positive, Y-down; KiCad field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
-    let text = canvas::Text {
-        content: display_text_content(content),
-        position: iced::Point::ORIGIN,
-        color,
-        size: iced::Pixels(screen_font),
-        font: crate::canvas_font(),
-        align_x: h_align.into(),
-        align_y: v_align,
-        ..canvas::Text::default()
-    };
-    if rad.abs() > 0.001 {
-        use iced::widget::canvas::path::lyon_path::math as lyon_math;
-        let t = lyon_math::Transform::identity()
-            .then_rotate(lyon_math::Angle::radians(rad))
-            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-        text.draw_with(|path, color| {
-            let rotated = path.transform(&t);
-            frame.fill(&rotated, color);
-        });
-    } else {
-        frame.fill_text(canvas::Text {
-            position: sp,
-            ..text
-        });
-    }
+    draw_rich_text(frame, content, sp, color, screen_font, h_align, v_align, rad);
 }
