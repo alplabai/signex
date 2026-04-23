@@ -91,6 +91,7 @@ The pre-release guard (`.claude/hooks/pre-release-guard.sh`) blocks step 4 with 
 - v0.5.0 — Schematic Editor (selection, wire drawing, undo/redo) ✅
 - v0.6.0 — Full Schematic Editor (drag-move, properties editing, placement tools, iced_aw, Active Bar) ✅
 - v0.7.0 — Validation & ERC + multi-window (11 ERC rules, annotation, pin matrix, per-window engine/canvas via `iced::daemon` — undocked tabs are fully interactive) ✅
+- v0.7.1 — macOS Apple-Silicon launch fix (ad-hoc codesign the shipped `.app` bundle, #49) ✅
 - v0.8.0 — Output Generation (PDF, BOM, netlist)
 - v0.9.0 — Library & Polish (symbol/footprint editor, installers)
 - v1.0.0 — Community Preview (schematic-only early access)
