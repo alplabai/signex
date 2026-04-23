@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{ExportContext, Exporter};
 
 mod kicad_sexpr;
-use kicad_sexpr::{build_net_graph, emit_comp, emit_net, emit_header};
+use kicad_sexpr::{emit_comp, emit_header, emit_net};
 
 pub struct NetlistExporter;
 
@@ -194,10 +194,12 @@ impl Exporter for NetlistExporter {
             }
         }
 
-        // FIX 3: Build net graph from all sheets at once (multi-sheet support)
-        // For now, use the first sheet as reference for lib_symbols
-        let first_sheet = &ctx.sheets[0];
-        let graph = build_net_graph_multi_sheet(&ctx.sheets, &all_symbols.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>());
+        // Multi-sheet net graph (walks every sheet; Global/Hierarchical
+        // labels with the same name unify across sheets).
+        let graph = build_net_graph_multi_sheet(
+            &ctx.sheets,
+            &all_symbols.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
+        );
 
         // Emit components
         for (sym, sheet_snap) in &all_symbols {
