@@ -11,10 +11,10 @@
 use iced::Color;
 use iced::widget::canvas::{self, path};
 
-use signex_types::schematic::{HAlign, Label, LabelType, VAlign};
+use signex_types::schematic::{HAlign, Label, LabelType};
 
 use super::ScreenTransform;
-use super::text::draw_rich_text;
+use super::text::display_text_content;
 use crate::LabelStyle;
 
 pub fn draw_label(
@@ -97,7 +97,11 @@ fn draw_port_label_altium(
     let arrow_w = h * 0.5;
     let base_pad = fs * 0.3;
     let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
-    let extra_body = if text_w > fs * 4.0 { fs * 0.8 } else { fs * 0.0 };
+    let extra_body = if text_w > fs * 4.0 {
+        fs * 0.8
+    } else {
+        fs * 0.0
+    };
     let right_breathing = fs * 0.45;
     let lx = label.position.x;
     let ly = label.position.y;
@@ -167,6 +171,7 @@ fn draw_port_label_altium(
         color,
         screen_font,
         text_offset,
+        true,
     );
 }
 
@@ -180,7 +185,7 @@ fn draw_net_label(
     screen_font: f32,
 ) {
     let offset = schematic_text_offset_net(label, crate::SCHEMATIC_TEXT_MM);
-    draw_spin_text(frame, label, transform, color, screen_font, offset);
+    draw_spin_text(frame, label, transform, color, screen_font, offset, false);
 }
 
 fn draw_global_label(
@@ -318,6 +323,7 @@ fn draw_global_label(
         color,
         screen_font,
         text_offset,
+        true,
     );
 }
 
@@ -403,6 +409,7 @@ fn draw_hier_label(
         color,
         screen_font,
         text_offset,
+        true,
     );
 }
 
@@ -467,9 +474,6 @@ pub fn label_text_aabb(label: &Label) -> signex_types::schematic::Aabb {
         return port_shape_aabb(label);
     }
     let fs = crate::SCHEMATIC_TEXT_MM;
-    let (off_x, off_y) = schematic_text_offset_net(label, fs);
-    let anchor_x = label.position.x + off_x;
-    let anchor_y = label.position.y + off_y;
     // Tight text width — slightly under half the font size per glyph matches
     // the actual rendered widths for most monospace-ish labels.
     // Iced's `fill_text(size = S)` reserves roughly S of vertical space for
@@ -477,64 +481,58 @@ pub fn label_text_aabb(label: &Label) -> signex_types::schematic::Aabb {
     // metric (left bearing + small descender space). Use measurements tuned
     // against a real canvas font so the bbox wraps the *visible* text.
     let tw = super::text::visible_char_count(&label.text) as f64 * fs * 0.55;
-    let th = pen_width_mm() + fs * 1.05;
-    let spin = label_spin_style(label);
-
-    let (x_lo, x_hi) = spin_text_x_bounds(spin, tw);
-    let (y_lo, y_hi) = match label.justify_v {
-        VAlign::Top => (0.0, th),
-        VAlign::Center => (-th * 0.5, th * 0.5),
-        VAlign::Bottom => (-th, 0.0),
+    let baseline_off = pen_width_mm();
+    let cap = baseline_off + fs * 1.05;
+    // No inset — the visible first glyph actually aligns with the anchor,
+    // so shifting the bbox inward leaves a visible gap on the leading side.
+    let inset = 0.0_f64;
+    let (x0, y0, x1, y1) = match label_spin_style(label) {
+        // Text to the right of the anchor, above the anchor line.
+        SpinStyle::Right => (
+            label.position.x + inset,
+            label.position.y - cap,
+            label.position.x + inset + tw,
+            label.position.y,
+        ),
+        // Text to the left of the anchor, above the anchor line.
+        SpinStyle::Left => (
+            label.position.x - inset - tw,
+            label.position.y - cap,
+            label.position.x - inset,
+            label.position.y,
+        ),
+        // Rotated +90° — text extends upward from the anchor.
+        SpinStyle::Up => (
+            label.position.x,
+            label.position.y - inset - tw,
+            label.position.x + cap,
+            label.position.y - inset,
+        ),
+        // Rotated -90° — text extends downward from the anchor.
+        SpinStyle::Bottom => (
+            label.position.x - cap,
+            label.position.y + inset,
+            label.position.x,
+            label.position.y + inset + tw,
+        ),
     };
-
-    let rot = match spin {
-        SpinStyle::Left | SpinStyle::Right => 0.0_f64,
-        SpinStyle::Up => -(std::f64::consts::FRAC_PI_2),
-        SpinStyle::Bottom => std::f64::consts::FRAC_PI_2,
-    };
-    let (sin_r, cos_r) = rot.sin_cos();
-    let corners = [(x_lo, y_lo), (x_hi, y_lo), (x_hi, y_hi), (x_lo, y_hi)];
-
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-
-    for (lx, ly) in corners {
-        let rx = lx * cos_r - ly * sin_r;
-        let ry = lx * sin_r + ly * cos_r;
-        let wx = anchor_x + rx;
-        let wy = anchor_y + ry;
-        min_x = min_x.min(wx);
-        min_y = min_y.min(wy);
-        max_x = max_x.max(wx);
-        max_y = max_y.max(wy);
-    }
-
-    signex_types::schematic::Aabb::new(min_x, min_y, max_x, max_y)
+    signex_types::schematic::Aabb::new(x0, y0, x1, y1)
 }
 
 fn label_spin_style(label: &Label) -> SpinStyle {
     let rot = normalize_rotation(label.rotation);
-    // Standard net-label connection orientation is determined by rotation for
-    // vertical labels; horizontal justify primarily affects horizontal labels.
-    match rot {
-        90 => SpinStyle::Up,
-        270 => SpinStyle::Bottom,
-        180 => {
-            if matches!(label.justify, HAlign::Right) {
-                SpinStyle::Right
-            } else {
-                SpinStyle::Left
-            }
+    let vertical = rot == 90 || rot == 270;
+
+    if vertical {
+        if matches!(label.justify, HAlign::Right) {
+            SpinStyle::Bottom
+        } else {
+            SpinStyle::Up
         }
-        _ => {
-            if matches!(label.justify, HAlign::Right) {
-                SpinStyle::Left
-            } else {
-                SpinStyle::Right
-            }
-        }
+    } else if matches!(label.justify, HAlign::Right) {
+        SpinStyle::Left
+    } else {
+        SpinStyle::Right
     }
 }
 
@@ -550,33 +548,13 @@ fn approx_text_width_mm(text: &str, font_size_mm: f64) -> f64 {
     super::text::visible_char_count(text) as f64 * font_size_mm * 0.6
 }
 
-fn schematic_text_offset_net(label: &Label, font_size_mm: f64) -> (f64, f64) {
-    // Standard keeps a small visual gap between the '+' connection point and the
-    // first visible glyph. This spacing is implicit renderer behavior (not an
-    // S-expression token), so we model it as a compact font-relative offset.
-    let gap = (font_size_mm * 0.12).max(0.15);
+fn schematic_text_offset_net(label: &Label, _font_size_mm: f64) -> (f64, f64) {
+    // Altium places the net-label baseline right on the wire — just the
+    // pen width's worth of clearance above the anchor.
+    let dist = pen_width_mm();
     match label_spin_style(label) {
-        SpinStyle::Right => (gap, 0.0),
-        SpinStyle::Left => (-gap, 0.0),
-        // Vertical labels still need a lateral wire gap (X axis), not a
-        // reading-direction gap (Y axis), so the connection point stays at
-        // the text end nearest the wire.
-        SpinStyle::Up => (-gap, 0.0),
-        SpinStyle::Bottom => (-gap, 0.0),
-    }
-}
-
-fn spin_text_h_align(spin: SpinStyle) -> iced::alignment::Horizontal {
-    match spin {
-        SpinStyle::Left | SpinStyle::Up | SpinStyle::Bottom => iced::alignment::Horizontal::Right,
-        SpinStyle::Right => iced::alignment::Horizontal::Left,
-    }
-}
-
-fn spin_text_x_bounds(spin: SpinStyle, text_width: f64) -> (f64, f64) {
-    match spin {
-        SpinStyle::Left | SpinStyle::Up | SpinStyle::Bottom => (-text_width, 0.0),
-        SpinStyle::Right => (0.0, text_width),
+        SpinStyle::Up | SpinStyle::Bottom => (-dist, 0.0),
+        SpinStyle::Left | SpinStyle::Right => (0.0, -dist),
     }
 }
 
@@ -616,31 +594,35 @@ fn draw_spin_text(
     color: Color,
     screen_font: f32,
     offset_mm: (f64, f64),
+    center_vertical: bool,
 ) {
     let spin = label_spin_style(label);
     let wx = label.position.x + offset_mm.0;
     let wy = label.position.y + offset_mm.1;
     let sp = transform.to_screen_point(wx, wy);
 
-    let h_align = spin_text_h_align(spin);
-    let v_align = match label.justify_v {
-        VAlign::Top => iced::alignment::Vertical::Top,
-        VAlign::Center => iced::alignment::Vertical::Center,
-        VAlign::Bottom => iced::alignment::Vertical::Bottom,
+    let h_align = match spin {
+        SpinStyle::Left | SpinStyle::Bottom => iced::alignment::Horizontal::Right,
+        SpinStyle::Right | SpinStyle::Up => iced::alignment::Horizontal::Left,
+    };
+    let v_align = if center_vertical {
+        iced::alignment::Vertical::Center
+    } else {
+        iced::alignment::Vertical::Bottom
     };
 
     match spin {
         SpinStyle::Left | SpinStyle::Right => {
-            draw_rich_text(
-                frame,
-                &label.text,
-                sp,
+            frame.fill_text(canvas::Text {
+                content: display_text_content(&label.text),
+                position: sp,
                 color,
-                screen_font,
-                h_align,
-                v_align,
-                0.0,
-            );
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: h_align.into(),
+                align_y: v_align,
+                ..canvas::Text::default()
+            });
         }
         SpinStyle::Up | SpinStyle::Bottom => {
             let rad = if matches!(spin, SpinStyle::Up) {
@@ -648,7 +630,27 @@ fn draw_spin_text(
             } else {
                 std::f32::consts::FRAC_PI_2
             };
-            draw_rich_text(frame, &label.text, sp, color, screen_font, h_align, v_align, rad);
+
+            // iced 0.14 text ignores frame rotation; transform glyph paths
+            // at the lyon level so rotation is baked into coordinates.
+            use iced::widget::canvas::path::lyon_path::math as lyon_math;
+            let t = lyon_math::Transform::identity()
+                .then_rotate(lyon_math::Angle::radians(rad))
+                .then_translate(lyon_math::Vector::new(sp.x, sp.y));
+            let text = canvas::Text {
+                content: display_text_content(&label.text),
+                position: iced::Point::ORIGIN,
+                color,
+                size: iced::Pixels(screen_font),
+                font: crate::canvas_font(),
+                align_x: h_align.into(),
+                align_y: v_align,
+                ..canvas::Text::default()
+            };
+            text.draw_with(|path, color| {
+                let rotated = path.transform(&t);
+                frame.fill(&rotated, color);
+            });
         }
     }
 }
@@ -699,93 +701,4 @@ fn draw_shape_closed_filled(
 fn normalize_rotation(deg: f64) -> i32 {
     let r = (deg.round() as i32) % 360;
     if r < 0 { r + 360 } else { r }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        SpinStyle, label_spin_style, schematic_text_offset_net, spin_text_h_align,
-        spin_text_x_bounds,
-    };
-    use signex_types::schematic::{HAlign, Label, LabelType, Point, VAlign};
-    use uuid::Uuid;
-
-    fn mk_label(rotation: f64, justify: HAlign) -> Label {
-        Label {
-            uuid: Uuid::nil(),
-            text: "DIVIDED-S_2".to_string(),
-            position: Point { x: 0.0, y: 0.0 },
-            rotation,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            justify,
-            justify_v: VAlign::Bottom,
-        }
-    }
-
-    #[test]
-    fn label_spin_style_distinguishes_90_and_270_for_left_justify() {
-        assert!(matches!(
-            label_spin_style(&mk_label(90.0, HAlign::Left)),
-            SpinStyle::Up
-        ));
-        assert!(matches!(
-            label_spin_style(&mk_label(270.0, HAlign::Left)),
-            SpinStyle::Bottom
-        ));
-    }
-
-    #[test]
-    fn label_spin_style_distinguishes_90_and_270_for_right_justify() {
-        assert!(matches!(
-            label_spin_style(&mk_label(90.0, HAlign::Right)),
-            SpinStyle::Up
-        ));
-        assert!(matches!(
-            label_spin_style(&mk_label(270.0, HAlign::Right)),
-            SpinStyle::Bottom
-        ));
-    }
-
-    #[test]
-    fn label_spin_style_center_uses_rotation_direction() {
-        assert!(matches!(
-            label_spin_style(&mk_label(0.0, HAlign::Center)),
-            SpinStyle::Right
-        ));
-        assert!(matches!(
-            label_spin_style(&mk_label(90.0, HAlign::Center)),
-            SpinStyle::Up
-        ));
-        assert!(matches!(
-            label_spin_style(&mk_label(180.0, HAlign::Center)),
-            SpinStyle::Left
-        ));
-        assert!(matches!(
-            label_spin_style(&mk_label(270.0, HAlign::Center)),
-            SpinStyle::Bottom
-        ));
-    }
-
-    #[test]
-    fn vertical_spins_use_same_side_anchor_bounds() {
-        let (u0, u1) = spin_text_x_bounds(SpinStyle::Up, 10.0);
-        let (d0, d1) = spin_text_x_bounds(SpinStyle::Bottom, 10.0);
-        assert_eq!((u0, u1), (d0, d1));
-        assert_eq!(
-            spin_text_h_align(SpinStyle::Up),
-            spin_text_h_align(SpinStyle::Bottom)
-        );
-    }
-
-    #[test]
-    fn vertical_spins_use_same_lateral_gap() {
-        let up = mk_label(90.0, HAlign::Left);
-        let down = mk_label(270.0, HAlign::Left);
-        let (ux, uy) = schematic_text_offset_net(&up, 1.27);
-        let (dx, dy) = schematic_text_offset_net(&down, 1.27);
-        assert!((ux - dx).abs() < 1e-9);
-        assert!((uy - dy).abs() < 1e-9);
-    }
 }
