@@ -86,6 +86,26 @@ pub enum Message {
     TextEditSubmit,
     ShowContextMenu(f32, f32),
     CloseContextMenu,
+    /// Expand a click-to-open submenu inside the right-click context
+    /// menu (Place or Align). Toggles off when the same kind is fired
+    /// twice, otherwise replaces the current submenu.
+    OpenContextSubmenu(ContextSubmenu),
+    /// Hover entered a submenu launcher row — start the 200 ms
+    /// hover-open timer for that submenu (and cancel any pending
+    /// close).
+    HoverContextSubmenu(ContextSubmenu),
+    /// Hover left the submenu launcher row — cancels any pending
+    /// open and starts the 150 ms close timer if a submenu is open.
+    LeaveContextSubmenu,
+    /// Hover entered the open submenu panel — cancels the close timer
+    /// so the panel stays visible while the cursor traverses it.
+    EnterContextSubmenuPanel,
+    /// Hover left the open submenu panel — starts the close timer.
+    LeaveContextSubmenuPanel,
+    /// 50 ms tick fired by the subscription while the context menu is
+    /// open; promotes a mature `pending_submenu` into an actual open
+    /// and a mature `pending_submenu_close` into an actual close.
+    TickContextSubmenuHover,
     ContextAction(ContextAction),
     OpenPreferences,
     OpenFind,
@@ -384,6 +404,20 @@ pub enum ContextAction {
     RotateSelected,
     MirrorX,
     MirrorY,
+    /// Run an Active Bar action from a context-menu submenu (Place /
+    /// Align). Closes both menus and dispatches the action through the
+    /// existing Active Bar handler so all the placement / transform
+    /// logic stays in one place.
+    ActiveBar(crate::active_bar::ActiveBarAction),
+}
+
+/// Which click-to-open submenu is currently expanded inside the right-
+/// click context menu, if any. Owned by `InteractionState` and cleared
+/// alongside `context_menu` whenever the menu closes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextSubmenu {
+    Place,
+    Align,
 }
 
 #[derive(Debug, Clone)]
