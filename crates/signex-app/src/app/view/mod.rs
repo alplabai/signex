@@ -2624,11 +2624,17 @@ impl Signex {
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
-        // Opaque semi-transparent backdrop that blocks interaction with underlying content.
-        // Clicking anywhere on it triggers the on_press message (modal dismiss).
-        // Right-click also dismisses — without this, right-click-to-pan
-        // while a context menu is open is silently absorbed by the
-        // mouse_area and the menu sticks until a left-click lands.
+        // Opaque semi-transparent backdrop that blocks interaction with
+        // underlying content. Left-click anywhere on it triggers the
+        // dismiss message.
+        //
+        // We intentionally do *not* wire `on_right_press` — iced's
+        // `mouse_area` would `capture_event()` the right-press and
+        // prevent the underlying canvas from starting a pan. Instead
+        // the canvas itself owns the right-press (its pan gesture) and
+        // closes the context menu once the pan actually starts moving
+        // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
+        // `CloseContextMenu` the moment `pan_moved` flips on).
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
@@ -2643,8 +2649,7 @@ impl Signex {
                     ..container::Style::default()
                 }),
         )
-        .on_press(on_press.clone())
-        .on_right_press(on_press)
+        .on_press(on_press)
         .into()
     }
 
