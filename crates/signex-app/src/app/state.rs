@@ -266,6 +266,38 @@ pub enum AnnotateOrder {
     AcrossThenUp,
 }
 
+/// Opaque identifier for a loaded project in the workspace. Assigned by
+/// `DocumentState::next_project_id` on load and never reused, so stale
+/// references (e.g. a tab pointing at a closed project) resolve to `None`
+/// via `DocumentState::project_by_id` instead of silently aliasing another
+/// project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct ProjectId(u32);
+
+impl ProjectId {
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ProjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "proj:{}", self.0)
+    }
+}
+
+/// One loaded project in the multi-project workspace. `path` is the
+/// canonical identity (`.kicad_pro` / `.snxprj` location on disk); `data`
+/// is the parsed project contents. Multiple projects with different
+/// `path`s coexist in `DocumentState.projects`; two identical `path`s
+/// at once is a loader bug (existing `open_project_file` de-dupes).
+#[derive(Debug, Clone)]
+pub struct LoadedProject {
+    pub id: ProjectId,
+    pub path: PathBuf,
+    pub data: ProjectData,
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
     pub tabs: Vec<TabInfo>,
@@ -283,8 +315,26 @@ pub struct DocumentState {
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
     /// is open).
     pub active_path: Option<PathBuf>,
+    /// Single-project convenience fields. These mirror `projects[active_project]`
+    /// during the multi-project migration so handlers that still read the
+    /// old Option keep working. All new code should read from `projects` +
+    /// `active_project` instead; the Option pair will be removed once every
+    /// handler is migrated (issue #54 phase 5).
     pub project_path: Option<PathBuf>,
     pub project_data: Option<ProjectData>,
+    /// Every loaded project in the workspace. Order = load order. First
+    /// project becomes active on load; subsequent opens append.
+    pub projects: Vec<LoadedProject>,
+    /// Which project is "active" for handlers that operate on the workspace
+    /// at large (ERC / annotate / export / save-all). Currently tracks the
+    /// most-recently-loaded project plus whichever project contains the
+    /// active tab; single source of truth for "where am I focused".
+    pub active_project: Option<ProjectId>,
+    /// Monotonic counter used to mint `ProjectId` on load. Never reused —
+    /// closing a project does not free its id (tabs may hold stale refs,
+    /// which we detect by resolving through `projects` and treating None
+    /// as "no longer loaded").
+    pub next_project_id: u32,
     pub panel_ctx: crate::panels::PanelContext,
     pub kicad_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
@@ -325,6 +375,37 @@ pub struct PdfOptionsDialogState {
 }
 
 impl DocumentState {
+    /// Mint a fresh `ProjectId` and bump the counter. Never reuses ids.
+    pub fn mint_project_id(&mut self) -> ProjectId {
+        let id = ProjectId(self.next_project_id);
+        self.next_project_id = self.next_project_id.wrapping_add(1);
+        id
+    }
+
+    pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
+        self.projects.iter().find(|p| p.id == id)
+    }
+
+    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
+        self.projects.iter_mut().find(|p| p.id == id)
+    }
+
+    /// Resolve the project that contains a file at this path. Used for
+    /// per-tab project scoping (tabs store a path, we resolve to the
+    /// project that parented them at load time).
+    pub fn project_for_path(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+        let dir = path.parent()?;
+        self.projects
+            .iter()
+            .find(|p| p.path.parent() == Some(dir))
+    }
+
+    /// Convenience: currently-active project. Returns `None` when the
+    /// workspace is empty or no project has been made active yet.
+    pub fn active_loaded_project(&self) -> Option<&LoadedProject> {
+        self.active_project.and_then(|id| self.project_by_id(id))
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }

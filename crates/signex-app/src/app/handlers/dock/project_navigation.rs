@@ -195,9 +195,10 @@ impl Signex {
     }
 
     /// Resolve a project-tree path (indices) to the file path on disk
-    /// for the leaf node at that position. Returns `None` if the node
-    /// is missing, the project has no directory, or the clicked node
-    /// is not a file-backed leaf.
+    /// for the leaf node at that position. Multi-root aware: the first
+    /// index picks which project's directory to resolve against, so a
+    /// leaf under project B isn't accidentally resolved against project
+    /// A's parent directory.
     fn tree_path_to_file_path(
         &self,
         tree_path: &[usize],
@@ -206,11 +207,9 @@ impl Signex {
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,
         )?;
-        let dir = self
-            .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent())?;
+        let project_idx = *tree_path.first()?;
+        let project = self.document_state.projects.get(project_idx)?;
+        let dir = project.path.parent()?;
         Some(dir.join(&node.label))
     }
 
