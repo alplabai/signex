@@ -98,6 +98,14 @@ impl Signex {
                 self.handle_print_preview_set_specific_page_input(value);
                 self.finish_update()
             }
+            Message::PrintPreviewSetFitToPage(fit) => {
+                self.handle_print_preview_set_fit_to_page(fit);
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeTitleBlock(include) => {
+                self.handle_print_preview_set_include_title_block(include);
+                self.finish_update()
+            }
             Message::PrintPreviewExport => {
                 let task = self
                     .handle_print_preview_export()
