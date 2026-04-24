@@ -148,7 +148,11 @@ impl Signex {
                 active_path: None,
                 project_path: None,
                 project_data: None,
+                projects: Vec::new(),
+                active_project: None,
+                next_project_id: 0,
                 panel_ctx: crate::panels::PanelContext {
+                    projects: Vec::new(),
                     project_name: None,
                     project_file: None,
                     pcb_file: None,

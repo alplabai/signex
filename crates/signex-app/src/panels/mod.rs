@@ -128,6 +128,25 @@ pub struct SheetInfo {
     pub label_count: usize,
 }
 
+/// Per-project bundle surfaced to the Projects panel. One entry per
+/// `LoadedProject` in `DocumentState.projects`. `build_project_tree`
+/// iterates this list to emit one tree root per project.
+#[derive(Debug, Clone)]
+pub struct ProjectPanelInfo {
+    pub id: crate::app::ProjectId,
+    /// Display name (project stem — "MyBoard" from "MyBoard.kicad_pro").
+    pub name: String,
+    /// Root schematic filename shown as the "project file" under each
+    /// root, when present.
+    pub project_file: Option<String>,
+    /// Companion PCB filename, when present.
+    pub pcb_file: Option<String>,
+    pub sheets: Vec<SheetInfo>,
+    /// Whether this is the currently-active project — drives accent
+    /// styling on the root node.
+    pub is_active: bool,
+}
+
 /// Context passed to panels — owned data to avoid lifetime issues.
 #[derive(Debug, Clone)]
 pub struct LibrarySymbolEntry {
@@ -162,6 +181,12 @@ pub enum ErcSeverityLite {
 }
 
 pub struct PanelContext {
+    /// Multi-project workspace — one entry per `LoadedProject`. The
+    /// `project_name` / `project_file` / `sheets` singletons below are
+    /// kept in sync with the *active* project for the handlers that
+    /// haven't been migrated yet (issue #54 phase 5), but every new
+    /// consumer — `build_project_tree` first — should iterate this list.
+    pub projects: Vec<ProjectPanelInfo>,
     pub project_name: Option<String>,
     pub project_file: Option<String>,
     pub pcb_file: Option<String>,
@@ -772,40 +797,50 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
 
 // ─── Projects Panel (TreeView) ────────────────────────────────
 
-/// Build the project tree from panel context data.
-/// Called once on project load; result is stored in `PanelContext::project_tree`.
+/// Build the project tree from panel context data. Produces one root
+/// per loaded project so multi-project workspaces show all their
+/// projects side by side. Single-project users see the same shape as
+/// before (one root). `PanelContext::projects` is the source of truth;
+/// the legacy `project_name` / `sheets` singletons are ignored here so
+/// we never emit a duplicate root for the active project.
 pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
-    let Some(name) = &ctx.project_name else {
+    if ctx.projects.is_empty() {
         return vec![];
-    };
+    }
 
-    // Source documents from project sheets
-    let mut source_docs: Vec<TreeNode> = vec![];
+    ctx.projects
+        .iter()
+        .map(|project| project_root_node(project, ctx.lib_symbol_count))
+        .collect()
+}
 
-    if !ctx.sheets.is_empty() {
-        for sheet in &ctx.sheets {
-            // Pick the icon from the file extension so `.snx***`
-            // files get their full-colour file-type icons while
-            // `.kicad_*` files keep the existing glyph treatment.
+/// One project root — "Source Documents" / "Libraries" / "Settings".
+/// `fallback_lib_count` is the workspace-wide library count that we
+/// fall through to when the project's own sheet sym totals don't give
+/// a useful number; accurate per-project lib counting is a follow-up
+/// once the library system is project-scoped (v0.9+).
+fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> TreeNode {
+    let mut source_docs: Vec<TreeNode> = Vec::new();
+
+    if !project.sheets.is_empty() {
+        for sheet in &project.sheets {
             let icon = TreeIcon::for_path(&sheet.filename);
             source_docs.push(TreeNode::leaf(sheet.filename.clone(), icon));
         }
-    } else if let Some(file) = &ctx.project_file {
+    } else if let Some(file) = &project.project_file {
         let icon = TreeIcon::for_path(file);
         source_docs.push(TreeNode::leaf(file.clone(), icon));
     }
 
-    // PCB file
-    if let Some(pcb) = &ctx.pcb_file {
+    if let Some(pcb) = &project.pcb_file {
         let icon = TreeIcon::for_path(pcb);
         source_docs.push(TreeNode::leaf(pcb.clone(), icon));
     }
 
-    // Libraries
-    let lib_count = if ctx.lib_symbol_count > 0 {
-        ctx.lib_symbol_count
+    let lib_count = if fallback_lib_count > 0 {
+        fallback_lib_count
     } else {
-        ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
+        project.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
     let lib_children = vec![TreeNode::leaf(
         format!("{} symbols loaded", lib_count),
@@ -815,8 +850,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
     settings.expanded = false;
 
-    vec![TreeNode::branch(
-        name.clone(),
+    TreeNode::branch(
+        project.name.clone(),
         TreeIcon::Folder,
         vec![
             TreeNode::branch(
@@ -827,7 +862,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
             TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
             settings,
         ],
-    )]
+    )
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
