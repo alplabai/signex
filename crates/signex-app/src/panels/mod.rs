@@ -1180,11 +1180,20 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     if !ctx.has_schematic {
+        // Don't mislead the user into thinking nothing is loaded when
+        // they've just switched to a PCB tab — distinguish "no project
+        // yet" from "project open, but the active tab isn't a
+        // schematic". GitHub issue #51.
+        let hint = if ctx.has_pcb {
+            "Properties are available when a schematic is active"
+        } else {
+            "Open a project"
+        };
         return container(
             column![
                 text("Properties").size(12).color(primary),
                 Space::new().height(12.0),
-                text("Open a project").size(11).color(muted),
+                text(hint).size(11).color(muted),
             ]
             .spacing(4)
             .padding(8),
