@@ -132,7 +132,7 @@ fn draw_text_prop_selection(
     transform: &ScreenTransform,
 ) {
     use signex_types::schematic::{HAlign, VAlign};
-    let fs = crate::SCHEMATIC_TEXT_MM;
+    let fs = crate::SCHEMATIC_TEXT_EM_MM;
     // `visible_char_count` drops KiCad `{slash}`-style escapes; Iosevka's
     // advance width is ≈0.55 em, so use the same coefficient the text
     // renderer uses below so bbox and glyphs line up.
@@ -200,9 +200,9 @@ fn draw_power_port_selection(frame: &mut canvas::Frame, sym: &Symbol, transform:
     } else {
         0.0
     };
-    let label_extent = crate::SCHEMATIC_TEXT_MM * 1.2; // cap + descender
+    let label_extent = crate::SCHEMATIC_TEXT_EM_MM * 1.2; // cap + descender
     let half_w =
-        1.8_f64.max(sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_MM * 0.55 * 0.5);
+        1.8_f64.max(sym.value.chars().count() as f64 * crate::SCHEMATIC_TEXT_EM_MM * 0.55 * 0.5);
 
     // In lib-local Y (before Y-flip in instance_transform): the pin stub
     // starts at the anchor (y = 0) and extends toward the body. Keep the
