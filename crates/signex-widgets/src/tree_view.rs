@@ -11,7 +11,7 @@
 
 use std::sync::OnceLock;
 
-use iced::widget::{Column, Row, Space, button, container, scrollable, svg, text};
+use iced::widget::{Column, Row, Space, button, container, mouse_area, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
@@ -255,6 +255,13 @@ impl TreeNode {
 pub enum TreeMsg {
     Toggle(Vec<usize>),
     Select(Vec<usize>),
+    /// Right-click on a node. Anchor coordinates are resolved by the
+    /// parent (from `last_mouse_pos`) since iced 0.14's `mouse_area` does
+    /// not forward cursor position with `on_right_press`.
+    ContextMenu(Vec<usize>),
+    /// Right-click in the tree area but not on any node — offer generic
+    /// tree actions (Expand all / Collapse all / Refresh).
+    BackgroundContextMenu,
 }
 
 // ─── Layout Constants (matched to Altium Designer) ────────────
@@ -262,6 +269,7 @@ pub enum TreeMsg {
 const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
+const ICON_LABEL_GAP: f32 = 6.0; // Extra breathing room after the icon
 const CHEVRON_W: f32 = 10.0; // triangle column
 const ICON_SZ: f32 = 14.0; // Chamfered SVG silhouettes — tuned visually
 const FONT_SZ: f32 = 12.0; // body text
@@ -305,7 +313,14 @@ impl<'a> TreeView<'a> {
         for (i, node) in self.roots.iter().enumerate() {
             col = render_node(col, node, 0, &[i], self.selected, self.tokens);
         }
-        scrollable(col).width(Length::Fill).into()
+        // Right-click on the scrollable body (below the last row or in any
+        // gap between rows that row-level mouse_areas don't cover) triggers
+        // the background context menu (Expand all / Collapse all / Refresh).
+        // Row right-clicks are captured earlier by per-row mouse_areas and
+        // take priority — they never propagate to this outer handler.
+        mouse_area(scrollable(col).width(Length::Fill))
+            .on_right_press(TreeMsg::BackgroundContextMenu)
+            .into()
     }
 }
 
@@ -377,6 +392,11 @@ fn render_node(
     // `iced::widget::svg`. KiCad handoff formats share glyphs with
     // their Signex-native counterparts (see `TreeIcon::svg`).
     r = r.push(svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ));
+    // Dedicated icon → label gap. `ELEM_GAP` alone (2 px) leaves the
+    // label visually kerned into the icon; a wider spacer just after
+    // the icon opens the gap without affecting the chevron→icon
+    // alignment that's already tight-on-purpose.
+    r = r.push(Space::new().width(ICON_LABEL_GAP));
 
     // Label (flex, no wrap — truncation handled by scrollable parent)
     r = r.push(
@@ -428,7 +448,12 @@ fn render_node(
             }
         });
 
-    col = col.push(row_btn);
+    // Right-click → tree-scoped context menu. `mouse_area` wraps the
+    // button so left-press still reaches the button's `on_press`; only
+    // `on_right_press` is intercepted here.
+    let row_element = mouse_area(row_btn)
+        .on_right_press(TreeMsg::ContextMenu(path.to_vec()));
+    col = col.push(row_element);
 
     // Expanded children
     if is_expandable && node.expanded {

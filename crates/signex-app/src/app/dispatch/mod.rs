@@ -88,6 +88,14 @@ impl Signex {
             | Message::ActiveBar(_)
             | Message::ShowContextMenu(_, _)
             | Message::CloseContextMenu
+            | Message::ShowProjectTreeContextMenu(_)
+            | Message::CloseProjectTreeContextMenu
+            | Message::ProjectTreeAction(_)
+            | Message::RenameBufferChanged(_)
+            | Message::RenameSubmit
+            | Message::CloseRenameDialog
+            | Message::RemoveConfirm(_)
+            | Message::CloseRemoveDialog
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)
             | Message::LeaveContextSubmenu
@@ -179,6 +187,8 @@ impl Signex {
                             ModalId::ParameterManager => {
                                 self.ui_state.parameter_manager_open = false
                             }
+                            ModalId::RenameDialog => self.ui_state.rename_dialog = None,
+                            ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
