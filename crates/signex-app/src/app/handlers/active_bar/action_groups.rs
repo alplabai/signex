@@ -3,7 +3,7 @@ use iced::Task;
 use super::super::super::*;
 
 impl Signex {
-    pub(super) fn handle_active_bar_action(
+    pub(crate) fn handle_active_bar_action(
         &mut self,
         action: crate::active_bar::ActiveBarAction,
     ) -> Task<Message> {

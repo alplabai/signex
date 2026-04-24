@@ -163,6 +163,7 @@ impl Signex {
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
+                    theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,
@@ -202,6 +203,8 @@ impl Signex {
                         .iter()
                         .copied()
                         .collect(),
+                    custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                    active_custom_filter_tab: 0,
                     page_format_mode: crate::panels::PageFormatMode::default(),
                     margin_vertical: 1,
                     margin_horizontal: 1,
@@ -243,12 +246,19 @@ impl Signex {
                 draw_mode: DrawMode::default(),
                 editing_text: None,
                 context_menu: None,
+                context_submenu: None,
+                pending_submenu: None,
+                submenu_launcher_hovered: None,
+                submenu_panel_hovered: false,
+                submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
                     .copied()
                     .collect(),
+                custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                active_custom_filter_tab: 0,
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
@@ -346,6 +356,18 @@ impl Signex {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
                     text: iced::Color::from_rgb(0.86, 0.86, 0.86),
                     primary: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
+                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
+                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                },
+            ),
+            ThemeId::Alplab => Theme::custom(
+                "Alp Lab".to_string(),
+                iced::theme::Palette {
+                    background: iced::Color::from_rgb(0.18, 0.18, 0.19),
+                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
+                    // Alp Lab cyan #0891b2 as primary accent.
+                    primary: iced::Color::from_rgb(0.031, 0.569, 0.698),
                     success: iced::Color::from_rgb(0.34, 0.65, 0.29),
                     danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
                     warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
@@ -614,6 +636,16 @@ impl Signex {
         let window_resize = iced::window::resize_events()
             .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
 
-        Subscription::batch([kbd, mouse_sub, window_close, window_resize])
+        // Hover-open timer for the right-click context-menu submenus.
+        // Only active while the context menu is open; the dispatcher
+        // checks `pending_submenu`'s elapsed time on each tick.
+        let hover_tick = if self.interaction_state.context_menu.is_some() {
+            iced::time::every(std::time::Duration::from_millis(50))
+                .map(|_| Message::TickContextSubmenuHover)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([kbd, mouse_sub, window_close, window_resize, hover_tick])
     }
 }

@@ -9,27 +9,73 @@ use super::*;
 impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
+        use crate::icons as ic;
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
         let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
+        let tid = self.ui_state.theme_id;
 
         // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
         // U+25B6, which Windows renders via the color emoji font).
         const SUBMENU_ARROW: &str = "›";
 
-        items.push(self.ctx_menu_item_disabled("Find Similar Objects...", None));
-        items.push(self.ctx_menu_item_msg("Find Text...", "Ctrl+F", Message::OpenFind));
-        items.push(self.ctx_menu_item_disabled("Clear Filter", Some("Shift+C")));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_find_similar(tid)),
+            "Find Similar Objects...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_msg(
+            Some(ic::icon_chrome_search(tid)),
+            "Find Text...",
+            "Ctrl+F",
+            Message::OpenFind,
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_clear_filter(tid)),
+            "Clear Filter",
+            Some("Shift+C"),
+        ));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_disabled("Place", Some(SUBMENU_ARROW)));
-        items.push(self.ctx_menu_item_disabled("Part Actions", Some(SUBMENU_ARROW)));
-        items.push(self.ctx_menu_item_disabled("Sheet Actions", Some(SUBMENU_ARROW)));
+        let active_submenu = self.interaction_state.context_submenu;
+        items.push(self.ctx_menu_item_submenu(
+            Some(ic::icon_dd_place_menu(tid)),
+            "Place",
+            ContextSubmenu::Place,
+            active_submenu == Some(ContextSubmenu::Place),
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_part_actions(tid)),
+            "Part Actions",
+            Some(SUBMENU_ARROW),
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_sheet_actions(tid)),
+            "Sheet Actions",
+            Some(SUBMENU_ARROW),
+        ));
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("References", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Align", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Unions", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Snippets", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_references(tid)),
+                "References",
+                Some(SUBMENU_ARROW),
+            ));
+            items.push(self.ctx_menu_item_submenu(
+                Some(ic::icon_dd_align_menu(tid)),
+                "Align",
+                ContextSubmenu::Align,
+                active_submenu == Some(ContextSubmenu::Align),
+            ));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_unions(tid)),
+                "Unions",
+                Some(SUBMENU_ARROW),
+            ));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_snippets(tid)),
+                "Snippets",
+                Some(SUBMENU_ARROW),
+            ));
         }
 
         let child_sheet_selected = canvas
@@ -38,6 +84,7 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         if child_sheet_selected {
             items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_open_child_sheet(tid)),
                 "Open Child Sheet",
                 "Enter",
                 ContextAction::OpenChildSheet,
@@ -45,33 +92,99 @@ impl Signex {
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled("Cross Probe", None));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_cross_probe(tid)),
+            "Cross Probe",
+            None,
+        ));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
-        items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
-        items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
-        items.push(self.ctx_menu_item_kb("Smart Paste", "Shift+Ctrl+V", ContextAction::SmartPaste));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_cut(tid)),
+            "Cut",
+            "Ctrl+X",
+            ContextAction::Cut,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_copy(tid)),
+            "Copy",
+            "Ctrl+C",
+            ContextAction::Copy,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_paste(tid)),
+            "Paste",
+            "Ctrl+V",
+            ContextAction::Paste,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_smart_paste(tid)),
+            "Smart Paste",
+            "Shift+Ctrl+V",
+            ContextAction::SmartPaste,
+        ));
         items.push(self.ctx_menu_sep());
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_kb("Rotate", "Space", ContextAction::RotateSelected));
-            items.push(self.ctx_menu_item_kb("Mirror X", "X", ContextAction::MirrorX));
-            items.push(self.ctx_menu_item_kb("Mirror Y", "Y", ContextAction::MirrorY));
-            items.push(self.ctx_menu_item_kb("Delete", "Del", ContextAction::Delete));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_rotate(tid)),
+                "Rotate",
+                "Space",
+                ContextAction::RotateSelected,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_flip_x(tid)),
+                "Mirror X",
+                "X",
+                ContextAction::MirrorX,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_flip_y(tid)),
+                "Mirror Y",
+                "Y",
+                ContextAction::MirrorY,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_delete(tid)),
+                "Delete",
+                "Del",
+                ContextAction::Delete,
+            ));
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled("Comment...", None));
-        items.push(self.ctx_menu_item_disabled("Pin Mapping...", None));
-        items.push(self.ctx_menu_item_disabled("Project Options...", None));
-        items.push(self.ctx_menu_item_msg("Preferences...", "", Message::OpenPreferences));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_comment(tid)),
+            "Comment...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_pin_mapping(tid)),
+            "Pin Mapping...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_msg(
+            Some(ic::icon_dd_preferences(tid)),
+            "Preferences...",
+            "",
+            Message::OpenPreferences,
+        ));
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("Supplier Links...", None));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_supplier_links(tid)),
+                "Supplier Links...",
+                None,
+            ));
             // Properties → ensure the Properties panel is visible. The
             // panel already tracks the current selection, so it populates
             // with the right-clicked item's fields once shown.
             items.push(self.ctx_menu_item_msg(
+                Some(ic::icon_dd_properties(tid)),
                 "Properties...",
                 "F11",
                 Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
@@ -84,8 +197,40 @@ impl Signex {
             .into()
     }
 
+    /// Build the 26-wide icon column for a context-menu row. Mirrors
+    /// `dd_item_icon` in `active_bar.rs` so the icons in the right-
+    /// click menu visually align with the dropdown menus in the bar.
+    /// `None` still reserves the column so labels in icon-less rows
+    /// line up with their iconed neighbours.
+    fn ctx_menu_icon_slot<'a>(
+        icon: Option<iced::widget::svg::Handle>,
+        muted: bool,
+    ) -> Element<'a, Message> {
+        match icon {
+            Some(h) => {
+                let mut s = iced::widget::svg(h)
+                    .width(20)
+                    .height(20)
+                    .content_fit(iced::ContentFit::Contain);
+                if muted {
+                    s = s.style(|_: &iced::Theme, _| iced::widget::svg::Style {
+                        color: Some(iced::Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0)),
+                    });
+                }
+                container(s)
+                    .width(26)
+                    .height(20)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .into()
+            }
+            None => iced::widget::Space::new().width(26).height(20).into(),
+        }
+    }
+
     fn ctx_menu_item_kb<'a>(
         &self,
+        icon: Option<iced::widget::svg::Handle>,
         label: &str,
         shortcut: &str,
         action: ContextAction,
@@ -95,13 +240,15 @@ impl Signex {
         let hover_c = crate::styles::ti(tokens.hover);
         iced::widget::button(
             iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
                 iced::widget::text(label.to_string()).size(11).color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(shortcut.to_string())
                     .size(10)
                     .color(crate::styles::ti(tokens.text_secondary)),
             ]
-            .spacing(12)
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         )
         .width(Self::CONTEXT_MENU_WIDTH)
@@ -126,6 +273,7 @@ impl Signex {
 
     fn ctx_menu_item_msg<'a>(
         &self,
+        icon: Option<iced::widget::svg::Handle>,
         label: &str,
         shortcut: &str,
         message: Message,
@@ -135,13 +283,15 @@ impl Signex {
         let hover_c = crate::styles::ti(tokens.hover);
         iced::widget::button(
             iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
                 iced::widget::text(label.to_string()).size(11).color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(shortcut.to_string())
                     .size(10)
                     .color(crate::styles::ti(tokens.text_secondary)),
             ]
-            .spacing(12)
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         )
         .width(Self::CONTEXT_MENU_WIDTH)
@@ -164,15 +314,78 @@ impl Signex {
         .into()
     }
 
-    fn ctx_menu_item_disabled<'a>(&self, label: &str, right: Option<&str>) -> Element<'a, Message> {
+    /// Submenu launcher row — hover to open after a 200 ms delay
+    /// (subscription-driven), or click for instant open. Active state
+    /// highlights the row so the user can tell which submenu is open.
+    fn ctx_menu_item_submenu<'a>(
+        &self,
+        icon: Option<iced::widget::svg::Handle>,
+        label: &str,
+        kind: ContextSubmenu,
+        active: bool,
+    ) -> Element<'a, Message> {
+        const SUBMENU_ARROW: &str = "›";
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let hover_c = crate::styles::ti(tokens.hover);
+        let active_bg = crate::styles::ti(tokens.selection);
+        let arrow_c = crate::styles::ti(tokens.text_secondary);
+        let btn = iced::widget::button(
+            iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
+                iced::widget::text(label.to_string()).size(11).color(text_c),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(SUBMENU_ARROW.to_string())
+                    .size(14)
+                    .color(arrow_c),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .width(Self::CONTEXT_MENU_WIDTH)
+        .padding([4, 12])
+        .on_press(Message::OpenContextSubmenu(kind))
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ if active => Some(iced::Background::Color(active_bg)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        );
+        // Wrap in mouse_area for on_enter / on_exit so the hover timer
+        // (handled by `Message::TickContextSubmenuHover`) can open the
+        // submenu after 200 ms without the user clicking.
+        iced::widget::mouse_area(btn)
+            .on_enter(Message::HoverContextSubmenu(kind))
+            .on_exit(Message::LeaveContextSubmenu)
+            .into()
+    }
+
+    fn ctx_menu_item_disabled<'a>(
+        &self,
+        icon: Option<iced::widget::svg::Handle>,
+        label: &str,
+        right: Option<&str>,
+    ) -> Element<'a, Message> {
         let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
         let mut row = iced::widget::row![
+            Self::ctx_menu_icon_slot(icon, true),
             iced::widget::text(label.to_string())
                 .size(11)
                 .color(text_secondary),
             iced::widget::Space::new().width(Length::Fill),
         ]
-        .spacing(12)
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
         .width(Length::Fill);
 
         if let Some(right_text) = right {
@@ -189,6 +402,153 @@ impl Signex {
         container(row)
             .padding([4, 12])
             .width(Self::CONTEXT_MENU_WIDTH)
+            .into()
+    }
+
+    /// Build the secondary submenu (Place / Align) shown to the right
+    /// of the parent context menu. Each row dispatches an Active Bar
+    /// action via `ContextAction::ActiveBar(...)` so the placement /
+    /// transform pipelines stay shared with the toolbar.
+    fn view_context_submenu(&self, kind: ContextSubmenu) -> Element<'_, Message> {
+        use crate::active_bar::ActiveBarAction as A;
+        use crate::icons as ic;
+        let tid = self.ui_state.theme_id;
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
+        let mk = |icon: iced::widget::svg::Handle, label: &'static str, action: A| -> Element<'_, Message> {
+            self.ctx_menu_item_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
+        };
+        match kind {
+            ContextSubmenu::Place => {
+                // Wires + buses + entries
+                items.push(mk(ic::icon_dd_wire(tid), "Wire", A::DrawWire));
+                items.push(mk(ic::icon_dd_bus(tid), "Bus", A::DrawBus));
+                items.push(mk(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry));
+                items.push(mk(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel));
+                items.push(self.ctx_menu_sep());
+                // Ports
+                items.push(mk(ic::icon_dd_port(tid), "Port", A::PlacePort));
+                items.push(mk(
+                    ic::icon_dd_off_sheet(tid),
+                    "Off Sheet Connector",
+                    A::PlaceOffSheetConnector,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Power ports (the four most common)
+                items.push(mk(ic::icon_dd_gnd(tid), "GND Power Port", A::PlacePowerGND));
+                items.push(mk(ic::icon_dd_vcc(tid), "VCC Power Port", A::PlacePowerVCC));
+                items.push(mk(
+                    ic::icon_dd_pwr_plus5(tid),
+                    "+5 Power Port",
+                    A::PlacePowerPlus5,
+                ));
+                items.push(mk(
+                    ic::icon_dd_pwr_plus12(tid),
+                    "+12 Power Port",
+                    A::PlacePowerPlus12,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Directives
+                items.push(mk(
+                    ic::icon_dd_param_set(tid),
+                    "Parameter Set",
+                    A::PlaceParameterSet,
+                ));
+                items.push(mk(ic::icon_dd_no_erc(tid), "Generic No ERC", A::PlaceNoERC));
+                items.push(mk(
+                    ic::icon_dd_diff_pair(tid),
+                    "Differential Pair",
+                    A::PlaceDiffPair,
+                ));
+                items.push(mk(ic::icon_dd_blanket(tid), "Blanket", A::PlaceBlanket));
+                items.push(self.ctx_menu_sep());
+                // Harness
+                items.push(mk(
+                    ic::icon_dd_harness(tid),
+                    "Signal Harness",
+                    A::PlaceSignalHarness,
+                ));
+                items.push(mk(
+                    ic::icon_dd_harness_conn(tid),
+                    "Harness Connector",
+                    A::PlaceHarnessConnector,
+                ));
+                items.push(mk(
+                    ic::icon_dd_harness_entry(tid),
+                    "Harness Entry",
+                    A::PlaceHarnessEntry,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Sheet symbols
+                items.push(mk(
+                    ic::icon_dd_sheet_symbol(tid),
+                    "Sheet Symbol",
+                    A::PlaceSheetSymbol,
+                ));
+                items.push(mk(
+                    ic::icon_dd_sheet_entry(tid),
+                    "Sheet Entry",
+                    A::PlaceSheetEntry,
+                ));
+                items.push(mk(
+                    ic::icon_dd_device_sheet(tid),
+                    "Device Sheet Symbol",
+                    A::PlaceDeviceSheetSymbol,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Component
+                items.push(mk(ic::icon_component(tid), "Part", A::PlaceComponent));
+                items.push(self.ctx_menu_sep());
+                // Text
+                items.push(mk(
+                    ic::icon_dd_text_string(tid),
+                    "Text String",
+                    A::PlaceTextString,
+                ));
+                items.push(mk(
+                    ic::icon_dd_text_frame(tid),
+                    "Text Frame",
+                    A::PlaceTextFrame,
+                ));
+                items.push(mk(ic::icon_dd_note(tid), "Note", A::PlaceNote));
+            }
+            ContextSubmenu::Align => {
+                items.push(mk(ic::icon_dd_align_left(tid), "Align Left", A::AlignLeft));
+                items.push(mk(ic::icon_dd_align_right(tid), "Align Right", A::AlignRight));
+                items.push(mk(
+                    ic::icon_dd_align_hcenter(tid),
+                    "Align Horizontal Centers",
+                    A::AlignHorizontalCenters,
+                ));
+                items.push(mk(
+                    ic::icon_dd_dist_horiz(tid),
+                    "Distribute Horizontally",
+                    A::DistributeHorizontally,
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(mk(ic::icon_dd_align_top(tid), "Align Top", A::AlignTop));
+                items.push(mk(ic::icon_dd_align_bottom(tid), "Align Bottom", A::AlignBottom));
+                items.push(mk(
+                    ic::icon_dd_align_vcenter(tid),
+                    "Align Vertical Centers",
+                    A::AlignVerticalCenters,
+                ));
+                items.push(mk(
+                    ic::icon_dd_dist_vert(tid),
+                    "Distribute Vertically",
+                    A::DistributeVertically,
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(mk(
+                    ic::icon_dd_align_grid(tid),
+                    "Align To Grid",
+                    A::AlignToGrid,
+                ));
+            }
+        }
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
             .into()
     }
 
@@ -1654,30 +2014,15 @@ impl Signex {
     ) -> Element<'a, Message> {
         use iced::widget::{Space, button, container, mouse_area, row, svg, text};
         use iced::{Alignment, Background, Border, Color, Length};
-        use std::sync::LazyLock;
 
-        // Window-control SVG icons (10×10 strokes, tinted via svg::Style
-        // per theme).
-        static H_MIN: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_min.svg"
-            ))
-        });
-        static H_MAX: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_max.svg"
-            ))
-        });
-        static H_CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_close.svg"
-            ))
-        });
-        static H_SEARCH: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/search.svg"
-            ))
-        });
+        // Window-control SVG icons resolved through `crate::icons` so the
+        // accent sentinel in each SVG tints to the active theme at
+        // fetch time.
+        let theme_id = self.ui_state.theme_id;
+        let h_min = crate::icons::icon_chrome_window_min(theme_id);
+        let h_max = crate::icons::icon_chrome_window_max(theme_id);
+        let h_close = crate::icons::icon_chrome_window_close(theme_id);
+        let h_search = crate::icons::icon_chrome_search(theme_id);
 
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
@@ -1731,15 +2076,15 @@ impl Signex {
         };
 
         let controls = row![
-            chrome_btn((*H_MIN).clone(), Message::MinimizeMainWindow, hover_c, text_c),
+            chrome_btn(h_min.clone(), Message::MinimizeMainWindow, hover_c, text_c),
             chrome_btn(
-                (*H_MAX).clone(),
+                h_max.clone(),
                 Message::ToggleMaximizeMainWindow,
                 hover_c,
                 text_c,
             ),
             chrome_btn(
-                (*H_CLOSE).clone(),
+                h_close.clone(),
                 Message::CloseMainWindow,
                 close_hover,
                 Color::WHITE,
@@ -1759,7 +2104,7 @@ impl Signex {
         // Search bar placeholder — visual only for now. Matches VS Code's
         // central command palette peek: rounded rect with search icon
         // and muted prompt text.
-        let search_icon = svg((*H_SEARCH).clone())
+        let search_icon = svg(h_search.clone())
             .width(12)
             .height(12)
             .style(move |_: &iced::Theme, _| svg::Style {
@@ -2281,6 +2626,9 @@ impl Signex {
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
         // Opaque semi-transparent backdrop that blocks interaction with underlying content.
         // Clicking anywhere on it triggers the on_press message (modal dismiss).
+        // Right-click also dismisses — without this, right-click-to-pan
+        // while a context menu is open is silently absorbed by the
+        // mouse_area and the menu sticks until a left-click lands.
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
@@ -2295,7 +2643,8 @@ impl Signex {
                     ..container::Style::default()
                 }),
         )
-        .on_press(on_press)
+        .on_press(on_press.clone())
+        .on_right_press(on_press)
         .into()
     }
 
@@ -2408,11 +2757,18 @@ impl Signex {
         if self.has_active_schematic() {
             let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            // Active Bar overlay is only painted on the main window, so
+            // the main canvas's selection set is the right gate.
+            let bar_has_selection = !interaction.canvas.selected.is_empty();
+            let bar_has_net_colors = !ui.net_colors.is_empty();
             let bar = crate::active_bar::view_bar(
                 interaction.current_tool,
                 interaction.draw_mode,
                 &interaction.last_tool,
                 &document.panel_ctx.tokens,
+                self.ui_state.theme_id,
+                bar_has_selection,
+                bar_has_net_colors,
             )
             .map(Message::ActiveBar);
             layers.push(
@@ -2496,10 +2852,16 @@ impl Signex {
         }
 
         if let Some(ab_menu) = interaction.active_bar_menu {
+            let has_selection = !interaction.canvas.selected.is_empty();
+            let has_net_colors = !ui.net_colors.is_empty();
             let dropdown = crate::active_bar::view_dropdown(
                 ab_menu,
                 &document.panel_ctx.tokens,
                 &interaction.selection_filters,
+                &interaction.custom_filter_presets,
+                self.ui_state.theme_id,
+                has_selection,
+                has_net_colors,
             )
             .map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
@@ -2526,12 +2888,32 @@ impl Signex {
 
         if let Some(ref ctx_menu) = interaction.context_menu {
             let menu = self.view_context_menu();
+            // Clamp the menu inside the window so a click near the
+            // right/bottom edge doesn't push it off-screen. Estimate
+            // the menu's footprint conservatively from the maximum
+            // possible row count (≈ 22 rows × 22 px + padding) and
+            // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
+            // lands too close to an edge.
+            let (win_w, win_h) = self.ui_state.window_size;
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
+            let edge_margin: f32 = 4.0;
+            let x = if ctx_menu.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                ctx_menu.x
+            };
+            let y = if ctx_menu.y + est_menu_h + edge_margin > win_h {
+                (ctx_menu.y - est_menu_h).max(0.0)
+            } else {
+                ctx_menu.y
+            };
             layers.push(Self::dismiss_layer(Message::CloseContextMenu));
             layers.push(
                 column![
-                    iced::widget::Space::new().height(ctx_menu.y),
+                    iced::widget::Space::new().height(y),
                     row![
-                        iced::widget::Space::new().width(ctx_menu.x),
+                        iced::widget::Space::new().width(x),
                         menu,
                         iced::widget::Space::new().width(Length::Fill),
                     ]
@@ -2539,6 +2921,55 @@ impl Signex {
                 ]
                 .into(),
             );
+            // Submenu (Place / Align) — pop to the right of the parent
+            // menu (or left if the right edge would overflow), and
+            // align its top to the launcher row's y-position so the
+            // first submenu item sits next to the row that opened it.
+            if let Some(submenu_kind) = interaction.context_submenu {
+                let submenu = self.view_context_submenu(submenu_kind);
+                // Wrap in mouse_area so on_enter/on_exit on the panel
+                // can extend the close timer when the cursor crosses
+                // from the launcher into the submenu and back.
+                let submenu = iced::widget::mouse_area(submenu)
+                    .on_enter(Message::EnterContextSubmenuPanel)
+                    .on_exit(Message::LeaveContextSubmenuPanel);
+                let submenu_w = menu_w;
+                let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                    (x - submenu_w).max(0.0)
+                } else {
+                    x + menu_w
+                };
+                // Approximate launcher-row y inside the parent menu.
+                // Each ctx_menu_item_* row is ≈ 22 px tall (text + 4 px
+                // top + 4 px bottom + a tiny line-height fudge); the
+                // separator is rendered as a 1 px line. The numbers
+                // below come from counting rows above each launcher in
+                // `view_context_menu`.
+                const ROW_H: f32 = 22.0;
+                const SEP_H: f32 = 1.0;
+                const TOP_PAD: f32 = 4.0;
+                let launcher_y = match submenu_kind {
+                    // Above Place: 3 always-visible rows + 1 separator.
+                    ContextSubmenu::Place => TOP_PAD + 3.0 * ROW_H + SEP_H,
+                    // Align is only shown when something is selected;
+                    // above Align: the same 3 rows + 1 sep, then
+                    // Place / Part Actions / Sheet Actions / References.
+                    ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                };
+                let sub_y = (y + launcher_y - 4.0).max(0.0);
+                layers.push(
+                    column![
+                        iced::widget::Space::new().height(sub_y),
+                        row![
+                            iced::widget::Space::new().width(sub_x),
+                            submenu,
+                            iced::widget::Space::new().width(Length::Fill),
+                        ]
+                        .width(Length::Fill),
+                    ]
+                    .into(),
+                );
+            }
         }
 
         if ui.panel_list_open {

@@ -387,6 +387,11 @@ fn content_appearance<'a>(
             "Default Signex schematic palette",
         ),
         (
+            ThemeId::Alplab,
+            "Alp Lab",
+            "Alp Lab brand cyan accent on the Signex chrome",
+        ),
+        (
             ThemeId::VsCodeDark,
             "VS Code Dark",
             "VS Code inspired dark theme",

@@ -166,6 +166,7 @@ impl Signex {
                     .unwrap_or_default()
             },
             tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
+            theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,
             snap_enabled: self.ui_state.snap_enabled,
@@ -202,6 +203,8 @@ impl Signex {
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
+            custom_filter_presets: self.interaction_state.custom_filter_presets.clone(),
+            active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             page_format_mode,
             margin_vertical,
             margin_horizontal,

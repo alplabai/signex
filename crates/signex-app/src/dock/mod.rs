@@ -3,35 +3,19 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
-use std::sync::LazyLock;
-
 use iced::widget::{Column, Space, button, canvas, column, container, mouse_area, row, svg, text};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
+use crate::icons;
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
 
-// ─── SVG handles (created once via LazyLock, cloned cheaply) ──
-
-static H_CLOSE: LazyLock<svg::Handle> =
-    LazyLock::new(|| svg::Handle::from_memory(include_bytes!("../../assets/icons/close.svg")));
-static H_COLLAPSE_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_left.svg"))
-});
-static H_COLLAPSE_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_right.svg"))
-});
-static H_COLLAPSE_DOWN: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_down.svg"))
-});
-static H_EXPAND_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_left.svg"))
-});
-static H_EXPAND_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_right.svg"))
-});
-fn svg_icon(handle: &LazyLock<svg::Handle>) -> iced::widget::Svg<'static> {
-    svg((*handle).clone()).width(10).height(10)
+/// Wrap a themed SVG handle into a 10×10 `Svg` widget — matches the
+/// dimensions of the old LazyLock-based helper. Kept as a free
+/// function so every call site reads `svg_icon(icons::icon_close(tid))`
+/// without extra boilerplate.
+fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {
+    svg(handle).width(14).height(14)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -466,12 +450,13 @@ impl DockArea {
         }
 
         // Collapse button (SVG icon)
+        let tid = ctx.theme_id;
         let collapse_icon = match position {
-            PanelPosition::Left => svg_icon(&H_COLLAPSE_LEFT),
-            PanelPosition::Right => svg_icon(&H_COLLAPSE_RIGHT),
-            PanelPosition::Bottom => svg_icon(&H_COLLAPSE_DOWN),
+            PanelPosition::Left => svg_icon(icons::icon_collapse_left(tid)),
+            PanelPosition::Right => svg_icon(icons::icon_collapse_right(tid)),
+            PanelPosition::Bottom => svg_icon(icons::icon_collapse_down(tid)),
         };
-        let close_btn = button(svg_icon(&H_CLOSE))
+        let close_btn = button(svg_icon(icons::icon_close(tid)))
             .padding([5, 4])
             .style(button::text)
             .on_press(DockMessage::ClosePanel(position, region.active));
@@ -552,10 +537,11 @@ impl DockArea {
             let mut rail: Column<DockMessage> = Column::new().spacing(2.0);
 
             // Expand button with SVG arrow
+            let tid = ctx.theme_id;
             let expand_icon = match position {
-                PanelPosition::Left => svg_icon(&H_EXPAND_LEFT),
-                PanelPosition::Right => svg_icon(&H_EXPAND_RIGHT),
-                _ => svg_icon(&H_EXPAND_LEFT),
+                PanelPosition::Left => svg_icon(icons::icon_expand_left(tid)),
+                PanelPosition::Right => svg_icon(icons::icon_expand_right(tid)),
+                _ => svg_icon(icons::icon_expand_left(tid)),
             };
             rail = rail.push(
                 button(expand_icon)
@@ -643,7 +629,7 @@ impl DockArea {
                 container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
                     .padding([4, 8])
                     .width(Length::Fill),
-                button(svg_icon(&H_CLOSE))
+                button(svg_icon(icons::icon_close(ctx.theme_id)))
                     .padding([4, 4])
                     .style(button::text)
                     .on_press(DockMessage::DockFloating(idx)),

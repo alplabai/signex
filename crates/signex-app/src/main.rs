@@ -10,6 +10,7 @@ mod diagnostics;
 mod dock;
 mod find_replace;
 mod fonts;
+mod icons;
 mod menu_bar;
 mod panels;
 mod pcb_canvas;
