@@ -281,7 +281,7 @@ pub enum TreeMsg {
 const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
-const ICON_LABEL_GAP: f32 = 6.0; // Extra breathing room after the icon
+const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
 const CHEVRON_W: f32 = 10.0; // triangle column
 const ICON_SZ: f32 = 14.0; // Chamfered SVG silhouettes — tuned visually
 const FONT_SZ: f32 = 12.0; // body text

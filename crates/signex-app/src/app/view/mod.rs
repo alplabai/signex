@@ -2378,9 +2378,12 @@ impl Signex {
                           hover_bg: Color,
                           hover_icon: Color|
          -> Element<'static, Message> {
+            // 14×14 brings the X / – / □ glyphs up to native-Windows
+            // chrome scale; the prior 10×10 left them visibly smaller
+            // than the surrounding menu-bar text.
             let icon = svg(handle)
-                .width(10)
-                .height(10)
+                .width(14)
+                .height(14)
                 .style(move |_: &iced::Theme, _| svg::Style {
                     color: Some(text_c),
                 });
