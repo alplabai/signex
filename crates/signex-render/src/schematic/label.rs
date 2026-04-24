@@ -27,9 +27,9 @@ pub fn draw_label(
     // All schematic canvas text renders at 10 pt (1.8 mm, cap-height basis)
     // regardless of what the source file declares. Overriding here instead of
     // mutating the stored value keeps save round-trips stable.
-    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
+    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
     let _stored = label.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
@@ -184,7 +184,7 @@ fn draw_net_label(
     color: Color,
     screen_font: f32,
 ) {
-    let offset = schematic_text_offset_net(label, crate::SCHEMATIC_TEXT_MM);
+    let offset = schematic_text_offset_net(label, crate::SCHEMATIC_TEXT_EM_MM);
     draw_spin_text(frame, label, transform, color, screen_font, offset, false);
 }
 
@@ -427,7 +427,7 @@ pub enum SpinStyle {
 /// AABB for a port (Global/Hierarchical) that wraps the whole pentagon shape,
 /// anchored on the connection point and extending forward into the body.
 fn port_shape_aabb(label: &Label) -> signex_types::schematic::Aabb {
-    let fs = crate::SCHEMATIC_TEXT_MM;
+    let fs = crate::SCHEMATIC_TEXT_EM_MM;
     let h = fs * 1.4;
     let arrow_w = h * 0.5;
     let pad = fs * 0.3;
@@ -473,7 +473,7 @@ pub fn label_text_aabb(label: &Label) -> signex_types::schematic::Aabb {
     ) {
         return port_shape_aabb(label);
     }
-    let fs = crate::SCHEMATIC_TEXT_MM;
+    let fs = crate::SCHEMATIC_TEXT_EM_MM;
     // Tight text width — slightly under half the font size per glyph matches
     // the actual rendered widths for most monospace-ish labels.
     // Iced's `fill_text(size = S)` reserves roughly S of vertical space for
