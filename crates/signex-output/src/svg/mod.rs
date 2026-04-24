@@ -6,20 +6,20 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use signex_types::schematic::{
-    FillType, Graphic, HAlign, LabelType, LibSymbol, Pin, Point, SchDrawing, Symbol, TextProp,
-    VAlign,
-};
 use signex_types::markup::{
     ExpressionEvalContext, RichSegment, evaluate_expressions, expand_kicad_char_escapes,
     parse_markup,
 };
+use signex_types::schematic::{
+    FillType, Graphic, HAlign, LabelType, LibSymbol, Pin, Point, SchDrawing, Symbol, TextProp,
+    VAlign,
+};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
+use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions, PdfScale};
-use crate::SheetSnapshot;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -230,9 +230,11 @@ impl SvgRenderContext {
             let (off_x, off_y) = match label.label_type {
                 LabelType::Net => schematic_text_offset_net(spin),
                 LabelType::Global => schematic_text_offset_global(&label.shape, spin),
-                LabelType::Hierarchical => {
-                    schematic_text_offset_hier(&label.text, signex_types::schematic::SCHEMATIC_TEXT_MM, spin)
-                }
+                LabelType::Hierarchical => schematic_text_offset_hier(
+                    &label.text,
+                    signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    spin,
+                ),
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
@@ -328,16 +330,19 @@ impl SvgRenderContext {
                 current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
                 cell: eval_inputs.map(|e| e.cell),
                 at_variables: Some(&symbol_vars),
-                refdes_variables: eval_inputs
-                    .map(|e| e.global_refdes)
-                    .or(Some(&refdes_vars)),
+                refdes_variables: eval_inputs.map(|e| e.global_refdes).or(Some(&refdes_vars)),
                 ..ExpressionEvalContext::default()
             };
 
-            let symbol_pin_nets = eval_inputs
-                .and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
+            let symbol_pin_nets =
+                eval_inputs.and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
 
-            if let Some(lib) = sheet.schematic.lib_symbols.values().find(|ls| ls.id == sym.lib_id) {
+            if let Some(lib) = sheet
+                .schematic
+                .lib_symbols
+                .values()
+                .find(|ls| ls.id == sym.lib_id)
+            {
                 push_symbol_lib_graphics(&mut elements, sym, lib, &xform);
                 push_symbol_pins(
                     &mut elements,
@@ -485,11 +490,7 @@ impl SvgRenderContext {
     }
 }
 
-fn push_sch_drawing_path(
-    out: &mut Vec<SvgElement>,
-    drawing: &SchDrawing,
-    xform: &PageTransform,
-) {
+fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform: &PageTransform) {
     match drawing {
         SchDrawing::Line {
             start, end, width, ..
@@ -794,7 +795,8 @@ fn push_symbol_lib_graphics(
                 ..
             } => {
                 let (wx0, wy0) = symbol_world_point(sym, position);
-                let (wx1, wy1) = symbol_world_point(sym, &Point::new(position.x + size.x, position.y + size.y));
+                let (wx1, wy1) =
+                    symbol_world_point(sym, &Point::new(position.x + size.x, position.y + size.y));
                 let x1 = xform.x(wx0).min(xform.x(wx1));
                 let y1 = xform.px_y(wy0).min(xform.px_y(wy1));
                 let x2 = xform.x(wx0).max(xform.x(wx1));
@@ -903,9 +905,19 @@ fn push_symbol_pins(
             let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
                 let (nwx, nwy) = (wx1, wy1);
                 if wdx.abs() > wdy.abs() {
-                    ((nwx, nwy + 0.508), SvgTextAlign::Center, SvgTextVAlign::Bottom, 0.0)
+                    (
+                        (nwx, nwy + 0.508),
+                        SvgTextAlign::Center,
+                        SvgTextVAlign::Bottom,
+                        0.0,
+                    )
                 } else {
-                    ((nwx + 0.508, nwy), SvgTextAlign::Left, SvgTextVAlign::Center, 0.0)
+                    (
+                        (nwx + 0.508, nwy),
+                        SvgTextAlign::Left,
+                        SvgTextVAlign::Center,
+                        0.0,
+                    )
                 }
             } else {
                 let name_pos = (
@@ -1067,8 +1079,14 @@ fn arc_path_commands(start: SvgPoint, mid: SvgPoint, end: SvgPoint) -> Vec<SvgPa
             let a1 = from + step * (i + 1) as f64;
             let k = (4.0 / 3.0) * ((a1 - a0) / 4.0).tan();
 
-            let p0 = (cx as f64 + r as f64 * a0.cos(), cy as f64 + r as f64 * a0.sin());
-            let p3 = (cx as f64 + r as f64 * a1.cos(), cy as f64 + r as f64 * a1.sin());
+            let p0 = (
+                cx as f64 + r as f64 * a0.cos(),
+                cy as f64 + r as f64 * a0.sin(),
+            );
+            let p3 = (
+                cx as f64 + r as f64 * a1.cos(),
+                cy as f64 + r as f64 * a1.sin(),
+            );
             let c1 = (
                 p0.0 - k * r as f64 * a0.sin(),
                 p0.1 + k * r as f64 * a0.cos(),
@@ -1167,7 +1185,11 @@ fn to_svg_path_d(commands: &[SvgPathCommand]) -> String {
                 let _ = write!(out, "L {} {} ", p.x, p.y);
             }
             SvgPathCommand::CubicTo(c1, c2, p) => {
-                let _ = write!(out, "C {} {}, {} {}, {} {} ", c1.x, c1.y, c2.x, c2.y, p.x, p.y);
+                let _ = write!(
+                    out,
+                    "C {} {}, {} {}, {} {} ",
+                    c1.x, c1.y, c2.x, c2.y, p.x, p.y
+                );
             }
             SvgPathCommand::Close => {
                 out.push_str("Z ");
@@ -1428,14 +1450,8 @@ fn draw_text_outline(
             }
 
             if let Some(gid) = face.glyph_index(ch) {
-                let mut builder = TinyPathOutlineBuilder::new(
-                    pen_x,
-                    run_baseline,
-                    run_scale,
-                    x,
-                    y,
-                    rotation_deg,
-                );
+                let mut builder =
+                    TinyPathOutlineBuilder::new(pen_x, run_baseline, run_scale, x, y, rotation_deg);
                 if face.outline_glyph(gid, &mut builder).is_some()
                     && let Some(path) = builder.finish()
                 {

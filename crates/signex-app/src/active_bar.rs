@@ -155,7 +155,6 @@ use crate::icons as ic;
 /// 13·26 + 4·2 + 16·2 + 4 = 338 + 8 + 32 + 4 = 382 px.
 pub const BAR_WIDTH_PX: f32 = 382.0;
 
-
 // ─── Messages ────────────────────────────────────────────────
 
 /// Which Active Bar dropdown menu is open (by button index).
@@ -936,7 +935,13 @@ pub fn view_dropdown(
             ),
         ],
         ActiveBarMenu::Select => vec![
-            dd_item_svg(ic::icon_dd_drag(tid), "Drag", ActiveBarAction::Drag, ac.text, ac.hover),
+            dd_item_svg(
+                ic::icon_dd_drag(tid),
+                "Drag",
+                ActiveBarAction::Drag,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 ic::icon_dd_move(tid),
                 "Move",
@@ -1106,7 +1111,13 @@ pub fn view_dropdown(
                 ac.text,
                 ac.hover,
             ),
-            dd_item_svg(ic::icon_dd_bus(tid), "Bus", ActiveBarAction::DrawBus, ac.text, ac.hover),
+            dd_item_svg(
+                ic::icon_dd_bus(tid),
+                "Bus",
+                ActiveBarAction::DrawBus,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 ic::icon_dd_bus_entry(tid),
                 "Bus Entry",
@@ -1333,7 +1344,13 @@ pub fn view_dropdown(
             ),
         ],
         ActiveBarMenu::Shapes => vec![
-            dd_item_svg(ic::icon_dd_arc(tid), "Arc", ActiveBarAction::DrawArc, ac.text, ac.hover),
+            dd_item_svg(
+                ic::icon_dd_arc(tid),
+                "Arc",
+                ActiveBarAction::DrawArc,
+                ac.text,
+                ac.hover,
+            ),
             dd_item_svg(
                 ic::icon_dd_circle(tid),
                 "Full Circle",
@@ -1408,18 +1425,19 @@ pub fn view_dropdown(
                 // The 14×14 swatch sits inside a 20×20 slot so the
                 // label column lines up with the SVG-icon rows below
                 // (`dd_item_svg` uses a 20-px icon column).
-                let swatch = container(Space::new())
-                    .width(14)
-                    .height(14)
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(color)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: Color::from_rgb(0.3, 0.3, 0.35),
-                        },
-                        ..container::Style::default()
-                    });
+                let swatch =
+                    container(Space::new())
+                        .width(14)
+                        .height(14)
+                        .style(move |_: &Theme| container::Style {
+                            background: Some(Background::Color(color)),
+                            border: Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: Color::from_rgb(0.3, 0.3, 0.35),
+                            },
+                            ..container::Style::default()
+                        });
                 let swatch_slot = container(swatch)
                     .width(20)
                     .height(20)
@@ -1679,24 +1697,25 @@ fn ab_icon_btn(
     // toggle) still works via the surrounding `mouse_area`, so the
     // user can open the menu and discover what's greyed out.
     let left_msg = left_click;
-    let mut btn = button(icon_content).padding(0).style(
-        move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Color::from_rgb(0.26, 0.27, 0.34),
-                _ if active => Color::from_rgb(0.22, 0.23, 0.30),
-                _ => Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    color: Color::TRANSPARENT,
-                },
-                ..button::Style::default()
-            }
-        },
-    );
+    let mut btn =
+        button(icon_content)
+            .padding(0)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered => Color::from_rgb(0.26, 0.27, 0.34),
+                    _ if active => Color::from_rgb(0.22, 0.23, 0.30),
+                    _ => Color::TRANSPARENT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        color: Color::TRANSPARENT,
+                    },
+                    ..button::Style::default()
+                }
+            });
     if left_enabled {
         btn = btn.on_press(left_msg);
     }

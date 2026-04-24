@@ -1,10 +1,10 @@
 //! `tiny-skia` CPU rasteriser for the preview pipeline via SVG context.
 
-use crate::svg::{SvgEvaluatorInputs, SvgRenderContext};
-use crate::expression::{ExpressionTables, sheet_cell_value};
-use crate::{ExportContext, SheetSnapshot};
 use super::PreviewOptions;
 use super::PreviewPage;
+use crate::expression::{ExpressionTables, sheet_cell_value};
+use crate::svg::{SvgEvaluatorInputs, SvgRenderContext};
+use crate::{ExportContext, SheetSnapshot};
 
 /// Rasterise a single sheet to an RGBA bitmap.
 ///
@@ -43,11 +43,8 @@ pub fn rasterize_page(
         px_per_mm,
         Some(&eval_inputs),
     );
-    let rgba = svg_ctx.rasterize_rgba_with_colour_mode(
-        page_w_px,
-        page_h_px,
-        opts.pdf.colour_mode,
-    )?;
+    let rgba =
+        svg_ctx.rasterize_rgba_with_colour_mode(page_w_px, page_h_px, opts.pdf.colour_mode)?;
     Some(PreviewPage {
         page_number: sheet.sheet_number,
         width_px: page_w_px,

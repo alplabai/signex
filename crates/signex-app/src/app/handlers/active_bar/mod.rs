@@ -25,9 +25,7 @@ impl Signex {
             }
             ActiveBarMsg::ToggleFilter(filter) => self.handle_active_bar_filter_toggle(filter),
             ActiveBarMsg::ToggleAllFilters => self.handle_active_bar_all_filters_toggle(),
-            ActiveBarMsg::ApplyCustomFilter(idx) => {
-                self.handle_apply_custom_filter_preset(idx)
-            }
+            ActiveBarMsg::ApplyCustomFilter(idx) => self.handle_apply_custom_filter_preset(idx),
             ActiveBarMsg::Action(action) => self.handle_active_bar_action(action),
         }
     }

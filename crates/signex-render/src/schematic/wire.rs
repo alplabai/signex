@@ -68,7 +68,11 @@ pub fn draw_wires(
         .iter()
         .map(|w| {
             let color = color_for(w);
-            let mm = if w.stroke_width > 0.0 { w.stroke_width } else { WIRE_DEFAULT_WIDTH_MM };
+            let mm = if w.stroke_width > 0.0 {
+                w.stroke_width
+            } else {
+                WIRE_DEFAULT_WIDTH_MM
+            };
             let px = transform.world_len(mm).max(1.0);
             let key = (color_key(color), width_key(px));
             (key, color, px)
@@ -91,12 +95,7 @@ pub fn draw_wires(
 
 /// Draw a bus (thick line, no chaining needed — buses are already polylines
 /// in KiCad but are represented as individual segments here).
-pub fn draw_bus(
-    frame: &mut canvas::Frame,
-    bus: &Bus,
-    transform: &ScreenTransform,
-    color: Color,
-) {
+pub fn draw_bus(frame: &mut canvas::Frame, bus: &Bus, transform: &ScreenTransform, color: Color) {
     let p1 = transform.to_screen_point(bus.start.x, bus.start.y);
     let p2 = transform.to_screen_point(bus.end.x, bus.end.y);
 
@@ -105,7 +104,9 @@ pub fn draw_bus(
     let stroke = canvas::Stroke {
         line_cap: LineCap::Round,
         line_join: LineJoin::Round,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     };
     frame.stroke(&line, stroke);
 }
@@ -132,7 +133,9 @@ pub fn draw_bus_entry(
     let stroke = canvas::Stroke {
         line_cap: LineCap::Round,
         line_join: LineJoin::Round,
-        ..canvas::Stroke::default().with_color(color).with_width(width)
+        ..canvas::Stroke::default()
+            .with_color(color)
+            .with_width(width)
     };
     frame.stroke(&path, stroke);
 }
@@ -153,8 +156,14 @@ fn draw_wire_group(
     let mut pt_map: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     for &idx in indices {
         let w = &wires[idx];
-        pt_map.entry(pt_key(w.start.x, w.start.y)).or_default().push(idx);
-        pt_map.entry(pt_key(w.end.x, w.end.y)).or_default().push(idx);
+        pt_map
+            .entry(pt_key(w.start.x, w.start.y))
+            .or_default()
+            .push(idx);
+        pt_map
+            .entry(pt_key(w.end.x, w.end.y))
+            .or_default()
+            .push(idx);
     }
 
     // Collect chain start candidates: endpoints where exactly 1 wire touches
@@ -178,7 +187,14 @@ fn draw_wire_group(
         if visited.contains(start_idx) {
             continue;
         }
-        let chain = trace_chain(*start_idx, *from_start, wires, &pt_map, &mut visited, transform);
+        let chain = trace_chain(
+            *start_idx,
+            *from_start,
+            wires,
+            &pt_map,
+            &mut visited,
+            transform,
+        );
         if chain.len() >= 2 {
             chains.push(chain);
         }
@@ -210,7 +226,9 @@ fn draw_wire_group(
         let stroke = canvas::Stroke {
             line_cap: LineCap::Round,
             line_join: LineJoin::Round,
-            ..canvas::Stroke::default().with_color(color).with_width(screen_width)
+            ..canvas::Stroke::default()
+                .with_color(color)
+                .with_width(screen_width)
         };
         frame.stroke(&p, stroke);
     }

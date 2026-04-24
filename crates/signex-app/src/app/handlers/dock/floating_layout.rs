@@ -22,8 +22,7 @@ impl Signex {
 
                     // Use real dock region footprints (or collapsed rails) as
                     // drop targets so users can dock panels more freely.
-                    let left_zone_w = if self.document_state.dock.has_panels(PanelPosition::Left)
-                    {
+                    let left_zone_w = if self.document_state.dock.has_panels(PanelPosition::Left) {
                         if self.document_state.dock.is_collapsed(PanelPosition::Left) {
                             40.0
                         } else {
@@ -33,16 +32,16 @@ impl Signex {
                         140.0
                     };
 
-                    let right_zone_w =
-                        if self.document_state.dock.has_panels(PanelPosition::Right) {
-                            if self.document_state.dock.is_collapsed(PanelPosition::Right) {
-                                40.0
-                            } else {
-                                self.ui_state.right_width.max(80.0)
-                            }
+                    let right_zone_w = if self.document_state.dock.has_panels(PanelPosition::Right)
+                    {
+                        if self.document_state.dock.is_collapsed(PanelPosition::Right) {
+                            40.0
                         } else {
-                            140.0
-                        };
+                            self.ui_state.right_width.max(80.0)
+                        }
+                    } else {
+                        140.0
+                    };
 
                     let bottom_zone_h =
                         if self.document_state.dock.has_panels(PanelPosition::Bottom) {

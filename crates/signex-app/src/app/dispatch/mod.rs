@@ -121,8 +121,7 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
-                        .map(Message::MainWindowScaleChanged);
+                    return iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
                 }
                 Task::none()
             }
@@ -142,8 +141,8 @@ impl Signex {
                 // Stash the scale factor so the wordmark PNG picker
                 // can render at native device-pixel count. Re-queried
                 // on every resize to track monitor moves.
-                let scale_task = iced::window::scale_factor(id)
-                    .map(Message::MainWindowScaleChanged);
+                let scale_task =
+                    iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
                 // Re-add Windows 11 DWM rounded corners + drop shadow
                 // (silently no-ops on Windows 10 and non-Windows). Has
                 // to run after the HWND is alive, hence here rather than
@@ -327,7 +326,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
                 Task::none()
             }
             Message::OpenParameterManager => {
@@ -422,8 +423,13 @@ impl Signex {
                         false,
                         false,
                     );
-                    self.interaction_state.active_canvas_mut().polyline_points.clear();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .polyline_points
+                        .clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
                 if let Some(pts) = self.ui_state.lasso_polygon.take()

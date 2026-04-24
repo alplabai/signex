@@ -549,9 +549,12 @@ impl Signex {
                                     self.ui_state.wire_color_overrides.insert(uuid, pending);
                                 }
                             }
-                            self.interaction_state.active_canvas_mut().wire_color_overrides =
-                                self.ui_state.wire_color_overrides.clone();
-                            self.interaction_state.active_canvas_mut().clear_content_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_content_cache();
                         }
                     }
                     // Altium-style continuous placement: stay armed
@@ -590,8 +593,12 @@ impl Signex {
                         }
                     }
                     self.ui_state.reorder_picker = None;
-                    self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .reorder_picker_armed = false;
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
 
@@ -788,7 +795,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Line {
@@ -809,7 +818,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -824,7 +835,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Rect));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Rect {
@@ -842,7 +855,9 @@ impl Signex {
                                 );
                                 self.interaction_state.shape_anchor = None;
                                 self.interaction_state.active_canvas_mut().shape_anchor = None;
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -856,7 +871,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Circle));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(center) => {
                                 let dx = p.x - center.x;
@@ -879,7 +896,9 @@ impl Signex {
                                 }
                                 self.interaction_state.shape_anchor = None;
                                 self.interaction_state.active_canvas_mut().shape_anchor = None;
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -907,7 +926,9 @@ impl Signex {
                         }
                         self.interaction_state.active_canvas_mut().arc_points =
                             self.interaction_state.arc_points.clone();
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                     }
                     Tool::Polyline => {
                         // Click-by-click polyline. Enter / double-click commits.
@@ -915,7 +936,9 @@ impl Signex {
                         self.interaction_state.polyline_points.push(p);
                         self.interaction_state.active_canvas_mut().polyline_points =
                             self.interaction_state.polyline_points.clone();
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                     }
                     Tool::Text => {
                         let note_text = self
@@ -1045,7 +1068,11 @@ impl Signex {
                     (dx, dy)
                 };
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
-                    && !self.interaction_state.active_canvas_mut().selected.is_empty()
+                    && !self
+                        .interaction_state
+                        .active_canvas_mut()
+                        .selected
+                        .is_empty()
                 {
                     self.apply_engine_command(
                         signex_engine::Command::MoveSelection {
@@ -1116,7 +1143,9 @@ impl Signex {
                             self.interaction_state.shape_anchor = Some(p);
                             self.interaction_state.active_canvas_mut().shape_anchor =
                                 Some((p, crate::canvas::ShapePreviewKind::Line));
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1138,7 +1167,9 @@ impl Signex {
                                 false,
                             );
                             self.interaction_state.active_canvas_mut().shape_anchor = None;
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1165,7 +1196,9 @@ impl Signex {
                                 );
                             }
                             self.interaction_state.active_canvas_mut().shape_anchor = None;
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1189,12 +1222,17 @@ impl Signex {
                                 false,
                                 false,
                             );
-                            self.interaction_state.active_canvas_mut().arc_points.clear();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .arc_points
+                                .clear();
                         } else {
                             self.interaction_state.active_canvas_mut().arc_points =
                                 self.interaction_state.arc_points.clone();
                         }
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                         return Task::none();
                     }
                     _ => {}
@@ -1234,14 +1272,22 @@ impl Signex {
                             false,
                         );
                     }
-                    self.interaction_state.active_canvas_mut().polyline_points.clear();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .polyline_points
+                        .clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .wire_preview
+                        .clear();
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                 } else if let Some(snapshot) = self.active_render_snapshot() {
                     use signex_types::schematic::SelectedKind;
@@ -1299,16 +1345,23 @@ impl Signex {
             }
             CanvasEvent::CursorMoved => {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.active_canvas_mut().pending_fit.set(None);
+                self.interaction_state
+                    .active_canvas_mut()
+                    .pending_fit
+                    .set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
                     self.interaction_state.active_canvas_mut().fit_to_paper();
                     self.interaction_state.active_canvas_mut().clear_bg_cache();
-                    self.interaction_state.active_canvas_mut().clear_content_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_content_cache();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
                     self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -1332,11 +1385,19 @@ impl Signex {
                         .iter()
                         .position(|s| s.uuid == hit.uuid)
                     {
-                        self.interaction_state.active_canvas_mut().selected.remove(pos);
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .selected
+                            .remove(pos);
                     } else {
-                        self.interaction_state.active_canvas_mut().selected.push(hit);
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .selected
+                            .push(hit);
                     }
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -1387,10 +1448,7 @@ impl Signex {
         };
 
         if !path.exists() {
-            crate::diagnostics::log_info(format!(
-                "Child-sheet file not found: {}",
-                path.display()
-            ));
+            crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return;
         }
 

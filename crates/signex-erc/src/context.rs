@@ -205,13 +205,20 @@ impl ErcContext {
         let wires: Vec<ErcWire> = snapshot
             .wires
             .iter()
-            .map(|w| ErcWire { uuid: w.uuid, start: w.start, end: w.end })
+            .map(|w| ErcWire {
+                uuid: w.uuid,
+                start: w.start,
+                end: w.end,
+            })
             .collect();
 
         let buses: Vec<ErcBus> = snapshot
             .buses
             .iter()
-            .map(|b| ErcBus { start: b.start, end: b.end })
+            .map(|b| ErcBus {
+                start: b.start,
+                end: b.end,
+            })
             .collect();
 
         let labels: Vec<ErcLabel> = snapshot
@@ -228,19 +235,25 @@ impl ErcContext {
         let junctions: Vec<ErcJunction> = snapshot
             .junctions
             .iter()
-            .map(|j| ErcJunction { position: j.position })
+            .map(|j| ErcJunction {
+                position: j.position,
+            })
             .collect();
 
         let no_connects: Vec<ErcNoConnect> = snapshot
             .no_connects
             .iter()
-            .map(|nc| ErcNoConnect { position: nc.position })
+            .map(|nc| ErcNoConnect {
+                position: nc.position,
+            })
             .collect();
 
         let bus_entries: Vec<ErcBusEntry> = snapshot
             .bus_entries
             .iter()
-            .map(|be| ErcBusEntry { position: be.position })
+            .map(|be| ErcBusEntry {
+                position: be.position,
+            })
             .collect();
 
         let child_sheets: Vec<ErcChildSheet> = snapshot
@@ -344,8 +357,12 @@ fn point_is_connected(
     labels: &[ErcLabel],
     no_connects: &[ErcNoConnect],
 ) -> bool {
-    wires.iter().any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
-        || buses.iter().any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
+    wires
+        .iter()
+        .any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
+        || buses
+            .iter()
+            .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
         || labels.iter().any(|l| pt_same(&l.position, pos))
         || no_connects.iter().any(|nc| pt_same(&nc.position, pos))
 }
@@ -365,11 +382,7 @@ fn uf_find(parent: &mut HashMap<(i64, i64), (i64, i64)>, x: (i64, i64)) -> (i64,
     }
 }
 
-fn uf_union(
-    parent: &mut HashMap<(i64, i64), (i64, i64)>,
-    a: (i64, i64),
-    b: (i64, i64),
-) {
+fn uf_union(parent: &mut HashMap<(i64, i64), (i64, i64)>, a: (i64, i64), b: (i64, i64)) {
     let ra = uf_find(parent, a);
     let rb = uf_find(parent, b);
     if ra != rb {
@@ -420,8 +433,7 @@ fn derive_nets(
     }
 
     // All unique roots that have at least one label OR pin.
-    let mut all_roots: std::collections::HashSet<(i64, i64)> =
-        std::collections::HashSet::new();
+    let mut all_roots: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
     all_roots.extend(net_labels.keys().copied());
     all_roots.extend(net_pins.keys().copied());
 

@@ -4,10 +4,10 @@
 //! `kicad-writer`'s `sexpr_render` — see
 //! `reference_kicad_sexpr_ast_pipeline` memory note for the convention.
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
-use kicad_parser::sexpr_builder::{atom, list, raw};
 use kicad_parser::sexpr::SExpr;
+use kicad_parser::sexpr_builder::{atom, list, raw};
 use signex_types::schematic::{Point, SchematicSheet, Symbol};
 
 // Union-find for net connectivity
@@ -65,7 +65,13 @@ impl NetGraph {
     }
 
     /// Add a pin to the net.
-    pub fn add_pin(&mut self, node_idx: usize, ref_des: String, pin_number: String, pin_type: String) {
+    pub fn add_pin(
+        &mut self,
+        node_idx: usize,
+        ref_des: String,
+        pin_number: String,
+        pin_type: String,
+    ) {
         let root = self.find_root(node_idx);
         self.node_to_pins
             .entry(root)
@@ -127,11 +133,7 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
                     let pin_type = format!("{:?}", lib_pin.pin.pin_type).to_lowercase();
                     pin_positions.insert(
                         key.clone(),
-                        (
-                            sym.reference.clone(),
-                            lib_pin.pin.number.clone(),
-                            pin_type,
-                        ),
+                        (sym.reference.clone(), lib_pin.pin.number.clone(), pin_type),
                     );
                     if !pos_to_node.contains_key(&key) {
                         pos_to_node.insert(key, graph.add_node());
@@ -159,9 +161,7 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
     // Process junctions: merge wires at the junction
     for junction in &sheet.junctions {
         let j_key = pos_key(junction.position);
-        let j_idx = *pos_to_node
-            .entry(j_key)
-            .or_insert_with(|| graph.add_node());
+        let j_idx = *pos_to_node.entry(j_key).or_insert_with(|| graph.add_node());
 
         // Find all wires that pass through this junction and merge them
         for wire in &sheet.wires {
@@ -304,11 +304,7 @@ pub fn emit_comp(
 }
 
 /// Emit a net node with code, name, and pins.
-pub fn emit_net(
-    code: u32,
-    name: &str,
-    pins: &[(String, String, String)],
-) -> SExpr {
+pub fn emit_net(code: u32, name: &str, pins: &[(String, String, String)]) -> SExpr {
     let mut items = vec![raw("net")];
     items.push(list(vec![raw("code"), atom(code)]));
     items.push(list(vec![raw("name"), atom(name)]));
@@ -326,11 +322,7 @@ pub fn emit_net(
 }
 
 /// Emit the root (export ...) node.
-pub fn emit_header(
-    source: &str,
-    timestamp: &str,
-    tool_version: &str,
-) -> SExpr {
+pub fn emit_header(source: &str, timestamp: &str, tool_version: &str) -> SExpr {
     list(vec![
         raw("export"),
         list(vec![raw("version"), raw("D")]),
