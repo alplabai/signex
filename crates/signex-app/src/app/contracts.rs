@@ -488,8 +488,12 @@ pub enum ProjectTreeAction {
     /// menu item.
     CloseAllDocuments,
     /// Reveal a file (leaf click) or the project directory (root
-    /// click) in the OS file manager. `None` = project root.
-    RevealInExplorer(Option<Vec<usize>>),
+    /// click) in the OS file manager. The tree path's first index
+    /// picks which project's directory the operation resolves
+    /// against — leaves nested under project B reveal in B's dir
+    /// even when project A is active. A single-element path means
+    /// the project root row was clicked.
+    RevealInExplorer(Vec<usize>),
     /// Fire the print preview flow — only surfaced on leaves that are
     /// already the active tab.
     PrintActive,
