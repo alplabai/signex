@@ -863,6 +863,7 @@ fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> T
             settings,
         ],
     )
+    .with_accent(project.is_active)
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
