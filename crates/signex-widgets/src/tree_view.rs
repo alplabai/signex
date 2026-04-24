@@ -51,34 +51,160 @@ pub enum TreeIcon {
     Sheet,
     Net,
     Pin,
+    // ─── Signex native file formats ─────────────────────────────
+    // Each renders as a full-color SVG (see `svg_bytes`). Glyph +
+    // colour methods below return sensible fallbacks but the SVG
+    // path is what actually paints in the tree.
+    /// `.snxprj` — Signex project file.
+    SnxProject,
+    /// `.snxsch` — Signex schematic.
+    SnxSchematic,
+    /// `.snxpcb` — Signex PCB.
+    SnxPcb,
+    /// `.snxfpt` — Signex footprint.
+    SnxFootprint,
+    /// `.snxsim` — Signex simulation.
+    SnxSimulation,
+    /// `.snxlib` — Signex library.
+    SnxLibrary,
+    /// `.snxsym` — Signex symbol.
+    SnxSymbol,
+    /// `.snxpkg` — Signex package / distributable bundle.
+    Package,
+    /// `.snxmat` — Signex PCB material / stackup sidecar.
+    Material,
+    /// `.snxcfg` — Signex project config.
+    Config,
+    /// `.snxmod` — Signex encrypted SPICE model (distinct from
+    /// `.snxsim`, which is the testbench, not the model).
+    Model,
 }
 
+// ─── Tree icon assets ─────────────────────────────────────────
+//
+// Every `TreeIcon` variant renders as a bundled SVG. Three groups:
+//
+//  * **Generic tree icons** — folder / file / library / component /
+//    sheet / net / pin. Live at
+//    `crates/signex-widgets/assets/tree-icons/`.
+//  * **Signex native `.snx***` file family** — shared with the
+//    installer's file-association artwork at
+//    `crates/signex-app/assets/icons/files/`. Reached cross-crate via
+//    `include_bytes!` so one copy of the artwork serves both the
+//    tree view and the .ico/.icns raster pipeline.
+//  * **KiCad handoff formats** — `.kicad_sch` / `.kicad_pcb` /
+//    `.kicad_sym` / `.kicad_mod` render with the matching Signex-
+//    brand glyph (same chamfered silhouette + amber wedge), so the
+//    project tree stays visually consistent regardless of whether
+//    files are native or KiCad. The `TreeIcon::Schematic` / `::Pcb`
+//    variants remain in the enum for backward-compat but now share
+//    the `.snxsch` / `.snxpcb` SVGs.
+
+// Per-variant `OnceLock` cache. iced handles are Arc-backed so
+// cloning a cached handle into every render frame is near-free.
+macro_rules! cached_svg_handle {
+    ($bytes:expr) => {{
+        static H: OnceLock<svg::Handle> = OnceLock::new();
+        H.get_or_init(|| svg::Handle::from_memory($bytes)).clone()
+    }};
+}
+
+// Generic tree icons (SVG).
+const SVG_TREE_FOLDER:      &[u8] = include_bytes!("../assets/tree-icons/folder.svg");
+const SVG_TREE_FOLDER_OPEN: &[u8] = include_bytes!("../assets/tree-icons/folder_open.svg");
+const SVG_TREE_FILE:        &[u8] = include_bytes!("../assets/tree-icons/file.svg");
+const SVG_TREE_LIBRARY:     &[u8] = include_bytes!("../assets/tree-icons/library.svg");
+const SVG_TREE_COMPONENT:   &[u8] = include_bytes!("../assets/tree-icons/component.svg");
+const SVG_TREE_SHEET:       &[u8] = include_bytes!("../assets/tree-icons/sheet.svg");
+const SVG_TREE_NET:         &[u8] = include_bytes!("../assets/tree-icons/net.svg");
+const SVG_TREE_PIN:         &[u8] = include_bytes!("../assets/tree-icons/pin.svg");
+const SVG_TREE_PACKAGE:     &[u8] = include_bytes!("../assets/tree-icons/package.svg");
+const SVG_TREE_MATERIAL:    &[u8] = include_bytes!("../assets/tree-icons/material.svg");
+const SVG_TREE_CONFIG:      &[u8] = include_bytes!("../assets/tree-icons/config.svg");
+const SVG_TREE_MODEL:       &[u8] = include_bytes!("../assets/tree-icons/model.svg");
+
+// Signex native `.snx***` file family (SVG). Shared with the
+// installer's file-association artwork; update both paths together
+// if the asset layout changes.
+const SVG_SNX_PROJECT:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxprj.svg");
+const SVG_SNX_SCHEMATIC:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsch.svg");
+const SVG_SNX_PCB:        &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxpcb.svg");
+const SVG_SNX_FOOTPRINT:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxfpt.svg");
+const SVG_SNX_SIMULATION: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsim.svg");
+const SVG_SNX_LIBRARY:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
+const SVG_SNX_SYMBOL:     &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
+
 impl TreeIcon {
-    fn glyph(self) -> &'static str {
+    /// Return the cached SVG handle for this icon. Each variant
+    /// memoises its handle through a `OnceLock` so bytes are only
+    /// wrapped once per process — subsequent calls are a cheap
+    /// `Arc::clone`.
+    pub fn svg(self) -> svg::Handle {
         match self {
-            Self::Folder | Self::FolderOpen => "\u{25A0}", // ■
-            Self::File => "\u{25AB}",                      // ▫
-            Self::Schematic => "\u{25A3}",                 // ▣
-            Self::Pcb => "\u{25A6}",                       // ▦
-            Self::Library => "\u{25C6}",                   // ◆
-            Self::Component => "\u{25C8}",                 // ◈
-            Self::Sheet => "\u{25A1}",                     // □
-            Self::Net => "\u{223F}",                       // ∿
-            Self::Pin => "\u{2022}",                       // •
+            Self::Folder => cached_svg_handle!(SVG_TREE_FOLDER),
+            Self::FolderOpen => cached_svg_handle!(SVG_TREE_FOLDER_OPEN),
+            Self::File => cached_svg_handle!(SVG_TREE_FILE),
+            Self::Library => cached_svg_handle!(SVG_TREE_LIBRARY),
+            Self::Component => cached_svg_handle!(SVG_TREE_COMPONENT),
+            Self::Sheet => cached_svg_handle!(SVG_TREE_SHEET),
+            Self::Net => cached_svg_handle!(SVG_TREE_NET),
+            Self::Pin => cached_svg_handle!(SVG_TREE_PIN),
+            // KiCad handoff formats — share the Signex-brand glyph
+            // for visual consistency in the project tree. The enum
+            // variants remain for backward-compat with older call
+            // sites that construct `TreeIcon::Schematic/::Pcb`
+            // directly.
+            Self::Schematic => cached_svg_handle!(SVG_SNX_SCHEMATIC),
+            Self::Pcb => cached_svg_handle!(SVG_SNX_PCB),
+            // Signex native `.snx***` family.
+            Self::SnxProject => cached_svg_handle!(SVG_SNX_PROJECT),
+            Self::SnxSchematic => cached_svg_handle!(SVG_SNX_SCHEMATIC),
+            Self::SnxPcb => cached_svg_handle!(SVG_SNX_PCB),
+            Self::SnxFootprint => cached_svg_handle!(SVG_SNX_FOOTPRINT),
+            Self::SnxSimulation => cached_svg_handle!(SVG_SNX_SIMULATION),
+            Self::SnxLibrary => cached_svg_handle!(SVG_SNX_LIBRARY),
+            Self::SnxSymbol => cached_svg_handle!(SVG_SNX_SYMBOL),
+            Self::Package => cached_svg_handle!(SVG_TREE_PACKAGE),
+            Self::Material => cached_svg_handle!(SVG_TREE_MATERIAL),
+            Self::Config => cached_svg_handle!(SVG_TREE_CONFIG),
+            Self::Model => cached_svg_handle!(SVG_TREE_MODEL),
         }
     }
 
-    fn color(self, tokens: &ThemeTokens) -> Color {
-        match self {
-            Self::Folder | Self::FolderOpen => theme_ext::warning_color(tokens),
-            Self::File => theme_ext::text_secondary(tokens),
-            Self::Schematic => theme_ext::accent(tokens),
-            Self::Pcb => theme_ext::success_color(tokens),
-            Self::Library => Color::from_rgb(0.70, 0.50, 0.90),
-            Self::Component => Color::from_rgb(0.40, 0.80, 0.90),
-            Self::Sheet => theme_ext::accent(tokens),
-            Self::Net => theme_ext::success_color(tokens),
-            Self::Pin => theme_ext::text_secondary(tokens),
+    /// Pick a `TreeIcon` for a filename. Both Signex `.snx***` and
+    /// KiCad `.kicad_*` extensions route to the same Signex-brand
+    /// glyph family so the project tree reads as one cohesive visual
+    /// family regardless of whether the underlying file is native or
+    /// KiCad. Unknown extensions fall back to `File`.
+    pub fn for_path(filename: &str) -> Self {
+        let lower = filename.to_ascii_lowercase();
+        if let Some(ext) = lower.rsplit('.').next() {
+            match ext {
+                // Native Signex files.
+                "snxprj" => Self::SnxProject,
+                "snxsch" => Self::SnxSchematic,
+                "snxpcb" => Self::SnxPcb,
+                "snxfpt" => Self::SnxFootprint,
+                "snxsim" => Self::SnxSimulation,
+                "snxlib" => Self::SnxLibrary,
+                "snxsym" => Self::SnxSymbol,
+                "snxpkg" => Self::Package,
+                "snxmat" => Self::Material,
+                "snxcfg" => Self::Config,
+                "snxmod" => Self::Model,
+                // KiCad handoff formats — map to the matching Signex
+                // glyph. `.kicad_sym` is a symbol library (multiple
+                // symbols) so it pairs with the library glyph;
+                // `.kicad_mod` is a single footprint.
+                "kicad_pro" => Self::SnxProject,
+                "kicad_sch" => Self::SnxSchematic,
+                "kicad_pcb" => Self::SnxPcb,
+                "kicad_sym" => Self::SnxLibrary,
+                "kicad_mod" => Self::SnxFootprint,
+                _ => Self::File,
+            }
+        } else {
+            Self::File
         }
     }
 }
@@ -137,7 +263,7 @@ const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
 const CHEVRON_W: f32 = 10.0; // triangle column
-const ICON_SZ: f32 = 13.0; // Altium: small colored icons
+const ICON_SZ: f32 = 14.0; // Chamfered SVG silhouettes — tuned visually
 const FONT_SZ: f32 = 12.0; // body text
 const BADGE_SZ: f32 = 10.0; // muted counts
 const PAD_V: u16 = 2; // Altium: compact rows (~20px total)
@@ -199,16 +325,18 @@ fn render_node(
     let is_expandable = has_kids || node.is_folder;
 
     // --- Colors ---
+    // Tree labels render in primary text (white on dark themes) so
+    // they read cleanly next to the full-colour SVG icons. Older
+    // builds used `text_secondary` back when icons were muted
+    // Unicode glyphs.
     let txt_c = if is_sel {
         Color::WHITE
     } else {
-        theme_ext::text_secondary(tokens) // React: text-text-secondary by default
+        theme_ext::text_primary(tokens)
     };
-    let icon_c = if is_sel {
-        Color::WHITE
-    } else {
-        node.icon.color(tokens)
-    };
+    // Icons are now rendered as full-colour bitmap / SVG assets — no
+    // per-variant theme tinting. The theme still drives text + hover
+    // + selection bg below.
     let badge_c = {
         let base = theme_ext::text_secondary(tokens);
         Color::from_rgba(base.r, base.g, base.b, 0.5)
@@ -245,8 +373,10 @@ fn render_node(
         r = r.push(Space::new().width(CHEVRON_W));
     }
 
-    // Icon
-    r = r.push(text(node.icon.glyph()).size(ICON_SZ).color(icon_c));
+    // Icon — full-colour bundled SVG. Cached per variant; render via
+    // `iced::widget::svg`. KiCad handoff formats share glyphs with
+    // their Signex-native counterparts (see `TreeIcon::svg`).
+    r = r.push(svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ));
 
     // Label (flex, no wrap — truncation handled by scrollable parent)
     r = r.push(
