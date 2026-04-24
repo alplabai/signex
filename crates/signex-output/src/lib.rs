@@ -20,8 +20,9 @@ pub mod svg;
 pub mod template;
 
 pub use bom::{
-    BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomMetadata, BomOptions, BomOutput,
-    BomTable, rollup,
+    BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
+    BomOptions, BomOutput, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
+    BomValidationReport, rollup,
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{

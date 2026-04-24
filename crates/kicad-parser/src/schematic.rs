@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -154,6 +154,18 @@ fn parse_schematic_property(prop_node: &SExpr, fallback_pos: Point) -> Schematic
     let text = prop_node
         .find("at")
         .map(|_| parse_text_prop(prop_node, fallback_pos));
+    let mut variant_overrides = BTreeMap::new();
+    if let Some(variants) = prop_node.find("variants") {
+        for variant in variants.find_all("variant") {
+            let Some(variant_name) = variant.first_arg() else {
+                continue;
+            };
+            let Some(variant_value) = variant.arg(1) else {
+                continue;
+            };
+            variant_overrides.insert(variant_name.to_string(), variant_value.to_string());
+        }
+    }
 
     SchematicProperty {
         key: prop_node.first_arg().unwrap_or("").to_string(),
@@ -162,7 +174,27 @@ fn parse_schematic_property(prop_node: &SExpr, fallback_pos: Point) -> Schematic
         text,
         show_name,
         do_not_autoplace,
+        variant_overrides,
     }
+}
+
+fn parse_variant_definitions(root: &SExpr) -> Vec<String> {
+    let mut variants = Vec::new();
+    if let Some(defs) = root.find("variant_definitions") {
+        for variant in defs.find_all("variant") {
+            let Some(name) = variant.first_arg() else {
+                continue;
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if !variants.iter().any(|existing| existing == name) {
+                variants.push(name.to_string());
+            }
+        }
+    }
+    variants
 }
 
 fn parse_uuid(node: &SExpr) -> Uuid {
@@ -1507,7 +1539,16 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     };
 
     let mut sheets = Vec::new();
+    let mut variant_definitions = Vec::new();
+    let mut active_variant = None;
     if let Some(ref root_name) = schematic_root {
+        let root_path = dir.join(root_name);
+        if let Ok(content) = std::fs::read_to_string(&root_path)
+            && let Ok(root) = sexpr::parse(&content)
+        {
+            variant_definitions = parse_variant_definitions(&root);
+            active_variant = variant_definitions.first().cloned();
+        }
         collect_sheets(dir, root_name, &mut sheets)?;
     }
 
@@ -1517,6 +1558,8 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         schematic_root,
         pcb_file,
         sheets,
+        variant_definitions,
+        active_variant,
     })
 }
 
@@ -1898,6 +1941,63 @@ mod tests {
             sheet.symbols[0].fields.get("Tolerance"),
             Some(&"1%".to_string())
         );
+    }
+
+    #[test]
+    fn parse_symbol_property_variant_overrides() {
+        let content = r#"(kicad_sch
+    (version 20260326)
+    (generator "test")
+    (generator_version "10.0")
+    (uuid "00000000-0000-0000-0000-000000000010")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 100 50 0)
+        (unit 1)
+        (uuid "00000000-0000-0000-0000-000000000011")
+        (property "Reference" "R1" (at 100 48 0) (effects (font (size 1.27 1.27))))
+        (property "Value" "10k" (at 100 52 0) (effects (font (size 1.27 1.27))))
+        (property "Fitted" "yes"
+            (at 102 55 0)
+            (effects (font (size 1.27 1.27)) (hide yes))
+            (variants
+                (variant "DEFAULT" "yes")
+                (variant "LITE" "no")
+            )
+        )
+    )
+)"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        let fitted = sheet.symbols[0]
+            .custom_properties
+            .iter()
+            .find(|property| property.key == "Fitted")
+            .unwrap();
+
+        assert_eq!(fitted.variant_overrides.get("DEFAULT"), Some(&"yes".to_string()));
+        assert_eq!(fitted.variant_overrides.get("LITE"), Some(&"no".to_string()));
+    }
+
+    #[test]
+    fn parse_variant_definitions_from_root() {
+        let root = sexpr::parse(
+            r#"(kicad_sch
+  (version 20260326)
+  (generator "eeschema")
+  (generator_version "10.0")
+  (variant_definitions
+    (variant "DEFAULT")
+    (variant "LITE")
+    (variant "PRO")
+  )
+)"#,
+        )
+        .unwrap();
+
+        let variants = super::parse_variant_definitions(&root);
+        assert_eq!(variants, vec!["DEFAULT", "LITE", "PRO"]);
     }
 
     #[test]
