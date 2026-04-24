@@ -7,7 +7,9 @@ use super::{BomColumn, BomError, BomTable};
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 
 /// Column width presets (in character widths, approximate).
+const COL_WIDTH_NAME: f64 = 20.0;
 const COL_WIDTH_REF: f64 = 8.0;
+const COL_WIDTH_LIBREF: f64 = 18.0;
 const COL_WIDTH_QTY: f64 = 4.0;
 const COL_WIDTH_VALUE: f64 = 15.0;
 const COL_WIDTH_FOOTPRINT: f64 = 30.0;
@@ -27,11 +29,13 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         .set_border(FormatBorder::Thin);
 
     // Write header row
-    let mut col: u16 = 0;
-    for column in columns {
+    for (col, column) in columns.iter().enumerate() {
+        let col = col as u16;
         let header_text = column.header();
         let width = match column {
-            BomColumn::Reference => COL_WIDTH_REF,
+            BomColumn::Name => COL_WIDTH_NAME,
+            BomColumn::Designator | BomColumn::Reference => COL_WIDTH_REF,
+            BomColumn::LibRef => COL_WIDTH_LIBREF,
             BomColumn::Qty => COL_WIDTH_QTY,
             BomColumn::Value => COL_WIDTH_VALUE,
             BomColumn::Footprint => COL_WIDTH_FOOTPRINT,
@@ -41,21 +45,21 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
         worksheet.write_string(0, col, header_text)?;
         worksheet.set_column_width(col, width)?;
-
-        col += 1;
     }
 
     // Freeze the header row
     worksheet.set_freeze_panes(1, 0)?;
 
     // Write data rows
-    let mut row: u32 = 1;
-    for bom_row in &table.rows {
-        let mut col: u16 = 0;
+    for (row_idx, bom_row) in table.rows.iter().enumerate() {
+        let row = (row_idx + 1) as u32;
 
-        for column in columns {
+        for (col_idx, column) in columns.iter().enumerate() {
+            let col = col_idx as u16;
             let value = match column {
-                BomColumn::Reference => bom_row.references.join(", "),
+                BomColumn::Name => bom_row.name.clone(),
+                BomColumn::Designator | BomColumn::Reference => bom_row.references.join(", "),
+                BomColumn::LibRef => bom_row.lib_ref.clone(),
                 BomColumn::Qty => bom_row.qty.to_string(),
                 BomColumn::Value => bom_row.value.clone(),
                 BomColumn::Footprint => bom_row.footprint.clone(),
@@ -73,11 +77,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             } else {
                 worksheet.write_string(row, col, &value)?;
             }
-
-            col += 1;
         }
-
-        row += 1;
     }
 
     // Save to in-memory buffer

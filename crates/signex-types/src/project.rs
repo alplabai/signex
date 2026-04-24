@@ -56,4 +56,10 @@ pub struct ProjectData {
     pub pcb_file: Option<String>,
     #[serde(default)]
     pub sheets: Vec<SheetEntry>,
+    /// Standard 10 schematic-level variant definitions.
+    #[serde(default)]
+    pub variant_definitions: Vec<String>,
+    /// Currently selected variant if known from project context.
+    #[serde(default)]
+    pub active_variant: Option<String>,
 }

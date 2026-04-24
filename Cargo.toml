@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/signex-app",
     "crates/signex-engine",
+    "crates/signex-bom",
     "crates/signex-types",
     "crates/kicad-parser",
     "crates/kicad-writer",
@@ -55,6 +56,7 @@ ttf-parser = "0.25"
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
+signex-bom = { path = "crates/signex-bom" }
 kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }

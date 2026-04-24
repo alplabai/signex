@@ -370,6 +370,12 @@ impl Signex {
             }
         };
 
+        let active_variant = self
+            .document_state
+            .project_data
+            .as_ref()
+            .and_then(|project| project.active_variant.clone())
+            .unwrap_or_else(|| "Base".to_string());
         let ctx = match build_export_context(&self.document_state) {
             Some(c) => c,
             None => {
@@ -379,28 +385,27 @@ impl Signex {
             }
         };
 
-        let format = match save_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref()
-        {
-            Some("xlsx") => BomFormat::Xlsx,
-            Some("html") | Some("htm") => BomFormat::Html,
-            _ => BomFormat::Csv,
-        };
+        let format = BomFormat::from_output_path(&save_path);
 
         let opts = BomOptions {
             columns: vec![
-                BomColumn::Reference,
-                BomColumn::Qty,
-                BomColumn::Value,
-                BomColumn::Footprint,
+                BomColumn::Name,
                 BomColumn::Description,
+                BomColumn::Designator,
+                BomColumn::Footprint,
+                BomColumn::LibRef,
+                BomColumn::Qty,
             ],
             grouping: BomGrouping::Grouped,
             format,
             include_dnp: false,
+            include_not_fitted: false,
+            active_variant: if active_variant.eq_ignore_ascii_case("Base") {
+                None
+            } else {
+                Some(active_variant)
+            },
+            rule_options: Default::default(),
         };
 
         match BomExporter.export(&ctx, &opts) {
@@ -649,13 +654,25 @@ fn build_export_context(
 
     let tb = &active_engine.document().title_block;
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
+    let mut custom_fields = std::collections::BTreeMap::new();
+    let active_variant = document_state
+        .project_data
+        .as_ref()
+        .and_then(|project| project.active_variant.clone())
+        .unwrap_or_else(|| "Base".to_string());
+    if !active_variant.eq_ignore_ascii_case("Base") {
+        custom_fields.insert(
+            "active_variant".to_string(),
+            active_variant,
+        );
+    }
     let metadata = ProjectMetadata {
         title: tb.get("title").cloned().unwrap_or_default(),
         revision: tb.get("rev").cloned().unwrap_or_default(),
         date: tb.get("date").cloned().unwrap_or_default(),
         company: tb.get("company").cloned().unwrap_or_default(),
         comments: [comment(1), comment(2), comment(3), comment(4)],
-        custom_fields: Default::default(),
+        custom_fields,
     };
 
     Some(ExportContext { sheets, metadata })

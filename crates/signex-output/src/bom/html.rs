@@ -108,7 +108,9 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
         for col in columns {
             let value = match col {
-                BomColumn::Reference => row.references.join(", "),
+                BomColumn::Name => row.name.clone(),
+                BomColumn::Designator | BomColumn::Reference => row.references.join(", "),
+                BomColumn::LibRef => row.lib_ref.clone(),
                 BomColumn::Qty => row.qty.to_string(),
                 BomColumn::Value => row.value.clone(),
                 BomColumn::Footprint => row.footprint.clone(),
