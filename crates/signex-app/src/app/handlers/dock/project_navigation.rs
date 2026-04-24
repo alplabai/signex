@@ -21,7 +21,18 @@ impl Signex {
                 let selected_node =
                     get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
                 if let Some(node) = selected_node
-                    && matches!(node.icon, TreeIcon::Schematic | TreeIcon::Pcb)
+                    && matches!(
+                        node.icon,
+                        TreeIcon::Schematic
+                            | TreeIcon::Pcb
+                            | TreeIcon::SnxSchematic
+                            | TreeIcon::SnxPcb
+                            | TreeIcon::SnxProject
+                            | TreeIcon::SnxFootprint
+                            | TreeIcon::SnxSimulation
+                            | TreeIcon::SnxLibrary
+                            | TreeIcon::SnxSymbol
+                    )
                     && let Err(error) = self.open_project_tree_document(node.label.clone())
                 {
                     crate::diagnostics::log_error("Failed to open project tree document", &error);
