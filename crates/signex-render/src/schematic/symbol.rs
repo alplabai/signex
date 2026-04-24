@@ -491,8 +491,7 @@ fn draw_graphic_text(
 
     // Force 10 pt (1.8 mm) for all symbol-embedded graphic text.
     let _stored = font_size;
-    let base_size = transform.world_len(crate::SCHEMATIC_TEXT_MM);
-    let size = base_size.abs() * crate::STROKE_FONT_SCALE;
+    let size = transform.world_len(crate::SCHEMATIC_TEXT_EM_MM).abs();
     if size < 1.0 {
         return;
     }

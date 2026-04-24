@@ -17,9 +17,13 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square.
-/// Cap height ≈ 72 % of em-square → scale up by 1/0.72 so visual sizes match Standard.
-pub const STROKE_FONT_SCALE: f32 = 1.0 / 0.72;
+/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square
+/// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
+/// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
+/// canvas font size AND any offset / hit-test math so they stay in sync —
+/// applying the scale only at render sites (as a separate multiplier on
+/// `screen_font`) silently breaks label/pin/text anchors.
+pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
