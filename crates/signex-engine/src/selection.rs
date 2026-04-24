@@ -492,7 +492,8 @@ impl Engine {
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
                 ));
-                info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
+                let effective_rot = (symbol.rotation + ref_text.rotation).rem_euclid(360.0);
+                info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
                 info.push((
                     "Text Size".into(),
                     format!(
@@ -535,7 +536,8 @@ impl Engine {
                         value_text.position.x, value_text.position.y
                     ),
                 ));
-                info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
+                let effective_rot = (symbol.rotation + value_text.rotation).rem_euclid(360.0);
+                info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
                 info.push((
                     "Text Size".into(),
                     format!(
