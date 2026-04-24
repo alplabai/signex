@@ -1269,23 +1269,30 @@ fn detached_header<'a>(
 
 /// Compact X close button for borderless modal headers.
 fn close_x_button(message: Message, text_color: Color, border: Color) -> Element<'static, Message> {
+    // Hover reads as destructive — same Windows-native red used by
+    // the main-window close in `view/mod.rs::view_titlebar` so modal
+    // close buttons match the OS chrome they sit beneath. Default
+    // state stays subtle so the X doesn't fight for attention.
+    let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
     button(container(text("\u{00D7}".to_string()).size(14).color(text_color)).padding([0, 6]))
         .on_press(message)
         .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => {
-                    Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.1)))
-                }
-                _ => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            let bg = if hovered {
+                Some(Background::Color(close_hover))
+            } else {
+                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03)))
             };
+            let border_c = if hovered { close_hover } else { border };
+            let text_c = if hovered { Color::WHITE } else { text_color };
             button::Style {
                 background: bg,
                 border: Border {
                     width: 1.0,
                     radius: 3.0.into(),
-                    color: border,
+                    color: border_c,
                 },
-                text_color,
+                text_color: text_c,
                 ..button::Style::default()
             }
         })
