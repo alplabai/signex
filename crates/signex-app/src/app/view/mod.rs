@@ -274,7 +274,12 @@ impl Signex {
             } else {
                 self.ctx_menu_item_disabled(None, "Close Project Documents", None)
             });
-            items.push(self.ctx_menu_item_disabled(None, "Close Project", Some("v0.9")));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Close Project",
+                "",
+                Message::ProjectTreeAction(A::CloseProject(path.clone())),
+            ));
             items.push(if has_project_dir {
                 self.ctx_menu_item_msg(
                     None,
