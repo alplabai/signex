@@ -7,10 +7,10 @@ use uuid::Uuid;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::property::SchematicProperty;
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
-    LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
-    SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign,
-    Wire, GRID_MM, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, SCHEMATIC_TEXT_MM,
+    Bus, BusEntry, ChildSheet, FillType, GRID_MM, Graphic, HAlign, Junction, Label, LabelType,
+    LibGraphic, LibPin, LibSymbol, NoConnect, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, Pin,
+    PinElectricalType, PinShape, Point, SCHEMATIC_TEXT_MM, SchDrawing, SchematicSheet,
+    SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign, Wire,
 };
 
 use crate::error::ParseError;
@@ -1376,7 +1376,12 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
             let (position, _) = parse_at(be);
             let size = be
                 .find("size")
-                .map(|s| (s.arg_f64(0).unwrap_or(GRID_MM), s.arg_f64(1).unwrap_or(GRID_MM)))
+                .map(|s| {
+                    (
+                        s.arg_f64(0).unwrap_or(GRID_MM),
+                        s.arg_f64(1).unwrap_or(GRID_MM),
+                    )
+                })
                 .unwrap_or((GRID_MM, GRID_MM));
             BusEntry {
                 uuid: parse_uuid(be),
@@ -1743,9 +1748,9 @@ mod tests {
         assert_eq!(label.position.x, 20.0);
     }
 
-        #[test]
-        fn parse_label_justify_reads_horizontal_token_independent_of_order() {
-                let content = r#"(kicad_sch
+    #[test]
+    fn parse_label_justify_reads_horizontal_token_independent_of_order() {
+        let content = r#"(kicad_sch
     (version 20231120)
     (generator "eeschema")
     (uuid "00000000-0000-0000-0000-000000000001")
@@ -1757,11 +1762,11 @@ mod tests {
     )
 )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                assert_eq!(sheet.labels.len(), 1);
-                assert_eq!(sheet.labels[0].justify, HAlign::Right);
-                assert_eq!(sheet.labels[0].justify_v, VAlign::Bottom);
-        }
+        let sheet = parse_schematic(content).unwrap();
+        assert_eq!(sheet.labels.len(), 1);
+        assert_eq!(sheet.labels[0].justify, HAlign::Right);
+        assert_eq!(sheet.labels[0].justify_v, VAlign::Bottom);
+    }
 
     #[test]
     fn parse_no_connect_has_uuid() {
@@ -1843,12 +1848,12 @@ mod tests {
         assert!(sym.on_board);
         assert!(!sym.exclude_from_sim);
         assert!(!sym.locked);
-                assert!(sym.custom_properties.is_empty());
+        assert!(sym.custom_properties.is_empty());
     }
 
-        #[test]
-        fn parse_symbol_custom_property_metadata() {
-                let content = r#"(kicad_sch
+    #[test]
+    fn parse_symbol_custom_property_metadata() {
+        let content = r#"(kicad_sch
     (version 20260326)
     (generator "test")
     (uuid "00000000-0000-0000-0000-000000000010")
@@ -1873,24 +1878,27 @@ mod tests {
     )
 )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                let property = &sheet.symbols[0].custom_properties[0];
+        let sheet = parse_schematic(content).unwrap();
+        let property = &sheet.symbols[0].custom_properties[0];
 
-                assert_eq!(property.key, "Tolerance");
-                assert_eq!(property.value, "1%");
-                assert_eq!(property.id, Some(7));
-                assert_eq!(property.show_name, Some(true));
-                assert_eq!(property.do_not_autoplace, Some(true));
-                let text = property.text.as_ref().unwrap();
-                assert_eq!(text.position.x, 110.0);
-                assert_eq!(text.position.y, 60.0);
-                assert_eq!(text.rotation, 90.0);
-                assert_eq!(text.font_size, 1.5);
-                assert_eq!(text.justify_h, HAlign::Left);
-                assert_eq!(text.justify_v, VAlign::Bottom);
-                assert!(text.hidden);
-                assert_eq!(sheet.symbols[0].fields.get("Tolerance"), Some(&"1%".to_string()));
-        }
+        assert_eq!(property.key, "Tolerance");
+        assert_eq!(property.value, "1%");
+        assert_eq!(property.id, Some(7));
+        assert_eq!(property.show_name, Some(true));
+        assert_eq!(property.do_not_autoplace, Some(true));
+        let text = property.text.as_ref().unwrap();
+        assert_eq!(text.position.x, 110.0);
+        assert_eq!(text.position.y, 60.0);
+        assert_eq!(text.rotation, 90.0);
+        assert_eq!(text.font_size, 1.5);
+        assert_eq!(text.justify_h, HAlign::Left);
+        assert_eq!(text.justify_v, VAlign::Bottom);
+        assert!(text.hidden);
+        assert_eq!(
+            sheet.symbols[0].fields.get("Tolerance"),
+            Some(&"1%".to_string())
+        );
+    }
 
     #[test]
     fn parse_lib_symbol_preserves_parent_metadata() {
@@ -1921,9 +1929,9 @@ mod tests {
         assert!(!parsed.duplicate_pin_numbers_are_jumpers);
     }
 
-        #[test]
-        fn parse_property_justify_left_defaults_vertical_to_center() {
-                let content = r#"(kicad_sch
+    #[test]
+    fn parse_property_justify_left_defaults_vertical_to_center() {
+        let content = r#"(kicad_sch
     (version 20231120)
     (generator "eeschema")
     (uuid "00000000-0000-0000-0000-000000000001")
@@ -1940,16 +1948,16 @@ mod tests {
     )
 )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                let sym = &sheet.symbols[0];
-                let value_text = sym.val_text.as_ref().expect("value text exists");
-                assert_eq!(value_text.justify_h, HAlign::Left);
-                assert_eq!(value_text.justify_v, VAlign::Center);
-        }
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Left);
+        assert_eq!(value_text.justify_v, VAlign::Center);
+    }
 
-            #[test]
-            fn parse_property_justify_center_sets_both_axes_to_center() {
-                let content = r#"(kicad_sch
+    #[test]
+    fn parse_property_justify_center_sets_both_axes_to_center() {
+        let content = r#"(kicad_sch
             (version 20231120)
             (generator "eeschema")
             (uuid "00000000-0000-0000-0000-000000000001")
@@ -1966,16 +1974,16 @@ mod tests {
             )
         )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                let sym = &sheet.symbols[0];
-                let value_text = sym.val_text.as_ref().expect("value text exists");
-                assert_eq!(value_text.justify_h, HAlign::Center);
-                assert_eq!(value_text.justify_v, VAlign::Center);
-            }
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Center);
+        assert_eq!(value_text.justify_v, VAlign::Center);
+    }
 
-            #[test]
-            fn parse_property_justify_left_center_keeps_left_and_centers_vertical() {
-                let content = r#"(kicad_sch
+    #[test]
+    fn parse_property_justify_left_center_keeps_left_and_centers_vertical() {
+        let content = r#"(kicad_sch
             (version 20231120)
             (generator "eeschema")
             (uuid "00000000-0000-0000-0000-000000000001")
@@ -1992,12 +2000,12 @@ mod tests {
             )
         )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                let sym = &sheet.symbols[0];
-                let value_text = sym.val_text.as_ref().expect("value text exists");
-                assert_eq!(value_text.justify_h, HAlign::Left);
-                assert_eq!(value_text.justify_v, VAlign::Center);
-            }
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Left);
+        assert_eq!(value_text.justify_v, VAlign::Center);
+    }
 
     #[test]
     fn parse_lib_symbol_preserves_pin_hide_flag() {

@@ -3,8 +3,8 @@
 //! Both the PDF exporter and the preview rasteriser use the same logic so
 //! that preview thumbnails match the exported PDF exactly.
 
-use crate::SheetSnapshot;
 use super::{Margins, PdfScale};
+use crate::SheetSnapshot;
 
 /// Bounding box of all schematic content (wires, symbols, labels) in mm.
 ///
@@ -127,7 +127,7 @@ impl PageTransform {
     /// Map a schematic Y coordinate to a **PDF Y** coordinate.
     ///
     /// PDF origin is bottom-left, Y increases upward, so we flip.
-        #[allow(dead_code)]
+    #[allow(dead_code)]
     #[inline]
     pub fn pdf_y(&self, sch_y: f64, page_h_units: f32) -> f32 {
         page_h_units - (sch_y * self.mm_to_unit + self.translate_y) as f32

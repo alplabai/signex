@@ -16,8 +16,11 @@ impl Signex {
     /// mutation to the in-flight lasso must route through this helper so
     /// the two copies never diverge.
     pub(crate) fn sync_lasso_polygon_to_canvas(&mut self) {
-        self.interaction_state.active_canvas_mut().lasso_polygon = self.ui_state.lasso_polygon.clone();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state.active_canvas_mut().lasso_polygon =
+            self.ui_state.lasso_polygon.clone();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
     }
 
     fn component_value_from_lib_id(lib_id: &str) -> String {
@@ -200,21 +203,32 @@ impl Signex {
         self.ui_state.pending_net_color = None;
         self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
-        self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
+        self.interaction_state
+            .active_canvas_mut()
+            .reorder_picker_armed = false;
         self.ui_state.lasso_polygon = None;
         self.sync_lasso_polygon_to_canvas();
 
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;
             self.interaction_state.wire_points.clear();
-            self.interaction_state.active_canvas_mut().wire_preview.clear();
+            self.interaction_state
+                .active_canvas_mut()
+                .wire_preview
+                .clear();
             self.interaction_state.active_canvas_mut().drawing_mode = false;
         }
         // Drop any in-flight arc / polyline click buffers.
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
-        self.interaction_state.active_canvas_mut().arc_points.clear();
-        self.interaction_state.active_canvas_mut().polyline_points.clear();
+        self.interaction_state
+            .active_canvas_mut()
+            .arc_points
+            .clear();
+        self.interaction_state
+            .active_canvas_mut()
+            .polyline_points
+            .clear();
         // Drop any two-click shape anchor.
         self.interaction_state.shape_anchor = None;
         self.interaction_state.active_canvas_mut().shape_anchor = None;

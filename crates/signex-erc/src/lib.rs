@@ -26,7 +26,7 @@ mod rules;
 
 pub use context::ErcContext;
 pub use diagnostic::Diagnostic;
-pub use rule::{Applicability, AnalysisScope, RuleDefinition, RuleId, RuleTarget};
+pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
 /// in the user's configuration. Ordered by the Altium ERC matrix conventions.

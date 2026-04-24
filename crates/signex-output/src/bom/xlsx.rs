@@ -4,7 +4,7 @@
 //! and styled header row (bold, grey background).
 
 use super::{BomColumn, BomError, BomTable};
-use rust_xlsxwriter::{Workbook, Format, Color, FormatBorder};
+use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 
 /// Column width presets (in character widths, approximate).
 const COL_WIDTH_REF: f64 = 8.0;
@@ -60,9 +60,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
                 BomColumn::Value => bom_row.value.clone(),
                 BomColumn::Footprint => bom_row.footprint.clone(),
                 BomColumn::Description => bom_row.description.clone(),
-                BomColumn::Custom(name) => {
-                    bom_row.custom.get(name).cloned().unwrap_or_default()
-                }
+                BomColumn::Custom(name) => bom_row.custom.get(name).cloned().unwrap_or_default(),
             };
 
             // Try to parse as number for Qty column; otherwise write as string
@@ -83,7 +81,8 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     }
 
     // Save to in-memory buffer
-    let bytes = workbook.save_to_buffer()
+    let bytes = workbook
+        .save_to_buffer()
         .map_err(|e| BomError::Xlsx(format!("Failed to save workbook: {}", e)))?;
 
     Ok(bytes)

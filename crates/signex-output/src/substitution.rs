@@ -120,8 +120,10 @@ mod tests {
             ],
             ..Default::default()
         };
-        m.custom_fields.insert("PROJECT_CODE".into(), "HW-2026-042".into());
-        m.custom_fields.insert("lower_case_field".into(), "ok".into());
+        m.custom_fields
+            .insert("PROJECT_CODE".into(), "HW-2026-042".into());
+        m.custom_fields
+            .insert("lower_case_field".into(), "ok".into());
         m
     }
 

@@ -313,27 +313,35 @@ pub fn draw_child_sheet(
         let rot = pin.rotation.rem_euclid(360.0).round() as i32;
         let (stub_wx, stub_wy, text_off_x, text_off_y, h_align, v_align) = match rot {
             180 => (
-                pin.position.x + pin_stub, pin.position.y,
-                -4.0, 0.0,
+                pin.position.x + pin_stub,
+                pin.position.y,
+                -4.0,
+                0.0,
                 iced::alignment::Horizontal::Right,
                 iced::alignment::Vertical::Center,
             ),
             270 => (
-                pin.position.x, pin.position.y - pin_stub,
-                0.0, small_font + 4.0,
+                pin.position.x,
+                pin.position.y - pin_stub,
+                0.0,
+                small_font + 4.0,
                 iced::alignment::Horizontal::Center,
                 iced::alignment::Vertical::Top,
             ),
             90 => (
-                pin.position.x, pin.position.y + pin_stub,
-                0.0, -(small_font + 4.0),
+                pin.position.x,
+                pin.position.y + pin_stub,
+                0.0,
+                -(small_font + 4.0),
                 iced::alignment::Horizontal::Center,
                 iced::alignment::Vertical::Bottom,
             ),
             _ => (
                 // 0° and anything else → left edge
-                pin.position.x - pin_stub, pin.position.y,
-                4.0, 0.0,
+                pin.position.x - pin_stub,
+                pin.position.y,
+                4.0,
+                0.0,
                 iced::alignment::Horizontal::Left,
                 iced::alignment::Vertical::Center,
             ),

@@ -132,9 +132,7 @@ impl Signex {
         for (path, snapshot) in &snapshots_by_path {
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
                 apply_overrides(signex_erc::run_with_project_and_dsl(
-                    snapshot,
-                    &children,
-                    eval_fns,
+                    snapshot, &children, eval_fns,
                 ))
             } else {
                 apply_overrides(signex_erc::run_with_project(snapshot, &children))
@@ -187,10 +185,7 @@ impl Signex {
         let dsl_path = dsl_path_candidates.iter().find(|p| p.exists())?;
 
         let Ok(src) = std::fs::read_to_string(dsl_path) else {
-            crate::diagnostics::log_info(format!(
-                "ERC DSL: failed to read {}",
-                dsl_path.display()
-            ));
+            crate::diagnostics::log_info(format!("ERC DSL: failed to read {}", dsl_path.display()));
             return None;
         };
 
@@ -237,12 +232,19 @@ impl Signex {
                 primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.ui_state.erc_violations = violations;
     }
 
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
-        let mut paths: Vec<_> = self.ui_state.erc_violations_by_path.keys().cloned().collect();
+        let mut paths: Vec<_> = self
+            .ui_state
+            .erc_violations_by_path
+            .keys()
+            .cloned()
+            .collect();
         paths.sort();
 
         let mut out = Vec::new();
@@ -306,7 +308,12 @@ impl Signex {
     }
 
     fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
-        if let Some(index) = self.document_state.tabs.iter().position(|tab| &tab.path == path) {
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| &tab.path == path)
+        {
             if index != self.document_state.active_tab {
                 self.park_active_schematic_session();
                 self.document_state.active_tab = index;
@@ -351,7 +358,9 @@ impl Signex {
         if let Some(item) = select {
             self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
-            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
         }
         // Stage a tighter fit target around the target point so
         // navigation jumps both center and zoom in to the issue.
@@ -373,8 +382,12 @@ impl Signex {
         // Mirror the flag onto the canvas so the renderer can compute
         // the focus uuid set locally without reaching into app state.
         self.interaction_state.active_canvas_mut().auto_focus = self.ui_state.auto_focus;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         Task::none()
     }
 
@@ -523,7 +536,9 @@ impl Signex {
             ));
         }
         // Force a render + panel refresh as if a command had fired.
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
@@ -707,9 +722,8 @@ impl Signex {
             let applied = self.document_state.engines.get_mut(&path).map(|engine| {
                 let mut sheet = engine.document().clone();
                 if reset_in(&mut sheet, &duplicates) {
-                    let _ = engine.execute(signex_engine::Command::ReplaceDocument {
-                        document: sheet,
-                    });
+                    let _ =
+                        engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
                     true
                 } else {
                     false
@@ -754,7 +768,9 @@ impl Signex {
         }
 
         if any_active_changed {
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );
@@ -1024,8 +1040,12 @@ impl Signex {
             let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
         }
         self.ui_state.move_selection.open = false;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         Task::none()
@@ -1043,7 +1063,9 @@ impl Signex {
                 key,
                 value,
             });
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );
