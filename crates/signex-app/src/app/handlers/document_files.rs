@@ -48,6 +48,21 @@ impl Signex {
     fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
         let project = standard_parser::parse_project(&path)
             .with_context(|| format!("parse project {}", path.display()))?;
+        // Signex's document model is single-project for now. Opening a
+        // second project used to silently overwrite `project_path` while
+        // leaving every tab from the previous project alive — which
+        // produced orphan tabs whose "project root" no longer matched
+        // anything in the Projects panel. Close those tabs here before
+        // we swap the project. Proper multi-project workspaces (side-
+        // by-side roots in the tree, per-tab project scoping) are
+        // tracked in the multi-project issue and land in v0.9.
+        let replacing_project = self.document_state.project_path.is_some()
+            && self.document_state.project_path.as_deref() != Some(path.as_path());
+        if replacing_project {
+            while !self.document_state.tabs.is_empty() {
+                let _ = self.close_tab_now(self.document_state.tabs.len() - 1);
+            }
+        }
         self.document_state.project_path = Some(path);
         self.document_state.project_data = Some(project);
         self.refresh_panel_ctx();
