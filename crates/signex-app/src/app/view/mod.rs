@@ -250,11 +250,14 @@ impl Signex {
             // so the user knows which release lands the feature rather
             // than staring at a silently-greyed row.
             let has_tabs = !self.document_state.tabs.is_empty();
-            let has_project_dir = self
-                .document_state
-                .project_path
-                .as_ref()
-                .and_then(|p| p.parent())
+            // Multi-project: gate on the *clicked* project's directory,
+            // not the active project's. Right-clicking project B's root
+            // while project A is active should still enable Explore for
+            // B. (#54)
+            let has_project_dir = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .and_then(|p| p.path.parent())
                 .is_some();
 
             items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
@@ -285,7 +288,7 @@ impl Signex {
                     None,
                     "Explore",
                     "",
-                    Message::ProjectTreeAction(A::RevealInExplorer(None)),
+                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Explore", None)
@@ -306,11 +309,12 @@ impl Signex {
             // active tab (the print-preview flow renders the active
             // document). Other items are disabled stubs until the
             // matching engine actions land.
-            let has_project_dir = self
-                .document_state
-                .project_path
-                .as_ref()
-                .and_then(|p| p.parent())
+            // Same multi-project gate as above — leaf rows resolve
+            // against their owning project, not the active one.
+            let has_project_dir = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .and_then(|p| p.path.parent())
                 .is_some();
             let is_active_tab = self
                 .document_state
@@ -339,7 +343,7 @@ impl Signex {
                     None,
                     "Explore",
                     "",
-                    Message::ProjectTreeAction(A::RevealInExplorer(Some(path.clone()))),
+                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Explore", None)
