@@ -785,6 +785,300 @@ impl Signex {
         .style(crate::styles::context_menu(tokens));
         dialog.into()
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // Small Altium-style modals (Rename / Remove-from-Project / Close-
+    // Tab Confirm). All three render through the same chrome used by
+    // Annotate / ERC: `draggable_header` + `close_x_button` on the
+    // right + `wrap_modal` for absolute positioning with drag-offset
+    // persistence in `ui_state.modal_offsets`.
+    // ────────────────────────────────────────────────────────────────
+
+    pub(super) fn view_rename_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_rename_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::RenameDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
+    }
+
+    fn view_rename_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::text_input;
+
+        let Some(ref st) = self.ui_state.rename_dialog else {
+            return container(Space::new()).into();
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let error_c = Color::from_rgb(0.90, 0.35, 0.30);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Rename File").size(14).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseRenameDialog, text_muted, border_c),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::RenameDialog,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let current_name = st
+            .target_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let mut body: iced::widget::Column<'_, Message> = column![
+            text(format!("Rename \"{}\"", current_name))
+                .size(11)
+                .color(text_muted),
+            text_input("new-name.kicad_sch", &st.buffer)
+                .on_input(Message::RenameBufferChanged)
+                .on_submit(Message::RenameSubmit)
+                .size(12)
+                .padding(6)
+                .width(Length::Fill),
+        ]
+        .spacing(8);
+
+        if let Some(ref err) = st.error {
+            body = body.push(text(err.clone()).size(11).color(error_c));
+        }
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button("Cancel", Message::CloseRenameDialog, text_c, border_c),
+                        Space::new().width(8),
+                        primary_button("Rename", Some(Message::RenameSubmit), border_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(420),
+        )
+        .style(crate::styles::context_menu(tokens));
+        dialog.into()
+    }
+
+    pub(super) fn view_remove_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_remove_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::RemoveDialog)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
+    }
+
+    fn view_remove_dialog_body(&self) -> Element<'_, Message> {
+        let Some(ref st) = self.ui_state.remove_dialog else {
+            return container(Space::new()).into();
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Remove from Project").size(14).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseRemoveDialog, text_muted, border_c),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::RemoveDialog,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let option_card = |title: &'static str,
+                           subtitle: &'static str,
+                           msg: Message|
+         -> Element<'_, Message> {
+            let title_owned = title.to_string();
+            let subtitle_owned = subtitle.to_string();
+            button(
+                column![
+                    text(format!("\u{2192} {}", title_owned)).size(12).color(text_c),
+                    text(subtitle_owned).size(10).color(text_muted),
+                ]
+                .spacing(4)
+                .padding([2, 0]),
+            )
+            .on_press(msg)
+            .padding([10, 14])
+            .width(Length::Fill)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                    }
+                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    border: Border {
+                        width: 1.0,
+                        radius: 4.0.into(),
+                        color: border_c,
+                    },
+                    text_color: text_c,
+                    ..button::Style::default()
+                }
+            })
+            .into()
+        };
+
+        let dialog = container(
+            column![
+                header,
+                container(
+                    text(format!(
+                        "Please choose how to remove file \"{}\"",
+                        st.display_name
+                    ))
+                    .size(11)
+                    .color(text_muted)
+                )
+                .padding([14, 14]),
+                container(
+                    column![
+                        option_card(
+                            "Delete file",
+                            "File will be removed from project and permanently deleted.",
+                            Message::RemoveConfirm(crate::app::RemoveChoice::DeleteFile),
+                        ),
+                        option_card(
+                            "Exclude from project",
+                            "File will be excluded from project but left in local folder. Not recommended for projects stored in version control.",
+                            Message::RemoveConfirm(crate::app::RemoveChoice::ExcludeFromProject),
+                        ),
+                    ]
+                    .spacing(8)
+                )
+                .padding([0, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button("Cancel", Message::CloseRemoveDialog, text_c, border_c),
+                    ],
+                )
+                .padding([14, 14]),
+            ]
+            .width(560),
+        )
+        .style(crate::styles::context_menu(tokens));
+        dialog.into()
+    }
+
+    pub(super) fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
+        let dialog = self.view_close_tab_confirm_body(tab_title);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::CloseTabConfirm)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
+    }
+
+    fn view_close_tab_confirm_body(&self, tab_title: &str) -> Element<'_, Message> {
+        use super::super::CloseTabChoice;
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Unsaved Changes").size(14).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(
+                    Message::CloseTabConfirm(CloseTabChoice::Cancel),
+                    text_muted,
+                    border_c,
+                ),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::CloseTabConfirm,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let message_text = format!(
+            "'{}' has unsaved changes. Do you want to save before closing?",
+            tab_title,
+        );
+
+        let dialog = container(
+            column![
+                header,
+                container(text(message_text).size(11).color(text_muted)).padding([14, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseTabConfirm(CloseTabChoice::Cancel),
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        secondary_button(
+                            "Don't Save",
+                            Message::CloseTabConfirm(CloseTabChoice::DiscardAndClose),
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Save",
+                            Some(Message::CloseTabConfirm(CloseTabChoice::SaveAndClose)),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(420),
+        )
+        .style(crate::styles::context_menu(tokens));
+        dialog.into()
+    }
 }
 
 // ---------------------------------------------------------------------------
