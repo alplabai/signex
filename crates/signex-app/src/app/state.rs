@@ -402,9 +402,38 @@ pub struct InteractionState {
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
+    /// Currently-expanded submenu inside the right-click context menu
+    /// (None when no submenu is shown). Always cleared when
+    /// `context_menu` becomes None.
+    pub context_submenu: Option<crate::app::ContextSubmenu>,
+    /// `(kind, hover_started_at)` for the submenu launcher the cursor
+    /// is currently hovering. The 50 ms hover-tick subscription opens
+    /// the submenu once `hover_started_at + 200 ms <= Instant::now()`,
+    /// matching the standard Altium / Windows menu delay.
+    pub pending_submenu: Option<(crate::app::ContextSubmenu, std::time::Instant)>,
+    /// Which submenu launcher row the cursor is currently over, or
+    /// `None`. Paired with `submenu_panel_hovered` to decide whether
+    /// the open submenu should stay visible.
+    pub submenu_launcher_hovered: Option<crate::app::ContextSubmenu>,
+    /// Whether the cursor is currently over the opened submenu panel.
+    pub submenu_panel_hovered: bool,
+    /// Timestamp of when *both* the launcher and the panel became
+    /// unhovered. The 50 ms tick closes the submenu once 150 ms has
+    /// elapsed, giving the user time to cross the gap between the two
+    /// zones without the menu collapsing mid-traversal.
+    pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// User-defined custom filter presets (capped at
+    /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
+    /// `~/.config/signex/prefs.json` on launch and written back when
+    /// edited from the Properties panel.
+    pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    /// Index of the active preset tab in the Properties-panel editor.
+    /// Clamped to `0..custom_filter_presets.len()` whenever the list
+    /// changes; ignored entirely when the list is empty.
+    pub active_custom_filter_tab: usize,
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,

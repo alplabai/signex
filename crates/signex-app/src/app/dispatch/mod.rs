@@ -88,6 +88,12 @@ impl Signex {
             | Message::ActiveBar(_)
             | Message::ShowContextMenu(_, _)
             | Message::CloseContextMenu
+            | Message::OpenContextSubmenu(_)
+            | Message::HoverContextSubmenu(_)
+            | Message::LeaveContextSubmenu
+            | Message::EnterContextSubmenuPanel
+            | Message::LeaveContextSubmenuPanel
+            | Message::TickContextSubmenuHover
             | Message::ContextAction(_)
             | Message::CloseTabConfirm(_)
             | Message::RunErc
