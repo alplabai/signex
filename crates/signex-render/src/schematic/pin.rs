@@ -182,8 +182,8 @@ fn draw_pin(
     // Small circle at the connection point (endpoint) — removed, KiCad doesn't draw this
 
     // Pin name is drawn near the symbol-side end of the pin.
-    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
-    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
+    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
+    let screen_font = transform.world_len(font_size_mm).abs();
 
     if screen_font >= 1.0
         && lib.show_pin_names
