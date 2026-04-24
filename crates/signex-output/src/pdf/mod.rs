@@ -26,9 +26,9 @@ use signex_types::markup::{
 };
 use thiserror::Error;
 
+use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_value};
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
-use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_value};
 
 mod colour;
 mod font;
@@ -36,13 +36,12 @@ pub(crate) mod layout;
 mod page;
 mod surface;
 
+use crate::svg::{
+    SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign,
+};
 use colour::ColourMap;
 use font::{PdfFont, best_alias_for_text, sanitize_pdf_text, text_advance_pt};
 use surface::PdfSurface;
-use crate::svg::{
-    SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign,
-    SvgTextVAlign,
-};
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -217,14 +216,8 @@ impl Exporter for PdfExporter {
             let content_ref = content_refs[idx];
 
             // Emit content stream for this page.
-            let content_bytes = build_page_content(
-                sheet,
-                opts,
-                ctx,
-                page_w_pt,
-                page_h_pt,
-                &expr_tables,
-            )?;
+            let content_bytes =
+                build_page_content(sheet, opts, ctx, page_w_pt, page_h_pt, &expr_tables)?;
 
             pdf.stream(content_ref, &content_bytes);
 
@@ -395,7 +388,13 @@ fn build_page_content(
                             -*rotation_deg,
                         );
                     } else {
-                        surface.text_at(cursor_x, page_h_pt - run_y, chosen_alias, run_size, &run_text);
+                        surface.text_at(
+                            cursor_x,
+                            page_h_pt - run_y,
+                            chosen_alias,
+                            run_size,
+                            &run_text,
+                        );
                     }
 
                     if run.overbar && run_advance > 0.1 {
@@ -403,13 +402,26 @@ fn build_page_content(
                         surface.set_stroke_width((run_size * 0.08).max(0.25));
                         let y_bar = run_y - run_size * 0.78;
                         let (x1, y1, x2, y2) = if rotation_deg.abs() > 0.001 {
-                            let (rx1, ry1) = rotate_about(cursor_x, y_bar, cursor_x, run_y, -*rotation_deg);
-                            let (rx2, ry2) = rotate_about(cursor_x + run_advance, y_bar, cursor_x, run_y, -*rotation_deg);
+                            let (rx1, ry1) =
+                                rotate_about(cursor_x, y_bar, cursor_x, run_y, -*rotation_deg);
+                            let (rx2, ry2) = rotate_about(
+                                cursor_x + run_advance,
+                                y_bar,
+                                cursor_x,
+                                run_y,
+                                -*rotation_deg,
+                            );
                             (rx1, ry1, rx2, ry2)
                         } else {
                             (cursor_x, y_bar, cursor_x + run_advance, y_bar)
                         };
-                        surface.stroke_line(x1, page_h_pt - y1, x2, page_h_pt - y2, (run_size * 0.08).max(0.25));
+                        surface.stroke_line(
+                            x1,
+                            page_h_pt - y1,
+                            x2,
+                            page_h_pt - y2,
+                            (run_size * 0.08).max(0.25),
+                        );
                     }
 
                     cursor_x += run_advance;
@@ -490,10 +502,7 @@ fn resolve_page_range(range: &PageRange, sheet_count: usize) -> Result<Vec<usize
         }
         PageRange::Range(start, end) => {
             if *start == 0 || *end == 0 || *start > sheet_count || *end > sheet_count {
-                return Err(PdfError::OutOfRange(
-                    (*start).max(*end).max(1),
-                    sheet_count,
-                ));
+                return Err(PdfError::OutOfRange((*start).max(*end).max(1), sheet_count));
             }
             if start <= end {
                 Ok((start - 1..*end).collect())
@@ -645,7 +654,9 @@ mod tests {
             sheets: vec![],
             metadata: ProjectMetadata::default(),
         };
-        let err = PdfExporter.export(&ctx, &PdfOptions::default()).unwrap_err();
+        let err = PdfExporter
+            .export(&ctx, &PdfOptions::default())
+            .unwrap_err();
         assert!(matches!(err, PdfError::NoSheets));
     }
 
@@ -699,7 +710,7 @@ mod tests {
 
     #[test]
     fn exports_schematic_content() {
-        use signex_types::schematic::{Wire, Symbol, Label, LabelType, Point};
+        use signex_types::schematic::{Label, LabelType, Point, Symbol, Wire};
         use std::collections::HashMap;
         use uuid::Uuid;
 
@@ -764,7 +775,8 @@ mod tests {
         let bytes = String::from_utf8_lossy(&out.bytes);
         // Check for content stream operators: 'm' (moveto), 'l' (lineto), 'S' (stroke),
         // 're' (rect), 'Tj' (show text).
-        let has_graphics = bytes.contains(" l\n") || bytes.contains(" re\n") || bytes.contains(" Tj");
+        let has_graphics =
+            bytes.contains(" l\n") || bytes.contains(" re\n") || bytes.contains(" Tj");
         assert!(
             has_graphics,
             "exported PDF should contain graphics operators"
@@ -806,7 +818,7 @@ mod tests {
 
     #[test]
     fn fit_to_page_scales_large_content_down() {
-        use signex_types::schematic::{Wire, Point};
+        use signex_types::schematic::{Point, Wire};
         use uuid::Uuid;
 
         let mut sheet = empty_sheet();
@@ -842,7 +854,7 @@ mod tests {
 
     #[test]
     fn fit_to_page_does_not_upscale_small_content() {
-        use signex_types::schematic::{Wire, Point};
+        use signex_types::schematic::{Point, Wire};
         use uuid::Uuid;
 
         let mut sheet = empty_sheet();

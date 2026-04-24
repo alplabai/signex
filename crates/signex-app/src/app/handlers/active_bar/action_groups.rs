@@ -28,17 +28,18 @@ impl Signex {
                 // the label-specific ghost + clear any Global/Hier pending.
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
-                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
-                    uuid: uuid::Uuid::new_v4(),
-                    text: "NET".to_string(),
-                    position: signex_types::schematic::Point::new(0.0, 0.0),
-                    rotation: 0.0,
-                    label_type: signex_types::schematic::LabelType::Net,
-                    shape: String::new(),
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify: signex_types::schematic::HAlign::Left,
-                    justify_v: signex_types::schematic::VAlign::Bottom,
-                });
+                self.interaction_state.active_canvas_mut().ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "NET".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Net,
+                        shape: String::new(),
+                        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        justify: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::Bottom,
+                    });
                 task
             }
             ActiveBarAction::PlaceComponent => {
@@ -97,17 +98,27 @@ impl Signex {
             // dispatched with SelectConnected.
             ActiveBarAction::SelectConnection => {
                 use signex_types::schematic::SelectedKind;
-                let has_net_seed = self.interaction_state.active_canvas_mut().selected.iter().any(|i| {
-                    matches!(
-                        i.kind,
-                        SelectedKind::Wire
-                            | SelectedKind::Bus
-                            | SelectedKind::Junction
-                            | SelectedKind::Label
-                    )
-                });
+                let has_net_seed = self
+                    .interaction_state
+                    .active_canvas_mut()
+                    .selected
+                    .iter()
+                    .any(|i| {
+                        matches!(
+                            i.kind,
+                            SelectedKind::Wire
+                                | SelectedKind::Bus
+                                | SelectedKind::Junction
+                                | SelectedKind::Label
+                        )
+                    });
                 if has_net_seed {
-                    let seed = self.interaction_state.active_canvas().selected.first().cloned();
+                    let seed = self
+                        .interaction_state
+                        .active_canvas()
+                        .selected
+                        .first()
+                        .cloned();
                     if let (Some(snapshot), Some(seed)) = (self.active_render_snapshot(), seed) {
                         let (wx, wy) = match seed.kind {
                             SelectedKind::Wire => snapshot
@@ -190,7 +201,12 @@ impl Signex {
             // items to the end of their Vec; Send-To-Back moves them to the
             // front.
             ActiveBarAction::BringToFront | ActiveBarAction::MoveToFront => {
-                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                if !self
+                    .interaction_state
+                    .active_canvas_mut()
+                    .selected
+                    .is_empty()
+                {
                     let items = self.interaction_state.active_canvas_mut().selected.clone();
                     self.apply_engine_command(
                         signex_engine::Command::ReorderObjects {
@@ -204,7 +220,12 @@ impl Signex {
                 Task::none()
             }
             ActiveBarAction::SendToBack => {
-                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                if !self
+                    .interaction_state
+                    .active_canvas_mut()
+                    .selected
+                    .is_empty()
+                {
                     let items = self.interaction_state.active_canvas_mut().selected.clone();
                     self.apply_engine_command(
                         signex_engine::Command::ReorderObjects {
@@ -221,11 +242,20 @@ impl Signex {
             // becomes the z-order anchor. See `handle_canvas_left_click`
             // for the pick site.
             ActiveBarAction::BringToFrontOf => {
-                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                if !self
+                    .interaction_state
+                    .active_canvas_mut()
+                    .selected
+                    .is_empty()
+                {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Above);
-                    self.interaction_state.active_canvas_mut().reorder_picker_armed = true;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .reorder_picker_armed = true;
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     crate::diagnostics::log_info(
                         "Click a reference object to bring the selection above it (Esc to cancel)",
                     );
@@ -233,11 +263,20 @@ impl Signex {
                 Task::none()
             }
             ActiveBarAction::SendToBackOf => {
-                if !self.interaction_state.active_canvas_mut().selected.is_empty() {
+                if !self
+                    .interaction_state
+                    .active_canvas_mut()
+                    .selected
+                    .is_empty()
+                {
                     self.ui_state.reorder_picker =
                         Some(super::super::super::state::ReorderPicker::Below);
-                    self.interaction_state.active_canvas_mut().reorder_picker_armed = true;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .reorder_picker_armed = true;
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     crate::diagnostics::log_info(
                         "Click a reference object to send the selection below it (Esc to cancel)",
                     );

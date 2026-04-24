@@ -381,14 +381,18 @@ impl Signex {
             }
             Message::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.active_canvas_mut().draw_mode = self.interaction_state.draw_mode;
+                self.interaction_state.active_canvas_mut().draw_mode =
+                    self.interaction_state.draw_mode;
                 self.finish_update()
             }
             Message::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .wire_preview
+                        .clear();
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                     self.interaction_state.current_tool = Tool::Select;
                     self.interaction_state.active_canvas_mut().tool_preview = None;

@@ -75,7 +75,10 @@ impl PageSize {
             PageSize::AnsiE => (863.6, 1117.6),
             PageSize::UsLetter => (215.9, 279.4),
             PageSize::UsLegal => (215.9, 355.6),
-            PageSize::Custom { width_mm, height_mm } => (width_mm, height_mm),
+            PageSize::Custom {
+                width_mm,
+                height_mm,
+            } => (width_mm, height_mm),
         }
     }
 
@@ -145,9 +148,15 @@ mod tests {
         assert!(matches!(PageSize::from_standard_str("A4"), PageSize::IsoA4));
         assert!(matches!(PageSize::from_standard_str("A3"), PageSize::IsoA3));
         assert!(matches!(PageSize::from_standard_str("A"), PageSize::AnsiA));
-        assert!(matches!(PageSize::from_standard_str("USLetter"), PageSize::UsLetter));
+        assert!(matches!(
+            PageSize::from_standard_str("USLetter"),
+            PageSize::UsLetter
+        ));
         // Unknown string falls back to A4.
-        assert!(matches!(PageSize::from_standard_str("unknown"), PageSize::IsoA4));
+        assert!(matches!(
+            PageSize::from_standard_str("unknown"),
+            PageSize::IsoA4
+        ));
     }
 
     #[test]

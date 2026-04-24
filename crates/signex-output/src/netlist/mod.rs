@@ -47,7 +47,8 @@ fn build_net_graph_multi_sheet(
         let tolerance = 0.01; // mm
 
         // Track position -> node index
-        let mut pos_to_node: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut pos_to_node: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
 
         // Process wires from this sheet
         for wire in &sheet.wires {
@@ -67,13 +68,16 @@ fn build_net_graph_multi_sheet(
         // Process junctions from this sheet
         for junction in &sheet.junctions {
             let j_key = pos_key(junction.position);
-            let j_idx = *pos_to_node
-                .entry(j_key)
-                .or_insert_with(|| graph.add_node());
+            let j_idx = *pos_to_node.entry(j_key).or_insert_with(|| graph.add_node());
 
             for wire in &sheet.wires {
                 if (wire.start == junction.position || wire.end == junction.position)
-                    || crate::netlist::standard_sexpr::point_on_segment(junction.position, wire.start, wire.end, tolerance)
+                    || crate::netlist::standard_sexpr::point_on_segment(
+                        junction.position,
+                        wire.start,
+                        wire.end,
+                        tolerance,
+                    )
                 {
                     let start_key = pos_key(wire.start);
                     let end_key = pos_key(wire.end);
@@ -97,7 +101,12 @@ fn build_net_graph_multi_sheet(
             // Check if label lies on a wire (mid-wire binding)
             if label_idx.is_none() {
                 for wire in &sheet.wires {
-                    if standard_sexpr::point_on_segment(label.position, wire.start, wire.end, tolerance) {
+                    if standard_sexpr::point_on_segment(
+                        label.position,
+                        wire.start,
+                        wire.end,
+                        tolerance,
+                    ) {
                         let start_key = pos_key(wire.start);
                         let end_key = pos_key(wire.end);
                         let start_idx = *pos_to_node
@@ -114,7 +123,10 @@ fn build_net_graph_multi_sheet(
             }
 
             // For Global/Hierarchical labels, find matching labels in existing graph and unify
-            if matches!(label.label_type, LabelType::Global | LabelType::Hierarchical) {
+            if matches!(
+                label.label_type,
+                LabelType::Global | LabelType::Hierarchical
+            ) {
                 if !label.text.is_empty() {
                     // Find a node in the main graph with the same label name
                     let mut main_idx = None;
@@ -198,7 +210,10 @@ impl Exporter for NetlistExporter {
         // labels with the same name unify across sheets).
         let graph = build_net_graph_multi_sheet(
             &ctx.sheets,
-            &all_symbols.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
+            &all_symbols
+                .iter()
+                .map(|(s, _)| s.clone())
+                .collect::<Vec<_>>(),
         );
 
         // Emit components
@@ -207,7 +222,13 @@ impl Exporter for NetlistExporter {
                 let sheet_path = format!("/{}/", sheet_snap.sheet_name);
                 let sheet_tstamp = format!("/<{:08x}>/", sheet_snap.sheet_number);
 
-                let comp = emit_comp(sym, lib_sym, &sheet_path, &sheet_tstamp, opts.include_timestamps);
+                let comp = emit_comp(
+                    sym,
+                    lib_sym,
+                    &sheet_path,
+                    &sheet_tstamp,
+                    opts.include_timestamps,
+                );
                 components.push(comp);
             }
         }
@@ -241,7 +262,8 @@ impl Exporter for NetlistExporter {
         let tool_version = "Signex 0.8.0";
         let timestamp = "2000-01-01T00:00:00".to_string();
 
-        let source = ctx.sheets
+        let source = ctx
+            .sheets
             .first()
             .map(|s| s.path.display().to_string())
             .unwrap_or_default();
@@ -275,7 +297,11 @@ mod tests {
 
     #[test]
     fn produces_valid_header() {
-        let header = emit_header("/path/to/test.standard_sch", "2026-04-22T00:00:00", "Signex 0.8.0");
+        let header = emit_header(
+            "/path/to/test.standard_sch",
+            "2026-04-22T00:00:00",
+            "Signex 0.8.0",
+        );
         let header_str = header.to_string();
         assert!(header_str.starts_with("(export (version D)"));
     }
@@ -313,7 +339,10 @@ mod tests {
         let result = exporter.export(&ctx, &opts).unwrap();
         let output = String::from_utf8(result.bytes).unwrap();
 
-        assert!(output.contains("(name \"VCC_3V3\")"), "Expected VCC_3V3 net name in output");
+        assert!(
+            output.contains("(name \"VCC_3V3\")"),
+            "Expected VCC_3V3 net name in output"
+        );
     }
 
     /// Normalise whitespace so tests tolerate the S-expression pretty-printer
@@ -368,9 +397,11 @@ mod tests {
 
     fn build_test_context_with_2_symbols() -> ExportContext {
         // Minimal test context with 2 symbols
-        use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Symbol, Point, LibSymbol, LibPin, Pin, PinElectricalType, PinShape};
+        use signex_types::schematic::{
+            LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point, SchematicSheet, Symbol,
+        };
         use std::collections::HashMap;
+        use uuid::Uuid;
 
         let mut lib_symbols = HashMap::new();
         let lib_sym = LibSymbol {
@@ -518,8 +549,8 @@ mod tests {
     }
 
     fn build_test_context_with_power_port() -> ExportContext {
+        use signex_types::schematic::{Point, SchematicSheet, Symbol};
         use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Symbol, Point};
 
         let sym = Symbol {
             uuid: Uuid::new_v4(),
@@ -585,9 +616,12 @@ mod tests {
     }
 
     fn build_test_context_with_labeled_wire() -> ExportContext {
-        use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Symbol, Point, Wire, Label, LabelType, LibSymbol, LibPin, Pin, PinElectricalType, PinShape};
+        use signex_types::schematic::{
+            Label, LabelType, LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point,
+            SchematicSheet, Symbol, Wire,
+        };
         use std::collections::HashMap;
+        use uuid::Uuid;
 
         let mut lib_symbols = HashMap::new();
         let lib_sym = LibSymbol {
@@ -604,24 +638,22 @@ mod tests {
             in_pos_files: true,
             duplicate_pin_numbers_are_jumpers: false,
             graphics: vec![],
-            pins: vec![
-                LibPin {
-                    unit: 1,
-                    body_style: 1,
-                    pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
-                        position: Point::new(0.0, 0.0),
-                        number: "1".to_string(),
-                        name: "~".to_string(),
-                        length: 2.54,
-                        rotation: 0.0,
-                        visible: true,
-                        name_visible: true,
-                        number_visible: true,
-                    },
+            pins: vec![LibPin {
+                unit: 1,
+                body_style: 1,
+                pin: Pin {
+                    pin_type: PinElectricalType::Passive,
+                    shape: PinShape::Line,
+                    position: Point::new(0.0, 0.0),
+                    number: "1".to_string(),
+                    name: "~".to_string(),
+                    length: 2.54,
+                    rotation: 0.0,
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
                 },
-            ],
+            }],
             show_pin_numbers: true,
             show_pin_names: true,
             pin_name_offset: 0.0,
@@ -714,9 +746,12 @@ mod tests {
     }
 
     fn build_test_context_with_2_connected_symbols() -> ExportContext {
-        use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Symbol, Point, Wire, LibSymbol, LibPin, Pin, PinElectricalType, PinShape};
+        use signex_types::schematic::{
+            LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point, SchematicSheet, Symbol,
+            Wire,
+        };
         use std::collections::HashMap;
+        use uuid::Uuid;
 
         let mut lib_symbols = HashMap::new();
         let lib_sym = LibSymbol {
@@ -872,9 +907,12 @@ mod tests {
     }
 
     fn build_test_context_with_mid_wire_label() -> ExportContext {
-        use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Symbol, Point, Wire, Label, LabelType, LibSymbol, LibPin, Pin, PinElectricalType, PinShape};
+        use signex_types::schematic::{
+            Label, LabelType, LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point,
+            SchematicSheet, Symbol, Wire,
+        };
         use std::collections::HashMap;
+        use uuid::Uuid;
 
         let mut lib_symbols = HashMap::new();
         let lib_sym = LibSymbol {
@@ -998,10 +1036,10 @@ mod tests {
     }
 
     fn build_test_context_with_hier_labels() -> ExportContext {
-        use uuid::Uuid;
-        use signex_types::schematic::{SchematicSheet, Point, Wire, Label, LabelType, LibSymbol};
+        use signex_types::schematic::{Label, LabelType, LibSymbol, Point, SchematicSheet, Wire};
         #[allow(unused_imports)]
         use std::collections::HashMap;
+        use uuid::Uuid;
 
         let mut lib_symbols = HashMap::new();
         let lib_sym = LibSymbol {

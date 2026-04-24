@@ -94,7 +94,7 @@ pub enum BomFormat {
 /// A single row in the BOM table.
 #[derive(Debug, Clone)]
 pub struct BomRow {
-    pub references: Vec<String>,     // ["R1", "R2", "R7"]
+    pub references: Vec<String>, // ["R1", "R2", "R7"]
     pub qty: u32,
     pub value: String,
     pub footprint: String,
@@ -178,7 +178,10 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
 
             for sym in &all_symbols {
                 let key = (sym.value.clone(), sym.footprint.clone());
-                grouped.entry(key).or_insert_with(Vec::new).push(sym.reference.clone());
+                grouped
+                    .entry(key)
+                    .or_insert_with(Vec::new)
+                    .push(sym.reference.clone());
             }
 
             let mut rows_vec: Vec<BomRow> = grouped
@@ -204,9 +207,7 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
                 .collect();
 
             // Sort rows by first reference in each group for consistent output
-            rows_vec.sort_by(|a, b| {
-                a.references.first().cmp(&b.references.first())
-            });
+            rows_vec.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
 
             rows_vec
         }
@@ -214,11 +215,7 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
             let mut rows_vec: Vec<BomRow> = all_symbols
                 .iter()
                 .map(|sym| {
-                    let description = sym
-                        .fields
-                        .get("Description")
-                        .cloned()
-                        .unwrap_or_default();
+                    let description = sym.fields.get("Description").cloned().unwrap_or_default();
 
                     BomRow {
                         references: vec![sym.reference.clone()],
@@ -232,9 +229,7 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
                 .collect();
 
             if opts.grouping == BomGrouping::Flat {
-                rows_vec.sort_by(|a, b| {
-                    a.references.first().cmp(&b.references.first())
-                });
+                rows_vec.sort_by(|a, b| a.references.first().cmp(&b.references.first()));
             }
 
             rows_vec
@@ -384,7 +379,10 @@ mod tests {
         let bytes = xlsx_emit(&table, &opts.columns)?;
 
         // XLSX is a ZIP file, so it should start with PK
-        assert!(bytes.starts_with(b"PK"), "XLSX should start with PK (ZIP magic)");
+        assert!(
+            bytes.starts_with(b"PK"),
+            "XLSX should start with PK (ZIP magic)"
+        );
         assert!(!bytes.is_empty(), "XLSX output should not be empty");
 
         Ok(())

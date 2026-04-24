@@ -1,6 +1,6 @@
+use crate::EngineError;
 use crate::command::AnnotateMode;
 use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
-use crate::EngineError;
 
 use super::Engine;
 
@@ -33,7 +33,10 @@ impl Engine {
         };
 
         // Phase 1: reset to '?' if requested.
-        if matches!(mode, AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber) {
+        if matches!(
+            mode,
+            AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
+        ) {
             for symbol in self.document.symbols.iter_mut() {
                 if !is_designator_target(symbol) {
                     continue;

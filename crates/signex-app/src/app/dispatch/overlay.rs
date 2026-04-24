@@ -76,7 +76,9 @@ impl Signex {
                     self.ui_state.pending_net_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {
@@ -110,8 +112,7 @@ impl Signex {
                 // timer and mark the launcher zone as hovered. The
                 // close timer (if any) gets cancelled by the zone
                 // refresh below.
-                self.interaction_state.pending_submenu =
-                    Some((kind, std::time::Instant::now()));
+                self.interaction_state.pending_submenu = Some((kind, std::time::Instant::now()));
                 self.interaction_state.submenu_launcher_hovered = Some(kind);
                 self.refresh_submenu_hover_state();
                 Task::none()

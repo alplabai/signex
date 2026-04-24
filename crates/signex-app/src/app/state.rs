@@ -459,10 +459,7 @@ impl InteractionState {
     }
 
     #[allow(dead_code)]
-    pub fn canvas_for_window_mut(
-        &mut self,
-        window_id: iced::window::Id,
-    ) -> &mut SchematicCanvas {
+    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut SchematicCanvas {
         // `get_mut` returns `Option<&mut V>`. Match rather than
         // `contains_key` + `get_mut().unwrap()` to avoid the double
         // lookup and the unwrap.

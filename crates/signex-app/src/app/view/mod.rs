@@ -152,11 +152,7 @@ impl Signex {
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled(
-            Some(ic::icon_dd_comment(tid)),
-            "Comment...",
-            None,
-        ));
+        items.push(self.ctx_menu_item_disabled(Some(ic::icon_dd_comment(tid)), "Comment...", None));
         items.push(self.ctx_menu_item_disabled(
             Some(ic::icon_dd_pin_mapping(tid)),
             "Pin Mapping...",
@@ -415,7 +411,10 @@ impl Signex {
         let tid = self.ui_state.theme_id;
         let panel_ctx = &self.document_state.panel_ctx;
         let mut items: Vec<Element<'_, Message>> = Vec::new();
-        let mk = |icon: iced::widget::svg::Handle, label: &'static str, action: A| -> Element<'_, Message> {
+        let mk = |icon: iced::widget::svg::Handle,
+                  label: &'static str,
+                  action: A|
+         -> Element<'_, Message> {
             self.ctx_menu_item_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
         };
         match kind {
@@ -423,8 +422,16 @@ impl Signex {
                 // Wires + buses + entries
                 items.push(mk(ic::icon_dd_wire(tid), "Wire", A::DrawWire));
                 items.push(mk(ic::icon_dd_bus(tid), "Bus", A::DrawBus));
-                items.push(mk(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry));
-                items.push(mk(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel));
+                items.push(mk(
+                    ic::icon_dd_bus_entry(tid),
+                    "Bus Entry",
+                    A::PlaceBusEntry,
+                ));
+                items.push(mk(
+                    ic::icon_dd_net_label(tid),
+                    "Net Label",
+                    A::PlaceNetLabel,
+                ));
                 items.push(self.ctx_menu_sep());
                 // Ports
                 items.push(mk(ic::icon_dd_port(tid), "Port", A::PlacePort));
@@ -514,7 +521,11 @@ impl Signex {
             }
             ContextSubmenu::Align => {
                 items.push(mk(ic::icon_dd_align_left(tid), "Align Left", A::AlignLeft));
-                items.push(mk(ic::icon_dd_align_right(tid), "Align Right", A::AlignRight));
+                items.push(mk(
+                    ic::icon_dd_align_right(tid),
+                    "Align Right",
+                    A::AlignRight,
+                ));
                 items.push(mk(
                     ic::icon_dd_align_hcenter(tid),
                     "Align Horizontal Centers",
@@ -527,7 +538,11 @@ impl Signex {
                 ));
                 items.push(self.ctx_menu_sep());
                 items.push(mk(ic::icon_dd_align_top(tid), "Align Top", A::AlignTop));
-                items.push(mk(ic::icon_dd_align_bottom(tid), "Align Bottom", A::AlignBottom));
+                items.push(mk(
+                    ic::icon_dd_align_bottom(tid),
+                    "Align Bottom",
+                    A::AlignBottom,
+                ));
                 items.push(mk(
                     ic::icon_dd_align_vcenter(tid),
                     "Align Vertical Centers",
@@ -584,15 +599,17 @@ impl Signex {
         let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
             .padding([6, 20])
             .on_press(Message::DismissExportError)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(err_red.into()),
-                text_color: iced::Color::WHITE,
-                border: iced::Border {
-                    radius: iced::border::Radius::from(4.0),
-                    ..iced::Border::default()
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(err_red.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            });
+            );
 
         let body = column![
             row![
@@ -604,10 +621,7 @@ impl Signex {
             iced::widget::Space::new().height(8),
             text(msg).size(12).color(text_c),
             iced::widget::Space::new().height(12),
-            row![
-                iced::widget::Space::new().width(Length::Fill),
-                ok_btn,
-            ],
+            row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
         .padding(20);
 
@@ -656,23 +670,21 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
 
         // Page size display helper
-        let page_size_display = |size: &signex_output::PageSize| {
-            match size {
-                signex_output::PageSize::IsoA0 => "ISO A0",
-                signex_output::PageSize::IsoA1 => "ISO A1",
-                signex_output::PageSize::IsoA2 => "ISO A2",
-                signex_output::PageSize::IsoA3 => "ISO A3",
-                signex_output::PageSize::IsoA4 => "ISO A4",
-                signex_output::PageSize::IsoA5 => "ISO A5",
-                signex_output::PageSize::AnsiA => "ANSI A",
-                signex_output::PageSize::AnsiB => "ANSI B",
-                signex_output::PageSize::AnsiC => "ANSI C",
-                signex_output::PageSize::AnsiD => "ANSI D",
-                signex_output::PageSize::AnsiE => "ANSI E",
-                signex_output::PageSize::UsLetter => "US Letter",
-                signex_output::PageSize::UsLegal => "US Legal",
-                signex_output::PageSize::Custom { .. } => "Custom",
-            }
+        let page_size_display = |size: &signex_output::PageSize| match size {
+            signex_output::PageSize::IsoA0 => "ISO A0",
+            signex_output::PageSize::IsoA1 => "ISO A1",
+            signex_output::PageSize::IsoA2 => "ISO A2",
+            signex_output::PageSize::IsoA3 => "ISO A3",
+            signex_output::PageSize::IsoA4 => "ISO A4",
+            signex_output::PageSize::IsoA5 => "ISO A5",
+            signex_output::PageSize::AnsiA => "ANSI A",
+            signex_output::PageSize::AnsiB => "ANSI B",
+            signex_output::PageSize::AnsiC => "ANSI C",
+            signex_output::PageSize::AnsiD => "ANSI D",
+            signex_output::PageSize::AnsiE => "ANSI E",
+            signex_output::PageSize::UsLetter => "US Letter",
+            signex_output::PageSize::UsLegal => "US Legal",
+            signex_output::PageSize::Custom { .. } => "Custom",
         };
 
         let page_size_row = row![
@@ -777,36 +789,51 @@ impl Signex {
             }))
             .padding([4, 10])
             .on_press(msg)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(if selected {
-                    selected_bg.into()
-                } else {
-                    default_bg.into()
-                }),
-                text_color: if selected { selected_text } else { default_text },
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(4.0),
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(if selected {
+                        selected_bg.into()
+                    } else {
+                        default_bg.into()
+                    }),
+                    text_color: if selected {
+                        selected_text
+                    } else {
+                        default_text
+                    },
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            })
+            )
         };
 
         let colour_controls = row![
             mode_button(
                 "Colour",
-                matches!(dialog.options.colour_mode, signex_output::ColourMode::Colour),
+                matches!(
+                    dialog.options.colour_mode,
+                    signex_output::ColourMode::Colour
+                ),
                 Message::ExportPdfSetColourMode(signex_output::ColourMode::Colour),
             ),
             mode_button(
                 "Grayscale",
-                matches!(dialog.options.colour_mode, signex_output::ColourMode::Grayscale),
+                matches!(
+                    dialog.options.colour_mode,
+                    signex_output::ColourMode::Grayscale
+                ),
                 Message::ExportPdfSetColourMode(signex_output::ColourMode::Grayscale),
             ),
             mode_button(
                 "B/W",
-                matches!(dialog.options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                matches!(
+                    dialog.options.colour_mode,
+                    signex_output::ColourMode::BlackAndWhite
+                ),
                 Message::ExportPdfSetColourMode(signex_output::ColourMode::BlackAndWhite),
             ),
         ]
@@ -826,21 +853,30 @@ impl Signex {
             ),
             mode_button(
                 "Specific",
-                matches!(dialog.options.page_range, signex_output::PageRange::Specific(_)),
+                matches!(
+                    dialog.options.page_range,
+                    signex_output::PageRange::Specific(_)
+                ),
                 Message::ExportPdfSetPageRangeSpecific,
             ),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
 
-        let specific_page_input: Element<'_, Message> = if matches!(dialog.options.page_range, signex_output::PageRange::Specific(_)) {
+        let specific_page_input: Element<'_, Message> = if matches!(
+            dialog.options.page_range,
+            signex_output::PageRange::Specific(_)
+        ) {
             row![
                 text("Page").size(11).color(text_c),
-                text_input::<Message, iced::Theme, iced::Renderer>("1", &dialog.specific_page_input)
-                    .on_input(|value| Message::ExportPdfSetSpecificPageInput(value))
-                    .padding([4, 8])
-                    .size(12)
-                    .width(80),
+                text_input::<Message, iced::Theme, iced::Renderer>(
+                    "1",
+                    &dialog.specific_page_input
+                )
+                .on_input(|value| Message::ExportPdfSetSpecificPageInput(value))
+                .padding([4, 8])
+                .size(12)
+                .width(80),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center)
@@ -853,29 +889,33 @@ impl Signex {
         let cancel_btn = button(text("Cancel").size(12).color(text_c))
             .padding([6, 18])
             .on_press(Message::ExportPdfDialogCancel)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(panel_bg.into()),
-                text_color: text_c,
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(4.0),
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(panel_bg.into()),
+                    text_color: text_c,
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            });
+            );
 
         let export_btn = button(text("Export…").size(12).color(iced::Color::WHITE))
             .padding([6, 18])
             .on_press(Message::ExportPdfDialogConfirm)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(accent_c.into()),
-                text_color: iced::Color::WHITE,
-                border: iced::Border {
-                    radius: iced::border::Radius::from(4.0),
-                    ..iced::Border::default()
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(accent_c.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            });
+            );
 
         let bottom_bar = row![
             iced::widget::Space::new().width(Length::Fill),
@@ -937,7 +977,9 @@ impl Signex {
     /// and Close buttons at the bottom. Triggered by File → Print Preview
     /// (Ctrl+P); disappears on Close or when the export completes.
     fn view_print_preview(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, image, mouse_area, opaque, row, scrollable, text, text_input};
+        use iced::widget::{
+            button, column, container, image, mouse_area, opaque, row, scrollable, text, text_input,
+        };
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -964,37 +1006,52 @@ impl Signex {
             }))
             .padding([4, 10])
             .on_press(msg)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(if selected {
-                    selected_bg.into()
-                } else {
-                    default_bg.into()
-                }),
-                text_color: if selected { selected_text } else { default_text },
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(4.0),
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(if selected {
+                        selected_bg.into()
+                    } else {
+                        default_bg.into()
+                    }),
+                    text_color: if selected {
+                        selected_text
+                    } else {
+                        default_text
+                    },
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            })
+            )
         };
 
         let colour_controls = row![
             text("Colour").size(11).color(text_muted),
             mode_button(
                 "Color",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Colour
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
             ),
             mode_button(
                 "Gray",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Grayscale
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
             ),
             mode_button(
                 "B/W",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::BlackAndWhite
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
             ),
         ]
@@ -1005,31 +1062,46 @@ impl Signex {
             text("Pages").size(11).color(text_muted),
             mode_button(
                 "All",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::All
+                ),
                 Message::PrintPreviewSetPageRangeAll,
             ),
             mode_button(
                 "Current",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Current
+                ),
                 Message::PrintPreviewSetPageRangeCurrent,
             ),
             mode_button(
                 "Specific",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Specific(_)
+                ),
                 Message::PrintPreviewSetPageRangeSpecific,
             ),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
 
-        let specific_page_input: Element<'_, Message> = if matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)) {
+        let specific_page_input: Element<'_, Message> = if matches!(
+            preview.pdf_options.page_range,
+            signex_output::PageRange::Specific(_)
+        ) {
             row![
                 text("Page").size(11).color(text_muted),
-                text_input::<Message, iced::Theme, iced::Renderer>("1", &preview.specific_page_input)
-                    .on_input(|value| Message::PrintPreviewSetSpecificPageInput(value))
-                    .padding([4, 8])
-                    .size(12)
-                    .width(80),
+                text_input::<Message, iced::Theme, iced::Renderer>(
+                    "1",
+                    &preview.specific_page_input
+                )
+                .on_input(|value| Message::PrintPreviewSetSpecificPageInput(value))
+                .padding([4, 8])
+                .size(12)
+                .width(80),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center)
@@ -1040,8 +1112,7 @@ impl Signex {
 
         // Left rail: one thumbnail button per rendered page. Bounded width
         // and scrollable so 20-sheet projects don't break the layout.
-        let mut thumbs: iced::widget::Column<'_, Message> =
-            column![].spacing(4).padding(8);
+        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
             let thumb = image(preview.page_handles[i].clone())
@@ -1053,7 +1124,9 @@ impl Signex {
             let card = container(
                 column![
                     thumb,
-                    text(format!("Page {}", page.page_number)).size(10).color(text_c)
+                    text(format!("Page {}", page.page_number))
+                        .size(10)
+                        .color(text_c)
                 ]
                 .spacing(2)
                 .align_x(iced::Alignment::Center),
@@ -1069,9 +1142,7 @@ impl Signex {
                 },
                 ..container::Style::default()
             });
-            thumbs = thumbs.push(
-                mouse_area(card).on_press(Message::PrintPreviewSelectPage(i)),
-            );
+            thumbs = thumbs.push(mouse_area(card).on_press(Message::PrintPreviewSelectPage(i)));
         }
         let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
 
@@ -1116,28 +1187,32 @@ impl Signex {
         let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
             .padding([6, 14])
             .on_press(Message::PrintPreviewExport)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(accent_c.into()),
-                text_color: iced::Color::WHITE,
-                border: iced::Border {
-                    radius: iced::border::Radius::from(4.0),
-                    ..iced::Border::default()
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(accent_c.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            });
+            );
         let close_btn = button(text("Close").size(12).color(text_c))
             .padding([6, 14])
             .on_press(Message::PrintPreviewClose)
-            .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(panel_bg.into()),
-                text_color: text_c,
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(4.0),
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(panel_bg.into()),
+                    text_color: text_c,
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
                 },
-                ..iced::widget::button::Style::default()
-            });
+            );
 
         let bottom_bar = row![
             text(format!(
@@ -1156,8 +1231,13 @@ impl Signex {
         // Dialog body: title + thumbnails/content row + bottom bar
         let body = column![
             text("Print Preview").size(14).color(text_c),
-            row![colour_controls, iced::widget::Space::new().width(12), range_controls, specific_page_input]
-                .align_y(iced::Alignment::Center),
+            row![
+                colour_controls,
+                iced::widget::Space::new().width(12),
+                range_controls,
+                specific_page_input
+            ]
+            .align_y(iced::Alignment::Center),
             row![thumb_rail, iced::widget::Space::new().width(8), centre]
                 .width(Length::Fill)
                 .height(Length::Fill),
@@ -1167,24 +1247,26 @@ impl Signex {
         .padding(12);
 
         // Dialog card sized to leave a margin around the edges
-        let card = opaque(container(body)
-            .max_width(1100)
-            .max_height(780)
-            .padding(0)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(8.0),
-                },
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
-                ..container::Style::default()
-            }));
+        let card = opaque(
+            container(body)
+                .max_width(1100)
+                .max_height(780)
+                .padding(0)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(panel_bg.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(8.0),
+                    },
+                    shadow: iced::Shadow {
+                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                        offset: iced::Vector::new(0.0, 4.0),
+                        blur_radius: 16.0,
+                    },
+                    ..container::Style::default()
+                }),
+        );
 
         container(card)
             .width(Length::Fill)
@@ -2057,10 +2139,7 @@ impl Signex {
             .padding(0)
             .on_press(msg)
             .style(move |_: &iced::Theme, status: button::Status| {
-                let hovered = matches!(
-                    status,
-                    button::Status::Hovered | button::Status::Pressed
-                );
+                let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
                 button::Style {
                     background: if hovered {
                         Some(Background::Color(hover_bg))
@@ -2104,12 +2183,13 @@ impl Signex {
         // Search bar placeholder — visual only for now. Matches VS Code's
         // central command palette peek: rounded rect with search icon
         // and muted prompt text.
-        let search_icon = svg(h_search.clone())
-            .width(12)
-            .height(12)
-            .style(move |_: &iced::Theme, _| svg::Style {
-                color: Some(muted_c),
-            });
+        let search_icon =
+            svg(h_search.clone())
+                .width(12)
+                .height(12)
+                .style(move |_: &iced::Theme, _| svg::Style {
+                    color: Some(muted_c),
+                });
         let search_bar: Element<'_, Message> = container(
             row![
                 search_icon,
@@ -2158,15 +2238,9 @@ impl Signex {
         // row) is Shrink, and the chrome loses all its draggable real
         // estate the moment menus + search + controls consume their
         // natural widths.
-        let inner = row![
-            menu_padded,
-            drag_zone(),
-            search_bar,
-            drag_zone(),
-            controls,
-        ]
-        .width(Length::Fill)
-        .align_y(Alignment::Center);
+        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls,]
+            .width(Length::Fill)
+            .align_y(Alignment::Center);
 
         container(inner)
             .width(Length::Fill)
@@ -2416,24 +2490,20 @@ impl Signex {
 
         const EDGE: f32 = 6.0;
 
-        let straight = |direction: Direction,
-                        cursor: Interaction,
-                        horizontal: bool|
-         -> Element<'a, Message> {
-            let (w, h) = if horizontal {
-                (Length::Fill, Length::Fixed(EDGE))
-            } else {
-                (Length::Fixed(EDGE), Length::Fill)
+        let straight =
+            |direction: Direction, cursor: Interaction, horizontal: bool| -> Element<'a, Message> {
+                let (w, h) = if horizontal {
+                    (Length::Fill, Length::Fixed(EDGE))
+                } else {
+                    (Length::Fixed(EDGE), Length::Fill)
+                };
+                mouse_area(Space::new().width(w).height(h))
+                    .on_press(Message::StartMainWindowResize(direction))
+                    .interaction(cursor)
+                    .into()
             };
-            mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::StartMainWindowResize(direction))
-                .interaction(cursor)
-                .into()
-        };
 
-        let corner = |direction: Direction,
-                      cursor: Interaction|
-         -> Element<'a, Message> {
+        let corner = |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
             mouse_area(
                 Space::new()
                     .width(Length::Fixed(EDGE))
@@ -2456,14 +2526,22 @@ impl Signex {
         // Middle row: left/right edges frame a Fill/Fill empty Space so
         // the whole overlay is window-sized and the centre passes
         // clicks through.
-        let middle = row![left, Space::new().width(Length::Fill).height(Length::Fill), right]
-            .width(Length::Fill)
-            .height(Length::Fill);
+        let middle = row![
+            left,
+            Space::new().width(Length::Fill).height(Length::Fill),
+            right
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         column![
-            row![nw, top, ne].width(Length::Fill).height(Length::Fixed(EDGE)),
+            row![nw, top, ne]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
             middle,
-            row![sw, bottom, se].width(Length::Fill).height(Length::Fixed(EDGE)),
+            row![sw, bottom, se]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
         ]
         .width(Length::Fill)
         .height(Length::Fill)
@@ -2652,11 +2730,12 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(move |_: &iced::Theme| container::Style {
-                    background: Some(
-                        iced::Background::Color(
-                            iced::Color::from_rgba(0.0, 0.0, 0.0, BACKDROP_OPACITY)
-                        )
-                    ),
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0,
+                        0.0,
+                        0.0,
+                        BACKDROP_OPACITY,
+                    ))),
                     ..container::Style::default()
                 }),
         )

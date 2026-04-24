@@ -4,8 +4,7 @@ use signex_types::property::SchematicProperty;
 use signex_types::schematic::*;
 
 use crate::sexpr_render::{
-    SExpr, at_node, atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr,
-    yes_no_node,
+    SExpr, at_node, atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr, yes_no_node,
 };
 
 // ---------------------------------------------------------------------------
@@ -78,7 +77,10 @@ fn label_type_keyword(lt: LabelType) -> &'static str {
 fn stroke_default_node(width: f64) -> SExpr {
     node(
         "stroke",
-        vec![node("width", vec![atom(width)]), node("type", vec![raw("default")])],
+        vec![
+            node("width", vec![atom(width)]),
+            node("type", vec![raw("default")]),
+        ],
     )
 }
 
@@ -248,7 +250,9 @@ fn symbol_node(sym: &Symbol) -> SExpr {
     items.push(node("uuid", vec![atom(sym.uuid.to_string())]));
 
     let reference_node = match sym.ref_text.as_ref() {
-        Some(ref_text) => schematic_property_node("Reference", &sym.reference, ref_text, false, false, None),
+        Some(ref_text) => {
+            schematic_property_node("Reference", &sym.reference, ref_text, false, false, None)
+        }
         None => schematic_property_node(
             "Reference",
             &sym.reference,
@@ -261,7 +265,9 @@ fn symbol_node(sym: &Symbol) -> SExpr {
     items.push(reference_node);
 
     let value_node = match sym.val_text.as_ref() {
-        Some(val_text) => schematic_property_node("Value", &sym.value, val_text, false, false, None),
+        Some(val_text) => {
+            schematic_property_node("Value", &sym.value, val_text, false, false, None)
+        }
         None => schematic_property_node(
             "Value",
             &sym.value,
@@ -296,8 +302,10 @@ fn symbol_node(sym: &Symbol) -> SExpr {
         items.push(custom_property_node(property, sym.position));
     }
 
-    let custom_keys: std::collections::BTreeSet<&str> =
-        custom_properties.iter().map(|property| property.key.as_str()).collect();
+    let custom_keys: std::collections::BTreeSet<&str> = custom_properties
+        .iter()
+        .map(|property| property.key.as_str())
+        .collect();
     let mut field_keys: Vec<_> = sym
         .fields
         .keys()
@@ -324,7 +332,10 @@ fn symbol_node(sym: &Symbol) -> SExpr {
     for (pin_number, pin_uuid) in pin_entries {
         items.push(node(
             "pin",
-            vec![atom(pin_number), node("uuid", vec![atom(pin_uuid.to_string())])],
+            vec![
+                atom(pin_number),
+                node("uuid", vec![atom(pin_uuid.to_string())]),
+            ],
         ));
     }
 
@@ -693,7 +704,10 @@ fn wire_node(wire: &Wire) -> SExpr {
             node("pts", vec![xy_node(wire.start), xy_node(wire.end)]),
             node(
                 "stroke",
-                vec![node("width", vec![atom(0)]), node("type", vec![raw("default")])],
+                vec![
+                    node("width", vec![atom(0)]),
+                    node("type", vec![raw("default")]),
+                ],
             ),
             node("uuid", vec![atom(wire.uuid.to_string())]),
         ],
@@ -790,10 +804,7 @@ fn standard_sch_root_node(sheet: &SchematicSheet) -> SExpr {
 fn effects_with_justify_node(justify_tokens: &[&str]) -> SExpr {
     let mut extras = Vec::new();
     if !justify_tokens.is_empty() {
-        extras.push(node(
-            "justify",
-            justify_tokens.iter().copied().map(raw),
-        ));
+        extras.push(node("justify", justify_tokens.iter().copied().map(raw)));
     }
     effects_node(SCHEMATIC_TEXT_MM, None, false, false, extras)
 }
@@ -972,7 +983,11 @@ fn lib_symbol_node(lib: &LibSymbol) -> SExpr {
         items.push(lib_symbol_property_node("ki_keywords", &lib.keywords, 5));
     }
     if !lib.fp_filters.is_empty() {
-        items.push(lib_symbol_property_node("ki_fp_filters", &lib.fp_filters, 6));
+        items.push(lib_symbol_property_node(
+            "ki_fp_filters",
+            &lib.fp_filters,
+            6,
+        ));
     }
 
     let mut sub_keys: std::collections::BTreeSet<(u32, u32)> = std::collections::BTreeSet::new();
@@ -1295,11 +1310,11 @@ mod tests {
         write_label(&mut out, &label);
 
         assert!(out.contains("(justify right bottom)"));
-        }
+    }
 
-        #[test]
-        fn roundtrip_preserves_label_vertical_justify() {
-                let content = r#"(standard_sch
+    #[test]
+    fn roundtrip_preserves_label_vertical_justify() {
+        let content = r#"(standard_sch
     (version 20231120)
     (generator "eeschema")
     (uuid "00000000-0000-0000-0000-000000000001")
@@ -1311,13 +1326,13 @@ mod tests {
     )
 )"#;
 
-                let parsed = standard_parser::parse_schematic(content).expect("parse");
-                let rendered = write_schematic(&parsed);
-                let reparsed = standard_parser::parse_schematic(&rendered).expect("reparse");
+        let parsed = standard_parser::parse_schematic(content).expect("parse");
+        let rendered = write_schematic(&parsed);
+        let reparsed = standard_parser::parse_schematic(&rendered).expect("reparse");
 
-                assert_eq!(reparsed.labels.len(), 1);
-                assert_eq!(reparsed.labels[0].justify, HAlign::Right);
-                assert_eq!(reparsed.labels[0].justify_v, VAlign::Top);
+        assert_eq!(reparsed.labels.len(), 1);
+        assert_eq!(reparsed.labels[0].justify, HAlign::Right);
+        assert_eq!(reparsed.labels[0].justify_v, VAlign::Top);
     }
 
     #[test]
