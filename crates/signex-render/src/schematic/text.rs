@@ -190,9 +190,9 @@ pub fn draw_text_note(
     color: Color,
 ) {
     // Fixed 10 pt (1.8 mm) for all canvas text — matches Altium default.
-    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
+    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
     let _stored = note.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
@@ -265,9 +265,9 @@ pub fn draw_text_prop(
     }
 
     // All symbol ref/val text renders at 10 pt (1.8 mm).
-    let font_size_mm = crate::SCHEMATIC_TEXT_MM;
+    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
     let _stored = prop.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs() * crate::STROKE_FONT_SCALE;
+    let screen_font = transform.world_len(font_size_mm).abs();
     if screen_font < 1.0 {
         return;
     }
