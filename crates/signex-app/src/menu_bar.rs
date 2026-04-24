@@ -311,12 +311,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             separator(mc),
-            leaf_if(
-                "Print Preview...",
-                Some("Ctrl+P"),
-                MenuMessage::PrintPreview,
-                ctx.has_schematic,
-            ),
+            // Print Preview... previously lived here as a top-level
+            // leaf duplicating Export → PDF's shortcut. Consolidated
+            // under Export → PDF so there's one surface that opens the
+            // same preview flow. Ctrl+P (the former top-level shortcut)
+            // still fires `MenuMessage::PrintPreview` through the
+            // global key handler; only the menu row moves.
             export_menu,
             separator(mc),
             leaf_stub("Exit", None, mc),

@@ -843,10 +843,24 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .into()
     } else {
-        // Render the persistent tree — toggle state is preserved
-        TreeView::new(&ctx.project_tree, &ctx.tokens)
-            .view()
-            .map(PanelMsg::Tree)
+        // Render the persistent tree — toggle state is preserved.
+        // Wrap in a container with a small top inset so the tree's
+        // first row doesn't sit flush against the panel's tab-strip
+        // border (matches the breathing room Altium leaves below its
+        // panel tabs).
+        container(
+            TreeView::new(&ctx.project_tree, &ctx.tokens)
+                .view()
+                .map(PanelMsg::Tree),
+        )
+        .padding(iced::Padding {
+            top: 6.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        })
+        .width(Length::Fill)
+        .into()
     }
 }
 

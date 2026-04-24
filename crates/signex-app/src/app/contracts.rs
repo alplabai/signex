@@ -86,6 +86,24 @@ pub enum Message {
     TextEditSubmit,
     ShowContextMenu(f32, f32),
     CloseContextMenu,
+    /// Right-click landed on a specific tree node — open the per-node
+    /// context menu at `last_mouse_pos`. `path = None` → background menu.
+    ShowProjectTreeContextMenu(Option<Vec<usize>>),
+    /// Dismiss the Projects-panel tree context menu.
+    CloseProjectTreeContextMenu,
+    /// Menu item picked — route the action.
+    ProjectTreeAction(ProjectTreeAction),
+    /// Text input in the rename modal — updates the live buffer.
+    RenameBufferChanged(String),
+    /// Commit the rename: fs::rename + update in-memory sheet / tab
+    /// state. Errors surface in `RenameDialogState::error`.
+    RenameSubmit,
+    /// Dismiss the rename modal without applying.
+    CloseRenameDialog,
+    /// User picked Delete / Exclude in the Remove modal.
+    RemoveConfirm(RemoveChoice),
+    /// Dismiss the Remove modal without applying.
+    CloseRemoveDialog,
     /// Expand a click-to-open submenu inside the right-click context
     /// menu (Place or Align). Toggles off when the same kind is fired
     /// twice, otherwise replaces the current submenu.
@@ -436,6 +454,81 @@ pub struct TextEditState {
 pub struct ContextMenuState {
     pub x: f32,
     pub y: f32,
+}
+
+/// State for the Projects-panel tree-view right-click menu. The menu's
+/// action set is computed from `path` (leaf vs branch vs empty) at render
+/// time, so we only need to store the anchor coordinates + the clicked
+/// path (or `None` for the background menu).
+#[derive(Debug, Clone)]
+pub struct ProjectTreeContextMenuState {
+    pub x: f32,
+    pub y: f32,
+    /// `Some(path)` = right-click on a specific node; `None` = right-click
+    /// in empty tree area, offering only the generic actions.
+    pub path: Option<Vec<usize>>,
+}
+
+/// Concrete actions dispatched when the user picks a menu item in the
+/// Projects-panel tree-view context menu.
+#[derive(Debug, Clone)]
+pub enum ProjectTreeAction {
+    /// Open the file backed by this leaf in the current document slot.
+    OpenNode(Vec<usize>),
+    /// Expand (or collapse) a specific branch node.
+    ToggleNode(Vec<usize>),
+    /// Recursively expand every node in the tree.
+    ExpandAll,
+    /// Recursively collapse every node in the tree.
+    CollapseAll,
+    /// Re-scan the project and rebuild the tree from current state.
+    Refresh,
+    /// Close every open document tab without closing the project
+    /// itself. Fired from the project-root "Close Project Documents"
+    /// menu item.
+    CloseAllDocuments,
+    /// Reveal a file (leaf click) or the project directory (root
+    /// click) in the OS file manager. `None` = project root.
+    RevealInExplorer(Option<Vec<usize>>),
+    /// Fire the print preview flow — only surfaced on leaves that are
+    /// already the active tab.
+    PrintActive,
+    /// Open the sheet-rename modal for this leaf, preloaded with the
+    /// current filename.
+    OpenRenameDialog(Vec<usize>),
+    /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
+    /// for this leaf.
+    OpenRemoveDialog(Vec<usize>),
+}
+
+/// State for the rename modal. Tracks the target file, the live
+/// edit buffer, and the clicked tree path so we can rebuild the tree
+/// after a successful rename without rediscovering the project.
+#[derive(Debug, Clone)]
+pub struct RenameDialogState {
+    pub target_path: std::path::PathBuf,
+    pub tree_path: Vec<usize>,
+    pub buffer: String,
+    pub error: Option<String>,
+}
+
+/// State for the "Remove from Project" modal. `Delete` removes the file
+/// from disk; `Exclude` drops it from the session's sheet list but
+/// leaves the file in place.
+#[derive(Debug, Clone)]
+pub struct RemoveDialogState {
+    pub target_path: std::path::PathBuf,
+    pub tree_path: Vec<usize>,
+    pub display_name: String,
+}
+
+/// User choice from the Remove-from-Project modal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoveChoice {
+    /// Remove from project AND delete the file on disk.
+    DeleteFile,
+    /// Remove from project; leave the file in its folder.
+    ExcludeFromProject,
 }
 
 #[derive(Debug, Clone)]

@@ -193,6 +193,250 @@ impl Signex {
             .into()
     }
 
+    /// Build the Projects-panel tree-view right-click menu. The item
+    /// set is derived from the clicked node's role in the tree —
+    /// project root vs openable leaf vs container branch — so the
+    /// menu matches what Altium shows in each context. Empty-area
+    /// clicks are filtered out upstream (no menu shown), so `path`
+    /// is guaranteed `Some` whenever this function runs.
+    fn view_project_tree_context_menu(
+        &self,
+        ctx: &crate::app::ProjectTreeContextMenuState,
+    ) -> Element<'_, Message> {
+        use crate::app::ProjectTreeAction as A;
+        use signex_widgets::tree_view::{TreeIcon, get_node};
+
+        const SUBMENU_ARROW: &str = "›";
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(18);
+
+        let Some(path) = ctx.path.as_ref() else {
+            // Background (empty-area) clicks currently produce no menu —
+            // Altium shows a "New Project..." flow there which we do
+            // not ship yet. Return an empty placeholder container so
+            // the overlay layer above has something to render into.
+            return container(iced::widget::Space::new()).into();
+        };
+        let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
+            return container(iced::widget::Space::new()).into();
+        };
+
+        // Role detection:
+        // - Root: the single top-level node created in `build_project_tree`,
+        //   always at path `[0]`. Represents the whole project.
+        // - Openable leaf: file-backed tree entry the project-navigation
+        //   handler knows how to open (see `handle_dock_project_navigation_panel_message`).
+        // - Container branch: everything else with children (Source
+        //   Documents, Libraries, Settings folders).
+        let is_root = path.len() == 1;
+        let is_openable_leaf = matches!(
+            node.icon,
+            TreeIcon::Schematic
+                | TreeIcon::Pcb
+                | TreeIcon::SnxSchematic
+                | TreeIcon::SnxPcb
+                | TreeIcon::SnxProject
+                | TreeIcon::SnxFootprint
+                | TreeIcon::SnxSimulation
+                | TreeIcon::SnxLibrary
+                | TreeIcon::SnxSymbol
+        );
+        let is_container = !node.children.is_empty();
+        let has_schematic = panel_ctx.has_schematic;
+
+        if is_root {
+            // Project root — Altium's "right-click project" menu. Items
+            // we have not wired yet carry a "vX.Y" right-column badge
+            // so the user knows which release lands the feature rather
+            // than staring at a silently-greyed row.
+            let has_tabs = !self.document_state.tabs.is_empty();
+            let has_project_dir = self
+                .document_state
+                .project_path
+                .as_ref()
+                .and_then(|p| p.parent())
+                .is_some();
+
+            items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
+            items.push(self.ctx_menu_item_disabled(None, "Add New to Project", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(None, "Add Existing to Project...", Some("v0.9")));
+            items.push(self.save_menu_item(has_schematic));
+            items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
+            items.push(self.ctx_menu_sep());
+            items.push(if has_tabs {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Close Project Documents",
+                    "",
+                    Message::ProjectTreeAction(A::CloseAllDocuments),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Close Project Documents", None)
+            });
+            items.push(self.ctx_menu_item_disabled(None, "Close Project", Some("v0.9")));
+            items.push(if has_project_dir {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Explore",
+                    "",
+                    Message::ProjectTreeAction(A::RevealInExplorer(None)),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Explore", None)
+            });
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
+            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
+            items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Share...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
+        } else if is_openable_leaf {
+            // Sheet / PCB / library leaf — Altium's per-document menu.
+            // Rows match the Altium screenshot exactly: Open + Explore
+            // are wired; Print fires only when the clicked leaf is the
+            // active tab (the print-preview flow renders the active
+            // document). Other items are disabled stubs until the
+            // matching engine actions land.
+            let has_project_dir = self
+                .document_state
+                .project_path
+                .as_ref()
+                .and_then(|p| p.parent())
+                .is_some();
+            let is_active_tab = self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .and_then(|tab| tab.path.file_name())
+                .and_then(|f| f.to_str())
+                .zip(
+                    signex_widgets::tree_view::get_node(
+                        panel_ctx.project_tree.as_slice(),
+                        path,
+                    )
+                    .map(|n| n.label.as_str()),
+                )
+                .is_some_and(|(active_name, clicked_label)| active_name == clicked_label);
+
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Open",
+                "",
+                Message::ProjectTreeAction(A::OpenNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_sep());
+            items.push(if has_project_dir {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Explore",
+                    "",
+                    Message::ProjectTreeAction(A::RevealInExplorer(Some(path.clone()))),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Explore", None)
+            });
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Rename...",
+                "",
+                Message::ProjectTreeAction(A::OpenRenameDialog(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Remove from Project",
+                "",
+                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
+            ));
+            items.push(self.ctx_menu_sep());
+            // Print follows the Altium convention: it exports / prints
+            // the active document. Enabled whenever a schematic tab is
+            // open, regardless of which tree row was clicked — the
+            // previous label-match gate silently disabled the row when
+            // the tree label differed from the active tab's filename.
+            let _ = is_active_tab;
+            items.push(if has_schematic {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Print...",
+                    "",
+                    Message::ProjectTreeAction(A::PrintActive),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Print...", None)
+            });
+            items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
+            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+        } else if is_container {
+            // Source Documents / Libraries / Settings folders. These have
+            // no Altium direct analogue (Altium groups these under the
+            // project root); the minimum useful action is the tree-
+            // widget's own expand/collapse.
+            let label = if node.expanded { "Collapse" } else { "Expand" };
+            items.push(self.ctx_menu_item_msg(
+                None,
+                label,
+                "",
+                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Expand All",
+                "",
+                Message::ProjectTreeAction(A::ExpandAll),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Collapse All",
+                "",
+                Message::ProjectTreeAction(A::CollapseAll),
+            ));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
+        } else {
+            // Unknown role — give the user at least Refresh so a stale
+            // tree can be rebuilt without restarting.
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
+        }
+
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
+            .into()
+    }
+
+    /// Save menu row, active only when a schematic tab is open —
+    /// used by the project-tree context menu's project-root variant.
+    /// Altium's right-click menus do not surface keyboard shortcuts,
+    /// so the shortcut column is intentionally empty here even though
+    /// Ctrl+S still fires `MenuMessage::Save` globally.
+    fn save_menu_item<'a>(&self, enabled: bool) -> Element<'a, Message> {
+        if enabled {
+            self.ctx_menu_item_msg(
+                None,
+                "Save",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::Save),
+            )
+        } else {
+            self.ctx_menu_item_disabled(None, "Save", None)
+        }
+    }
+
     /// Build the 26-wide icon column for a context-menu row. Mirrors
     /// `dd_item_icon` in `active_bar.rs` so the icons in the right-
     /// click menu visually align with the dropdown menus in the bar.
@@ -385,12 +629,16 @@ impl Signex {
         .width(Length::Fill);
 
         if let Some(right_text) = right {
-            // Submenu/shortcut column. Bigger than the label so the arrow
-            // (›) is readable at a glance. Non-emoji glyph so Windows does
-            // not render it through the color emoji font.
+            // Submenu arrow (›) needs to render at 14 so the glyph is
+            // readable — it's a single thin Unicode chevron, not a
+            // bounding-box character. Every other right-column string
+            // (keyboard shortcuts, "coming in vX.Y" labels) renders at
+            // 10 to match the shortcut-column sizing used by enabled
+            // rows and avoid the Altium-breaking oversize look.
+            let size = if right_text == "›" { 14 } else { 10 };
             row = row.push(
                 iced::widget::text(right_text.to_string())
-                    .size(14)
+                    .size(size)
                     .color(text_secondary),
             );
         }
@@ -2261,7 +2509,11 @@ impl Signex {
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
-            ModalId::Preferences | ModalId::FindReplace | ModalId::CloseTabConfirm => {
+            ModalId::Preferences
+            | ModalId::FindReplace
+            | ModalId::CloseTabConfirm
+            | ModalId::RenameDialog
+            | ModalId::RemoveDialog => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -2426,12 +2678,15 @@ impl Signex {
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
+            || interaction.project_tree_context_menu.is_some()
             || interaction.active_bar_menu.is_some()
             || interaction.canvas.placement_paused
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
             || ui.close_tab_confirm.is_some()
+            || ui.rename_dialog.is_some()
+            || ui.remove_dialog.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
             || ui.erc_dialog_open
@@ -3067,6 +3322,45 @@ impl Signex {
             }
         }
 
+        // Projects-panel tree right-click menu. Rendered here (after the
+        // canvas context menu) so the canvas menu's dismiss layer does
+        // not cover this one — the two are mutually exclusive in
+        // practice since `ShowProjectTreeContextMenu` nulls out
+        // `context_menu` before opening.
+        if let Some(ref tree_ctx) = interaction.project_tree_context_menu {
+            let menu = self.view_project_tree_context_menu(tree_ctx);
+            // Conservative footprint: at most 6 rows × 22 px + 8 px
+            // padding. Width matches the canvas menu so the two look
+            // consistent.
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if tree_ctx.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                tree_ctx.x
+            };
+            let y = if tree_ctx.y + est_menu_h + edge_margin > win_h {
+                (tree_ctx.y - est_menu_h).max(0.0)
+            } else {
+                tree_ctx.y
+            };
+            layers.push(Self::dismiss_layer(Message::CloseProjectTreeContextMenu));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+        }
+
         if ui.panel_list_open {
             let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
             let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
@@ -3239,6 +3533,13 @@ impl Signex {
             layers.push(self.view_close_tab_confirm(&tab.title));
         }
 
+        if ui.rename_dialog.is_some() {
+            layers.push(self.view_rename_dialog());
+        }
+        if ui.remove_dialog.is_some() {
+            layers.push(self.view_remove_dialog());
+        }
+
         // Skip overlay rendering for any modal whose detached OS window
         // owns the view. Without this guard the user sees the modal in
         // both the main window and the popped-out window at the same
@@ -3261,96 +3562,5 @@ impl Signex {
         }
 
         layers
-    }
-
-    fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
-        use iced::widget::{Space, button, text};
-        use iced::{Background, Border, Color, Theme};
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-
-        let message = format!(
-            "'{}' has unsaved changes. Do you want to save before closing?",
-            tab_title,
-        );
-
-        let btn = |label: &'static str, msg: Message, primary: bool| -> Element<'_, Message> {
-            let label_color = if primary { Color::WHITE } else { text_c };
-            let bg = if primary {
-                Color::from_rgb(0.00, 0.47, 0.84)
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-            };
-            button(container(text(label.to_string()).size(12).color(label_color)).padding([5, 14]))
-                .on_press(msg)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 4.0.into(),
-                        color: border_c,
-                    },
-                    text_color: label_color,
-                    ..iced::widget::button::Style::default()
-                })
-                .into()
-        };
-
-        let dialog = container(
-            column![
-                container(text("Unsaved Changes").size(14).color(text_c))
-                    .padding([10, 14])
-                    .style(crate::styles::toolbar_strip(tokens)),
-                container(text(message).size(11).color(text_muted)).padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        btn(
-                            "Cancel",
-                            Message::CloseTabConfirm(CloseTabChoice::Cancel),
-                            false,
-                        ),
-                        btn(
-                            "Don't Save",
-                            Message::CloseTabConfirm(CloseTabChoice::DiscardAndClose),
-                            false,
-                        ),
-                        btn(
-                            "Save",
-                            Message::CloseTabConfirm(CloseTabChoice::SaveAndClose),
-                            true,
-                        ),
-                    ]
-                    .spacing(8),
-                )
-                .padding([10, 14]),
-            ]
-            .width(420),
-        )
-        .style(crate::styles::context_menu(tokens));
-
-        container(
-            column![
-                Space::new().height(Length::Fill),
-                row![
-                    Space::new().width(Length::Fill),
-                    dialog,
-                    Space::new().width(Length::Fill),
-                ],
-                Space::new().height(Length::Fill),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
-            ..container::Style::default()
-        })
-        .into()
     }
 }

@@ -27,7 +27,8 @@ mod view;
 
 pub use contracts::{
     CloseTabChoice, ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
-    StatusBarRequest, TextEditState,
+    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState,
+    RenameDialogState, StatusBarRequest, TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
 pub use state::{DocumentState, InteractionState, Signex, UiState};

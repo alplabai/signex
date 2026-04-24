@@ -95,6 +95,40 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
+            Message::ShowProjectTreeContextMenu(path) => {
+                // Close any canvas context menu so the two menus never
+                // overlap, then anchor the new menu to `last_mouse_pos`
+                // (iced 0.14 mouse_area does not forward cursor coords
+                // with on_right_press, so we use the last tracked pos
+                // from the global mouse-move subscription).
+                self.interaction_state.context_menu = None;
+                let (x, y) = self.interaction_state.last_mouse_pos;
+                self.interaction_state.project_tree_context_menu =
+                    Some(crate::app::ProjectTreeContextMenuState { x, y, path });
+                Task::none()
+            }
+            Message::CloseProjectTreeContextMenu => {
+                self.interaction_state.project_tree_context_menu = None;
+                Task::none()
+            }
+            Message::ProjectTreeAction(action) => self.handle_project_tree_action(action),
+            Message::RenameBufferChanged(s) => {
+                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
+                    d.buffer = s;
+                    d.error = None;
+                }
+                Task::none()
+            }
+            Message::RenameSubmit => self.handle_rename_submit(),
+            Message::CloseRenameDialog => {
+                self.ui_state.rename_dialog = None;
+                Task::none()
+            }
+            Message::RemoveConfirm(choice) => self.handle_remove_confirm(choice),
+            Message::CloseRemoveDialog => {
+                self.ui_state.remove_dialog = None;
+                Task::none()
+            }
             Message::OpenContextSubmenu(kind) => {
                 // Click-to-open. Toggles off if the same kind is fired
                 // again so the header row works as a collapse handle.

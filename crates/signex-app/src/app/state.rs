@@ -60,6 +60,11 @@ pub struct UiState {
     /// edits. While `Some`, an overlay modal blocks other interaction with
     /// Save / Discard / Cancel actions.
     pub close_tab_confirm: Option<usize>,
+    /// Rename-sheet modal state. Opened from the Projects-panel tree
+    /// context menu; `None` when the modal is closed.
+    pub rename_dialog: Option<crate::app::RenameDialogState>,
+    /// Remove-from-project modal state (Delete / Exclude / Cancel).
+    pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -241,6 +246,10 @@ pub enum ModalId {
     Preferences,
     FindReplace,
     CloseTabConfirm,
+    /// Rename-sheet dialog (Projects-panel leaf → Rename...).
+    RenameDialog,
+    /// Remove-from-project dialog (Projects-panel leaf → Remove from Project).
+    RemoveDialog,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
@@ -402,6 +411,11 @@ pub struct InteractionState {
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
+    /// Projects-panel tree-view right-click menu state. Separate from
+    /// `context_menu` (canvas-scoped) because the two menus have no
+    /// overlap in actions and the canvas menu depends on placement /
+    /// selection state that does not exist in the panel context.
+    pub project_tree_context_menu: Option<crate::app::ProjectTreeContextMenuState>,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.
