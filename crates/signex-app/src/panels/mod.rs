@@ -180,6 +180,9 @@ pub struct PanelContext {
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
     pub tokens: ThemeTokens,
+    /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
+    /// to the theme's accent (see `crate::icons`).
+    pub theme_id: signex_types::theme::ThemeId,
     // Live settings (synced from Signex on every update)
     pub unit: Unit,
     pub grid_visible: bool,
@@ -252,6 +255,14 @@ pub struct PanelContext {
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
     /// Selection filter state, shared with the Active Bar.
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// User-defined custom filter presets (capped at
+    /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Edited from
+    /// the Properties panel; surfaced as shortcut buttons in the Active
+    /// Bar's filter dropdown.
+    pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    /// Index of the active preset tab in the Properties-panel editor
+    /// (mirrored from `InteractionState`). Clamped on every sync.
+    pub active_custom_filter_tab: usize,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
     /// Vertical page margin zones.
@@ -565,6 +576,18 @@ pub enum PanelMsg {
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
     ToggleAllSelectionFilters,
+    /// Append a new empty custom filter preset (no-op when at the cap).
+    AddCustomFilterPreset,
+    /// Remove the preset at this index.
+    RemoveCustomFilterPreset(usize),
+    /// Rename the preset at this index.
+    RenameCustomFilterPreset(usize, String),
+    /// Toggle whether the preset at `idx` includes `filter`.
+    ToggleCustomFilterPresetMember(usize, crate::active_bar::SelectionFilter),
+    /// Snapshot the active selection filter set into the preset at `idx`.
+    CaptureCustomFilterPreset(usize),
+    /// Switch the Properties-panel preset editor to the given tab.
+    SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
     /// Page Options: choose paper size.
@@ -631,43 +654,16 @@ fn chevron_down() -> svg::Handle {
         .clone()
 }
 
-// Draft shape icons (16×16). Stylistic draft only — safe to replace
-// with final assets later by dropping equivalent files at the same
-// paths. Loaded once and cached via OnceLock.
-const SVG_SHAPE_LINE: &[u8] = include_bytes!("../../assets/icons/shape_line.svg");
-const SVG_SHAPE_RECT: &[u8] = include_bytes!("../../assets/icons/shape_rect.svg");
-const SVG_SHAPE_CIRCLE: &[u8] = include_bytes!("../../assets/icons/shape_circle.svg");
-const SVG_SHAPE_ARC: &[u8] = include_bytes!("../../assets/icons/shape_arc.svg");
-const SVG_SHAPE_POLYGON: &[u8] = include_bytes!("../../assets/icons/shape_polygon.svg");
-
-fn shape_icon_handle(elem_type: &str) -> Option<svg::Handle> {
-    static LINE: OnceLock<svg::Handle> = OnceLock::new();
-    static RECT: OnceLock<svg::Handle> = OnceLock::new();
-    static CIRCLE: OnceLock<svg::Handle> = OnceLock::new();
-    static ARC: OnceLock<svg::Handle> = OnceLock::new();
-    static POLY: OnceLock<svg::Handle> = OnceLock::new();
+fn shape_icon_handle(
+    elem_type: &str,
+    theme: signex_types::theme::ThemeId,
+) -> Option<svg::Handle> {
     match elem_type {
-        "Line" => Some(
-            LINE.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_LINE))
-                .clone(),
-        ),
-        "Rectangle" => Some(
-            RECT.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_RECT))
-                .clone(),
-        ),
-        "Circle" => Some(
-            CIRCLE
-                .get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_CIRCLE))
-                .clone(),
-        ),
-        "Arc" => Some(
-            ARC.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_ARC))
-                .clone(),
-        ),
-        "Polygon" => Some(
-            POLY.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_POLYGON))
-                .clone(),
-        ),
+        "Line" => Some(crate::icons::icon_shape_line(theme)),
+        "Rectangle" => Some(crate::icons::icon_shape_rect(theme)),
+        "Circle" => Some(crate::icons::icon_shape_circle(theme)),
+        "Arc" => Some(crate::icons::icon_shape_arc(theme)),
+        "Polygon" => Some(crate::icons::icon_shape_polygon(theme)),
         _ => None,
     }
 }
@@ -1988,6 +1984,7 @@ fn view_selected_element_properties<'a>(
                                 input_bdr,
                                 primary,
                                 muted,
+                                ctx.theme_id,
                             ))
                             .padding([4, 8]),
                         );
@@ -2251,7 +2248,12 @@ fn view_pre_placement<'a>(
                     c = c.push(form_label("Justification", muted));
                     c = c.push(
                         container(preplacement_justification_grid(
-                            justify_h, input_bg, input_bdr, primary, muted,
+                            justify_h,
+                            input_bg,
+                            input_bdr,
+                            primary,
+                            muted,
+                            ctx.theme_id,
                         ))
                         .padding([4, 8]),
                     );
@@ -2417,139 +2419,106 @@ fn view_properties_general<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Selection Filter (collapsible) — shares state with the Active Bar filter dropdown.
+    // Custom Selection Filters (collapsible) — tabbed editor for up to
+    // CUSTOM_FILTER_PRESET_LIMIT named presets that also surface as
+    // shortcut buttons in the Active Bar's filter dropdown.
     {
-        use crate::active_bar::SelectionFilter;
-        let filters = ctx.selection_filters.clone();
-        let all_on = filters.len() == SelectionFilter::ALL.len();
+        use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
+        let presets = ctx.custom_filter_presets.clone();
+        let active_tab = ctx
+            .active_custom_filter_tab
+            .min(presets.len().saturating_sub(1));
+        let muted_c = muted;
+        let primary_c = primary;
+        // Border colour for tabs and member chips — matches the Active
+        // Bar Filter dropdown's chip border treatment so the section
+        // reads as one cohesive piece.
+        let accent_c = crate::styles::ti(ctx.tokens.accent);
         col = col.push(collapsible_section(
             "prop_sel_filter",
-            "Selection Filter",
+            "Custom Selection Filters",
             &ctx.collapsed_sections,
             primary,
             border_c,
             move || {
-                // All-On/Off toggle row
-                let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-                let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-                let all_active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
-                let all_inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
-                let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-                let all_text_on = Color::WHITE;
-                let all_label = if all_on { "All - On" } else { "All - Off" };
-                let all_toggle = iced::widget::button(
-                    text(all_label.to_string())
-                        .size(10)
-                        .color(if all_on { all_text_on } else { all_text_off })
-                        .align_x(iced::alignment::Horizontal::Center),
-                )
-                .padding([3, 10])
-                .on_press(PanelMsg::ToggleAllSelectionFilters)
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => Background::Color(tag_hover),
-                        _ => Background::Color(if all_on {
-                            all_active_bg
-                        } else {
-                            all_inactive_bg
-                        }),
+                let mut c = Column::new().spacing(6).width(Length::Fill);
+                if presets.is_empty() {
+                    c = c.push(
+                        container(
+                            text("No presets yet. Click + to define one.")
+                                .size(11)
+                                .color(muted_c),
+                        )
+                        .padding([4, 8]),
+                    );
+                    c = c.push(
+                        container(
+                            iced::widget::button(text("+ Add Filter").size(11).color(primary_c))
+                                .padding([4, 10])
+                                .on_press(PanelMsg::AddCustomFilterPreset),
+                        )
+                        .padding([4, 8]),
+                    );
+                    return c;
+                }
+                // Tab strip: one tab per preset + a trailing "+" tab
+                // when room remains. Each tab is its own button — the
+                // active one gets the accent border, others a muted one.
+                let mut tabs = iced::widget::Row::new()
+                    .spacing(2)
+                    .align_y(iced::Alignment::Center);
+                for (idx, preset) in presets.iter().enumerate() {
+                    let label = if preset.name.trim().is_empty() {
+                        format!("Filter {}", idx + 1)
+                    } else {
+                        preset.name.clone()
                     };
-                    iced::widget::button::Style {
-                        background: Some(bg),
-                        border: Border {
-                            width: 1.0,
-                            radius: 12.0.into(),
-                            color: if all_on {
-                                all_active_border
-                            } else {
-                                all_inactive_border
-                            },
-                        },
-                        text_color: if all_on { all_text_on } else { all_text_off },
-                        ..iced::widget::button::Style::default()
-                    }
-                });
-                let mut c = Column::new().spacing(4).width(Length::Fill);
-                c = c.push(container(all_toggle).padding([4, 8]));
+                    tabs = tabs.push(custom_filter_tab(
+                        label,
+                        idx == active_tab,
+                        idx,
+                        tag_hover,
+                        accent_c,
+                    ));
+                }
+                if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
+                    tabs = tabs.push(
+                        iced::widget::button(text("+").size(12).color(primary_c))
+                            .padding([3, 10])
+                            .on_press(PanelMsg::AddCustomFilterPreset),
+                    );
+                }
+                c = c.push(container(tabs).padding([4, 8]));
+                // Active tab body — name input + chips + delete.
+                let preset = &presets[active_tab];
+                let included: std::collections::HashSet<SelectionFilter> =
+                    preset.filters.iter().copied().collect();
+                let header = row![
+                    iced::widget::text_input("Preset name", &preset.name)
+                        .size(11)
+                        .padding([3, 6])
+                        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
+                        .width(Length::Fill),
+                    iced::widget::button(text("Delete").size(10).color(primary_c))
+                        .padding([3, 8])
+                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center);
+                let mut wrap = Wrap::new().spacing(4.0).line_spacing(4.0);
+                for &f in SelectionFilter::ALL {
+                    wrap = wrap.push(preset_chip(
+                        f.label(),
+                        active_tab,
+                        f,
+                        included.contains(&f),
+                        tag_hover,
+                        accent_c,
+                    ));
+                }
                 c = c.push(
-                    container(
-                        Wrap::new()
-                            .spacing(4.0)
-                            .line_spacing(4.0)
-                            .push(tag_btn(
-                                "Components",
-                                SelectionFilter::Components,
-                                filters.contains(&SelectionFilter::Components),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Wires",
-                                SelectionFilter::Wires,
-                                filters.contains(&SelectionFilter::Wires),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Buses",
-                                SelectionFilter::Buses,
-                                filters.contains(&SelectionFilter::Buses),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Sheet Symbols",
-                                SelectionFilter::SheetSymbols,
-                                filters.contains(&SelectionFilter::SheetSymbols),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Sheet Entries",
-                                SelectionFilter::SheetEntries,
-                                filters.contains(&SelectionFilter::SheetEntries),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Net Labels",
-                                SelectionFilter::NetLabels,
-                                filters.contains(&SelectionFilter::NetLabels),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Parameters",
-                                SelectionFilter::Parameters,
-                                filters.contains(&SelectionFilter::Parameters),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Ports",
-                                SelectionFilter::Ports,
-                                filters.contains(&SelectionFilter::Ports),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Power Ports",
-                                SelectionFilter::PowerPorts,
-                                filters.contains(&SelectionFilter::PowerPorts),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Texts",
-                                SelectionFilter::Texts,
-                                filters.contains(&SelectionFilter::Texts),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Drawing Objects",
-                                SelectionFilter::DrawingObjects,
-                                filters.contains(&SelectionFilter::DrawingObjects),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Other",
-                                SelectionFilter::Other,
-                                filters.contains(&SelectionFilter::Other),
-                                tag_hover,
-                            )),
-                    )
-                    .padding([6, 8]),
+                    container(column![header, container(wrap).padding([4, 0])].spacing(4))
+                        .padding([6, 8]),
                 );
                 c
             },
@@ -3865,48 +3834,21 @@ fn justification_grid(
     input_bdr: Color,
     primary: Color,
     muted: Color,
+    theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    use std::sync::LazyLock;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
-    });
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
-    });
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
-    });
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
-    });
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
-    });
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
-    });
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
-    });
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
-    });
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
-    });
     let _ = muted;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+    let cell = |handle: iced::widget::svg::Handle,
                 active: bool,
                 on_press: PanelMsg|
      -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg((*handle).clone())
+        let svg_widget = iced::widget::svg(handle)
             .width(12.0)
             .height(12.0)
             .style(move |_: &Theme, _| iced::widget::svg::Style {
@@ -3991,21 +3933,53 @@ fn justification_grid(
 
     iced::widget::column![
         iced::widget::row![
-            cell(&ICON_TL, hl(LabelDir::Up), to_msg(LabelDir::Up)),
-            cell(&ICON_T, hl(LabelDir::Up), to_msg(LabelDir::Up)),
-            cell(&ICON_TR, hl(LabelDir::Up), to_msg(LabelDir::Up)),
+            cell(
+                crate::icons::icon_justify_tl(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
+            ),
+            cell(
+                crate::icons::icon_justify_t(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
+            ),
+            cell(
+                crate::icons::icon_justify_tr(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
+            ),
         ]
         .spacing(2),
         iced::widget::row![
-            cell(&ICON_L, hl(LabelDir::Left), to_msg(LabelDir::Left)),
-            cell(&ICON_C, false, to_msg(current_dir)),
-            cell(&ICON_R, hl(LabelDir::Right), to_msg(LabelDir::Right)),
+            cell(
+                crate::icons::icon_justify_l(theme),
+                hl(LabelDir::Left),
+                to_msg(LabelDir::Left)
+            ),
+            cell(crate::icons::icon_justify_c(theme), false, to_msg(current_dir)),
+            cell(
+                crate::icons::icon_justify_r(theme),
+                hl(LabelDir::Right),
+                to_msg(LabelDir::Right)
+            ),
         ]
         .spacing(2),
         iced::widget::row![
-            cell(&ICON_BL, hl(LabelDir::Down), to_msg(LabelDir::Down)),
-            cell(&ICON_B, hl(LabelDir::Down), to_msg(LabelDir::Down)),
-            cell(&ICON_BR, hl(LabelDir::Down), to_msg(LabelDir::Down)),
+            cell(
+                crate::icons::icon_justify_bl(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
+            ),
+            cell(
+                crate::icons::icon_justify_b(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
+            ),
+            cell(
+                crate::icons::icon_justify_br(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
+            ),
         ]
         .spacing(2),
     ]
@@ -4022,47 +3996,20 @@ fn preplacement_justification_grid(
     input_bdr: Color,
     primary: Color,
     muted: Color,
+    theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    use std::sync::LazyLock;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
-    });
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
-    });
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
-    });
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
-    });
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
-    });
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
-    });
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
-    });
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
-    });
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
-    });
     let _ = muted;
 
     const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+    let cell = |handle: iced::widget::svg::Handle,
                 active: bool,
                 on_press: PanelMsg|
      -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg((*handle).clone())
+        let svg_widget = iced::widget::svg(handle)
             .width(12.0)
             .height(12.0)
             .style(move |_: &Theme, _| iced::widget::svg::Style {
@@ -4104,17 +4051,17 @@ fn preplacement_justification_grid(
     iced::widget::column![
         iced::widget::row![
             cell(
-                &ICON_TL,
+                crate::icons::icon_justify_tl(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_T,
+                crate::icons::icon_justify_t(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_TR,
+                crate::icons::icon_justify_tr(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4122,17 +4069,17 @@ fn preplacement_justification_grid(
         .spacing(2),
         iced::widget::row![
             cell(
-                &ICON_L,
+                crate::icons::icon_justify_l(theme),
                 hl_mid(HAlign::Left),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_C,
+                crate::icons::icon_justify_c(theme),
                 hl_mid(HAlign::Center),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_R,
+                crate::icons::icon_justify_r(theme),
                 hl_mid(HAlign::Right),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4140,17 +4087,17 @@ fn preplacement_justification_grid(
         .spacing(2),
         iced::widget::row![
             cell(
-                &ICON_BL,
+                crate::icons::icon_justify_bl(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_B,
+                crate::icons::icon_justify_b(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_BR,
+                crate::icons::icon_justify_br(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4161,7 +4108,91 @@ fn preplacement_justification_grid(
     .into()
 }
 
+/// Tab button in the Custom Selection Filters tab strip. Active tab
+/// gets a filled background; both states use the theme accent for the
+/// border so the section reads as one piece with the chips and the
+/// Active Bar dropdown.
+fn custom_filter_tab(
+    label: String,
+    active: bool,
+    idx: usize,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
+    iced::widget::button(
+        text(label)
+            .size(11)
+            .color(if active { text_on } else { text_off }),
+    )
+    .padding([3, 10])
+    .on_press(PanelMsg::SelectCustomFilterTab(idx))
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
+            _ if active => Background::Color(active_bg),
+            _ => Background::Color(Color::TRANSPARENT),
+        };
+        iced::widget::button::Style {
+            background: Some(bg),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+            },
+            text_color: if active { text_on } else { text_off },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
+/// Member chip for a custom-filter preset card (Properties panel).
+/// Border colour matches the Active Bar Filter dropdown chips (theme
+/// accent), so chip styling stays consistent across both surfaces.
+fn preset_chip(
+    label: &str,
+    preset_idx: usize,
+    filter: crate::active_bar::SelectionFilter,
+    enabled: bool,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    iced::widget::button(
+        text(label.to_string())
+            .size(10)
+            .color(if enabled { text_on } else { text_off })
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding([3, 8])
+    .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
+            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
+        };
+        iced::widget::button::Style {
+            background: Some(bg),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+            },
+            text_color: if enabled { text_on } else { text_off },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
 /// Selection filter tag button — Altium pill with active/inactive state.
+#[allow(dead_code)]
 fn tag_btn(
     label: &str,
     filter: crate::active_bar::SelectionFilter,
@@ -4591,7 +4622,8 @@ fn view_drawing_properties<'a>(
     // Header: shape icon + type label. Draft SVGs live at
     // assets/icons/shape_*.svg and can be swapped out for final art
     // without touching the panel code.
-    let header_row: Element<'a, PanelMsg> = if let Some(icon) = shape_icon_handle(&elem_type) {
+    let header_row: Element<'a, PanelMsg> =
+        if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
         row![
             iced::widget::svg(icon).width(16).height(16),
             text(elem_type.clone())
