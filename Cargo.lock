@@ -3668,6 +3668,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-bom"
+version = "0.7.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "signex-engine"
 version = "0.7.0"
 dependencies = [
@@ -3709,6 +3716,7 @@ dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
  "serde",
+ "signex-bom",
  "signex-types",
  "thiserror 2.0.18",
  "tiny-skia",

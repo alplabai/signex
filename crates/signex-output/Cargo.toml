@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+signex-bom = { path = "../signex-bom" }
 signex-types = { path = "../signex-types" }
 kicad-parser = { path = "../kicad-parser" }
 kicad-writer = { path = "../kicad-writer" }

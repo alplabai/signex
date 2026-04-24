@@ -180,14 +180,26 @@ fn custom_property_node(property: &SchematicProperty, fallback_pos: Point) -> SE
         .clone()
         .unwrap_or_else(|| default_symbol_property_text(fallback_pos, true));
 
-    schematic_property_node(
+    let mut property_node = schematic_property_node(
         &property.key,
         &property.value,
         &text,
         property.show_name.unwrap_or(false),
         property.do_not_autoplace.unwrap_or(false),
         property.id,
-    )
+    );
+
+    if !property.variant_overrides.is_empty() {
+        let mut variants = Vec::new();
+        for (variant_name, variant_value) in &property.variant_overrides {
+            variants.push(node("variant", vec![atom(variant_name), atom(variant_value)]));
+        }
+        if let SExpr::List(items) = &mut property_node {
+            items.push(node("variants", variants));
+        }
+    }
+
+    property_node
 }
 
 fn symbol_instances_node(instances: &[SymbolInstance]) -> Option<SExpr> {
@@ -322,6 +334,7 @@ fn symbol_node(sym: &Symbol) -> SExpr {
                 text: None,
                 show_name: Some(false),
                 do_not_autoplace: Some(false),
+                variant_overrides: Default::default(),
             },
             sym.position,
         ));
@@ -1092,6 +1105,7 @@ mod tests {
             }),
             show_name: Some(true),
             do_not_autoplace: Some(true),
+            variant_overrides: Default::default(),
         };
 
         let out = render(custom_property_node(&property, Point { x: 0.0, y: 0.0 }), 4);
@@ -1115,6 +1129,51 @@ mod tests {
             Some("yes")
         );
         assert!(parsed.find("hide").is_some());
+    }
+
+    #[test]
+    fn writes_custom_property_variant_overrides() {
+        let mut property = SchematicProperty {
+            key: "Fitted".to_string(),
+            value: "yes".to_string(),
+            id: None,
+            text: Some(TextProp {
+                position: Point { x: 100.0, y: 50.0 },
+                rotation: 0.0,
+                font_size: 1.27,
+                justify_h: HAlign::Center,
+                justify_v: VAlign::Center,
+                hidden: true,
+            }),
+            show_name: Some(false),
+            do_not_autoplace: Some(false),
+            variant_overrides: Default::default(),
+        };
+        property
+            .variant_overrides
+            .insert("DEFAULT".to_string(), "yes".to_string());
+        property
+            .variant_overrides
+            .insert("LITE".to_string(), "no".to_string());
+
+        let out = render(custom_property_node(&property, Point { x: 0.0, y: 0.0 }), 4);
+        let parsed = kicad_parser::sexpr::parse(out.trim()).unwrap();
+
+        let variants = parsed.find("variants").unwrap();
+        let variant_nodes = variants.find_all("variant");
+        assert_eq!(variant_nodes.len(), 2);
+
+        let default = variant_nodes
+            .iter()
+            .find(|node| node.first_arg() == Some("DEFAULT"))
+            .unwrap();
+        let lite = variant_nodes
+            .iter()
+            .find(|node| node.first_arg() == Some("LITE"))
+            .unwrap();
+
+        assert_eq!(default.arg(1), Some("yes"));
+        assert_eq!(lite.arg(1), Some("no"));
     }
 
     #[test]
