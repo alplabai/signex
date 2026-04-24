@@ -73,6 +73,8 @@ impl Signex {
             | Message::PrintPreviewSetPageRangeCurrent
             | Message::PrintPreviewSetPageRangeSpecific
             | Message::PrintPreviewSetSpecificPageInput(_)
+            | Message::PrintPreviewSetFitToPage(_)
+            | Message::PrintPreviewSetIncludeTitleBlock(_)
             | Message::PrintPreviewExport
             | Message::PrintPreviewClose
             | Message::DismissExportError => self.dispatch_document_message(message),
