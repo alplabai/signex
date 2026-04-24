@@ -784,15 +784,21 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 
     if !ctx.sheets.is_empty() {
         for sheet in &ctx.sheets {
-            source_docs.push(TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic));
+            // Pick the icon from the file extension so `.snx***`
+            // files get their full-colour file-type icons while
+            // `.kicad_*` files keep the existing glyph treatment.
+            let icon = TreeIcon::for_path(&sheet.filename);
+            source_docs.push(TreeNode::leaf(sheet.filename.clone(), icon));
         }
     } else if let Some(file) = &ctx.project_file {
-        source_docs.push(TreeNode::leaf(file.clone(), TreeIcon::Schematic));
+        let icon = TreeIcon::for_path(file);
+        source_docs.push(TreeNode::leaf(file.clone(), icon));
     }
 
     // PCB file
     if let Some(pcb) = &ctx.pcb_file {
-        source_docs.push(TreeNode::leaf(pcb.clone(), TreeIcon::Pcb));
+        let icon = TreeIcon::for_path(pcb);
+        source_docs.push(TreeNode::leaf(pcb.clone(), icon));
     }
 
     // Libraries
