@@ -1,12 +1,12 @@
-use signex_types::property::PcbProperty;
 use signex_types::pcb::{
-    BoardGraphic, BoardText, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadShape, PadType,
-    PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
-    PCB_DEFAULT_TEXT_SIZE_MM, PCB_FP_TEXT_OFFSET_MM, PCB_TEXT_THICKNESS_MM,
+    BoardGraphic, BoardText, Footprint, FpGraphic, LayerDef, NetDef, PCB_DEFAULT_TEXT_SIZE_MM,
+    PCB_FP_TEXT_OFFSET_MM, PCB_TEXT_THICKNESS_MM, Pad, PadShape, PadType, PcbBoard, PcbSetup,
+    Point, Segment, Via, ViaType, Zone,
 };
+use signex_types::property::PcbProperty;
 
 use crate::sexpr_render::{
-    atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr, SExpr,
+    SExpr, atom, effects_node, hide_yes_node, node, raw, write_rendered_sexpr,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,15 +86,21 @@ fn layer_node(l: &str) -> SExpr {
 
 /// `(stroke (width W) (type default))`.
 fn stroke_node(width: f64) -> SExpr {
-    node("stroke", [
-        node("width", [coord(width)]),
-        node("type", [raw("default")]),
-    ])
+    node(
+        "stroke",
+        [
+            node("width", [coord(width)]),
+            node("type", [raw("default")]),
+        ],
+    )
 }
 
 /// `(pts (xy X Y) ...)`.
 fn pts_node(points: &[Point]) -> SExpr {
-    node("pts", points.iter().map(|p| node("xy", [coord(p.x), coord(p.y)])))
+    node(
+        "pts",
+        points.iter().map(|p| node("xy", [coord(p.x), coord(p.y)])),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +108,13 @@ fn pts_node(points: &[Point]) -> SExpr {
 // ---------------------------------------------------------------------------
 
 fn pcb_text_effects_node(font_size: f64) -> SExpr {
-    effects_node(font_size, Some(PCB_TEXT_THICKNESS_MM), false, false, Vec::new())
+    effects_node(
+        font_size,
+        Some(PCB_TEXT_THICKNESS_MM),
+        false,
+        false,
+        Vec::new(),
+    )
 }
 
 fn pcb_property_node(property: &PcbProperty) -> SExpr {
@@ -143,15 +155,22 @@ fn board_text_node(text: &BoardText) -> SExpr {
 // ---------------------------------------------------------------------------
 
 fn build_general(board: &PcbBoard) -> SExpr {
-    node("general", [
-        node("thickness", [coord(board.thickness)]),
-        uuid_node(&board.uuid),
-    ])
+    node(
+        "general",
+        [
+            node("thickness", [coord(board.thickness)]),
+            uuid_node(&board.uuid),
+        ],
+    )
 }
 
 fn build_layer(l: &LayerDef) -> SExpr {
     // (ID "NAME" TYPE) — ID and TYPE are unquoted raw tokens, NAME is quoted.
-    SExpr::List(vec![raw(l.id.to_string()), atom(&l.name), raw(&l.layer_type)])
+    SExpr::List(vec![
+        raw(l.id.to_string()),
+        atom(&l.name),
+        raw(&l.layer_type),
+    ])
 }
 
 fn build_layers(layers: &[LayerDef]) -> SExpr {
@@ -159,41 +178,57 @@ fn build_layers(layers: &[LayerDef]) -> SExpr {
 }
 
 fn build_setup(_setup: &PcbSetup) -> SExpr {
-    node("setup", [
-        node("pad_to_mask_clearance", [raw("0")]),
-        node("pcbplotparams", [
-            node("layerselection", [raw("0x00010fc_ffffffff")]),
-            node("plot_on_all_layers_selection", [raw("0x0000000_00000000")]),
-        ]),
-    ])
+    node(
+        "setup",
+        [
+            node("pad_to_mask_clearance", [raw("0")]),
+            node(
+                "pcbplotparams",
+                [
+                    node("layerselection", [raw("0x00010fc_ffffffff")]),
+                    node("plot_on_all_layers_selection", [raw("0x0000000_00000000")]),
+                ],
+            ),
+        ],
+    )
 }
 
 fn build_net_class(setup: &PcbSetup) -> SExpr {
-    node("net_class", [
-        atom("Default"),
-        atom(""),
-        node("clearance", [coord(setup.clearance)]),
-        node("trace_width", [coord(setup.trace_width)]),
-        node("via_dia", [coord(setup.via_diameter)]),
-        node("via_drill", [coord(setup.via_drill)]),
-        node("uvia_dia", [coord(setup.via_min_diameter)]),
-        node("uvia_drill", [coord(setup.via_min_drill)]),
-    ])
+    node(
+        "net_class",
+        [
+            atom("Default"),
+            atom(""),
+            node("clearance", [coord(setup.clearance)]),
+            node("trace_width", [coord(setup.trace_width)]),
+            node("via_dia", [coord(setup.via_diameter)]),
+            node("via_drill", [coord(setup.via_drill)]),
+            node("uvia_dia", [coord(setup.via_min_diameter)]),
+            node("uvia_drill", [coord(setup.via_min_drill)]),
+        ],
+    )
 }
 
 fn build_net(net: &NetDef) -> SExpr {
-    SExpr::List(vec![raw("net"), raw(net.number.to_string()), atom(&net.name)])
+    SExpr::List(vec![
+        raw("net"),
+        raw(net.number.to_string()),
+        atom(&net.name),
+    ])
 }
 
 fn build_segment(s: &Segment) -> SExpr {
-    node("segment", [
-        node("start", [coord(s.start.x), coord(s.start.y)]),
-        node("end", [coord(s.end.x), coord(s.end.y)]),
-        node("width", [coord(s.width)]),
-        layer_node(&s.layer),
-        node("net", [raw(s.net.to_string())]),
-        uuid_node(s.uuid),
-    ])
+    node(
+        "segment",
+        [
+            node("start", [coord(s.start.x), coord(s.start.y)]),
+            node("end", [coord(s.end.x), coord(s.end.y)]),
+            node("width", [coord(s.width)]),
+            layer_node(&s.layer),
+            node("net", [raw(s.net.to_string())]),
+            uuid_node(s.uuid),
+        ],
+    )
 }
 
 fn build_via(v: &Via) -> SExpr {
@@ -241,39 +276,51 @@ fn build_board_graphic(g: &BoardGraphic) -> Option<SExpr> {
     match g.graphic_type.as_str() {
         "line" => {
             let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
-            Some(node("gr_line", [
-                node("start", [coord(s.x), coord(s.y)]),
-                node("end", [coord(e.x), coord(e.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "gr_line",
+                [
+                    node("start", [coord(s.x), coord(s.y)]),
+                    node("end", [coord(e.x), coord(e.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         "rect" => {
             let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
-            Some(node("gr_rect", [
-                node("start", [coord(s.x), coord(s.y)]),
-                node("end", [coord(e.x), coord(e.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "gr_rect",
+                [
+                    node("start", [coord(s.x), coord(s.y)]),
+                    node("end", [coord(e.x), coord(e.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         "circle" => {
             let c = g.center.as_ref()?;
-            Some(node("gr_circle", [
-                node("center", [coord(c.x), coord(c.y)]),
-                node("end", [coord(c.x + g.radius), coord(c.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "gr_circle",
+                [
+                    node("center", [coord(c.x), coord(c.y)]),
+                    node("end", [coord(c.x + g.radius), coord(c.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         "arc" => {
             let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
-            Some(node("gr_arc", [
-                node("start", [coord(s.x), coord(s.y)]),
-                node("end", [coord(e.x), coord(e.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "gr_arc",
+                [
+                    node("start", [coord(s.x), coord(s.y)]),
+                    node("end", [coord(e.x), coord(e.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         _ => None,
     }
@@ -283,12 +330,15 @@ fn build_fp_graphic(g: &FpGraphic) -> Option<SExpr> {
     match g.graphic_type.as_str() {
         "line" => {
             let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
-            Some(node("fp_line", [
-                node("start", [coord(s.x), coord(s.y)]),
-                node("end", [coord(e.x), coord(e.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "fp_line",
+                [
+                    node("start", [coord(s.x), coord(s.y)]),
+                    node("end", [coord(e.x), coord(e.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         "rect" => {
             let (s, e) = (g.start.as_ref()?, g.end.as_ref()?);
@@ -318,13 +368,16 @@ fn build_fp_graphic(g: &FpGraphic) -> Option<SExpr> {
         }
         "arc" => {
             let (s, m, e) = (g.start.as_ref()?, g.mid.as_ref()?, g.end.as_ref()?);
-            Some(node("fp_arc", [
-                node("start", [coord(s.x), coord(s.y)]),
-                node("mid", [coord(m.x), coord(m.y)]),
-                node("end", [coord(e.x), coord(e.y)]),
-                stroke_node(g.width),
-                layer_node(&g.layer),
-            ]))
+            Some(node(
+                "fp_arc",
+                [
+                    node("start", [coord(s.x), coord(s.y)]),
+                    node("mid", [coord(m.x), coord(m.y)]),
+                    node("end", [coord(e.x), coord(e.y)]),
+                    stroke_node(g.width),
+                    layer_node(&g.layer),
+                ],
+            ))
         }
         "poly" => {
             if g.points.len() < 2 {
@@ -344,13 +397,16 @@ fn build_fp_graphic(g: &FpGraphic) -> Option<SExpr> {
             } else {
                 PCB_DEFAULT_TEXT_SIZE_MM
             };
-            Some(node("fp_text", [
-                raw("user"),
-                atom(&g.text),
-                at_coord(pos.x, pos.y, (g.rotation != 0.0).then_some(g.rotation)),
-                layer_node(&g.layer),
-                pcb_text_effects_node(fs),
-            ]))
+            Some(node(
+                "fp_text",
+                [
+                    raw("user"),
+                    atom(&g.text),
+                    at_coord(pos.x, pos.y, (g.rotation != 0.0).then_some(g.rotation)),
+                    layer_node(&g.layer),
+                    pcb_text_effects_node(fs),
+                ],
+            ))
         }
         _ => None,
     }
@@ -424,7 +480,10 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
+                position: Some(Point {
+                    x: 0.0,
+                    y: -PCB_FP_TEXT_OFFSET_MM,
+                }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
                 font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
@@ -433,7 +492,10 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Value".to_string(),
                 value: fp.value.clone(),
-                position: Some(Point { x: 0.0, y: PCB_FP_TEXT_OFFSET_MM }),
+                position: Some(Point {
+                    x: 0.0,
+                    y: PCB_FP_TEXT_OFFSET_MM,
+                }),
                 rotation: 0.0,
                 layer: Some("F.Fab".to_string()),
                 font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
@@ -457,7 +519,10 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
             PcbProperty {
                 key: "Reference".to_string(),
                 value: fp.reference.clone(),
-                position: Some(Point { x: 0.0, y: -PCB_FP_TEXT_OFFSET_MM }),
+                position: Some(Point {
+                    x: 0.0,
+                    y: -PCB_FP_TEXT_OFFSET_MM,
+                }),
                 rotation: 0.0,
                 layer: Some("F.SilkS".to_string()),
                 font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
@@ -469,7 +534,10 @@ fn effective_footprint_properties(fp: &Footprint) -> Vec<PcbProperty> {
         properties.push(PcbProperty {
             key: "Value".to_string(),
             value: fp.value.clone(),
-            position: Some(Point { x: 0.0, y: PCB_FP_TEXT_OFFSET_MM }),
+            position: Some(Point {
+                x: 0.0,
+                y: PCB_FP_TEXT_OFFSET_MM,
+            }),
             rotation: 0.0,
             layer: Some("F.Fab".to_string()),
             font_size: Some(PCB_DEFAULT_TEXT_SIZE_MM),
@@ -487,28 +555,25 @@ fn is_property_backed_text_graphic(g: &FpGraphic, properties: &[PcbProperty]) ->
     let Some(position) = g.position else {
         return false;
     };
-    properties
-        .iter()
-        .filter(|p| !p.hidden)
-        .any(|property| {
-            let Some(property_pos) = property.position else {
-                return false;
-            };
-            let Some(property_layer) = property.layer.as_deref() else {
-                return false;
-            };
-            let display_text = match property.key.as_str() {
-                "Reference" => "%R",
-                "Value" => "%V",
-                _ => property.value.as_str(),
-            };
-            let property_font_size = property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
-            g.layer == property_layer
-                && g.text == display_text
-                && g.rotation == property.rotation
-                && g.font_size == property_font_size
-                && position == property_pos
-        })
+    properties.iter().filter(|p| !p.hidden).any(|property| {
+        let Some(property_pos) = property.position else {
+            return false;
+        };
+        let Some(property_layer) = property.layer.as_deref() else {
+            return false;
+        };
+        let display_text = match property.key.as_str() {
+            "Reference" => "%R",
+            "Value" => "%V",
+            _ => property.value.as_str(),
+        };
+        let property_font_size = property.font_size.unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
+        g.layer == property_layer
+            && g.text == display_text
+            && g.rotation == property.rotation
+            && g.font_size == property_font_size
+            && position == property_pos
+    })
 }
 
 // ---------------------------------------------------------------------------

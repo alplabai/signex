@@ -11,13 +11,13 @@ mod transform;
 use std::path::{Path, PathBuf};
 
 pub use command::{
-    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort,
-    SymbolTextField, TextTarget,
+    AnnotateMode, Command, CommandKind, MirrorAxis, ReorderDirection, SheetPort, SymbolTextField,
+    TextTarget,
 };
 pub use error::EngineError;
+use history::HistoryEntry;
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use selection::{ClipboardSelection, SelectionAnchor, SelectionDetails};
-use history::HistoryEntry;
 use signex_types::schematic::SchematicSheet;
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
@@ -977,8 +977,8 @@ impl Engine {
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        ChildSheet, FillType, Label, LabelType, Point, SelectedItem, SelectedKind, SheetPin,
-        GRID_MM,
+        ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem, SelectedKind,
+        SheetPin,
     };
 
     fn test_sheet() -> SchematicSheet {
@@ -1093,9 +1093,18 @@ mod tests {
 
         assert!(result.changed);
         let pins = &engine.document().child_sheets[0].pins;
-        assert!(pins.iter().any(|pin| pin.name == "MANUAL" && !pin.auto_generated));
-        assert!(pins.iter().any(|pin| pin.name == "SDA" && pin.auto_generated));
-        assert!(pins.iter().any(|pin| pin.name == "SCL" && pin.auto_generated));
+        assert!(
+            pins.iter()
+                .any(|pin| pin.name == "MANUAL" && !pin.auto_generated)
+        );
+        assert!(
+            pins.iter()
+                .any(|pin| pin.name == "SDA" && pin.auto_generated)
+        );
+        assert!(
+            pins.iter()
+                .any(|pin| pin.name == "SCL" && pin.auto_generated)
+        );
         assert!(!pins.iter().any(|pin| pin.name == "OLD_AUTO"));
     }
 

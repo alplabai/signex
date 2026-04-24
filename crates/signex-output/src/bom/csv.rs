@@ -27,9 +27,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
                 BomColumn::Value => row.value.clone(),
                 BomColumn::Footprint => row.footprint.clone(),
                 BomColumn::Description => row.description.clone(),
-                BomColumn::Custom(name) => {
-                    row.custom.get(name).cloned().unwrap_or_default()
-                }
+                BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
             };
             fields.push(value);
         }

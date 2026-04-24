@@ -194,8 +194,10 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
             }
 
             let root = find(&mut parent, node);
-            let unify_text = if matches!(label.label_type, LabelType::Global | LabelType::Hierarchical)
-                && !label.text.is_empty()
+            let unify_text = if matches!(
+                label.label_type,
+                LabelType::Global | LabelType::Hierarchical
+            ) && !label.text.is_empty()
             {
                 Some(label.text.clone())
             } else {
@@ -264,7 +266,10 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
 
     let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
     for root in root_pins.keys().copied() {
-        let named = root_name.get(&root).map(|(_, n)| n.clone()).unwrap_or_default();
+        let named = root_name
+            .get(&root)
+            .map(|(_, n)| n.clone())
+            .unwrap_or_default();
         if !named.is_empty() {
             resolved_root_name.insert(root, named);
             continue;

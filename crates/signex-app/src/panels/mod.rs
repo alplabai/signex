@@ -654,10 +654,7 @@ fn chevron_down() -> svg::Handle {
         .clone()
 }
 
-fn shape_icon_handle(
-    elem_type: &str,
-    theme: signex_types::theme::ThemeId,
-) -> Option<svg::Handle> {
+fn shape_icon_handle(elem_type: &str, theme: signex_types::theme::ThemeId) -> Option<svg::Handle> {
     match elem_type {
         "Line" => Some(crate::icons::icon_shape_line(theme)),
         "Rectangle" => Some(crate::icons::icon_shape_rect(theme)),
@@ -3857,12 +3854,13 @@ fn justification_grid(
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg(handle)
-            .width(12.0)
-            .height(12.0)
-            .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: Some(if active { fg_active } else { fg_inactive }),
-            });
+        let svg_widget =
+            iced::widget::svg(handle)
+                .width(12.0)
+                .height(12.0)
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: Some(if active { fg_active } else { fg_inactive }),
+                });
         iced::widget::button(
             container(svg_widget)
                 .width(Length::Fill)
@@ -3965,7 +3963,11 @@ fn justification_grid(
                 hl(LabelDir::Left),
                 to_msg(LabelDir::Left)
             ),
-            cell(crate::icons::icon_justify_c(theme), false, to_msg(current_dir)),
+            cell(
+                crate::icons::icon_justify_c(theme),
+                false,
+                to_msg(current_dir)
+            ),
             cell(
                 crate::icons::icon_justify_r(theme),
                 hl(LabelDir::Right),
@@ -4018,12 +4020,13 @@ fn preplacement_justification_grid(
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg(handle)
-            .width(12.0)
-            .height(12.0)
-            .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: Some(if active { fg_active } else { fg_inactive }),
-            });
+        let svg_widget =
+            iced::widget::svg(handle)
+                .width(12.0)
+                .height(12.0)
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: Some(if active { fg_active } else { fg_inactive }),
+                });
         iced::widget::button(
             container(svg_widget)
                 .width(Length::Fill)
@@ -4437,13 +4440,15 @@ fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .width(Length::Fill)
             .padding([2, 6])
             .on_press(PanelMsg::FocusErcViolation(v.global_index))
-            .style(move |_theme: &Theme, status: iced::widget::button::Status| {
-                let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
-                iced::widget::button::Style {
-                    background: row_bg.clone().or(base.background),
-                    ..base
-                }
-            }),
+            .style(
+                move |_theme: &Theme, status: iced::widget::button::Status| {
+                    let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
+                    iced::widget::button::Style {
+                        background: row_bg.clone().or(base.background),
+                        ..base
+                    }
+                },
+            ),
         );
     }
 
@@ -4633,21 +4638,21 @@ fn view_drawing_properties<'a>(
     // without touching the panel code.
     let header_row: Element<'a, PanelMsg> =
         if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
-        row![
-            iced::widget::svg(icon).width(16).height(16),
+            row![
+                iced::widget::svg(icon).width(16).height(16),
+                text(elem_type.clone())
+                    .size(11)
+                    .color(Color::from_rgb(0.90, 0.90, 0.92)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
             text(elem_type.clone())
                 .size(11)
-                .color(Color::from_rgb(0.90, 0.90, 0.92)),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center)
-        .into()
-    } else {
-        text(elem_type.clone())
-            .size(11)
-            .color(Color::from_rgb(0.90, 0.90, 0.92))
-            .into()
-    };
+                .color(Color::from_rgb(0.90, 0.90, 0.92))
+                .into()
+        };
     col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
     col = col.push(thin_sep(border_c));
 

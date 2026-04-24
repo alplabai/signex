@@ -233,7 +233,9 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.refresh_active_erc_from_cache(active_path.as_ref());
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas.
@@ -252,7 +254,9 @@ impl Signex {
         // selection change must invalidate the cached content layer to
         // reflect the new focus set.
         if self.ui_state.auto_focus {
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
         }
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
@@ -330,7 +334,9 @@ impl Signex {
         );
         self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }

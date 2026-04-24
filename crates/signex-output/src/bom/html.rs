@@ -66,15 +66,27 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
     // Header with project metadata
     html.push_str("  <div class=\"bom-header\">\n");
-    html.push_str(&format!("    <h1>{}</h1>\n", escape_html(&table.metadata.title)));
+    html.push_str(&format!(
+        "    <h1>{}</h1>\n",
+        escape_html(&table.metadata.title)
+    ));
     html.push_str("    <div class=\"bom-meta\">\n");
     if !table.metadata.revision.is_empty() {
-        html.push_str(&format!("      <p>Revision: {}</p>\n", escape_html(&table.metadata.revision)));
+        html.push_str(&format!(
+            "      <p>Revision: {}</p>\n",
+            escape_html(&table.metadata.revision)
+        ));
     }
     if !table.metadata.date.is_empty() {
-        html.push_str(&format!("      <p>Date: {}</p>\n", escape_html(&table.metadata.date)));
+        html.push_str(&format!(
+            "      <p>Date: {}</p>\n",
+            escape_html(&table.metadata.date)
+        ));
     }
-    html.push_str(&format!("      <p>Total parts: {}</p>\n", table.rows.iter().map(|r| r.qty).sum::<u32>()));
+    html.push_str(&format!(
+        "      <p>Total parts: {}</p>\n",
+        table.rows.iter().map(|r| r.qty).sum::<u32>()
+    ));
     html.push_str("    </div>\n");
     html.push_str("  </div>\n");
 
@@ -101,15 +113,10 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
                 BomColumn::Value => row.value.clone(),
                 BomColumn::Footprint => row.footprint.clone(),
                 BomColumn::Description => row.description.clone(),
-                BomColumn::Custom(name) => {
-                    row.custom.get(name).cloned().unwrap_or_default()
-                }
+                BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
             };
 
-            html.push_str(&format!(
-                "        <td>{}</td>\n",
-                escape_html(&value)
-            ));
+            html.push_str(&format!("        <td>{}</td>\n", escape_html(&value)));
         }
 
         html.push_str("      </tr>\n");

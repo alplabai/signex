@@ -170,7 +170,10 @@ canonical_icon!(icon_dd_move_sel, "dropdown/move_sel.svg");
 canonical_icon!(icon_dd_move_to_front, "dropdown/move_to_front.svg");
 canonical_icon!(icon_dd_move_xy, "dropdown/move_xy.svg");
 canonical_icon!(icon_dd_net_color_clear, "dropdown/net_color_clear.svg");
-canonical_icon!(icon_dd_net_color_clear_all, "dropdown/net_color_clear_all.svg");
+canonical_icon!(
+    icon_dd_net_color_clear_all,
+    "dropdown/net_color_clear_all.svg"
+);
 canonical_icon!(icon_dd_net_color_custom, "dropdown/net_color_custom.svg");
 canonical_icon!(icon_dd_net_label, "dropdown/net_label.svg");
 canonical_icon!(icon_dd_no_erc, "dropdown/no_erc.svg");
@@ -209,8 +212,14 @@ canonical_icon!(icon_dd_select_inside, "dropdown/select_inside.svg");
 canonical_icon!(icon_dd_select_lasso, "dropdown/select_lasso.svg");
 canonical_icon!(icon_dd_select_outside, "dropdown/select_outside.svg");
 canonical_icon!(icon_dd_select_toggle, "dropdown/select_toggle.svg");
-canonical_icon!(icon_dd_select_touching_line, "dropdown/select_touching_line.svg");
-canonical_icon!(icon_dd_select_touching_rect, "dropdown/select_touching_rect.svg");
+canonical_icon!(
+    icon_dd_select_touching_line,
+    "dropdown/select_touching_line.svg"
+);
+canonical_icon!(
+    icon_dd_select_touching_rect,
+    "dropdown/select_touching_rect.svg"
+);
 canonical_icon!(icon_dd_send_back, "dropdown/send_back.svg");
 canonical_icon!(icon_dd_send_back_of, "dropdown/send_back_of.svg");
 canonical_icon!(icon_dd_sheet_actions, "dropdown/sheet_actions.svg");

@@ -319,7 +319,8 @@ fn eval_dollar_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option
         && head.trim().eq_ignore_ascii_case("refdes")
     {
         let key = tail.trim();
-        if key.is_empty() || key.eq_ignore_ascii_case("self") || key.eq_ignore_ascii_case("current") {
+        if key.is_empty() || key.eq_ignore_ascii_case("self") || key.eq_ignore_ascii_case("current")
+        {
             return ctx.current_refdes.map(ToString::to_string);
         }
         if let Some(v) = lookup_ci(ctx.refdes_variables, key) {
@@ -457,10 +458,7 @@ mod tests {
 
     #[test]
     fn expands_standard_char_escapes() {
-        assert_eq!(
-            expand_standard_char_escapes("A{slash}B{dollar}C"),
-            "A/B$C"
-        );
+        assert_eq!(expand_standard_char_escapes("A{slash}B{dollar}C"), "A/B$C");
     }
 
     #[test]

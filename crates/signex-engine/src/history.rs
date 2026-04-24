@@ -1,7 +1,7 @@
 use signex_types::schematic::SchematicSheet;
 
-use crate::patch::PatchPair;
 use crate::EngineError;
+use crate::patch::PatchPair;
 
 use super::Engine;
 
@@ -61,4 +61,3 @@ impl Engine {
         self.redo_stack.clear();
     }
 }
-

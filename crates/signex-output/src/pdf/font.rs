@@ -19,7 +19,8 @@ use crate::template::FontStyle;
 // Embed font bytes at compile time
 const ROBOTO_REGULAR: &[u8] = include_bytes!("../../../signex-app/assets/fonts/Roboto-Regular.ttf");
 const ROBOTO_BOLD: &[u8] = include_bytes!("../../../signex-app/assets/fonts/Roboto-Bold.ttf");
-const IOSEVKA_REGULAR: &[u8] = include_bytes!("../../../signex-app/assets/fonts/Iosevka-Regular.ttf");
+const IOSEVKA_REGULAR: &[u8] =
+    include_bytes!("../../../signex-app/assets/fonts/Iosevka-Regular.ttf");
 const IOSEVKA_BOLD: &[u8] = include_bytes!("../../../signex-app/assets/fonts/Iosevka-Bold.ttf");
 
 /// Embedded font variants, backed by TTF bytes.
@@ -47,7 +48,7 @@ impl PdfFont {
         match style {
             FontStyle::Normal => PdfFont::RobotoRegular,
             FontStyle::Bold => PdfFont::RobotoBold,
-            FontStyle::Italic => PdfFont::IosevkaRegular,  // Iosevka for italic text
+            FontStyle::Italic => PdfFont::IosevkaRegular, // Iosevka for italic text
             FontStyle::BoldItalic => PdfFont::IosevkaBold,
         }
     }
@@ -267,10 +268,19 @@ mod tests {
 
     #[test]
     fn font_style_maps_to_embedded_variants() {
-        assert_eq!(PdfFont::for_style(FontStyle::Normal), PdfFont::RobotoRegular);
+        assert_eq!(
+            PdfFont::for_style(FontStyle::Normal),
+            PdfFont::RobotoRegular
+        );
         assert_eq!(PdfFont::for_style(FontStyle::Bold), PdfFont::RobotoBold);
-        assert_eq!(PdfFont::for_style(FontStyle::Italic), PdfFont::IosevkaRegular);
-        assert_eq!(PdfFont::for_style(FontStyle::BoldItalic), PdfFont::IosevkaBold);
+        assert_eq!(
+            PdfFont::for_style(FontStyle::Italic),
+            PdfFont::IosevkaRegular
+        );
+        assert_eq!(
+            PdfFont::for_style(FontStyle::BoldItalic),
+            PdfFont::IosevkaBold
+        );
     }
 
     #[test]

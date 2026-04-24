@@ -63,7 +63,10 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_export_pdf_set_colour_mode(&mut self, colour_mode: signex_output::ColourMode) {
+    pub(crate) fn handle_export_pdf_set_colour_mode(
+        &mut self,
+        colour_mode: signex_output::ColourMode,
+    ) {
         if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
             dialog.options.colour_mode = colour_mode;
         }
@@ -143,8 +146,7 @@ impl Signex {
                 Some(p) if p > 0 => p,
                 _ => {
                     self.document_state.export_error = Some(
-                        "Specific page must be a positive page number (1, 2, 3, ...)."
-                            .to_string(),
+                        "Specific page must be a positive page number (1, 2, 3, ...).".to_string(),
                     );
                     return Some(Task::none());
                 }
@@ -249,8 +251,7 @@ impl Signex {
                 }
             },
             Err(e) => {
-                self.document_state.export_error =
-                    Some(format!("PDF export failed: {e}"));
+                self.document_state.export_error = Some(format!("PDF export failed: {e}"));
             }
         }
 
@@ -318,8 +319,7 @@ impl Signex {
                 }
             },
             Err(e) => {
-                self.document_state.export_error =
-                    Some(format!("Netlist export failed: {e}"));
+                self.document_state.export_error = Some(format!("Netlist export failed: {e}"));
             }
         }
 
@@ -589,8 +589,7 @@ impl Signex {
 
         if pages.is_empty() {
             self.document_state.export_error = Some(
-                "Preview has no pages for the selected range. Check page range input."
-                    .to_string(),
+                "Preview has no pages for the selected range. Check page range input.".to_string(),
             );
             return;
         }

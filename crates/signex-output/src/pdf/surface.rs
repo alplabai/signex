@@ -132,7 +132,10 @@ impl PdfSurface {
 
         self.write_operator("BT\n");
         self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
-        self.write_operator(&format!("{} {} {} {} {} {} Tm\n", cos, sin, -sin, cos, x, y));
+        self.write_operator(&format!(
+            "{} {} {} {} {} {} Tm\n",
+            cos, sin, -sin, cos, x, y
+        ));
         self.write_operator(&format!("({}) Tj\n", escaped));
         self.write_operator("ET\n");
     }
@@ -172,10 +175,7 @@ mod tests {
         assert_eq!(escape_pdf_string("hello"), "hello");
         assert_eq!(escape_pdf_string("(world)"), "\\(world\\)");
         assert_eq!(escape_pdf_string("back\\slash"), "back\\\\slash");
-        assert_eq!(
-            escape_pdf_string("(back\\slash)"),
-            "\\(back\\\\slash\\)"
-        );
+        assert_eq!(escape_pdf_string("(back\\slash)"), "\\(back\\\\slash\\)");
     }
 
     #[test]

@@ -69,7 +69,11 @@ pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
         }
     }
 
-    if errors.is_empty() { Ok(out) } else { Err(errors) }
+    if errors.is_empty() {
+        Ok(out)
+    } else {
+        Err(errors)
+    }
 }
 
 /// Convert compiled rules into engine evaluator closures.
@@ -129,12 +133,17 @@ fn compile_expr(rule_id: &str, expr: &ExprAst) -> Result<CompiledExpr, DslError>
         ExprAst::Not(e) => Ok(CompiledExpr::Not(Box::new(compile_expr(rule_id, e)?))),
         ExprAst::HelperCall { name, args } => {
             let regex_arg = if name == "name_matches" {
-                let pattern = args.first().map(LiteralAst::as_str_value).unwrap_or_default();
-                Some(Regex::new(pattern).map_err(|source| DslError::InvalidRegex {
-                    rule: rule_id.to_string(),
-                    pattern: pattern.to_string(),
-                    source,
-                })?)
+                let pattern = args
+                    .first()
+                    .map(LiteralAst::as_str_value)
+                    .unwrap_or_default();
+                Some(
+                    Regex::new(pattern).map_err(|source| DslError::InvalidRegex {
+                        rule: rule_id.to_string(),
+                        pattern: pattern.to_string(),
+                        source,
+                    })?,
+                )
             } else {
                 None
             };
@@ -257,7 +266,9 @@ fn eval_expr(expr: &CompiledExpr, subject: Subject<'_>) -> bool {
         CompiledExpr::Not(e) => !eval_expr(e, subject),
         CompiledExpr::HelperCall(helper) => eval_helper(helper, subject),
         CompiledExpr::FieldCmp { field, op, value } => eval_field_cmp(field, *op, value, subject),
-        CompiledExpr::FieldMatches { field, regex, .. } => eval_field_matches(field, regex, subject),
+        CompiledExpr::FieldMatches { field, regex, .. } => {
+            eval_field_matches(field, regex, subject)
+        }
     }
 }
 
@@ -302,7 +313,12 @@ enum Value {
     Bool(bool),
 }
 
-fn eval_field_cmp(field: &FieldExprAst, op: CmpOp, value: &LiteralAst, subject: Subject<'_>) -> bool {
+fn eval_field_cmp(
+    field: &FieldExprAst,
+    op: CmpOp,
+    value: &LiteralAst,
+    subject: Subject<'_>,
+) -> bool {
     let Some(lhs) = resolve_field(field, subject) else {
         return false;
     };
@@ -356,18 +372,27 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
                 _ => None,
             }
         }
-        (FieldExprAst::Access { object, field }, Subject::Component(symbol)) if object == "component" => {
+        (FieldExprAst::Access { object, field }, Subject::Component(symbol))
+            if object == "component" =>
+        {
             match field.as_str() {
                 "ref_des" => Some(Value::Str(symbol.reference.clone())),
                 "value" => Some(Value::Str(symbol.value.clone())),
                 _ => None,
             }
         }
-        (FieldExprAst::MethodCall { object, method, args }, Subject::Component(symbol))
-            if object == "component" && method == "attr" =>
-        {
+        (
+            FieldExprAst::MethodCall {
+                object,
+                method,
+                args,
+            },
+            Subject::Component(symbol),
+        ) if object == "component" && method == "attr" => {
             let key = args.first()?.as_str_value();
-            Some(Value::Str(symbol.attrs.get(key).cloned().unwrap_or_default()))
+            Some(Value::Str(
+                symbol.attrs.get(key).cloned().unwrap_or_default(),
+            ))
         }
         (FieldExprAst::MethodCall { object, method, .. }, Subject::Sheet(_))
             if object == "sheet" && method == "tagged" =>

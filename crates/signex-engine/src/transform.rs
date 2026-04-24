@@ -44,18 +44,16 @@ impl Engine {
                     .iter()
                     .any(|sheet_pin| sheet_pin.uuid == item.uuid)
             }),
-            SelectedKind::Drawing => {
-                self.document.drawings.iter().any(|d| {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
-                    u == item.uuid
-                })
-            }
+            SelectedKind::Drawing => self.document.drawings.iter().any(|d| {
+                let u = match d {
+                    SchDrawing::Line { uuid, .. }
+                    | SchDrawing::Rect { uuid, .. }
+                    | SchDrawing::Circle { uuid, .. }
+                    | SchDrawing::Arc { uuid, .. }
+                    | SchDrawing::Polyline { uuid, .. } => *uuid,
+                };
+                u == item.uuid
+            }),
             _ => false,
         }
     }
@@ -205,9 +203,7 @@ impl Engine {
                             (c.position.x, c.position.y, c.size.0, c.size.1)
                         };
                         let pin = &mut self.document.child_sheets[child_idx].pins[pin_idx];
-                        super::sheet::lock_sheet_pin_to_child_edge(
-                            pin, dx, dy, cx, cy, cw, ch,
-                        );
+                        super::sheet::lock_sheet_pin_to_child_edge(pin, dx, dy, cx, cy, cw, ch);
                         pin.user_moved = true;
                         return true;
                     }

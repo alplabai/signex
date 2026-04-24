@@ -15,13 +15,13 @@ mod expression;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
-pub mod svg;
 pub mod substitution;
+pub mod svg;
 pub mod template;
 
 pub use bom::{
-    BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, BomOutput, BomTable, BomError,
-    BomMetadata, rollup,
+    BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomMetadata, BomOptions, BomOutput,
+    BomTable, rollup,
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{

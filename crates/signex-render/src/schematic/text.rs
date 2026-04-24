@@ -69,7 +69,10 @@ const GLYPH_ADVANCE_FACTOR: f32 = 0.55;
 fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
     match (prev, next) {
         // Standard keeps suffix indices visually tight to the preceding glyph.
-        (RichRunKind::Normal | RichRunKind::Overbar, RichRunKind::Subscript | RichRunKind::Superscript) => -size * 0.16,
+        (
+            RichRunKind::Normal | RichRunKind::Overbar,
+            RichRunKind::Subscript | RichRunKind::Superscript,
+        ) => -size * 0.16,
         _ => 0.0,
     }
 }
@@ -165,7 +168,9 @@ pub fn evaluate_symbol_text_with_context(
     evaluate_expressions(content, &ctx)
 }
 
-pub fn build_global_refdes_lookup(snapshot: &super::SchematicRenderSnapshot) -> HashMap<String, String> {
+pub fn build_global_refdes_lookup(
+    snapshot: &super::SchematicRenderSnapshot,
+) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for sym in &snapshot.symbols {
         if sym.reference.is_empty() {
@@ -241,7 +246,10 @@ pub fn build_symbol_pin_net_lookup(
         (p.x - proj_x).abs() < tol && (p.y - proj_y).abs() < tol
     }
 
-    fn transform_pin_position(sym: &Symbol, local_pos: &signex_types::schematic::Point) -> signex_types::schematic::Point {
+    fn transform_pin_position(
+        sym: &Symbol,
+        local_pos: &signex_types::schematic::Point,
+    ) -> signex_types::schematic::Point {
         let x = local_pos.x;
         let y = -local_pos.y;
 
@@ -303,8 +311,11 @@ pub fn build_symbol_pin_net_lookup(
         }
 
         let mut root = find(&mut parent, n);
-        if matches!(label.label_type, signex_types::schematic::LabelType::Global | signex_types::schematic::LabelType::Hierarchical)
-            && !label.text.is_empty()
+        if matches!(
+            label.label_type,
+            signex_types::schematic::LabelType::Global
+                | signex_types::schematic::LabelType::Hierarchical
+        ) && !label.text.is_empty()
         {
             if let Some(existing) = label_root_by_name.get(&label.text).copied() {
                 union(&mut parent, root, existing);
@@ -347,7 +358,10 @@ pub fn build_symbol_pin_net_lookup(
 
     let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
     for root in root_pins.keys().copied() {
-        let named = root_name.get(&root).map(|(_, n)| n.clone()).unwrap_or_default();
+        let named = root_name
+            .get(&root)
+            .map(|(_, n)| n.clone())
+            .unwrap_or_default();
         if !named.is_empty() {
             resolved_root_name.insert(root, named);
             continue;
@@ -363,7 +377,9 @@ pub fn build_symbol_pin_net_lookup(
     for (sym_uuid, pin_number, root) in pin_entries {
         let net_name = resolved_root_name.get(&root).cloned().unwrap_or_default();
         if !net_name.is_empty() {
-            out.entry(sym_uuid).or_default().insert(pin_number, net_name);
+            out.entry(sym_uuid)
+                .or_default()
+                .insert(pin_number, net_name);
         }
     }
 
@@ -650,14 +666,8 @@ pub fn draw_text_prop(
         return;
     }
 
-    let evaluated = evaluate_symbol_text_with_context(
-        content,
-        sym,
-        None,
-        cell,
-        global_refdes,
-        pin_net_names,
-    );
+    let evaluated =
+        evaluate_symbol_text_with_context(content, sym, None, cell, global_refdes, pin_net_names);
     if evaluated.is_empty() {
         return;
     }
@@ -689,7 +699,16 @@ pub fn draw_text_prop(
     // Iced CW-positive, Y-down; Standard field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
-    draw_rich_text(frame, &evaluated, sp, color, screen_font, h_align, v_align, rad);
+    draw_rich_text(
+        frame,
+        &evaluated,
+        sp,
+        color,
+        screen_font,
+        h_align,
+        v_align,
+        rad,
+    );
 }
 
 #[cfg(test)]
