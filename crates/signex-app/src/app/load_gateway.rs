@@ -244,7 +244,15 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        self.document_state.clear_active_engine();
+        // Detach from the currently-visible schematic engine, but
+        // leave its entry in `document_state.engines` untouched — the
+        // engine should outlive a tab switch so switching back to a
+        // parked schematic (e.g. Schematic → PCB → Schematic from the
+        // project tree) finds its engine still resident. The only
+        // authoritative removal point is `close_tab_at_index` in
+        // `handlers/document_tabs.rs`, which explicitly prunes the
+        // closing tab's entry. GitHub issue #51.
+        self.document_state.active_path = None;
         self.interaction_state.active_canvas_mut().set_render_cache(None);
         self.interaction_state.active_canvas_mut().selected.clear();
         self.interaction_state.active_canvas_mut().wire_preview.clear();
