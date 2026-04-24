@@ -2599,18 +2599,29 @@ impl Signex {
                 .height(Length::Fill)
                 .into()
         } else {
+            // Distinguish "nothing loaded at all" from "project loaded,
+            // but no document picked yet" — the second case is what
+            // the user sees right after opening a .kicad_pro before
+            // clicking any node in the project tree.
+            let (title, hint) = if self.document_state.project_path.is_some() {
+                (
+                    "No document selected",
+                    "Choose a schematic or PCB from the project tree",
+                )
+            } else {
+                (
+                    "No document open",
+                    "Open a project with File > Open or Ctrl+O",
+                )
+            };
             container(
                 column![
-                    iced::widget::text("No document open")
-                        .size(14)
-                        .color(crate::styles::ti(
-                            self.document_state.panel_ctx.tokens.text_secondary
-                        )),
-                    iced::widget::text("Open a project with File > Open or Ctrl+O")
-                        .size(11)
-                        .color(crate::styles::ti(
-                            self.document_state.panel_ctx.tokens.text_secondary
-                        )),
+                    iced::widget::text(title).size(14).color(crate::styles::ti(
+                        self.document_state.panel_ctx.tokens.text_secondary
+                    )),
+                    iced::widget::text(hint).size(11).color(crate::styles::ti(
+                        self.document_state.panel_ctx.tokens.text_secondary
+                    )),
                 ]
                 .spacing(8)
                 .align_x(iced::Alignment::Center),
