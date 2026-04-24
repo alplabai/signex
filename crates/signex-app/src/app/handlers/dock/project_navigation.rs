@@ -157,8 +157,70 @@ impl Signex {
             ProjectTreeAction::OpenRemoveDialog(tree_path) => {
                 self.open_remove_dialog(tree_path);
             }
+            ProjectTreeAction::CloseProject(tree_path) => {
+                return self.close_project_at_tree_path(&tree_path);
+            }
         }
         Task::none()
+    }
+
+    /// Close every tab backed by the project whose root is at
+    /// `tree_path[0]`, then drop the project from the workspace and
+    /// promote a sibling (or `None`) to active. Mirrors Altium's
+    /// Projects-panel right-click → Close Project.
+    fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return Task::none();
+        };
+        let Some(target_id) = self
+            .document_state
+            .projects
+            .get(project_idx)
+            .map(|p| p.id)
+        else {
+            return Task::none();
+        };
+
+        // Collect tab indices owned by this project, highest first —
+        // `close_tab_now` removes by index, so descending order keeps
+        // untouched indices valid as we iterate.
+        let mut indices: Vec<usize> = self
+            .document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| (t.project_id == Some(target_id)).then_some(i))
+            .collect();
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        let mut tasks: Vec<Task<Message>> = Vec::with_capacity(indices.len());
+        for idx in indices {
+            tasks.push(self.close_tab_now(idx));
+        }
+
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
+        self.document_state.projects.retain(|p| p.id != target_id);
+        self.document_state.active_project = self
+            .document_state
+            .projects
+            .get(project_idx)
+            .or_else(|| {
+                project_idx
+                    .checked_sub(1)
+                    .and_then(|i| self.document_state.projects.get(i))
+            })
+            .map(|p| p.id);
+
+        self.sync_legacy_project_fields();
+        self.refresh_panel_ctx();
+
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            Task::batch(tasks)
+        }
     }
 
     fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {

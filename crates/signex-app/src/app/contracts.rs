@@ -499,6 +499,13 @@ pub enum ProjectTreeAction {
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
     OpenRemoveDialog(Vec<usize>),
+    /// Close the entire project whose root is at this tree path. Closes
+    /// every open tab backed by the project, drops the `LoadedProject`
+    /// from the workspace, and promotes another project (or `None`) to
+    /// active. The tree path's first index selects the project; other
+    /// indices are ignored so the action is safe to fire from any node
+    /// underneath a project root.
+    CloseProject(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live
