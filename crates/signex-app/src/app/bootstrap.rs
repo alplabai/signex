@@ -224,7 +224,6 @@ impl Signex {
                 preview: None,
                 pdf_options_dialog: None,
                 pending_pdf_options: None,
-                pdf_options_seed: None,
                 export_error: None,
             },
             interaction_state: InteractionState {

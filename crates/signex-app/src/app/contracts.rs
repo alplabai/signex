@@ -356,6 +356,10 @@ pub enum Message {
     PrintPreviewSetPageRangeSpecific,
     /// User edited the specific page input in preview.
     PrintPreviewSetSpecificPageInput(String),
+    /// User toggled "Fit to Page" in the unified PDF preview modal.
+    PrintPreviewSetFitToPage(bool),
+    /// User toggled "Include Title Block" in the unified PDF preview modal.
+    PrintPreviewSetIncludeTitleBlock(bool),
     /// User clicked the "Export PDF" button in the preview dialog.
     PrintPreviewExport,
     /// User closed the print preview dialog.

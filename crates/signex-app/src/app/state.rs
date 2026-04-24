@@ -343,13 +343,11 @@ pub struct DocumentState {
     /// PDF export options dialog state. `Some` while the user is configuring
     /// PDF export options before choosing a save path.
     pub pdf_options_dialog: Option<PdfOptionsDialogState>,
-    /// Pending PDF options stashed from the dialog while the file picker
-    /// is running. Used by handle_export_pdf_finished to apply user-selected
-    /// options instead of defaults. Cleared after export.
+    /// Pending PDF options stashed from the unified preview modal
+    /// while the file picker is running. Used by
+    /// `handle_export_pdf_finished` to apply user-selected options
+    /// instead of defaults. Cleared after export.
     pub pending_pdf_options: Option<signex_output::PdfOptions>,
-    /// Optional PDF options seed copied from Print Preview controls.
-    /// When present, the next PDF options dialog opens with this seed.
-    pub pdf_options_seed: Option<signex_output::PdfOptions>,
     /// User-visible export error. `Some(msg)` while the error modal is shown.
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
     /// itself (not the file dialog) fails. Cleared by DismissExportError.

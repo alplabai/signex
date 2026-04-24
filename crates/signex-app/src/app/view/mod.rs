@@ -1235,7 +1235,8 @@ impl Signex {
     /// (Ctrl+P); disappears on Close or when the export completes.
     fn view_print_preview(&self) -> Element<'_, Message> {
         use iced::widget::{
-            button, column, container, image, mouse_area, opaque, row, scrollable, text, text_input,
+            button, checkbox, column, container, image, mouse_area, opaque, row, scrollable, text,
+            text_input,
         };
 
         let preview = match &self.document_state.preview {
@@ -1367,6 +1368,67 @@ impl Signex {
             iced::widget::Space::new().height(0).into()
         };
 
+        // Output toggles — pulled in from the old standalone PDF
+        // settings dialog so the unified preview modal exposes every
+        // export decision the user previously made via two separate
+        // dialogs.
+        let fit_to_page = matches!(
+            preview.pdf_options.scale,
+            signex_output::PdfScale::FitToPage
+        );
+        let toggles_row = row![
+            text("Output").size(11).color(text_muted),
+            row![
+                checkbox(fit_to_page).on_toggle(Message::PrintPreviewSetFitToPage),
+                text("Fit to Page").size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+            row![
+                checkbox(preview.pdf_options.include_title_block)
+                    .on_toggle(Message::PrintPreviewSetIncludeTitleBlock),
+                text("Title Block").size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        // Page-size / orientation summary so the user can verify the
+        // sheet dimensions the preview was rasterized at without
+        // hunting through a separate dialog. Display-only for now —
+        // they're seeded from the active schematic's paper size and
+        // can't be overridden until the page-size picker lands.
+        let page_size_label = match &preview.pdf_options.page_size {
+            signex_output::PageSize::IsoA0 => "ISO A0",
+            signex_output::PageSize::IsoA1 => "ISO A1",
+            signex_output::PageSize::IsoA2 => "ISO A2",
+            signex_output::PageSize::IsoA3 => "ISO A3",
+            signex_output::PageSize::IsoA4 => "ISO A4",
+            signex_output::PageSize::IsoA5 => "ISO A5",
+            signex_output::PageSize::AnsiA => "ANSI A",
+            signex_output::PageSize::AnsiB => "ANSI B",
+            signex_output::PageSize::AnsiC => "ANSI C",
+            signex_output::PageSize::AnsiD => "ANSI D",
+            signex_output::PageSize::AnsiE => "ANSI E",
+            signex_output::PageSize::UsLetter => "US Letter",
+            signex_output::PageSize::UsLegal => "US Legal",
+            signex_output::PageSize::Custom { .. } => "Custom",
+        };
+        let orientation_label = match preview.pdf_options.orientation {
+            signex_output::Orientation::Portrait => "Portrait",
+            signex_output::Orientation::Landscape => "Landscape",
+        };
+        let summary_row = row![
+            text("Sheet").size(11).color(text_muted),
+            text(format!("{} • {}", page_size_label, orientation_label))
+                .size(11)
+                .color(text_c),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
         // Left rail: one thumbnail button per rendered page. Bounded width
         // and scrollable so 20-sheet projects don't break the layout.
         let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
@@ -1485,14 +1547,20 @@ impl Signex {
         .spacing(8)
         .align_y(iced::Alignment::Center);
 
-        // Dialog body: title + thumbnails/content row + bottom bar
+        // Dialog body: title + thumbnails/content row + bottom bar.
+        // The settings strip now carries every PDF export decision —
+        // no more separate "Export PDF" dialog after Print Preview.
         let body = column![
-            text("Print Preview").size(14).color(text_c),
+            text("Export PDF").size(14).color(text_c),
             row![
+                summary_row,
+                iced::widget::Space::new().width(16),
                 colour_controls,
                 iced::widget::Space::new().width(12),
                 range_controls,
-                specific_page_input
+                specific_page_input,
+                iced::widget::Space::new().width(Length::Fill),
+                toggles_row,
             ]
             .align_y(iced::Alignment::Center),
             row![thumb_rail, iced::widget::Space::new().width(8), centre]
