@@ -51,6 +51,16 @@ impl Signex {
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
+        // BOM column-resize drag: while a header's resize handle is
+        // pressed, every mouse-move tick recomputes the column's
+        // width as `start_width + (current_x - start_x)`. Min width
+        // floors at 40 px so the column doesn't disappear.
+        if let Some(preview) = self.document_state.bom_preview.as_mut()
+            && let Some(resize) = preview.column_resize
+        {
+            let new_width = (resize.start_width + (x - resize.start_x)).max(40.0);
+            preview.column_widths.insert(resize.idx, new_width);
+        }
         // Modal drag — accumulate delta into the per-modal offset so the
         // dialog slides under the cursor.
         if let Some((modal, last_x, last_y)) = self.ui_state.modal_dragging {
@@ -216,6 +226,13 @@ impl Signex {
     }
 
     pub(crate) fn handle_layout_drag_finished(&mut self) {
+        // Always release any in-flight BOM column resize on a
+        // global mouse-up — the resize handle's `on_release`
+        // doesn't fire reliably when the cursor leaves the handle's
+        // 4 px hit zone during the drag.
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.column_resize = None;
+        }
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;

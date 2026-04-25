@@ -1551,43 +1551,32 @@ impl Signex {
     /// so it reads as "the tab itself is moving". The ghost is
     /// non-interactive; it just shows what the user is carrying.
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
-        use iced::widget::{Space, container, row, text};
+        use iced::widget::{container, row, text};
+        use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border = crate::styles::ti(tokens.border);
         let active_bg = crate::styles::ti(tokens.hover);
-        // Slight translucency so the user still sees the tab bar
-        // underneath — reads as "ghost" rather than a solid widget.
-        let bg = iced::Color {
-            a: 0.88,
-            ..active_bg
+        let accent = crate::styles::ti(tokens.accent);
+        // Match the live tab look: same TabPill widget, accent
+        // stripe at the bottom, top-rounded corners. The previous
+        // ghost showed an old style with inline ↗ undock + × close
+        // glyphs that were removed when the tab right-click menu
+        // landed.
+        let pill_style = TabPillStyle {
+            fill: iced::Color { a: 0.88, ..active_bg },
+            border: crate::styles::ti(tokens.border),
+            accent,
+            is_active: true,
+            is_last: true,
+            accent_position: AccentPosition::Bottom,
         };
-        let tab_like = container(
-            row![
-                text(title.to_string()).size(11).color(text_c),
-                Space::new().width(6),
-                text("\u{2197}".to_string()).size(12).color(text_muted),
-                Space::new().width(4),
-                text("\u{00D7}".to_string()).size(14).color(text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 10])
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(bg)),
-            border: iced::Border {
-                width: 1.0,
-                radius: 0.0.into(),
-                color: border,
-            },
-            text_color: Some(text_c),
-            ..container::Style::default()
-        });
+        let inner = container(row![text(title.to_string()).size(11).color(text_c)])
+            .padding([4, 10]);
+        let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
         let (cx, cy) = self.interaction_state.last_mouse_pos;
-        super::view::translate::Translate::new(tab_like, (cx + 10.0, cy + 6.0)).into()
+        super::view::translate::Translate::new(pill, (cx + 10.0, cy + 6.0)).into()
     }
 
     /// Altium-style Move Selection dialog. Two numeric inputs plus
@@ -2506,7 +2495,41 @@ impl Signex {
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
-            ModalId::BomPreview => self.view_bom_preview_body(),
+            ModalId::BomPreview => {
+                // Stack the body underneath a 6 px edge-resize
+                // overlay so the borderless OS window can be
+                // resized by dragging its edges. Without this,
+                // `decorations: false` strips the OS frame and
+                // there's nothing to grab.
+                let body = self.view_bom_preview_body();
+                let resize_active = self
+                    .document_state
+                    .bom_preview
+                    .as_ref()
+                    .map(|p| p.column_resize.is_some())
+                    .unwrap_or(false);
+                let mut stack = iced::widget::Stack::new()
+                    .push(body)
+                    .push(Self::detached_modal_resize_overlay(modal));
+                // While a column-resize drag is in flight, lay an
+                // invisible mouse_area over the whole modal that
+                // pins the cursor to ResizingHorizontally. Without
+                // this, the cursor reverts to default the moment
+                // it leaves the 4 px handle's hit zone — which
+                // happens immediately on horizontal drag.
+                if resize_active {
+                    let overlay: Element<'_, Message> = iced::widget::mouse_area(
+                        iced::widget::Space::new()
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_release(Message::BomPreviewColumnResizeEnd)
+                    .interaction(iced::mouse::Interaction::ResizingHorizontally)
+                    .into();
+                    stack = stack.push(overlay);
+                }
+                stack.into()
+            }
             ModalId::Preferences
             | ModalId::FindReplace
             | ModalId::RenameDialog
@@ -2516,6 +2539,74 @@ impl Signex {
                     .into()
             }
         }
+    }
+
+    /// Same 6 px edge-resize overlay as the main window's, but
+    /// emitting `StartDetachedModalResize { modal, direction }`
+    /// so it dispatches to the right OS window. Used as a stack
+    /// layer above the modal's body in `view_detached_modal`.
+    fn detached_modal_resize_overlay<'a>(
+        modal: super::state::ModalId,
+    ) -> Element<'a, Message> {
+        use iced::mouse::Interaction;
+        use iced::widget::{Space, column, mouse_area, row};
+        use iced::window::Direction;
+
+        const EDGE: f32 = 6.0;
+
+        let straight =
+            move |direction: Direction, cursor: Interaction, horizontal: bool|
+                -> Element<'a, Message> {
+                let (w, h) = if horizontal {
+                    (Length::Fill, Length::Fixed(EDGE))
+                } else {
+                    (Length::Fixed(EDGE), Length::Fill)
+                };
+                mouse_area(Space::new().width(w).height(h))
+                    .on_press(Message::StartDetachedModalResize { modal, direction })
+                    .interaction(cursor)
+                    .into()
+            };
+        let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
+            mouse_area(
+                Space::new()
+                    .width(Length::Fixed(EDGE))
+                    .height(Length::Fixed(EDGE)),
+            )
+            .on_press(Message::StartDetachedModalResize { modal, direction })
+            .interaction(cursor)
+            .into()
+        };
+
+        let top = straight(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
+        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
+        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
+        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
+        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
+        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+
+        let middle = row![
+            left,
+            Space::new().width(Length::Fill).height(Length::Fill),
+            right
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        column![
+            row![nw, top, ne]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+            middle,
+            row![sw, bottom, se]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -2657,7 +2748,23 @@ impl Signex {
                 )),
         );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
-            let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
+            // Resolve "really dragging" — Some only after the
+            // cursor has travelled past a 6 px threshold from
+            // the press origin. Without this, every click-to-
+            // switch armed the drag state and flipped the
+            // cursor to Grabbing instantaneously, plus flashed
+            // the drag ghost.
+            const DRAG_THRESHOLD_PX: f32 = 6.0;
+            let dragging = ui.tab_dragging.and_then(|(idx, ox, oy)| {
+                let (mx, my) = interaction.last_mouse_pos;
+                let dx = mx - ox;
+                let dy = my - oy;
+                if dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX {
+                    Some(idx)
+                } else {
+                    None
+                }
+            });
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
@@ -2721,16 +2828,22 @@ impl Signex {
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
-            // Tab drag ghost: while a tab is being dragged, follow the
-            // cursor with a translucent copy of the tab label (Altium
-            // parity — see the user's screenshot). Gives direct visual
-            // feedback that the tab is being moved and will drop
-            // wherever the user releases, including into a new window
-            // past the edge.
-            if let Some((tab_idx, _, _)) = ui.tab_dragging
+            // Tab drag ghost: only renders once the cursor has
+            // travelled past the same 6 px threshold the cursor
+            // gating uses (`tab_bar::view`). Mirrors that gate
+            // here so press-without-move keeps the ghost off.
+            if let Some((tab_idx, ox, oy)) = ui.tab_dragging
                 && let Some(tab) = document.tabs.get(tab_idx)
             {
-                overlays.push(self.view_tab_drag_ghost(&tab.title));
+                const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
+                let (mx, my) = interaction.last_mouse_pos;
+                let dx = mx - ox;
+                let dy = my - oy;
+                if dx * dx + dy * dy
+                    > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX
+                {
+                    overlays.push(self.view_tab_drag_ghost(&tab.title));
+                }
             }
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional

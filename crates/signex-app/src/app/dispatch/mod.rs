@@ -63,6 +63,11 @@ impl Signex {
             | Message::BomPreviewSortColumn(_)
             | Message::BomPreviewColumnDragStart(_)
             | Message::BomPreviewColumnDragDrop(_)
+            | Message::BomPreviewColumnHoverEnter(_)
+            | Message::BomPreviewColumnHoverExit(_)
+            | Message::BomPreviewColumnResizeStart(_)
+            | Message::BomPreviewColumnResizeEnd
+            | Message::BomPreviewSetSidebarTab(_)
             | Message::BomPreviewExport
             | Message::BomPreviewClose
             | Message::PrintPreviewRequested
@@ -225,7 +230,13 @@ impl Signex {
                 // once the modal is popped out, the OS handles window
                 // drags directly.
                 self.ui_state.modal_dragging = None;
-                Task::none()
+                // Win11 DWM rounded corners on the detached window so
+                // its edges visually match the modal_card's 8 px
+                // radius. Silent no-op on Win10 / non-Windows.
+                // Without this the OS paints the window with hard
+                // corners and the modal_card's rounded border is
+                // hidden inside a square OS frame.
+                crate::chrome::apply_rounded_corners::<Message>(id)
             }
             Message::UndockTab(idx) => self.handle_undock_tab(idx),
             Message::UndockedTabOpened { path, id } => {
@@ -302,6 +313,26 @@ impl Signex {
                 Some(id) => iced::window::drag_resize(id, direction),
                 None => Task::none(),
             },
+            Message::StartDetachedModalResize { modal, direction } => {
+                // Find the OS window id hosting this modal, then ask
+                // iced/winit to start a resize drag in the requested
+                // direction. Same pattern as the main window —
+                // detached modals have `decorations: false`, so
+                // there's no OS frame to grab; the 6 px overlay
+                // strips are how we expose resize.
+                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
+                    if let super::state::WindowKind::DetachedModal(m) = kind {
+                        if *m == modal {
+                            return Some(*id);
+                        }
+                    }
+                    None
+                });
+                match id {
+                    Some(id) => iced::window::drag_resize(id, direction),
+                    None => Task::none(),
+                }
+            }
             Message::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),
