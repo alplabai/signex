@@ -218,6 +218,10 @@ pub struct TreeNode {
     pub badge: Option<String>,
     /// Node represents a folder that can hold children (show expand even if empty).
     pub is_folder: bool,
+    /// Accent the row when rendering (bold label at depth 0). Callers
+    /// set this to mark the active project root in multi-project
+    /// workspaces; inner nodes ignore it.
+    pub accent: bool,
 }
 
 impl TreeNode {
@@ -229,6 +233,7 @@ impl TreeNode {
             children: Vec::new(),
             badge: None,
             is_folder: false,
+            accent: false,
         }
     }
 
@@ -240,11 +245,18 @@ impl TreeNode {
             children,
             badge: None,
             is_folder: true,
+            accent: false,
         }
     }
 
     pub fn with_badge(mut self, badge: impl Into<String>) -> Self {
         self.badge = Some(badge.into());
+        self
+    }
+
+    /// Builder variant: mark the node as accented (bold at depth 0).
+    pub fn with_accent(mut self, accent: bool) -> Self {
+        self.accent = accent;
         self
     }
 }
@@ -269,7 +281,7 @@ pub enum TreeMsg {
 const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
-const ICON_LABEL_GAP: f32 = 6.0; // Extra breathing room after the icon
+const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
 const CHEVRON_W: f32 = 10.0; // triangle column
 const ICON_SZ: f32 = 14.0; // Chamfered SVG silhouettes — tuned visually
 const FONT_SZ: f32 = 12.0; // body text
@@ -398,13 +410,21 @@ fn render_node(
     // alignment that's already tight-on-purpose.
     r = r.push(Space::new().width(ICON_LABEL_GAP));
 
-    // Label (flex, no wrap — truncation handled by scrollable parent)
-    r = r.push(
-        text(node.label.clone())
-            .size(FONT_SZ)
-            .color(txt_c)
-            .wrapping(iced::widget::text::Wrapping::None),
-    );
+    // Label (flex, no wrap — truncation handled by scrollable parent).
+    // Accented root nodes (active project in a multi-project workspace)
+    // render bold so the user can scan the workspace at a glance; inner
+    // depths ignore the flag.
+    let mut label = text(node.label.clone())
+        .size(FONT_SZ)
+        .color(txt_c)
+        .wrapping(iced::widget::text::Wrapping::None);
+    if node.accent && depth == 0 {
+        label = label.font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::DEFAULT
+        });
+    }
+    r = r.push(label);
 
     // Badge (right-aligned, very muted, single line)
     if let Some(badge) = &node.badge {

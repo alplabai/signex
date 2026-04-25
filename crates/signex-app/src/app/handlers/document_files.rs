@@ -46,27 +46,60 @@ impl Signex {
     }
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
-        let project = standard_parser::parse_project(&path)
-            .with_context(|| format!("parse project {}", path.display()))?;
-        // Signex's document model is single-project for now. Opening a
-        // second project used to silently overwrite `project_path` while
-        // leaving every tab from the previous project alive — which
-        // produced orphan tabs whose "project root" no longer matched
-        // anything in the Projects panel. Close those tabs here before
-        // we swap the project. Proper multi-project workspaces (side-
-        // by-side roots in the tree, per-tab project scoping) are
-        // tracked in the multi-project issue and land in v0.9.
-        let replacing_project = self.document_state.project_path.is_some()
-            && self.document_state.project_path.as_deref() != Some(path.as_path());
-        if replacing_project {
-            while !self.document_state.tabs.is_empty() {
-                let _ = self.close_tab_now(self.document_state.tabs.len() - 1);
-            }
+        // Append to the workspace instead of replacing the previous
+        // project. If the project is already loaded (same path), just
+        // switch activity to it — no duplicate entries, no tab churn.
+        // Tabs from other projects stay alive; they resolve back to
+        // their source via `DocumentState::project_for_path`.
+        let existing = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.path == path);
+
+        if let Some(idx) = existing {
+            let id = self.document_state.projects[idx].id;
+            self.document_state.active_project = Some(id);
+        } else {
+            let data = standard_parser::parse_project(&path)
+                .with_context(|| format!("parse project {}", path.display()))?;
+            let id = self.document_state.mint_project_id();
+            self.document_state.projects.push(super::super::state::LoadedProject {
+                id,
+                path: path.clone(),
+                data,
+            });
+            self.document_state.active_project = Some(id);
         }
-        self.document_state.project_path = Some(path);
-        self.document_state.project_data = Some(project);
+        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
         Ok(())
+    }
+
+    /// Mirror the active `LoadedProject` into the legacy single-project
+    /// fields (`project_path`, `project_data`). Every handler that still
+    /// reads those fields then sees the active project without needing
+    /// to know about the `projects` Vec yet. Remove once every handler
+    /// has been migrated (issue #54 phase 5).
+    pub(crate) fn sync_legacy_project_fields(&mut self) {
+        // Clone out of the borrow before writing back. `active_loaded_project`
+        // immutably borrows `self.document_state`; assigning to
+        // `project_path` / `project_data` would need &mut on the same
+        // state, so we resolve to owned clones first and assign after.
+        let resolved = self
+            .document_state
+            .active_loaded_project()
+            .map(|p| (p.path.clone(), p.data.clone()));
+        match resolved {
+            Some((path, data)) => {
+                self.document_state.project_path = Some(path);
+                self.document_state.project_data = Some(data);
+            }
+            None => {
+                self.document_state.project_path = None;
+                self.document_state.project_data = None;
+            }
+        }
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {

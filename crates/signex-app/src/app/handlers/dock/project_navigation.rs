@@ -34,7 +34,8 @@ impl Signex {
                             | TreeIcon::SnxLibrary
                             | TreeIcon::SnxSymbol
                     )
-                    && let Err(error) = self.open_project_tree_document(node.label.clone())
+                    && let Err(error) =
+                        self.open_project_tree_document(path, node.label.clone())
                 {
                     crate::diagnostics::log_error("Failed to open project tree document", &error);
                 }
@@ -118,29 +119,18 @@ impl Signex {
                 }
                 return Task::batch(tasks);
             }
-            ProjectTreeAction::RevealInExplorer(path_opt) => {
-                // `None` = project root → show the project directory.
-                // `Some(path)` = leaf → reveal the specific file.
-                let target = match path_opt {
-                    None => self
-                        .document_state
-                        .project_path
-                        .as_ref()
-                        .and_then(|p| p.parent())
-                        .map(|p| p.to_path_buf()),
-                    Some(tree_path) => {
-                        let filename = signex_widgets::tree_view::get_node(
-                            self.document_state.panel_ctx.project_tree.as_slice(),
-                            &tree_path,
-                        )
-                        .map(|n| n.label.clone());
-                        self.document_state
-                            .project_path
-                            .as_ref()
-                            .and_then(|p| p.parent())
-                            .zip(filename.as_ref())
-                            .map(|(dir, name)| dir.join(name))
-                    }
+            ProjectTreeAction::RevealInExplorer(tree_path) => {
+                // The tree_path's first index picks the owning project,
+                // so right-clicking project B's leaf reveals in B's dir
+                // even when project A is active. Single-element path =
+                // project root → reveal the project directory itself.
+                let target = if tree_path.len() <= 1 {
+                    tree_path
+                        .first()
+                        .and_then(|idx| self.document_state.projects.get(*idx))
+                        .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+                } else {
+                    self.tree_path_to_file_path(&tree_path)
                 };
                 if let Some(path) = target
                     && let Err(err) = reveal_in_file_manager(&path)
@@ -157,8 +147,70 @@ impl Signex {
             ProjectTreeAction::OpenRemoveDialog(tree_path) => {
                 self.open_remove_dialog(tree_path);
             }
+            ProjectTreeAction::CloseProject(tree_path) => {
+                return self.close_project_at_tree_path(&tree_path);
+            }
         }
         Task::none()
+    }
+
+    /// Close every tab backed by the project whose root is at
+    /// `tree_path[0]`, then drop the project from the workspace and
+    /// promote a sibling (or `None`) to active. Mirrors Altium's
+    /// Projects-panel right-click → Close Project.
+    fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return Task::none();
+        };
+        let Some(target_id) = self
+            .document_state
+            .projects
+            .get(project_idx)
+            .map(|p| p.id)
+        else {
+            return Task::none();
+        };
+
+        // Collect tab indices owned by this project, highest first —
+        // `close_tab_now` removes by index, so descending order keeps
+        // untouched indices valid as we iterate.
+        let mut indices: Vec<usize> = self
+            .document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| (t.project_id == Some(target_id)).then_some(i))
+            .collect();
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        let mut tasks: Vec<Task<Message>> = Vec::with_capacity(indices.len());
+        for idx in indices {
+            tasks.push(self.close_tab_now(idx));
+        }
+
+        // Drop the project from the workspace, then pick a new active
+        // project — the one that now sits in the same slot (was
+        // immediately after the closed one), else the previous slot,
+        // else None when the workspace is empty.
+        self.document_state.projects.retain(|p| p.id != target_id);
+        self.document_state.active_project = self
+            .document_state
+            .projects
+            .get(project_idx)
+            .or_else(|| {
+                project_idx
+                    .checked_sub(1)
+                    .and_then(|i| self.document_state.projects.get(i))
+            })
+            .map(|p| p.id);
+
+        self.sync_legacy_project_fields();
+        self.refresh_panel_ctx();
+
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            Task::batch(tasks)
+        }
     }
 
     fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
@@ -195,9 +247,10 @@ impl Signex {
     }
 
     /// Resolve a project-tree path (indices) to the file path on disk
-    /// for the leaf node at that position. Returns `None` if the node
-    /// is missing, the project has no directory, or the clicked node
-    /// is not a file-backed leaf.
+    /// for the leaf node at that position. Multi-root aware: the first
+    /// index picks which project's directory to resolve against, so a
+    /// leaf under project B isn't accidentally resolved against project
+    /// A's parent directory.
     fn tree_path_to_file_path(
         &self,
         tree_path: &[usize],
@@ -206,11 +259,9 @@ impl Signex {
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,
         )?;
-        let dir = self
-            .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent())?;
+        let project_idx = *tree_path.first()?;
+        let project = self.document_state.projects.get(project_idx)?;
+        let dir = project.path.parent()?;
         Some(dir.join(&node.label))
     }
 
@@ -265,17 +316,21 @@ impl Signex {
             .file_name()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string());
-        if let (Some(old), Some(project)) = (
-            old_filename.as_ref(),
-            self.document_state.project_data.as_mut(),
-        ) {
-            for entry in project.sheets.iter_mut() {
+        // Mutate the *owning* project's data via the dialog's
+        // tree_path[0], not the active project — renaming a sheet of
+        // project B while project A is active should still touch B.
+        // (#54)
+        let owner_idx = state.tree_path.first().copied();
+        if let (Some(old), Some(idx)) = (old_filename.as_ref(), owner_idx)
+            && let Some(loaded) = self.document_state.projects.get_mut(idx)
+        {
+            for entry in loaded.data.sheets.iter_mut() {
                 if &entry.filename == old {
                     entry.filename = new_name.to_string();
                 }
             }
-            if project.schematic_root.as_deref() == Some(old.as_str()) {
-                project.schematic_root = Some(new_name.to_string());
+            if loaded.data.schematic_root.as_deref() == Some(old.as_str()) {
+                loaded.data.schematic_root = Some(new_name.to_string());
             }
         }
 
@@ -299,6 +354,10 @@ impl Signex {
         }
 
         self.ui_state.rename_dialog = None;
+        // Re-mirror the active project's data into the legacy fields so
+        // any handler still reading `document_state.project_data` sees
+        // the rename if it landed on the active project.
+        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
         iced::Task::none()
     }
@@ -341,26 +400,37 @@ impl Signex {
             }
         }
 
-        // Drop the sheet from the in-memory project_data so the tree
-        // rebuild reflects the removal. Session-scoped: reopening the
-        // project rescans disk and (for Exclude) re-discovers the
-        // file, until proper project-write support lands.
+        // Drop the sheet from the *owning* project's in-memory data so
+        // the tree rebuild reflects the removal. Resolves project via
+        // the dialog's `tree_path[0]` so removing a sheet of project B
+        // doesn't accidentally mutate active project A. Session-scoped:
+        // reopening the project rescans disk and (for Exclude)
+        // re-discovers the file, until proper project-write support
+        // lands. (#54)
+        let owner_idx = state.tree_path.first().copied();
         if let Some(filename) = state
             .target_path
             .file_name()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
-            && let Some(project) = self.document_state.project_data.as_mut()
+            && let Some(idx) = owner_idx
+            && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
-            project.sheets.retain(|entry| entry.filename != filename);
-            if project.schematic_root.as_deref() == Some(filename.as_str()) {
-                project.schematic_root = None;
+            loaded
+                .data
+                .sheets
+                .retain(|entry| entry.filename != filename);
+            if loaded.data.schematic_root.as_deref() == Some(filename.as_str()) {
+                loaded.data.schematic_root = None;
             }
-            if project.pcb_file.as_deref() == Some(filename.as_str()) {
-                project.pcb_file = None;
+            if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
+                loaded.data.pcb_file = None;
             }
         }
 
+        // Mirror back into the legacy fields if the mutation landed on
+        // the active project.
+        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
         if close_tasks.is_empty() {
             iced::Task::none()
@@ -369,12 +439,23 @@ impl Signex {
         }
     }
 
-    fn open_project_tree_document(&mut self, filename: String) -> Result<()> {
+    fn open_project_tree_document(
+        &mut self,
+        tree_path: &[usize],
+        filename: String,
+    ) -> Result<()> {
+        // Multi-project: walk to the owning project via tree_path[0]
+        // instead of the active project, so clicking a leaf inside
+        // project B opens B's file even when A is the active project.
+        // (#54)
+        let project_idx = *tree_path
+            .first()
+            .with_context(|| format!("project tree path was empty for {}", filename))?;
         let project_dir = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|path| path.parent())
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent())
             .with_context(|| format!("resolve project directory for {}", filename))?;
         let file_path = project_dir.join(&filename);
         if !file_path.exists() {
