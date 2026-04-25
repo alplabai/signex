@@ -126,6 +126,16 @@ pub struct SheetInfo {
     pub wire_count: usize,
     #[allow(dead_code)]
     pub label_count: usize,
+    /// True when this sheet is currently in `document_state.tabs`.
+    /// Drives the small accent-coloured dot on the tree row (Altium parity).
+    pub is_open: bool,
+    /// True when the open tab for this sheet has unsaved edits.
+    /// Drives the bright red dot on the tree row.
+    pub is_dirty: bool,
+    /// True when this sheet is the document the user is currently
+    /// viewing (`document_state.tabs[active_tab].path == sheet path`).
+    /// Drives the highlighted row background — Altium parity.
+    pub is_active: bool,
 }
 
 /// Per-project bundle surfaced to the Projects panel. One entry per
@@ -139,8 +149,16 @@ pub struct ProjectPanelInfo {
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
     pub project_file: Option<String>,
+    /// Open / dirty state for the root schematic, mirrors the same
+    /// flags that `SheetInfo` carries for inner sheets.
+    pub project_file_open: bool,
+    pub project_file_dirty: bool,
+    pub project_file_active: bool,
     /// Companion PCB filename, when present.
     pub pcb_file: Option<String>,
+    pub pcb_file_open: bool,
+    pub pcb_file_dirty: bool,
+    pub pcb_file_active: bool,
     pub sheets: Vec<SheetInfo>,
     /// Whether this is the currently-active project — drives accent
     /// styling on the root node.
@@ -819,16 +837,31 @@ fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> T
     if !project.sheets.is_empty() {
         for sheet in &project.sheets {
             let icon = TreeIcon::for_path(&sheet.filename);
-            source_docs.push(TreeNode::leaf(sheet.filename.clone(), icon));
+            source_docs.push(
+                TreeNode::leaf(sheet.filename.clone(), icon)
+                    .with_open(sheet.is_open)
+                    .with_dirty(sheet.is_dirty)
+                    .with_active(sheet.is_active),
+            );
         }
     } else if let Some(file) = &project.project_file {
         let icon = TreeIcon::for_path(file);
-        source_docs.push(TreeNode::leaf(file.clone(), icon));
+        source_docs.push(
+            TreeNode::leaf(file.clone(), icon)
+                .with_open(project.project_file_open)
+                .with_dirty(project.project_file_dirty)
+                .with_active(project.project_file_active),
+        );
     }
 
     if let Some(pcb) = &project.pcb_file {
         let icon = TreeIcon::for_path(pcb);
-        source_docs.push(TreeNode::leaf(pcb.clone(), icon));
+        source_docs.push(
+            TreeNode::leaf(pcb.clone(), icon)
+                .with_open(project.pcb_file_open)
+                .with_dirty(project.pcb_file_dirty)
+                .with_active(project.pcb_file_active),
+        );
     }
 
     let lib_count = if fallback_lib_count > 0 {
