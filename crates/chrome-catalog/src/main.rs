@@ -310,6 +310,16 @@ fn tab<'a>(
 // ─── Modal card demo ──────────────────────────────────────────
 
 fn modal_card_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+    // Constants matched to `app/view/dialogs.rs` (the real app's
+    // modal chrome) so the catalog renders byte-for-byte the same.
+    // MODAL_HEADER_HEIGHT = 36, MODAL_CLOSE_X_HIT_W = 46, body
+    // padding = 16. Title padding also = 16 so the title's left
+    // edge aligns with the body's first text glyph (not 12 — that
+    // misalignment was the catalog modal's stand-out bug).
+    const HEADER_HEIGHT: f32 = 36.0;
+    const CLOSE_W: f32 = 46.0;
+    const BODY_PAD: f32 = 16.0;
+
     let panel_bg = ti(tokens.panel_bg);
     let toolbar_bg = ti(tokens.toolbar_bg);
     let text_c = ti(tokens.text);
@@ -320,8 +330,11 @@ fn modal_card_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             text("Modal title").size(13).color(text_c),
             Space::new().width(Length::Fill),
             container(text("\u{00D7}").size(14).color(text_c))
-                .width(40)
-                .height(28)
+                .width(CLOSE_W)
+                // Full header height — without this the X button
+                // had a visible gap below it because the button
+                // was 28 px tall inside a 36 px header.
+                .height(HEADER_HEIGHT)
                 .align_x(iced::alignment::Horizontal::Center)
                 .align_y(iced::alignment::Vertical::Center)
                 .style(move |_: &Theme| container::Style {
@@ -335,12 +348,15 @@ fn modal_card_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         ]
         .align_y(iced::Alignment::Center),
     )
-    .height(36)
+    .height(HEADER_HEIGHT)
     .padding(iced::Padding {
         top: 0.0,
         right: 0.0,
         bottom: 0.0,
-        left: 12.0,
+        // Title left = body left so the modal reads as a single
+        // column. The previous 12 px inset put the title 4 px
+        // left of the body text — visible misalignment.
+        left: BODY_PAD,
     })
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(toolbar_bg)),
@@ -362,7 +378,7 @@ fn modal_card_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                 .size(11)
                 .color(text_c),
         ]
-        .padding(16),
+        .padding(BODY_PAD),
     );
 
     container(column![header, body].width(Length::Fixed(420.0)))

@@ -192,74 +192,34 @@ where
     ) {
         let bounds = layout.bounds();
 
-        // Bg fill — covers the full widget area. Inactive pills get
-        // a flat fill with no borders so the tab bar reads as a
-        // bare strip of labels (Altium parity); only the active
-        // tab gets the 3-sided border + accent stripe that lifts
-        // it out of the strip.
+        // Bg fill + rounded-top border in a single fill_quad. iced's
+        // Border on a Quad supports per-corner radius (`top_left`,
+        // `top_right`), so the border outline traces the curve
+        // around the rounded corners — manual T+L+R rectangles
+        // couldn't do that. The bottom edge of the border merges
+        // with the strip baseline drawn below the tab strip
+        // (same colour, same y), so visually there's no
+        // double-line at the bottom of inactive tabs.
         renderer.fill_quad(
             Quad {
                 bounds,
                 border: Border {
-                    width: 0.0,
+                    width: BORDER_WIDTH,
                     radius: iced::border::Radius::default()
                         .top_left(TOP_RADIUS)
                         .top_right(TOP_RADIUS),
-                    color: Color::TRANSPARENT,
+                    color: self.style.border,
                 },
                 ..Quad::default()
             },
             Background::Color(self.style.fill),
         );
-
-        // Three-sided border — top edge + left edge + (right edge
-        // only on the last tab). Drawn on every tab so each pill
-        // is framed (Altium parity); the right edge is suppressed
-        // on non-last tabs because adjacent tabs share the divider
-        // (left of tab N+1 = right of tab N). The top edge is
-        // inset by TOP_RADIUS on each side so the rounded corners
-        // show as just bg fill at the curve, with no straight
-        // border line cutting across them.
-        let border_color = self.style.border;
-        let top_inset = TOP_RADIUS;
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle {
-                    x: bounds.x + top_inset,
-                    y: bounds.y,
-                    width: (bounds.width - 2.0 * top_inset).max(0.0),
-                    height: BORDER_WIDTH,
-                },
-                ..Quad::default()
-            },
-            Background::Color(border_color),
-        );
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle {
-                    x: bounds.x,
-                    y: bounds.y + TOP_RADIUS,
-                    width: BORDER_WIDTH,
-                    height: bounds.height - TOP_RADIUS,
-                },
-                ..Quad::default()
-            },
-            Background::Color(border_color),
-        );
-        if self.style.is_last {
-            renderer.fill_quad(
-                Quad {
-                    bounds: Rectangle {
-                        x: bounds.x + bounds.width - BORDER_WIDTH,
-                        y: bounds.y + TOP_RADIUS,
-                        width: BORDER_WIDTH,
-                        height: bounds.height - TOP_RADIUS,
-                    },
-                    ..Quad::default()
-                },
-                Background::Color(border_color),
-            );
-        }
+        // `is_last` is unused now (every tab has its full border),
+        // but kept on the style struct so callers don't have to
+        // change. Adjacent tabs will draw a 2-px-wide divider
+        // (right border of tab N + left border of tab N+1); fine
+        // for now since `tokens.border` is a subtle theme colour.
+        let _ = self.style.is_last;
         if self.style.is_active {
             // Accent strip — drawn inside the pill at the bottom
             // 2 px on the active tab only. Sits below the borders
