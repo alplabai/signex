@@ -385,9 +385,14 @@ impl DockArea {
             });
         }
 
+        // Last visible panel index drives the `is_last` flag so
+        // adjacent tabs share their L/R borders and the rightmost
+        // tab actually closes off with a right edge.
+        let last_panel_idx = region.panels.len().saturating_sub(1);
         for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
             let is_active = i == region.active;
+            let is_last = i == last_panel_idx;
 
             let text_c = if is_active {
                 styles::ti(ctx.tokens.text)
@@ -435,9 +440,10 @@ impl DockArea {
             };
             let pill_style = signex_widgets::tab_pill::TabPillStyle {
                 fill,
-                border: styles::ti(ctx.tokens.border),
+                border: iced::Color::BLACK,
                 accent,
                 is_active,
+                is_last,
             };
             let inner = container(text(label).size(11).color(text_c))
                 .padding([4, 10]);
