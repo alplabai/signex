@@ -10,7 +10,7 @@ pub mod tab_pill;
 pub mod theme_ext;
 pub mod tree_view;
 
-pub use tab_pill::{TabPill, TabPillStyle};
+pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────
 

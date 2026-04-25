@@ -254,6 +254,15 @@ pub enum Message {
     /// direction. Replaces the WS_THICKFRAME edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
+    /// User pressed one of the 6 px edge strips around a borderless
+    /// detached modal window — ask the OS to start a resize drag in
+    /// that direction. Same trick as the main window; without this
+    /// the modals couldn't be resized because `decorations: false`
+    /// strips the OS chrome.
+    StartDetachedModalResize {
+        modal: super::state::ModalId,
+        direction: iced::window::Direction,
+    },
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
@@ -356,6 +365,22 @@ pub enum Message {
     /// The source column moves to the destination index, preserving
     /// the user's column order intent.
     BomPreviewColumnDragDrop(usize),
+    /// Cursor entered a column header — used by the in-progress
+    /// drag-reorder feedback to highlight the drop target.
+    BomPreviewColumnHoverEnter(usize),
+    /// Cursor left a column header. Clears the hover state for that
+    /// idx; the next on_enter on a sibling header replaces it.
+    BomPreviewColumnHoverExit(usize),
+    /// User pressed a column's right-edge resize handle. Stores
+    /// the start x and start width on `BomPreviewState`; subsequent
+    /// mouse-move events compute the new width as
+    /// `start_width + (current_x - start_x)`.
+    BomPreviewColumnResizeStart(usize),
+    /// User released the mouse — clears the in-flight resize state.
+    BomPreviewColumnResizeEnd,
+    /// User clicked a Properties-sidebar tab (General / Columns) in
+    /// the BOM preview modal.
+    BomPreviewSetSidebarTab(super::state::BomSidebarTab),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     BomPreviewExport,

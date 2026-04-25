@@ -29,3 +29,7 @@ Theme switching is global — just pull from the `tokens: &ThemeTokens` argument
 ## When the catalog disagrees with the app
 
 The catalog is canonical for the widget appearance. If the same widget looks wrong in the full app but right in the catalog, the bug is in the surrounding container / padding / layout in the app — not the widget itself. Fix it at the call site.
+
+## No commits during iteration
+
+The catalog is a sandbox. Iterating on a widget should stay in the working tree until the design is signed off — then a single commit lands the final version. Committing every visual tweak pollutes branch history with WIP styling and defeats the rapid-feedback purpose of the catalog.

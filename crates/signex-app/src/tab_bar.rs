@@ -3,7 +3,7 @@
 use iced::widget::{Row, container, mouse_area, row, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::tab_pill::{TabPill, TabPillStyle};
+use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 use crate::app::TabInfo;
 use crate::styles;
@@ -79,6 +79,9 @@ pub fn view<'a>(
             accent: styles::ti(tokens.accent),
             is_active,
             is_last,
+            // Document tabs hang from the top of the editing area:
+            // rounded top corners + accent stripe at the bottom.
+            accent_position: AccentPosition::Bottom,
         };
         let inner = container(
             row![text(label).size(11).color(text_c)]
@@ -86,14 +89,21 @@ pub fn view<'a>(
                 .align_y(iced::Alignment::Center),
         )
         .padding([4, 10]);
+        // Cursor: default Pointer on hover so the bar reads as
+        // "clickable tabs", switching to Grabbing only while a tab
+        // is in flight so the drag-to-reorder / drag-to-undock
+        // gesture stays advertised. Always-on Grab on hover read
+        // as the move cursor and felt heavy.
+        let cursor = if dragging.is_some() {
+            iced::mouse::Interaction::Grabbing
+        } else {
+            iced::mouse::Interaction::Pointer
+        };
         let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
             .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
             .on_release(TabMessage::Select(i))
             .on_right_press(TabMessage::ContextMenu(i))
-            // Grab cursor advertises that the tab is draggable —
-            // discoverability for the Altium-style drag-to-undock
-            // behaviour.
-            .interaction(iced::mouse::Interaction::Grab)
+            .interaction(cursor)
             .into();
         bar = bar.push(tab_el);
     }

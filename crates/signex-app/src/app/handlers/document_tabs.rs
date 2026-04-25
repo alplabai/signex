@@ -54,6 +54,13 @@ impl Signex {
                     self.document_state.active_tab = idx;
                     self.sync_active_tab();
                 }
+                // Always clear the drag state on release. The
+                // press-handler arms it on every mouse-down; if
+                // the cursor never moved past the threshold (which
+                // gates the ghost in `view`), we still need to
+                // reset state so the next render doesn't paint the
+                // ghost on the resting cursor.
+                self.ui_state.tab_dragging = None;
                 Task::none()
             }
             TabMessage::ContextMenu(idx) => {

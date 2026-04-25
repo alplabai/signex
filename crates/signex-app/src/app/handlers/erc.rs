@@ -975,7 +975,7 @@ impl Signex {
             ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
-            ModalId::BomPreview => iced::Size::new(1000.0, 700.0),
+            ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {

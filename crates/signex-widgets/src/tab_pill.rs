@@ -30,6 +30,17 @@ use iced::advanced::{Clipboard, Layout, Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector};
 
+/// Where the accent stripe sits on the pill — `Bottom` for document
+/// tabs that hang from above (rounded top corners, accent line at
+/// bottom replacing the strip baseline) and `Top` for panel tabs
+/// that hang from a strip below (rounded bottom corners, accent line
+/// at top replacing the strip top-line).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccentPosition {
+    Bottom,
+    Top,
+}
+
 /// Visual state that drives bg + border colour. Built as a struct so
 /// callers don't have to care about the exact derivation rules
 /// (e.g. drag-tinted active = mix-of-accent-and-fill).
@@ -45,6 +56,7 @@ pub struct TabPillStyle {
     /// pair of adjacent tabs shows a 2-px-wide black band where
     /// their R+L borders stack.
     pub is_last: bool,
+    pub accent_position: AccentPosition,
 }
 
 const TOP_RADIUS: f32 = 4.0;
@@ -192,45 +204,53 @@ where
     ) {
         let bounds = layout.bounds();
 
-        // Bg fill + rounded-top border in a single fill_quad. iced's
-        // Border on a Quad supports per-corner radius (`top_left`,
-        // `top_right`), so the border outline traces the curve
-        // around the rounded corners — manual T+L+R rectangles
-        // couldn't do that. The bottom edge of the border merges
-        // with the strip baseline drawn below the tab strip
-        // (same colour, same y), so visually there's no
-        // double-line at the bottom of inactive tabs.
+        // Bg fill + bordered outline with per-corner radius via
+        // iced's Border. Document tabs round the TOP corners (hang
+        // from above); panel tabs round the BOTTOM corners (hang
+        // from below). Either way the opposite edge merges with
+        // the strip's baseline (same colour, same y) so there's
+        // no visible double-line at the join.
+        let radius = match self.style.accent_position {
+            AccentPosition::Bottom => iced::border::Radius::default()
+                .top_left(TOP_RADIUS)
+                .top_right(TOP_RADIUS),
+            AccentPosition::Top => iced::border::Radius::default()
+                .bottom_left(TOP_RADIUS)
+                .bottom_right(TOP_RADIUS),
+        };
         renderer.fill_quad(
             Quad {
                 bounds,
                 border: Border {
                     width: BORDER_WIDTH,
-                    radius: iced::border::Radius::default()
-                        .top_left(TOP_RADIUS)
-                        .top_right(TOP_RADIUS),
+                    radius,
                     color: self.style.border,
                 },
                 ..Quad::default()
             },
             Background::Color(self.style.fill),
         );
-        // `is_last` is unused now (every tab has its full border),
-        // but kept on the style struct so callers don't have to
-        // change. Adjacent tabs will draw a 2-px-wide divider
-        // (right border of tab N + left border of tab N+1); fine
-        // for now since `tokens.border` is a subtle theme colour.
+        // `is_last` kept on the style struct so callers don't have
+        // to drop the field, but unused now (every tab has full
+        // border via the Quad's Border). Adjacent tabs draw a
+        // 2-px-wide divider; fine since `tokens.border` is subtle.
         let _ = self.style.is_last;
         if self.style.is_active {
-            // Accent strip — drawn inside the pill at the bottom
-            // 2 px on the active tab only. Sits below the borders
-            // (renders last) so it visually replaces the strip
-            // baseline at the active tab's position. Other tabs let
-            // the strip baseline show through.
+            // Accent strip — drawn inside the pill at the edge
+            // opposite the rounded corners on the active tab only.
+            // Sits over the bordered outline so it visually
+            // replaces the strip baseline at the active tab's
+            // position. Inactive tabs let the strip baseline show
+            // through.
+            let accent_y = match self.style.accent_position {
+                AccentPosition::Bottom => bounds.y + bounds.height - ACCENT_HEIGHT,
+                AccentPosition::Top => bounds.y,
+            };
             renderer.fill_quad(
                 Quad {
                     bounds: Rectangle {
                         x: bounds.x,
-                        y: bounds.y + bounds.height - ACCENT_HEIGHT,
+                        y: accent_y,
                         width: bounds.width,
                         height: ACCENT_HEIGHT,
                     },

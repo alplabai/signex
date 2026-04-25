@@ -444,6 +444,12 @@ impl DockArea {
                 accent,
                 is_active,
                 is_last,
+                // Panel tabs sit at the top of each dock region but
+                // visually hang from the strip baseline that runs
+                // ABOVE the panel content — so the accent stripe
+                // belongs at the top of the pill and the rounded
+                // corners flip to the bottom. Inverse of doc tabs.
+                accent_position: signex_widgets::tab_pill::AccentPosition::Top,
             };
             let inner = container(text(label).size(11).color(text_c))
                 .padding([4, 10]);
