@@ -214,6 +214,34 @@ impl Signex {
         self.rerollup_bom_preview();
     }
 
+    /// Flip a column's presence in `BomOptions.columns`. Removing a
+    /// column drops it from the preview + export; adding pushes it
+    /// to the end of the display order. Re-adding a column the user
+    /// previously removed lands it at the end (predictable;
+    /// preserving the original slot would require a separate
+    /// "available columns" Vec).
+    pub(crate) fn handle_bom_preview_toggle_column(&mut self, col: BomColumn) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            if let Some(idx) = preview.options.columns.iter().position(|c| c == &col) {
+                preview.options.columns.remove(idx);
+            } else {
+                preview.options.columns.push(col);
+            }
+        }
+        // Column toggles don't change the rolled-up table, only the
+        // displayed columns + the export columns. No rerollup needed.
+    }
+
+    /// Switch the active variant in the BOM preview. `None` is the
+    /// "Base" view (no variant override). Triggers a rerollup since
+    /// variant_fitted resolution can flip qty totals.
+    pub(crate) fn handle_bom_preview_set_variant(&mut self, variant: Option<String>) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.options.active_variant = variant;
+        }
+        self.rerollup_bom_preview();
+    }
+
     /// User clicked Export inside the BOM preview modal — stash the
     /// live options on the document, kick off the file dialog, and
     /// finish in `handle_export_bom_finished` (which already exists).

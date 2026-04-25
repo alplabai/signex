@@ -15,9 +15,10 @@ use thiserror::Error;
 use crate::pdf::{Orientation, PageSize};
 
 pub mod builtin;
-mod format;
+pub mod format;
 
 pub use builtin::{all_builtin_ids, load_builtin};
+pub use format::{SnxshtError, emit_template, parse_template};
 
 /// Opaque identifier for a template. Built-ins use well-known strings
 /// (`"iso_a4_landscape"`, `"ansi_c_landscape"`); user templates will later
