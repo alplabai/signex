@@ -2642,20 +2642,22 @@ impl Signex {
                 _ => std::collections::HashSet::new(),
             }
         };
+        // Reserve the tab strip's vertical footprint regardless of
+        // whether any document is open — opening the first document
+        // would otherwise shift the entire chrome down by ~24 px,
+        // which feels jarring. The 1 px chrome separator stays
+        // visible too so the menu row always reads as a distinct
+        // band above the tab strip.
+        main = main.push(
+            container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(crate::styles::chrome_separator(
+                    &document.panel_ctx.tokens,
+                )),
+        );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
-            // 1 px divider between the menu/Active-Bar row and the
-            // document tabs — gives the chrome a clean banding so the
-            // tab strip reads as its own zone instead of merging into
-            // the menu row.
-            main = main.push(
-                container(iced::widget::Space::new())
-                    .width(Length::Fill)
-                    .height(1)
-                    .style(crate::styles::chrome_separator(
-                        &document.panel_ctx.tokens,
-                    )),
-            );
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
@@ -2666,6 +2668,18 @@ impl Signex {
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
             );
+        } else {
+            // Empty placeholder strip with the same metrics as
+            // tab_bar::view: 2 px outer padding + 22 px tall inner
+            // pill = 26 px total. Without this the chrome jumps
+            // when the first tab opens.
+            let placeholder = container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(26)
+                .style(crate::styles::toolbar_strip(
+                    &document.panel_ctx.tokens,
+                ));
+            main = main.push(placeholder);
         }
         let main = main
             .push(center_row)
