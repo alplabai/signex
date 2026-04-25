@@ -411,28 +411,39 @@ impl DockArea {
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
             // Length::Fill which would expand the tab to the panel width.
-            // Shared tab-pill style: same rounded-top, no-bottom-border,
-            // accent-underline shape that the document tab bar uses, so
-            // panel tabs and document tabs stay visually in lockstep.
-            let _ = line_c; // accent line drives via `tab_pill_underline`
-            let label_el = container(text(label).size(11).color(text_c))
-                .padding([4, 10])
-                .style(styles::tab_pill(
-                    &ctx.tokens,
-                    is_active,
-                    is_dragging_this,
-                    is_hovered,
-                ));
-            let tab = mouse_area(
-                container(label_el)
-                    .padding(iced::Padding {
-                        top: 0.0,
-                        right: 0.0,
-                        bottom: 2.0,
-                        left: 0.0,
-                    })
-                    .style(styles::tab_pill_underline(&ctx.tokens, is_active)),
-            )
+            // Shared `signex_widgets::TabPill` custom widget — same
+            // rounded-top + 3-sided border + accent underline that the
+            // document tab bar uses. Panel tabs and document tabs stay
+            // visually in lockstep.
+            let _ = line_c; // accent line lives inside TabPill now
+            let tab_active = styles::ti(ctx.tokens.hover);
+            let accent = styles::ti(ctx.tokens.accent);
+            let fill = if is_dragging_this {
+                iced::Color { a: 0.22, ..accent }
+            } else if is_active {
+                tab_active
+            } else if is_hovered {
+                iced::Color {
+                    a: tab_active.a * 0.70,
+                    ..tab_active
+                }
+            } else {
+                iced::Color {
+                    a: tab_active.a * 0.35,
+                    ..tab_active
+                }
+            };
+            let pill_style = signex_widgets::tab_pill::TabPillStyle {
+                fill,
+                border: styles::ti(ctx.tokens.border),
+                accent,
+                is_active,
+            };
+            let inner = container(text(label).size(11).color(text_c))
+                .padding([4, 10]);
+            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
+                inner, pill_style,
+            ))
             .on_enter(DockMessage::TabHoverEnter(position, i))
             .on_exit(DockMessage::TabHoverExit(position, i))
             .on_press(DockMessage::TabDragStart(position, i))
