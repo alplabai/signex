@@ -65,7 +65,7 @@ impl Signex {
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
-        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
+        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
         let kicad_lib_dir = helpers::find_kicad_symbols_dir();
         let mut kicad_libraries = kicad_lib_dir
             .as_deref()
@@ -85,7 +85,7 @@ impl Signex {
                 cursor_y: 0.0,
                 zoom: 100.0,
                 grid_size_mm,
-                visible_grid_mm: 2.54,
+                visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
@@ -168,8 +168,8 @@ impl Signex {
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,
-                    grid_size_mm: 2.54,
-                    visible_grid_mm: 2.54,
+                    grid_size_mm: 1.27,
+                    visible_grid_mm: 1.27,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
