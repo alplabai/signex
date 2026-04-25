@@ -2290,7 +2290,7 @@ impl Signex {
         let menu_ctx = crate::menu_bar::MenuContext {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
-            has_project: document.project_path.is_some(),
+            has_project: document.active_project.is_some(),
             has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
             can_undo: document
                 .engine_for_window(window_id, ui)
@@ -2694,7 +2694,7 @@ impl Signex {
             // but no document picked yet" — the second case is what
             // the user sees right after opening a .kicad_pro before
             // clicking any node in the project tree.
-            let (title, hint) = if self.document_state.project_path.is_some() {
+            let (title, hint) = if self.document_state.active_project.is_some() {
                 (
                     "No document selected",
                     "Choose a schematic or PCB from the project tree",
