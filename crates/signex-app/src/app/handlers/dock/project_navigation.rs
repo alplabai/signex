@@ -291,13 +291,14 @@ impl Signex {
         match choice {
             ProjectCloseChoice::Cancel => Task::none(),
             ProjectCloseChoice::SaveAll => {
-                // Save every dirty file. For files that match an
-                // engine entry (the typical case — close_tab_now's
-                // park-on-dirty rule keeps them alive), call
-                // `engine.save()` and clear the dirty flag on disk.
-                // Files without a live engine can't be saved here;
-                // they shouldn't exist if `dirty_paths` is consistent
-                // with `engines`, but log + skip just in case.
+                // Save every dirty file. Files without a live engine
+                // shouldn't exist if `dirty_paths` is consistent with
+                // `engines` — count those as failures so the user
+                // sees something is wrong instead of silently losing
+                // the dirty state. If ANY save fails, the project
+                // stays open + the user gets an error modal listing
+                // the unsaved files.
+                let mut failed: Vec<std::path::PathBuf> = Vec::new();
                 for path in &state.dirty_paths {
                     if let Some(engine) = self.document_state.engines.get_mut(path) {
                         match engine.save() {
@@ -317,15 +318,30 @@ impl Signex {
                                     "Failed to save during project close",
                                     &anyhow::anyhow!("{err}"),
                                 );
+                                failed.push(path.clone());
                             }
                         }
                     } else {
                         crate::diagnostics::log_info(format!(
-                            "Project close: no live engine for dirty {} — skipping save",
+                            "Project close: no live engine for dirty {} — cannot save",
                             path.display()
                         ));
-                        self.document_state.dirty_paths.remove(path);
+                        failed.push(path.clone());
                     }
+                }
+                if !failed.is_empty() {
+                    let listing: Vec<String> = failed
+                        .iter()
+                        .filter_map(|p| {
+                            p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
+                        })
+                        .collect();
+                    self.document_state.export_error = Some(format!(
+                        "Could not save {} file(s) — project not closed:\n  {}",
+                        failed.len(),
+                        listing.join("\n  ")
+                    ));
+                    return Task::none();
                 }
                 self.execute_close_project_at_tree_path(&state.tree_path)
             }
@@ -610,9 +626,23 @@ impl Signex {
         }
 
         if filename.ends_with(".kicad_sch") || filename.ends_with(".snxsch") {
+            let title = filename
+                .trim_end_matches(".kicad_sch")
+                .trim_end_matches(".snxsch")
+                .to_string();
+            // If we parked an engine for this file (closed while dirty),
+            // restore it instead of reparsing — Altium parity. Re-parsing
+            // would silently discard the user's in-memory edits, which is
+            // exactly what `dirty_paths` was built to prevent.
+            if self.document_state.engines.contains_key(&file_path)
+                && self.document_state.dirty_paths.contains(&file_path)
+            {
+                self.attach_parked_schematic_tab(file_path, title);
+                return Ok(());
+            }
             let schematic = kicad_parser::parse_schematic_file(&file_path)
                 .with_context(|| format!("parse schematic {}", file_path.display()))?;
-            self.open_schematic_tab(file_path, filename.replace(".kicad_sch", ""), schematic);
+            self.open_schematic_tab(file_path, title, schematic);
             return Ok(());
         }
 
