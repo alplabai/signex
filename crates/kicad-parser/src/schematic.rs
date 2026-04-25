@@ -82,10 +82,9 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
-    // KiCad property texts (Reference/Value/custom fields) default to centered
-    // alignment on unspecified axes. For example `(justify left)` means
-    // horizontal left + vertical center.
-    let mut justify_h = HAlign::Left;
+    // KiCad spec: when (justify ...) is omitted, both axes default to centered.
+    // (See KiCad S-expression effects token reference.)
+    let mut justify_h = HAlign::Center;
     let mut justify_v = VAlign::Center;
     let mut seen_h = false;
     let mut seen_v = false;
