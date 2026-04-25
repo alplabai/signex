@@ -106,6 +106,10 @@ impl Signex {
                 self.handle_print_preview_set_include_title_block(include);
                 self.finish_update()
             }
+            Message::PrintPreviewZoom(delta) => {
+                self.handle_print_preview_zoom(delta);
+                self.finish_update()
+            }
             Message::PrintPreviewExport => {
                 let task = self
                     .handle_print_preview_export()
@@ -154,6 +158,18 @@ impl Signex {
             }
             Message::BomPreviewSetVariant(v) => {
                 self.handle_bom_preview_set_variant(v);
+                self.finish_update()
+            }
+            Message::BomPreviewSortColumn(idx) => {
+                self.handle_bom_preview_sort_column(idx);
+                self.finish_update()
+            }
+            Message::BomPreviewColumnDragStart(idx) => {
+                self.handle_bom_preview_column_drag_start(idx);
+                self.finish_update()
+            }
+            Message::BomPreviewColumnDragDrop(idx) => {
+                self.handle_bom_preview_column_drag_drop(idx);
                 self.finish_update()
             }
             Message::BomPreviewExport => {

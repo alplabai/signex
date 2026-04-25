@@ -35,6 +35,87 @@ pub fn panel_region(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     }
 }
 
+/// 1 px horizontal divider that sits between two strips of chrome —
+/// used between the menu/Active-Bar row and the document tab strip
+/// so the two zones read as separate UI bands.
+pub fn chrome_separator(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(Background::Color(border)),
+        ..container::Style::default()
+    }
+}
+
+/// Pill geometry shared between the document tab bar and the panel
+/// tab strip: top-only rounded corners, no bottom border (iced 0.14
+/// can't draw per-side borders, so the outer accent strip + tab bg
+/// fill stand in for the missing top/side divider). Output is a
+/// closure suitable for `container.style(...)`.
+///
+/// `is_active`, `is_hovered`, `is_dragging` drive the fill colour:
+///   - dragging → 22 % alpha tint of the theme accent
+///   - active   → `tokens.hover` (full alpha)
+///   - hovered  → `tokens.hover` × 0.70 alpha
+///   - default  → `tokens.hover` × 0.35 alpha
+pub fn tab_pill(
+    tokens: &ThemeTokens,
+    is_active: bool,
+    is_dragging: bool,
+    is_hovered: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let tab_active = ti(tokens.hover);
+    let accent = ti(tokens.accent);
+    let inactive_fill = iced::Color {
+        a: tab_active.a * 0.35,
+        ..tab_active
+    };
+    let hover_fill = iced::Color {
+        a: tab_active.a * 0.70,
+        ..tab_active
+    };
+    let drag_fill = iced::Color { a: 0.22, ..accent };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(if is_dragging {
+            drag_fill
+        } else if is_active {
+            tab_active
+        } else if is_hovered {
+            hover_fill
+        } else {
+            inactive_fill
+        })),
+        // No border (the bottom edge would otherwise draw across
+        // the underline). Top-only radius gives the pill a subtle
+        // chrome lift without rounding into the underline strip.
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .top_left(3.0)
+                .top_right(3.0),
+            color: Color::TRANSPARENT,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Outer accent-line wrapper for a tab pill: a 2 px high strip whose
+/// background is the accent colour (active) or transparent (inactive).
+/// Pair with `tab_pill` via a 2 px bottom padding on the wrapping
+/// container so the strip peeks below the pill as the active marker.
+pub fn tab_pill_underline(
+    tokens: &ThemeTokens,
+    is_active: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let accent = ti(tokens.accent);
+    let line = if is_active { accent } else { Color::TRANSPARENT };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(line)),
+        ..container::Style::default()
+    }
+}
+
 /// Toolbar / menu bar strip
 pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.toolbar_bg);

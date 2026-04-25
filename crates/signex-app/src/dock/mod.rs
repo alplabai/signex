@@ -411,9 +411,13 @@ impl DockArea {
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
             // Length::Fill which would expand the tab to the panel width.
+            // Shared tab-pill style: same rounded-top, no-bottom-border,
+            // accent-underline shape that the document tab bar uses, so
+            // panel tabs and document tabs stay visually in lockstep.
+            let _ = line_c; // accent line drives via `tab_pill_underline`
             let label_el = container(text(label).size(11).color(text_c))
-                .padding([5, 10])
-                .style(styles::dock_tab_container_dragging(
+                .padding([4, 10])
+                .style(styles::tab_pill(
                     &ctx.tokens,
                     is_active,
                     is_dragging_this,
@@ -427,7 +431,7 @@ impl DockArea {
                         bottom: 2.0,
                         left: 0.0,
                     })
-                    .style(styles::tab_underline(line_c)),
+                    .style(styles::tab_pill_underline(&ctx.tokens, is_active)),
             )
             .on_enter(DockMessage::TabHoverEnter(position, i))
             .on_exit(DockMessage::TabHoverExit(position, i))

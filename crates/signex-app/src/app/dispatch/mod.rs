@@ -60,6 +60,9 @@ impl Signex {
             | Message::BomPreviewSetIncludeNotFitted(_)
             | Message::BomPreviewToggleColumn(_)
             | Message::BomPreviewSetVariant(_)
+            | Message::BomPreviewSortColumn(_)
+            | Message::BomPreviewColumnDragStart(_)
+            | Message::BomPreviewColumnDragDrop(_)
             | Message::BomPreviewExport
             | Message::BomPreviewClose
             | Message::PrintPreviewRequested
@@ -71,6 +74,7 @@ impl Signex {
             | Message::PrintPreviewSetSpecificPageInput(_)
             | Message::PrintPreviewSetFitToPage(_)
             | Message::PrintPreviewSetIncludeTitleBlock(_)
+            | Message::PrintPreviewZoom(_)
             | Message::PrintPreviewExport
             | Message::PrintPreviewClose
             | Message::DismissExportError => self.dispatch_document_message(message),
