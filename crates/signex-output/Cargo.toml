@@ -20,3 +20,7 @@ ttf-parser = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }
+
+[[example]]
+name = "qa_harness"
+path = "examples/qa_harness.rs"
