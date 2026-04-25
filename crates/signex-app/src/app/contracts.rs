@@ -336,6 +336,14 @@ pub enum Message {
     BomPreviewSetIncludeDnp(bool),
     /// User toggled "Include Not Fitted" in the BOM preview modal.
     BomPreviewSetIncludeNotFitted(bool),
+    /// User toggled a single column on / off in the BOM preview
+    /// column picker. The handler flips the column's presence in
+    /// `BomOptions.columns`, preserving the existing display order
+    /// when re-adding so the user's column ordering survives toggles.
+    BomPreviewToggleColumn(signex_output::BomColumn),
+    /// User picked a variant in the BOM preview variant dropdown.
+    /// `None` means the "Base" (no-variant) view.
+    BomPreviewSetVariant(Option<String>),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     BomPreviewExport,

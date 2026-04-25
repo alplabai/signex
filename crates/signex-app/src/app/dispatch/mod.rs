@@ -58,6 +58,8 @@ impl Signex {
             | Message::BomPreviewSetFormat(_)
             | Message::BomPreviewSetIncludeDnp(_)
             | Message::BomPreviewSetIncludeNotFitted(_)
+            | Message::BomPreviewToggleColumn(_)
+            | Message::BomPreviewSetVariant(_)
             | Message::BomPreviewExport
             | Message::BomPreviewClose
             | Message::PrintPreviewRequested

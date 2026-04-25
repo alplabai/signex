@@ -148,6 +148,14 @@ impl Signex {
                 self.handle_bom_preview_set_include_not_fitted(b);
                 self.finish_update()
             }
+            Message::BomPreviewToggleColumn(col) => {
+                self.handle_bom_preview_toggle_column(col);
+                self.finish_update()
+            }
+            Message::BomPreviewSetVariant(v) => {
+                self.handle_bom_preview_set_variant(v);
+                self.finish_update()
+            }
             Message::BomPreviewExport => {
                 let task = self
                     .handle_bom_preview_export()
