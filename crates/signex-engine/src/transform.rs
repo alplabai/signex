@@ -316,7 +316,31 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    symbol.rotation = (symbol.rotation + angle_degrees) % 360.0;
+                    let pivot = symbol.position;
+                    symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
+                    // KiCad rotates property field positions around the symbol's
+                    // pivot and bumps each field's stored rotation by the same
+                    // delta so text follows the symbol on rotate operations.
+                    if let Some(rt) = symbol.ref_text.as_mut() {
+                        let (nx, ny) = rotate_point_around(rt.position.x, rt.position.y, pivot.x, pivot.y, angle_degrees);
+                        rt.position.x = nx;
+                        rt.position.y = ny;
+                        rt.rotation = (rt.rotation + angle_degrees).rem_euclid(360.0);
+                    }
+                    if let Some(vt) = symbol.val_text.as_mut() {
+                        let (nx, ny) = rotate_point_around(vt.position.x, vt.position.y, pivot.x, pivot.y, angle_degrees);
+                        vt.position.x = nx;
+                        vt.position.y = ny;
+                        vt.rotation = (vt.rotation + angle_degrees).rem_euclid(360.0);
+                    }
+                    for cp in &mut symbol.custom_properties {
+                        if let Some(tp) = cp.text.as_mut() {
+                            let (nx, ny) = rotate_point_around(tp.position.x, tp.position.y, pivot.x, pivot.y, angle_degrees);
+                            tp.position.x = nx;
+                            tp.position.y = ny;
+                            tp.rotation = (tp.rotation + angle_degrees).rem_euclid(360.0);
+                        }
+                    }
                     true
                 })
                 .unwrap_or(false),
@@ -332,9 +356,27 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
+                    let pivot = symbol.position;
                     match axis {
                         MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
                         MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
+                    }
+                    // Reflect property field positions across the symbol's pivot
+                    // axis so text mirrors with the symbol body.
+                    let mirror_field = |pos_x: &mut f64, pos_y: &mut f64| match axis {
+                        MirrorAxis::Horizontal => *pos_x = 2.0 * pivot.x - *pos_x,
+                        MirrorAxis::Vertical => *pos_y = 2.0 * pivot.y - *pos_y,
+                    };
+                    if let Some(rt) = symbol.ref_text.as_mut() {
+                        mirror_field(&mut rt.position.x, &mut rt.position.y);
+                    }
+                    if let Some(vt) = symbol.val_text.as_mut() {
+                        mirror_field(&mut vt.position.x, &mut vt.position.y);
+                    }
+                    for cp in &mut symbol.custom_properties {
+                        if let Some(tp) = cp.text.as_mut() {
+                            mirror_field(&mut tp.position.x, &mut tp.position.y);
+                        }
                     }
                     true
                 })
@@ -342,6 +384,23 @@ impl Engine {
             _ => false,
         }
     }
+}
+
+/// Rotate `(x, y)` around `(cx, cy)` by `angle_deg` using the same screen
+/// convention as `signex_render::instance_transform` (Y-down schematic
+/// coordinates, positive angle = CCW in user view).
+fn rotate_point_around(x: f64, y: f64, cx: f64, cy: f64, angle_deg: f64) -> (f64, f64) {
+    let rx = x - cx;
+    let ry = y - cy;
+    // Match instance_transform: flip Y to local Y-up, rotate by -angle, flip back.
+    let rad = -angle_deg.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let lx = rx;
+    let ly = -ry;
+    let nlx = lx * cos - ly * sin;
+    let nly = lx * sin + ly * cos;
+    (cx + nlx, cy - nly)
 }
 
 // ---------------------------------------------------------------------------
