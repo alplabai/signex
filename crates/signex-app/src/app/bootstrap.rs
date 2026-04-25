@@ -218,6 +218,7 @@ impl Signex {
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 pending_pdf_options: None,
+                pending_bom_options: None,
                 export_error: None,
                 bom_preview: None,
             },
