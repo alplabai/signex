@@ -56,9 +56,15 @@ pub fn view<'a>(
         // right-click menu now (Altium parity) — the tab itself is the
         // entire hit target, which makes drag-to-reorder and drag-to-
         // detach feel uniform across the strip.
+        //
+        // Drag accent follows the theme's accent colour (amber on
+        // Altium Dark, cyan on Alp Lab, etc.) so the drag indicator
+        // looks native to whichever theme is active. The hardcoded
+        // Windows-blue (#0078D7) made the drag stand out as obviously
+        // not-Signex on every theme.
         let is_dragging = dragging == Some(i);
-        let accent = Color::from_rgb(0.00, 0.47, 0.84);
-        let drag_bg = Color::from_rgba(0.0, 0.47, 0.84, 0.18);
+        let accent = signex_widgets::theme_ext::accent_color(tokens);
+        let drag_bg = Color::from_rgba(accent.r, accent.g, accent.b, 0.18);
         let bg = if is_dragging {
             Some(Background::Color(drag_bg))
         } else if is_active {
