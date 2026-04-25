@@ -258,14 +258,28 @@ impl Exporter for NetlistExporter {
             net_code += 1;
         }
 
-        // Build the root export node
+        // Build the root export node. The header date prefers the
+        // project title-block `date` field — the engineer's chosen
+        // revision date — falling back to a fixed deterministic
+        // value (`2000-01-01T00:00:00`) when both are absent. The
+        // fixed fallback keeps test assertions stable; live exports
+        // always have a title-block date in practice.
         let tool_version = "Signex 0.8.0";
-        let timestamp = "2000-01-01T00:00:00".to_string();
+        let title_block_date = ctx.metadata.date.trim();
+        let timestamp = if !title_block_date.is_empty() {
+            title_block_date.to_string()
+        } else {
+            "2000-01-01T00:00:00".to_string()
+        };
 
+        // KiCad netlists use forward-slash separators in (source ...)
+        // regardless of host OS — Windows `path.display()` mixes them
+        // when crossed through `Path::join`. Normalise so the netlist
+        // doesn't carry a "C:/foo\\bar" hybrid that looks like a bug.
         let source = ctx
             .sheets
             .first()
-            .map(|s| s.path.display().to_string())
+            .map(|s| s.path.display().to_string().replace('\\', "/"))
             .unwrap_or_default();
 
         let mut root_items = vec![emit_header(&source, &timestamp, tool_version)];
