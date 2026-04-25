@@ -1346,11 +1346,41 @@ impl Signex {
         let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
 
         // Centre: the selected page rendered full-size, constrained to a
-        // reasonable viewport.
+        // reasonable viewport. The image is wrapped in a scrollable so
+        // scroll-wheel zoom can blow it up past the visible area; the
+        // outer mouse_area intercepts the wheel and converts it into a
+        // `PrintPreviewZoom` message that scales the image around its
+        // current centre.
         let selected_page = &preview.pages[preview.selected];
-        let full_image = container(
+        let zoom = preview.zoom;
+        let scaled_w = (selected_page.width_px as f32 * zoom).max(64.0);
+        let scaled_h = (selected_page.height_px as f32 * zoom).max(64.0);
+        let img: Element<'_, Message> = if zoom <= 1.0 {
+            // Fit to viewport at zoom ≤ 1 so the page never gets
+            // smaller than the available area; matches the previous
+            // "fill viewport, preserve aspect" behaviour at default
+            // zoom.
             image(preview.page_handles[preview.selected].clone())
                 .content_fit(iced::ContentFit::Contain)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            // Above 1× we want the image to be exactly its scaled
+            // pixel size + the wrapper scrollable lets the user
+            // pan around when it overflows.
+            image(preview.page_handles[preview.selected].clone())
+                .content_fit(iced::ContentFit::Fill)
+                .width(Length::Fixed(scaled_w))
+                .height(Length::Fixed(scaled_h))
+                .into()
+        };
+        let viewport = container(
+            scrollable(img)
+                .direction(iced::widget::scrollable::Direction::Both {
+                    vertical: iced::widget::scrollable::Scrollbar::default(),
+                    horizontal: iced::widget::scrollable::Scrollbar::default(),
+                })
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -1366,13 +1396,22 @@ impl Signex {
             },
             ..container::Style::default()
         });
+        let full_image = iced::widget::mouse_area(viewport).on_scroll(|delta| {
+            use iced::mouse::ScrollDelta;
+            let dy = match delta {
+                ScrollDelta::Lines { y, .. } => y,
+                ScrollDelta::Pixels { y, .. } => y,
+            };
+            Message::PrintPreviewZoom(dy)
+        });
 
         let page_caption = text(format!(
-            "Page {} of {} — {}×{} px",
+            "Page {} of {} — {}×{} px · {:.0}%",
             selected_page.page_number,
             preview.pages.len(),
             selected_page.width_px,
             selected_page.height_px,
+            zoom * 100.0,
         ))
         .size(11)
         .color(text_muted);
@@ -2605,6 +2644,18 @@ impl Signex {
         };
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
+            // 1 px divider between the menu/Active-Bar row and the
+            // document tabs — gives the chrome a clean banding so the
+            // tab strip reads as its own zone instead of merging into
+            // the menu row.
+            main = main.push(
+                container(iced::widget::Space::new())
+                    .width(Length::Fill)
+                    .height(1)
+                    .style(crate::styles::chrome_separator(
+                        &document.panel_ctx.tokens,
+                    )),
+            );
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
