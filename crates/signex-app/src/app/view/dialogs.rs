@@ -5,7 +5,7 @@
 //! - ERC — per-rule severity override grid + pin-connection matrix
 //! - Reset-Annotations confirm — simple Yes/No
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Row, Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
@@ -1082,7 +1082,7 @@ impl Signex {
     }
 
     fn view_bom_preview_body_inner(&self, draggable: bool) -> Element<'_, Message> {
-        use signex_output::{BomFormat, BomGrouping};
+        use signex_output::{BomColumn, BomFormat, BomGrouping};
         let Some(ref preview) = self.document_state.bom_preview else {
             return container(Space::new()).into();
         };
@@ -1117,11 +1117,11 @@ impl Signex {
             detached_header(header_content, super::super::state::ModalId::BomPreview)
         };
 
-        let row_pill = |label: &'static str,
+        let row_pill = |label: String,
                         on: bool,
                         msg: Message|
          -> Element<'_, Message> {
-            button(text(label.to_string()).size(11).color(text_c))
+            button(text(label).size(11).color(text_c))
                 .padding([4, 10])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
@@ -1150,19 +1150,19 @@ impl Signex {
             text("Grouping:").size(11).color(text_muted),
             Space::new().width(8),
             row_pill(
-                "Grouped",
+                "Grouped".to_string(),
                 preview.options.grouping == BomGrouping::Grouped,
                 Message::BomPreviewSetGrouping(BomGrouping::Grouped),
             ),
             Space::new().width(4),
             row_pill(
-                "Ungrouped",
+                "Ungrouped".to_string(),
                 preview.options.grouping == BomGrouping::Ungrouped,
                 Message::BomPreviewSetGrouping(BomGrouping::Ungrouped),
             ),
             Space::new().width(4),
             row_pill(
-                "Flat",
+                "Flat".to_string(),
                 preview.options.grouping == BomGrouping::Flat,
                 Message::BomPreviewSetGrouping(BomGrouping::Flat),
             ),
@@ -1174,19 +1174,19 @@ impl Signex {
             text("Format:").size(11).color(text_muted),
             Space::new().width(8),
             row_pill(
-                "CSV",
+                "CSV".to_string(),
                 preview.options.format == BomFormat::Csv,
                 Message::BomPreviewSetFormat(BomFormat::Csv),
             ),
             Space::new().width(4),
             row_pill(
-                "XLSX",
+                "XLSX".to_string(),
                 preview.options.format == BomFormat::Xlsx,
                 Message::BomPreviewSetFormat(BomFormat::Xlsx),
             ),
             Space::new().width(4),
             row_pill(
-                "HTML",
+                "HTML".to_string(),
                 preview.options.format == BomFormat::Html,
                 Message::BomPreviewSetFormat(BomFormat::Html),
             ),
@@ -1196,13 +1196,13 @@ impl Signex {
 
         let toggle_row: Element<'_, Message> = row![
             row_pill(
-                "Include DNP",
+                "Include DNP".to_string(),
                 preview.options.include_dnp,
                 Message::BomPreviewSetIncludeDnp(!preview.options.include_dnp),
             ),
             Space::new().width(4),
             row_pill(
-                "Include Not Fitted",
+                "Include Not Fitted".to_string(),
                 preview.options.include_not_fitted,
                 Message::BomPreviewSetIncludeNotFitted(!preview.options.include_not_fitted),
             ),
@@ -1210,29 +1210,128 @@ impl Signex {
         .align_y(iced::Alignment::Center)
         .into();
 
-        // Header strip + body rows. Columns mirror the default
-        // `BomOptions::columns` set; widths are tuned so the
-        // designator list stays readable without dominating the
-        // table.
-        let col_h = |label: &'static str, width: f32| -> Element<'_, Message> {
-            container(text(label.to_string()).size(11).color(text_c))
+        // Variant picker — only shown when the active project
+        // declares variants. "Base" is the no-override view.
+        let variant_row: Element<'_, Message> = if preview.variants.is_empty() {
+            Space::new().into()
+        } else {
+            let active_label = preview
+                .options
+                .active_variant
+                .clone()
+                .unwrap_or_else(|| "Base".to_string());
+            let mut r = row![
+                text("Variant:").size(11).color(text_muted),
+                Space::new().width(8),
+                row_pill(
+                    "Base".to_string(),
+                    preview.options.active_variant.is_none(),
+                    Message::BomPreviewSetVariant(None),
+                ),
+            ]
+            .align_y(iced::Alignment::Center);
+            for variant in &preview.variants {
+                let is_active = active_label.as_str() == variant.as_str();
+                r = r.push(Space::new().width(4));
+                r = r.push(row_pill(
+                    variant.clone(),
+                    is_active,
+                    Message::BomPreviewSetVariant(Some(variant.clone())),
+                ));
+            }
+            r.into()
+        };
+
+        // Column picker — toggles for the standard column set + any
+        // custom-field column discovered in the rolled-up rows. The
+        // pill state mirrors `preview.options.columns`; clicking
+        // adds/removes from that Vec via `handle_bom_preview_toggle_column`.
+        let mut custom_keys: std::collections::BTreeSet<String> =
+            std::collections::BTreeSet::new();
+        for r in &preview.table.rows {
+            for k in r.custom.keys() {
+                custom_keys.insert(k.clone());
+            }
+        }
+        let column_options: Vec<(BomColumn, &'static str)> = vec![
+            (BomColumn::Name, "Name"),
+            (BomColumn::Description, "Description"),
+            (BomColumn::Designator, "Designator"),
+            (BomColumn::Value, "Value"),
+            (BomColumn::Footprint, "Footprint"),
+            (BomColumn::LibRef, "LibRef"),
+            (BomColumn::Qty, "Qty"),
+        ];
+        let mut column_row = row![text("Columns:").size(11).color(text_muted), Space::new().width(8)]
+            .align_y(iced::Alignment::Center);
+        for (col, label) in &column_options {
+            let on = preview.options.columns.iter().any(|c| c == col);
+            column_row = column_row.push(row_pill(
+                label.to_string(),
+                on,
+                Message::BomPreviewToggleColumn(col.clone()),
+            ));
+            column_row = column_row.push(Space::new().width(4));
+        }
+        for key in &custom_keys {
+            let col = BomColumn::Custom(key.clone());
+            let on = preview.options.columns.iter().any(|c| c == &col);
+            column_row = column_row.push(row_pill(
+                key.clone(),
+                on,
+                Message::BomPreviewToggleColumn(col),
+            ));
+            column_row = column_row.push(Space::new().width(4));
+        }
+        let column_row: Element<'_, Message> = scrollable(column_row)
+            .direction(iced::widget::scrollable::Direction::Horizontal(
+                iced::widget::scrollable::Scrollbar::new()
+                    .width(0)
+                    .scroller_width(0),
+            ))
+            .into();
+
+        // Build the table from `preview.options.columns`. Column
+        // widths are picked per-kind so the long-string columns
+        // (designator list, description) get more horizontal room
+        // than the short ones (Qty).
+        let column_width = |c: &BomColumn| -> f32 {
+            match c {
+                BomColumn::Name => 140.0,
+                BomColumn::Description => 220.0,
+                BomColumn::Designator | BomColumn::Reference => 220.0,
+                BomColumn::Value => 110.0,
+                BomColumn::Footprint => 140.0,
+                BomColumn::LibRef => 160.0,
+                BomColumn::Qty => 50.0,
+                BomColumn::Custom(_) => 120.0,
+            }
+        };
+        let column_value = |c: &BomColumn, r: &signex_output::BomRow| -> String {
+            match c {
+                BomColumn::Name => r.name.clone(),
+                BomColumn::Description => r.description.clone(),
+                BomColumn::Designator | BomColumn::Reference => r.references.join(", "),
+                BomColumn::Value => r.value.clone(),
+                BomColumn::Footprint => r.footprint.clone(),
+                BomColumn::LibRef => r.lib_ref.clone(),
+                BomColumn::Qty => r.qty.to_string(),
+                BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
+            }
+        };
+        let col_h = |label: String, width: f32| -> Element<'_, Message> {
+            container(text(label).size(11).color(text_c))
                 .width(Length::Fixed(width))
                 .padding([4, 6])
                 .into()
         };
-        let table_header = container(
-            row![
-                col_h("Name", 140.0),
-                col_h("Description", 220.0),
-                col_h("Designator", 220.0),
-                col_h("Footprint", 140.0),
-                col_h("LibRef", 160.0),
-                col_h("Qty", 50.0),
-            ]
-            .spacing(0),
-        )
-        .style(crate::styles::toolbar_strip(tokens))
-        .width(Length::Fill);
+        let mut header_row: Row<'_, Message> = Row::new().spacing(0);
+        for c in &preview.options.columns {
+            header_row = header_row.push(col_h(c.header().to_string(), column_width(c)));
+        }
+        let table_header = container(header_row)
+            .style(crate::styles::toolbar_strip(tokens))
+            .width(Length::Fill);
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (idx, r) in preview.table.rows.iter().enumerate() {
@@ -1247,23 +1346,16 @@ impl Signex {
                     .padding([3, 6])
                     .into()
             };
-            let designators = r.references.join(", ");
-            let row_el = container(
-                row![
-                    cell(r.name.clone(), 140.0),
-                    cell(r.description.clone(), 220.0),
-                    cell(designators, 220.0),
-                    cell(r.footprint.clone(), 140.0),
-                    cell(r.lib_ref.clone(), 160.0),
-                    cell(r.qty.to_string(), 50.0),
-                ]
-                .spacing(0),
-            )
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(alt_bg)),
-                ..container::Style::default()
-            });
+            let mut row_inner: Row<'_, Message> = Row::new().spacing(0);
+            for c in &preview.options.columns {
+                row_inner = row_inner.push(cell(column_value(c, r), column_width(c)));
+            }
+            let row_el = container(row_inner)
+                .width(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(alt_bg)),
+                    ..container::Style::default()
+                });
             rows.push(row_el.into());
         }
         let body = scrollable(column(rows).spacing(0))
@@ -1291,6 +1383,10 @@ impl Signex {
                         format_row,
                         Space::new().height(6),
                         toggle_row,
+                        Space::new().height(6),
+                        variant_row,
+                        Space::new().height(6),
+                        column_row,
                     ]
                     .spacing(0)
                 )
