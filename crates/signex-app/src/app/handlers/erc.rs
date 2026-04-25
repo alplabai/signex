@@ -57,9 +57,8 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
 
         let push_snap = |path: std::path::PathBuf,
                          snap: signex_render::schematic::SchematicRenderSnapshot,
@@ -108,7 +107,7 @@ impl Signex {
             }
         }
         // Unopened project sheets.
-        if let Some(pd) = self.document_state.project_data.as_ref() {
+        if let Some(pd) = self.document_state.active_loaded_project().map(|p| &p.data) {
             for sheet in &pd.sheets {
                 let path = match project_root.as_ref() {
                     Some(root) => root.join(&sheet.filename),
@@ -174,9 +173,8 @@ impl Signex {
     fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from))?;
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))?;
 
         let dsl_path_candidates = [
             project_root.join("erc.dsl"),
@@ -472,15 +470,14 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
         let unopened_sheet_paths: Vec<std::path::PathBuf> = self
             .document_state
-            .project_data
-            .as_ref()
-            .map(|pd| {
-                pd.sheets
+            .active_loaded_project()
+            .map(|p| {
+                p.data
+                    .sheets
                     .iter()
                     .filter_map(|s| {
                         let path = match project_root.as_ref() {
@@ -607,15 +604,14 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(PathBuf::from));
         let unopened_paths: Vec<PathBuf> = self
             .document_state
-            .project_data
-            .as_ref()
-            .map(|pd| {
-                pd.sheets
+            .active_loaded_project()
+            .map(|p| {
+                p.data
+                    .sheets
                     .iter()
                     .filter_map(|s| {
                         let path = match project_root.as_ref() {
