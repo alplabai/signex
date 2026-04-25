@@ -14,6 +14,36 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        // Build per-project panel info from every loaded project in the
+        // workspace. `sheets` / `project_name` below stay in sync with
+        // the active project for handlers still reading those fields
+        // (issue #54 phase 5 removes the single-project fallbacks).
+        let active_id = self.document_state.active_project;
+        let projects_panel: Vec<crate::panels::ProjectPanelInfo> = self
+            .document_state
+            .projects
+            .iter()
+            .map(|p| crate::panels::ProjectPanelInfo {
+                id: p.id,
+                name: p.data.name.clone(),
+                project_file: p.data.schematic_root.clone(),
+                pcb_file: p.data.pcb_file.clone(),
+                sheets: p
+                    .data
+                    .sheets
+                    .iter()
+                    .map(|sheet| crate::panels::SheetInfo {
+                        name: sheet.name.clone(),
+                        filename: sheet.filename.clone(),
+                        sym_count: sheet.symbols_count,
+                        wire_count: sheet.wires_count,
+                        label_count: sheet.labels_count,
+                    })
+                    .collect(),
+                is_active: Some(p.id) == active_id,
+            })
+            .collect();
+
         let sheets: Vec<crate::panels::SheetInfo> = self
             .document_state
             .project_data
@@ -76,6 +106,7 @@ impl Signex {
         let erc_diagnostics = self.build_erc_diagnostic_entries();
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
+            projects: projects_panel,
             project_name,
             project_file: self
                 .document_state
@@ -224,6 +255,23 @@ impl Signex {
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
+        // Follow the focused tab into its project: the Projects-panel
+        // accent and active_project-scoped handlers (ERC / annotate /
+        // save-all) should track the user's tab focus, not the most
+        // recently opened project. Tabs with no `project_id` (loose
+        // schematics opened without a `.kicad_pro`) leave the pointer
+        // alone so the panel keeps showing whichever project was last
+        // active. (#54 phase 2.4)
+        if let Some(pid) = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| t.project_id)
+        {
+            self.document_state.active_project = Some(pid);
+            self.sync_legacy_project_fields();
+        }
+
         self.sync_visible_document_from_active_tab();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.

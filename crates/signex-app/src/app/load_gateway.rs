@@ -188,11 +188,16 @@ impl Signex {
         sheet: SchematicSheet,
     ) {
         self.park_active_schematic_session();
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: None,
             dirty: false,
+            project_id,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
@@ -201,11 +206,16 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
+            project_id,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);

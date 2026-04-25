@@ -15,196 +15,12 @@ impl Signex {
             log::warn!("PDF export: no active schematic");
             return;
         }
-
-        // Prefer a seed copied from Print Preview controls. Otherwise pre-populate
-        // from the active document's paper declaration.
-        let options = if let Some(seed) = self.document_state.pdf_options_seed.take() {
-            seed
-        } else if let Some(active_path) = self.document_state.active_path.as_ref() {
-            if let Some(engine) = self.document_state.engines.get(active_path) {
-                let paper_str = engine.document().paper_size.as_str();
-                let page_size = PageSize::from_kicad_str(paper_str);
-                let orientation = PageSize::default_orientation_for_kicad(paper_str);
-                PdfOptions {
-                    page_size,
-                    orientation,
-                    ..PdfOptions::default()
-                }
-            } else {
-                PdfOptions::default()
-            }
-        } else {
-            PdfOptions::default()
-        };
-
-        let specific_page_input = match &options.page_range {
-            PageRange::Specific(pages) if !pages.is_empty() => pages[0].to_string(),
-            _ => "1".to_string(),
-        };
-
-        self.document_state.pdf_options_dialog = Some(crate::app::state::PdfOptionsDialogState {
-            options,
-            specific_page_input,
-        });
-    }
-
-    pub(crate) fn handle_export_pdf_set_page_size(&mut self, page_size: signex_output::PageSize) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.page_size = page_size;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_orientation(
-        &mut self,
-        orientation: signex_output::Orientation,
-    ) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.orientation = orientation;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_colour_mode(
-        &mut self,
-        colour_mode: signex_output::ColourMode,
-    ) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.colour_mode = colour_mode;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_template(
-        &mut self,
-        template_id: Option<signex_output::TemplateId>,
-    ) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.sheet_template = template_id;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_fit_to_page(&mut self, fit_to_page: bool) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.scale = if fit_to_page {
-                signex_output::PdfScale::FitToPage
-            } else {
-                signex_output::PdfScale::OneToOne
-            };
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_include_title_block(&mut self, include: bool) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.include_title_block = include;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_page_range_all(&mut self) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.page_range = PageRange::All;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_page_range_current(&mut self) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.page_range = PageRange::Current;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_page_range_specific(&mut self) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.options.page_range = PageRange::Specific(vec![1]);
-            if dialog.specific_page_input.trim().is_empty() {
-                dialog.specific_page_input = "1".to_string();
-            }
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_set_specific_page_input(&mut self, value: String) {
-        if let Some(dialog) = self.document_state.pdf_options_dialog.as_mut() {
-            dialog.specific_page_input = value;
-        }
-    }
-
-    pub(crate) fn handle_export_pdf_dialog_cancel(&mut self) {
-        self.document_state.pdf_options_dialog = None;
-    }
-
-    pub(crate) fn handle_export_pdf_dialog_confirm(&mut self) -> Option<Task<Message>> {
-        if !self.document_state.has_active_engine() {
-            log::warn!("PDF export: no active schematic");
-            return Some(Task::none());
-        }
-
-        let dialog = match self.document_state.pdf_options_dialog.as_ref() {
-            Some(d) => d,
-            None => return Some(Task::none()),
-        };
-
-        let mut options = dialog.options.clone();
-        if matches!(options.page_range, PageRange::Specific(_)) {
-            let page = dialog.specific_page_input.trim().parse::<usize>().ok();
-            let page = match page {
-                Some(p) if p > 0 => p,
-                _ => {
-                    self.document_state.export_error = Some(
-                        "Specific page must be a positive page number (1, 2, 3, ...).".to_string(),
-                    );
-                    return Some(Task::none());
-                }
-            };
-            options.page_range = PageRange::Specific(vec![page]);
-        }
-
-        self.document_state.pdf_options_dialog = None;
-
-        // Stash options in the document state so handle_export_pdf_finished can access them.
-        // We'll use a pending_pdf_options field (add next).
-        self.document_state.pending_pdf_options = Some(options);
-
-        Some(Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export PDF")
-                    .add_filter("PDF", &["pdf"])
-                    .set_file_name("schematic.pdf")
-                    .save_file()
-                    .await
-                    .map(|file| file.path().to_path_buf())
-            },
-            |path| {
-                if let Some(path) = path {
-                    Message::ExportPdfFinished(Ok(path))
-                } else {
-                    Message::Noop
-                }
-            },
-        ))
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn handle_export_pdf_requested(&mut self) -> Option<Task<Message>> {
-        if !self.document_state.has_active_engine() {
-            log::warn!("PDF export: no active schematic");
-            return Some(Task::none());
-        }
-
-        Some(Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export PDF")
-                    .add_filter("PDF", &["pdf"])
-                    .set_file_name("schematic.pdf")
-                    .save_file()
-                    .await
-                    .map(|file| file.path().to_path_buf())
-            },
-            |path| {
-                if let Some(path) = path {
-                    Message::ExportPdfFinished(Ok(path))
-                } else {
-                    Message::Noop
-                }
-            },
-        ))
+        // PDF Export now opens the unified Print Preview modal — the
+        // user gets the rasterized preview AND every PDF setting in a
+        // single overlay instead of a settings-only dialog. The
+        // Print-Preview "Export PDF" button drives the file picker
+        // directly (see `handle_print_preview_export`).
+        self.handle_print_preview_requested();
     }
 
     pub(crate) fn handle_export_pdf_finished(
@@ -548,21 +364,72 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
-        if let Some(preview) = self.document_state.preview.as_ref() {
-            let mut seed = preview.pdf_options.clone();
-            if matches!(seed.page_range, PageRange::Specific(_)) {
-                if let Ok(page) = preview.specific_page_input.trim().parse::<usize>() {
-                    if page > 0 {
-                        seed.page_range = PageRange::Specific(vec![page]);
-                    }
-                }
-            }
-            self.document_state.pdf_options_seed = Some(seed);
+    pub(crate) fn handle_print_preview_set_fit_to_page(&mut self, fit: bool) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.scale = if fit {
+                signex_output::PdfScale::FitToPage
+            } else {
+                signex_output::PdfScale::OneToOne
+            };
         }
-        // Close the preview overlay and open the PDF options dialog.
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_set_include_title_block(&mut self, include: bool) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.pdf_options.include_title_block = include;
+        }
+        self.rerasterize_print_preview();
+    }
+
+    pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        // Pull the (possibly edited) options out of the live preview
+        // and drive the OS save-file dialog directly. The intermediate
+        // settings-only dialog was removed when PDF Export started
+        // opening Print Preview as the unified modal.
+        let pdf_options = match self.document_state.preview.as_ref() {
+            Some(preview) => {
+                let mut options = preview.pdf_options.clone();
+                if matches!(options.page_range, PageRange::Specific(_)) {
+                    let parsed = preview.specific_page_input.trim().parse::<usize>().ok();
+                    let page = match parsed {
+                        Some(p) if p > 0 => p,
+                        _ => {
+                            self.document_state.export_error = Some(
+                                "Specific page must be a positive page number (1, 2, 3, ...)."
+                                    .to_string(),
+                            );
+                            return Some(Task::none());
+                        }
+                    };
+                    options.page_range = PageRange::Specific(vec![page]);
+                }
+                options
+            }
+            None => return Some(Task::none()),
+        };
+
         self.document_state.preview = None;
-        Some(self.update(Message::ExportPdfOpenDialog))
+        self.document_state.pending_pdf_options = Some(pdf_options);
+
+        Some(Task::perform(
+            async {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Export PDF")
+                    .add_filter("PDF", &["pdf"])
+                    .set_file_name("schematic.pdf")
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            |path| {
+                if let Some(path) = path {
+                    Message::ExportPdfFinished(Ok(path))
+                } else {
+                    Message::Noop
+                }
+            },
+        ))
     }
 
     pub(crate) fn handle_print_preview_close(&mut self) {

@@ -148,7 +148,11 @@ impl Signex {
                 active_path: None,
                 project_path: None,
                 project_data: None,
+                projects: Vec::new(),
+                active_project: None,
+                next_project_id: 0,
                 panel_ctx: crate::panels::PanelContext {
+                    projects: Vec::new(),
                     project_name: None,
                     project_file: None,
                     pcb_file: None,
@@ -218,9 +222,7 @@ impl Signex {
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
-                pdf_options_dialog: None,
                 pending_pdf_options: None,
-                pdf_options_seed: None,
                 export_error: None,
             },
             interaction_state: InteractionState {
