@@ -31,7 +31,7 @@ pub use contracts::{
     RenameDialogState, StatusBarRequest, TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
-pub use state::{DocumentState, InteractionState, Signex, UiState};
+pub use state::{DocumentState, InteractionState, LoadedProject, ProjectId, Signex, UiState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 #[allow(unused_imports)]
