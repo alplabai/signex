@@ -427,17 +427,15 @@ pub(super) fn field_display_pos(
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// KiCad stores `prop.rotation` in the symbol's lib frame. Compose with
-/// `sym.rotation` to get the on-screen angle, then fold so text is always
-/// drawn at 0° or 90° (readable — never upside-down or reversed):
+/// KiCad's saved schematic files already store property positions and
+/// justify values in their final, post-orientation, post-mirror visual
+/// state (KiCad rewrites them whenever the user rotates or mirrors the
+/// symbol). At render time we only need to ensure the text is readable
+/// — folding 180°→0° and 270°→90° — without touching alignment.
 ///
-/// * 180° → 0° with horizontal justify flipped
-/// * 270° → 90° with vertical justify flipped
-///
-/// Mirror state additionally flips the perpendicular axis:
-///
-/// * `mirror_y` flips the X axis → toggle horizontal justify
-/// * `mirror_x` flips the Y axis → toggle vertical justify
+/// This mirrors KiCad's `SCH_FIELD::GetDrawRotation()` which only
+/// toggles the draw angle and never flips the justify (see
+/// `references/sch-symbol.md::render_field_text`).
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,
@@ -446,40 +444,14 @@ pub(super) fn field_effective_style(
     signex_types::schematic::HAlign,
     signex_types::schematic::VAlign,
 ) {
-    use signex_types::schematic::{HAlign, VAlign};
-
     let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
-    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
-        0 => (0.0, false, false),
-        90 => (90.0, false, false),
-        180 => (0.0, true, false),
-        270 => (90.0, false, true),
-        _ => (total, false, false),
+    let draw_rot = match total.round() as i32 {
+        0 | 180 => 0.0,
+        90 | 270 => 90.0,
+        _ => total,
     };
 
-    let flip_h = fold_h ^ sym.mirror_y;
-    let flip_v = fold_v ^ sym.mirror_x;
-
-    let h = if flip_h {
-        match prop.justify_h {
-            HAlign::Left => HAlign::Right,
-            HAlign::Right => HAlign::Left,
-            HAlign::Center => HAlign::Center,
-        }
-    } else {
-        prop.justify_h
-    };
-    let v = if flip_v {
-        match prop.justify_v {
-            VAlign::Top => VAlign::Bottom,
-            VAlign::Bottom => VAlign::Top,
-            VAlign::Center => VAlign::Center,
-        }
-    } else {
-        prop.justify_v
-    };
-
-    (draw_rot, h, v)
+    (draw_rot, prop.justify_h, prop.justify_v)
 }
 
 /// Find the circle passing through three non-collinear points.
