@@ -388,19 +388,18 @@ impl Engine {
 
 /// Rotate `(x, y)` around `(cx, cy)` by `angle_deg` using the same screen
 /// convention as `signex_render::instance_transform` (Y-down schematic
-/// coordinates, positive angle = CCW in user view).
+/// coordinates, positive `angle_deg` = visual CCW rotation as seen by the
+/// user, matching Standard's rotate command).
+///
+/// In a Y-down coordinate space the standard rotation matrix gives a visual
+/// CW rotation, so we negate the angle to recover the expected visual CCW.
 fn rotate_point_around(x: f64, y: f64, cx: f64, cy: f64, angle_deg: f64) -> (f64, f64) {
     let rx = x - cx;
     let ry = y - cy;
-    // Match instance_transform: flip Y to local Y-up, rotate by -angle, flip back.
     let rad = -angle_deg.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
-    let lx = rx;
-    let ly = -ry;
-    let nlx = lx * cos - ly * sin;
-    let nly = lx * sin + ly * cos;
-    (cx + nlx, cy - nly)
+    (cx + rx * cos - ry * sin, cy + rx * sin + ry * cos)
 }
 
 // ---------------------------------------------------------------------------
