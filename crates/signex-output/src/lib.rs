@@ -21,7 +21,7 @@ pub mod template;
 
 pub use bom::{
     BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
-    BomOptions, BomOutput, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
+    BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
     BomValidationReport, rollup,
 };
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};

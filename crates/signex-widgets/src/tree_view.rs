@@ -222,6 +222,18 @@ pub struct TreeNode {
     /// set this to mark the active project root in multi-project
     /// workspaces; inner nodes ignore it.
     pub accent: bool,
+    /// File represented by this leaf is currently open in a tab.
+    /// Drives a small right-side "open" marker — Altium parity.
+    pub is_open: bool,
+    /// File has unsaved changes. Drives a red dot on the right —
+    /// Altium parity. Implies `is_open` (only open files can be
+    /// dirty), but the renderer doesn't enforce that.
+    pub is_dirty: bool,
+    /// Leaf is the currently-active document (the tab the user is
+    /// viewing). Renders with a highlighted row background so the
+    /// user can find their place in a multi-sheet project at a
+    /// glance — Altium parity.
+    pub is_active: bool,
 }
 
 impl TreeNode {
@@ -234,6 +246,9 @@ impl TreeNode {
             badge: None,
             is_folder: false,
             accent: false,
+            is_open: false,
+            is_dirty: false,
+            is_active: false,
         }
     }
 
@@ -246,6 +261,9 @@ impl TreeNode {
             badge: None,
             is_folder: true,
             accent: false,
+            is_open: false,
+            is_dirty: false,
+            is_active: false,
         }
     }
 
@@ -257,6 +275,24 @@ impl TreeNode {
     /// Builder variant: mark the node as accented (bold at depth 0).
     pub fn with_accent(mut self, accent: bool) -> Self {
         self.accent = accent;
+        self
+    }
+
+    /// Builder: mark this leaf as currently open in a tab.
+    pub fn with_open(mut self, open: bool) -> Self {
+        self.is_open = open;
+        self
+    }
+
+    /// Builder: mark this leaf as having unsaved changes.
+    pub fn with_dirty(mut self, dirty: bool) -> Self {
+        self.is_dirty = dirty;
+        self
+    }
+
+    /// Builder: mark this leaf as the currently-active document.
+    pub fn with_active(mut self, active: bool) -> Self {
+        self.is_active = active;
         self
     }
 }
@@ -278,16 +314,24 @@ pub enum TreeMsg {
 
 // ─── Layout Constants (matched to Altium Designer) ────────────
 
-const INDENT_PER_DEPTH: f32 = 16.0; // Altium: ~16px per depth
+const INDENT_PER_DEPTH: f32 = 12.0; // Altium: ~12px per depth at compact density
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
 const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
-const CHEVRON_W: f32 = 10.0; // triangle column
-const ICON_SZ: f32 = 14.0; // Chamfered SVG silhouettes — tuned visually
-const FONT_SZ: f32 = 12.0; // body text
-const BADGE_SZ: f32 = 10.0; // muted counts
-const PAD_V: u16 = 2; // Altium: compact rows (~20px total)
-const PAD_R: u16 = 4; // minimal right margin
+const CHEVRON_W: f32 = 8.0; // triangle column — half-step smaller to match smaller icon
+const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at compact density
+const FONT_SZ: f32 = 10.5; // body text — Altium project tree is typically 9-10pt
+const BADGE_SZ: f32 = 9.0; // muted counts — track FONT_SZ down a half-step
+const PAD_V: u16 = 2; // Altium-ish: 16-18px row height — 1-2 px breathing room above + below the icon
+const PAD_R: u16 = 6; // right margin — leaves room for open / dirty indicators
+/// Right-side "file is currently open" indicator — small filled square,
+/// matches Altium's per-row open-document marker. Pulled out as a const
+/// so the rest of the tree row layout can plan around its width.
+const OPEN_DOT_SZ: f32 = 6.0;
+/// Right-side "file has unsaved changes" indicator — bright red dot.
+const DIRTY_DOT_SZ: f32 = 6.0;
+/// Spacer between the label / badge and the right-side indicators.
+const RIGHT_INDICATOR_GAP: f32 = 6.0;
 
 // ─── TreeView (COSMIC composition struct) ─────────────────────
 
@@ -403,7 +447,23 @@ fn render_node(
     // Icon — full-colour bundled SVG. Cached per variant; render via
     // `iced::widget::svg`. KiCad handoff formats share glyphs with
     // their Signex-native counterparts (see `TreeIcon::svg`).
-    r = r.push(svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ));
+    //
+    // Active-project marker: when this row is the accented root in a
+    // multi-project workspace (`node.accent && depth == 0`), tint the
+    // icon with the theme accent so the active project pops without
+    // relying solely on the bold-label cue. svg::Style.color flat-tints
+    // the SVG, which is what we want at this size — the silhouette
+    // stays readable, the colour signals "this is active".
+    let icon_w = svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ);
+    let icon_w = if node.accent && depth == 0 {
+        let accent = theme_ext::accent_color(tokens);
+        icon_w.style(move |_: &Theme, _| svg::Style {
+            color: Some(accent),
+        })
+    } else {
+        icon_w
+    };
+    r = r.push(icon_w);
     // Dedicated icon → label gap. `ELEM_GAP` alone (2 px) leaves the
     // label visually kerned into the icon; a wider spacer just after
     // the icon opens the gap without affecting the chevron→icon
@@ -437,6 +497,51 @@ fn render_node(
         );
     }
 
+    // Right-side indicators (Altium parity):
+    //   • dim grey dot  → file is currently open in a tab
+    //   • bright red dot → file has unsaved changes
+    // Both ride to the far right of the row, after the badge. The
+    // `is_dirty` dot replaces the open dot when both apply since the
+    // dirty state already implies open and only one indicator's worth
+    // of width fits comfortably in narrow Projects panels.
+    if node.is_open || node.is_dirty {
+        if node.badge.is_none() {
+            r = r.push(iced::widget::space::horizontal());
+        } else {
+            r = r.push(Space::new().width(RIGHT_INDICATOR_GAP));
+        }
+        let dot_color = if node.is_dirty {
+            // Windows-native destructive red — same hue used by the
+            // chrome window-close hover so dirty / close stay
+            // visually consistent.
+            Color::from_rgba(0.85, 0.30, 0.30, 1.0)
+        } else {
+            // Open-but-clean reads as a neutral white dot — the theme
+            // accent is reserved for the active-project marker so
+            // mixing accent colour into the open indicator made the
+            // tree feel noisy at a glance.
+            Color::WHITE
+        };
+        let sz = if node.is_dirty {
+            DIRTY_DOT_SZ
+        } else {
+            OPEN_DOT_SZ
+        };
+        r = r.push(
+            container(Space::new().width(sz).height(sz))
+                .width(sz)
+                .height(sz)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(dot_color)),
+                    border: iced::Border {
+                        radius: (sz / 2.0).into(),
+                        ..iced::Border::default()
+                    },
+                    ..container::Style::default()
+                }),
+        );
+    }
+
     // Click action
     let msg = if is_expandable {
         TreeMsg::Toggle(path_vec.clone())
@@ -444,17 +549,26 @@ fn render_node(
         TreeMsg::Select(path_vec)
     };
 
-    // Button with hover/selection styling
+    // Button with hover/selection styling. Active-row gets a
+    // dimmer-than-selection bg so the active document reads at a
+    // glance without competing with the explicit click-to-select
+    // colour.
+    let is_active = node.is_active;
+    let active_bg = {
+        let s = sel_bg;
+        Color::from_rgba(s.r, s.g, s.b, 0.45)
+    };
     let row_btn = button(r)
         .padding([PAD_V, PAD_R])
         .width(Length::Fill)
         .on_press(msg)
         .style(move |_theme: &Theme, status: button::Status| {
-            let bg = match (is_sel, status) {
-                (true, _) => Some(Background::Color(sel_bg)),
-                (false, button::Status::Hovered | button::Status::Pressed) => {
+            let bg = match (is_sel, is_active, status) {
+                (true, _, _) => Some(Background::Color(sel_bg)),
+                (false, _, button::Status::Hovered | button::Status::Pressed) => {
                     Some(Background::Color(hov_bg))
                 }
+                (false, true, _) => Some(Background::Color(active_bg)),
                 _ => None,
             };
             button::Style {

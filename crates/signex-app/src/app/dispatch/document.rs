@@ -71,8 +71,8 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             Message::PrintPreviewRequested => {
-                self.handle_print_preview_requested();
-                self.finish_update()
+                let task = self.handle_print_preview_requested();
+                iced::Task::batch([task, self.finish_update()])
             }
             Message::PrintPreviewSelectPage(idx) => {
                 self.handle_print_preview_select_page(idx);
@@ -113,25 +113,49 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             Message::PrintPreviewClose => {
-                self.handle_print_preview_close();
-                self.finish_update()
+                let task = self.handle_print_preview_close();
+                iced::Task::batch([task, self.finish_update()])
             }
             Message::ExportPdfOpenDialog => {
-                self.handle_export_pdf_open_dialog();
-                self.finish_update()
+                let task = self.handle_export_pdf_open_dialog();
+                iced::Task::batch([task, self.finish_update()])
             }
             Message::DismissExportError => {
                 self.handle_dismiss_export_error();
                 self.finish_update()
             }
             Message::ExportBomRequested => {
-                let task = self
-                    .handle_export_bom_requested()
-                    .unwrap_or_else(iced::Task::none);
+                let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
             }
             Message::ExportBomFinished(result) => {
                 let task = self.handle_export_bom_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::BomPreviewSetGrouping(g) => {
+                self.handle_bom_preview_set_grouping(g);
+                self.finish_update()
+            }
+            Message::BomPreviewSetFormat(f) => {
+                self.handle_bom_preview_set_format(f);
+                self.finish_update()
+            }
+            Message::BomPreviewSetIncludeDnp(b) => {
+                self.handle_bom_preview_set_include_dnp(b);
+                self.finish_update()
+            }
+            Message::BomPreviewSetIncludeNotFitted(b) => {
+                self.handle_bom_preview_set_include_not_fitted(b);
+                self.finish_update()
+            }
+            Message::BomPreviewExport => {
+                let task = self
+                    .handle_bom_preview_export()
+                    .unwrap_or_else(iced::Task::none);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::BomPreviewClose => {
+                let task = self.handle_bom_preview_close();
                 iced::Task::batch([task, self.finish_update()])
             }
             _ => unreachable!("dispatch_document_message received non-document message"),
