@@ -41,7 +41,7 @@ pub struct TabPillStyle {
     pub is_active: bool,
 }
 
-const TOP_RADIUS: f32 = 3.0;
+const TOP_RADIUS: f32 = 4.0;
 const ACCENT_HEIGHT: f32 = 2.0;
 const BORDER_WIDTH: f32 = 1.0;
 
@@ -98,21 +98,17 @@ where
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        // Reserve ACCENT_HEIGHT below the child so the accent strip
-        // is part of the widget's own footprint (no parent padding
-        // required). Child gets a slightly smaller vertical limit
-        // accordingly; in the row-of-tabs case the strip never
-        // shrinks the child since text + horizontal padding drive
-        // height.
-        let inner_limits = limits
-            .clone()
-            .shrink(Size::new(0.0, ACCENT_HEIGHT));
+        // Pass parent limits through to the child unchanged. The
+        // accent strip overlays the bottom 2 px IN PLACE — it's a
+        // visual element on top of the bg fill, not a separate
+        // layout band. Inactive tabs and active tabs occupy the
+        // exact same footprint; the only difference is whether
+        // the borders + accent are drawn.
         let child = self
             .content
             .as_widget_mut()
-            .layout(tree, renderer, &inner_limits);
-        let child_size = child.size();
-        let total_size = Size::new(child_size.width, child_size.height + ACCENT_HEIGHT);
+            .layout(tree, renderer, limits);
+        let total_size = child.size();
         Node::with_children(total_size, vec![child])
     }
 
@@ -189,19 +185,15 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let pill_bounds = Rectangle {
-            x: bounds.x,
-            y: bounds.y,
-            width: bounds.width,
-            height: bounds.height - ACCENT_HEIGHT,
-        };
 
-        // Bg fill — only the pill area (above the accent strip), with
-        // top-only rounding so the corners are subtle but the bottom
-        // sits flush against the accent line / chrome below.
+        // Bg fill — covers the full widget area. Inactive pills get
+        // a flat fill with no borders so the tab bar reads as a
+        // bare strip of labels (Altium parity); only the active
+        // tab gets the 3-sided border + accent stripe that lifts
+        // it out of the strip.
         renderer.fill_quad(
             Quad {
-                bounds: pill_bounds,
+                bounds,
                 border: Border {
                     width: 0.0,
                     radius: iced::border::Radius::default()
@@ -214,59 +206,56 @@ where
             Background::Color(self.style.fill),
         );
 
-        // Three-sided border — top edge + left edge + right edge. Each
-        // is a 1 px tall/wide quad. Drawing these as separate quads
-        // (rather than a Border on the bg) gives us the missing
-        // bottom side without relying on iced's uniform-border API.
+        // Three-sided border — top edge + left edge + right edge.
+        // Drawn on EVERY tab regardless of state (Altium parity:
+        // every tab is framed; only the active tab gets the accent
+        // stripe + brighter fill). Each border is a 1 px tall/wide
+        // quad — drawing them separately (rather than a Border on
+        // the bg) gives us the missing bottom side without iced's
+        // uniform-border API.
         let border_color = self.style.border;
-        // Top edge (full width)
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: pill_bounds.x,
-                    y: pill_bounds.y,
-                    width: pill_bounds.width,
+                    x: bounds.x,
+                    y: bounds.y,
+                    width: bounds.width,
                     height: BORDER_WIDTH,
                 },
                 ..Quad::default()
             },
             Background::Color(border_color),
         );
-        // Left edge — slightly inset at top so the rounded corner
-        // shows a clean curve. With a 3 px radius the visible
-        // straight portion starts at y + TOP_RADIUS.
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: pill_bounds.x,
-                    y: pill_bounds.y + TOP_RADIUS,
+                    x: bounds.x,
+                    y: bounds.y + TOP_RADIUS,
                     width: BORDER_WIDTH,
-                    height: pill_bounds.height - TOP_RADIUS,
+                    height: bounds.height - TOP_RADIUS,
                 },
                 ..Quad::default()
             },
             Background::Color(border_color),
         );
-        // Right edge
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: pill_bounds.x + pill_bounds.width - BORDER_WIDTH,
-                    y: pill_bounds.y + TOP_RADIUS,
+                    x: bounds.x + bounds.width - BORDER_WIDTH,
+                    y: bounds.y + TOP_RADIUS,
                     width: BORDER_WIDTH,
-                    height: pill_bounds.height - TOP_RADIUS,
+                    height: bounds.height - TOP_RADIUS,
                 },
                 ..Quad::default()
             },
             Background::Color(border_color),
         );
-
-        // Accent strip below the pill — only on the active tab. The
-        // strip is a flat rectangle (no rounding) so adjacent pills
-        // with their own strips line up to a continuous accent line
-        // when active, and inactive pills just leave 2 px of strip
-        // bg showing.
         if self.style.is_active {
+            // Accent strip — drawn inside the pill at the bottom
+            // 2 px on the active tab only. Sits below the borders
+            // (renders last) so it visually replaces the strip
+            // baseline at the active tab's position. Other tabs let
+            // the strip baseline show through.
             renderer.fill_quad(
                 Quad {
                     bounds: Rectangle {

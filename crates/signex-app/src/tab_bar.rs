@@ -66,7 +66,9 @@ pub fn view<'a>(
         // the rounded corners (visible on dark themes).
         let pill_style = TabPillStyle {
             fill: pill_fill(tokens, is_active, is_dragging),
-            border: styles::ti(tokens.border),
+            // Black border per request — reads as a clean dividing
+            // edge on dark and light themes alike.
+            border: iced::Color::BLACK,
             accent: styles::ti(tokens.accent),
             is_active,
         };
@@ -88,16 +90,39 @@ pub fn view<'a>(
         bar = bar.push(tab_el);
     }
 
-    container(bar)
+    // Strip baseline — a 1 px black line at the bottom of the tab
+    // bar that all inactive tabs sit "on" (Altium parity). The
+    // active tab's accent stripe overlays the baseline at its x
+    // range, visually punching through. Implemented as a Column
+    // wrapping the tab row + a fixed-height divider so the
+    // baseline doesn't depend on iced's uniform Border.
+    let baseline = container(iced::widget::Space::new())
         .width(Length::Fill)
-        .padding([2, 6])
-        .style(styles::toolbar_strip(tokens))
-        .into()
+        .height(1)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::BLACK)),
+            ..iced::widget::container::Style::default()
+        });
+    container(iced::widget::column![
+        container(bar)
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                top: 2.0,
+                right: 6.0,
+                bottom: 0.0,
+                left: 6.0,
+            }),
+        baseline,
+    ])
+    .width(Length::Fill)
+    .style(styles::toolbar_strip(tokens))
+    .into()
 }
 
-/// Resolve the pill bg fill for the current state. Active uses
-/// `tokens.hover` at full alpha; inactive at 0.35×; dragging tints
-/// with the theme accent at 22 %.
+/// Resolve the pill bg fill for the current state. Altium parity:
+/// inactive tabs are flat strip-bg (transparent fill so the
+/// toolbar strip shows through), active tabs lift with `tokens.hover`,
+/// dragging tints with theme accent at 22 %.
 fn pill_fill(
     tokens: &ThemeTokens,
     is_active: bool,
@@ -110,9 +135,6 @@ fn pill_fill(
     } else if is_active {
         tab_active
     } else {
-        iced::Color {
-            a: tab_active.a * 0.35,
-            ..tab_active
-        }
+        iced::Color::TRANSPARENT
     }
 }
