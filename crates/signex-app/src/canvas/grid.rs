@@ -6,7 +6,7 @@ use iced::{Color, Point};
 use super::camera::Camera;
 
 /// Schematic grid sizes in mm — exact multiples/fractions of 2.54 mm (100 mil).
-/// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 2.54 mm.
+/// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
 /// Human-readable labels for GRID_SIZES_MM (same order).
@@ -29,7 +29,7 @@ pub struct GridState {
 impl Default for GridState {
     fn default() -> Self {
         Self {
-            size_index: 2, // 2.54mm default (100mil)
+            size_index: 1, // 1.27mm default (50mil) — Altium default
             snap: true,
         }
     }
