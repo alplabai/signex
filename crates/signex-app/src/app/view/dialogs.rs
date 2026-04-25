@@ -13,6 +13,42 @@ use crate::app::{Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
+// ── Modal chrome — single source of truth ───────────────────────────
+//
+// Every modal in the app (Annotate, ERC, Reset Confirm, Rename, Remove,
+// Close-Tab Confirm, Print Preview) reaches for these constants so the
+// header height, title font, and close-X footprint stay locked in
+// step with the main-window chrome strip (`view::view_main_window_chrome`).
+// Tweak here, every modal updates.
+
+/// Modal header total height. Set to `MENU_BAR_HEIGHT` so modal headers
+/// and the app's top chrome strip read at exactly the same height.
+pub(in crate::app::view) const MODAL_HEADER_HEIGHT: f32 = crate::menu_bar::MENU_BAR_HEIGHT;
+/// Asymmetric padding inside the modal header strip: zero on the right
+/// so the close-X sits flush against the rounded corner (its own
+/// top-right radius matches `MODAL_CORNER_RADIUS`); zero top/bottom so
+/// the X fills the strip's full height; small left inset so the title
+/// doesn't kiss the rounded edge.
+pub(in crate::app::view) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
+    top: 0.0,
+    right: 0.0,
+    bottom: 0.0,
+    left: 8.0,
+};
+/// Title text size in the modal header.
+pub(in crate::app::view) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
+/// Close-X hit-box width — same width the chrome close uses
+/// (`view::view_main_window_chrome::chrome_btn`).
+pub(in crate::app::view) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
+/// Close-X hit-box height — also matches the chrome close (full
+/// menu-bar height) so the modal X is pixel-identical to the OS-window X.
+pub(in crate::app::view) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
+/// SVG glyph size for the close-X. Same value the chrome close uses.
+pub(in crate::app::view) const MODAL_CLOSE_X_ICON: f32 = 14.0;
+/// Hover background for the close-X (Windows-native destructive red).
+pub(in crate::app::view) const MODAL_CLOSE_X_HOVER: Color =
+    Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+
 impl Signex {
     pub(super) fn view_annotate_dialog(&self) -> Element<'_, Message> {
         let modal_w = 1100.0_f32;
@@ -58,17 +94,22 @@ impl Signex {
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
+        let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Annotate").size(14).color(text_c),
+                text("Annotate")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseAnnotateDialog, text_muted, border_c),
+                close_x_button(Message::CloseAnnotateDialog, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
+        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -555,7 +596,8 @@ impl Signex {
                 .width(modal_w)
                 .height(modal_h),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
 
         dialog.into()
     }
@@ -581,17 +623,22 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
+        let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Reset All Annotations").size(14).color(text_c),
+                text("Reset All Annotations")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseAnnotateResetConfirm, text_muted, border_c,),
+                close_x_button(Message::CloseAnnotateResetConfirm, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
+        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -634,7 +681,8 @@ impl Signex {
             ]
             .width(420),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
         dialog.into()
     }
 
@@ -659,17 +707,22 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
+        let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Electrical Rules Check").size(14).color(text_c),
+                text("Electrical Rules Check")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseErcDialog, text_muted, border_c),
+                close_x_button(Message::CloseErcDialog, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
+        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -782,7 +835,8 @@ impl Signex {
             .width(1000)
             .height(600),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
         dialog.into()
     }
 
@@ -818,17 +872,22 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let error_c = Color::from_rgb(0.90, 0.35, 0.30);
 
+        let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Rename File").size(14).color(text_c),
+                text("Rename File")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseRenameDialog, text_muted, border_c),
+                close_x_button(Message::CloseRenameDialog, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
+        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::state::ModalId::RenameDialog,
@@ -876,7 +935,8 @@ impl Signex {
             ]
             .width(420),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
         dialog.into()
     }
 
@@ -901,17 +961,22 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
+        let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Remove from Project").size(14).color(text_c),
+                text("Remove from Project")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseRemoveDialog, text_muted, border_c),
+                close_x_button(Message::CloseRemoveDialog, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
+        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::state::ModalId::RemoveDialog,
@@ -994,79 +1059,260 @@ impl Signex {
             ]
             .width(560),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
         dialog.into()
     }
 
-    pub(super) fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
-        let dialog = self.view_close_tab_confirm_body(tab_title);
+    pub(super) fn view_bom_preview(&self) -> Element<'_, Message> {
+        let modal_w = 1000.0_f32;
+        let modal_h = 700.0_f32;
+        let dialog = self.view_bom_preview_body_inner(true);
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::CloseTabConfirm)
+            .get(&super::super::state::ModalId::BomPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
+        wrap_modal(dialog, offset, self.ui_state.window_size, (modal_w, modal_h))
     }
 
-    fn view_close_tab_confirm_body(&self, tab_title: &str) -> Element<'_, Message> {
-        use super::super::CloseTabChoice;
+    pub(super) fn view_bom_preview_body(&self) -> Element<'_, Message> {
+        self.view_bom_preview_body_inner(false)
+    }
 
+    fn view_bom_preview_body_inner(&self, draggable: bool) -> Element<'_, Message> {
+        use signex_output::{BomFormat, BomGrouping};
+        let Some(ref preview) = self.document_state.bom_preview else {
+            return container(Space::new()).into();
+        };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
+        let theme_id = self.ui_state.theme_id;
 
         let header_content: Element<'_, Message> = container(
             row![
-                text("Unsaved Changes").size(14).color(text_c),
+                text("Bill of Materials")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::CloseTabConfirm(CloseTabChoice::Cancel),
-                    text_muted,
-                    border_c,
-                ),
+                close_x_button(Message::BomPreviewClose, theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
-            header_content,
-            super::super::state::ModalId::CloseTabConfirm,
-            self.interaction_state.last_mouse_pos,
-        );
+        let _ = border_c;
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                super::super::state::ModalId::BomPreview,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(header_content, super::super::state::ModalId::BomPreview)
+        };
 
-        let message_text = format!(
-            "'{}' has unsaved changes. Do you want to save before closing?",
-            tab_title,
+        let row_pill = |label: &'static str,
+                        on: bool,
+                        msg: Message|
+         -> Element<'_, Message> {
+            button(text(label.to_string()).size(11).color(text_c))
+                .padding([4, 10])
+                .on_press(msg)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match (on, status) {
+                        (true, _) => Color::from_rgb(0.00, 0.47, 0.84),
+                        (false, button::Status::Hovered | button::Status::Pressed) => {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                        }
+                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..button::Style::default()
+                    }
+                })
+                .into()
+        };
+
+        let grouping_row: Element<'_, Message> = row![
+            text("Grouping:").size(11).color(text_muted),
+            Space::new().width(8),
+            row_pill(
+                "Grouped",
+                preview.options.grouping == BomGrouping::Grouped,
+                Message::BomPreviewSetGrouping(BomGrouping::Grouped),
+            ),
+            Space::new().width(4),
+            row_pill(
+                "Ungrouped",
+                preview.options.grouping == BomGrouping::Ungrouped,
+                Message::BomPreviewSetGrouping(BomGrouping::Ungrouped),
+            ),
+            Space::new().width(4),
+            row_pill(
+                "Flat",
+                preview.options.grouping == BomGrouping::Flat,
+                Message::BomPreviewSetGrouping(BomGrouping::Flat),
+            ),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into();
+
+        let format_row: Element<'_, Message> = row![
+            text("Format:").size(11).color(text_muted),
+            Space::new().width(8),
+            row_pill(
+                "CSV",
+                preview.options.format == BomFormat::Csv,
+                Message::BomPreviewSetFormat(BomFormat::Csv),
+            ),
+            Space::new().width(4),
+            row_pill(
+                "XLSX",
+                preview.options.format == BomFormat::Xlsx,
+                Message::BomPreviewSetFormat(BomFormat::Xlsx),
+            ),
+            Space::new().width(4),
+            row_pill(
+                "HTML",
+                preview.options.format == BomFormat::Html,
+                Message::BomPreviewSetFormat(BomFormat::Html),
+            ),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into();
+
+        let toggle_row: Element<'_, Message> = row![
+            row_pill(
+                "Include DNP",
+                preview.options.include_dnp,
+                Message::BomPreviewSetIncludeDnp(!preview.options.include_dnp),
+            ),
+            Space::new().width(4),
+            row_pill(
+                "Include Not Fitted",
+                preview.options.include_not_fitted,
+                Message::BomPreviewSetIncludeNotFitted(!preview.options.include_not_fitted),
+            ),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into();
+
+        // Header strip + body rows. Columns mirror the default
+        // `BomOptions::columns` set; widths are tuned so the
+        // designator list stays readable without dominating the
+        // table.
+        let col_h = |label: &'static str, width: f32| -> Element<'_, Message> {
+            container(text(label.to_string()).size(11).color(text_c))
+                .width(Length::Fixed(width))
+                .padding([4, 6])
+                .into()
+        };
+        let table_header = container(
+            row![
+                col_h("Name", 140.0),
+                col_h("Description", 220.0),
+                col_h("Designator", 220.0),
+                col_h("Footprint", 140.0),
+                col_h("LibRef", 160.0),
+                col_h("Qty", 50.0),
+            ]
+            .spacing(0),
+        )
+        .style(crate::styles::toolbar_strip(tokens))
+        .width(Length::Fill);
+
+        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
+        for (idx, r) in preview.table.rows.iter().enumerate() {
+            let alt_bg = if idx % 2 == 0 {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.0)
+            } else {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.025)
+            };
+            let cell = |s: String, width: f32| -> Element<'_, Message> {
+                container(text(s).size(10).color(text_c))
+                    .width(Length::Fixed(width))
+                    .padding([3, 6])
+                    .into()
+            };
+            let designators = r.references.join(", ");
+            let row_el = container(
+                row![
+                    cell(r.name.clone(), 140.0),
+                    cell(r.description.clone(), 220.0),
+                    cell(designators, 220.0),
+                    cell(r.footprint.clone(), 140.0),
+                    cell(r.lib_ref.clone(), 160.0),
+                    cell(r.qty.to_string(), 50.0),
+                ]
+                .spacing(0),
+            )
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(alt_bg)),
+                ..container::Style::default()
+            });
+            rows.push(row_el.into());
+        }
+        let body = scrollable(column(rows).spacing(0))
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let total_label = format!(
+            "{} row(s), {} fitted",
+            preview.table.rows.len(),
+            preview
+                .table
+                .rows
+                .iter()
+                .map(|r| r.fitted_qty)
+                .sum::<u32>()
         );
 
         let dialog = container(
             column![
                 header,
-                container(text(message_text).size(11).color(text_muted)).padding([14, 14]),
+                container(
+                    column![
+                        grouping_row,
+                        Space::new().height(6),
+                        format_row,
+                        Space::new().height(6),
+                        toggle_row,
+                    ]
+                    .spacing(0)
+                )
+                .padding([12, 14]),
+                container(table_header).padding([0, 14]),
+                container(body)
+                    .padding([0, 14])
+                    .height(Length::Fill),
                 container(
                     row![
+                        text(total_label).size(10).color(text_muted),
                         Space::new().width(Length::Fill),
                         secondary_button(
                             "Cancel",
-                            Message::CloseTabConfirm(CloseTabChoice::Cancel),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        secondary_button(
-                            "Don't Save",
-                            Message::CloseTabConfirm(CloseTabChoice::DiscardAndClose),
+                            Message::BomPreviewClose,
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         primary_button(
-                            "Save",
-                            Some(Message::CloseTabConfirm(CloseTabChoice::SaveAndClose)),
+                            "Export",
+                            Some(Message::BomPreviewExport),
                             border_c,
                         ),
                     ]
@@ -1074,9 +1320,128 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(420),
+            .spacing(0)
+            .width(Length::Fill)
+            .height(Length::Fill),
         )
-        .style(crate::styles::context_menu(tokens));
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    pub(super) fn view_project_close_confirm(&self) -> Element<'_, Message> {
+        let dialog = self.view_project_close_confirm_body();
+        // Reuse the rename modal's offset slot — `RenameDialog` is
+        // never up at the same time as project-close confirm, and
+        // they're roughly the same footprint, so reusing the slot
+        // keeps modal-offset state simpler.
+        let offset = (0.0, 0.0);
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+    }
+
+    fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
+        use crate::app::ProjectCloseChoice;
+        let Some(ref st) = self.ui_state.project_close_confirm else {
+            return container(Space::new()).into();
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let theme_id = self.ui_state.theme_id;
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Close Project — Unsaved Edits")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(
+                    Message::ProjectCloseConfirm(ProjectCloseChoice::Cancel),
+                    theme_id,
+                    text_muted,
+                ),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let _ = border_c;
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::RenameDialog,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        // List of dirty filenames, scrollable in case the project
+        // has dozens of unsaved sheets. Filenames only — paths would
+        // overflow narrow modals and the project context already
+        // implies the parent dir.
+        let mut file_rows: Vec<Element<'_, Message>> = Vec::new();
+        for path in &st.dirty_paths {
+            let name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("(unnamed)")
+                .to_string();
+            file_rows.push(
+                container(text(name).size(11).color(text_c))
+                    .padding([4, 8])
+                    .into(),
+            );
+        }
+        let file_list = scrollable(column(file_rows).spacing(0))
+            .height(Length::Fixed(160.0))
+            .width(Length::Fill);
+
+        let dialog = container(
+            column![
+                header,
+                container(
+                    text(format!(
+                        "'{}' has {} unsaved file(s). What would you like to do?",
+                        st.project_name,
+                        st.dirty_paths.len()
+                    ))
+                    .size(11)
+                    .color(text_muted)
+                )
+                .padding([14, 14]),
+                container(file_list).padding([0, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::ProjectCloseConfirm(ProjectCloseChoice::Cancel),
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        secondary_button(
+                            "Discard All",
+                            Message::ProjectCloseConfirm(ProjectCloseChoice::DiscardAll),
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Save All",
+                            Some(Message::ProjectCloseConfirm(ProjectCloseChoice::SaveAll)),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([14, 14]),
+            ]
+            .width(520),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
         dialog.into()
     }
 }
@@ -1201,7 +1566,7 @@ fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'stati
     }
 }
 
-fn wrap_modal<'a>(
+pub(in crate::app::view) fn wrap_modal<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
     window_size: (f32, f32),
@@ -1240,7 +1605,7 @@ fn wrap_modal<'a>(
 
 /// Wrap a header element in a mouse_area so pressing on it begins a modal
 /// drag. Uses the last known mouse position as the drag anchor.
-fn draggable_header<'a>(
+pub(in crate::app::view) fn draggable_header<'a>(
     header_content: Element<'a, Message>,
     modal: super::super::state::ModalId,
     last_mouse: (f32, f32),
@@ -1257,7 +1622,7 @@ fn draggable_header<'a>(
 /// Borderless-window header — pressing anywhere on the header region
 /// asks iced to start an OS-level window drag. Replaces the OS title
 /// bar for detached modals opened with `decorations: false`.
-fn detached_header<'a>(
+pub(in crate::app::view) fn detached_header<'a>(
     header_content: Element<'a, Message>,
     modal: super::super::state::ModalId,
 ) -> Element<'a, Message> {
@@ -1267,36 +1632,62 @@ fn detached_header<'a>(
         .into()
 }
 
-/// Compact X close button for borderless modal headers.
-fn close_x_button(message: Message, text_color: Color, border: Color) -> Element<'static, Message> {
-    // Hover reads as destructive — same Windows-native red used by
-    // the main-window close in `view/mod.rs::view_titlebar` so modal
-    // close buttons match the OS chrome they sit beneath. Default
-    // state stays subtle so the X doesn't fight for attention.
-    let close_hover = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_color)).padding([0, 6]))
-        .on_press(message)
-        .style(move |_: &Theme, status: button::Status| {
-            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let bg = if hovered {
-                Some(Background::Color(close_hover))
+/// Compact X close button for borderless modal headers. Matches the
+/// main-window chrome close (`view/mod.rs::view_main_window_chrome`):
+/// no border, fully transparent at rest, Windows-native red bg + white
+/// icon on hover. The `_border` argument is kept for API compatibility
+/// with existing call sites — it is intentionally ignored.
+pub(in crate::app::view) fn close_x_button(
+    message: Message,
+    theme_id: signex_types::theme::ThemeId,
+    text_color: Color,
+) -> Element<'static, Message> {
+    // Use the same SVG and footprint as the main-window chrome close
+    // (`view::view_main_window_chrome::chrome_btn`) so the modal X is
+    // visually identical to the OS-window X, including stroke weight,
+    // hit-box dimensions, and red-on-hover behaviour. The icon is
+    // tint-overlaid via `svg::Style.color`, so the SVG's native fill
+    // colour is irrelevant.
+    use iced::widget::svg;
+    let handle = crate::icons::icon_chrome_window_close(theme_id);
+    button(
+        container(
+            svg(handle)
+                .width(MODAL_CLOSE_X_ICON)
+                .height(MODAL_CLOSE_X_ICON)
+                .style(move |_: &Theme, _| svg::Style {
+                    color: Some(text_color),
+                }),
+        )
+        .width(MODAL_CLOSE_X_HIT_W)
+        .height(MODAL_CLOSE_X_HIT_H)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(0)
+    .on_press(message)
+    .style(move |_: &Theme, status: button::Status| {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        // Top-right radius matches the modal card's outer corner so
+        // the red hover background fills the rounded corner cleanly
+        // — same trick the OS chrome close uses on Windows 11.
+        let radius = iced::border::Radius::default()
+            .top_right(crate::styles::MODAL_CORNER_RADIUS);
+        button::Style {
+            background: if hovered {
+                Some(Background::Color(MODAL_CLOSE_X_HOVER))
             } else {
-                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03)))
-            };
-            let border_c = if hovered { close_hover } else { border };
-            let text_c = if hovered { Color::WHITE } else { text_color };
-            button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                },
-                text_color: text_c,
-                ..button::Style::default()
-            }
-        })
-        .into()
+                None
+            },
+            border: Border {
+                radius,
+                ..Border::default()
+            },
+            text_color: if hovered { Color::WHITE } else { text_color },
+            ..button::Style::default()
+        }
+    })
+    .into()
 }
 
 // `detach_button` was removed once the three big modals started

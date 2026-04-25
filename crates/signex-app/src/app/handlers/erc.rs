@@ -516,6 +516,7 @@ impl Signex {
             }
             if engine.save().is_ok() {
                 disk_touched += 1;
+                self.document_state.dirty_paths.remove(&sheet_path);
                 crate::diagnostics::log_info(format!("Annotate: saved {}", sheet_path.display()));
             }
         }
@@ -729,6 +730,7 @@ impl Signex {
                 if let Some(tab) = self.document_state.tabs.get_mut(idx) {
                     tab.dirty = true;
                 }
+                self.document_state.dirty_paths.insert(path);
                 resets += 1;
             }
         }
@@ -753,6 +755,7 @@ impl Signex {
             match engine.save() {
                 Ok(_) => {
                     resets += 1;
+                    self.document_state.dirty_paths.remove(&path);
                 }
                 Err(err) => {
                     crate::diagnostics::log_info(format!(
@@ -969,9 +972,10 @@ impl Signex {
             ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
             ModalId::Preferences => iced::Size::new(900.0, 620.0),
             ModalId::FindReplace => iced::Size::new(420.0, 180.0),
-            ModalId::CloseTabConfirm => iced::Size::new(420.0, 180.0),
             ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
+            ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
+            ModalId::BomPreview => iced::Size::new(1000.0, 700.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
