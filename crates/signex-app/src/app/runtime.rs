@@ -15,9 +15,10 @@ impl Signex {
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
         // Build per-project panel info from every loaded project in the
-        // workspace. `sheets` / `project_name` below stay in sync with
-        // the active project for handlers still reading those fields
-        // (issue #54 phase 5 removes the single-project fallbacks).
+        // workspace. The `project_name` / `project_file` / `pcb_file` /
+        // `sheets` legacy singletons mirror whichever entry is `is_active`
+        // — kept around for the few panels that haven't migrated to read
+        // `panel_ctx.projects` directly yet.
         let active_id = self.document_state.active_project;
         let projects_panel: Vec<crate::panels::ProjectPanelInfo> = self
             .document_state
@@ -43,36 +44,6 @@ impl Signex {
                 is_active: Some(p.id) == active_id,
             })
             .collect();
-
-        let sheets: Vec<crate::panels::SheetInfo> = self
-            .document_state
-            .project_data
-            .as_ref()
-            .map(|proj| {
-                proj.sheets
-                    .iter()
-                    .map(|sheet| crate::panels::SheetInfo {
-                        name: sheet.name.clone(),
-                        filename: sheet.filename.clone(),
-                        sym_count: sheet.symbols_count,
-                        wire_count: sheet.wires_count,
-                        label_count: sheet.labels_count,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let project_name = self
-            .document_state
-            .project_data
-            .as_ref()
-            .map(|project| project.name.clone())
-            .or_else(|| {
-                self.document_state.project_path.as_ref().and_then(|path| {
-                    path.file_stem()
-                        .map(|stem| stem.to_string_lossy().to_string())
-                })
-            });
 
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
@@ -107,24 +78,6 @@ impl Signex {
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
             projects: projects_panel,
-            project_name,
-            project_file: self
-                .document_state
-                .project_data
-                .as_ref()
-                .and_then(|project| project.schematic_root.clone())
-                .or_else(|| {
-                    self.document_state.project_path.as_ref().and_then(|path| {
-                        path.file_name()
-                            .map(|name| name.to_string_lossy().to_string())
-                    })
-                }),
-            pcb_file: self
-                .document_state
-                .project_data
-                .as_ref()
-                .and_then(|project| project.pcb_file.clone()),
-            sheets,
             sym_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.symbols.len())
                 .or_else(|| active_pcb_snapshot.map(|snapshot| snapshot.footprints.len()))
@@ -269,7 +222,6 @@ impl Signex {
             .and_then(|t| t.project_id)
         {
             self.document_state.active_project = Some(pid);
-            self.sync_legacy_project_fields();
         }
 
         self.sync_visible_document_from_active_tab();

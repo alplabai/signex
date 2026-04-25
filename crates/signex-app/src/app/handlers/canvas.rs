@@ -1428,9 +1428,8 @@ impl Signex {
 
         let base_dir = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
             .or_else(|| {
                 self.active_tab_path()
                     .and_then(|path| path.parent().map(std::path::PathBuf::from))

@@ -315,13 +315,6 @@ pub struct DocumentState {
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
     /// is open).
     pub active_path: Option<PathBuf>,
-    /// Single-project convenience fields. These mirror `projects[active_project]`
-    /// during the multi-project migration so handlers that still read the
-    /// old Option keep working. All new code should read from `projects` +
-    /// `active_project` instead; the Option pair will be removed once every
-    /// handler is migrated (issue #54 phase 5).
-    pub project_path: Option<PathBuf>,
-    pub project_data: Option<ProjectData>,
     /// Every loaded project in the workspace. Order = load order. First
     /// project becomes active on load; subsequent opens append.
     pub projects: Vec<LoadedProject>,

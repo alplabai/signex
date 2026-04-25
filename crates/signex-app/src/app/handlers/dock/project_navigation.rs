@@ -203,7 +203,6 @@ impl Signex {
             })
             .map(|p| p.id);
 
-        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
 
         if tasks.is_empty() {
@@ -354,10 +353,6 @@ impl Signex {
         }
 
         self.ui_state.rename_dialog = None;
-        // Re-mirror the active project's data into the legacy fields so
-        // any handler still reading `document_state.project_data` sees
-        // the rename if it landed on the active project.
-        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
         iced::Task::none()
     }
@@ -428,9 +423,6 @@ impl Signex {
             }
         }
 
-        // Mirror back into the legacy fields if the mutation landed on
-        // the active project.
-        self.sync_legacy_project_fields();
         self.refresh_panel_ctx();
         if close_tasks.is_empty() {
             iced::Task::none()
