@@ -12,6 +12,7 @@ members = [
     "crates/signex-erc",
     "crates/signex-erc-dsl",
     "crates/signex-output",
+    "crates/chrome-catalog",
 ]
 
 [workspace.package]
