@@ -3,6 +3,7 @@
 use iced::widget::{Row, container, mouse_area, row, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::tab_pill::{TabPill, TabPillStyle};
 
 use crate::app::TabInfo;
 use crate::styles;
@@ -28,7 +29,10 @@ pub fn view<'a>(
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
-    let mut bar = Row::new().spacing(2.0);
+    // Tabs sit flush against each other — Altium parity. The active
+    // pill's accent underline distinguishes it from neighbours; no
+    // gap or vertical divider needed.
+    let mut bar = Row::new().spacing(0.0);
 
     let text_primary = styles::ti(tokens.text);
     let text_muted = styles::ti(tokens.text_secondary);
@@ -53,41 +57,34 @@ pub fn view<'a>(
 
         // No inline close-X / undock buttons. Both actions live in the
         // right-click menu now (Altium parity) — the tab itself is the
-        // entire hit target, which makes drag-to-reorder and drag-to-
-        // detach feel uniform across the strip.
+        // entire hit target.
         //
-        // Visual stack (top-down):
-        //   - inner pill   (top-rounded, no border, fill follows state)
-        //   - 2 px gap     (bottom-padding on outer)
-        //   - accent line  (outer container's bg)
-        // This matches the panel-tab look: no visible bottom border,
-        // accent stripe under the active tab. Shared style helpers in
-        // `crate::styles` keep document and panel tabs in lockstep.
-        let label_el = container(
+        // The pill itself is a custom widget (`signex_widgets::TabPill`)
+        // that paints its own bg + 3-sided border (top + L/R only) +
+        // 2 px accent strip below. Iced's stock Border can't do "top
+        // and sides only", and a stacked-bg fake leaked accent through
+        // the rounded corners (visible on dark themes).
+        let pill_style = TabPillStyle {
+            fill: pill_fill(tokens, is_active, is_dragging),
+            border: styles::ti(tokens.border),
+            accent: styles::ti(tokens.accent),
+            is_active,
+        };
+        let inner = container(
             row![text(label).size(11).color(text_c)]
                 .spacing(6.0)
                 .align_y(iced::Alignment::Center),
         )
-        .padding([4, 10])
-        .style(styles::tab_pill(tokens, is_active, is_dragging, false));
-        let tab_el: Element<'_, TabMessage> = mouse_area(
-            container(label_el)
-                .padding(iced::Padding {
-                    top: 0.0,
-                    right: 0.0,
-                    bottom: 2.0,
-                    left: 0.0,
-                })
-                .style(styles::tab_pill_underline(tokens, is_active)),
-        )
-        .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
-        .on_release(TabMessage::Select(i))
-        .on_right_press(TabMessage::ContextMenu(i))
-        // Grab cursor advertises that the tab is draggable —
-        // discoverability for the Altium-style drag-to-undock
-        // behaviour.
-        .interaction(iced::mouse::Interaction::Grab)
-        .into();
+        .padding([4, 10]);
+        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
+            .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
+            .on_release(TabMessage::Select(i))
+            .on_right_press(TabMessage::ContextMenu(i))
+            // Grab cursor advertises that the tab is draggable —
+            // discoverability for the Altium-style drag-to-undock
+            // behaviour.
+            .interaction(iced::mouse::Interaction::Grab)
+            .into();
         bar = bar.push(tab_el);
     }
 
@@ -96,4 +93,26 @@ pub fn view<'a>(
         .padding([2, 6])
         .style(styles::toolbar_strip(tokens))
         .into()
+}
+
+/// Resolve the pill bg fill for the current state. Active uses
+/// `tokens.hover` at full alpha; inactive at 0.35×; dragging tints
+/// with the theme accent at 22 %.
+fn pill_fill(
+    tokens: &ThemeTokens,
+    is_active: bool,
+    is_dragging: bool,
+) -> iced::Color {
+    let tab_active = styles::ti(tokens.hover);
+    let accent = styles::ti(tokens.accent);
+    if is_dragging {
+        iced::Color { a: 0.22, ..accent }
+    } else if is_active {
+        tab_active
+    } else {
+        iced::Color {
+            a: tab_active.a * 0.35,
+            ..tab_active
+        }
+    }
 }
