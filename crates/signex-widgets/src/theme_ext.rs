@@ -65,6 +65,12 @@ pub fn hover_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.hover)
 }
 
+/// Theme accent color — used for active-project markers and the
+/// "open" indicator dot on the tree.
+pub fn accent_color(tokens: &ThemeTokens) -> Color {
+    to_color(&tokens.accent)
+}
+
 // ---------------------------------------------------------------------------
 // Container style factories
 // ---------------------------------------------------------------------------

@@ -6,6 +6,16 @@ mod translate;
 
 use super::*;
 
+// ── Submenu chevron — single source of truth ─────────────────────────
+//
+// Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
+// TRIANGLE (U+25B6) which Windows renders via the colour emoji font.
+// Same glyph the menu_bar dropdowns use; the matching size below keeps
+// every submenu launcher visually aligned across the whole app
+// (canvas right-click, project-tree right-click, File/Edit/View menu).
+const SUBMENU_ARROW: &str = "›";
+const SUBMENU_ARROW_SIZE: f32 = 18.0;
+
 impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
@@ -14,10 +24,6 @@ impl Signex {
         let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
         let tid = self.ui_state.theme_id;
-
-        // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
-        // U+25B6, which Windows renders via the color emoji font).
-        const SUBMENU_ARROW: &str = "›";
 
         items.push(self.ctx_menu_item_disabled(
             Some(ic::icon_dd_find_similar(tid)),
@@ -206,7 +212,6 @@ impl Signex {
         use crate::app::ProjectTreeAction as A;
         use signex_widgets::tree_view::{TreeIcon, get_node};
 
-        const SUBMENU_ARROW: &str = "›";
         let panel_ctx = &self.document_state.panel_ctx;
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(18);
 
@@ -262,7 +267,13 @@ impl Signex {
 
             items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
             items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
-            items.push(self.ctx_menu_item_disabled(None, "Add New to Project", Some(SUBMENU_ARROW)));
+            let active_submenu = self.interaction_state.context_submenu;
+            items.push(self.ctx_menu_item_submenu(
+                None,
+                "Add New to Project",
+                ContextSubmenu::AddNewToProject,
+                active_submenu == Some(ContextSubmenu::AddNewToProject),
+            ));
             items.push(self.ctx_menu_item_disabled(None, "Add Existing to Project...", Some("v0.9")));
             items.push(self.save_menu_item(has_schematic));
             items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
@@ -428,6 +439,79 @@ impl Signex {
             .into()
     }
 
+    /// Build the document-tab right-click menu. Items are derived
+    /// from the clicked tab index — the per-tab "Close [filename]"
+    /// row carries the live tab title, and the bulk-close rows are
+    /// gated on whether they'd be no-ops (single tab open → no
+    /// "others" to close). The split / tile / merge rows from
+    /// Altium's screenshot are intentionally left out: Signex's
+    /// editor doesn't support split-pane layout yet.
+    fn view_tab_context_menu(
+        &self,
+        ctx: &crate::app::TabContextMenuState,
+    ) -> Element<'_, Message> {
+        use crate::app::TabContextAction as A;
+
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(6);
+
+        let Some(tab) = self.document_state.tabs.get(ctx.tab_idx) else {
+            return container(iced::widget::Space::new()).into();
+        };
+
+        let title = tab.title.clone();
+        let total_tabs = self.document_state.tabs.len();
+        // A tab can be undocked iff it's not already living in its own
+        // OS window. Single-tab workspaces still show the row (Altium
+        // does too) — undocking a sole tab leaves the main window
+        // empty, which is fine.
+        use super::state::WindowKind;
+        let already_undocked = self
+            .ui_state
+            .windows
+            .values()
+            .any(|kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path));
+
+        items.push(self.ctx_menu_item_msg(
+            None,
+            &format!("Close {title}"),
+            "",
+            Message::TabContextAction(A::Close(ctx.tab_idx)),
+        ));
+        if total_tabs > 1 {
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Close All Other Documents",
+                "",
+                Message::TabContextAction(A::CloseAllOthers(ctx.tab_idx)),
+            ));
+        } else {
+            items.push(self.ctx_menu_item_disabled(None, "Close All Other Documents", None));
+        }
+        items.push(self.ctx_menu_item_msg(
+            None,
+            "Close All Documents",
+            "",
+            Message::TabContextAction(A::CloseAll),
+        ));
+        items.push(self.ctx_menu_sep());
+        items.push(if already_undocked {
+            self.ctx_menu_item_disabled(None, "Open In New Window", None)
+        } else {
+            self.ctx_menu_item_msg(
+                None,
+                "Open In New Window",
+                "",
+                Message::TabContextAction(A::Undock(ctx.tab_idx)),
+            )
+        });
+
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
+            .into()
+    }
+
     /// Save menu row, active only when a schematic tab is open —
     /// used by the project-tree context menu's project-root variant.
     /// Altium's right-click menus do not surface keyboard shortcuts,
@@ -573,7 +657,6 @@ impl Signex {
         kind: ContextSubmenu,
         active: bool,
     ) -> Element<'a, Message> {
-        const SUBMENU_ARROW: &str = "›";
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let hover_c = crate::styles::ti(tokens.hover);
@@ -585,7 +668,7 @@ impl Signex {
                 iced::widget::text(label.to_string()).size(11).color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(SUBMENU_ARROW.to_string())
-                    .size(14)
+                    .size(SUBMENU_ARROW_SIZE)
                     .color(arrow_c),
             ]
             .spacing(8)
@@ -638,13 +721,17 @@ impl Signex {
         .width(Length::Fill);
 
         if let Some(right_text) = right {
-            // Submenu arrow (›) needs to render at 14 so the glyph is
-            // readable — it's a single thin Unicode chevron, not a
-            // bounding-box character. Every other right-column string
-            // (keyboard shortcuts, "coming in vX.Y" labels) renders at
-            // 10 to match the shortcut-column sizing used by enabled
-            // rows and avoid the Altium-breaking oversize look.
-            let size = if right_text == "›" { 14 } else { 10 };
+            // Submenu arrow (›) renders at the unified `SUBMENU_ARROW_SIZE`
+            // so disabled placeholder rows showing the chevron line up
+            // with live submenu launchers and the menu_bar dropdowns.
+            // Every other right-column string (keyboard shortcuts,
+            // "coming in vX.Y" version badges) renders at 10 to match
+            // the shortcut-column sizing used by enabled rows.
+            let size = if right_text == SUBMENU_ARROW {
+                SUBMENU_ARROW_SIZE
+            } else {
+                10.0
+            };
             row = row.push(
                 iced::widget::text(right_text.to_string())
                     .size(size)
@@ -777,44 +864,130 @@ impl Signex {
                 items.push(mk(ic::icon_dd_note(tid), "Note", A::PlaceNote));
             }
             ContextSubmenu::Align => {
-                items.push(mk(ic::icon_dd_align_left(tid), "Align Left", A::AlignLeft));
-                items.push(mk(
+                // Altium gating: pairwise aligns (Left/Right/Top/Bottom/H/V
+                // Centers) need ≥2 items to make sense; Distribute needs
+                // ≥3 (two endpoints + at least one item to space between
+                // them); Align To Grid works on a single item too. The
+                // submenu is only opened when something is selected, so
+                // grid is always enabled here.
+                let n = self.interaction_state.canvas.selected.len();
+                let pair = n >= 2;
+                let dist = n >= 3;
+                let mk_or_disabled = |icon: iced::widget::svg::Handle,
+                                      label: &'static str,
+                                      action: A,
+                                      enabled: bool|
+                 -> Element<'_, Message> {
+                    if enabled {
+                        mk(icon, label, action)
+                    } else {
+                        self.ctx_menu_item_disabled(Some(icon), label, None)
+                    }
+                };
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_left(tid),
+                    "Align Left",
+                    A::AlignLeft,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
                     ic::icon_dd_align_right(tid),
                     "Align Right",
                     A::AlignRight,
+                    pair,
                 ));
-                items.push(mk(
+                items.push(mk_or_disabled(
                     ic::icon_dd_align_hcenter(tid),
                     "Align Horizontal Centers",
                     A::AlignHorizontalCenters,
+                    pair,
                 ));
-                items.push(mk(
+                items.push(mk_or_disabled(
                     ic::icon_dd_dist_horiz(tid),
                     "Distribute Horizontally",
                     A::DistributeHorizontally,
+                    dist,
                 ));
                 items.push(self.ctx_menu_sep());
-                items.push(mk(ic::icon_dd_align_top(tid), "Align Top", A::AlignTop));
-                items.push(mk(
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_top(tid),
+                    "Align Top",
+                    A::AlignTop,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
                     ic::icon_dd_align_bottom(tid),
                     "Align Bottom",
                     A::AlignBottom,
+                    pair,
                 ));
-                items.push(mk(
+                items.push(mk_or_disabled(
                     ic::icon_dd_align_vcenter(tid),
                     "Align Vertical Centers",
                     A::AlignVerticalCenters,
+                    pair,
                 ));
-                items.push(mk(
+                items.push(mk_or_disabled(
                     ic::icon_dd_dist_vert(tid),
                     "Distribute Vertically",
                     A::DistributeVertically,
+                    dist,
                 ));
                 items.push(self.ctx_menu_sep());
                 items.push(mk(
                     ic::icon_dd_align_grid(tid),
                     "Align To Grid",
                     A::AlignToGrid,
+                ));
+            }
+            ContextSubmenu::AddNewToProject => {
+                // Altium parity: this is the master "Add New" picker for
+                // the active project. Every entry below requires
+                // project-file write support (v0.9) plus the matching
+                // editor — none ship in v0.8, so each row carries a
+                // version badge and stays disabled. The submenu still
+                // launches so the user can see what's coming.
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_wire(tid)),
+                    "Schematic",
+                    Some("v0.9"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_component(tid)),
+                    "Schematic Library",
+                    Some("v0.9"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_part_actions(tid)),
+                    "PCB",
+                    Some("v2.0"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_component(tid)),
+                    "PCB Library",
+                    Some("v2.0"),
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "Output Job",
+                    Some("v1.3"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_frame(tid)),
+                    "Design Notebook",
+                    Some("v1.4"),
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "Constraint File",
+                    Some("v3.x"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "VHDL File",
+                    Some("v3.x"),
                 ));
             }
         }
@@ -910,12 +1083,41 @@ impl Signex {
     /// Print Preview overlay. Shows thumbnails of every rendered page on
     /// the left, the selected page full-size on the right, with Export PDF
     /// and Close buttons at the bottom. Triggered by File → Print Preview
-    /// (Ctrl+P); disappears on Close or when the export completes.
+    /// (Ctrl+P) and File → Export PDF; disappears on Close or when the
+    /// export completes. In-window flavour wraps the body in `wrap_modal`
+    /// for backdrop + drag-to-position.
     fn view_print_preview(&self) -> Element<'_, Message> {
+        use crate::app::state::ModalId;
+        use crate::app::view::dialogs::wrap_modal;
+        let modal_w = 1100.0_f32;
+        let modal_h = 780.0_f32;
+        let body = self.view_print_preview_inner(true);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&ModalId::PrintPreview)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(body, offset, self.ui_state.window_size, (modal_w, modal_h))
+    }
+
+    /// Detached-window flavour — bare body, no backdrop, no in-window
+    /// drag handler (the OS window-drag covers the header).
+    pub(super) fn view_print_preview_body(&self) -> Element<'_, Message> {
+        self.view_print_preview_inner(false)
+    }
+
+    fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use iced::widget::{
-            button, checkbox, column, container, image, mouse_area, opaque, row, scrollable, text,
-            text_input,
+            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
+            text_input, Space,
         };
+        use crate::app::view::dialogs::{
+            close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
+            MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+        };
+        use crate::app::state::ModalId;
+        let theme_id = self.ui_state.theme_id;
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -1180,7 +1382,8 @@ impl Signex {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        // Bottom bar: Export PDF + Close
+        // Bottom bar: Export PDF only — the header X handles dismissal,
+        // a redundant text "Close" just adds visual noise.
         let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
             .padding([6, 14])
             .on_press(Message::PrintPreviewExport)
@@ -1195,21 +1398,6 @@ impl Signex {
                     ..iced::widget::button::Style::default()
                 },
             );
-        let close_btn = button(text("Close").size(12).color(text_c))
-            .padding([6, 14])
-            .on_press(Message::PrintPreviewClose)
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(panel_bg.into()),
-                    text_color: text_c,
-                    border: iced::Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: iced::border::Radius::from(4.0),
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            );
 
         let bottom_bar = row![
             text(format!(
@@ -1219,70 +1407,77 @@ impl Signex {
             .size(11)
             .color(text_muted),
             iced::widget::Space::new().width(Length::Fill),
-            close_btn,
             export_btn,
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
 
-        // Dialog body: title + thumbnails/content row + bottom bar.
-        // The settings strip now carries every PDF export decision —
-        // no more separate "Export PDF" dialog after Print Preview.
-        let body = column![
-            text("Export PDF").size(14).color(text_c),
+        // Header: title + close X. The same draggable_header /
+        // close_x_button helpers used by the Annotate / ERC modals so
+        // every modal in the app shares one chrome.
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Export PDF")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let _ = border_c;
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                ModalId::PrintPreview,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(header_content, ModalId::PrintPreview)
+        };
+
+        // Settings strip + thumbnails/content row + bottom bar.
+        let settings_strip = container(
             row![
                 summary_row,
-                iced::widget::Space::new().width(16),
+                Space::new().width(16),
                 colour_controls,
-                iced::widget::Space::new().width(12),
+                Space::new().width(12),
                 range_controls,
                 specific_page_input,
-                iced::widget::Space::new().width(Length::Fill),
+                Space::new().width(Length::Fill),
                 toggles_row,
             ]
             .align_y(iced::Alignment::Center),
-            row![thumb_rail, iced::widget::Space::new().width(8), centre]
+        )
+        .padding([8, 14]);
+
+        let modal_w = 1100.0_f32;
+        let modal_h = 780.0_f32;
+        let dialog = container(
+            column![
+                header,
+                settings_strip,
+                container(
+                    row![thumb_rail, Space::new().width(8), centre]
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .padding([0, 14])
                 .width(Length::Fill)
                 .height(Length::Fill),
-            bottom_bar,
-        ]
-        .spacing(8)
-        .padding(12);
-
-        // Dialog card sized to leave a margin around the edges
-        let card = opaque(
-            container(body)
-                .max_width(1100)
-                .max_height(780)
-                .padding(0)
-                .style(move |_: &iced::Theme| container::Style {
-                    background: Some(panel_bg.into()),
-                    border: iced::Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: iced::border::Radius::from(8.0),
-                    },
-                    shadow: iced::Shadow {
-                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                        offset: iced::Vector::new(0.0, 4.0),
-                        blur_radius: 16.0,
-                    },
-                    ..container::Style::default()
-                }),
-        );
-
-        container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Top)
-            .padding(iced::Padding {
-                top: 32.0,
-                right: 0.0,
-                bottom: 0.0,
-                left: 0.0,
-            })
-            .into()
+                container(bottom_bar).padding([10, 14]),
+            ]
+            .width(modal_w)
+            .height(modal_h),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
     }
 
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -1378,7 +1573,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::MoveSelection,
@@ -1468,7 +1663,8 @@ impl Signex {
                 .width(iced::Length::Fixed(420.0))
                 .height(iced::Length::Fixed(240.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -1525,7 +1721,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::NetColorPalette,
@@ -1663,7 +1859,8 @@ impl Signex {
             .width(iced::Length::Fixed(520.0))
             .height(iced::Length::Fixed(480.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -1690,7 +1887,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::ParameterManager,
@@ -1710,7 +1907,8 @@ impl Signex {
                 .width(iced::Length::Fixed(900.0))
                 .height(iced::Length::Fixed(560.0)),
             )
-            .style(crate::styles::context_menu(tokens))
+            .style(crate::styles::modal_card(tokens))
+        .clip(true)
             .into();
         };
         let doc = engine.document();
@@ -1814,7 +2012,8 @@ impl Signex {
             .width(iced::Length::Fixed(900.0))
             .height(iced::Length::Fixed(560.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -2267,9 +2466,10 @@ impl Signex {
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
+            ModalId::PrintPreview => self.view_print_preview_body(),
+            ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences
             | ModalId::FindReplace
-            | ModalId::CloseTabConfirm
             | ModalId::RenameDialog
             | ModalId::RemoveDialog => {
                 iced::widget::container(iced::widget::text("Detached modal"))
@@ -2437,14 +2637,16 @@ impl Signex {
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
             || interaction.project_tree_context_menu.is_some()
+            || interaction.tab_context_menu.is_some()
             || interaction.active_bar_menu.is_some()
             || interaction.canvas.placement_paused
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
-            || ui.close_tab_confirm.is_some()
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
+            || ui.project_close_confirm.is_some()
+            || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
             || ui.erc_dialog_open
@@ -2770,11 +2972,25 @@ impl Signex {
             layers.push(self.view_export_error());
         }
 
-        // Print preview overlay — appears on top of everything when the user
-        // invokes File → Print Preview (Ctrl+P). Full-screen dim + dialog.
-        if document.preview.is_some() {
-            layers.push(Self::dismiss_layer(Message::PrintPreviewClose));
+        // Print preview overlay — Altium parity: opens as a separate OS
+        // window (see `handle_print_preview_requested → handle_detach_modal`)
+        // so it can be dragged outside the app's client area. Only fall
+        // back to the in-window overlay if the OS window failed to open.
+        let preview_detached = ui
+            .windows
+            .values()
+            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)));
+        if document.preview.is_some() && !preview_detached {
             layers.push(self.view_print_preview());
+        }
+
+        // BOM preview overlay — same detach-first pattern as Print Preview.
+        let bom_detached = ui
+            .windows
+            .values()
+            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)));
+        if document.bom_preview.is_some() && !bom_detached {
+            layers.push(self.view_bom_preview());
         }
 
         // Custom net-colour picker. Bespoke modal (not the iced_aw
@@ -3053,6 +3269,11 @@ impl Signex {
                     // above Align: the same 3 rows + 1 sep, then
                     // Place / Part Actions / Sheet Actions / References.
                     ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                    // AddNewToProject only fires from the project-tree
+                    // menu, never from the canvas menu — fall through
+                    // to a safe placeholder if the state somehow leaks
+                    // (no submenu rendered, just a 0-offset).
+                    ContextSubmenu::AddNewToProject => 0.0,
                 };
                 let sub_y = (y + launcher_y - 4.0).max(0.0);
                 layers.push(
@@ -3068,6 +3289,43 @@ impl Signex {
                     .into(),
                 );
             }
+        }
+
+        // Document-tab right-click menu. Rendered before the project-
+        // tree menu since the two are mutually exclusive — only one of
+        // them can be open at a time, and opening one closes the
+        // others (see Message::ShowTabContextMenu).
+        if let Some(ref tab_ctx) = interaction.tab_context_menu {
+            let menu = self.view_tab_context_menu(tab_ctx);
+            // Conservative footprint matches the project-tree menu so
+            // the two visually align.
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if tab_ctx.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                tab_ctx.x
+            };
+            let y = if tab_ctx.y + est_menu_h + edge_margin > win_h {
+                (tab_ctx.y - est_menu_h).max(0.0)
+            } else {
+                tab_ctx.y
+            };
+            layers.push(Self::dismiss_layer(Message::CloseTabContextMenu));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
         }
 
         // Projects-panel tree right-click menu. Rendered here (after the
@@ -3107,6 +3365,44 @@ impl Signex {
                 ]
                 .into(),
             );
+            // Adjacent submenu (currently only AddNewToProject opens
+            // from this menu). Mirrors the canvas-menu submenu logic
+            // above — pop to the right of the parent (or left if the
+            // right edge would overflow), align top to the launcher
+            // row's y inside the parent menu.
+            if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+                let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
+                let submenu = iced::widget::mouse_area(submenu)
+                    .on_enter(Message::EnterContextSubmenuPanel)
+                    .on_exit(Message::LeaveContextSubmenuPanel);
+                let submenu_w = menu_w;
+                let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                    (x - submenu_w).max(0.0)
+                } else {
+                    x + menu_w
+                };
+                // Launcher position inside the project-tree menu:
+                // `Make Project Available Online...` (row 0)
+                // `Validate Project`                 (row 1)
+                // `Add New to Project ›`             (row 2) ← target
+                // → top + 2 rows, no separator above the launcher.
+                const ROW_H: f32 = 22.0;
+                const TOP_PAD: f32 = 4.0;
+                let launcher_y = TOP_PAD + 2.0 * ROW_H;
+                let sub_y = (y + launcher_y - 4.0).max(0.0);
+                layers.push(
+                    column![
+                        iced::widget::Space::new().height(sub_y),
+                        row![
+                            iced::widget::Space::new().width(sub_x),
+                            submenu,
+                            iced::widget::Space::new().width(Length::Fill),
+                        ]
+                        .width(Length::Fill),
+                    ]
+                    .into(),
+                );
+            }
         }
 
         if ui.panel_list_open {
@@ -3275,17 +3571,14 @@ impl Signex {
             layers.push(dialog);
         }
 
-        if let Some(idx) = ui.close_tab_confirm
-            && let Some(tab) = document.tabs.get(idx)
-        {
-            layers.push(self.view_close_tab_confirm(&tab.title));
-        }
-
         if ui.rename_dialog.is_some() {
             layers.push(self.view_rename_dialog());
         }
         if ui.remove_dialog.is_some() {
             layers.push(self.view_remove_dialog());
+        }
+        if ui.project_close_confirm.is_some() {
+            layers.push(self.view_project_close_confirm());
         }
 
         // Skip overlay rendering for any modal whose detached OS window

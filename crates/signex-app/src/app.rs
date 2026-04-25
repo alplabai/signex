@@ -26,12 +26,13 @@ mod state;
 mod view;
 
 pub use contracts::{
-    CloseTabChoice, ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState,
-    RenameDialogState, StatusBarRequest, TextEditState,
+    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RenameDialogState,
+    StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
-pub use state::{DocumentState, InteractionState, LoadedProject, ProjectId, Signex, UiState};
+pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 #[allow(unused_imports)]

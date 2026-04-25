@@ -109,9 +109,9 @@ impl Signex {
                 preferences_draft_label_style: crate::fonts::read_label_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
-                close_tab_confirm: None,
                 rename_dialog: None,
                 remove_dialog: None,
+                project_close_confirm: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
@@ -148,6 +148,7 @@ impl Signex {
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
+                dirty_paths: std::collections::HashSet::new(),
                 next_project_id: 0,
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
@@ -218,6 +219,7 @@ impl Signex {
                 preview: None,
                 pending_pdf_options: None,
                 export_error: None,
+                bom_preview: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -245,6 +247,7 @@ impl Signex {
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,
+                tab_context_menu: None,
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,
@@ -636,9 +639,14 @@ impl Signex {
             .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
 
         // Hover-open timer for the right-click context-menu submenus.
-        // Only active while the context menu is open; the dispatcher
-        // checks `pending_submenu`'s elapsed time on each tick.
-        let hover_tick = if self.interaction_state.context_menu.is_some() {
+        // Active while ANY menu that owns submenus is open — canvas
+        // right-click, project-tree right-click, or document-tab
+        // right-click. The dispatcher checks `pending_submenu`'s
+        // elapsed time on each tick.
+        let any_menu_open = self.interaction_state.context_menu.is_some()
+            || self.interaction_state.project_tree_context_menu.is_some()
+            || self.interaction_state.tab_context_menu.is_some();
+        let hover_tick = if any_menu_open {
             iced::time::every(std::time::Duration::from_millis(50))
                 .map(|_| Message::TickContextSubmenuHover)
         } else {

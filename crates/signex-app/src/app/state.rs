@@ -56,15 +56,16 @@ pub struct UiState {
     pub preferences_draft_label_style: LabelStyle,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
-    /// Index of a tab queued for close-confirmation because it has unsaved
-    /// edits. While `Some`, an overlay modal blocks other interaction with
-    /// Save / Discard / Cancel actions.
-    pub close_tab_confirm: Option<usize>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
     /// context menu; `None` when the modal is closed.
     pub rename_dialog: Option<crate::app::RenameDialogState>,
     /// Remove-from-project modal state (Delete / Exclude / Cancel).
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
+    /// "Close Project — Unsaved Edits" confirmation modal. `Some`
+    /// while the user is being asked to save / discard / cancel a
+    /// close request that intersects `dirty_paths`. Cleared on any
+    /// of the three button choices.
+    pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -245,11 +246,14 @@ pub enum ModalId {
     // header gets a drag hook.
     Preferences,
     FindReplace,
-    CloseTabConfirm,
     /// Rename-sheet dialog (Projects-panel leaf → Rename...).
     RenameDialog,
     /// Remove-from-project dialog (Projects-panel leaf → Remove from Project).
     RemoveDialog,
+    /// Print Preview / Export PDF unified modal (File → Print Preview, File → Export PDF).
+    PrintPreview,
+    /// BOM Export preview modal (File → Export → Bill of Materials…).
+    BomPreview,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
@@ -323,6 +327,14 @@ pub struct DocumentState {
     /// most-recently-loaded project plus whichever project contains the
     /// active tab; single source of truth for "where am I focused".
     pub active_project: Option<ProjectId>,
+    /// Files with unsaved edits, keyed by absolute path. Tracks the
+    /// "Altium-style" project-scoped dirty state — a file stays in this
+    /// set after its tab is closed (the engine in `engines` keeps the
+    /// edited document) and clears when the file is saved or the
+    /// project's edits are explicitly discarded. Drives the red dot on
+    /// the Projects-panel tree row independently of `tab.dirty`, which
+    /// would otherwise lose the signal the moment the tab is closed.
+    pub dirty_paths: std::collections::HashSet<PathBuf>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -344,6 +356,24 @@ pub struct DocumentState {
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
     /// itself (not the file dialog) fails. Cleared by DismissExportError.
     pub export_error: Option<String>,
+    /// BOM preview state. `Some` while the BOM Export modal is open.
+    /// Mirrors the Print Preview pattern: the user adjusts grouping /
+    /// include flags / format / variant in the modal and clicks
+    /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
+    pub bom_preview: Option<BomPreviewState>,
+}
+
+/// Live BOM preview state — the rolled-up table for the active project
+/// plus the user-editable options that drive the next rollup. Re-rolled
+/// whenever an option toggle fires.
+pub struct BomPreviewState {
+    pub options: signex_output::BomOptions,
+    pub table: signex_output::BomTable,
+    /// Available variants for the active project. Reserved for the
+    /// variant picker dropdown — empty when no variants are defined.
+    /// Currently only seeded; the picker UI lands in v0.8.1.
+    #[allow(dead_code)]
+    pub variants: Vec<String>,
 }
 
 /// Open-print-preview state — rasterised pages + which one is currently
@@ -480,6 +510,13 @@ pub struct InteractionState {
     /// overlap in actions and the canvas menu depends on placement /
     /// selection state that does not exist in the panel context.
     pub project_tree_context_menu: Option<crate::app::ProjectTreeContextMenuState>,
+    /// Document-tab right-click menu state. Anchored at the right-click
+    /// coordinates inside the tab strip; carries the index of the
+    /// clicked tab so per-tab actions ("Close [filename]") resolve
+    /// against the correct entry. Mutually exclusive with
+    /// `context_menu` and `project_tree_context_menu` — opening one
+    /// dismisses the others.
+    pub tab_context_menu: Option<crate::app::TabContextMenuState>,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.

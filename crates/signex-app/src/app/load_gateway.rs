@@ -89,6 +89,16 @@ impl Signex {
                     tab.dirty = dirty;
                 }
 
+                // Mirror tab dirty state into the project-scoped
+                // `dirty_paths` set so the Projects-panel red dot
+                // survives tab close and is single-source-of-truth
+                // for "the file has unsaved edits".
+                if dirty {
+                    self.document_state.dirty_paths.insert(new_path.clone());
+                } else {
+                    self.document_state.dirty_paths.remove(&new_path);
+                }
+
                 self.document_state.engines.insert(new_path.clone(), engine);
                 self.document_state.active_path = Some(new_path);
                 Some(result)

@@ -24,7 +24,6 @@ impl Signex {
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
-            Message::CloseTabConfirm(choice) => self.handle_close_tab_confirm(choice),
             Message::RunErc => {
                 let close_task = if self.ui_state.erc_dialog_open {
                     self.handle_close_erc_dialog()
@@ -100,8 +99,18 @@ impl Signex {
                 // overlap, then anchor the new menu to `last_mouse_pos`
                 // (iced 0.14 mouse_area does not forward cursor coords
                 // with on_right_press, so we use the last tracked pos
-                // from the global mouse-move subscription).
+                // from the global mouse-move subscription). Also clear
+                // any submenu state from a *previous* right-click —
+                // otherwise opening the project root, hovering "Add
+                // New to Project ›", dismissing the menu, then right-
+                // clicking a leaf row would still render the stale
+                // submenu next to the new (leaf) menu.
                 self.interaction_state.context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.interaction_state.pending_submenu = None;
+                self.interaction_state.submenu_launcher_hovered = None;
+                self.interaction_state.submenu_panel_hovered = false;
+                self.interaction_state.submenu_unhovered_since = None;
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
                     Some(crate::app::ProjectTreeContextMenuState { x, y, path });
@@ -109,9 +118,42 @@ impl Signex {
             }
             Message::CloseProjectTreeContextMenu => {
                 self.interaction_state.project_tree_context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.interaction_state.pending_submenu = None;
+                self.interaction_state.submenu_launcher_hovered = None;
+                self.interaction_state.submenu_panel_hovered = false;
+                self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
             Message::ProjectTreeAction(action) => self.handle_project_tree_action(action),
+            Message::ShowTabContextMenu(idx) => {
+                // Mutually exclusive with the canvas + project-tree
+                // menus — close them and any submenu state from a
+                // previous right-click before anchoring the tab menu
+                // at `last_mouse_pos`.
+                self.interaction_state.context_menu = None;
+                self.interaction_state.project_tree_context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.interaction_state.pending_submenu = None;
+                self.interaction_state.submenu_launcher_hovered = None;
+                self.interaction_state.submenu_panel_hovered = false;
+                self.interaction_state.submenu_unhovered_since = None;
+                let (x, y) = self.interaction_state.last_mouse_pos;
+                self.interaction_state.tab_context_menu =
+                    Some(crate::app::TabContextMenuState { x, y, tab_idx: idx });
+                Task::none()
+            }
+            Message::CloseTabContextMenu => {
+                self.interaction_state.tab_context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.interaction_state.pending_submenu = None;
+                self.interaction_state.submenu_launcher_hovered = None;
+                self.interaction_state.submenu_panel_hovered = false;
+                self.interaction_state.submenu_unhovered_since = None;
+                Task::none()
+            }
+            Message::TabContextAction(action) => self.handle_tab_context_action(action),
+            Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
             Message::RenameBufferChanged(s) => {
                 if let Some(d) = self.ui_state.rename_dialog.as_mut() {
                     d.buffer = s;

@@ -54,6 +54,12 @@ impl Signex {
             | Message::ExportNetlistFinished(_)
             | Message::ExportBomRequested
             | Message::ExportBomFinished(_)
+            | Message::BomPreviewSetGrouping(_)
+            | Message::BomPreviewSetFormat(_)
+            | Message::BomPreviewSetIncludeDnp(_)
+            | Message::BomPreviewSetIncludeNotFitted(_)
+            | Message::BomPreviewExport
+            | Message::BomPreviewClose
             | Message::PrintPreviewRequested
             | Message::PrintPreviewSelectPage(_)
             | Message::PrintPreviewSetColourMode(_)
@@ -81,6 +87,10 @@ impl Signex {
             | Message::ShowProjectTreeContextMenu(_)
             | Message::CloseProjectTreeContextMenu
             | Message::ProjectTreeAction(_)
+            | Message::ShowTabContextMenu(_)
+            | Message::CloseTabContextMenu
+            | Message::TabContextAction(_)
+            | Message::ProjectCloseConfirm(_)
             | Message::RenameBufferChanged(_)
             | Message::RenameSubmit
             | Message::CloseRenameDialog
@@ -93,7 +103,6 @@ impl Signex {
             | Message::LeaveContextSubmenuPanel
             | Message::TickContextSubmenuHover
             | Message::ContextAction(_)
-            | Message::CloseTabConfirm(_)
             | Message::RunErc
             | Message::Annotate(_)
             | Message::OpenAnnotateDialog
@@ -169,7 +178,6 @@ impl Signex {
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => self.ui_state.preferences_open = false,
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
-                            ModalId::CloseTabConfirm => self.ui_state.close_tab_confirm = None,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
                                 self.ui_state.net_color_palette_open = false
@@ -179,6 +187,8 @@ impl Signex {
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
+                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::BomPreview => self.document_state.bom_preview = None,
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in

@@ -158,7 +158,57 @@ impl Signex {
     /// `tree_path[0]`, then drop the project from the workspace and
     /// promote a sibling (or `None`) to active. Mirrors Altium's
     /// Projects-panel right-click → Close Project.
+    ///
+    /// If any file in the project's directory has unsaved edits
+    /// (`dirty_paths` intersects the project dir), opens the
+    /// `ProjectCloseConfirm` modal first instead of closing
+    /// immediately. The modal's choice handler
+    /// (`handle_project_close_confirm`) calls back into this method
+    /// once the user picks Save All or Discard All.
     fn close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return Task::none();
+        };
+        let Some(project) = self.document_state.projects.get(project_idx) else {
+            return Task::none();
+        };
+        let project_dir = project.path.parent().map(|p| p.to_path_buf());
+        // Collect dirty paths inside this project's directory.
+        // dirty_paths is project-scoped via on-disk parent dir;
+        // a file outside `project_dir` is somebody else's problem.
+        let dirty: Vec<std::path::PathBuf> = if let Some(dir) = project_dir.as_deref() {
+            let mut v: Vec<std::path::PathBuf> = self
+                .document_state
+                .dirty_paths
+                .iter()
+                .filter(|p| p.parent() == Some(dir))
+                .cloned()
+                .collect();
+            v.sort();
+            v
+        } else {
+            Vec::new()
+        };
+
+        if !dirty.is_empty() {
+            self.ui_state.project_close_confirm =
+                Some(crate::app::ProjectCloseConfirmState {
+                    tree_path: tree_path.to_vec(),
+                    project_name: project.data.name.clone(),
+                    dirty_paths: dirty,
+                });
+            return Task::none();
+        }
+
+        self.execute_close_project_at_tree_path(tree_path)
+    }
+
+    /// Inner close-project flow that actually drops tabs + the
+    /// project entry. Called either directly (clean project) or via
+    /// the project-close confirm modal once the user picks Save All
+    /// or Discard All. Trusts that `dirty_paths` for this project is
+    /// already empty (callers ensure this).
+    fn execute_close_project_at_tree_path(&mut self, tree_path: &[usize]) -> Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
@@ -187,6 +237,21 @@ impl Signex {
             tasks.push(self.close_tab_now(idx));
         }
 
+        // Drop the project's parked engines too — without this, an
+        // engine that was kept alive by `dirty_paths` would leak
+        // through project close. Save All / Discard All have already
+        // pruned `dirty_paths` for the project, so this loop just
+        // sweeps the engine map for any path under this project's
+        // directory.
+        if let Some(project) = self.document_state.projects.get(project_idx)
+            && let Some(dir) = project.path.parent()
+        {
+            let dir = dir.to_path_buf();
+            self.document_state
+                .engines
+                .retain(|p, _| p.parent() != Some(&dir));
+        }
+
         // Drop the project from the workspace, then pick a new active
         // project — the one that now sits in the same slot (was
         // immediately after the closed one), else the previous slot,
@@ -209,6 +274,82 @@ impl Signex {
             Task::none()
         } else {
             Task::batch(tasks)
+        }
+    }
+
+    /// Resolve the user's Save All / Discard All / Cancel choice on
+    /// the project-close confirmation modal. Owned by this module
+    /// because it's a follow-up of `close_project_at_tree_path`.
+    pub(crate) fn handle_project_close_confirm(
+        &mut self,
+        choice: crate::app::ProjectCloseChoice,
+    ) -> Task<Message> {
+        use crate::app::ProjectCloseChoice;
+        let Some(state) = self.ui_state.project_close_confirm.take() else {
+            return Task::none();
+        };
+        match choice {
+            ProjectCloseChoice::Cancel => Task::none(),
+            ProjectCloseChoice::SaveAll => {
+                // Save every dirty file. For files that match an
+                // engine entry (the typical case — close_tab_now's
+                // park-on-dirty rule keeps them alive), call
+                // `engine.save()` and clear the dirty flag on disk.
+                // Files without a live engine can't be saved here;
+                // they shouldn't exist if `dirty_paths` is consistent
+                // with `engines`, but log + skip just in case.
+                for path in &state.dirty_paths {
+                    if let Some(engine) = self.document_state.engines.get_mut(path) {
+                        match engine.save() {
+                            Ok(_) => {
+                                self.document_state.dirty_paths.remove(path);
+                                if let Some(tab) = self
+                                    .document_state
+                                    .tabs
+                                    .iter_mut()
+                                    .find(|t| &t.path == path)
+                                {
+                                    tab.dirty = false;
+                                }
+                            }
+                            Err(err) => {
+                                crate::diagnostics::log_error(
+                                    "Failed to save during project close",
+                                    &anyhow::anyhow!("{err}"),
+                                );
+                            }
+                        }
+                    } else {
+                        crate::diagnostics::log_info(format!(
+                            "Project close: no live engine for dirty {} — skipping save",
+                            path.display()
+                        ));
+                        self.document_state.dirty_paths.remove(path);
+                    }
+                }
+                self.execute_close_project_at_tree_path(&state.tree_path)
+            }
+            ProjectCloseChoice::DiscardAll => {
+                // Drop dirty engines + clear the dirty flags. The
+                // engines map is also swept by
+                // `execute_close_project_at_tree_path` afterwards,
+                // but doing it here too keeps the flow symmetric
+                // with SaveAll (after this match the project's
+                // dirty_paths entries are gone either way).
+                for path in &state.dirty_paths {
+                    self.document_state.engines.remove(path);
+                    self.document_state.dirty_paths.remove(path);
+                    if let Some(tab) = self
+                        .document_state
+                        .tabs
+                        .iter_mut()
+                        .find(|t| &t.path == path)
+                    {
+                        tab.dirty = false;
+                    }
+                }
+                self.execute_close_project_at_tree_path(&state.tree_path)
+            }
         }
     }
 

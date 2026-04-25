@@ -52,6 +52,32 @@ pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
     }
 }
 
+/// Modal header strip — same toolbar bg as `toolbar_strip` but with a
+/// top-only rounded radius matching `MODAL_CORNER_RADIUS`. Without
+/// this, the modal's outer 8 px rounded border is visually masked by
+/// the header's own rectangular background filling into the corners
+/// (iced's `Container::clip(true)` clips to the bounds rectangle, not
+/// the rounded path).
+pub fn modal_header_strip(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.toolbar_bg);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .top_left(MODAL_CORNER_RADIUS)
+                .top_right(MODAL_CORNER_RADIUS),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
 /// Active Bar strip (centered toolbar above canvas)
 #[allow(dead_code)]
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
@@ -150,6 +176,36 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
             offset: iced::Vector::new(2.0, 3.0),
             blur_radius: 8.0,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Corner radius shared by every modal card — sized to match the
+/// Windows 11 OS-window rounding so the modal chrome reads as a
+/// continuation of the app shell, not a separate panel.
+pub const MODAL_CORNER_RADIUS: f32 = 8.0;
+
+/// Modal-card surface — same panel/text/border palette as
+/// `context_menu`, but with a wider corner radius matching the
+/// OS chrome. Used by every modal so the rounding stays in step
+/// with the surrounding window shell.
+pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.paper);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 1.0,
+            radius: MODAL_CORNER_RADIUS.into(),
+            color: border,
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+            offset: iced::Vector::new(2.0, 3.0),
+            blur_radius: 12.0,
         },
         ..container::Style::default()
     }

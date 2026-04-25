@@ -20,28 +20,82 @@ impl Signex {
         // — kept around for the few panels that haven't migrated to read
         // `panel_ctx.projects` directly yet.
         let active_id = self.document_state.active_project;
+        // Open-state lookup is "is there a tab pointing at this path?"
+        // Dirty-state lookup is the project-scoped `dirty_paths` set,
+        // which persists across tab close (Altium parity: closing a
+        // tab keeps the file dirty until the project is saved or the
+        // edits are explicitly discarded).
+        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
+            .document_state
+            .tabs
+            .iter()
+            .map(|tab| tab.path.clone())
+            .collect();
+        let dirty_paths = self.document_state.dirty_paths.clone();
+        // Active-tab path drives the per-row highlight in the tree —
+        // matches Altium's "you are here" cue. None when no tabs open.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.clone());
         let projects_panel: Vec<crate::panels::ProjectPanelInfo> = self
             .document_state
             .projects
             .iter()
-            .map(|p| crate::panels::ProjectPanelInfo {
-                id: p.id,
-                name: p.data.name.clone(),
-                project_file: p.data.schematic_root.clone(),
-                pcb_file: p.data.pcb_file.clone(),
-                sheets: p
+            .map(|p| {
+                let project_dir = std::path::Path::new(&p.data.dir);
+                let active_path_ref = active_path.as_ref();
+                let lookup = |filename: &str| -> (bool, bool, bool) {
+                    let abs = project_dir.join(filename);
+                    let is_open = open_paths.contains(&abs);
+                    let is_dirty = dirty_paths.contains(&abs);
+                    let is_active = active_path_ref == Some(&abs);
+                    (is_open, is_dirty, is_active)
+                };
+                let (project_file_open, project_file_dirty, project_file_active) = p
                     .data
-                    .sheets
-                    .iter()
-                    .map(|sheet| crate::panels::SheetInfo {
-                        name: sheet.name.clone(),
-                        filename: sheet.filename.clone(),
-                        sym_count: sheet.symbols_count,
-                        wire_count: sheet.wires_count,
-                        label_count: sheet.labels_count,
-                    })
-                    .collect(),
-                is_active: Some(p.id) == active_id,
+                    .schematic_root
+                    .as_deref()
+                    .map(lookup)
+                    .unwrap_or((false, false, false));
+                let (pcb_file_open, pcb_file_dirty, pcb_file_active) = p
+                    .data
+                    .pcb_file
+                    .as_deref()
+                    .map(lookup)
+                    .unwrap_or((false, false, false));
+                crate::panels::ProjectPanelInfo {
+                    id: p.id,
+                    name: p.data.name.clone(),
+                    project_file: p.data.schematic_root.clone(),
+                    project_file_open,
+                    project_file_dirty,
+                    project_file_active,
+                    pcb_file: p.data.pcb_file.clone(),
+                    pcb_file_open,
+                    pcb_file_dirty,
+                    pcb_file_active,
+                    sheets: p
+                        .data
+                        .sheets
+                        .iter()
+                        .map(|sheet| {
+                            let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
+                            crate::panels::SheetInfo {
+                                name: sheet.name.clone(),
+                                filename: sheet.filename.clone(),
+                                sym_count: sheet.symbols_count,
+                                wire_count: sheet.wires_count,
+                                label_count: sheet.labels_count,
+                                is_open,
+                                is_dirty,
+                                is_active,
+                            }
+                        })
+                        .collect(),
+                    is_active: Some(p.id) == active_id,
+                }
             })
             .collect();
 
@@ -236,6 +290,11 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_overlay_cache();
+        // Always rebuild the panel context so the active-row highlight
+        // and active-project accent track the focused tab even when
+        // sync_visible_document_from_active_tab took the empty-doc
+        // branch (which suppresses the implicit refresh).
+        self.refresh_panel_ctx();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas.

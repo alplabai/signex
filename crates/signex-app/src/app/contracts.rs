@@ -93,6 +93,17 @@ pub enum Message {
     CloseProjectTreeContextMenu,
     /// Menu item picked — route the action.
     ProjectTreeAction(ProjectTreeAction),
+    /// Right-click on a document tab — open the per-tab context menu
+    /// at `last_mouse_pos`. Carries the clicked tab's index.
+    ShowTabContextMenu(usize),
+    /// Dismiss the document-tab right-click menu.
+    CloseTabContextMenu,
+    /// Menu item picked — route the action.
+    TabContextAction(TabContextAction),
+    /// User picked an option in the project-close confirmation modal
+    /// (Save All / Discard All / Cancel) shown when closing a
+    /// project that still has entries in `dirty_paths`.
+    ProjectCloseConfirm(ProjectCloseChoice),
     /// Text input in the rename modal — updates the live buffer.
     RenameBufferChanged(String),
     /// Commit the rename: fs::rename + update in-memory sheet / tab
@@ -138,10 +149,6 @@ pub enum Message {
     /// can drop non-main-window resizes before they touch
     /// `ui_state.window_size`.
     WindowResizedFor(iced::window::Id, f32, f32),
-    /// User picked an option in the close-confirmation modal shown when they
-    /// try to close a tab with unsaved changes. Drives the modal via
-    /// `ui_state.close_tab_confirm`.
-    CloseTabConfirm(CloseTabChoice),
     /// Run the ERC engine against the active schematic snapshot and populate
     /// `ui_state.erc_violations`. Bound to F8.
     RunErc,
@@ -315,10 +322,25 @@ pub enum Message {
     ExportPdfFinished(Result<std::path::PathBuf, String>),
     /// Completion of netlist export — carries either the saved path or error.
     ExportNetlistFinished(Result<std::path::PathBuf, String>),
-    /// User invoked File → Export → Bill of Materials…
+    /// User invoked File → Export → Bill of Materials… — open the
+    /// BOM preview modal instead of going straight to the file
+    /// dialog. Mirrors Print Preview.
     ExportBomRequested,
     /// Completion of BOM export — carries either the saved path or error.
     ExportBomFinished(Result<std::path::PathBuf, String>),
+    /// User changed BOM grouping (Grouped / Ungrouped / Flat).
+    BomPreviewSetGrouping(signex_output::BomGrouping),
+    /// User changed BOM output format (CSV / XLSX / HTML).
+    BomPreviewSetFormat(signex_output::BomFormat),
+    /// User toggled "Include DNP" in the BOM preview modal.
+    BomPreviewSetIncludeDnp(bool),
+    /// User toggled "Include Not Fitted" in the BOM preview modal.
+    BomPreviewSetIncludeNotFitted(bool),
+    /// User clicked Export in the BOM preview modal — drives the file
+    /// dialog with the live options.
+    BomPreviewExport,
+    /// User dismissed the BOM preview modal.
+    BomPreviewClose,
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     PrintPreviewRequested,
     /// User selected a page in the print preview thumbnail list.
@@ -382,13 +404,6 @@ pub enum Channel {
     B,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum CloseTabChoice {
-    SaveAndClose,
-    DiscardAndClose,
-    Cancel,
-}
-
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum ContextAction {
@@ -417,6 +432,10 @@ pub enum ContextAction {
 pub enum ContextSubmenu {
     Place,
     Align,
+    /// Project-tree → "Add New to Project ›" launcher. Items are
+    /// version-tagged placeholders today — actual document creation
+    /// lands with project-write support in v0.9.
+    AddNewToProject,
 }
 
 #[derive(Debug, Clone)]
@@ -448,6 +467,65 @@ pub struct ProjectTreeContextMenuState {
     /// `Some(path)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
     pub path: Option<Vec<usize>>,
+}
+
+/// State for the "Close Project — Unsaved Edits" confirmation modal.
+/// Opens only when the user closes a project that has at least one
+/// entry in `DocumentState.dirty_paths` rooted in the project's
+/// directory; the modal lists every dirty file by filename so the
+/// user can see what they're about to lose.
+#[derive(Debug, Clone)]
+pub struct ProjectCloseConfirmState {
+    /// Project root tree path the close was requested for. Stored so
+    /// the modal's confirm action can dispatch back to
+    /// `close_project_at_tree_path` without re-resolving from the
+    /// project list (which may shift if the user closes another
+    /// project while this modal is up — Altium's modal is dismiss-
+    /// only, so this is defence-in-depth).
+    pub tree_path: Vec<usize>,
+    /// Project display name shown in the modal header.
+    pub project_name: String,
+    /// Absolute paths of dirty files inside the project's directory.
+    /// The view layer renders the file basenames; the handler uses
+    /// the absolute paths to locate the engines for save / discard.
+    pub dirty_paths: Vec<std::path::PathBuf>,
+}
+
+/// User choice from the project-close confirmation modal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectCloseChoice {
+    /// Save every dirty file in the project, then close.
+    SaveAll,
+    /// Drop the engines for every dirty file in the project without
+    /// writing to disk, then close.
+    DiscardAll,
+    /// Dismiss the modal; the project stays open.
+    Cancel,
+}
+
+/// State for the document-tab right-click menu. The menu's items are
+/// derived from `tab_idx` (the clicked tab) so the same menu builder
+/// works for any tab; mutually exclusive with the canvas and project-
+/// tree context menus.
+#[derive(Debug, Clone)]
+pub struct TabContextMenuState {
+    pub x: f32,
+    pub y: f32,
+    pub tab_idx: usize,
+}
+
+/// Concrete actions dispatched when the user picks a menu item in the
+/// document-tab right-click menu.
+#[derive(Debug, Clone)]
+pub enum TabContextAction {
+    /// Close just this tab.
+    Close(usize),
+    /// Close every tab except the one at this index.
+    CloseAllOthers(usize),
+    /// Close every open tab.
+    CloseAll,
+    /// Pop the tab at this index into its own OS window.
+    Undock(usize),
 }
 
 /// Concrete actions dispatched when the user picks a menu item in the
