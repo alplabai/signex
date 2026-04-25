@@ -306,34 +306,11 @@ pub enum Message {
     /// Polygon editable rows). Engine replaces the stored drawing by
     /// uuid with full undo.
     UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
-    /// Open the PDF export options dialog (user clicks File → Export → PDF…).
-    /// Replaces the old direct-to-file flow.
+    /// Open the unified PDF Export overlay (File → Export → PDF…). Now
+    /// delegates to `handle_print_preview_requested`, which sets up
+    /// `document_state.preview` with the rasterized pages plus every
+    /// PDF setting in one modal.
     ExportPdfOpenDialog,
-    /// User changed page size in the PDF options dialog.
-    ExportPdfSetPageSize(signex_output::PageSize),
-    /// User changed orientation in the PDF options dialog.
-    ExportPdfSetOrientation(signex_output::Orientation),
-    /// User changed colour mode in the PDF options dialog.
-    ExportPdfSetColourMode(signex_output::ColourMode),
-    /// User changed sheet template in the PDF options dialog. None = no template.
-    ExportPdfSetTemplate(Option<signex_output::TemplateId>),
-    /// User toggled the "Fit to Page" checkbox in the PDF options dialog.
-    ExportPdfSetFitToPage(bool),
-    /// User toggled the "Include Title Block" checkbox in the PDF options dialog.
-    ExportPdfSetIncludeTitleBlock(bool),
-    /// User changed page-range mode to export all sheets.
-    ExportPdfSetPageRangeAll,
-    /// User changed page-range mode to export only the active sheet.
-    ExportPdfSetPageRangeCurrent,
-    /// User changed page-range mode to export one specific page number.
-    ExportPdfSetPageRangeSpecific,
-    /// User edited the specific page number input in the PDF options dialog.
-    ExportPdfSetSpecificPageInput(String),
-    /// User clicked Cancel in the PDF options dialog.
-    ExportPdfDialogCancel,
-    /// User clicked Export in the PDF options dialog — proceed with file
-    /// picker and export using the dialog's options.
-    ExportPdfDialogConfirm,
     /// Completion of PDF export — carries either the saved path or error.
     ExportPdfFinished(Result<std::path::PathBuf, String>),
     /// Completion of netlist export — carries either the saved path or error.
