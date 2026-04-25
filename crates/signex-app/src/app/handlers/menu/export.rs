@@ -188,9 +188,8 @@ impl Signex {
 
         let active_variant = self
             .document_state
-            .project_data
-            .as_ref()
-            .and_then(|project| project.active_variant.clone())
+            .active_loaded_project()
+            .and_then(|p| p.data.active_variant.clone())
             .unwrap_or_else(|| "Base".to_string());
         let ctx = match build_export_context(&self.document_state) {
             Some(c) => c,
@@ -523,9 +522,8 @@ fn build_export_context(
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
     let mut custom_fields = std::collections::BTreeMap::new();
     let active_variant = document_state
-        .project_data
-        .as_ref()
-        .and_then(|project| project.active_variant.clone())
+        .active_loaded_project()
+        .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
         custom_fields.insert(

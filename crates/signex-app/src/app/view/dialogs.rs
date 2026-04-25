@@ -1529,15 +1529,13 @@ impl super::super::Signex {
 
         // Pass 2: parse every remaining project sheet from disk so the
         // change list spans sheets the user hasn't opened yet.
-        if let (Some(project), Some(project_path)) = (
-            self.document_state.project_data.as_ref(),
-            self.document_state.project_path.as_ref(),
-        ) {
-            let project_dir = project_path
+        if let Some(loaded) = self.document_state.active_loaded_project() {
+            let project_dir = loaded
+                .path
                 .parent()
                 .map(std::path::Path::to_path_buf)
                 .unwrap_or_default();
-            for sheet_entry in &project.sheets {
+            for sheet_entry in &loaded.data.sheets {
                 let file_path = project_dir.join(&sheet_entry.filename);
                 if open_paths.contains(&file_path) {
                     continue;

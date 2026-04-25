@@ -181,16 +181,10 @@ pub enum ErcSeverityLite {
 }
 
 pub struct PanelContext {
-    /// Multi-project workspace — one entry per `LoadedProject`. The
-    /// `project_name` / `project_file` / `sheets` singletons below are
-    /// kept in sync with the *active* project for the handlers that
-    /// haven't been migrated yet (issue #54 phase 5), but every new
-    /// consumer — `build_project_tree` first — should iterate this list.
+    /// Multi-project workspace — one entry per `LoadedProject`. Every
+    /// project-aware panel reads from this Vec; the active project is
+    /// the one with `is_active == true`.
     pub projects: Vec<ProjectPanelInfo>,
-    pub project_name: Option<String>,
-    pub project_file: Option<String>,
-    pub pcb_file: Option<String>,
-    pub sheets: Vec<SheetInfo>,
     pub sym_count: usize,
     pub wire_count: usize,
     pub label_count: usize,
@@ -1197,12 +1191,19 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(section_title("Sheets", &ctx.tokens));
     col = col.push(separator(&ctx.tokens));
 
-    if let Some(name) = &ctx.project_name {
+    // Resolve the active project from the multi-project Vec — replaces
+    // the legacy `ctx.project_name` singleton (#54 phase 2.5).
+    let active_project = ctx.projects.iter().find(|p| p.is_active);
+    if let Some(project) = active_project {
         let mut sheets = vec![];
         for cs in &ctx.child_sheets {
             sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
         }
-        let roots = vec![TreeNode::branch(name.clone(), TreeIcon::Schematic, sheets)];
+        let roots = vec![TreeNode::branch(
+            project.name.clone(),
+            TreeIcon::Schematic,
+            sheets,
+        )];
         col = col.push(
             TreeView::new(&roots, &ctx.tokens)
                 .view()
