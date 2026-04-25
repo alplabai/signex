@@ -440,7 +440,7 @@ impl DockArea {
             };
             let pill_style = signex_widgets::tab_pill::TabPillStyle {
                 fill,
-                border: iced::Color::BLACK,
+                border: styles::ti(ctx.tokens.border),
                 accent,
                 is_active,
                 is_last,
