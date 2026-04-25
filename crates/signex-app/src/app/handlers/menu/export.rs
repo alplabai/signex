@@ -179,12 +179,25 @@ impl Signex {
                 Some("Cannot build BOM: no active schematic.".to_string());
             return Task::none();
         };
+        // Default sort: ascending by the Designator column when it
+        // exists in the column set. Matches Altium's "rows are
+        // ordered by reference designator on open" convention.
+        let default_sort = opts
+            .columns
+            .iter()
+            .position(|c| matches!(c, signex_output::BomColumn::Designator))
+            .map(|idx| (idx, true));
         self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
             options: opts,
             table,
             variants,
-            sort: None,
+            sort: default_sort,
             column_drag: None,
+            column_drag_press_x: None,
+            column_hover: None,
+            column_widths: std::collections::HashMap::new(),
+            column_resize: None,
+            sidebar_tab: crate::app::state::BomSidebarTab::General,
         });
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
@@ -252,6 +265,11 @@ impl Signex {
     /// the rollup default.
     pub(crate) fn handle_bom_preview_sort_column(&mut self, idx: usize) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            // Click-no-move: arrived here via the on_release
+            // sort branch. Clear the drag state so the highlight
+            // doesn't linger.
+            preview.column_drag = None;
+            preview.column_drag_press_x = None;
             preview.sort = match preview.sort {
                 Some((cur, true)) if cur == idx => Some((idx, false)),
                 Some((cur, false)) if cur == idx => None,
@@ -261,13 +279,16 @@ impl Signex {
     }
 
     pub(crate) fn handle_bom_preview_column_drag_start(&mut self, idx: usize) {
+        let press_x = self.interaction_state.last_mouse_pos.0;
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag = Some(idx);
+            preview.column_drag_press_x = Some(press_x);
         }
     }
 
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.column_drag_press_x = None;
             if let Some(src) = preview.column_drag.take() {
                 if src != dest && src < preview.options.columns.len() && dest < preview.options.columns.len() {
                     let col = preview.options.columns.remove(src);

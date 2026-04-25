@@ -159,6 +159,32 @@ pub fn modal_header_strip(
     }
 }
 
+/// Modal footer strip — mirrors `modal_header_strip` for the bottom
+/// of a modal: same toolbar bg, BL+BR rounded radius matching
+/// `MODAL_CORNER_RADIUS`. Apply to the very bottom container of a
+/// modal that's wider than the body padding (button rows, status
+/// rows) so the rectangular bg doesn't paint into the modal's
+/// rounded bottom corners.
+pub fn modal_footer_strip(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.toolbar_bg);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .bottom_left(MODAL_CORNER_RADIUS)
+                .bottom_right(MODAL_CORNER_RADIUS),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
 /// Active Bar strip (centered toolbar above canvas)
 #[allow(dead_code)]
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
