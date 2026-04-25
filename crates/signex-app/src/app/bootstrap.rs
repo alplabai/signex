@@ -222,7 +222,6 @@ impl Signex {
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
-                pdf_options_dialog: None,
                 pending_pdf_options: None,
                 export_error: None,
             },

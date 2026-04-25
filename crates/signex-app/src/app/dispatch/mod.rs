@@ -50,18 +50,6 @@ impl Signex {
             | Message::SaveFileAs(_)
             | Message::SchematicLoaded(_)
             | Message::ExportPdfOpenDialog
-            | Message::ExportPdfSetPageSize(_)
-            | Message::ExportPdfSetOrientation(_)
-            | Message::ExportPdfSetColourMode(_)
-            | Message::ExportPdfSetTemplate(_)
-            | Message::ExportPdfSetFitToPage(_)
-            | Message::ExportPdfSetIncludeTitleBlock(_)
-            | Message::ExportPdfSetPageRangeAll
-            | Message::ExportPdfSetPageRangeCurrent
-            | Message::ExportPdfSetPageRangeSpecific
-            | Message::ExportPdfSetSpecificPageInput(_)
-            | Message::ExportPdfDialogCancel
-            | Message::ExportPdfDialogConfirm
             | Message::ExportPdfFinished(_)
             | Message::ExportNetlistFinished(_)
             | Message::ExportBomRequested
