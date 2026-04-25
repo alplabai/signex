@@ -338,11 +338,10 @@ pub struct DocumentState {
     pub panel_ctx: crate::panels::PanelContext,
     pub kicad_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
-    /// Print-preview overlay state. `Some` while the preview dialog is open.
+    /// Print-preview overlay state. `Some` while the preview dialog is
+    /// open. Doubles as the unified PDF Export modal — `File → Export
+    /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
-    /// PDF export options dialog state. `Some` while the user is configuring
-    /// PDF export options before choosing a save path.
-    pub pdf_options_dialog: Option<PdfOptionsDialogState>,
     /// Pending PDF options stashed from the unified preview modal
     /// while the file picker is running. Used by
     /// `handle_export_pdf_finished` to apply user-selected options
@@ -362,13 +361,6 @@ pub struct PreviewState {
     pub page_handles: Vec<iced::widget::image::Handle>,
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
-    pub specific_page_input: String,
-}
-
-/// PDF export options dialog state. Holds the current option selections
-/// until the user confirms (ExportPdfDialogConfirm) or cancels.
-pub struct PdfOptionsDialogState {
-    pub options: signex_output::PdfOptions,
     pub specific_page_input: String,
 }
 
