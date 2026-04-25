@@ -1,7 +1,7 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::{Row, container, mouse_area, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::TabInfo;
@@ -32,8 +32,6 @@ pub fn view<'a>(
 
     let text_primary = styles::ti(tokens.text);
     let text_muted = styles::ti(tokens.text_secondary);
-    let tab_active_bg = styles::ti(tokens.hover);
-    let border = styles::ti(tokens.border);
 
     for (i, tab) in tabs.iter().enumerate() {
         // Only show tabs that belong to the window being rendered. Main
@@ -50,6 +48,7 @@ pub fn view<'a>(
         let label = tab.title.clone();
 
         let is_active = i == active;
+        let is_dragging = dragging == Some(i);
         let text_c = if is_active { text_primary } else { text_muted };
 
         // No inline close-X / undock buttons. Both actions live in the
@@ -57,48 +56,38 @@ pub fn view<'a>(
         // entire hit target, which makes drag-to-reorder and drag-to-
         // detach feel uniform across the strip.
         //
-        // Drag accent follows the theme's accent colour (amber on
-        // Altium Dark, cyan on Alp Lab, etc.) so the drag indicator
-        // looks native to whichever theme is active. The hardcoded
-        // Windows-blue (#0078D7) made the drag stand out as obviously
-        // not-Signex on every theme.
-        let is_dragging = dragging == Some(i);
-        let accent = signex_widgets::theme_ext::accent_color(tokens);
-        let drag_bg = Color::from_rgba(accent.r, accent.g, accent.b, 0.18);
-        let bg = if is_dragging {
-            Some(Background::Color(drag_bg))
-        } else if is_active {
-            Some(Background::Color(tab_active_bg))
-        } else {
-            None
-        };
-        let border_w = if is_dragging { 2.0 } else { 1.0 };
-        let border_c = if is_dragging { accent } else { border };
-        let tab_body = container(
+        // Visual stack (top-down):
+        //   - inner pill   (top-rounded, no border, fill follows state)
+        //   - 2 px gap     (bottom-padding on outer)
+        //   - accent line  (outer container's bg)
+        // This matches the panel-tab look: no visible bottom border,
+        // accent stripe under the active tab. Shared style helpers in
+        // `crate::styles` keep document and panel tabs in lockstep.
+        let label_el = container(
             row![text(label).size(11).color(text_c)]
                 .spacing(6.0)
                 .align_y(iced::Alignment::Center),
         )
         .padding([4, 10])
-        .style(move |_: &Theme| container::Style {
-            background: bg,
-            border: Border {
-                width: border_w,
-                radius: 0.0.into(),
-                color: border_c,
-            },
-            ..container::Style::default()
-        });
-
-        let tab_el: Element<'_, TabMessage> = mouse_area(tab_body)
-            .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
-            .on_release(TabMessage::Select(i))
-            .on_right_press(TabMessage::ContextMenu(i))
-            // Grab cursor advertises that the tab is draggable —
-            // discoverability for the Altium-style drag-to-undock
-            // behaviour.
-            .interaction(iced::mouse::Interaction::Grab)
-            .into();
+        .style(styles::tab_pill(tokens, is_active, is_dragging, false));
+        let tab_el: Element<'_, TabMessage> = mouse_area(
+            container(label_el)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 0.0,
+                    bottom: 2.0,
+                    left: 0.0,
+                })
+                .style(styles::tab_pill_underline(tokens, is_active)),
+        )
+        .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
+        .on_release(TabMessage::Select(i))
+        .on_right_press(TabMessage::ContextMenu(i))
+        // Grab cursor advertises that the tab is draggable —
+        // discoverability for the Altium-style drag-to-undock
+        // behaviour.
+        .interaction(iced::mouse::Interaction::Grab)
+        .into();
         bar = bar.push(tab_el);
     }
 

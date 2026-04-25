@@ -183,6 +183,8 @@ impl Signex {
             options: opts,
             table,
             variants,
+            sort: None,
+            column_drag: None,
         });
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
@@ -240,6 +242,56 @@ impl Signex {
             preview.options.active_variant = variant;
         }
         self.rerollup_bom_preview();
+    }
+
+    /// Click on a header cell — cycle through ascending → descending
+    /// → no-sort. The previewed table rows get sorted live in
+    /// `view_bom_preview`; we don't re-export-order the underlying
+    /// table because sorting is a render-only convenience and the
+    /// final exported file should mirror the user's chosen sort, not
+    /// the rollup default.
+    pub(crate) fn handle_bom_preview_sort_column(&mut self, idx: usize) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.sort = match preview.sort {
+                Some((cur, true)) if cur == idx => Some((idx, false)),
+                Some((cur, false)) if cur == idx => None,
+                _ => Some((idx, true)),
+            };
+        }
+    }
+
+    pub(crate) fn handle_bom_preview_column_drag_start(&mut self, idx: usize) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.column_drag = Some(idx);
+        }
+    }
+
+    pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            if let Some(src) = preview.column_drag.take() {
+                if src != dest && src < preview.options.columns.len() && dest < preview.options.columns.len() {
+                    let col = preview.options.columns.remove(src);
+                    let insert_at = if src < dest { dest } else { dest };
+                    let insert_at = insert_at.min(preview.options.columns.len());
+                    preview.options.columns.insert(insert_at, col);
+                    // Sort spec follows the moved column. If the
+                    // sort was on a different column, indices may
+                    // have shifted under it.
+                    if let Some((sort_idx, asc)) = preview.sort {
+                        let new_idx = if sort_idx == src {
+                            insert_at
+                        } else if src < sort_idx && insert_at >= sort_idx {
+                            sort_idx - 1
+                        } else if src > sort_idx && insert_at <= sort_idx {
+                            sort_idx + 1
+                        } else {
+                            sort_idx
+                        };
+                        preview.sort = Some((new_idx, asc));
+                    }
+                }
+            }
+        }
     }
 
     /// User clicked Export inside the BOM preview modal — stash the
@@ -482,6 +534,7 @@ impl Signex {
             selected: 0,
             pdf_options: pdf_opts,
             specific_page_input: "1".to_string(),
+            zoom: 1.0,
         });
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
@@ -662,13 +715,42 @@ impl Signex {
             })
             .collect();
 
+        // Re-rasterise preserves the user's zoom so toggling colour
+        // mode / page range doesn't reset their pan/zoom.
+        let zoom = self
+            .document_state
+            .preview
+            .as_ref()
+            .map(|p| p.zoom)
+            .unwrap_or(1.0);
         self.document_state.preview = Some(crate::app::state::PreviewState {
             selected: selected.min(pages.len().saturating_sub(1)),
             pages,
             page_handles,
             pdf_options: pdf_opts,
             specific_page_input,
+            zoom,
         });
+    }
+
+    /// Scroll-wheel zoom on the preview image. `delta_y` follows the
+    /// usual sign convention (positive = scroll up = zoom in). The
+    /// step is `ZOOM_STEP` per wheel notch, clamped to
+    /// `[ZOOM_MIN, ZOOM_MAX]`.
+    pub(crate) fn handle_print_preview_zoom(&mut self, delta_y: f32) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            let factor = if delta_y > 0.0 {
+                crate::app::state::PreviewState::ZOOM_STEP
+            } else if delta_y < 0.0 {
+                1.0 / crate::app::state::PreviewState::ZOOM_STEP
+            } else {
+                return;
+            };
+            preview.zoom = (preview.zoom * factor).clamp(
+                crate::app::state::PreviewState::ZOOM_MIN,
+                crate::app::state::PreviewState::ZOOM_MAX,
+            );
+        }
     }
 }
 

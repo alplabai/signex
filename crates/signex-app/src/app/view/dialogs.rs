@@ -1319,23 +1319,81 @@ impl Signex {
                 BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
             }
         };
-        let col_h = |label: String, width: f32| -> Element<'_, Message> {
-            container(text(label).size(11).color(text_c))
-                .width(Length::Fixed(width))
-                .padding([4, 6])
-                .into()
+        // Compute the table's full content width so the horizontal
+        // scrollbar tracks every column the user picked, including
+        // custom-field columns past the right edge of the modal.
+        let table_width: f32 = preview
+            .options
+            .columns
+            .iter()
+            .map(column_width)
+            .sum();
+        // Headers: clickable + draggable. Click cycles sort; press
+        // arms a drag, release on another header drops the source
+        // column at that index. Sort indicator (▲/▼) appears next to
+        // the active sort column.
+        let sort_arrow = |idx: usize| -> &'static str {
+            match preview.sort {
+                Some((c, true)) if c == idx => " ▲",
+                Some((c, false)) if c == idx => " ▼",
+                _ => "",
+            }
         };
         let mut header_row: Row<'_, Message> = Row::new().spacing(0);
-        for c in &preview.options.columns {
-            header_row = header_row.push(col_h(c.header().to_string(), column_width(c)));
+        for (idx, c) in preview.options.columns.iter().enumerate() {
+            let label_text = format!("{}{}", c.header(), sort_arrow(idx));
+            let cell = container(text(label_text).size(11).color(text_c))
+                .width(Length::Fixed(column_width(c)))
+                .padding([4, 6]);
+            // mouse_area gives us press (drag-start) + release
+            // (drop) + on_press for click-vs-drag distinction.
+            // Single-click sorts; press-then-release-elsewhere
+            // reorders.
+            let drop_msg = Message::BomPreviewColumnDragDrop(idx);
+            let header_cell: Element<'_, Message> = iced::widget::mouse_area(cell)
+                .on_press(Message::BomPreviewColumnDragStart(idx))
+                .on_release(if preview.column_drag == Some(idx) {
+                    // Press + release on the same column → click
+                    // semantics: cycle sort order.
+                    Message::BomPreviewSortColumn(idx)
+                } else {
+                    drop_msg
+                })
+                .interaction(iced::mouse::Interaction::Pointer)
+                .into();
+            header_row = header_row.push(header_cell);
         }
-        let table_header = container(header_row)
+        let table_header_el: Element<'_, Message> = container(header_row)
             .style(crate::styles::toolbar_strip(tokens))
-            .width(Length::Fill);
+            .width(Length::Fixed(table_width.max(100.0)))
+            .into();
+
+        // Sort the row order if a sort spec is set. We sort indexes
+        // into preview.table.rows so we can borrow rows by reference
+        // without cloning the BomRow Vec. Numeric columns (Qty) sort
+        // numerically; the rest sort case-insensitively.
+        let mut row_order: Vec<usize> = (0..preview.table.rows.len()).collect();
+        if let Some((sort_idx, asc)) = preview.sort
+            && let Some(sort_col) = preview.options.columns.get(sort_idx)
+        {
+            let key = |r: &signex_output::BomRow| column_value(sort_col, r);
+            row_order.sort_by(|&a, &b| {
+                let ra = &preview.table.rows[a];
+                let rb = &preview.table.rows[b];
+                let cmp = match sort_col {
+                    BomColumn::Qty => ra.qty.cmp(&rb.qty),
+                    _ => key(ra)
+                        .to_ascii_lowercase()
+                        .cmp(&key(rb).to_ascii_lowercase()),
+                };
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
-        for (idx, r) in preview.table.rows.iter().enumerate() {
-            let alt_bg = if idx % 2 == 0 {
+        for (visible_idx, &row_idx) in row_order.iter().enumerate() {
+            let r = &preview.table.rows[row_idx];
+            let alt_bg = if visible_idx % 2 == 0 {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.0)
             } else {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.025)
@@ -1351,14 +1409,28 @@ impl Signex {
                 row_inner = row_inner.push(cell(column_value(c, r), column_width(c)));
             }
             let row_el = container(row_inner)
-                .width(Length::Fill)
+                .width(Length::Fixed(table_width.max(100.0)))
                 .style(move |_: &Theme| container::Style {
                     background: Some(Background::Color(alt_bg)),
                     ..container::Style::default()
                 });
             rows.push(row_el.into());
         }
-        let body = scrollable(column(rows).spacing(0))
+        // Header + rows live inside the same vertical column so the
+        // horizontal scroll moves them together. Without this, the
+        // header was wrapped separately and stayed fixed while the
+        // body rows scrolled past it.
+        let table_inner: Element<'_, Message> = column![
+            table_header_el,
+            column(rows).spacing(0),
+        ]
+        .width(Length::Fixed(table_width.max(100.0)))
+        .into();
+        let body = scrollable(table_inner)
+            .direction(iced::widget::scrollable::Direction::Both {
+                vertical: iced::widget::scrollable::Scrollbar::default(),
+                horizontal: iced::widget::scrollable::Scrollbar::default(),
+            })
             .width(Length::Fill)
             .height(Length::Fill);
 
@@ -1373,27 +1445,38 @@ impl Signex {
                 .sum::<u32>()
         );
 
+        // Top control band — Grouping / Format / toggles all in one
+        // horizontal row separated by 16 px gaps. Variant + Columns
+        // each get their own row; both can be horizontally scrolled
+        // when the option set overflows the modal width.
+        let modal_w = 1000.0_f32;
+        let modal_h = 700.0_f32;
+        let top_band: Element<'_, Message> = row![
+            grouping_row,
+            Space::new().width(16),
+            format_row,
+            Space::new().width(16),
+            toggle_row,
+        ]
+        .align_y(iced::Alignment::Center)
+        .into();
         let dialog = container(
             column![
                 header,
                 container(
                     column![
-                        grouping_row,
-                        Space::new().height(6),
-                        format_row,
-                        Space::new().height(6),
-                        toggle_row,
-                        Space::new().height(6),
+                        top_band,
+                        Space::new().height(8),
                         variant_row,
-                        Space::new().height(6),
+                        Space::new().height(8),
                         column_row,
                     ]
                     .spacing(0)
                 )
                 .padding([12, 14]),
-                container(table_header).padding([0, 14]),
                 container(body)
                     .padding([0, 14])
+                    .width(Length::Fill)
                     .height(Length::Fill),
                 container(
                     row![
@@ -1417,8 +1500,8 @@ impl Signex {
                 .padding([10, 14]),
             ]
             .spacing(0)
-            .width(Length::Fill)
-            .height(Length::Fill),
+            .width(Length::Fixed(modal_w))
+            .height(Length::Fixed(modal_h)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
