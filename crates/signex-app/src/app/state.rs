@@ -380,6 +380,15 @@ pub struct BomPreviewState {
     /// Currently only seeded; the picker UI lands in v0.8.1.
     #[allow(dead_code)]
     pub variants: Vec<String>,
+    /// Active sort spec — `(column index in options.columns, ascending)`.
+    /// `None` = render rollup order (the default emit order from
+    /// `bom::rollup`). Click a header cell to set; click the same one
+    /// again to flip direction.
+    pub sort: Option<(usize, bool)>,
+    /// In-flight column drag — `Some(from_idx)` while the user is
+    /// dragging a header cell. Drop on another header cell reorders
+    /// `options.columns`. `None` when no drag is active.
+    pub column_drag: Option<usize>,
 }
 
 /// Open-print-preview state — rasterised pages + which one is currently
@@ -391,6 +400,17 @@ pub struct PreviewState {
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
+    /// Multiplicative zoom for the preview image. 1.0 = fit-to-viewport;
+    /// scroll wheel multiplies by `1.10`/`1/1.10`. Clamped to
+    /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
+    /// wheel bursts can't blow the image up to gigabytes.
+    pub zoom: f32,
+}
+
+impl PreviewState {
+    pub const ZOOM_MIN: f32 = 0.25;
+    pub const ZOOM_MAX: f32 = 6.0;
+    pub const ZOOM_STEP: f32 = 1.10;
 }
 
 impl DocumentState {

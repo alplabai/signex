@@ -344,6 +344,18 @@ pub enum Message {
     /// User picked a variant in the BOM preview variant dropdown.
     /// `None` means the "Base" (no-variant) view.
     BomPreviewSetVariant(Option<String>),
+    /// User clicked a column header — set or cycle the sort spec.
+    /// First click on a column sorts ascending; same column again
+    /// flips to descending; a third click clears the sort and goes
+    /// back to rollup order.
+    BomPreviewSortColumn(usize),
+    /// User started dragging a column header. Carries the source
+    /// index in `options.columns`.
+    BomPreviewColumnDragStart(usize),
+    /// User dropped a dragged column header onto another header.
+    /// The source column moves to the destination index, preserving
+    /// the user's column order intent.
+    BomPreviewColumnDragDrop(usize),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     BomPreviewExport,
@@ -367,6 +379,10 @@ pub enum Message {
     PrintPreviewSetFitToPage(bool),
     /// User toggled "Include Title Block" in the unified PDF preview modal.
     PrintPreviewSetIncludeTitleBlock(bool),
+    /// Mouse wheel scrolled over the preview image. Carries the
+    /// vertical delta — positive = scroll up = zoom in. Multiplies
+    /// `PreviewState.zoom` by `ZOOM_STEP` per notch.
+    PrintPreviewZoom(f32),
     /// User clicked the "Export PDF" button in the preview dialog.
     PrintPreviewExport,
     /// User closed the print preview dialog.
