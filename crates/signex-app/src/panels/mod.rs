@@ -1877,8 +1877,8 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Horizontal Justification");
-            let justify_v = get("Vertical Justification");
+            let justify_h = get("Justify H");
+            let justify_v = get("Justify V");
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
             let is_reference = matches!(
@@ -1938,14 +1938,14 @@ fn view_selected_element_properties<'a>(
                             "Rotation", &rotation, muted, input_bg, input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Horizontal Justification",
+                            "Justify H",
                             &justify_h,
                             muted,
                             input_bg,
                             input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Vertical Justification",
+                            "Justify V",
                             &justify_v,
                             muted,
                             input_bg,
@@ -1970,7 +1970,7 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
-            let justify_h_str = get("Horizontal Justification");
+            let justify_h_str = get("Justify H");
 
             // Parse numeric values for edit controls (with fallbacks).
             let rotation_deg = rotation_str
@@ -2094,8 +2094,8 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Horizontal Justification");
-            let justify_v = get("Vertical Justification");
+            let justify_h = get("Justify H");
+            let justify_v = get("Justify V");
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
@@ -2128,14 +2128,14 @@ fn view_selected_element_properties<'a>(
                             "Rotation", &rotation, muted, input_bg, input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Horizontal Justification",
+                            "Justify H",
                             &justify_h,
                             muted,
                             input_bg,
                             input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Vertical Justification",
+                            "Justify V",
                             &justify_v,
                             muted,
                             input_bg,
