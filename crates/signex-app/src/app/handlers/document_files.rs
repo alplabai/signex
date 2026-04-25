@@ -46,81 +46,62 @@ impl Signex {
     }
 
     fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
-        // Append to the workspace instead of replacing the previous
-        // project. If the project is already loaded (same path), just
-        // switch activity to it — no duplicate entries, no tab churn.
-        // Tabs from other projects stay alive; they resolve back to
-        // their source via `DocumentState::project_for_path`.
-        let existing = self
-            .document_state
-            .projects
-            .iter()
-            .position(|p| p.path == path);
-
-        if let Some(idx) = existing {
-            let id = self.document_state.projects[idx].id;
-            self.document_state.active_project = Some(id);
-        } else {
-            let data = kicad_parser::parse_project(&path)
-                .with_context(|| format!("parse project {}", path.display()))?;
-            let id = self.document_state.mint_project_id();
-            self.document_state.projects.push(super::super::state::LoadedProject {
-                id,
-                path: path.clone(),
-                data,
-            });
-            self.document_state.active_project = Some(id);
-        }
-        self.sync_legacy_project_fields();
+        self.load_or_activate_project(&path)?;
         self.refresh_panel_ctx();
         Ok(())
     }
 
-    /// Mirror the active `LoadedProject` into the legacy single-project
-    /// fields (`project_path`, `project_data`). Every handler that still
-    /// reads those fields then sees the active project without needing
-    /// to know about the `projects` Vec yet. Remove once every handler
-    /// has been migrated (issue #54 phase 5).
-    pub(crate) fn sync_legacy_project_fields(&mut self) {
-        // Clone out of the borrow before writing back. `active_loaded_project`
-        // immutably borrows `self.document_state`; assigning to
-        // `project_path` / `project_data` would need &mut on the same
-        // state, so we resolve to owned clones first and assign after.
-        let resolved = self
+    /// Append a `LoadedProject` for `project_path` to the workspace if
+    /// it isn't already loaded, then make it active. De-dupes by path
+    /// so re-opening the same project just switches activity. Used by
+    /// both `open_project_file` (direct .kicad_pro open) and the
+    /// companion-project path inside `open_schematic_file` /
+    /// `open_pcb_file`. Returns the resolved `ProjectId`.
+    fn load_or_activate_project(
+        &mut self,
+        project_path: &std::path::Path,
+    ) -> Result<crate::app::state::ProjectId> {
+        if let Some(existing) = self
             .document_state
-            .active_loaded_project()
-            .map(|p| (p.path.clone(), p.data.clone()));
-        match resolved {
-            Some((path, data)) => {
-                self.document_state.project_path = Some(path);
-                self.document_state.project_data = Some(data);
-            }
-            None => {
-                self.document_state.project_path = None;
-                self.document_state.project_data = None;
-            }
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)
+        {
+            let id = existing.id;
+            self.document_state.active_project = Some(id);
+            return Ok(id);
         }
+        let data = kicad_parser::parse_project(project_path)
+            .with_context(|| format!("parse project {}", project_path.display()))?;
+        let id = self.document_state.mint_project_id();
+        self.document_state
+            .projects
+            .push(super::super::state::LoadedProject {
+                id,
+                path: project_path.to_path_buf(),
+                data,
+            });
+        self.document_state.active_project = Some(id);
+        Ok(id)
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {
         let sheet = kicad_parser::parse_schematic_file(&path)
             .with_context(|| format!("parse schematic {}", path.display()))?;
-        self.document_state.project_path = Some(path.clone());
+        // Try to load the companion project so the schematic tab gets
+        // a `project_id` via `project_for_path`. Best-effort: a missing
+        // or unparseable `.kicad_pro` doesn't block opening the loose
+        // schematic.
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
-            let project_path = dir.join(format!("{stem}.kicad_pro"));
-            if project_path.exists() {
-                match kicad_parser::parse_project(&project_path)
-                    .with_context(|| format!("parse companion project {}", project_path.display()))
-                {
-                    Ok(project) => self.document_state.project_data = Some(project),
-                    Err(error) => {
-                        crate::diagnostics::log_error("Failed to parse companion project", &error)
-                    }
-                }
+            let companion = dir.join(format!("{stem}.kicad_pro"));
+            if companion.exists()
+                && let Err(error) = self.load_or_activate_project(&companion)
+            {
+                crate::diagnostics::log_error("Failed to parse companion project", &error);
             }
         }
         let title = path
@@ -134,11 +115,25 @@ impl Signex {
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<()> {
         let board = kicad_parser::parse_pcb_file(&path)
             .with_context(|| format!("parse pcb {}", path.display()))?;
+        // Same companion-project resolution as `open_schematic_file` so
+        // the PCB tab can resolve `project_id` for project-scoped
+        // handlers.
+        if let Some(dir) = path.parent() {
+            let stem = path
+                .file_stem()
+                .and_then(|segment| segment.to_str())
+                .unwrap_or("");
+            let companion = dir.join(format!("{stem}.kicad_pro"));
+            if companion.exists()
+                && let Err(error) = self.load_or_activate_project(&companion)
+            {
+                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            }
+        }
         let title = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
-        self.document_state.project_path = Some(path.clone());
         self.open_pcb_tab(path, title, board);
         Ok(())
     }
