@@ -86,8 +86,6 @@ impl Signex {
     }
 
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {
-        let sheet = standard_parser::parse_schematic_file(&path)
-            .with_context(|| format!("parse schematic {}", path.display()))?;
         // Try to load the companion project so the schematic tab gets
         // a `project_id` via `project_for_path`. Best-effort: a missing
         // or unparseable `.standard_pro` doesn't block opening the loose
@@ -108,6 +106,17 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "Schematic".to_string());
+        // Parked-engine restore — same Altium-parity rule as the
+        // project-tree open path. Reparsing from disk would discard
+        // edits the user made before closing the tab.
+        if self.document_state.engines.contains_key(&path)
+            && self.document_state.dirty_paths.contains(&path)
+        {
+            self.attach_parked_schematic_tab(path, title);
+            return Ok(());
+        }
+        let sheet = standard_parser::parse_schematic_file(&path)
+            .with_context(|| format!("parse schematic {}", path.display()))?;
         self.open_schematic_tab(path, title, sheet);
         Ok(())
     }

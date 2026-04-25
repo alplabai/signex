@@ -352,6 +352,12 @@ pub struct DocumentState {
     /// `handle_export_pdf_finished` to apply user-selected options
     /// instead of defaults. Cleared after export.
     pub pending_pdf_options: Option<signex_output::PdfOptions>,
+    /// Pending BOM options stashed from the BOM preview modal while
+    /// the file picker is running. Without this, the user's column /
+    /// grouping / variant / include-DNP picks in the preview would
+    /// be dropped on export and the actual file would be a default
+    /// 6-column Grouped Base BOM. Cleared after export.
+    pub pending_bom_options: Option<signex_output::BomOptions>,
     /// User-visible export error. `Some(msg)` while the error modal is shown.
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
     /// itself (not the file dialog) fails. Cleared by DismissExportError.

@@ -244,22 +244,17 @@ impl Signex {
 
     /// User clicked Export inside the BOM preview modal — stash the
     /// live options on the document, kick off the file dialog, and
-    /// finish in `handle_export_bom_finished` (which already exists).
+    /// finish in `handle_export_bom_finished`. Mirrors the
+    /// PrintPreview → Export PDF pattern; without `pending_bom_options`
+    /// the finish handler would fall back to defaults and the user's
+    /// column / grouping / variant picks would silently disappear
+    /// between modal-close and file-write.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
-        let Some(_preview) = self.document_state.bom_preview.as_ref() else {
+        let Some(preview) = self.document_state.bom_preview.as_ref() else {
             return Some(Task::none());
         };
-        // The file picker's filter list mirrors the format the user
-        // picked so the default suffix matches their choice. The
-        // existing finish handler resolves the format from the
-        // returned file path's extension.
-        let (default_name, format_filter) = match self
-            .document_state
-            .bom_preview
-            .as_ref()
-            .map(|p| p.options.format)
-            .unwrap_or(BomFormat::Csv)
-        {
+        let options = preview.options.clone();
+        let (default_name, format_filter) = match options.format {
             BomFormat::Csv => ("bom.csv", ("CSV (.csv)", &["csv"][..])),
             BomFormat::Xlsx => ("bom.xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
             BomFormat::Html => ("bom.html", ("HTML (.html)", &["html", "htm"][..])),
@@ -269,7 +264,17 @@ impl Signex {
         let filter_label_owned = filter_label.to_string();
         let filter_exts_owned: Vec<String> =
             filter_exts.iter().map(|s| s.to_string()).collect();
-        Some(Task::perform(
+
+        // Stash the live options + dismiss the preview state. The
+        // detached preview window also needs to close so the OS
+        // window doesn't linger after Export — same shape as
+        // `handle_print_preview_export`.
+        self.document_state.pending_bom_options = Some(options);
+        self.document_state.bom_preview = None;
+        let close_window =
+            self.close_detached_modal(crate::app::state::ModalId::BomPreview);
+
+        let dialog = Task::perform(
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 rfd::AsyncFileDialog::new()
@@ -287,7 +292,8 @@ impl Signex {
                     Message::Noop
                 }
             },
-        ))
+        );
+        Some(Task::batch([close_window, dialog]))
     }
 
     pub(crate) fn handle_bom_preview_close(&mut self) -> Task<Message> {
@@ -323,15 +329,6 @@ impl Signex {
         }
     }
 
-    /// Backwards-compat shim: keep the old "no preview" code path
-    /// available in case anything still calls it directly. The menu
-    /// handler now dispatches through `handle_bom_preview_open`
-    /// instead, so this isn't reachable from the UI.
-    #[allow(dead_code)]
-    pub(crate) fn handle_export_bom_requested(&mut self) -> Option<Task<Message>> {
-        Some(self.handle_bom_preview_open())
-    }
-
     pub(crate) fn handle_export_bom_finished(
         &mut self,
         result: Result<PathBuf, String>,
@@ -339,46 +336,65 @@ impl Signex {
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {
+                // Cancelled — drop any pending options so the next
+                // open of the modal starts fresh.
+                self.document_state.pending_bom_options = None;
                 log::info!("BOM export cancelled: {e}");
                 return Task::none();
             }
         };
 
-        let active_variant = self
-            .document_state
-            .active_loaded_project()
-            .and_then(|p| p.data.active_variant.clone())
-            .unwrap_or_else(|| "Base".to_string());
         let ctx = match build_export_context(&self.document_state) {
             Some(c) => c,
             None => {
+                self.document_state.pending_bom_options = None;
                 self.document_state.export_error =
                     Some("Cannot export BOM: no active schematic.".to_string());
                 return Task::none();
             }
         };
 
-        let format = BomFormat::from_output_path(&save_path);
-
-        let opts = BomOptions {
-            columns: vec![
-                BomColumn::Name,
-                BomColumn::Description,
-                BomColumn::Designator,
-                BomColumn::Footprint,
-                BomColumn::LibRef,
-                BomColumn::Qty,
-            ],
-            grouping: BomGrouping::Grouped,
-            format,
-            include_dnp: false,
-            include_not_fitted: false,
-            active_variant: if active_variant.eq_ignore_ascii_case("Base") {
-                None
-            } else {
-                Some(active_variant)
-            },
-            rule_options: Default::default(),
+        // Honour the user's picks from the BOM preview modal when
+        // present. The pending slot is populated by
+        // `handle_bom_preview_export`; falling back here covers any
+        // hypothetical future caller (none today) that drives the
+        // export message directly without going through the preview.
+        let format_from_path = BomFormat::from_output_path(&save_path);
+        let opts = match self.document_state.pending_bom_options.take() {
+            Some(mut user_opts) => {
+                // Picker filter sets a default extension; the user
+                // may rename the file in the dialog. Trust the
+                // saved-as extension over the picker's intent.
+                user_opts.format = format_from_path;
+                user_opts
+            }
+            None => {
+                let active_variant = self
+                    .document_state
+                    .active_loaded_project()
+                    .and_then(|p| p.data.active_variant.clone())
+                    .unwrap_or_else(|| "Base".to_string());
+                BomOptions {
+                    columns: vec![
+                        BomColumn::Name,
+                        BomColumn::Description,
+                        BomColumn::Designator,
+                        BomColumn::Footprint,
+                        BomColumn::LibRef,
+                        BomColumn::Qty,
+                    ],
+                    grouping: BomGrouping::Grouped,
+                    format: format_from_path,
+                    include_dnp: false,
+                    include_not_fitted: false,
+                    active_variant: if active_variant.eq_ignore_ascii_case("Base") {
+                        None
+                    } else {
+                        Some(active_variant)
+                    },
+                    rule_options: Default::default(),
+                }
+            }
         };
 
         match BomExporter.export(&ctx, &opts) {

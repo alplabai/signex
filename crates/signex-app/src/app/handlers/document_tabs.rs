@@ -147,10 +147,14 @@ impl Signex {
         match action {
             A::Close(idx) => self.close_tab_now(idx),
             A::CloseAllOthers(keep_idx) => {
-                // Collect every other tab's index, descending so each
-                // close keeps lower indices valid; the kept tab's path
-                // would shift if we used indices alone, so the loop
-                // uses descending order.
+                // Close every tab except `keep_idx`, descending so
+                // each `close_tab_now(i)` removes a tab without
+                // shifting the indices of tabs we haven't visited
+                // yet. The kept tab's index does shift as tabs
+                // below it close, but `close_tab_now`'s active-tab
+                // adjuster (`if active_tab >= len ... -= 1`) tracks
+                // the live position correctly without us needing
+                // to thread the kept path through this loop.
                 let mut indices: Vec<usize> = (0..self.document_state.tabs.len())
                     .filter(|&i| i != keep_idx)
                     .collect();

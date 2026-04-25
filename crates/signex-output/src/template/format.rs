@@ -352,15 +352,6 @@ fn fnum(v: f64) -> String {
     }
 }
 
-// Suppress unused-warning when the parser's not yet wired into the
-// template loader. Re-exported via `template::mod` so callers can
-// pick the parser up immediately.
-#[allow(dead_code)]
-fn _force_used() {
-    let _ = parse_template;
-    let _ = emit_template;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
