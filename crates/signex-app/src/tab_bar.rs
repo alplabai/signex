@@ -72,9 +72,10 @@ pub fn view<'a>(
         // the rounded corners (visible on dark themes).
         let pill_style = TabPillStyle {
             fill: pill_fill(tokens, is_active, is_dragging),
-            // Black border per request — reads as a clean dividing
-            // edge on dark and light themes alike.
-            border: iced::Color::BLACK,
+            // Theme border colour — reads as a subtle divider on
+            // each theme's chrome surface. Tried pure black; it
+            // looked harsh on every theme.
+            border: styles::ti(tokens.border),
             accent: styles::ti(tokens.accent),
             is_active,
             is_last,
@@ -97,17 +98,17 @@ pub fn view<'a>(
         bar = bar.push(tab_el);
     }
 
-    // Strip baseline — a 1 px black line at the bottom of the tab
-    // bar that all inactive tabs sit "on" (Altium parity). The
-    // active tab's accent stripe overlays the baseline at its x
-    // range, visually punching through. Implemented as a Column
-    // wrapping the tab row + a fixed-height divider so the
-    // baseline doesn't depend on iced's uniform Border.
+    // Strip baseline — 1 px theme-border line at the bottom of the
+    // tab bar. Inactive tabs sit "on" the line; the active tab's
+    // accent stripe overlays it at its x-range, visually punching
+    // through. Color follows the theme's border token so it reads
+    // as part of the chrome rather than a hard black edge.
+    let baseline_color = styles::ti(tokens.border);
     let baseline = container(iced::widget::Space::new())
         .width(Length::Fill)
         .height(1)
         .style(move |_: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::BLACK)),
+            background: Some(iced::Background::Color(baseline_color)),
             ..iced::widget::container::Style::default()
         });
     container(iced::widget::column![
@@ -127,9 +128,11 @@ pub fn view<'a>(
 }
 
 /// Resolve the pill bg fill for the current state. Altium parity:
-/// inactive tabs are flat strip-bg (transparent fill so the
-/// toolbar strip shows through), active tabs lift with `tokens.hover`,
-/// dragging tints with theme accent at 22 %.
+/// inactive tabs are dimmer than active so they read as "off" but
+/// still show their tab body (transparent inactive made them look
+/// like floating labels — the strip showed through). Active uses
+/// `tokens.hover` at full alpha; inactive 0.35× the same; drag
+/// tints with theme accent at 22 %.
 fn pill_fill(
     tokens: &ThemeTokens,
     is_active: bool,
@@ -142,6 +145,9 @@ fn pill_fill(
     } else if is_active {
         tab_active
     } else {
-        iced::Color::TRANSPARENT
+        iced::Color {
+            a: tab_active.a * 0.35,
+            ..tab_active
+        }
     }
 }

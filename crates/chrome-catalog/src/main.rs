@@ -198,43 +198,12 @@ fn section<'a>(
 // ─── Tab demo helpers ─────────────────────────────────────────
 
 fn doc_tab_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let toolbar_bg = ti(tokens.toolbar_bg);
-    let baseline = container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(|_: &Theme| container::Style {
-            background: Some(Background::Color(Color::BLACK)),
-            ..container::Style::default()
-        });
-    let tabs_row = Row::new().spacing(0).push(tab(
-        "MCU_IO",
-        false,
-        false,
-        false,
-        false,
-        tokens,
-    ))
-    .push(tab(
-        "Loratis-SN",
-        true,
-        false,
-        false,
-        false,
-        tokens,
-    ))
-    .push(tab("Power", false, false, false, true, tokens));
-    container(column![
-        container(tabs_row)
-            .width(Length::Fill)
-            .padding([2, 6]),
-        baseline,
-    ])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(toolbar_bg)),
-        ..container::Style::default()
-    })
-    .into()
+    let tabs_row = Row::new()
+        .spacing(0)
+        .push(tab("MCU_IO", false, false, false, false, tokens))
+        .push(tab("Loratis-SN", true, false, false, false, tokens))
+        .push(tab("Power", false, false, false, true, tokens));
+    strip_with_baseline(tabs_row, tokens)
 }
 
 fn tab_state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -251,19 +220,10 @@ fn tab_state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     ] {
         r = r.push(tab(label, active, dragging, hovered, last, tokens));
     }
-    let toolbar_bg = ti(tokens.toolbar_bg);
-    container(r)
-        .width(Length::Fill)
-        .padding([4, 8])
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(toolbar_bg)),
-            ..container::Style::default()
-        })
-        .into()
+    strip_with_baseline(r, tokens)
 }
 
 fn panel_tab_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let toolbar_bg = ti(tokens.toolbar_bg);
     let mut r: Row<'a, Message> = Row::new().spacing(0);
     for (i, label) in ["Components", "Manufacturer Part Search", "PCB CoDesign", "Messages", "Properties"]
         .iter()
@@ -273,14 +233,41 @@ fn panel_tab_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         let last = i == 4;
         r = r.push(tab(label, active, false, false, last, tokens));
     }
-    container(r)
+    strip_with_baseline(r, tokens)
+}
+
+/// Wrap a row of tabs in the same toolbar bg + 1 px black baseline
+/// the real app uses (`tab_bar::view`). Without this the tabs would
+/// "float" against the section panel's bg with no continuous strip
+/// underneath them — the strip + baseline are part of the chrome,
+/// not just decoration.
+fn strip_with_baseline<'a>(tabs_row: Row<'a, Message>, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let toolbar_bg = ti(tokens.toolbar_bg);
+    let baseline_color = ti(tokens.border);
+    let baseline = container(Space::new())
         .width(Length::Fill)
-        .padding([4, 8])
+        .height(1)
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(toolbar_bg)),
+            background: Some(Background::Color(baseline_color)),
             ..container::Style::default()
-        })
-        .into()
+        });
+    container(column![
+        container(tabs_row)
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                top: 2.0,
+                right: 6.0,
+                bottom: 0.0,
+                left: 6.0,
+            }),
+        baseline,
+    ])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(toolbar_bg)),
+        ..container::Style::default()
+    })
+    .into()
 }
 
 fn tab<'a>(
@@ -309,7 +296,7 @@ fn tab<'a>(
     };
     let pill_style = TabPillStyle {
         fill,
-        border: Color::BLACK,
+        border: ti(tokens.border),
         accent,
         is_active,
         is_last,
