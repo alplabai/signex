@@ -39,6 +39,12 @@ pub struct TabPillStyle {
     pub border: Color,
     pub accent: Color,
     pub is_active: bool,
+    /// Draw the right edge. Set `false` for every tab except the
+    /// last one in a row so adjacent tabs share their L/R borders
+    /// (left of tab N+1 acts as the divider). Without this, every
+    /// pair of adjacent tabs shows a 2-px-wide black band where
+    /// their R+L borders stack.
+    pub is_last: bool,
 }
 
 const TOP_RADIUS: f32 = 4.0;
@@ -206,20 +212,22 @@ where
             Background::Color(self.style.fill),
         );
 
-        // Three-sided border — top edge + left edge + right edge.
-        // Drawn on EVERY tab regardless of state (Altium parity:
-        // every tab is framed; only the active tab gets the accent
-        // stripe + brighter fill). Each border is a 1 px tall/wide
-        // quad — drawing them separately (rather than a Border on
-        // the bg) gives us the missing bottom side without iced's
-        // uniform-border API.
+        // Three-sided border — top edge + left edge + (right edge
+        // only on the last tab). Drawn on every tab so each pill
+        // is framed (Altium parity); the right edge is suppressed
+        // on non-last tabs because adjacent tabs share the divider
+        // (left of tab N+1 = right of tab N). The top edge is
+        // inset by TOP_RADIUS on each side so the rounded corners
+        // show as just bg fill at the curve, with no straight
+        // border line cutting across them.
         let border_color = self.style.border;
+        let top_inset = TOP_RADIUS;
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: bounds.x,
+                    x: bounds.x + top_inset,
                     y: bounds.y,
-                    width: bounds.width,
+                    width: (bounds.width - 2.0 * top_inset).max(0.0),
                     height: BORDER_WIDTH,
                 },
                 ..Quad::default()
@@ -238,18 +246,20 @@ where
             },
             Background::Color(border_color),
         );
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle {
-                    x: bounds.x + bounds.width - BORDER_WIDTH,
-                    y: bounds.y + TOP_RADIUS,
-                    width: BORDER_WIDTH,
-                    height: bounds.height - TOP_RADIUS,
+        if self.style.is_last {
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle {
+                        x: bounds.x + bounds.width - BORDER_WIDTH,
+                        y: bounds.y + TOP_RADIUS,
+                        width: BORDER_WIDTH,
+                        height: bounds.height - TOP_RADIUS,
+                    },
+                    ..Quad::default()
                 },
-                ..Quad::default()
-            },
-            Background::Color(border_color),
-        );
+                Background::Color(border_color),
+            );
+        }
         if self.style.is_active {
             // Accent strip — drawn inside the pill at the bottom
             // 2 px on the active tab only. Sits below the borders

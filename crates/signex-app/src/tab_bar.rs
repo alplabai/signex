@@ -37,14 +37,19 @@ pub fn view<'a>(
     let text_primary = styles::ti(tokens.text);
     let text_muted = styles::ti(tokens.text_secondary);
 
-    for (i, tab) in tabs.iter().enumerate() {
-        // Only show tabs that belong to the window being rendered. Main
-        // gets all tabs except those owned by undocked windows; undocked
-        // windows get only their owned tab.
-        if !visible_paths.contains(&tab.path) {
-            continue;
-        }
+    // Collect the indices of tabs that should render in this window —
+    // we need the count up front so each pill knows whether it's the
+    // last one (which draws the right edge; the rest skip it so
+    // adjacent tabs share their L/R divider as a single 1 px line).
+    let visible_indices: Vec<usize> = tabs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, tab)| visible_paths.contains(&tab.path).then_some(i))
+        .collect();
+    let last_idx = visible_indices.last().copied();
 
+    for &i in &visible_indices {
+        let tab = &tabs[i];
         // Tab title — no dirty indicator here. The unsaved-changes
         // marker now lives on the corresponding row in the Projects
         // tree (red dot to the right of the file name) so the user
@@ -53,6 +58,7 @@ pub fn view<'a>(
 
         let is_active = i == active;
         let is_dragging = dragging == Some(i);
+        let is_last = Some(i) == last_idx;
         let text_c = if is_active { text_primary } else { text_muted };
 
         // No inline close-X / undock buttons. Both actions live in the
@@ -71,6 +77,7 @@ pub fn view<'a>(
             border: iced::Color::BLACK,
             accent: styles::ti(tokens.accent),
             is_active,
+            is_last,
         };
         let inner = container(
             row![text(label).size(11).color(text_c)]
