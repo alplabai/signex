@@ -42,6 +42,15 @@ impl Signex {
             MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
+            MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
+                crate::library::LibraryMessage::OpenLibraryDialog,
+            ))),
+            MenuMessage::LibraryPlaceComponent => {
+                Some(self.update(Message::Library(crate::library::LibraryMessage::OpenPicker)))
+            }
+            MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
+                crate::library::LibraryMessage::NewComponent,
+            ))),
             _ => None,
         }
     }

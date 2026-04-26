@@ -15,6 +15,10 @@ pub struct Signex {
     pub ui_state: UiState,
     pub document_state: DocumentState,
     pub interaction_state: InteractionState,
+    /// v0.9 Library subsystem state. Borrowed independently of
+    /// `document_state` so the library dispatcher can mutate it
+    /// without colliding with schematic / PCB engine borrows.
+    pub library: crate::library::LibraryState,
 }
 
 pub struct UiState {
@@ -192,6 +196,14 @@ pub enum WindowKind {
     /// floating panel past the main window edge. Closing the OS window
     /// reattaches the panel to its last dock region.
     DetachedPanel(crate::panels::PanelKind),
+    /// v0.9 Component Editor — one window per open component. The
+    /// editor's full state (active tab, draft revision, etc.) lives
+    /// in `Signex::library.open_editors`, keyed by the same window
+    /// id that `WindowKind` is mapped under.
+    ComponentEditor {
+        library_path: std::path::PathBuf,
+        component_id: signex_library::ComponentId,
+    },
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click
@@ -569,9 +581,7 @@ impl DocumentState {
     /// project that parented them at load time).
     pub fn project_for_path(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         let dir = path.parent()?;
-        self.projects
-            .iter()
-            .find(|p| p.path.parent() == Some(dir))
+        self.projects.iter().find(|p| p.path.parent() == Some(dir))
     }
 
     /// Convenience: currently-active project. Returns `None` when the

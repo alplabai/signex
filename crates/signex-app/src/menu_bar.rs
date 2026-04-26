@@ -101,6 +101,12 @@ pub enum MenuMessage {
     ExportPdf,
     ExportNetlist,
     ExportBom,
+    /// File ▸ Library ▸ Open Library… (v0.9 Phase 1).
+    LibraryOpenLibrary,
+    /// File ▸ Library ▸ Place Component… (v0.9 Phase 1).
+    LibraryPlaceComponent,
+    /// File ▸ Library ▸ New Component… (v0.9 Phase 1).
+    LibraryNewComponent,
     // Edit
     Undo,
     Redo,
@@ -297,6 +303,27 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         ]),
     );
 
+    // v0.9 Library submenu — open / place / new component.
+    let library_menu = Item::with_menu(
+        submenu_item_btn("Library", mc),
+        menu_template(vec![
+            leaf("Open Library...", None, MenuMessage::LibraryOpenLibrary, mc),
+            separator(mc),
+            leaf_if(
+                "Place Component...",
+                None,
+                MenuMessage::LibraryPlaceComponent,
+                ctx.has_schematic,
+            ),
+            leaf(
+                "New Component...",
+                None,
+                MenuMessage::LibraryNewComponent,
+                mc,
+            ),
+        ]),
+    );
+
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
@@ -310,6 +337,8 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::SaveAs,
                 ctx.has_schematic,
             ),
+            separator(mc),
+            library_menu,
             separator(mc),
             // Print Preview... previously lived here as a top-level
             // leaf duplicating Export → PDF's shortcut. Consolidated

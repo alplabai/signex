@@ -59,6 +59,7 @@ impl Signex {
                 let mut d = DockArea::new();
                 d.add_panel(PanelPosition::Left, PanelKind::Projects);
                 d.add_panel(PanelPosition::Left, PanelKind::Components);
+                d.add_panel(PanelPosition::Left, PanelKind::Library);
                 d.add_panel(PanelPosition::Left, PanelKind::Signal);
                 d.add_panel(PanelPosition::Right, PanelKind::Properties);
                 d.add_panel(PanelPosition::Right, PanelKind::Messages);
@@ -274,6 +275,7 @@ impl Signex {
                 pending_power: None,
                 pending_port: None,
             },
+            library: crate::library::LibraryState::default(),
         };
         signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
         signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);

@@ -11,6 +11,7 @@ mod dock;
 mod find_replace;
 mod fonts;
 mod icons;
+mod library;
 mod menu_bar;
 mod panels;
 mod pcb_canvas;

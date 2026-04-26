@@ -18,16 +18,23 @@ pub enum PrefNav {
     Appearance,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
+    /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
+    LibraryDistributors,
     // Future: Editor, Shortcuts, ...
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] = &[PrefNav::Appearance, PrefNav::Erc];
+    pub const ALL: &'static [PrefNav] = &[
+        PrefNav::Appearance,
+        PrefNav::Erc,
+        PrefNav::LibraryDistributors,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
             PrefNav::Erc => "Electrical Rules",
+            PrefNav::LibraryDistributors => "Distributor APIs",
         }
     }
 
@@ -35,6 +42,7 @@ impl PrefNav {
         match self {
             PrefNav::Appearance => "System",
             PrefNav::Erc => "Validation",
+            PrefNav::LibraryDistributors => "Library",
         }
     }
 }
@@ -350,6 +358,13 @@ fn build_content<'a>(
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
+        // The Library Distributor APIs panel is owned by the
+        // library subsystem (it edits `LibraryState.settings`, not
+        // the preferences draft). The Preferences modal renders an
+        // inline placeholder pointing at the `Tools ▸ Library` flow
+        // until v0.9.1 promotes the panel to a first-class
+        // preferences pane.
+        PrefNav::LibraryDistributors => content_library_distributors_placeholder(),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -361,6 +376,28 @@ fn build_content<'a>(
             ..container::Style::default()
         })
         .into()
+}
+
+// ─── Library Distributor APIs page (placeholder) ─────────────────
+
+/// Placeholder copy directing users at the Tools-menu surface where
+/// the live Distributor APIs panel mounts in Phase 1. Promoting this
+/// to a first-class preferences pane (with the live state) lands in
+/// v0.9.1 once the keyring writeback runs through prefs persistence.
+fn content_library_distributors_placeholder<'a>() -> Element<'a, PrefMsg> {
+    column![
+        section_title("Library — Distributor APIs"),
+        Space::new().height(8),
+        text(
+            "Phase 1 ships the live Distributor APIs panel inline in the Library settings \
+             surface (mounted from the library subsystem). Promote-to-Preferences lands in \
+             v0.9.1 once keyring writeback rides through the preferences persistence layer.",
+        )
+        .size(11)
+        .color(TEXT_MUT),
+    ]
+    .padding([16, 20])
+    .into()
 }
 
 // ─── Appearance page ──────────────────────────────────────────
