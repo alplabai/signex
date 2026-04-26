@@ -133,8 +133,12 @@ impl ApiError {
 }
 
 impl From<sqlx::Error> for ApiError {
+    /// M4: never echo sqlx::Error verbatim — it leaks table/column/constraint
+    /// names that help attackers map the schema. Log server-side at error
+    /// level so operators still see the underlying failure.
     fn from(e: sqlx::Error) -> Self {
-        Self::internal(format!("db: {e}"))
+        tracing::error!(error = %e, "database error");
+        Self::internal("internal server error")
     }
 }
 

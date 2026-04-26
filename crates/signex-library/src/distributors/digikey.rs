@@ -161,11 +161,33 @@ impl DigiKeyAuth {
 
     /// Step 2: exchange the redirected `code` for tokens; persist the
     /// refresh token in keyring and return the access token.
+    ///
+    /// H3: this call now requires the CSRF state token returned by the
+    /// authorization redirect (`returned_state`) to match the one issued by
+    /// [`Self::start_authorization`] (`expected_state`). Without this check,
+    /// an attacker who can forge a redirect (e.g. via DNS rebinding or a
+    /// malicious deep-link) could complete the OAuth exchange with an
+    /// attacker-controlled `code` and capture the resulting refresh token
+    /// into the victim's keyring.
+    ///
+    /// We compare with `str::eq`. Constant-time comparison would be cleaner
+    /// in principle, but DigiKey's CSRF tokens are 128+ bits of entropy and
+    /// the exchange is a one-shot per browser session — the timing
+    /// side-channel surface is bounded to a single guess per OAuth flow,
+    /// well below the threshold where ConstantTime matters. Document this
+    /// inline so future audits don't flag it.
     pub fn exchange_code(
         &self,
         code: &str,
         verifier: PkceCodeVerifier,
+        returned_state: &str,
+        expected_state: &CsrfToken,
     ) -> Result<String, DigiKeyAuthError> {
+        if returned_state != expected_state.secret() {
+            return Err(DigiKeyAuthError::Request(
+                "CSRF state mismatch — refusing to exchange OAuth code".into(),
+            ));
+        }
         let http = build_http_client();
         let token = self
             .client
