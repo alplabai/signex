@@ -232,14 +232,13 @@ impl DigiKeyAuth {
         // operators see *why* before debugging blind.
         if let Some(new_refresh) = token.refresh_token()
             && self.fallback_refresh.is_none()
+            && let Err(e) = self.keyring.set_secret(new_refresh.secret())
         {
-            if let Err(e) = self.keyring.set_secret(new_refresh.secret()) {
-                tracing::warn!(
-                    error = %e,
-                    "failed to persist rotated DigiKey refresh token to keyring; \
-                     next refresh will fail until the keyring is writable",
-                );
-            }
+            tracing::warn!(
+                error = %e,
+                "failed to persist rotated DigiKey refresh token to keyring; \
+                 next refresh will fail until the keyring is writable",
+            );
         }
         Ok(token.access_token().secret().clone())
     }
