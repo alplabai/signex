@@ -66,7 +66,8 @@ fn lookup_by_mpn_with_inline_token() {
                     .and(path("/products/v4/search/keyword"))
                     .and(header("Authorization", "Bearer test-access-token"))
                     .respond_with(
-                        ResponseTemplate::new(200).set_body_json(fixture_response("RC0805FR-0710KL")),
+                        ResponseTemplate::new(200)
+                            .set_body_json(fixture_response("RC0805FR-0710KL")),
                     )
                     .expect(1)
                     .mount(server)

@@ -14,7 +14,7 @@ pub mod keyring;
 pub mod lcsc;
 pub mod mouser;
 
-pub use cache::{CacheError, DistributorCache, DEFAULT_TTL};
+pub use cache::{CacheError, DEFAULT_TTL, DistributorCache};
 pub use digikey::DigiKeyAdapter;
 pub use jlcpcb::JlcpcbAdapter;
 pub use keyring::{KeyringError, KeyringStore};

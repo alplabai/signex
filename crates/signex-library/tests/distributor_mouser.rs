@@ -58,7 +58,8 @@ fn lookup_by_mpn_passes_apikey_query_param() {
                     .and(path("/api/v1/search/keyword"))
                     .and(query_param("apiKey", "DEADBEEF-1234"))
                     .respond_with(
-                        ResponseTemplate::new(200).set_body_json(fixture_response("RC0805FR-0710KL")),
+                        ResponseTemplate::new(200)
+                            .set_body_json(fixture_response("RC0805FR-0710KL")),
                     )
                     .expect(1)
                     .mount(server)
@@ -112,11 +113,9 @@ fn empty_search_results_returns_empty_vec() {
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path("/api/v1/search/keyword"))
-                    .respond_with(
-                        ResponseTemplate::new(200).set_body_json(json!({
-                            "SearchResults": { "Parts": [] }
-                        })),
-                    )
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                        "SearchResults": { "Parts": [] }
+                    })))
                     .mount(server)
                     .await;
             })
