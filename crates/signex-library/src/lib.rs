@@ -15,6 +15,8 @@ pub mod identity;
 pub mod lifecycle;
 pub mod manifest;
 pub mod search;
+#[cfg(feature = "search-tantivy")]
+pub mod search_index;
 pub mod snxpart;
 pub mod where_used;
 
@@ -34,6 +36,8 @@ pub use identity::{ComponentId, InternalPn, Mpn, Version};
 pub use lifecycle::LifecycleState;
 pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, WorkflowConfig};
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
+#[cfg(feature = "search-tantivy")]
+pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 pub use where_used::{UseSite, WhereUsedIndex};
 
