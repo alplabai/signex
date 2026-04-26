@@ -3,11 +3,13 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::component::{Component, Revision};
 use crate::identity::{ComponentId, InternalPn, Version};
 use crate::lifecycle::LifecycleState;
 use crate::manifest::Manifest;
+use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
@@ -60,8 +62,34 @@ pub struct ComponentSummary {
     pub description: String,
 }
 
+/// Header row for a primitive listing — name + uuid + kind tag, plus a hint
+/// of how many components depend on it (for the library editor's "in use"
+/// badge). The `used_by_count` is a snapshot the adapter computes from its
+/// own state; it's not authoritative across an open `LibrarySet` (resolver
+/// aggregation is the caller's job).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrimitiveSummary {
+    pub uuid: Uuid,
+    pub name: String,
+    pub kind: PrimitiveKind,
+    #[serde(default)]
+    pub used_by_count: usize,
+}
+
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm) implement this.
 pub trait LibraryAdapter: Send + Sync {
+    /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
+    ///
+    /// Used by [`crate::adapters::library_set::LibrarySet`] to key resolution
+    /// of cross-library [`crate::primitive::PrimitiveRef`]s. The default
+    /// implementation pulls it from `manifest().library.library_id` so any
+    /// adapter whose manifest is honest gets it for free; adapters that
+    /// fabricate a placeholder manifest (e.g. remote DB shim before login)
+    /// should override.
+    fn library_id(&self) -> Uuid {
+        self.manifest().library.library_id
+    }
+
     fn manifest(&self) -> &Manifest;
 
     fn search(&self, query: &LibraryQuery) -> Result<Vec<ComponentSummary>, LibraryError>;
@@ -81,6 +109,61 @@ pub trait LibraryAdapter: Send + Sync {
     fn try_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError>;
 
     fn release_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError>;
+
+    // ── Primitive CRUD (WS-C) ────────────────────────────────────────────
+    //
+    // Reusable shape primitives addressed by the adapter's `library_id` plus
+    // a primitive UUID. Default impls return `LibraryError::Backend` so older
+    // adapters compile while WS-D / WS-E / WS-F / WS-G / WS-H land — every
+    // production adapter SHOULD override.
+
+    fn get_symbol(&self, _uuid: Uuid) -> Result<Symbol, LibraryError> {
+        Err(LibraryError::Backend(
+            "get_symbol not implemented for this adapter".into(),
+        ))
+    }
+
+    fn get_footprint(&self, _uuid: Uuid) -> Result<Footprint, LibraryError> {
+        Err(LibraryError::Backend(
+            "get_footprint not implemented for this adapter".into(),
+        ))
+    }
+
+    fn get_sim(&self, _uuid: Uuid) -> Result<SimModel, LibraryError> {
+        Err(LibraryError::Backend(
+            "get_sim not implemented for this adapter".into(),
+        ))
+    }
+
+    fn save_symbol(&self, _sym: Symbol, _message: &str) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "save_symbol not implemented for this adapter".into(),
+        ))
+    }
+
+    fn save_footprint(&self, _fp: Footprint, _message: &str) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "save_footprint not implemented for this adapter".into(),
+        ))
+    }
+
+    fn save_sim(&self, _sm: SimModel, _message: &str) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "save_sim not implemented for this adapter".into(),
+        ))
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        Ok(Vec::new())
+    }
 
     /// For local-git, the `.snxlib/` directory; for DB, `None`.
     fn root_path(&self) -> Option<PathBuf> {
