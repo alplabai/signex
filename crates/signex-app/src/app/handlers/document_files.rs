@@ -78,6 +78,24 @@ impl Signex {
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
         let id = self.document_state.mint_project_id();
+        // WS-H: Project tree library wiring — auto-mount every
+        // library referenced by `Project::libraries` so the project
+        // tree picks them up before the panel rebuild fires. Errors
+        // are logged inside `auto_mount_project_libraries` and never
+        // bubble: a missing library shouldn't block the project
+        // from loading.
+        let mounted = crate::library::commands::auto_mount_project_libraries(
+            &mut self.library,
+            &data,
+        );
+        if mounted > 0 {
+            tracing::info!(
+                target: "signex::library",
+                project = %project_path.display(),
+                mounted,
+                "auto-mounted project libraries"
+            );
+        }
         self.document_state
             .projects
             .push(super::super::state::LoadedProject {
