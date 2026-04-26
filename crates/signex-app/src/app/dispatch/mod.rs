@@ -82,6 +82,34 @@ impl Signex {
             | Message::PrintPreviewZoom(_)
             | Message::PrintPreviewExport
             | Message::PrintPreviewClose
+            | Message::PrintPreviewSetTab(_)
+            | Message::PrintPreviewPanStart
+            | Message::PrintPreviewPanFinished
+            | Message::PrintPreviewToggleFile(_)
+            | Message::PrintPreviewSelectAllFiles
+            | Message::PrintPreviewClearAllFiles
+            | Message::PrintPreviewSetVariant(_)
+            | Message::PrintPreviewSetUsePhysicalStructure(_)
+            | Message::PrintPreviewSetPhysicalDesignators(_)
+            | Message::PrintPreviewSetPhysicalNetLabels(_)
+            | Message::PrintPreviewSetPhysicalPorts(_)
+            | Message::PrintPreviewSetPhysicalSheetNumber(_)
+            | Message::PrintPreviewSetPhysicalDocumentNumber(_)
+            | Message::PrintPreviewSetIncludeNoErcMarkers(_)
+            | Message::PrintPreviewSetIncludeParameterSets(_)
+            | Message::PrintPreviewSetIncludeProbes(_)
+            | Message::PrintPreviewSetIncludeBlankets(_)
+            | Message::PrintPreviewSetIncludeNotes(_)
+            | Message::PrintPreviewSetIncludeCollapsedNotes(_)
+            | Message::PrintPreviewSetQuality(_)
+            | Message::PrintPreviewSetBookmarkZoom(_)
+            | Message::PrintPreviewSetGenerateNetsInfo(_)
+            | Message::PrintPreviewSetBookmarkPins(_)
+            | Message::PrintPreviewSetBookmarkNetLabels(_)
+            | Message::PrintPreviewSetBookmarkPorts(_)
+            | Message::PrintPreviewSetIncludeComponentParameters(_)
+            | Message::PrintPreviewSetGlobalBookmarks(_)
+            | Message::PrintPreviewSetPcbColourMode(_)
             | Message::DismissExportError => self.dispatch_document_message(message),
             Message::TogglePanelList
             | Message::OpenPanel(_)

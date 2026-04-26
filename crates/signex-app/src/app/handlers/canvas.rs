@@ -61,6 +61,14 @@ impl Signex {
             let new_width = (resize.start_width + (x - resize.start_x)).max(40.0);
             preview.column_widths.insert(resize.idx, new_width);
         }
+        // PDF preview pan-drag: while panning, every move tick adds
+        // (cursor - press_origin) to the original pan offset so the
+        // page slides under the cursor 1:1.
+        if let Some(preview) = self.document_state.preview.as_mut()
+            && let Some((origin, ox, oy)) = preview.panning
+        {
+            preview.pan = (origin.0 + (x - ox), origin.1 + (y - oy));
+        }
         // Modal drag — accumulate delta into the per-modal offset so the
         // dialog slides under the cursor.
         if let Some((modal, last_x, last_y)) = self.ui_state.modal_dragging {
@@ -232,6 +240,12 @@ impl Signex {
         // 4 px hit zone during the drag.
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_resize = None;
+        }
+        // Same belt-and-braces release for the PDF preview pan
+        // drag — the on_release on the viewport mouse_area can miss
+        // when the cursor leaves the modal during a fast drag.
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.panning = None;
         }
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
