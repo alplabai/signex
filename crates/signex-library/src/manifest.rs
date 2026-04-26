@@ -22,17 +22,15 @@ pub struct LibraryMeta {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LibraryMode {
+    #[default]
     LocalGit,
-    Database { url: String, auth: String },
-}
-
-impl Default for LibraryMode {
-    fn default() -> Self {
-        LibraryMode::LocalGit
-    }
+    Database {
+        url: String,
+        auth: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
