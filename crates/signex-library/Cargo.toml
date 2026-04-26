@@ -18,5 +18,19 @@ anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 standard-parser = { workspace = true }
 
+# Heuristic AI-stub for symbol pinout extraction (WS-F).
+# Gated behind the `ai-stub` feature so the default build skips the
+# pdf-extract / regex compile cost.
+pdf-extract = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+
+[features]
+default = []
+# Enables `signex_library::ai_stub` — heuristic pinout extraction from
+# datasheet PDFs (no LLM, no network calls). Pulls in `pdf-extract` and
+# `regex`. Real LLM-based synthesis is deferred to v3.x per LIBRARY_PLAN.
+ai-stub = ["dep:pdf-extract", "dep:regex"]
+
 [dev-dependencies]
 tempfile = "3"
+pdf-writer = { workspace = true }
