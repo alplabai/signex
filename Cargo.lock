@@ -4895,7 +4895,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
- "kicad-parser",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
@@ -4920,6 +4920,7 @@ dependencies = [
  "serde_json",
  "signex-library",
  "sqlx",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tower",
