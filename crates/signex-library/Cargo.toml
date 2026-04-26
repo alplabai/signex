@@ -29,8 +29,17 @@ tantivy = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 walkdir = { version = "2", optional = true }
 
-# Database adapter — HTTP client (WS-B). Optional so non-server consumers stay lean.
-reqwest = { workspace = true, features = ["blocking", "json"], optional = true }
+# Database adapter (WS-B) + community distributor adapters (WS-C) — both use
+# the same `reqwest` blocking client. Adding `blocking` to the workspace
+# default features (json + rustls-tls).
+reqwest = { workspace = true, features = ["blocking"], optional = true }
+
+# Distributor adapters (WS-C).
+keyring = { workspace = true, optional = true }
+# DigiKey scaffolding uses oauth2's blocking sync HTTP integration.
+oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls", "reqwest-blocking"], optional = true }
+tokio = { workspace = true, optional = true }
+dirs = { version = "5", optional = true }
 
 [features]
 default = []
@@ -38,7 +47,16 @@ ai-stub = ["dep:pdf-extract", "dep:regex"]
 search-tantivy = ["dep:tantivy"]
 local-git = ["dep:git2", "dep:walkdir"]
 database = ["dep:reqwest"]
+distributors-community = [
+    "dep:keyring",
+    "dep:oauth2",
+    "dep:reqwest",
+    "dep:tokio",
+    "dep:dirs",
+]
 
 [dev-dependencies]
 tempfile = "3"
 pdf-writer = { workspace = true }
+tokio = { workspace = true }
+wiremock = "0.6"
