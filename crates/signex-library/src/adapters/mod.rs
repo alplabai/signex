@@ -5,6 +5,11 @@
 //!
 //! - `local-git` → [`local_git::LocalGitAdapter`] backed by a `*.snxlib/` dir
 //!   plus an embedded libgit2 repo (Phase 1 WS-A).
+//! - `database` → [`database::DatabaseAdapter`] HTTP client speaking to
+//!   `signex-library-server` (Phase 1 WS-B).
 
 #[cfg(feature = "local-git")]
 pub mod local_git;
+
+#[cfg(feature = "database")]
+pub mod database;
