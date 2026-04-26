@@ -2,7 +2,25 @@
 
 use std::collections::BTreeMap;
 
-use crate::embed::{ParamMap, PricingSnapshot};
+use crate::param::ParamMap;
+
+/// Price-break tier for one distributor — `qty @ unit_price_usd`.
+///
+/// Lifted out of the legacy `embed.rs` module by the v0.9 library refactor;
+/// pricing is a runtime/cache concept, not a static `Component` field, so it
+/// belongs alongside the distributor adapters.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PriceBreak {
+    pub qty: u32,
+    pub unit_price_usd: f64,
+}
+
+/// Captured pricing snapshot for a single MPN, partitioned by distributor.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PricingSnapshot {
+    pub captured_at: chrono::DateTime<chrono::Utc>,
+    pub by_distributor: BTreeMap<String, Vec<PriceBreak>>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DistributorError {

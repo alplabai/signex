@@ -40,6 +40,41 @@ impl Mpn {
     }
 }
 
+/// Component class — picks the parameter template ("resistor", "opamp", …).
+///
+/// Open string per `v0.9-library-refactor-plan.md` §4.1: users may add custom
+/// classes; templates resolve dynamically through [`crate::TemplateRegistry`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ComponentClass(pub String);
+
+impl ComponentClass {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Default class — applied when the user hasn't picked one yet.
+    pub fn generic() -> Self {
+        Self("generic".into())
+    }
+}
+
+impl std::fmt::Display for ComponentClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Default for ComponentClass {
+    fn default() -> Self {
+        Self::generic()
+    }
+}
+
 /// Two-segment monotonic version. Minor = compatible, major = breaking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Version {
@@ -119,5 +154,16 @@ mod tests {
         assert_eq!(s, "\"R0805_10k\"");
         let back: InternalPn = serde_json::from_str(&s).unwrap();
         assert_eq!(pn, back);
+    }
+
+    #[test]
+    fn component_class_round_trip_and_default_is_generic() {
+        let c = ComponentClass::new("opamp");
+        let s = serde_json::to_string(&c).unwrap();
+        assert_eq!(s, "\"opamp\"");
+        let back: ComponentClass = serde_json::from_str(&s).unwrap();
+        assert_eq!(c, back);
+        assert_eq!(ComponentClass::default(), ComponentClass::generic());
+        assert_eq!(ComponentClass::generic().as_str(), "generic");
     }
 }

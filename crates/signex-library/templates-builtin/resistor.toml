@@ -1,0 +1,31 @@
+class = "resistor"
+description = "Fixed-value resistor"
+
+[[required_params]]
+name = "value"
+kind = "measurement"
+unit = "ohm"
+
+[[required_params]]
+name = "tolerance"
+kind = "measurement"
+unit = "%"
+
+[[required_params]]
+name = "power"
+kind = "measurement"
+unit = "W"
+
+[[optional_params]]
+name = "tcr"
+kind = "measurement"
+unit = "ppm/C"
+
+[[optional_params]]
+name = "voltage_max"
+kind = "measurement"
+unit = "V"
+
+[[optional_params]]
+name = "package"
+kind = "text"

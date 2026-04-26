@@ -1,8 +1,8 @@
 //! Integration tests for the local + git library adapter (WS-A).
 //!
-//! Exercises the full lifecycle of a `.snxlib/` directory: init → save
-//! several revisions → reopen → search → lock contention → review
-//! workflow redirect.
+//! Exercises the v0.9-refactored lifecycle of a `.snxlib/` directory:
+//! init → save several revisions → reopen → search → lock contention →
+//! review workflow redirect.
 
 #![cfg(feature = "local-git")]
 
@@ -10,11 +10,13 @@ use std::path::Path;
 
 use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 use signex_library::adapters::local_git::LocalGitAdapter;
-use signex_library::component::Revision;
-use signex_library::embed::{FootprintBody, PcbSide, SchematicSide, SharedSide, SymbolBody};
+use signex_library::component::{DatasheetRef, PlmReserved, Revision};
 use signex_library::identity::Version;
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
 fn empty_manifest(name: &str, review_required: bool) -> Manifest {
@@ -33,35 +35,28 @@ fn empty_manifest(name: &str, review_required: bool) -> Manifest {
     }
 }
 
-fn fixture_revision(symbol_pins: usize, mpn: &str) -> Revision {
-    let mut pin_lines = String::new();
-    for n in 1..=symbol_pins {
-        pin_lines.push_str(&format!("(pin {n}) "));
-    }
+/// Build a fixture revision pointing at `(library_id, sym_uuid)` for the
+/// symbol primitive and `(library_id, fp_uuid)` for the footprint. Saving the
+/// same revision again with the *same* primitive UUIDs is a metadata-only
+/// change (minor bump); swapping a primitive UUID is a major bump.
+fn fixture_revision(sym_uuid: Uuid, fp_uuid: Uuid, mpn: &str) -> Revision {
+    let lib = Uuid::nil();
     Revision {
         version: Version::new(0, 0), // overwritten by adapter
         state: LifecycleState::Released,
         created: chrono::Utc::now(),
         author: "tester@example.com".into(),
         message: "fixture".into(),
-        schematic: SchematicSide {
-            symbol: SymbolBody {
-                sexpr: format!("(symbol {pin_lines})"),
-            },
-            schematic_params: Default::default(),
-        },
-        pcb: PcbSide {
-            footprint: FootprintBody {
-                sexpr: "(footprint (pad 1) (pad 2))".into(),
-            },
-            ..Default::default()
-        },
-        shared: SharedSide {
-            mpn: mpn.into(),
-            manufacturer: "Acme".into(),
-            description: format!("test part for {mpn}"),
-            ..Default::default()
-        },
+        symbol_ref: PrimitiveRef::new(lib, sym_uuid),
+        footprint_ref: Some(PrimitiveRef::new(lib, fp_uuid)),
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", mpn),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     }
 }
@@ -99,50 +94,53 @@ fn init_refuses_existing_library() {
 }
 
 /// Saving 3 revisions of the same component:
-/// - v1.0: first save (mpn A, 2 pins).
-/// - v1.1: only mpn changes (still 2 pins) → minor bump.
-/// - v2.0: pin count grows to 3 → major bump.
+/// - v1.0: first save (sym_a, fp_a, MPN-A).
+/// - v1.1: only mpn changes → minor bump.
+/// - v2.0: symbol primitive UUID swaps → major bump.
 ///
 /// Reopen the adapter and verify search returns the latest summary, history
-/// includes all three, and each on-disk file ends in the expected version.
+/// includes all three, and the on-disk file is `<uuid>.snxprt`.
 #[test]
 fn three_revisions_auto_bump_minor_then_major() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("Hist.snxlib");
     let adapter = LocalGitAdapter::init(&root, empty_manifest("Hist", false)).unwrap();
     let id = Uuid::now_v7();
+    let sym_a = Uuid::now_v7();
+    let sym_b = Uuid::now_v7();
+    let fp_a = Uuid::now_v7();
 
     // First save → 1.0.
     adapter
-        .save_revision(id, fixture_revision(2, "MPN-A"), "first release")
+        .save_revision(id, fixture_revision(sym_a, fp_a, "MPN-A"), "first release")
         .unwrap();
-
-    // Reload the on-disk component, verify v1.0 was assigned.
     let comp = adapter.get_component(id).unwrap();
     assert_eq!(comp.head, Version::new(1, 0));
     assert_eq!(comp.revisions.len(), 1);
 
-    // mpn-only change should be a minor bump.
-    let mut rev_b = fixture_revision(2, "MPN-B");
+    // mpn-only change should be a minor bump (same primitive refs).
+    let mut rev_b = fixture_revision(sym_a, fp_a, "MPN-B");
     rev_b.message = "vendor swap".into();
     adapter.save_revision(id, rev_b, "swap mpn").unwrap();
     let comp = adapter.get_component(id).unwrap();
     assert_eq!(comp.head, Version::new(1, 1));
     assert_eq!(comp.revisions.len(), 2);
 
-    // Pin count change must trigger a major bump.
+    // Symbol primitive UUID swap must trigger a major bump.
     adapter
-        .save_revision(id, fixture_revision(3, "MPN-B"), "added pin")
+        .save_revision(
+            id,
+            fixture_revision(sym_b, fp_a, "MPN-B"),
+            "symbol swap",
+        )
         .unwrap();
     let comp = adapter.get_component(id).unwrap();
     assert_eq!(comp.head, Version::new(2, 0));
     assert_eq!(comp.revisions.len(), 3);
 
-    // Disk layout: parts/<uuid>-1.0.snxpart, ...-1.1.snxpart, ...-2.0.snxpart
-    for v in [Version::new(1, 0), Version::new(1, 1), Version::new(2, 0)] {
-        let path = root.join("parts").join(format!("{id}-{v}.snxpart"));
-        assert!(path.exists(), "expected on-disk file for {v}");
-    }
+    // Disk layout: parts/<uuid>.snxprt (single file per component now).
+    let part_path = root.join("parts").join(format!("{id}.snxprt"));
+    assert!(part_path.exists(), "expected on-disk file at {part_path:?}");
 
     // Drop, reopen, search picks up the latest summary.
     drop(adapter);
@@ -202,7 +200,7 @@ fn release_lock_without_holder_errors() {
 }
 
 /// With `workflow.review_required = true`, `save_revision` writes the new
-/// `.snxpart` on a `review/<uuid>` git branch instead of trunk. Trunk stays
+/// `.snxprt` on a `review/<uuid>` git branch instead of trunk. Trunk stays
 /// empty until a reviewer merges it.
 #[test]
 fn review_required_redirects_save_to_review_branch() {
@@ -210,14 +208,20 @@ fn review_required_redirects_save_to_review_branch() {
     let root = dir.path().join("Review.snxlib");
     let adapter = LocalGitAdapter::init(&root, empty_manifest("Review", true)).unwrap();
     let id = Uuid::now_v7();
+    let sym = Uuid::now_v7();
+    let fp = Uuid::now_v7();
 
     adapter
-        .save_revision(id, fixture_revision(2, "MPN-A"), "submit for review")
+        .save_revision(
+            id,
+            fixture_revision(sym, fp, "MPN-A"),
+            "submit for review",
+        )
         .unwrap();
 
-    // The .snxpart should NOT be visible on trunk's working tree after save —
+    // The .snxprt should NOT be visible on trunk's working tree after save —
     // the adapter must hop back to the trunk branch when review_required.
-    let on_disk = root.join("parts").join(format!("{id}-1.0.snxpart"));
+    let on_disk = root.join("parts").join(format!("{id}.snxprt"));
     assert!(
         !on_disk.exists(),
         "trunk should be clean after a review-only save"
@@ -232,7 +236,7 @@ fn review_required_redirects_save_to_review_branch() {
     let commit = branch.get().peel_to_commit().unwrap();
     let tree = commit.tree().unwrap();
     let part_entry = tree
-        .get_path(Path::new(&format!("parts/{id}-1.0.snxpart")))
+        .get_path(Path::new(&format!("parts/{id}.snxprt")))
         .expect("review branch tree contains the new revision");
     assert_eq!(part_entry.kind(), Some(git2::ObjectType::Blob));
 }

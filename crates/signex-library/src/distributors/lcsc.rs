@@ -27,7 +27,7 @@ use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
-use crate::embed::ParamMap;
+use crate::param::ParamMap;
 
 const LCSC_PROVIDER_KEY: &str = "lcsc";
 const LCSC_NAME: &str = "LCSC";
@@ -199,7 +199,7 @@ impl DistributorAdapter for LcscAdapter {
     fn refresh_pricing(
         &self,
         part: &DistributorPart,
-    ) -> Result<crate::embed::PricingSnapshot, DistributorError> {
+    ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         // Re-query the same MPN; the response carries pricing.
         let mut hits = self.search_by_keyword(&part.mpn)?;
         let fresh = hits.pop().ok_or(DistributorError::NotFound)?;

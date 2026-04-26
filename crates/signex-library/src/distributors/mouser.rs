@@ -23,7 +23,7 @@ use crate::distributor::{
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
-use crate::embed::ParamMap;
+use crate::param::ParamMap;
 
 const MOUSER_PROVIDER_KEY: &str = "mouser";
 const MOUSER_NAME: &str = "Mouser";
@@ -224,7 +224,7 @@ impl DistributorAdapter for MouserAdapter {
     fn refresh_pricing(
         &self,
         part: &DistributorPart,
-    ) -> Result<crate::embed::PricingSnapshot, DistributorError> {
+    ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         let mut hits = self.search_by_keyword(&part.mpn)?;
         let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
         fresh.pricing.ok_or(DistributorError::NotFound)

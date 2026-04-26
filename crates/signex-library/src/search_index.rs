@@ -40,9 +40,9 @@ use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, TantivyError, Term}
 
 use crate::adapter::ComponentSummary;
 use crate::component::Component;
-use crate::embed::ParamValue;
 use crate::identity::{InternalPn, Version};
 use crate::lifecycle::LifecycleState;
+use crate::param::ParamValue;
 use crate::search::{Facet, FacetOp, SearchIndex, SearchQuery};
 
 /// Well-known numeric parameter keys promoted to dedicated `f64` Tantivy
@@ -298,23 +298,37 @@ impl TantivySearchIndex {
             return Ok(());
         };
 
-        // Surface `category` parameter into a dedicated facet field if present.
-        let category_value = head
-            .shared
-            .parameters
-            .get("category")
-            .and_then(|v| match v {
-                ParamValue::Text(s) => Some(s.clone()),
-                _ => None,
+        // Category now lives on Component.category (refactor); fallback to
+        // a "category" parameter for backwards source compatibility.
+        let category_value = component
+            .category
+            .to_str()
+            .map(str::to_string)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                head.parameters.get("category").and_then(|v| match v {
+                    ParamValue::Text(s) => Some(s.clone()),
+                    _ => None,
+                })
             })
             .unwrap_or_default();
+
+        // The refactor dropped the inline `description` slot on Revision;
+        // surface a synthesised "<manufacturer> <mpn>" string for free-text
+        // search until WS-E ships a dedicated description field on Component.
+        let description = format!(
+            "{} {}",
+            head.primary_mpn.manufacturer, head.primary_mpn.mpn
+        )
+        .trim()
+        .to_string();
 
         let mut doc = TantivyDocument::default();
         doc.add_text(self.fields.uuid, &uuid_str);
         doc.add_text(self.fields.internal_pn, component.internal_pn.as_str());
-        doc.add_text(self.fields.mpn, &head.shared.mpn);
-        doc.add_text(self.fields.manufacturer, &head.shared.manufacturer);
-        doc.add_text(self.fields.description, &head.shared.description);
+        doc.add_text(self.fields.mpn, &head.primary_mpn.mpn);
+        doc.add_text(self.fields.manufacturer, &head.primary_mpn.manufacturer);
+        doc.add_text(self.fields.description, &description);
         doc.add_text(self.fields.category, &category_value);
         doc.add_u64(self.fields.head_major, component.head.major as u64);
         doc.add_u64(self.fields.head_minor, component.head.minor as u64);
@@ -323,7 +337,7 @@ impl TantivySearchIndex {
         // Push numeric values into their dedicated f64 columns; non-numeric
         // values fall through to the JSON blob.
         let mut json_blob: BTreeMap<String, OwnedValue> = BTreeMap::new();
-        for (k, v) in &head.shared.parameters {
+        for (k, v) in &head.parameters {
             if k == "category" {
                 continue;
             }
