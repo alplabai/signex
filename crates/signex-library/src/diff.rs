@@ -1,52 +1,45 @@
-//! Visual + parametric diff over two Revisions. See LIBRARY_PLAN §9.
+//! Pure-data diff between two revisions of the same component.
 //!
-//! The diff is pure-function over already-typed `Revision` pairs. It is the
-//! data backbone for:
+//! Per `v0.9-library-refactor-plan.md` §7 step B5, the diff now operates on
+//! primitive *references* and binding fields — geometry-level diffs (pin
+//! moves, pad changes) live with the primitive editors and are out of scope
+//! here. This crate's `RevisionDiff` answers:
+//! "did the symbol primitive UUID change? did the MPN swap? did supply
+//!  listings move? did the datasheet repoint?"
 //!
-//! * the visual diff renderer (drawn by signex-app — out of scope for the
-//!   library crate),
-//! * WS-A's auto-bump heuristic — call [`auto_bump_kind`] to decide whether
-//!   a save should be a `.minor` or `.major` version bump.
-//!
-//! Symbol/footprint diffs use [`standard_parser::sexpr`] to walk the embedded
-//! S-expression text and extract pins/pads. Pin identity is the pin number
-//! (Standard pin "name" is the printed label; "number" is the silk-stable
-//! identifier — we want number for diffing). Pad identity is the pad number.
-//!
-//! Position equality uses an epsilon (1 µm) so float round-trip noise from
-//! Standard's `(at x y rot)` doesn't manufacture spurious "moved" entries.
+//! The diff is the data backbone for:
+//! * the visual diff renderer (drawn by signex-app — out of scope here),
+//! * the auto-bump heuristic — call [`auto_bump_kind`] to decide whether a
+//!   save should be a `.minor` or `.major` version bump.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use standard_parser::sexpr::{self, SExpr};
-
-use crate::component::Revision;
-use crate::embed::{ParamMap, ParamValue, SupplierLink};
+use crate::component::{DatasheetRef, PinPadOverride, PlmReserved, Revision};
 use crate::lifecycle::LifecycleState;
+use crate::manufacturer::{DistributorListing, ManufacturerPart};
+use crate::param::ParamMap;
 
-/// Position-equality epsilon (mm). Standard coordinates round-trip in 1 µm.
-const POS_EPS_MM: f64 = 1e-3;
-
+/// Field-level changed flags + grouped detail. Mirrors plan §7 step B5.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RevisionDiff {
-    pub symbol: SymbolDiff,
-    pub footprint: FootprintDiff,
+    pub symbol_changed: bool,
+    pub footprint_changed: bool,
+    pub sim_changed: bool,
+    pub pin_map_changed: bool,
+    pub params_changed: bool,
+    pub mpn_changed: bool,
+    pub alternates_changed: bool,
+    pub supply_changed: bool,
+    pub datasheet_changed: bool,
+    pub lifecycle_changed: bool,
+    pub plm_changed: bool,
+
+    /// Detail rows — populated only for the dimensions actually changed.
     pub parameters: ParameterDiff,
-    pub suppliers: SupplierDiff,
-    pub lifecycle: LifecycleDiff,
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct SymbolDiff {
-    pub added_pins: Vec<String>,
-    pub removed_pins: Vec<String>,
-    pub moved_pins: Vec<(String, [f64; 2], [f64; 2])>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct FootprintDiff {
-    pub added_pads: Vec<String>,
-    pub removed_pads: Vec<String>,
+    pub pin_map: PinMapDiff,
+    pub alternates_detail: ListDiff,
+    pub supply_detail: ListDiff,
+    pub lifecycle_detail: LifecycleDiff,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -57,7 +50,15 @@ pub struct ParameterDiff {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct SupplierDiff {
+pub struct PinMapDiff {
+    pub added: Vec<PinPadOverride>,
+    pub removed: Vec<PinPadOverride>,
+    pub changed: Vec<(String, String, String)>, // pin_number, old_pad, new_pad
+}
+
+/// Identity-keyed diff over a list — Strings keys (e.g. `manufacturer:mpn`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ListDiff {
     pub added: Vec<String>,
     pub removed: Vec<String>,
 }
@@ -68,10 +69,8 @@ pub struct LifecycleDiff {
     pub to: Option<LifecycleState>,
 }
 
-/// Auto-bump heuristic — see WS-A acceptance criteria.
-///
-/// A revision counts as **major** if any pin or pad set changed
-/// (added/removed/moved); otherwise it is a **minor** bump.
+/// Auto-bump heuristic — major when the binding shape changes (symbol,
+/// footprint, sim, or pin map), minor otherwise.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum BumpKind {
@@ -79,217 +78,65 @@ pub enum BumpKind {
     Major,
 }
 
-/// Decide whether the change between the two revisions feeding `diff`
-/// is a `Minor` or `Major` version bump.
-///
-/// LIBRARY_PLAN §9 / WS-D contract: empty symbol+footprint diff → Minor;
-/// any pin/pad add/remove/move → Major.
+/// Decide whether the change between two revisions is a `Minor` or `Major`
+/// bump. Per the plan §7 step B5, any change to a primitive ref or pin-map
+/// override is a major bump.
 pub fn auto_bump_kind(diff: &RevisionDiff) -> BumpKind {
-    let symbol_changed = !diff.symbol.added_pins.is_empty()
-        || !diff.symbol.removed_pins.is_empty()
-        || !diff.symbol.moved_pins.is_empty();
-    let footprint_changed =
-        !diff.footprint.added_pads.is_empty() || !diff.footprint.removed_pads.is_empty();
-    if symbol_changed || footprint_changed {
+    if diff.symbol_changed
+        || diff.footprint_changed
+        || diff.sim_changed
+        || diff.pin_map_changed
+    {
         BumpKind::Major
     } else {
         BumpKind::Minor
     }
 }
 
-/// Compute the diff from `a` to `b`. Order matters: `added_*` are present in
-/// `b` but not `a`; `removed_*` are present in `a` but not `b`.
+/// Compute the diff from `a` to `b`.
 pub fn diff_revisions(a: &Revision, b: &Revision) -> RevisionDiff {
+    let parameters = diff_parameters(&a.parameters, &b.parameters);
+    let pin_map = diff_pin_map(&a.pin_map_overrides, &b.pin_map_overrides);
+    let alternates_detail = diff_alternates(&a.alternates, &b.alternates);
+    let supply_detail = diff_supply(&a.supply, &b.supply);
+    let lifecycle_detail = diff_lifecycle(a.state, b.state);
+
     RevisionDiff {
-        symbol: diff_symbol(&a.schematic.symbol.sexpr, &b.schematic.symbol.sexpr),
-        footprint: diff_footprint(&a.pcb.footprint.sexpr, &b.pcb.footprint.sexpr),
-        parameters: diff_parameters(&a.shared.parameters, &b.shared.parameters),
-        suppliers: diff_suppliers(&a.shared.suppliers, &b.shared.suppliers),
-        lifecycle: diff_lifecycle(a.state, b.state),
+        symbol_changed: a.symbol_ref != b.symbol_ref,
+        footprint_changed: a.footprint_ref != b.footprint_ref,
+        sim_changed: a.sim_ref != b.sim_ref,
+        pin_map_changed: !pin_map.added.is_empty()
+            || !pin_map.removed.is_empty()
+            || !pin_map.changed.is_empty(),
+        params_changed: !parameters.added.is_empty()
+            || !parameters.removed.is_empty()
+            || !parameters.changed.is_empty(),
+        mpn_changed: mpn_key(&a.primary_mpn) != mpn_key(&b.primary_mpn),
+        alternates_changed: !alternates_detail.added.is_empty()
+            || !alternates_detail.removed.is_empty(),
+        supply_changed: !supply_detail.added.is_empty()
+            || !supply_detail.removed.is_empty(),
+        datasheet_changed: a.datasheet != b.datasheet,
+        lifecycle_changed: lifecycle_detail.from.is_some(),
+        plm_changed: a.plm != b.plm,
+        parameters,
+        pin_map,
+        alternates_detail,
+        supply_detail,
+        lifecycle_detail,
     }
 }
 
-// ---------------------------------------------------------------------------
-// Symbol / footprint pin & pad extraction
-// ---------------------------------------------------------------------------
-
-/// `("<unit_index>:<pin_number>", [x_mm, y_mm])` — diff identity.
-///
-/// M9: Standard multi-unit symbols (e.g. dual op-amps, gate arrays) reuse pin
-/// numbers across the unit sub-symbols. Keying purely by `pin_number` then
-/// collecting into a `BTreeMap` silently dropped duplicates. The compound key
-/// `<unit>:<pin>` keeps every (unit, pin) pair distinct so a real pin move on
-/// unit 2 of a dual op-amp shows up as a `moved_pins` entry instead of being
-/// shadowed by unit 1's pin of the same number.
-///
-/// Empty body or unparseable text returns an empty list (treat as "no pins").
-fn extract_pins(sexpr_text: &str) -> Vec<(String, [f64; 2])> {
-    extract_pins_with_unit(sexpr_text)
+fn mpn_key(p: &ManufacturerPart) -> String {
+    format!("{}:{}", p.manufacturer, p.mpn)
 }
-
-/// Walk the parsed tree once, tracking the enclosing unit sub-symbol so each
-/// pin's key is `<unit_index>:<pin_number>`. The unit index is parsed from the
-/// Standard `<root>_<unit>_<style>` sub-symbol naming convention; symbols without
-/// the suffix collapse to unit `0` (which preserves pre-M9 behaviour for
-/// single-unit parts).
-fn extract_pins_with_unit(sexpr_text: &str) -> Vec<(String, [f64; 2])> {
-    let trimmed = sexpr_text.trim();
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-    let parsed = match sexpr::parse(trimmed) {
-        Ok(e) => e,
-        Err(_) => return Vec::new(),
-    };
-
-    // DFS keeping the enclosing unit number in scope.
-    let mut out = Vec::new();
-    let mut stack: Vec<(&SExpr, u32)> = vec![(&parsed, 0)];
-    while let Some((node, unit)) = stack.pop() {
-        let next_unit = if node.keyword() == Some("symbol") {
-            node.first_arg()
-                .and_then(parse_symbol_unit_index)
-                .unwrap_or(unit)
-        } else {
-            unit
-        };
-        if node.keyword() == Some("pin")
-            && let Some(num) = pin_number(node)
-        {
-            let pos = at_position(node).unwrap_or([0.0, 0.0]);
-            out.push((format!("{next_unit}:{num}"), pos));
-        }
-        for child in node.children() {
-            if matches!(child, SExpr::List(_)) {
-                stack.push((child, next_unit));
-            }
-        }
-    }
-    out
-}
-
-/// Standard sub-symbol names use the convention `<root>_<unit>_<style>` (e.g.
-/// `LM358_1_1`, `LM358_2_1`). Returns the `<unit>` segment when both numeric
-/// suffixes are present, otherwise `None` (root or non-conforming name).
-fn parse_symbol_unit_index(name: &str) -> Option<u32> {
-    let unquoted = name.trim_matches('"');
-    let mut parts = unquoted.rsplitn(3, '_');
-    let _style = parts.next()?.parse::<u32>().ok()?;
-    let unit = parts.next()?.parse::<u32>().ok()?;
-    let _root = parts.next()?;
-    Some(unit)
-}
-
-/// (pad_number, [x_mm, y_mm]) — first arg of `(pad N ...)` is the pad number.
-fn extract_pads(sexpr_text: &str) -> Vec<(String, [f64; 2])> {
-    extract_at_keyed(sexpr_text, "pad", |node| {
-        node.first_arg().map(|s| s.to_string())
-    })
-}
-
-/// Walk the parsed S-expr tree, collect every `(<keyword> ...)` node, and key
-/// it via `key_of`. Position is read from the standard `(at x y [rot])` child.
-fn extract_at_keyed(
-    sexpr_text: &str,
-    keyword: &str,
-    key_of: impl Fn(&SExpr) -> Option<String>,
-) -> Vec<(String, [f64; 2])> {
-    let trimmed = sexpr_text.trim();
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-    let parsed = match sexpr::parse(trimmed) {
-        Ok(e) => e,
-        Err(_) => return Vec::new(),
-    };
-    let mut out = Vec::new();
-    let mut stack: Vec<&SExpr> = vec![&parsed];
-    while let Some(node) = stack.pop() {
-        if node.keyword() == Some(keyword)
-            && let Some(k) = key_of(node)
-        {
-            let pos = at_position(node).unwrap_or([0.0, 0.0]);
-            out.push((k, pos));
-        }
-        for child in node.children() {
-            if matches!(child, SExpr::List(_)) {
-                stack.push(child);
-            }
-        }
-    }
-    out
-}
-
-/// Standard pin nodes carry the silk-stable identifier as `(number "1")`.
-fn pin_number(node: &SExpr) -> Option<String> {
-    node.find("number")
-        .and_then(|n| n.first_arg())
-        .map(|s| s.to_string())
-}
-
-fn at_position(node: &SExpr) -> Option<[f64; 2]> {
-    let at = node.find("at")?;
-    let x = at.arg_f64(0)?;
-    let y = at.arg_f64(1)?;
-    Some([x, y])
-}
-
-fn diff_symbol(a_sexpr: &str, b_sexpr: &str) -> SymbolDiff {
-    let a_pins: BTreeMap<String, [f64; 2]> = extract_pins(a_sexpr).into_iter().collect();
-    let b_pins: BTreeMap<String, [f64; 2]> = extract_pins(b_sexpr).into_iter().collect();
-
-    let a_keys: BTreeSet<&String> = a_pins.keys().collect();
-    let b_keys: BTreeSet<&String> = b_pins.keys().collect();
-
-    let added: Vec<String> = b_keys.difference(&a_keys).map(|s| (*s).clone()).collect();
-    let removed: Vec<String> = a_keys.difference(&b_keys).map(|s| (*s).clone()).collect();
-
-    let mut moved: Vec<(String, [f64; 2], [f64; 2])> = Vec::new();
-    for k in a_keys.intersection(&b_keys) {
-        let a_pos = a_pins[*k];
-        let b_pos = b_pins[*k];
-        if !pos_eq(a_pos, b_pos) {
-            moved.push(((*k).clone(), a_pos, b_pos));
-        }
-    }
-    moved.sort_by(|x, y| x.0.cmp(&y.0));
-
-    SymbolDiff {
-        added_pins: added,
-        removed_pins: removed,
-        moved_pins: moved,
-    }
-}
-
-fn diff_footprint(a_sexpr: &str, b_sexpr: &str) -> FootprintDiff {
-    let a_pads: BTreeMap<String, [f64; 2]> = extract_pads(a_sexpr).into_iter().collect();
-    let b_pads: BTreeMap<String, [f64; 2]> = extract_pads(b_sexpr).into_iter().collect();
-
-    let a_keys: BTreeSet<&String> = a_pads.keys().collect();
-    let b_keys: BTreeSet<&String> = b_pads.keys().collect();
-
-    FootprintDiff {
-        added_pads: b_keys.difference(&a_keys).map(|s| (*s).clone()).collect(),
-        removed_pads: a_keys.difference(&b_keys).map(|s| (*s).clone()).collect(),
-    }
-}
-
-fn pos_eq(a: [f64; 2], b: [f64; 2]) -> bool {
-    (a[0] - b[0]).abs() <= POS_EPS_MM && (a[1] - b[1]).abs() <= POS_EPS_MM
-}
-
-// ---------------------------------------------------------------------------
-// Parameter / supplier / lifecycle diffs
-// ---------------------------------------------------------------------------
 
 fn diff_parameters(a: &ParamMap, b: &ParamMap) -> ParameterDiff {
     let mut added = Vec::new();
     let mut removed = Vec::new();
     let mut changed = Vec::new();
-
     let a_keys: BTreeSet<&String> = a.keys().collect();
     let b_keys: BTreeSet<&String> = b.keys().collect();
-
     for k in b_keys.difference(&a_keys) {
         added.push((*k).clone());
     }
@@ -300,7 +147,7 @@ fn diff_parameters(a: &ParamMap, b: &ParamMap) -> ParameterDiff {
         let av = &a[*k];
         let bv = &b[*k];
         if av != bv {
-            changed.push(((*k).clone(), display_param(av), display_param(bv)));
+            changed.push(((*k).clone(), av.display(), bv.display()));
         }
     }
     ParameterDiff {
@@ -310,21 +157,56 @@ fn diff_parameters(a: &ParamMap, b: &ParamMap) -> ParameterDiff {
     }
 }
 
-fn display_param(v: &ParamValue) -> String {
-    match v {
-        ParamValue::Text(s) => s.clone(),
-        ParamValue::Number(n) => n.to_string(),
-        ParamValue::Bool(b) => b.to_string(),
-        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
+fn diff_pin_map(a: &[PinPadOverride], b: &[PinPadOverride]) -> PinMapDiff {
+    use std::collections::BTreeMap;
+    // Index by symbol_pin_number — the unique key.
+    let a_map: BTreeMap<&str, &str> = a
+        .iter()
+        .map(|o| (o.symbol_pin_number.as_str(), o.footprint_pad_number.as_str()))
+        .collect();
+    let b_map: BTreeMap<&str, &str> = b
+        .iter()
+        .map(|o| (o.symbol_pin_number.as_str(), o.footprint_pad_number.as_str()))
+        .collect();
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut changed = Vec::new();
+    for (k, v) in &b_map {
+        match a_map.get(k) {
+            None => added.push(PinPadOverride::new(*k, *v)),
+            Some(av) if av != v => {
+                changed.push(((*k).to_string(), (*av).to_string(), (*v).to_string()))
+            }
+            _ => {}
+        }
+    }
+    for (k, v) in &a_map {
+        if !b_map.contains_key(k) {
+            removed.push(PinPadOverride::new(*k, *v));
+        }
+    }
+    PinMapDiff {
+        added,
+        removed,
+        changed,
     }
 }
 
-fn diff_suppliers(a: &[SupplierLink], b: &[SupplierLink]) -> SupplierDiff {
-    let to_key = |s: &SupplierLink| format!("{}:{}", s.distributor, s.sku);
+fn diff_alternates(a: &[ManufacturerPart], b: &[ManufacturerPart]) -> ListDiff {
+    let to_key = mpn_key;
     let a_keys: BTreeSet<String> = a.iter().map(to_key).collect();
     let b_keys: BTreeSet<String> = b.iter().map(to_key).collect();
+    ListDiff {
+        added: b_keys.difference(&a_keys).cloned().collect(),
+        removed: a_keys.difference(&b_keys).cloned().collect(),
+    }
+}
 
-    SupplierDiff {
+fn diff_supply(a: &[DistributorListing], b: &[DistributorListing]) -> ListDiff {
+    let to_key = |s: &DistributorListing| format!("{}:{}", s.distributor, s.sku);
+    let a_keys: BTreeSet<String> = a.iter().map(to_key).collect();
+    let b_keys: BTreeSet<String> = b.iter().map(to_key).collect();
+    ListDiff {
         added: b_keys.difference(&a_keys).cloned().collect(),
         removed: a_keys.difference(&b_keys).cloned().collect(),
     }
@@ -341,269 +223,180 @@ fn diff_lifecycle(a: LifecycleState, b: LifecycleState) -> LifecycleDiff {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+/// Touch the unused-warning placeholder so `PlmReserved` and `DatasheetRef`
+/// stay imported even when the public API changes (silences "unused import"
+/// after a refactor).
+#[allow(dead_code)]
+fn _phantom(_: &PlmReserved, _: &DatasheetRef) {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embed::{FootprintBody, PcbSide, SchematicSide, SharedSide, SymbolBody};
+    use crate::component::PinPadOverride;
     use crate::identity::Version;
+    use crate::manufacturer::ManufacturerPart;
+    use crate::param::ParamValue;
+    use crate::primitive::PrimitiveRef;
+    use uuid::Uuid;
 
-    const SYMBOL_2_PINS: &str = r#"
-        (symbol "R0805"
-            (pin passive line (at -2.54 0 0) (length 1.27)
-                (name "1") (number "1"))
-            (pin passive line (at  2.54 0 180) (length 1.27)
-                (name "2") (number "2")))
-    "#;
-
-    const SYMBOL_3_PINS: &str = r#"
-        (symbol "R0805"
-            (pin passive line (at -2.54 0 0) (length 1.27)
-                (name "1") (number "1"))
-            (pin passive line (at  2.54 0 180) (length 1.27)
-                (name "2") (number "2"))
-            (pin passive line (at  0 2.54 270) (length 1.27)
-                (name "3") (number "3")))
-    "#;
-
-    const SYMBOL_2_PINS_MOVED: &str = r#"
-        (symbol "R0805"
-            (pin passive line (at -3.81 0 0) (length 1.27)
-                (name "1") (number "1"))
-            (pin passive line (at  2.54 0 180) (length 1.27)
-                (name "2") (number "2")))
-    "#;
-
-    fn rev_with(sym: &str, fp: &str) -> Revision {
+    fn rev() -> Revision {
         Revision {
             version: Version::new(1, 0),
             state: LifecycleState::Released,
             created: chrono::Utc::now(),
             author: "test".into(),
-            message: "fixture".into(),
-            schematic: SchematicSide {
-                symbol: SymbolBody {
-                    sexpr: sym.to_string(),
-                },
-                ..Default::default()
-            },
-            pcb: PcbSide {
-                footprint: FootprintBody {
-                    sexpr: fp.to_string(),
-                },
-                ..Default::default()
-            },
-            shared: SharedSide::default(),
+            message: "init".into(),
+            symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "A"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            datasheet: DatasheetRef::url(""),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
             content_hash: [0u8; 32],
         }
     }
 
     #[test]
-    fn extract_pins_finds_pin_numbers_and_positions() {
-        let pins = extract_pins(SYMBOL_2_PINS);
-        assert_eq!(pins.len(), 2);
-        let by_num: BTreeMap<String, [f64; 2]> = pins.into_iter().collect();
-        // M9: keys are now `<unit>:<pin>`; single-unit symbols emit unit 0.
-        assert!(by_num.contains_key("0:1"));
-        assert!(by_num.contains_key("0:2"));
-        assert!((by_num["0:1"][0] - -2.54).abs() < POS_EPS_MM);
-    }
-
-    #[test]
-    fn extract_pins_handles_empty_body() {
-        assert!(extract_pins("").is_empty());
-        assert!(extract_pins("   ").is_empty());
-        assert!(extract_pins("(symbol R0805)").is_empty());
-    }
-
-    #[test]
-    fn empty_symbol_diff_when_bodies_equal() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let b = rev_with(SYMBOL_2_PINS, "");
+    fn diff_detects_symbol_ref_change() {
+        let mut a = rev();
+        let mut b = rev();
+        let lib = Uuid::new_v4();
+        a.symbol_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        b.symbol_ref = PrimitiveRef::new(lib, Uuid::new_v4());
         let d = diff_revisions(&a, &b);
-        assert!(d.symbol.added_pins.is_empty());
-        assert!(d.symbol.removed_pins.is_empty());
-        assert!(d.symbol.moved_pins.is_empty());
+        assert!(d.symbol_changed);
+        assert!(!d.footprint_changed);
+        assert_eq!(auto_bump_kind(&d), BumpKind::Major);
     }
 
     #[test]
-    fn pin_added_shows_in_added_pins_one_way_and_removed_other_way() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let b = rev_with(SYMBOL_3_PINS, "");
-        let forward = diff_revisions(&a, &b);
-        let reverse = diff_revisions(&b, &a);
-        // M9: keys carry the unit prefix even for single-unit symbols.
-        assert_eq!(forward.symbol.added_pins, vec!["0:3".to_string()]);
-        assert!(forward.symbol.removed_pins.is_empty());
-        assert!(reverse.symbol.added_pins.is_empty());
-        assert_eq!(reverse.symbol.removed_pins, vec!["0:3".to_string()]);
+    fn diff_detects_footprint_ref_change() {
+        let mut a = rev();
+        let mut b = rev();
+        let lib = Uuid::new_v4();
+        a.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
+        b.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
+        let d = diff_revisions(&a, &b);
+        assert!(d.footprint_changed);
+        assert_eq!(auto_bump_kind(&d), BumpKind::Major);
     }
 
     #[test]
-    fn moved_pin_recorded_with_old_and_new_positions() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let b = rev_with(SYMBOL_2_PINS_MOVED, "");
+    fn diff_detects_sim_ref_change() {
+        let mut a = rev();
+        let mut b = rev();
+        let lib = Uuid::new_v4();
+        a.sim_ref = None;
+        b.sim_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
         let d = diff_revisions(&a, &b);
-        assert_eq!(d.symbol.moved_pins.len(), 1);
-        let (num, from, to) = &d.symbol.moved_pins[0];
-        // M9: key is `<unit>:<pin>` — unit 0 for the single-unit fixture.
-        assert_eq!(num, "0:1");
-        assert!((from[0] - -2.54).abs() < POS_EPS_MM);
-        assert!((to[0] - -3.81).abs() < POS_EPS_MM);
-    }
-
-    /// M9: regression test for multi-unit pin keying.
-    ///
-    /// A dual op-amp (e.g. LM358) shares pin numbers across its two unit
-    /// sub-symbols. Pre-M9 the diff collapsed both `pin "1"` entries into a
-    /// single map slot, hiding any change on the second unit. With unit-aware
-    /// keying, moving unit 2's pin 1 surfaces as a clean `moved_pins` entry
-    /// while unit 1's identical pin stays put.
-    #[test]
-    fn extract_pins_keeps_multi_unit_duplicates_distinct() {
-        let dual_a = r#"
-            (symbol "LM358"
-                (symbol "LM358_1_1"
-                    (pin input line (at -5 0 0) (length 2)
-                        (name "IN+") (number "1")))
-                (symbol "LM358_2_1"
-                    (pin input line (at -5 -10 0) (length 2)
-                        (name "IN+") (number "1"))))
-        "#;
-        let dual_b = r#"
-            (symbol "LM358"
-                (symbol "LM358_1_1"
-                    (pin input line (at -5 0 0) (length 2)
-                        (name "IN+") (number "1")))
-                (symbol "LM358_2_1"
-                    (pin input line (at -7 -10 0) (length 2)
-                        (name "IN+") (number "1"))))
-        "#;
-        let pins_a: BTreeMap<String, [f64; 2]> = extract_pins(dual_a).into_iter().collect();
-        // Two distinct keys despite shared pin number "1".
-        assert_eq!(pins_a.len(), 2, "multi-unit pins must not collide");
-        assert!(pins_a.contains_key("1:1"));
-        assert!(pins_a.contains_key("2:1"));
-
-        let a = rev_with(dual_a, "");
-        let b = rev_with(dual_b, "");
-        let d = diff_revisions(&a, &b);
-        assert!(d.symbol.added_pins.is_empty());
-        assert!(d.symbol.removed_pins.is_empty());
-        assert_eq!(d.symbol.moved_pins.len(), 1);
-        assert_eq!(d.symbol.moved_pins[0].0, "2:1");
+        assert!(d.sim_changed);
     }
 
     #[test]
-    fn footprint_pad_diff_keyed_by_pad_number() {
-        let fp_a = r#"(footprint "R_0805_2012Metric"
-            (pad "1" smd rect (at -1.0 0))
-            (pad "2" smd rect (at  1.0 0)))"#;
-        let fp_b = r#"(footprint "R_0805_2012Metric"
-            (pad "1" smd rect (at -1.0 0))
-            (pad "2" smd rect (at  1.0 0))
-            (pad "3" smd rect (at  0.0 1.0)))"#;
-        let a = rev_with("", fp_a);
-        let b = rev_with("", fp_b);
+    fn diff_detects_mpn_change() {
+        let mut a = rev();
+        let mut b = rev();
+        a.primary_mpn = ManufacturerPart::draft("Acme", "A");
+        b.primary_mpn = ManufacturerPart::draft("Acme", "B");
         let d = diff_revisions(&a, &b);
-        assert_eq!(d.footprint.added_pads, vec!["3".to_string()]);
-        assert!(d.footprint.removed_pads.is_empty());
-    }
-
-    #[test]
-    fn parameter_diff_added_removed_changed() {
-        let mut a = rev_with("", "");
-        let mut b = rev_with("", "");
-        a.shared
-            .parameters
-            .insert("value".into(), ParamValue::Text("10k".into()));
-        a.shared
-            .parameters
-            .insert("tolerance".into(), ParamValue::Text("1%".into()));
-        b.shared
-            .parameters
-            .insert("value".into(), ParamValue::Text("10k".into()));
-        b.shared
-            .parameters
-            .insert("package".into(), ParamValue::Text("0805".into()));
-        b.shared
-            .parameters
-            .insert("tolerance".into(), ParamValue::Text("0.1%".into()));
-
-        let d = diff_revisions(&a, &b);
-        assert_eq!(d.parameters.added, vec!["package".to_string()]);
-        assert!(d.parameters.removed.is_empty());
-        assert_eq!(d.parameters.changed.len(), 1);
-        assert_eq!(d.parameters.changed[0].0, "tolerance");
-        assert_eq!(d.parameters.changed[0].1, "1%");
-        assert_eq!(d.parameters.changed[0].2, "0.1%");
-    }
-
-    #[test]
-    fn supplier_diff_keyed_by_distributor_and_sku_tuple() {
-        let mut a = rev_with("", "");
-        let mut b = rev_with("", "");
-        a.shared.suppliers.push(SupplierLink {
-            distributor: "DigiKey".into(),
-            sku: "DK-1".into(),
-            url: None,
-        });
-        b.shared.suppliers.push(SupplierLink {
-            distributor: "DigiKey".into(),
-            sku: "DK-1".into(),
-            url: None,
-        });
-        b.shared.suppliers.push(SupplierLink {
-            distributor: "Mouser".into(),
-            sku: "M-1".into(),
-            url: None,
-        });
-
-        let d = diff_revisions(&a, &b);
-        assert_eq!(d.suppliers.added, vec!["Mouser:M-1".to_string()]);
-        assert!(d.suppliers.removed.is_empty());
-    }
-
-    #[test]
-    fn lifecycle_diff_only_when_state_actually_changes() {
-        let mut a = rev_with("", "");
-        let mut b = rev_with("", "");
-        a.state = LifecycleState::Released;
-        b.state = LifecycleState::Released;
-        let d = diff_revisions(&a, &b);
-        assert!(d.lifecycle.from.is_none() && d.lifecycle.to.is_none());
-
-        b.state = LifecycleState::Deprecated;
-        let d = diff_revisions(&a, &b);
-        assert_eq!(d.lifecycle.from, Some(LifecycleState::Released));
-        assert_eq!(d.lifecycle.to, Some(LifecycleState::Deprecated));
-    }
-
-    #[test]
-    fn auto_bump_is_minor_when_only_metadata_changes() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let mut b = rev_with(SYMBOL_2_PINS, "");
-        b.shared.mpn = "ANOTHER_MPN".into();
-        let d = diff_revisions(&a, &b);
+        assert!(d.mpn_changed);
+        // MPN swap with no other change is a *minor* bump.
         assert_eq!(auto_bump_kind(&d), BumpKind::Minor);
     }
 
     #[test]
-    fn auto_bump_is_major_when_pin_count_changes() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let b = rev_with(SYMBOL_3_PINS, "");
+    fn diff_detects_pin_map_added_and_changed() {
+        let mut a = rev();
+        let mut b = rev();
+        a.pin_map_overrides.push(PinPadOverride::new("1", "A"));
+        b.pin_map_overrides.push(PinPadOverride::new("1", "B"));
+        b.pin_map_overrides.push(PinPadOverride::new("EP", "EP1"));
         let d = diff_revisions(&a, &b);
+        assert!(d.pin_map_changed);
+        assert_eq!(d.pin_map.changed.len(), 1);
+        assert_eq!(d.pin_map.added.len(), 1);
         assert_eq!(auto_bump_kind(&d), BumpKind::Major);
     }
 
     #[test]
-    fn auto_bump_is_major_when_pin_moves() {
-        let a = rev_with(SYMBOL_2_PINS, "");
-        let b = rev_with(SYMBOL_2_PINS_MOVED, "");
+    fn diff_detects_parameter_added_removed_changed() {
+        let mut a = rev();
+        let mut b = rev();
+        a.parameters
+            .insert("value".into(), ParamValue::Text("10k".into()));
+        a.parameters
+            .insert("tolerance".into(), ParamValue::Text("1%".into()));
+        b.parameters
+            .insert("value".into(), ParamValue::Text("10k".into()));
+        b.parameters
+            .insert("package".into(), ParamValue::Text("0805".into()));
+        b.parameters
+            .insert("tolerance".into(), ParamValue::Text("0.1%".into()));
+
         let d = diff_revisions(&a, &b);
-        assert_eq!(auto_bump_kind(&d), BumpKind::Major);
+        assert!(d.params_changed);
+        assert_eq!(d.parameters.added, vec!["package".to_string()]);
+        assert!(d.parameters.removed.is_empty());
+        assert_eq!(d.parameters.changed.len(), 1);
+        assert_eq!(d.parameters.changed[0].0, "tolerance");
+    }
+
+    #[test]
+    fn diff_detects_supply_added() {
+        let mut a = rev();
+        let mut b = rev();
+        b.supply.push(DistributorListing::new("DigiKey", "DK-1"));
+        let d = diff_revisions(&a, &b);
+        assert!(d.supply_changed);
+        assert_eq!(d.supply_detail.added, vec!["DigiKey:DK-1".to_string()]);
+    }
+
+    #[test]
+    fn diff_detects_alternates_added() {
+        let mut a = rev();
+        let mut b = rev();
+        b.alternates
+            .push(ManufacturerPart::draft("AlternateCorp", "ALT-001"));
+        let d = diff_revisions(&a, &b);
+        assert!(d.alternates_changed);
+    }
+
+    #[test]
+    fn diff_detects_datasheet_change() {
+        let mut a = rev();
+        let mut b = rev();
+        a.datasheet = DatasheetRef::url("a.pdf");
+        b.datasheet = DatasheetRef::url("b.pdf");
+        let d = diff_revisions(&a, &b);
+        assert!(d.datasheet_changed);
+    }
+
+    #[test]
+    fn diff_detects_lifecycle_change() {
+        let mut a = rev();
+        let mut b = rev();
+        a.state = LifecycleState::Released;
+        b.state = LifecycleState::Deprecated;
+        let d = diff_revisions(&a, &b);
+        assert!(d.lifecycle_changed);
+        assert_eq!(d.lifecycle_detail.from, Some(LifecycleState::Released));
+        assert_eq!(d.lifecycle_detail.to, Some(LifecycleState::Deprecated));
+    }
+
+    #[test]
+    fn auto_bump_minor_when_only_metadata_changes() {
+        let mut a = rev();
+        let mut b = rev();
+        b.primary_mpn = ManufacturerPart::draft("Acme", "B");
+        b.parameters
+            .insert("value".into(), ParamValue::Text("10k".into()));
+        let d = diff_revisions(&a, &b);
+        assert_eq!(auto_bump_kind(&d), BumpKind::Minor);
+        // sanity: no binding change
+        let _ = (&a, &b);
     }
 }

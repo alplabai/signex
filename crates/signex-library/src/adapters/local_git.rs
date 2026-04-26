@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 use crate::component::{Component, Revision};
-use crate::identity::{ComponentId, InternalPn, Version};
+use crate::identity::{ComponentClass, ComponentId, InternalPn, Version};
 use crate::manifest::Manifest;
 use crate::snxpart::{SCHEMA_VERSION, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 
@@ -118,30 +118,39 @@ impl LocalGitAdapter {
             .join(format!("{id}.{}.lock", field_set_slug(field_set)))
     }
 
-    fn revision_path(&self, id: ComponentId, version: Version) -> PathBuf {
-        self.parts_dir().join(snxpart_filename(id, version))
+    /// Path to the on-disk `<uuid>.snxprt` file for `id`. WS-C will use this
+    /// from the `library_id` + primitive CRUD wiring; the search path uses
+    /// `load_components` rather than reading by id.
+    #[allow(dead_code)]
+    fn component_file_path(&self, id: ComponentId) -> PathBuf {
+        self.parts_dir().join(snxpart_filename(id))
     }
 
-    /// Compute the auto-bump heuristic per `LIBRARY_PLAN.md` §3.
+    /// Compute the auto-bump heuristic per `v0.9-library-refactor-plan.md`
+    /// §7 step B5.
     ///
-    /// Returns the new version that `revision` should take, given the previous
-    /// head version on disk (if any). The rule mirrors the WS-D diff
-    /// engine for the cases WS-A needs today: a change in the symbol pin
-    /// count is a major bump; everything else (mpn swap, parameter edits,
-    /// etc.) is a minor bump. Versionless first revision starts at `1.0`.
+    /// Returns the new version that `revision` should take, given the
+    /// previous head revision on disk (if any). Any change in the bound
+    /// primitive refs (symbol/footprint/sim) or pin-map overrides counts as a
+    /// major bump; pure metadata swaps (MPN, parameters, supply, datasheet)
+    /// stay minor. First revision starts at `1.0`.
     pub fn auto_bump(prev: Option<&Revision>, next: &Revision) -> Version {
         let Some(prev) = prev else {
             return Version::new(1, 0);
         };
-        if requires_major_bump(prev, next) {
+        let major = prev.symbol_ref != next.symbol_ref
+            || prev.footprint_ref != next.footprint_ref
+            || prev.sim_ref != next.sim_ref
+            || prev.pin_map_overrides != next.pin_map_overrides;
+        if major {
             prev.version.bump_major()
         } else {
             prev.version.bump_minor()
         }
     }
 
-    /// Walk `parts/` and load every `.snxpart` file, grouping revisions by
-    /// component uuid.
+    /// Walk `parts/` and load every `.snxprt` file. One file per component
+    /// since the v0.9 refactor — revisions live inside the file.
     fn load_components(&self) -> Result<BTreeMap<ComponentId, Component>, LibraryError> {
         let mut by_uuid: BTreeMap<ComponentId, Component> = BTreeMap::new();
         let parts = self.parts_dir();
@@ -162,24 +171,12 @@ impl LocalGitAdapter {
                 Some(s) => s,
                 None => continue,
             };
-            if !name.ends_with(".snxpart") || name.contains(".lock") {
+            if !name.ends_with(".snxprt") || name.contains(".lock") {
                 continue;
             }
             let file = read_snxpart(path)
                 .map_err(|e| LibraryError::Backend(format!("read {name}: {e}")))?;
-            let comp = by_uuid.entry(file.uuid).or_insert_with(|| Component {
-                uuid: file.uuid,
-                internal_pn: file.internal_pn.clone(),
-                revisions: Vec::new(),
-                head: file.revision.version,
-            });
-            // Track head as the maximum version seen.
-            if file.revision.version > comp.head {
-                comp.head = file.revision.version;
-            }
-            // Keep `internal_pn` in sync with the latest file in case of rename.
-            comp.internal_pn = file.internal_pn;
-            comp.revisions.push(file.revision);
+            by_uuid.insert(file.component.uuid, file.component);
         }
         for comp in by_uuid.values_mut() {
             comp.revisions.sort_by_key(|r| r.version);
@@ -202,10 +199,10 @@ impl LibraryAdapter for LocalGitAdapter {
                 Some(ComponentSummary {
                     uuid: c.uuid,
                     internal_pn: c.internal_pn.clone(),
-                    mpn: head.shared.mpn.clone(),
+                    mpn: head.primary_mpn.mpn.clone(),
                     head: c.head,
                     state: head.state,
-                    description: head.shared.description.clone(),
+                    description: head.primary_mpn.manufacturer.clone(),
                 })
             })
             .collect();
@@ -231,13 +228,11 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn get_revision(&self, id: ComponentId, version: Version) -> Result<Revision, LibraryError> {
-        let path = self.revision_path(id, version);
-        if !path.exists() {
-            return Err(LibraryError::NotFound(format!("{id}-{version}")));
-        }
-        let file = read_snxpart(&path)
-            .map_err(|e| LibraryError::Backend(format!("read revision: {e}")))?;
-        Ok(file.revision)
+        let comp = self.get_component(id)?;
+        comp.revisions
+            .into_iter()
+            .find(|r| r.version == version)
+            .ok_or_else(|| LibraryError::NotFound(format!("{id}-{version}")))
     }
 
     fn save_revision(
@@ -255,19 +250,32 @@ impl LibraryAdapter for LocalGitAdapter {
         revision.version = new_version;
         revision.refresh_content_hash();
 
-        let internal_pn = prev_component
-            .map(|c| c.internal_pn.clone())
-            .unwrap_or_else(|| InternalPn::new(format!("PART_{id}")));
+        // Build the up-to-date Component (append revision, advance head).
+        let mut component = match prev_component.cloned() {
+            Some(mut c) => {
+                c.revisions.push(revision);
+                c.head = new_version;
+                c
+            }
+            None => Component {
+                uuid: id,
+                internal_pn: InternalPn::new(format!("PART_{id}")),
+                class: ComponentClass::generic(),
+                category: PathBuf::new(),
+                family: None,
+                head: new_version,
+                revisions: vec![revision],
+            },
+        };
+        component.revisions.sort_by_key(|r| r.version);
 
         let file = SnxPartFile {
-            schema: SCHEMA_VERSION,
-            uuid: id,
-            internal_pn,
-            revision,
+            schema_version: SCHEMA_VERSION,
+            component,
         };
         let parts_dir = self.parts_dir();
         fs::create_dir_all(&parts_dir)?;
-        let rel_path = format!("{}/{}", PARTS_DIR, snxpart_filename(id, new_version));
+        let rel_path = format!("{}/{}", PARTS_DIR, snxpart_filename(id));
         let abs_path = self.root.join(&rel_path);
 
         // Open repo once so we can switch branches before writing the file.
@@ -450,29 +458,6 @@ fn checkout_branch(repo: &git2::Repository, branch: &str) -> Result<(), LibraryE
     Ok(())
 }
 
-/// Decide whether moving from `prev` to `next` is a major bump.
-///
-/// Cheap token-count heuristic on the symbol/footprint S-expression: any
-/// change in `(pin ` or `(pad ` count promotes to major. Cosmetic edits and
-/// pure metadata swaps (mpn, parameters) stay minor.
-///
-/// `crate::diff::auto_bump_kind` runs WS-D's real Standard-aware diff and is the
-/// preferred call site when the symbol body is known to be a well-formed
-/// Standard pin S-expression with `(number "X")` children. The token heuristic
-/// here stays robust on stubs / drafts that don't yet carry the full schema.
-fn requires_major_bump(prev: &Revision, next: &Revision) -> bool {
-    pin_count(&prev.schematic.symbol.sexpr) != pin_count(&next.schematic.symbol.sexpr)
-        || pad_count(&prev.pcb.footprint.sexpr) != pad_count(&next.pcb.footprint.sexpr)
-}
-
-fn pin_count(sexpr: &str) -> usize {
-    sexpr.matches("(pin ").count()
-}
-
-fn pad_count(sexpr: &str) -> usize {
-    sexpr.matches("(pad ").count()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,35 +466,5 @@ mod tests {
     fn field_set_slugs_are_stable() {
         assert_eq!(field_set_slug(FieldSet::Symbol), "symbol");
         assert_eq!(field_set_slug(FieldSet::SharedParams), "shared_params");
-    }
-
-    #[test]
-    fn pin_count_matches_standard_tokens() {
-        let s = "(symbol (pin 1) (pin 2) (pin 3))";
-        assert_eq!(pin_count(s), 3);
-    }
-
-    /// L4: Documents the known false-positive in the `(pin ` token heuristic.
-    ///
-    /// `pin_count` is a deliberately naive byte-substring scan used only as a
-    /// stub-friendly fallback when the symbol body is not yet a well-formed
-    /// Standard S-expression. A property value that literally contains the string
-    /// `(pin ` (e.g. a free-form description) will inflate the count and
-    /// incorrectly trigger a major bump in `requires_major_bump`.
-    ///
-    /// Production call sites should prefer `crate::diff::auto_bump_kind`,
-    /// which structurally walks the parsed pin nodes. This test pins the
-    /// limitation so the next refactor knows to swap the heuristic — not to
-    /// "fix" the off-by-one count.
-    #[test]
-    fn pin_count_false_positive_on_property_string() {
-        // A property value that mentions "(pin " as plain text — not a real
-        // Standard pin node. The heuristic still counts it.
-        let s = r#"(symbol (property "Description" "Connector with (pin 1) terminal"))"#;
-        assert_eq!(
-            pin_count(s),
-            1,
-            "byte-substring scan cannot distinguish Standard pin nodes from property text"
-        );
     }
 }

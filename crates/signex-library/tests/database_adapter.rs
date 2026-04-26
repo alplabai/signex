@@ -20,12 +20,16 @@
 use std::future::Future;
 
 use serde_json::json;
+use std::path::PathBuf;
+
 use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryQuery};
 use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{Component, Revision};
-use signex_library::embed::{PcbSide, SchematicSide, SharedSide};
-use signex_library::identity::{InternalPn, Version};
+use signex_library::component::{Component, DatasheetRef, PlmReserved, Revision};
+use signex_library::identity::{ComponentClass, InternalPn, Version};
 use signex_library::lifecycle::LifecycleState;
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -35,20 +39,23 @@ const TEST_TOKEN: &str = "wiremock-bearer-token";
 const TEST_HOLDER: &str = "test@signex";
 
 fn fixture_revision(version: Version) -> Revision {
+    let lib = Uuid::nil();
     let mut rev = Revision {
         version,
         state: LifecycleState::Released,
         created: chrono::Utc::now(),
         author: "test".into(),
         message: "fixture".into(),
-        schematic: SchematicSide::default(),
-        pcb: PcbSide::default(),
-        shared: SharedSide {
-            mpn: format!("MPN-{version}"),
-            manufacturer: "Acme".into(),
-            description: format!("part {version}"),
-            ..Default::default()
-        },
+        symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{version}")),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        datasheet: DatasheetRef::url(""),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     };
     rev.refresh_content_hash();
@@ -59,6 +66,9 @@ fn fixture_component(uuid: Uuid) -> Component {
     Component {
         uuid,
         internal_pn: InternalPn::new("R0805_10k"),
+        class: ComponentClass::new("resistor"),
+        category: PathBuf::new(),
+        family: None,
         revisions: vec![fixture_revision(Version::new(1, 0))],
         head: Version::new(1, 0),
     }

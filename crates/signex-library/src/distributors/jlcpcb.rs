@@ -16,7 +16,7 @@ use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
-use crate::embed::ParamMap;
+use crate::param::ParamMap;
 
 const JLCPCB_PROVIDER_KEY: &str = "jlcpcb";
 const JLCPCB_NAME: &str = "JLCPCB";
@@ -171,7 +171,7 @@ impl DistributorAdapter for JlcpcbAdapter {
     fn refresh_pricing(
         &self,
         part: &DistributorPart,
-    ) -> Result<crate::embed::PricingSnapshot, DistributorError> {
+    ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         let mut hits = self.search_by_keyword(&part.mpn)?;
         let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
         fresh.pricing.ok_or(DistributorError::NotFound)

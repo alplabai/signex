@@ -39,7 +39,7 @@ use crate::distributor::{
 };
 use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
-use crate::embed::ParamMap;
+use crate::param::ParamMap;
 
 /// DigiKey production endpoints. Tests override these via `with_endpoints`.
 pub const DIGIKEY_AUTH_URL: &str = "https://api.digikey.com/v1/oauth2/authorize";
@@ -442,7 +442,7 @@ impl DistributorAdapter for DigiKeyAdapter {
     fn refresh_pricing(
         &self,
         part: &DistributorPart,
-    ) -> Result<crate::embed::PricingSnapshot, DistributorError> {
+    ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
         let mut hits = self.search_by_keyword(&part.mpn)?;
         let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
         fresh.pricing.ok_or(DistributorError::NotFound)

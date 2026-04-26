@@ -20,7 +20,9 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use crate::identity::Version;
+use crate::component::Component;
+use crate::identity::{ComponentId, Version};
+use crate::primitive::PrimitiveRef;
 
 /// One occurrence of a component on a schematic sheet.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,6 +65,11 @@ struct Entry {
 pub struct WhereUsedIndex {
     /// project → sheet → entries on that sheet.
     by_project: HashMap<PathBuf, HashMap<PathBuf, Vec<Entry>>>,
+    /// `(library_id, primitive_uuid)` → list of components referencing this
+    /// primitive. Populated via [`Self::ingest_component`] when a library is
+    /// opened or a component is saved. Used by the "where-is-this-symbol-used"
+    /// editor surfaces.
+    primitive_to_components: HashMap<PrimitiveRef, Vec<ComponentId>>,
     /// `Cell<()>` is `!Sync`, which propagates through `PhantomData`. No
     /// runtime cost; the field is zero-sized.
     _not_sync: PhantomData<std::cell::Cell<()>>,
@@ -105,6 +112,51 @@ impl WhereUsedIndex {
     /// No-op if the project is not currently indexed.
     pub fn drop_project(&mut self, project: &Path) {
         self.by_project.remove(project);
+    }
+
+    /// Replace the reverse-index entries for `component`. Called whenever a
+    /// library is opened or a component revision is saved.
+    ///
+    /// Idempotent: re-ingesting the same component clears its previous
+    /// reverse-index entries before appending the current ones.
+    pub fn ingest_component(&mut self, component: &Component) {
+        // Drop any prior entries for this component's UUID, regardless of
+        // primitive ref — a revision swap may have repointed at different
+        // primitives, and stale entries would survive forever otherwise.
+        for sites in self.primitive_to_components.values_mut() {
+            sites.retain(|id| *id != component.uuid);
+        }
+        self.primitive_to_components
+            .retain(|_, sites| !sites.is_empty());
+
+        for rev in &component.revisions {
+            self.primitive_to_components
+                .entry(rev.symbol_ref)
+                .or_default()
+                .push(component.uuid);
+            if let Some(fp) = rev.footprint_ref {
+                self.primitive_to_components
+                    .entry(fp)
+                    .or_default()
+                    .push(component.uuid);
+            }
+            if let Some(sm) = rev.sim_ref {
+                self.primitive_to_components
+                    .entry(sm)
+                    .or_default()
+                    .push(component.uuid);
+            }
+        }
+    }
+
+    /// All components that reference the given primitive, across every
+    /// revision currently ingested. Returned slice is empty when the
+    /// primitive isn't referenced.
+    pub fn components_for_primitive(&self, r: &PrimitiveRef) -> &[ComponentId] {
+        self.primitive_to_components
+            .get(r)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Find every site where `uuid` is used.
@@ -179,5 +231,112 @@ mod tests {
 
         idx.ingest_sheet(&project, &sheet, &[]);
         assert_eq!(idx.where_used(uuid, None).len(), 0);
+    }
+
+    #[test]
+    fn primitive_to_components_lists_referencing_component() {
+        use crate::component::{Component, DatasheetRef, PlmReserved, Revision};
+        use crate::identity::{ComponentClass, InternalPn};
+        use crate::lifecycle::LifecycleState;
+        use crate::manufacturer::ManufacturerPart;
+        use crate::param::ParamMap;
+
+        let lib = Uuid::new_v4();
+        let sym_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        let fpt_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        let comp_id = Uuid::now_v7();
+
+        let rev = Revision {
+            version: Version::new(1, 0),
+            state: LifecycleState::Released,
+            created: chrono::Utc::now(),
+            author: "test".into(),
+            message: "init".into(),
+            symbol_ref: sym_ref,
+            footprint_ref: Some(fpt_ref),
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "A"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            datasheet: DatasheetRef::url(""),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            content_hash: [0u8; 32],
+        };
+        let comp = Component {
+            uuid: comp_id,
+            internal_pn: InternalPn::new("R_TEST"),
+            class: ComponentClass::generic(),
+            category: PathBuf::new(),
+            family: None,
+            revisions: vec![rev],
+            head: Version::new(1, 0),
+        };
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_component(&comp);
+        assert_eq!(idx.components_for_primitive(&sym_ref), &[comp_id]);
+        assert_eq!(idx.components_for_primitive(&fpt_ref), &[comp_id]);
+        let unknown = PrimitiveRef::new(lib, Uuid::new_v4());
+        assert!(idx.components_for_primitive(&unknown).is_empty());
+    }
+
+    #[test]
+    fn ingest_component_replaces_prior_primitive_links() {
+        use crate::component::{Component, DatasheetRef, PlmReserved, Revision};
+        use crate::identity::{ComponentClass, InternalPn};
+        use crate::lifecycle::LifecycleState;
+        use crate::manufacturer::ManufacturerPart;
+        use crate::param::ParamMap;
+
+        let lib = Uuid::new_v4();
+        let old_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let new_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let comp_id = Uuid::now_v7();
+
+        let mk_rev = |sym: PrimitiveRef| Revision {
+            version: Version::new(1, 0),
+            state: LifecycleState::Released,
+            created: chrono::Utc::now(),
+            author: "t".into(),
+            message: "".into(),
+            symbol_ref: sym,
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("A", "B"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            datasheet: DatasheetRef::url(""),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            content_hash: [0u8; 32],
+        };
+
+        let mut idx = WhereUsedIndex::new();
+
+        let comp_old = Component {
+            uuid: comp_id,
+            internal_pn: InternalPn::new("X"),
+            class: ComponentClass::generic(),
+            category: PathBuf::new(),
+            family: None,
+            revisions: vec![mk_rev(old_sym)],
+            head: Version::new(1, 0),
+        };
+        idx.ingest_component(&comp_old);
+        assert_eq!(idx.components_for_primitive(&old_sym), &[comp_id]);
+
+        let comp_new = Component {
+            revisions: vec![mk_rev(new_sym)],
+            ..comp_old
+        };
+        idx.ingest_component(&comp_new);
+        assert!(
+            idx.components_for_primitive(&old_sym).is_empty(),
+            "stale primitive link must be evicted"
+        );
+        assert_eq!(idx.components_for_primitive(&new_sym), &[comp_id]);
     }
 }

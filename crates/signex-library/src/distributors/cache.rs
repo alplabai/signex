@@ -158,7 +158,7 @@ impl DistributorCache {
 mod tests {
     use super::*;
     use crate::distributor::DistributorSource;
-    use crate::embed::ParamMap;
+    use crate::param::ParamMap;
 
     fn part(mpn: &str) -> DistributorPart {
         DistributorPart {

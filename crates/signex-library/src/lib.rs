@@ -1,6 +1,13 @@
-//! Signex component library subsystem (v0.9).
+//! Signex component library subsystem (v0.9, refactored).
 //!
-//! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
+//! Per `v0.9-library-refactor-plan.md`, the data model is split into three
+//! reusable primitives (`Symbol`, `Footprint`, `SimModel`) addressed by
+//! `(library_id, uuid)` tuples, and a thin binding [`Component`] record that
+//! references them via [`PrimitiveRef`].
+//!
+//! See `docs/internal/docs/LIBRARY_PLAN.md` for the original (pre-refactor)
+//! design rationale; refactor delta lives in
+//! `.claude/PRPs/v0.9-library-refactor-plan.md`.
 
 pub mod adapter;
 pub mod adapters;
@@ -11,40 +18,49 @@ pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
-pub mod embed;
 pub mod hash;
 pub mod identity;
 pub mod lifecycle;
 pub mod manifest;
+pub mod manufacturer;
+pub mod param;
+pub mod primitive;
 pub mod search;
 #[cfg(feature = "search-tantivy")]
 pub mod search_index;
 pub mod snxpart;
+pub mod templates;
 pub mod where_used;
 
 pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
-pub use component::{Component, Revision};
-pub use diff::{BumpKind, RevisionDiff, auto_bump_kind, diff_revisions};
+pub use component::{Component, DatasheetRef, PinPadOverride, PlmReserved, Revision};
+pub use diff::{
+    BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RevisionDiff, auto_bump_kind,
+    diff_revisions,
+};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
 #[cfg(feature = "distributors-community")]
 pub use distributors::{
     DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
 };
-pub use embed::{
-    AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue, PcbSide,
-    PlmLink, PriceBreak, PricingSnapshot, SchematicSide, SharedSide, SharedSlice, SpiceModel,
-    SupplierLink, SymbolBody, TemplateId, VariantOverride,
-};
 pub use hash::hash_revision_content;
-pub use identity::{ComponentId, InternalPn, Mpn, ParseVersionError, Version};
+pub use identity::{ComponentClass, ComponentId, InternalPn, Mpn, ParseVersionError, Version};
 pub use lifecycle::LifecycleState;
 pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, WorkflowConfig};
+pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
+pub use param::{ParamMap, ParamValue};
+pub use primitive::{
+    Body3D, BodyShape, Drill, FpGraphic, FpGraphicKind, Footprint, LayerId, Pad, PadKind, PadShape,
+    PinElectricalType, PinOrientation, Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel,
+    StepAttachment, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+};
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
+pub use templates::{ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation};
 pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(feature = "local-git")]

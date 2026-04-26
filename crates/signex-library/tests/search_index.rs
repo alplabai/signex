@@ -5,10 +5,12 @@
 #![cfg(feature = "search-tantivy")]
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use signex_library::{
-    Component, Facet, FacetOp, LifecycleState, ParamMap, ParamValue, PcbSide, Revision,
-    SchematicSide, SearchIndex, SearchQuery, SharedSide, TantivySearchIndex, Version,
+    Component, ComponentClass, DatasheetRef, Facet, FacetOp, LifecycleState, ManufacturerPart,
+    ParamMap, ParamValue, PlmReserved, PrimitiveRef, Revision, SearchIndex, SearchQuery,
+    TantivySearchIndex, Version,
 };
 use uuid::Uuid;
 
@@ -18,23 +20,17 @@ fn fresh_component(
     internal_pn: &str,
     mpn: &str,
     manufacturer: &str,
-    description: &str,
+    _description: &str,
     category: &str,
     parameters: ParamMap,
 ) -> Component {
-    let mut shared = SharedSide {
-        mpn: mpn.into(),
-        manufacturer: manufacturer.into(),
-        description: description.into(),
-        parameters,
-        ..Default::default()
-    };
-    // Convention: `category` lives as a parameter on SharedSide so we can store
-    // it without expanding the schema. The Tantivy index hoists it into a
-    // dedicated `category` field.
-    shared
-        .parameters
-        .insert("category".into(), ParamValue::Text(category.into()));
+    let lib = Uuid::nil();
+    let mut params = parameters;
+    // Pre-refactor convention: `category` lives as a parameter so the search
+    // index can hoist it. The new index also reads `Component.category`
+    // directly, but keeping the param mirror means the existing
+    // category-filter assertions stay correct.
+    params.insert("category".into(), ParamValue::Text(category.into()));
 
     let revision = Revision {
         version: Version::new(1, 0),
@@ -42,15 +38,25 @@ fn fresh_component(
         created: chrono::Utc::now(),
         author: "test@example.com".into(),
         message: "fixture".into(),
-        schematic: SchematicSide::default(),
-        pcb: PcbSide::default(),
-        shared,
+        symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft(manufacturer, mpn),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        datasheet: DatasheetRef::url(""),
+        parameters: params,
+        plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     };
 
     Component {
         uuid: Uuid::now_v7(),
         internal_pn: signex_library::InternalPn::new(internal_pn),
+        class: ComponentClass::new(category),
+        category: PathBuf::from(category),
+        family: None,
         revisions: vec![revision],
         head: Version::new(1, 0),
     }
@@ -187,11 +193,16 @@ fn text_query_pinpoints_the_single_matching_part() {
         "top hit was {:?}",
         hits[0].internal_pn
     );
-    // The unique target description is exact-match.
+    // The v0.9 refactor dropped the inline `description` slot; the search
+    // index now synthesises it from `manufacturer + mpn`. The MPN is unique
+    // enough that the synthesised description still pinpoints the hit.
     assert!(
-        hits[0]
-            .description
-            .contains("Capacitor 10µF 0805 25V X7R MLCC"),
+        hits[0].description.contains("Murata"),
+        "unexpected description: {:?}",
+        hits[0].description
+    );
+    assert!(
+        hits[0].description.contains("GRM21BR71E106KE12L"),
         "unexpected description: {:?}",
         hits[0].description
     );
@@ -228,7 +239,6 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
         .filter(|c| {
             let head = c.head_revision().unwrap();
             let cat = head
-                .shared
                 .parameters
                 .get("category")
                 .and_then(|v| match v {
@@ -238,7 +248,7 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
             if cat != Some("Capacitor") {
                 return false;
             }
-            let cap = head.shared.parameters.get("capacitance");
+            let cap = head.parameters.get("capacitance");
             matches!(cap, Some(ParamValue::Number(n)) if *n < 1e-6)
         })
         .map(|c| c.internal_pn.0.clone())
@@ -306,10 +316,13 @@ fn add_or_update_replaces_existing_doc() {
     idx.add_or_update(&comp).expect("add");
     idx.commit().expect("commit");
 
-    // Mutate the head revision — same uuid, new content.
+    // Mutate the head revision — same uuid, new content. The pre-refactor
+    // index surfaced `shared.description`; the new index synthesises the
+    // description from `manufacturer + mpn`, so update those instead.
     {
         let head = comp.revisions.last_mut().unwrap();
-        head.shared.description = "Sentinel-updated-zucchini cap".into();
+        head.primary_mpn.manufacturer = "Sentinel-updated-zucchini".into();
+        head.primary_mpn.mpn = "TEST-002".into();
     }
     idx.add_or_update(&comp).expect("update");
     idx.commit().expect("commit update");
