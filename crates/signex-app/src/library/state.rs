@@ -34,9 +34,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    Component, ComponentClass, ComponentId, ComponentSummary, DistributorSource, Footprint,
-    LibraryAdapter, LibraryError, LibraryQuery, LibrarySet, LocalGitAdapter, PrimitiveRef,
-    Revision, SimModel, Symbol, TemplateRegistry, UseSite, Version, WhereUsedIndex,
+    Component, ComponentId, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
+    LibraryError, LibraryQuery, LocalGitAdapter, Revision, Symbol, UseSite, Version, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -408,6 +407,37 @@ impl LibrarySet {
     }
 }
 
+/// WS-F stub for the upcoming WS-C `LibrarySet`. Holds Symbol /
+/// Footprint primitives keyed by uuid so the editor can resolve a
+/// `PrimitiveRef::uuid` without a real adapter call. Cross-library
+/// resolution by `library_id` is a no-op until WS-C ships.
+///
+/// TODO(merge-with-WS-C): replace this whole struct with
+/// `signex_library::adapters::library_set::LibrarySet`.
+#[derive(Debug, Default)]
+pub struct LibrarySet {
+    pub symbols: HashMap<Uuid, Symbol>,
+    pub footprints: HashMap<Uuid, Footprint>,
+}
+
+impl LibrarySet {
+    pub fn resolve_symbol(&self, uuid: Uuid) -> Option<Symbol> {
+        self.symbols.get(&uuid).cloned()
+    }
+
+    pub fn resolve_footprint(&self, uuid: Uuid) -> Option<Footprint> {
+        self.footprints.get(&uuid).cloned()
+    }
+
+    pub fn save_symbol(&mut self, sym: Symbol) {
+        self.symbols.insert(sym.uuid, sym);
+    }
+
+    pub fn save_footprint(&mut self, fp: Footprint) {
+        self.footprints.insert(fp.uuid, fp);
+    }
+}
+
 /// Component Editor window state — one per editor window.
 ///
 /// WS-F refactor: instead of carrying the legacy
@@ -535,6 +565,21 @@ pub struct ComponentEditorState {
     /// bound directly to `f64` fights typing because every keystroke
     /// has to re-parse the in-progress text.
     pub params_edit_buf: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for ComponentEditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentEditorState")
+            .field("library_root", &self.library_root)
+            .field("component_id", &self.component_id)
+            .field("display_internal_pn", &self.display_internal_pn)
+            .field("displayed_version", &self.displayed_version)
+            .field("active_tab", &self.active_tab)
+            .field("symbol_uuid", &self.symbol.uuid)
+            .field("footprint_uuid", &self.footprint.as_ref().map(|f| f.uuid))
+            .field("dirty", &self.dirty)
+            .finish()
+    }
 }
 
 impl std::fmt::Debug for ComponentEditorState {
@@ -683,10 +728,8 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            symbol: None,
-            footprint: None,
-            sim: None,
-            pin_map: PinMapTabState::default(),
+            symbol,
+            footprint,
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
             symbol_selected: None,
             symbol_ai_preview: None,
@@ -797,15 +840,12 @@ mod tests {
     }
 
     #[test]
-    fn new_component_state_defaults_to_generic_class() {
-        let nc = NewComponentState::default();
-        assert!(nc.internal_pn.is_empty());
-        assert!(nc.library_idx.is_none());
-        // WS-8: table starts unset until the user picks one in the modal.
-        assert!(nc.table.is_none());
-        assert_eq!(nc.class, ComponentClass::generic());
-        assert!(nc.category.is_empty());
-    }
+    fn ingest_sheet_round_trips_through_state_to_where_used_index() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/sample.snxprj");
+        let sheet = PathBuf::from("/tmp/sample.snxprj/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v = Version::new(1, 2);
 
         // Empty state → no sites.
         assert!(state.where_used_for(uuid, None).is_empty());

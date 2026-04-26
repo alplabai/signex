@@ -180,16 +180,14 @@ pub fn load_component_for_editor(
     library_root: &Path,
     id: ComponentId,
 ) -> Result<ComponentEditorState, LibraryError> {
-    let library_id = state
-        .library_at(library_root)
-        .map(|lib| lib.library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let component = adapter.get_component(id)?;
-    let review_required = adapter.manifest().workflow.review_required;
+    let (component, review_required) = {
+        let lib = state
+            .library_at_mut(library_root)
+            .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+        let c = lib.adapter.get_component(id)?;
+        let r = lib.adapter.manifest().workflow.review_required;
+        (c, r)
+    };
     Ok(ComponentEditorState::from_head(
         library_root.to_path_buf(),
         component,

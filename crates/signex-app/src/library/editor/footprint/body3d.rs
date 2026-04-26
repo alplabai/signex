@@ -14,7 +14,6 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
-use crate::library::state::EditorAddress;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ShapePick(BodyShape);
@@ -37,7 +36,7 @@ impl std::fmt::Display for ShapePick {
 pub fn view<'a>(
     body: &Body3D,
     tokens: &'a ThemeTokens,
-    address: EditorAddress,
+    window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -51,13 +50,11 @@ pub fn view<'a>(
         ShapePick(BodyShape::Cylinder),
         ShapePick(BodyShape::Custom),
     ];
-    let shape_addr = address.clone();
     let shape_picker = pick_list(
         opts,
         Some(ShapePick(body.shape)),
         move |ShapePick(s)| LibraryMessage::EditorEvent {
-            library_path: shape_addr.library_path.clone(),
-            component_id: shape_addr.component_id,
+            window_id,
             msg: EditorMsg::SetBodyShape(s),
         },
     )
@@ -65,13 +62,11 @@ pub fn view<'a>(
     .padding([4, 8]);
 
     // Numeric inputs — height_mm / offset_z_mm.
-    let height_addr = address.clone();
     let height_input = NumberInput::new(
         &body.height_mm,
         0.0_f32..=50.0_f32,
         move |v: f32| LibraryMessage::EditorEvent {
-            library_path: height_addr.library_path.clone(),
-            component_id: height_addr.component_id,
+            window_id,
             msg: EditorMsg::SetBodyHeight(v),
         },
     )
@@ -79,13 +74,11 @@ pub fn view<'a>(
     .padding(4)
     .width(Length::Fixed(96.0));
 
-    let offset_addr = address.clone();
     let offset_input = NumberInput::new(
         &body.offset_z_mm,
         -10.0_f32..=10.0_f32,
         move |v: f32| LibraryMessage::EditorEvent {
-            library_path: offset_addr.library_path.clone(),
-            component_id: offset_addr.component_id,
+            window_id,
             msg: EditorMsg::SetBodyOffsetZ(v),
         },
     )
@@ -100,7 +93,7 @@ pub fn view<'a>(
         muted,
         text_c,
         tokens,
-        address.clone(),
+        window_id,
         true,
     );
     let side_row = color_row(
@@ -109,7 +102,7 @@ pub fn view<'a>(
         muted,
         text_c,
         tokens,
-        address,
+        window_id,
         false,
     );
 
@@ -160,7 +153,7 @@ fn color_row<'a>(
     muted: iced::Color,
     text_c: iced::Color,
     tokens: &'a ThemeTokens,
-    address: EditorAddress,
+    window_id: iced::window::Id,
     is_top: bool,
 ) -> Element<'a, LibraryMessage> {
     let border = theme_ext::border_color(tokens);
@@ -190,17 +183,18 @@ fn color_row<'a>(
     let current_idx = presets.iter().position(|p| (*p) == rgba).unwrap_or(0);
     let next = presets[(current_idx + 1) % presets.len()];
 
-    let msg = if is_top {
-        EditorMsg::SetBodyTopColor(next)
-    } else {
-        EditorMsg::SetBodySideColor(next)
+    let msg_factory = move |c: [f32; 4]| -> EditorMsg {
+        if is_top {
+            EditorMsg::SetBodyTopColor(c)
+        } else {
+            EditorMsg::SetBodySideColor(c)
+        }
     };
 
     let cycle_btn = button(container(text("Cycle").size(10).color(text_c)).padding([3, 8]))
         .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path,
-            component_id: address.component_id,
-            msg,
+            window_id,
+            msg: msg_factory(next),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(

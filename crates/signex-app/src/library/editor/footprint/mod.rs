@@ -7,10 +7,6 @@
 //! stacked. All three right-column panes operate on the
 //! `Footprint::body_3d` / `Footprint::step_attachment` fields directly
 //! per `v0.9-library-refactor-plan.md` §11.
-//!
-//! WS-F2: post-WS-I the editor lives as a tab in the main window, so
-//! all messages route via `EditorAddress(library_path, component_id)`
-//! rather than an `iced::window::Id`.
 
 pub mod body3d;
 pub mod canvas;
@@ -69,6 +65,35 @@ fn view_two_d_editor<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    // Two-column split: 2D editor (left, FillPortion(2)) + body3d/3d/STEP
+    // pane (right, FillPortion(1)).
+    let left = view_two_d_editor(editor, tokens, window_id);
+    let right = view_three_d_panel(editor, tokens, window_id);
+
+    let split = row![
+        container(left)
+            .width(Length::FillPortion(2))
+            .height(Length::Fill),
+        Space::new().width(8),
+        container(right)
+            .width(Length::FillPortion(1))
+            .height(Length::Fill),
+    ]
+    .height(Length::Fill);
+
+    container(split)
+        .padding(0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+/// Left column — pad editor canvas + layer toolbar + footer.
+fn view_two_d_editor<'a>(
+    editor: &'a ComponentEditorState,
+    tokens: &'a ThemeTokens,
+    window_id: iced::window::Id,
+) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.bg);
     let grid = crate::styles::ti(tokens.text_secondary);
 
@@ -88,7 +113,7 @@ fn view_two_d_editor<'a>(
 fn view_three_d_panel<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    address: EditorAddress,
+    window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -106,13 +131,13 @@ fn view_three_d_panel<'a>(
         .into();
     };
 
-    let body_editor = body3d::view(&fp.body_3d, tokens, address.clone());
+    let body_editor = body3d::view(&fp.body_3d, tokens, window_id);
     let preview = container(preview3d::view(fp))
         .padding(0)
         .width(Length::Fill)
         .height(Length::FillPortion(2))
         .style(crate::styles::modal_card(tokens));
-    let step = step_attach::view(fp, tokens, address);
+    let step = step_attach::view(fp, tokens, window_id);
 
     column![
         text("Body 3D & STEP").size(13).color(text_c),
