@@ -201,6 +201,13 @@ pub struct ComponentEditorState {
     /// AI-stub PDF preview — populated after a successful PDF pick,
     /// dismissed on Apply / Cancel.
     pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
+    /// UI sidecar for the most recently uploaded 3D model — filename,
+    /// hash, byte size. The canonical [`signex_library::ModelRef`] on
+    /// `draft.pcb.model_3d` only carries (path, offset, rotation), so
+    /// this struct keeps the human metadata for the placeholder card
+    /// without forcing a re-read off disk on every draw. Cleared when
+    /// the user removes the model.
+    pub three_d_upload_info: Option<crate::library::editor::three_d::Model3dUploadInfo>,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -308,6 +315,7 @@ impl ComponentEditorState {
             symbol_doc,
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
             symbol_ai_preview: None,
+            three_d_upload_info: None,
         }
     }
 
@@ -330,6 +338,56 @@ impl ComponentEditorState {
             self.draft.shared.datasheet = None;
         } else {
             self.draft.shared.datasheet = Some(DatasheetRef::url(trimmed));
+        }
+    }
+
+    /// Set the datasheet to a hash-pinned PDF. Used by the WS3 upload
+    /// flow in `dispatch::library`.
+    pub fn set_datasheet_pinned(&mut self, hash: String, filename: String) {
+        self.draft.shared.datasheet = Some(DatasheetRef::HashPinned { hash, filename });
+    }
+
+    /// Switch the datasheet "mode" — preserves nothing across the
+    /// switch (the previous variant's payload is dropped). Phase 2 may
+    /// add per-mode buffers if reviewers ask.
+    pub fn set_datasheet_mode(&mut self, mode: crate::library::editor::datasheet_picker::DatasheetMode) {
+        use crate::library::editor::datasheet_picker::DatasheetMode;
+        match mode {
+            DatasheetMode::Url => match self.draft.shared.datasheet.as_ref() {
+                Some(DatasheetRef::Url { .. }) => { /* no-op */ }
+                _ => {
+                    // Drop the pinned variant; user must paste a URL.
+                    self.draft.shared.datasheet = None;
+                }
+            },
+            DatasheetMode::PinnedPdf => match self.draft.shared.datasheet.as_ref() {
+                Some(DatasheetRef::HashPinned { .. }) => { /* no-op */ }
+                _ => {
+                    // Drop the URL; user must upload a PDF.
+                    self.draft.shared.datasheet = None;
+                }
+            },
+        }
+    }
+
+    /// Set or clear the 3D model alongside its UI sidecar info. Pass
+    /// `None` to remove the model.
+    pub fn set_model_3d(
+        &mut self,
+        model: Option<(
+            signex_library::ModelRef,
+            crate::library::editor::three_d::Model3dUploadInfo,
+        )>,
+    ) {
+        match model {
+            Some((m, info)) => {
+                self.draft.pcb.model_3d = Some(m);
+                self.three_d_upload_info = Some(info);
+            }
+            None => {
+                self.draft.pcb.model_3d = None;
+                self.three_d_upload_info = None;
+            }
         }
     }
 }
@@ -413,6 +471,129 @@ mod tests {
         let labels: std::collections::HashSet<&str> =
             EditorTab::ORDER.iter().map(|t| t.label()).collect();
         assert_eq!(labels.len(), EditorTab::ORDER.len());
+    }
+
+    /// Construct a minimal editor state for the WS3 mutation tests.
+    fn fresh_editor_state() -> ComponentEditorState {
+        use signex_library::{
+            Component, InternalPn, PcbSide, SchematicSide, SharedSide, Version,
+        };
+        let head = Revision {
+            version: Version::new(0, 1),
+            state: LifecycleState::Draft,
+            created: chrono::Utc::now(),
+            author: String::new(),
+            message: String::new(),
+            schematic: SchematicSide::default(),
+            pcb: PcbSide::default(),
+            shared: SharedSide::default(),
+            content_hash: [0u8; 32],
+        };
+        let component = Component {
+            uuid: uuid::Uuid::now_v7(),
+            internal_pn: InternalPn::new("TEST_PN"),
+            head: head.version,
+            revisions: vec![head.clone()],
+        };
+        ComponentEditorState::from_head(PathBuf::from("MyLib.snxlib"), component, false)
+    }
+
+    #[test]
+    fn set_datasheet_pinned_replaces_url_variant() {
+        let mut state = fresh_editor_state();
+        state.set_datasheet_url("https://example.com/d.pdf".into());
+        state.set_datasheet_pinned("deadbeef".into(), "TLP281.pdf".into());
+        match state.draft.shared.datasheet.as_ref() {
+            Some(DatasheetRef::HashPinned { hash, filename }) => {
+                assert_eq!(hash, "deadbeef");
+                assert_eq!(filename, "TLP281.pdf");
+            }
+            other => panic!("expected HashPinned, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_datasheet_mode_url_drops_pinned() {
+        use crate::library::editor::datasheet_picker::DatasheetMode;
+        let mut state = fresh_editor_state();
+        state.set_datasheet_pinned("abc".into(), "x.pdf".into());
+        state.set_datasheet_mode(DatasheetMode::Url);
+        // Switching to URL with no URL-buffer drops the prior datasheet
+        // entirely — user must paste a fresh URL.
+        assert!(state.draft.shared.datasheet.is_none());
+    }
+
+    #[test]
+    fn set_datasheet_mode_pinned_drops_url() {
+        use crate::library::editor::datasheet_picker::DatasheetMode;
+        let mut state = fresh_editor_state();
+        state.set_datasheet_url("https://x.test/d.pdf".into());
+        state.set_datasheet_mode(DatasheetMode::PinnedPdf);
+        assert!(state.draft.shared.datasheet.is_none());
+    }
+
+    #[test]
+    fn set_datasheet_mode_idempotent_when_variant_matches() {
+        use crate::library::editor::datasheet_picker::DatasheetMode;
+        let mut state = fresh_editor_state();
+        state.set_datasheet_url("https://x.test/d.pdf".into());
+        state.set_datasheet_mode(DatasheetMode::Url);
+        // No-op — URL preserved.
+        match state.draft.shared.datasheet.as_ref() {
+            Some(DatasheetRef::Url { url }) => assert_eq!(url, "https://x.test/d.pdf"),
+            other => panic!("expected Url, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_model_3d_round_trips_path_and_info() {
+        use crate::library::editor::three_d::Model3dUploadInfo;
+        use signex_library::ModelRef;
+        let mut state = fresh_editor_state();
+        let info = Model3dUploadInfo {
+            filename: "fpv-cam.step".into(),
+            hash_hex: "ab".repeat(32),
+            size_bytes: 12_345,
+            extension: "step".into(),
+        };
+        let model = ModelRef {
+            path: info.storage_path(),
+            offset: [1.0, 2.0, 3.0],
+            rotation: [10.0, 20.0, 30.0],
+        };
+        state.set_model_3d(Some((model.clone(), info.clone())));
+
+        assert_eq!(state.draft.pcb.model_3d.as_ref(), Some(&model));
+        assert_eq!(state.three_d_upload_info.as_ref(), Some(&info));
+
+        // JSON serde round-trip on PcbSide preserves the ModelRef.
+        let json = serde_json::to_string(&state.draft.pcb).unwrap();
+        let back: signex_library::PcbSide = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.model_3d.as_ref(), Some(&model));
+    }
+
+    #[test]
+    fn set_model_3d_none_clears_both_sides() {
+        use crate::library::editor::three_d::Model3dUploadInfo;
+        use signex_library::ModelRef;
+        let mut state = fresh_editor_state();
+        let info = Model3dUploadInfo {
+            filename: "m.step".into(),
+            hash_hex: "0".repeat(64),
+            size_bytes: 1,
+            extension: "step".into(),
+        };
+        let model = ModelRef {
+            path: "shared/3d-models/dummy.step".into(),
+            offset: [0.0; 3],
+            rotation: [0.0; 3],
+        };
+        state.set_model_3d(Some((model, info)));
+        assert!(state.draft.pcb.model_3d.is_some());
+        assert!(state.three_d_upload_info.is_some());
+        state.set_model_3d(None);
+        assert!(state.draft.pcb.model_3d.is_none());
+        assert!(state.three_d_upload_info.is_none());
     }
 }
 

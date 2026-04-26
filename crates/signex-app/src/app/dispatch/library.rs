@@ -330,6 +330,52 @@ impl Signex {
                 }
                 return Task::none();
             }
+            EditorMsg::DatasheetUploadDialog => {
+                return Task::future(async move {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Pin Datasheet PDF")
+                        .add_filter("PDF", &["pdf"])
+                        .pick_file()
+                        .await;
+                    let resolved = match picked {
+                        Some(f) => {
+                            let bytes = f.read().await;
+                            let filename = f
+                                .file_name();
+                            Some((bytes, filename))
+                        }
+                        None => None,
+                    };
+                    Message::Library(crate::library::LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::DatasheetUploadResult(resolved),
+                    })
+                });
+            }
+            EditorMsg::Model3dUploadDialog => {
+                return Task::future(async move {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Upload 3D Model")
+                        .add_filter("3D Models", &["step", "stp", "wrl", "glb", "gltf"])
+                        .add_filter("STEP", &["step", "stp"])
+                        .add_filter("VRML", &["wrl"])
+                        .add_filter("glTF / GLB", &["glb", "gltf"])
+                        .pick_file()
+                        .await;
+                    let resolved = match picked {
+                        Some(f) => {
+                            let bytes = f.read().await;
+                            let filename = f.file_name();
+                            Some((bytes, filename))
+                        }
+                        None => None,
+                    };
+                    Message::Library(crate::library::LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::Model3dUploadResult(resolved),
+                    })
+                });
+            }
             _ => {}
         }
 
@@ -354,7 +400,8 @@ fn sync_symbol_sexpr(editor: &mut ComponentEditorState) {
 /// dispatcher's match arm stays small and the borrow scope is
 /// obvious.
 fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
-    use signex_library::{ParamValue, SupplierLink};
+    use crate::library::editor::three_d::{Model3dUploadInfo, hash_bytes_hex, is_supported_extension};
+    use signex_library::{ModelRef, ParamValue, SupplierLink};
     match msg {
         EditorMsg::SelectTab(tab) => editor.active_tab = tab,
         EditorMsg::OverviewSetDisplayName(s) => editor.display_internal_pn = s,
@@ -370,6 +417,80 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::OverviewSetDescription(s) => editor.draft.shared.description = s,
         EditorMsg::OverviewSetDatasheet(s) => editor.set_datasheet_url(s),
         EditorMsg::OverviewSetLifecycle(state) => editor.draft.state = state,
+        EditorMsg::DatasheetSetMode(mode) => editor.set_datasheet_mode(mode),
+        EditorMsg::DatasheetSetUrl(s) => editor.set_datasheet_url(s),
+        EditorMsg::DatasheetUploadResult(Some((bytes, filename))) => {
+            let hash = hash_bytes_hex(&bytes);
+            tracing::warn!(
+                target: "signex::library",
+                bytes = bytes.len(),
+                filename = %filename,
+                "datasheet PDF storage shipped in WS-A's local-git adapter — not wired to UI yet"
+            );
+            editor.set_datasheet_pinned(hash, filename);
+        }
+        EditorMsg::DatasheetUploadResult(None) => {
+            // User cancelled — no state change.
+        }
+        EditorMsg::Model3dUploadResult(Some((bytes, filename))) => {
+            let extension = filename
+                .rsplit_once('.')
+                .map(|(_, e)| e.to_ascii_lowercase())
+                .unwrap_or_default();
+            if !is_supported_extension(&extension) {
+                tracing::warn!(
+                    target: "signex::library",
+                    filename = %filename,
+                    extension = %extension,
+                    "rejected 3D upload — unsupported extension"
+                );
+                return;
+            }
+            let hash = hash_bytes_hex(&bytes);
+            let info = Model3dUploadInfo {
+                filename: filename.clone(),
+                hash_hex: hash.clone(),
+                size_bytes: bytes.len() as u64,
+                extension: extension.clone(),
+            };
+            let path = info.storage_path();
+            tracing::warn!(
+                target: "signex::library",
+                bytes = bytes.len(),
+                path = %path,
+                "3D model storage shipped in WS-A's local-git adapter — not wired to UI yet"
+            );
+            // Preserve any offset/rotation the user pre-set on the
+            // empty-path placeholder grid.
+            let prev_offset = editor.draft.pcb.model_3d.as_ref().map(|m| m.offset);
+            let prev_rotation = editor.draft.pcb.model_3d.as_ref().map(|m| m.rotation);
+            let model = ModelRef {
+                path,
+                offset: prev_offset.unwrap_or([0.0; 3]),
+                rotation: prev_rotation.unwrap_or([0.0; 3]),
+            };
+            editor.set_model_3d(Some((model, info)));
+        }
+        EditorMsg::Model3dUploadResult(None) => {
+            // User cancelled — no state change.
+        }
+        EditorMsg::Model3dRemove => {
+            editor.set_model_3d(None);
+        }
+        EditorMsg::Model3dSetOffset { axis, value } => {
+            if axis < 3
+                && let Some(m) = editor.draft.pcb.model_3d.as_mut()
+            {
+                m.offset[axis] = value;
+            }
+        }
+        EditorMsg::Model3dSetRotation { axis, value } => {
+            if axis < 3
+                && let Some(m) = editor.draft.pcb.model_3d.as_mut()
+            {
+                m.rotation[axis] = value;
+            }
+        }
         EditorMsg::ParamAddRow => {
             let key = format!("param_{}", editor.draft.shared.parameters.len() + 1);
             editor
@@ -518,6 +639,8 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         | EditorMsg::SymbolPickAiPdf
         | EditorMsg::SymbolPickedAiPdf(_)
         | EditorMsg::SymbolApplyAiPreview
-        | EditorMsg::SymbolDismissAiPreview => {}
+        | EditorMsg::SymbolDismissAiPreview
+        | EditorMsg::DatasheetUploadDialog
+        | EditorMsg::Model3dUploadDialog => {}
     }
 }
