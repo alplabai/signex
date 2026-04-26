@@ -40,6 +40,27 @@ regex = { workspace = true, optional = true }
 # Phase 1 WS-E: Tantivy search backend (gated behind `search-tantivy`).
 tantivy = { workspace = true, optional = true }
 
+# Local + git adapter (WS-A).
+git2 = { workspace = true, optional = true }
+walkdir = { version = "2", optional = true }
+
+# Database adapter (WS-B) + community distributor adapters (WS-C) — both use
+# the same `reqwest` blocking client. Adding `blocking` to the workspace
+# default features (json + rustls-tls).
+reqwest = { workspace = true, features = ["blocking"], optional = true }
+
+# Distributor adapters (WS-C).
+keyring = { workspace = true, optional = true }
+# DigiKey scaffolding uses oauth2's blocking sync HTTP integration.
+oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls", "reqwest-blocking"], optional = true }
+tokio = { workspace = true, optional = true }
+dirs = { version = "5", optional = true }
+
+# Logging — used to surface non-fatal errors (cache writes, token rotation,
+# mutex poison, etc.) without aborting the call. Light-weight and pure-Rust;
+# kept un-feature-gated so every adapter can `tracing::warn!` consistently.
+tracing = { workspace = true }
+
 [features]
 default = []
 # Enables `signex_library::ai_stub` — heuristic pinout extraction from

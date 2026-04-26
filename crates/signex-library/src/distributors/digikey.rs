@@ -203,10 +203,21 @@ impl DigiKeyAuth {
         // Rotate: persist any newly-issued refresh token. If the fallback
         // is in use we update it so subsequent calls within the same
         // process see the rotated value.
+        //
+        // L5: a failed keyring write means DigiKey has consumed the old
+        // refresh token but we couldn't store the new one — the next call
+        // would fail with an opaque auth error. Surface it via tracing so
+        // operators see *why* before debugging blind.
         if let Some(new_refresh) = token.refresh_token()
             && self.fallback_refresh.is_none()
         {
-            let _ = self.keyring.set_secret(new_refresh.secret());
+            if let Err(e) = self.keyring.set_secret(new_refresh.secret()) {
+                tracing::warn!(
+                    error = %e,
+                    "failed to persist rotated DigiKey refresh token to keyring; \
+                     next refresh will fail until the keyring is writable",
+                );
+            }
         }
         Ok(token.access_token().secret().clone())
     }
