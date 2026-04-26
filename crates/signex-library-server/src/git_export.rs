@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
-use signex_library::snxpart::{SnxPartFile, snxpart_filename, write_snxpart};
+use signex_library::snxpart::{SCHEMA_VERSION, SnxPartFile, snxpart_filename, write_snxpart};
 use uuid::Uuid;
 
 use crate::db::AppState;
@@ -31,17 +31,15 @@ pub async fn export_to_dir(state: &AppState, out: &Path) -> std::io::Result<()> 
         let comp_dir = out.join(comp.uuid.to_string());
         std::fs::create_dir_all(&comp_dir)?;
 
-        for rev in &comp.revisions {
-            let file = SnxPartFile {
-                schema: 1,
-                uuid: comp.uuid,
-                internal_pn: comp.internal_pn.clone(),
-                revision: rev.clone(),
-            };
-            let part_path = comp_dir.join(snxpart_filename(comp.uuid, rev.version));
-            write_snxpart(&part_path, &file)
-                .map_err(|e| std::io::Error::other(format!("snxpart: {e}")))?;
-        }
+        // Refactored .snxprt is one file per component (revisions live inside
+        // the embedded `Component`), so the per-revision loop collapses.
+        let file = SnxPartFile {
+            schema_version: SCHEMA_VERSION,
+            component: comp.clone(),
+        };
+        let part_path = comp_dir.join(snxpart_filename(comp.uuid));
+        write_snxpart(&part_path, &file)
+            .map_err(|e| std::io::Error::other(format!("snxpart: {e}")))?;
     }
     Ok(())
 }

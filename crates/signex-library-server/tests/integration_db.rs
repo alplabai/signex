@@ -12,11 +12,13 @@ use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryQuery};
 use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{Component, Revision};
-use signex_library::embed::{PcbSide, SchematicSide, SharedSide};
-use signex_library::identity::{InternalPn, Version};
+use signex_library::component::{Component, DatasheetRef, PinPadOverride, PlmReserved, Revision};
+use signex_library::identity::{ComponentClass, InternalPn, Version};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::PrimitiveRef;
 use signex_library::snxpart::{read_snxpart, snxpart_filename};
 use signex_library_server::db::AppState;
 use signex_library_server::git_export::export_to_dir;
@@ -42,20 +44,23 @@ fn ensure_test_token() {
 }
 
 fn fixture_revision(version: Version) -> Revision {
+    let lib = Uuid::now_v7();
     let mut rev = Revision {
         version,
         state: LifecycleState::Released,
         created: Utc::now(),
         author: "test@signex".into(),
         message: format!("rev {version}"),
-        schematic: SchematicSide::default(),
-        pcb: PcbSide::default(),
-        shared: SharedSide {
-            mpn: format!("MPN-{}", version),
-            manufacturer: "Acme".into(),
-            description: format!("part {version}"),
-            ..Default::default()
-        },
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+        sim_ref: None,
+        pin_map_overrides: Vec::<PinPadOverride>::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{version}")),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     };
     rev.refresh_content_hash();
@@ -66,6 +71,9 @@ fn fixture_component() -> Component {
     Component {
         uuid: Uuid::now_v7(),
         internal_pn: InternalPn::new("R0805_10k"),
+        class: ComponentClass::new("resistor"),
+        category: std::path::PathBuf::from("Passives/Resistors/0805"),
+        family: None,
         revisions: vec![fixture_revision(Version::new(1, 0))],
         head: Version::new(1, 0),
     }
@@ -234,17 +242,22 @@ async fn git_export_round_trip_three_components() {
     let dir = tempfile::tempdir().unwrap();
     export_to_dir(&state, dir.path()).await.unwrap();
 
-    // Assert .snxpart files exist in <uuid>/<uuid>-1.0.snxpart layout.
+    // Assert .snxprt files exist in <uuid>/<uuid>.snxprt layout (refactor:
+    // one file per component, all revisions live inside the embedded
+    // `Component`).
     for c in &comps {
         let part_path = dir
             .path()
             .join(c.uuid.to_string())
-            .join(snxpart_filename(c.uuid, c.revisions[0].version));
+            .join(snxpart_filename(c.uuid));
         assert!(part_path.exists(), "expected {part_path:?}");
         let part = read_snxpart(&part_path).unwrap();
-        assert_eq!(part.uuid, c.uuid);
-        assert_eq!(part.internal_pn, c.internal_pn);
-        assert_eq!(part.revision.content_hash, c.revisions[0].content_hash);
+        assert_eq!(part.component.uuid, c.uuid);
+        assert_eq!(part.component.internal_pn, c.internal_pn);
+        assert_eq!(
+            part.component.revisions[0].content_hash,
+            c.revisions[0].content_hash
+        );
     }
 
     // Manifest at the export root.
