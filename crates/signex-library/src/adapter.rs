@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use crate::component::{Component, Revision};
 use crate::identity::{ComponentId, Version};
 use crate::lifecycle::LifecycleState;
@@ -44,7 +46,7 @@ pub struct LibraryQuery {
 }
 
 /// One result row from a library query — header info, NOT full revisions.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentSummary {
     pub uuid: ComponentId,
     pub internal_pn: String,
