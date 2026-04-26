@@ -1,0 +1,254 @@
+//! Integration tests for the local + git library adapter (WS-A).
+//!
+//! Exercises the full lifecycle of a `.snxlib/` directory: init → save
+//! several revisions → reopen → search → lock contention → review
+//! workflow redirect.
+
+#![cfg(feature = "local-git")]
+
+use std::path::Path;
+
+use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
+use signex_library::adapters::local_git::LocalGitAdapter;
+use signex_library::component::Revision;
+use signex_library::embed::{FootprintBody, PcbSide, SchematicSide, SharedSide, SymbolBody};
+use signex_library::identity::Version;
+use signex_library::lifecycle::LifecycleState;
+use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
+use uuid::Uuid;
+
+fn empty_manifest(name: &str, review_required: bool) -> Manifest {
+    Manifest {
+        library: LibraryMeta {
+            name: name.into(),
+            library_id: Uuid::now_v7(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig {
+            review_required,
+            ..Default::default()
+        },
+        users: UsersConfig::default(),
+    }
+}
+
+fn fixture_revision(symbol_pins: usize, mpn: &str) -> Revision {
+    let mut pin_lines = String::new();
+    for n in 1..=symbol_pins {
+        pin_lines.push_str(&format!("(pin {n}) "));
+    }
+    Revision {
+        version: Version::new(0, 0), // overwritten by adapter
+        state: LifecycleState::Released,
+        created: chrono::Utc::now(),
+        author: "tester@example.com".into(),
+        message: "fixture".into(),
+        schematic: SchematicSide {
+            symbol: SymbolBody {
+                sexpr: format!("(symbol {pin_lines})"),
+            },
+            schematic_params: Default::default(),
+        },
+        pcb: PcbSide {
+            footprint: FootprintBody {
+                sexpr: "(footprint (pad 1) (pad 2))".into(),
+            },
+            ..Default::default()
+        },
+        shared: SharedSide {
+            mpn: mpn.into(),
+            manufacturer: "Acme".into(),
+            description: format!("test part for {mpn}"),
+            ..Default::default()
+        },
+        content_hash: [0u8; 32],
+    }
+}
+
+/// Initialising into a non-existent directory writes manifest + makes a git
+/// commit; reopening picks up the same manifest.
+#[test]
+fn init_open_round_trip_empty_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Empty.snxlib");
+    let manifest = empty_manifest("Empty", false);
+    let adapter = LocalGitAdapter::init(&root, manifest.clone()).unwrap();
+    assert_eq!(adapter.manifest().library.name, "Empty");
+    assert!(root.join("manifest.toml").exists());
+    assert!(root.join(".git").is_dir());
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&root).unwrap();
+    assert_eq!(
+        reopened.manifest().library.library_id,
+        manifest.library.library_id
+    );
+    let hits = reopened.search(&LibraryQuery::default()).unwrap();
+    assert!(hits.is_empty(), "fresh library has no parts");
+}
+
+/// Re-init over an existing manifest must not silently nuke history.
+#[test]
+fn init_refuses_existing_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("X.snxlib");
+    LocalGitAdapter::init(&root, empty_manifest("X", false)).unwrap();
+    let err = LocalGitAdapter::init(&root, empty_manifest("X", false)).unwrap_err();
+    assert!(matches!(err, LibraryError::Conflict(_)));
+}
+
+/// Saving 3 revisions of the same component:
+/// - v1.0: first save (mpn A, 2 pins).
+/// - v1.1: only mpn changes (still 2 pins) → minor bump.
+/// - v2.0: pin count grows to 3 → major bump.
+///
+/// Reopen the adapter and verify search returns the latest summary, history
+/// includes all three, and each on-disk file ends in the expected version.
+#[test]
+fn three_revisions_auto_bump_minor_then_major() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Hist.snxlib");
+    let adapter = LocalGitAdapter::init(&root, empty_manifest("Hist", false)).unwrap();
+    let id = Uuid::now_v7();
+
+    // First save → 1.0.
+    adapter
+        .save_revision(id, fixture_revision(2, "MPN-A"), "first release")
+        .unwrap();
+
+    // Reload the on-disk component, verify v1.0 was assigned.
+    let comp = adapter.get_component(id).unwrap();
+    assert_eq!(comp.head, Version::new(1, 0));
+    assert_eq!(comp.revisions.len(), 1);
+
+    // mpn-only change should be a minor bump.
+    let mut rev_b = fixture_revision(2, "MPN-B");
+    rev_b.message = "vendor swap".into();
+    adapter.save_revision(id, rev_b, "swap mpn").unwrap();
+    let comp = adapter.get_component(id).unwrap();
+    assert_eq!(comp.head, Version::new(1, 1));
+    assert_eq!(comp.revisions.len(), 2);
+
+    // Pin count change must trigger a major bump.
+    adapter
+        .save_revision(id, fixture_revision(3, "MPN-B"), "added pin")
+        .unwrap();
+    let comp = adapter.get_component(id).unwrap();
+    assert_eq!(comp.head, Version::new(2, 0));
+    assert_eq!(comp.revisions.len(), 3);
+
+    // Disk layout: parts/<uuid>-1.0.snxpart, ...-1.1.snxpart, ...-2.0.snxpart
+    for v in [Version::new(1, 0), Version::new(1, 1), Version::new(2, 0)] {
+        let path = root.join("parts").join(format!("{id}-{v}.snxpart"));
+        assert!(path.exists(), "expected on-disk file for {v}");
+    }
+
+    // Drop, reopen, search picks up the latest summary.
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&root).unwrap();
+    let hits = reopened
+        .search(&LibraryQuery {
+            text: Some("MPN".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(hits.len(), 1);
+    let hit = &hits[0];
+    assert_eq!(hit.head, Version::new(2, 0));
+    assert_eq!(hit.mpn, "MPN-B");
+}
+
+/// `try_lock` writes a lock file alongside the part. A second adapter handle
+/// pointing at the same `.snxlib/` then sees the lock and refuses.
+/// `release_lock` removes the file and lets the second handle succeed.
+#[test]
+fn lock_blocks_sibling_adapter_until_released() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Locks.snxlib");
+    let a = LocalGitAdapter::init(&root, empty_manifest("Locks", false)).unwrap();
+    let b = LocalGitAdapter::open(&root).unwrap();
+    let id = Uuid::now_v7();
+
+    a.try_lock(id, FieldSet::Symbol).unwrap();
+
+    let lock_file = root.join("parts").join(format!("{id}.symbol.lock"));
+    assert!(lock_file.exists(), "lock file lives under parts/");
+
+    let err = b.try_lock(id, FieldSet::Symbol).unwrap_err();
+    match err {
+        LibraryError::Locked { field_set, .. } => assert_eq!(field_set, "symbol"),
+        other => panic!("expected Locked, got {other:?}"),
+    }
+
+    // Locks for different field-sets must not collide.
+    a.try_lock(id, FieldSet::Footprint).unwrap();
+
+    a.release_lock(id, FieldSet::Symbol).unwrap();
+    assert!(!lock_file.exists());
+    b.try_lock(id, FieldSet::Symbol).unwrap();
+}
+
+/// `release_lock` on an absent file is `NotFound` — UI surfaces this as a
+/// "no-op" toast rather than an error dialog.
+#[test]
+fn release_lock_without_holder_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("LR.snxlib");
+    let a = LocalGitAdapter::init(&root, empty_manifest("LR", false)).unwrap();
+    let id = Uuid::now_v7();
+    let err = a.release_lock(id, FieldSet::Symbol).unwrap_err();
+    assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// With `workflow.review_required = true`, `save_revision` writes the new
+/// `.snxpart` on a `review/<uuid>` git branch instead of trunk. Trunk stays
+/// empty until a reviewer merges it.
+#[test]
+fn review_required_redirects_save_to_review_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Review.snxlib");
+    let adapter = LocalGitAdapter::init(&root, empty_manifest("Review", true)).unwrap();
+    let id = Uuid::now_v7();
+
+    adapter
+        .save_revision(id, fixture_revision(2, "MPN-A"), "submit for review")
+        .unwrap();
+
+    // The .snxpart should NOT be visible on trunk's working tree after save —
+    // the adapter must hop back to the trunk branch when review_required.
+    let on_disk = root.join("parts").join(format!("{id}-1.0.snxpart"));
+    assert!(
+        !on_disk.exists(),
+        "trunk should be clean after a review-only save"
+    );
+
+    // …but the review/<uuid> branch should hold the new revision.
+    let repo = git2::Repository::open(&root).unwrap();
+    let branch_name = format!("review/{id}");
+    let branch = repo
+        .find_branch(&branch_name, git2::BranchType::Local)
+        .expect("review branch should exist");
+    let commit = branch.get().peel_to_commit().unwrap();
+    let tree = commit.tree().unwrap();
+    let part_entry = tree
+        .get_path(Path::new(&format!("parts/{id}-1.0.snxpart")))
+        .expect("review branch tree contains the new revision");
+    assert_eq!(part_entry.kind(), Some(git2::ObjectType::Blob));
+}
+
+/// Even with `review_required`, `try_lock` / `release_lock` operate on the
+/// working tree directly (never branch-scoped) so two designers see each
+/// other's locks immediately.
+#[test]
+fn lock_files_ignore_review_branch_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("RL.snxlib");
+    let a = LocalGitAdapter::init(&root, empty_manifest("RL", true)).unwrap();
+    let b = LocalGitAdapter::open(&root).unwrap();
+    let id = Uuid::now_v7();
+
+    a.try_lock(id, FieldSet::Lifecycle).unwrap();
+    let err = b.try_lock(id, FieldSet::Lifecycle).unwrap_err();
+    assert!(matches!(err, LibraryError::Locked { .. }));
+}
