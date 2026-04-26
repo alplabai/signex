@@ -234,6 +234,27 @@ pub enum EditorMsg {
     /// `SchematicSide.symbol.sexpr`. Mirrors the LIBRARY_PLAN
     /// `SaveDraft` flow for non-modal edits.
     SymbolEdited(String),
+    // ── Footprint tab ───────────────────────────────────────
+    /// Click-add a pad at the given world position (mm). Pad number
+    /// is auto-incremented in the dispatcher.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag a pad to a new world position (mm).
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Hover position update — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` clears the selection.
+    FootprintSelectPad(Option<usize>),
+    /// Delete the currently-selected pad (Del key).
+    FootprintDeleteSelected,
+    /// Toggle a layer's visibility — the string is the Standard layer
+    /// name (e.g. "F.Cu"). Unknown names are silently ignored.
+    FootprintToggleLayer(String),
+    /// Toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+    /// Replace the entire footprint sexpr — used when external code
+    /// (e.g. paste, AI-stub) wants to atomically swap in a new
+    /// footprint. Re-parses into the editor state.
+    FootprintEdited(String),
 }
 
 /// Kind copy of [`super::editor::symbol::canvas::SymbolTool`] used

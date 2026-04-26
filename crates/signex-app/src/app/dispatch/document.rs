@@ -10,6 +10,34 @@ impl Signex {
                 self.finish_update()
             }
             Message::DeleteSelected => {
+                // Component Editor footprint tab has its own
+                // selection model and preempts Delete when a pad is
+                // currently selected. We check every open editor
+                // because the global keyboard listener doesn't carry
+                // a window-id; the first match (if any) wins. Falls
+                // through to the schematic delete when nothing
+                // matches.
+                let footprint_target = self
+                    .library
+                    .open_editors
+                    .iter()
+                    .find(|(_id, ed)| {
+                        ed.active_tab == crate::library::state::EditorTab::Footprint
+                            && ed
+                                .footprint_state
+                                .as_ref()
+                                .and_then(|s| s.selected_pad)
+                                .is_some()
+                    })
+                    .map(|(id, _)| *id);
+                if let Some(id) = footprint_target {
+                    return self.dispatch_library_message(
+                        crate::library::messages::LibraryMessage::EditorEvent {
+                            window_id: id,
+                            msg: crate::library::messages::EditorMsg::FootprintDeleteSelected,
+                        },
+                    );
+                }
                 self.handle_selection_delete_requested();
                 self.finish_update()
             }

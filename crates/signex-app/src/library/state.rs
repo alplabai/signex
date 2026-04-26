@@ -191,7 +191,7 @@ pub struct PickerState {
 }
 
 /// Component Editor window state — one per editor window.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ComponentEditorState {
     pub library_root: PathBuf,
     pub component_id: ComponentId,
@@ -238,6 +238,19 @@ pub struct ComponentEditorState {
     /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
     /// dispatcher arms.
     pub sim: super::editor::sim::SimTabState,
+    /// Footprint tab live editor state — lazily parsed from
+    /// `draft.pcb.footprint.sexpr` on first switch to the Footprint
+    /// tab. `None` until then so the parse cost stays out of the
+    /// editor-open critical path.
+    pub footprint_state:
+        Option<crate::library::editor::footprint::state::FootprintEditorState>,
+    /// Cache reused across redraws so `iced::widget::Canvas`'s draw
+    /// path only retessellates when the model actually changes.
+    /// Held in `OnceLock` because the canvas program needs a
+    /// borrowed reference; the lock is initialised once on the
+    /// first render and cleared on every model mutation.
+    #[allow(dead_code)]
+    pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -351,6 +364,36 @@ impl ComponentEditorState {
             symbol_ai_preview: None,
             three_d_upload_info: None,
             sim,
+            footprint_state: None,
+            footprint_canvas_cache: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// Lazily initialise the Footprint tab's in-memory state from
+    /// `draft.pcb.footprint.sexpr`. Idempotent — subsequent calls are
+    /// no-ops. The dispatcher calls this before any Footprint*
+    /// message handler runs so the rest of the dispatch logic can
+    /// assume `footprint_state` is `Some`.
+    pub fn ensure_footprint_state(&mut self) {
+        if self.footprint_state.is_none() {
+            let parsed = crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
+                &self.draft.pcb.footprint.sexpr,
+            );
+            self.footprint_state = Some(parsed);
+        }
+    }
+
+    /// Re-emit the in-memory footprint state into `draft.pcb.footprint.sexpr`.
+    /// Called after every Footprint mutation so Save Draft / Commit
+    /// pick up the latest pad layout. The render cache is cleared so
+    /// the next draw rebuilds the geometry against the fresh model.
+    pub fn flush_footprint_to_draft(&mut self) {
+        if let Some(fp) = &self.footprint_state {
+            self.draft.pcb.footprint.sexpr = fp.to_sexpr();
+            // Cache invalidates on mutation by replacing the OnceLock —
+            // cheaper than reaching for interior mutability through
+            // the lock.
+            self.footprint_canvas_cache = std::sync::OnceLock::new();
         }
     }
 

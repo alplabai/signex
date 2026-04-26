@@ -85,7 +85,7 @@ fn view_active_tab<'a>(
     let inner = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, window_id),
         EditorTab::Symbol => symbol::view(editor, tokens, window_id),
-        EditorTab::Footprint => footprint::view(tokens),
+        EditorTab::Footprint => footprint::view(editor, tokens, window_id),
         EditorTab::ThreeD => three_d::view(editor, tokens, window_id),
         EditorTab::Params => params::view(editor, tokens, window_id),
         EditorTab::Supply => supply::view(editor, tokens, window_id),
