@@ -192,13 +192,11 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
-    /// UI sidecar for the most recently uploaded 3D model — filename,
-    /// hash, byte size. The canonical [`signex_library::ModelRef`] on
-    /// `draft.pcb.model_3d` only carries (path, offset, rotation), so
-    /// this struct keeps the human metadata for the placeholder card
-    /// without forcing a re-read off disk on every draw. Cleared when
-    /// the user removes the model.
-    pub three_d_upload_info: Option<crate::library::editor::three_d::Model3dUploadInfo>,
+    /// Sim tab editor state — owns the multi-line `text_editor::Content`
+    /// for the SPICE body plus the cached pin-number list. Stays in
+    /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
+    /// dispatcher arms.
+    pub sim: super::editor::sim::SimTabState,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -289,9 +287,9 @@ impl ComponentEditorState {
             .unwrap_or_else(|| draft_starter(component.head));
         let internal_pn = component.internal_pn.as_str().to_string();
         let displayed_version = component.head;
-        let symbol_doc = super::editor::symbol::state::SymbolDoc::parse(
+        let sim = super::editor::sim::SimTabState::from_model(
+            head.shared.simulation.as_ref(),
             &head.schematic.symbol.sexpr,
-            internal_pn.as_str(),
         );
         Self {
             library_root,
@@ -303,7 +301,7 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            three_d_upload_info: None,
+            sim,
         }
     }
 

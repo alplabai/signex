@@ -344,8 +344,8 @@ fn sync_symbol_sexpr(editor: &mut ComponentEditorState) {
 /// dispatcher's match arm stays small and the borrow scope is
 /// obvious.
 fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
-    use crate::library::editor::three_d::{Model3dUploadInfo, hash_bytes_hex, is_supported_extension};
-    use signex_library::{ModelRef, ParamValue, SupplierLink};
+    use crate::library::editor::sim;
+    use signex_library::{ParamValue, SpiceModel, SupplierLink};
     match msg {
         EditorMsg::SelectTab(tab) => editor.active_tab = tab,
         EditorMsg::OverviewSetDisplayName(s) => editor.display_internal_pn = s,
@@ -517,66 +517,59 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
         }
-        // ── Footprint tab ─────────────────────────────────────
-        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut() {
-                fp.add_pad_at(x_mm, y_mm);
-            }
-            editor.flush_footprint_to_draft();
-        }
-        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut() {
-                fp.move_pad(idx, x_mm, y_mm);
-            }
-            editor.flush_footprint_to_draft();
-        }
-        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut() {
-                fp.cursor_mm = Some((x_mm, y_mm));
-            }
-        }
-        EditorMsg::FootprintSelectPad(idx) => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut() {
-                fp.selected_pad = idx;
+        EditorMsg::SimSetEnabled(on) => {
+            if on {
+                // Re-derive pin numbers from the current symbol body
+                // so a freshly-edited symbol always seeds the right
+                // skeleton when the toggle is flipped on.
+                let pins = sim::extract_pin_numbers(&editor.draft.schematic.symbol.sexpr);
+                editor.sim.pin_numbers = pins;
+                let body = editor.sim.body_text();
+                let pin_map = editor
+                    .draft
+                    .shared
+                    .simulation
+                    .as_ref()
+                    .map(|m| m.pin_map.clone())
+                    .unwrap_or_else(|| sim::seed_empty_pin_map(&editor.sim.pin_numbers));
+                editor.draft.shared.simulation = Some(SpiceModel { body, pin_map });
+            } else {
+                editor.draft.shared.simulation = None;
             }
         }
-        EditorMsg::FootprintDeleteSelected => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut()
-                && let Some(sel) = fp.selected_pad
-            {
-                fp.delete_pad(sel);
-            }
-            editor.flush_footprint_to_draft();
-        }
-        EditorMsg::FootprintToggleLayer(name) => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut()
-                && let Some(layer) =
-                    crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
-            {
-                fp.layer_visibility.toggle(layer);
+        EditorMsg::SimBodyAction(action) => {
+            editor.sim.body.perform(action);
+            // Mirror the new text back into the canonical model so a
+            // Save Draft / Commit captures the body verbatim.
+            if let Some(model) = editor.draft.shared.simulation.as_mut() {
+                model.body = editor.sim.body_text();
             }
         }
-        EditorMsg::FootprintToggleAutoFit => {
-            editor.ensure_footprint_state();
-            if let Some(fp) = editor.footprint_state.as_mut() {
-                fp.toggle_auto_fit();
+        EditorMsg::SimSetPinNode { pin_number, value } => {
+            // Toggling the model on is implicit — typing into a row
+            // means the user wants a model. Avoids surprise behaviour
+            // when the user starts mapping pins before checking the box.
+            if editor.draft.shared.simulation.is_none() {
+                editor.draft.shared.simulation = Some(SpiceModel {
+                    body: editor.sim.body_text(),
+                    pin_map: Default::default(),
+                });
+                if editor.sim.pin_numbers.is_empty() {
+                    editor.sim.pin_numbers =
+                        sim::extract_pin_numbers(&editor.draft.schematic.symbol.sexpr);
+                }
             }
-            editor.flush_footprint_to_draft();
+            if let Some(model) = editor.draft.shared.simulation.as_mut() {
+                model.pin_map = sim::apply_pin_node_edit(&model.pin_map, &pin_number, value);
+            }
         }
-        EditorMsg::FootprintEdited(sexpr) => {
-            editor.draft.pcb.footprint.sexpr = sexpr.clone();
-            editor.footprint_state = Some(
-                crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
-                    &sexpr,
-                ),
-            );
-            editor.footprint_canvas_cache = std::sync::OnceLock::new();
+        EditorMsg::SimChanged(model) => {
+            // Keep the live editor's body widget aligned with the
+            // canonical model — used by paste-from-template / reset.
+            if editor.sim.body_text() != model.body {
+                editor.sim.body = iced::widget::text_editor::Content::with_text(&model.body);
+            }
+            editor.draft.shared.simulation = Some(model);
         }
         // Already handled in the outer match.
         EditorMsg::CloseEditor
