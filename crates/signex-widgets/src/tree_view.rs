@@ -110,29 +110,29 @@ macro_rules! cached_svg_handle {
 }
 
 // Generic tree icons (SVG).
-const SVG_TREE_FOLDER:      &[u8] = include_bytes!("../assets/tree-icons/folder.svg");
+const SVG_TREE_FOLDER: &[u8] = include_bytes!("../assets/tree-icons/folder.svg");
 const SVG_TREE_FOLDER_OPEN: &[u8] = include_bytes!("../assets/tree-icons/folder_open.svg");
-const SVG_TREE_FILE:        &[u8] = include_bytes!("../assets/tree-icons/file.svg");
-const SVG_TREE_LIBRARY:     &[u8] = include_bytes!("../assets/tree-icons/library.svg");
-const SVG_TREE_COMPONENT:   &[u8] = include_bytes!("../assets/tree-icons/component.svg");
-const SVG_TREE_SHEET:       &[u8] = include_bytes!("../assets/tree-icons/sheet.svg");
-const SVG_TREE_NET:         &[u8] = include_bytes!("../assets/tree-icons/net.svg");
-const SVG_TREE_PIN:         &[u8] = include_bytes!("../assets/tree-icons/pin.svg");
-const SVG_TREE_PACKAGE:     &[u8] = include_bytes!("../assets/tree-icons/package.svg");
-const SVG_TREE_MATERIAL:    &[u8] = include_bytes!("../assets/tree-icons/material.svg");
-const SVG_TREE_CONFIG:      &[u8] = include_bytes!("../assets/tree-icons/config.svg");
-const SVG_TREE_MODEL:       &[u8] = include_bytes!("../assets/tree-icons/model.svg");
+const SVG_TREE_FILE: &[u8] = include_bytes!("../assets/tree-icons/file.svg");
+const SVG_TREE_LIBRARY: &[u8] = include_bytes!("../assets/tree-icons/library.svg");
+const SVG_TREE_COMPONENT: &[u8] = include_bytes!("../assets/tree-icons/component.svg");
+const SVG_TREE_SHEET: &[u8] = include_bytes!("../assets/tree-icons/sheet.svg");
+const SVG_TREE_NET: &[u8] = include_bytes!("../assets/tree-icons/net.svg");
+const SVG_TREE_PIN: &[u8] = include_bytes!("../assets/tree-icons/pin.svg");
+const SVG_TREE_PACKAGE: &[u8] = include_bytes!("../assets/tree-icons/package.svg");
+const SVG_TREE_MATERIAL: &[u8] = include_bytes!("../assets/tree-icons/material.svg");
+const SVG_TREE_CONFIG: &[u8] = include_bytes!("../assets/tree-icons/config.svg");
+const SVG_TREE_MODEL: &[u8] = include_bytes!("../assets/tree-icons/model.svg");
 
 // Signex native `.snx***` file family (SVG). Shared with the
 // installer's file-association artwork; update both paths together
 // if the asset layout changes.
-const SVG_SNX_PROJECT:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxprj.svg");
-const SVG_SNX_SCHEMATIC:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsch.svg");
-const SVG_SNX_PCB:        &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxpcb.svg");
-const SVG_SNX_FOOTPRINT:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxfpt.svg");
+const SVG_SNX_PROJECT: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxprj.svg");
+const SVG_SNX_SCHEMATIC: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsch.svg");
+const SVG_SNX_PCB: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxpcb.svg");
+const SVG_SNX_FOOTPRINT: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxfpt.svg");
 const SVG_SNX_SIMULATION: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsim.svg");
-const SVG_SNX_LIBRARY:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
-const SVG_SNX_SYMBOL:     &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
+const SVG_SNX_LIBRARY: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
+const SVG_SNX_SYMBOL: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
 
 impl TreeIcon {
     /// Return the cached SVG handle for this icon. Each variant
@@ -585,8 +585,7 @@ fn render_node(
     // Right-click → tree-scoped context menu. `mouse_area` wraps the
     // button so left-press still reaches the button's `on_press`; only
     // `on_right_press` is intercepted here.
-    let row_element = mouse_area(row_btn)
-        .on_right_press(TreeMsg::ContextMenu(path.to_vec()));
+    let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(path.to_vec()));
     col = col.push(row_element);
 
     // Expanded children
