@@ -205,10 +205,10 @@ impl DigiKeyAuth {
         // Rotate: persist any newly-issued refresh token. If the fallback
         // is in use we update it so subsequent calls within the same
         // process see the rotated value.
-        if let Some(new_refresh) = token.refresh_token() {
-            if self.fallback_refresh.is_none() {
-                let _ = self.keyring.set_secret(new_refresh.secret());
-            }
+        if let Some(new_refresh) = token.refresh_token()
+            && self.fallback_refresh.is_none()
+        {
+            let _ = self.keyring.set_secret(new_refresh.secret());
         }
         Ok(token.access_token().secret().clone())
     }
@@ -237,8 +237,10 @@ pub struct DigiKeyAdapter {
 enum AuthSource {
     /// Tests inject a precomputed access token directly.
     InlineAccessToken(String),
-    /// Production: refresh-token-grant on every call.
-    Oauth(DigiKeyAuth),
+    /// Production: refresh-token-grant on every call. Boxed because
+    /// `DigiKeyAuth` is much larger than `String` and clippy flags the
+    /// size disparity otherwise.
+    Oauth(Box<DigiKeyAuth>),
 }
 
 impl DigiKeyAdapter {
@@ -249,7 +251,7 @@ impl DigiKeyAdapter {
             cache,
             throttle: Mutex::new(None),
             http: build_http_client(),
-            auth: AuthSource::Oauth(auth),
+            auth: AuthSource::Oauth(Box::new(auth)),
         }
     }
 
@@ -283,7 +285,7 @@ impl DigiKeyAdapter {
             cache,
             throttle: Mutex::new(None),
             http: build_http_client(),
-            auth: AuthSource::Oauth(auth),
+            auth: AuthSource::Oauth(Box::new(auth)),
         }
     }
 
@@ -391,10 +393,10 @@ impl DistributorAdapter for DigiKeyAdapter {
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        if let Some(cache) = &self.cache {
-            if let Ok(Some(hit)) = cache.get(DIGIKEY_PROVIDER_KEY, mpn, DEFAULT_TTL) {
-                return Ok(vec![hit]);
-            }
+        if let Some(cache) = &self.cache
+            && let Ok(Some(hit)) = cache.get(DIGIKEY_PROVIDER_KEY, mpn, DEFAULT_TTL)
+        {
+            return Ok(vec![hit]);
         }
         let hits = self.search_by_keyword(mpn)?;
         if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {

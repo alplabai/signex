@@ -26,6 +26,10 @@ pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use component::{Component, Revision};
 pub use diff::{BumpKind, RevisionDiff, auto_bump_kind, diff_revisions};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
+#[cfg(feature = "distributors-community")]
+pub use distributors::{
+    DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
+};
 pub use embed::{
     AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue, PcbSide,
     PlmLink, PriceBreak, PricingSnapshot, SchematicSide, SharedSide, SharedSlice, SpiceModel,
