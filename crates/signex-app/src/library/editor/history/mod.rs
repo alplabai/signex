@@ -1,17 +1,10 @@
 //! History tab — list every revision of the component.
 //!
-//! Click a revision row to render a side-by-side visual diff into the
-//! lower pane. The diff data side comes from
-//! [`signex_library::diff::diff_revisions`]; this module owns the
-//! rendering: two miniature `Canvas` previews for symbol + footprint,
-//! plus a parameter / supplier / lifecycle row stack.
-//!
-//! Spec: LIBRARY_PLAN §9 "Visual Diff" — added pins green, removed red,
-//! moved pins blue arrow from old → new pad.
-
-pub mod diff_view;
-pub mod footprint_canvas;
-pub mod symbol_canvas;
+//! WS-E (refactor): the visual diff renderer (`diff_view`,
+//! `symbol_canvas`, `footprint_canvas`) operated against the old
+//! `SchematicSide` / `PcbSide` blobs. WS-F will rewire it against the
+//! resolved `Symbol` / `Footprint` primitives. Until then this tab
+//! shows the revision list + a textual placeholder for the diff card.
 
 use iced::widget::{Space, button, column, container, scrollable, text};
 use iced::{Border, Element, Length, Theme};
@@ -22,16 +15,13 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::ComponentEditorState;
 
-/// Render the History tab — revision list (top) + visual diff card
-/// (bottom). The diff card lights up once the user picks a revision
-/// row; until then it shows the empty-state hint.
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
     let revs = revision_list(editor, tokens, window_id);
-    let diff = diff_view::view(editor, tokens);
+    let diff = diff_placeholder(editor, tokens);
 
     container(
         column![
@@ -51,9 +41,6 @@ pub fn view<'a>(
     .into()
 }
 
-/// Top half of the tab — clickable rows for each revision in the
-/// component's history. Selection is mirrored back through
-/// [`EditorMsg::HistorySelectRevision`].
 fn revision_list<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
@@ -77,8 +64,8 @@ fn revision_list<'a>(
         ));
     }
     if editor.component.revisions.is_empty() {
-        rows =
-            rows.push(container(text("No revisions yet.").size(11).color(muted)).padding([10, 8]));
+        rows = rows
+            .push(container(text("No revisions yet.").size(11).color(muted)).padding([10, 8]));
     }
     rows.into()
 }
@@ -132,4 +119,43 @@ fn revision_row<'a>(
             }
         })
         .into()
+}
+
+/// WS-E placeholder for the visual diff card. WS-F will replace this
+/// with the side-by-side symbol + footprint canvases driven by
+/// `signex_library::diff::diff_revisions`.
+fn diff_placeholder<'a>(
+    editor: &'a ComponentEditorState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let summary: String = match editor.history_selected {
+        Some(version) => match editor
+            .component
+            .revisions
+            .iter()
+            .find(|r| r.version == version)
+        {
+            Some(rev) => format!(
+                "Selected v{} — {} (visual diff lands in WS-F).",
+                version, rev.message
+            ),
+            None => format!("v{} not found in history.", version),
+        },
+        None => "Pick a revision to see its diff against the previous revision.".to_string(),
+    };
+    container(
+        column![
+            text("Diff Preview — coming in WS-F")
+                .size(13)
+                .color(text_c),
+            Space::new().height(6),
+            text(summary).size(11).color(muted),
+        ]
+        .spacing(0),
+    )
+    .padding(14)
+    .style(crate::styles::modal_card(tokens))
+    .into()
 }
