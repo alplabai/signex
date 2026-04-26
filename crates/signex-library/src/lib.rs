@@ -16,7 +16,7 @@ pub mod snxpart;
 
 pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 pub use component::{Component, Revision};
-pub use diff::{RevisionDiff, diff_revisions};
+pub use diff::{BumpKind, RevisionDiff, auto_bump_kind, diff_revisions};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
 pub use embed::{
     AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue, PcbSide,

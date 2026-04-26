@@ -4679,6 +4679,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "kicad-parser",
  "serde",
  "serde_json",
  "sha2",
