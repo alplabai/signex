@@ -306,6 +306,33 @@ pub enum EditorMsg {
     /// (e.g. paste, AI-stub) wants to atomically swap in a new
     /// footprint. Re-parses into the editor state.
     FootprintEdited(String),
+    // ── WS-G: Pin Map ───────────────────────────────────────
+    /// Toolbar — clear every override and revert to default 1:1 by
+    /// pin/pad number equality.
+    PinMapAutoMatchByNumber,
+    /// Toolbar — match by pin name → pad number where unambiguous.
+    /// Stub: emits a tracing warn until the name-based heuristic
+    /// ships in a follow-up patch (see plan §12 task list).
+    PinMapAutoMatchByName,
+    /// Toolbar — drop every entry in `Revision::pin_map_overrides`.
+    /// Equivalent to `PinMapAutoMatchByNumber` for the v0.9 algorithm.
+    PinMapClearOverrides,
+    /// Click "[Override]" on a row — expands the inline editor for
+    /// that pin's row. Carries the symbol pin number.
+    PinMapOpenOverrideEdit(String),
+    /// Live edit of the override pad-number text input. The dispatcher
+    /// keeps the buffer on `PinMapTabState.override_buf`.
+    PinMapOverrideBufChanged { pin: String, value: String },
+    /// User clicked "Save" inside the inline editor — push a
+    /// `PinPadOverride` onto the active draft.
+    PinMapAddOverride { pin: String, pad: String },
+    /// User clicked "Cancel" inside the inline editor — discard the
+    /// edit buffer + collapse the row.
+    PinMapCancelOverrideEdit,
+    /// User clicked "Remove" on an overridden row — drops that pin's
+    /// entry from `Revision::pin_map_overrides`.
+    PinMapRemoveOverride { pin: String },
+    // ── /WS-G ───────────────────────────────────────────────
 }
 
 /// Kind copy of [`super::editor::symbol::canvas::SymbolTool`] used

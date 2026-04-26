@@ -315,6 +315,12 @@ pub struct ComponentEditorState {
     /// first render and cleared on every model mutation.
     #[allow(dead_code)]
     pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
+    // ── WS-G: Pin Map ────────────────────────────────────────
+    /// Pin Map tab transient UI state — which row's override editor
+    /// is open and the live edit buffer. Persists across re-renders;
+    /// reset by Save / Cancel / row collapse.
+    pub pin_map: PinMapTabState,
+    // ── /WS-G ────────────────────────────────────────────────
     /// True while the SubmitForReview modal is up. Switched on by
     /// the footer button and off by Cancel / successful submit.
     pub review_dialog_open: bool,
@@ -341,6 +347,8 @@ pub enum EditorTab {
     Symbol,
     Footprint,
     ThreeD,
+    // WS-G: Pin Map — sits between Footprint/3D and Params per plan §11.
+    PinMap,
     Params,
     Supply,
     Sim,
@@ -354,6 +362,8 @@ impl EditorTab {
         EditorTab::Symbol,
         EditorTab::Footprint,
         EditorTab::ThreeD,
+        // WS-G: Pin Map
+        EditorTab::PinMap,
         EditorTab::Params,
         EditorTab::Supply,
         EditorTab::Sim,
@@ -367,6 +377,8 @@ impl EditorTab {
             EditorTab::Symbol => "Symbol",
             EditorTab::Footprint => "Footprint",
             EditorTab::ThreeD => "3D",
+            // WS-G: Pin Map
+            EditorTab::PinMap => "Pin Map",
             EditorTab::Params => "Params",
             EditorTab::Supply => "Supply",
             EditorTab::Sim => "Sim",
@@ -375,6 +387,22 @@ impl EditorTab {
         }
     }
 }
+
+// ── WS-G: Pin Map ────────────────────────────────────────────────────
+/// Per-window UI state for the Pin Map tab. The Pin/Pad bindings
+/// themselves live on `Revision::pin_map_overrides`; this struct only
+/// holds the inline-editor flags (which row is being overridden, the
+/// live edit buffer for the new pad-number text-input).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PinMapTabState {
+    /// `Some(pin_number)` while the override editor is expanded for
+    /// that specific pin row. `None` when collapsed.
+    pub expanded_row: Option<String>,
+    /// Live buffer for the target pad-number text input. Cleared on
+    /// open / save / cancel.
+    pub override_buf: String,
+}
+// ── /WS-G ────────────────────────────────────────────────────────────
 
 /// Distributor APIs Settings panel state.
 ///
@@ -469,6 +497,8 @@ impl ComponentEditorState {
             sim,
             footprint_state: None,
             footprint_canvas_cache: std::sync::OnceLock::new(),
+            // WS-G: Pin Map
+            pin_map: PinMapTabState::default(),
             review_dialog_open: false,
             review_notes_buf: String::new(),
             review_status: None,
@@ -662,7 +692,11 @@ mod tests {
     fn editor_tab_order_starts_with_overview() {
         assert_eq!(EditorTab::ORDER[0], EditorTab::Overview);
         assert_eq!(EditorTab::ORDER.last(), Some(&EditorTab::WhereUsed));
-        assert_eq!(EditorTab::ORDER.len(), 9);
+        // WS-G: Pin Map adds a tab between Footprint/3D and Params, so
+        // the in-flight count is 10. WS-F drops ThreeD (absorbed into
+        // Footprint) bringing it back to 9 per plan §11.
+        assert_eq!(EditorTab::ORDER.len(), 10);
+        assert!(EditorTab::ORDER.contains(&EditorTab::PinMap));
     }
 
     #[test]
