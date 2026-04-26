@@ -19,6 +19,7 @@ use signex_library::{
     LibraryError, LibraryQuery, LifecycleState, LocalGitAdapter, ParamMap, Revision, SupplierLink,
     UseSite, Version, WhereUsedIndex,
 };
+use uuid::Uuid;
 
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
@@ -33,9 +34,11 @@ pub struct LibraryState {
     /// `Signex::ui_state.windows` so `view(id)` knows what to render.
     pub open_editors: HashMap<iced::window::Id, ComponentEditorState>,
     /// Reverse "where-used" index. Single-thread per the L3 invariant
-    /// in `signex-library/src/where_used.rs`. Refresh on project
-    /// open/save (Phase 2 wires the ingest path).
-    #[allow(dead_code)]
+    /// in `signex-library/src/where_used.rs`. Populated incrementally
+    /// via [`LibraryState::ingest_sheet`] whenever a sheet opens or
+    /// saves; the editor's Where-Used tab reads it via `where_used`.
+    /// TODO(v0.9-phase-3): wire signex-engine sheet-load events into
+    /// `ingest_sheet` so the index updates without explicit calls.
     pub where_used: WhereUsedIndex,
     /// Picker modal state — `None` while the modal is closed.
     pub picker: Option<PickerState>,
@@ -130,6 +133,28 @@ impl LibraryState {
             }
         }
         out
+    }
+
+    /// Replace the Where-Used entries for one `(project, sheet)` with
+    /// `refs` — `(component_uuid, instance_id, version_pinned)` tuples.
+    ///
+    /// Thin pass-through to [`WhereUsedIndex::ingest_sheet`]. Phase 1
+    /// callers are tests + the future sheet-load flow; Phase 3 wires
+    /// signex-engine open/save events directly so the index is live.
+    ///
+    /// TODO(v0.9-phase-3): wire signex-engine sheet-load events into
+    /// `ingest_sheet` so callers don't have to invoke this manually.
+    #[allow(dead_code)]
+    pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String, Version)]) {
+        self.where_used.ingest_sheet(project, sheet, refs);
+    }
+
+    /// Look up the use-sites for a component. Thin pass-through to
+    /// [`WhereUsedIndex::where_used`] — kept here so the editor view
+    /// only depends on `LibraryState` (not on `signex_library`'s
+    /// `WhereUsedIndex` directly).
+    pub fn where_used_for(&self, uuid: ComponentId, version: Option<Version>) -> Vec<UseSite> {
+        self.where_used.where_used(uuid, version)
     }
 }
 
@@ -605,6 +630,53 @@ mod tests {
         assert!(state.draft.pcb.model_3d.is_none());
         assert!(state.three_d_upload_info.is_none());
     }
+
+    #[test]
+    fn ingest_sheet_round_trips_through_state_to_where_used_index() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/sample.snxprj");
+        let sheet = PathBuf::from("/tmp/sample.snxprj/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v = Version::new(1, 2);
+
+        // Empty state → no sites.
+        assert!(state.where_used_for(uuid, None).is_empty());
+
+        // Ingest one ref under a project/sheet → one site visible.
+        state.ingest_sheet(&project, &sheet, &[(uuid, "U7".into(), v)]);
+        let sites = state.where_used_for(uuid, None);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].instance_id, "U7");
+        assert_eq!(sites[0].version_pinned, v);
+        assert_eq!(sites[0].sheet_path, sheet);
+
+        // Re-ingesting the same sheet with empty refs clears the entry.
+        state.ingest_sheet(&project, &sheet, &[]);
+        assert!(state.where_used_for(uuid, None).is_empty());
+    }
+
+    #[test]
+    fn where_used_for_filters_by_pinned_version_when_requested() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/p.snxprj");
+        let sheet = PathBuf::from("/tmp/p/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v1 = Version::new(1, 0);
+        let v2 = Version::new(1, 1);
+
+        state.ingest_sheet(
+            &project,
+            &sheet,
+            &[(uuid, "R1".into(), v1), (uuid, "R2".into(), v2)],
+        );
+
+        // Unfiltered → both instances.
+        assert_eq!(state.where_used_for(uuid, None).len(), 2);
+        // Filtered to v1 → just R1.
+        let v1_sites = state.where_used_for(uuid, Some(v1));
+        assert_eq!(v1_sites.len(), 1);
+        assert_eq!(v1_sites[0].instance_id, "R1");
+    }
 }
 
 /// Avoid an unused-import warning when the `local-git` feature is off
@@ -612,4 +684,4 @@ mod tests {
 /// always pulled in by the editor types). Phase 2 may flip this when
 /// the trait widens.
 #[allow(dead_code)]
-fn _types_used(_c: &Component, _r: &Revision, _u: &UseSite) {}
+fn _types_used(_c: &Component, _r: &Revision) {}

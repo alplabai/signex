@@ -69,6 +69,12 @@ pub enum LibraryMessage {
     /// `tracing::info!` and is intercepted by Phase 2 to actually
     /// open the project + select the instance.
     JumpToUseSite(UseSite),
+    /// No-op sink — used by the diff preview canvases in the History
+    /// tab. The canvases are read-only previews; their `()` event
+    /// stream maps through this variant so they slot into the
+    /// editor's `LibraryMessage` Element tree without dragging the
+    /// canvas crate's generic state into the editor view.
+    Noop,
 }
 
 /// Component Editor inner messages. Carried inside
