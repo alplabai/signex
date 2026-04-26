@@ -34,7 +34,7 @@ async fn list_components(
     if let Some(text) = q.text.as_deref() {
         let needle = text.to_lowercase();
         all.retain(|s| {
-            s.internal_pn.to_lowercase().contains(&needle)
+            s.internal_pn.as_str().to_lowercase().contains(&needle)
                 || s.mpn.to_lowercase().contains(&needle)
                 || s.description.to_lowercase().contains(&needle)
         });
