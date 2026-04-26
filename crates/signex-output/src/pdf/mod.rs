@@ -30,11 +30,15 @@ use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_va
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
 
+mod bookmarks;
 mod colour;
 mod font;
 pub(crate) mod layout;
 mod page;
+pub mod palette;
 mod surface;
+
+pub use palette::SchematicPalette;
 
 use crate::svg::{
     SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign,
@@ -73,17 +77,42 @@ pub struct PdfOptions {
     /// preview/export modal can pin this to a specific variant
     /// without mutating the project's active variant.
     pub variant: Option<String>,
-    /// Use Altium-style "physical structure" expansion: logical sheets
-    /// expand to physical sheets named after the variant.
+    /// Use Altium-style "physical structure" expansion: logical
+    /// sheets expand to physical sheets named after the variant.
+    /// Today it controls the title block's `${VARIANT}` token and
+    /// the bookmark sheet titles; full per-instance sheet rewriting
+    /// lands once signex-types models per-variant component data.
     pub use_physical_structure: bool,
+    /// Per-instance designator/net-label/port rewriting. Today
+    /// signex-types stores variants as `Vec<String>` only — there's
+    /// no per-variant override map — so these toggles are accepted
+    /// and round-tripped but produce no visible difference until
+    /// the schema gains per-variant fields. Promote the gating
+    /// inside `svg/mod.rs` (designators) and `bookmarks::format_*`
+    /// (labels/ports) one-liner-style when that lands.
     pub physical_designators: bool,
     pub physical_net_labels: bool,
     pub physical_ports: bool,
+    /// Drops `${SHEETNUMBER}` / `${DOCUMENTNUMBER}` from the title
+    /// block when off. Live today via `SubstitutionContext`.
     pub physical_sheet_number: bool,
     pub physical_document_number: bool,
     /// Render schematic chrome elements when set. False hides each
     /// element from the exported PDF. Mirrors Altium's "Schematics
     /// include" checklist verbatim.
+    ///
+    /// Live toggles (renderer honours the value):
+    ///   `include_no_erc_markers`, `include_notes`.
+    ///
+    /// Dormant toggles — KiCad's schema has no equivalent concept,
+    /// so these are stored for Altium-import parity but produce no
+    /// observable difference today: `include_parameter_sets` (Altium
+    /// parameter-set objects), `include_probes` (Altium probe
+    /// markers), `include_blankets` (Altium blanket regions),
+    /// `include_collapsed_notes` (Altium collapsed-note placards).
+    /// Toggle them ahead of time so that round-tripping an Altium
+    /// project keeps the user's intent — when the corresponding
+    /// signex-types feature lands the gating is one-line.
     pub include_no_erc_markers: bool,
     pub include_parameter_sets: bool,
     pub include_probes: bool,
@@ -105,6 +134,12 @@ pub struct PdfOptions {
     /// Emit a top-level "Components & Nets" pair of bookmarks instead
     /// of nesting them under the sheet they appear on.
     pub global_bookmarks: bool,
+    /// Schematic-element colour palette. The unified Print Preview
+    /// passes the active theme's `CanvasColors` here so PDF wires /
+    /// symbols / labels match the on-screen schematic. Default is
+    /// the classic eeschema palette so existing direct-export
+    /// callers keep their historical look.
+    pub palette: SchematicPalette,
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +240,7 @@ impl Default for PdfOptions {
             bookmark_ports: true,
             include_component_parameters: true,
             global_bookmarks: false,
+            palette: SchematicPalette::classic(),
         }
     }
 }
@@ -265,7 +301,22 @@ impl Exporter for PdfExporter {
             .map(|(i, &f)| (f, Ref::new(font_base + i as i32)))
             .collect();
 
-        pdf.catalog(catalog_id).pages(page_tree_id);
+        // Build bookmark items up front so the catalog can decide
+        // whether to write `/Outlines` and how many `Ref` slots to
+        // reserve for outline-item dicts.
+        let pending_bookmarks =
+            bookmarks::build_bookmarks(ctx, opts, &sheet_indices, page_w_mm, page_h_mm, page_h_pt);
+        let bookmarks_active = !pending_bookmarks.is_empty();
+        let outline_root_id = Ref::new(font_base + font_refs.len() as i32);
+        let bookmark_id_base = outline_root_id.get() + 1;
+
+        let mut catalog = pdf.catalog(catalog_id);
+        catalog.pages(page_tree_id);
+        if bookmarks_active {
+            catalog.outlines(outline_root_id);
+        }
+        catalog.finish();
+
         pdf.pages(page_tree_id)
             .kids(page_refs.iter().copied())
             .count(page_refs.len() as i32);
@@ -307,6 +358,19 @@ impl Exporter for PdfExporter {
             resources.finish();
 
             page.finish();
+        }
+
+        // Outline tree must be written after every page Ref has been
+        // allocated so /Dest entries can point at concrete pages.
+        if bookmarks_active {
+            bookmarks::emit_bookmarks(
+                &mut pdf,
+                &pending_bookmarks,
+                outline_root_id,
+                bookmark_id_base,
+                &page_refs,
+                opts,
+            );
         }
 
         let bytes = pdf.finish();
@@ -524,6 +588,10 @@ fn build_page_content(
                     sheet_number: sheet.sheet_number,
                     sheet_count: sheet.sheet_count,
                     signex_version: env!("CARGO_PKG_VERSION"),
+                    variant: opts.variant.clone(),
+                    physical_structure: opts.use_physical_structure,
+                    physical_sheet_number: opts.physical_sheet_number,
+                    physical_document_number: opts.physical_document_number,
                 };
 
                 let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
@@ -985,5 +1053,102 @@ mod tests {
         let out = PdfExporter.export(&ctx, &opts).expect("export");
         // PDF should be valid and include title block fields.
         assert!(out.bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn no_outlines_emitted_when_every_bookmark_toggle_is_off() {
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            include_component_parameters: false,
+            generate_nets_info: false,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        let bytes = String::from_utf8_lossy(&out.bytes);
+        assert!(
+            !bytes.contains("/Outlines"),
+            "should not write /Outlines when no toggles are set"
+        );
+    }
+
+    #[test]
+    fn page_paper_colour_is_filled_in_content_stream() {
+        // The first element in svg_ctx is the paper-fill rect with
+        // palette.paper as fill colour; the PDF content stream
+        // emits an "re" operator immediately followed by an "f" or
+        // "B" fill operator.
+        let ctx = sample_ctx(1);
+        let opts = PdfOptions {
+            palette: SchematicPalette {
+                paper: (0.10, 0.20, 0.30),
+                ..SchematicPalette::classic()
+            },
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        let bytes = String::from_utf8_lossy(&out.bytes);
+        // 0.10 0.20 0.30 RG / rg should appear when we emit the
+        // page-fill rect — the surface uses `RG` for stroke colour
+        // and `rg` for fill colour.
+        assert!(
+            bytes.contains("0.1 0.2 0.3 rg") || bytes.contains("0.10 0.20 0.30 rg"),
+            "expected paper fill colour in PDF stream; got slice: {}",
+            &bytes[..bytes.len().min(2000)]
+        );
+    }
+
+    #[test]
+    fn outlines_emitted_when_components_toggle_is_on() {
+        use signex_types::schematic::{Point, Symbol};
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        let mut sheet = empty_sheet();
+        sheet.symbols.push(Symbol {
+            uuid: Uuid::nil(),
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            position: Point::new(50.0, 50.0),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: vec![],
+            pin_uuids: HashMap::new(),
+            instances: vec![],
+            footprint: String::new(),
+            datasheet: String::new(),
+        });
+        let mut ctx = sample_ctx(1);
+        ctx.sheets[0].schematic = sheet;
+
+        let opts = PdfOptions {
+            include_component_parameters: true,
+            ..Default::default()
+        };
+        let out = PdfExporter.export(&ctx, &opts).expect("export");
+        let bytes = String::from_utf8_lossy(&out.bytes);
+        assert!(
+            bytes.contains("/Outlines"),
+            "catalog should reference /Outlines"
+        );
+        assert!(
+            bytes.contains("/Title"),
+            "outline items should carry /Title entries"
+        );
+        // Sheet bookmark + Components group + R1 → at least 3 outline items.
+        let title_count = bytes.matches("/Title").count();
+        assert!(title_count >= 3, "got only {title_count} /Title entries");
     }
 }
