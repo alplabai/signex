@@ -445,21 +445,12 @@ fn checkout_branch(repo: &git2::Repository, branch: &str) -> Result<(), LibraryE
 
 /// Decide whether moving from `prev` to `next` is a major bump.
 ///
-/// Phase 1 heuristic: count the number of `(pin ` tokens in the symbol body
-/// and treat any change in that count as a pin-map break. Cosmetic edits and
-/// pure metadata swaps (mpn, parameters, etc.) stay minor. WS-D promotes this
-/// to a real S-expression diff once the diff engine ships.
+/// Backed by WS-D's `auto_bump_kind` over a real S-expression diff: any pin
+/// add/remove/move on the symbol or pad add/remove on the footprint promotes
+/// to major; cosmetic edits and pure metadata swaps stay minor.
 fn requires_major_bump(prev: &Revision, next: &Revision) -> bool {
-    pin_count(&prev.schematic.symbol.sexpr) != pin_count(&next.schematic.symbol.sexpr)
-        || pad_count(&prev.pcb.footprint.sexpr) != pad_count(&next.pcb.footprint.sexpr)
-}
-
-fn pin_count(sexpr: &str) -> usize {
-    sexpr.matches("(pin ").count()
-}
-
-fn pad_count(sexpr: &str) -> usize {
-    sexpr.matches("(pad ").count()
+    use crate::diff::{auto_bump_kind, diff_revisions, BumpKind};
+    matches!(auto_bump_kind(&diff_revisions(prev, next)), BumpKind::Major)
 }
 
 #[cfg(test)]
@@ -472,9 +463,4 @@ mod tests {
         assert_eq!(field_set_slug(FieldSet::SharedParams), "shared_params");
     }
 
-    #[test]
-    fn pin_count_matches_kicad_tokens() {
-        let s = "(symbol (pin 1) (pin 2) (pin 3))";
-        assert_eq!(pin_count(s), 3);
-    }
 }
