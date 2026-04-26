@@ -3,6 +3,7 @@
 //! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
 
 pub mod adapter;
+pub mod adapters;
 pub mod component;
 pub mod diff;
 pub mod distributor;
@@ -33,6 +34,9 @@ pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, W
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 pub use where_used::{UseSite, WhereUsedIndex};
+
+#[cfg(feature = "local-git")]
+pub use adapters::local_git::LocalGitAdapter;
 
 #[cfg(test)]
 mod smoke {
