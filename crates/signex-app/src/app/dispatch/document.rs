@@ -234,6 +234,10 @@ impl Signex {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.quality = q;
                 }
+                // Visual toggle — preview rasterises at the new
+                // DPI so the user sees the picker reflected
+                // immediately rather than only at next export.
+                self.handle_print_preview_rerender();
                 self.finish_update()
             }
             Message::PrintPreviewSetBookmarkZoom(z) => {
