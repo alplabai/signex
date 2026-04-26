@@ -402,8 +402,17 @@ impl TantivySearchIndex {
         if clauses.is_empty() {
             return Ok(Box::new(AllQuery));
         }
+        // H6: collapse the `len == 1` and `into_iter().next().unwrap()` pair
+        // into a single shape that is panic-free even if a future refactor
+        // drops the length guard. `unwrap_or_else` returns the same `AllQuery`
+        // sentinel as the empty branch above, preserving observable behaviour
+        // while making the invariant invisible-to-the-compiler explicit.
         if clauses.len() == 1 {
-            let (_, q) = clauses.into_iter().next().unwrap();
+            let q = clauses
+                .into_iter()
+                .next()
+                .map(|(_, q)| q)
+                .unwrap_or_else(|| Box::new(AllQuery));
             return Ok(q);
         }
         Ok(Box::new(BooleanQuery::new(clauses)))
