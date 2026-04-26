@@ -6,6 +6,8 @@ pub mod adapter;
 pub mod component;
 pub mod diff;
 pub mod distributor;
+#[cfg(feature = "distributors-community")]
+pub mod distributors;
 pub mod embed;
 pub mod hash;
 pub mod identity;
