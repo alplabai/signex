@@ -83,7 +83,7 @@ fn view_active_tab<'a>(
         EditorTab::ThreeD => three_d::view(tokens),
         EditorTab::Params => params::view(editor, tokens, window_id),
         EditorTab::Supply => supply::view(editor, tokens, window_id),
-        EditorTab::Sim => sim::view(tokens),
+        EditorTab::Sim => sim::view(editor, tokens, window_id),
         EditorTab::History => history::view(editor, tokens, window_id),
         EditorTab::WhereUsed => where_used::view(editor, tokens),
     };

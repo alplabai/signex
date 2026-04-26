@@ -192,6 +192,11 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
+    /// Sim tab editor state — owns the multi-line `text_editor::Content`
+    /// for the SPICE body plus the cached pin-number list. Stays in
+    /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
+    /// dispatcher arms.
+    pub sim: super::editor::sim::SimTabState,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -282,6 +287,10 @@ impl ComponentEditorState {
             .unwrap_or_else(|| draft_starter(component.head));
         let internal_pn = component.internal_pn.as_str().to_string();
         let displayed_version = component.head;
+        let sim = super::editor::sim::SimTabState::from_model(
+            head.shared.simulation.as_ref(),
+            &head.schematic.symbol.sexpr,
+        );
         Self {
             library_root,
             component_id: component.uuid,
@@ -292,6 +301,7 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
+            sim,
         }
     }
 
