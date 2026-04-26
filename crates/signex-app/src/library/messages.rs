@@ -92,6 +92,16 @@ pub enum EditorMsg {
     /// Open the review-request UI (only when
     /// `manifest.workflow.review_required`).
     SubmitForReview,
+    /// Reviewer-notes text input changed in the SubmitForReview modal.
+    SubmitForReviewNotesChanged(String),
+    /// User clicked Submit in the SubmitForReview modal.
+    SubmitForReviewConfirm,
+    /// User clicked Cancel / X / Esc in the SubmitForReview modal.
+    SubmitForReviewCancel,
+    /// Async result of the SubmitForReview save_revision call. `Ok(())`
+    /// closes the modal; `Err(reason)` keeps it open with `reason`
+    /// surfaced in the footer status line.
+    SubmitForReviewResult(Result<(), String>),
     /// Footer "Where Used" — switches the active editor tab.
     OpenWhereUsedTab,
     /// User dismissed the editor (Close X or Ctrl+W).
@@ -297,12 +307,28 @@ pub enum PickerMsg {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum SettingsMsg {
-    /// "Connect" button on the DigiKey row — kicks off OAuth (stub).
+    /// "Connect" button on the DigiKey row — kicks off the OAuth2
+    /// PKCE flow on a worker thread.
     DigiKeyConnect,
+    /// User clicked Cancel while the DigiKey OAuth flow was in flight.
+    /// Cancels the listener thread + clears the "Waiting for browser…"
+    /// status.
+    DigiKeyCancel,
+    /// Async resolution of the DigiKey OAuth flow. Carries a tuple of
+    /// (account_label, error_reason) where exactly one is `Some`.
+    /// `Cancelled` is represented as `(None, None)`.
+    DigiKeyOAuthResult {
+        connected_label: Option<String>,
+        error: Option<String>,
+    },
     /// Mouser API-key input changed.
     MouserApiKeyChanged(String),
-    /// Mouser "Test" button.
+    /// Mouser "Test" button — kicks off a real Mouser request on a
+    /// worker thread.
     MouserTest,
+    /// Async result of the Mouser test path. `Ok(())` triggers a
+    /// keyring writeback + ✓ status; `Err(reason)` shows the failure.
+    MouserTestResult(Result<(), String>),
     /// Move a distributor up in the order-of-preference list.
     PreferenceUp(DistributorSource),
     /// Move a distributor down in the order-of-preference list.
