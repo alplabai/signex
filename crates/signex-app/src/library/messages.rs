@@ -28,14 +28,34 @@ pub enum LibraryMessage {
     OpenLibraryAt(Option<PathBuf>),
     /// Close an open library (drops the adapter + every editor window
     /// pointing at it). No-op when the path isn't currently open.
+    /// If any editor against this library has unsaved drafts, the
+    /// dispatcher diverts to [`LibraryMessage::ConfirmCloseLibrary`]
+    /// instead and shows the dirty-editors prompt.
     CloseLibrary(PathBuf),
+    /// Show the close-library confirmation modal carrying the list of
+    /// dirty editor windows the user is about to lose.
+    ConfirmCloseLibrary {
+        library_path: PathBuf,
+        dirty_editors: Vec<iced::window::Id>,
+    },
+    /// User picked Save All / Discard All / Cancel in the close prompt.
+    CloseLibraryConfirm(CloseLibraryChoice),
     /// File ▸ Library ▸ Place Component… — opens the picker modal.
     OpenPicker,
     /// Dismiss the picker modal (Esc / X / outside click).
     ClosePicker,
-    /// File ▸ Library ▸ New Component… — opens a brand-new editor
-    /// window seeded with a draft revision.
+    /// File ▸ Library ▸ New Component… — opens the New Component modal.
     NewComponent,
+    /// Dismiss the New Component modal without creating anything.
+    CloseNewComponent,
+    /// Live-edit of the New Component modal's "Internal PN" field.
+    NewComponentSetInternalPn(String),
+    /// User picked a target library in the modal — index into
+    /// `LibraryState.open_libraries`.
+    NewComponentSetLibrary(usize),
+    /// Submit the New Component modal — creates the draft, persists,
+    /// opens the editor on the new component.
+    NewComponentSubmit,
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
     ToggleLibraryTreeNode(usize),
@@ -75,6 +95,27 @@ pub enum LibraryMessage {
     /// editor's `LibraryMessage` Element tree without dragging the
     /// canvas crate's generic state into the editor view.
     Noop,
+    /// Picker → user clicked Place. Embeds the library component into
+    /// the active schematic engine. The dispatcher resolves the
+    /// `(library_id, content_hash)` source-ref and emits the engine
+    /// command (Phase 3 wires the actual `Command::PlaceLibrarySymbol`
+    /// once the schematic side gains the embed/source-ref slots).
+    PlaceLibraryComponent {
+        library_path: PathBuf,
+        component_id: ComponentId,
+        version: Version,
+    },
+}
+
+/// User choice from the close-library confirmation modal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseLibraryChoice {
+    /// Save every dirty draft, then close the library.
+    SaveAll,
+    /// Drop every dirty draft, then close the library.
+    DiscardAll,
+    /// Dismiss the modal; the library stays open.
+    Cancel,
 }
 
 /// Component Editor inner messages. Carried inside

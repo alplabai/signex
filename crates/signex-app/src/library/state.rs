@@ -49,6 +49,12 @@ pub struct LibraryState {
     pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
+    /// "New Component" modal state — `None` while closed.
+    #[allow(dead_code)]
+    pub new_component: Option<NewComponentState>,
+    /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
+    #[allow(dead_code)]
+    pub close_library_confirm: Option<CloseLibraryConfirmState>,
 }
 
 impl Default for LibraryState {
@@ -68,6 +74,8 @@ impl Default for LibraryState {
             settings,
             expanded: Vec::new(),
             panel_search: String::new(),
+            new_component: None,
+            close_library_confirm: None,
         }
     }
 }
@@ -163,6 +171,33 @@ impl LibraryState {
     pub fn where_used_for(&self, uuid: ComponentId, version: Option<Version>) -> Vec<UseSite> {
         self.where_used.where_used(uuid, version)
     }
+
+    /// Editor windows currently pointing at `root` that have unsaved
+    /// edits. Used by the close-library dirty prompt.
+    #[allow(dead_code)]
+    pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<iced::window::Id> {
+        let mut ids: Vec<iced::window::Id> = self
+            .open_editors
+            .iter()
+            .filter(|(_, st)| st.library_root == root && st.dirty)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// Existing editor window for `(library_root, component_id)`, if
+    /// any. Caller can `gain_focus(id)` instead of opening a duplicate.
+    #[allow(dead_code)]
+    pub fn editor_for(
+        &self,
+        library_root: &Path,
+        component_id: ComponentId,
+    ) -> Option<iced::window::Id> {
+        self.open_editors.iter().find_map(|(id, st)| {
+            (st.library_root == library_root && st.component_id == component_id).then_some(*id)
+        })
+    }
 }
 
 /// One open `*.snxlib/` directory.
@@ -195,6 +230,28 @@ pub struct PickerState {
     /// Currently-selected component (path + summary). `None` until
     /// the user clicks a row.
     pub selected: Option<(PathBuf, ComponentSummary)>,
+}
+
+/// "New Component" modal state — collected before the dispatcher
+/// creates a draft revision and opens the Component Editor.
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct NewComponentState {
+    /// Live edit buffer for the Internal PN field.
+    pub internal_pn: String,
+    /// Selected target library — index into `open_libraries`.
+    pub library_idx: Option<usize>,
+    /// Latest validation error.
+    pub error: Option<String>,
+}
+
+/// "Close Library — Unsaved Drafts" confirmation modal state.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct CloseLibraryConfirmState {
+    pub library_path: PathBuf,
+    pub library_name: String,
+    pub dirty_editors: Vec<iced::window::Id>,
 }
 
 /// Component Editor window state — one per editor window.
@@ -237,6 +294,10 @@ pub struct ComponentEditorState {
     /// True while the SubmitForReview save_revision call is in
     /// flight. Disables the Submit button to avoid double-submits.
     pub review_in_flight: bool,
+    /// True if any inline form edit has been applied since the last
+    /// Save Draft / Commit. Drives the close_library dirty prompt.
+    #[allow(dead_code)]
+    pub dirty: bool,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -367,6 +428,48 @@ impl ComponentEditorState {
             review_notes_buf: String::new(),
             review_status: None,
             review_in_flight: false,
+            dirty: false,
+        }
+    }
+
+    /// Mark the editor as having unsaved changes. Called from any
+    /// inline form edit. `Save Draft` / `Commit` clear the flag.
+    #[allow(dead_code)]
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Clear the dirty flag — called from `save_draft` / `commit`.
+    #[allow(dead_code)]
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Lazily initialise the Footprint tab's in-memory state from
+    /// `draft.pcb.footprint.sexpr`. Idempotent — subsequent calls are
+    /// no-ops. The dispatcher calls this before any Footprint*
+    /// message handler runs so the rest of the dispatch logic can
+    /// assume `footprint_state` is `Some`.
+    pub fn ensure_footprint_state(&mut self) {
+        if self.footprint_state.is_none() {
+            let parsed = crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
+                &self.draft.pcb.footprint.sexpr,
+            );
+            self.footprint_state = Some(parsed);
+        }
+    }
+
+    /// Re-emit the in-memory footprint state into `draft.pcb.footprint.sexpr`.
+    /// Called after every Footprint mutation so Save Draft / Commit
+    /// pick up the latest pad layout. The render cache is cleared so
+    /// the next draw rebuilds the geometry against the fresh model.
+    pub fn flush_footprint_to_draft(&mut self) {
+        if let Some(fp) = &self.footprint_state {
+            self.draft.pcb.footprint.sexpr = fp.to_sexpr();
+            // Cache invalidates on mutation by replacing the OnceLock —
+            // cheaper than reaching for interior mutability through
+            // the lock.
+            self.footprint_canvas_cache = std::sync::OnceLock::new();
         }
     }
 
