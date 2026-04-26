@@ -19,6 +19,7 @@ use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions, PdfScale};
 
 #[derive(Debug, Clone, Copy)]
@@ -111,16 +112,35 @@ impl SvgRenderContext {
         );
 
         let mut elements = Vec::new();
+        let palette = &opts.palette;
 
-        // Always render the physical sheet boundary first so both preview
-        // and PDF clearly reference the document page area.
+        // Page background — fill the whole MediaBox with the
+        // schematic paper colour so the PDF page matches what the
+        // user sees on the canvas. Light themes still hit white,
+        // dark themes hit their paper tone instead of relying on
+        // the reader's white default.
+        elements.push(rect_path(
+            0.0,
+            0.0,
+            width,
+            height,
+            SvgStyle {
+                stroke_rgb: None,
+                fill_rgb: Some(palette.paper),
+                stroke_width: 0.0,
+            },
+        ));
+
+        // Always render the physical sheet boundary on top of the
+        // page-fill so both preview and PDF clearly reference the
+        // document page area.
         elements.push(rect_path(
             0.5,
             0.5,
             (width - 1.0).max(1.0),
             (height - 1.0).max(1.0),
             SvgStyle {
-                stroke_rgb: Some((0.78, 0.78, 0.78)),
+                stroke_rgb: Some(palette.sheet_border),
                 fill_rgb: None,
                 stroke_width: 1.0,
             },
@@ -139,7 +159,7 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(wire.end.x), xform.px_y(wire.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some(wire_colour()),
+                    stroke_rgb: Some(palette.wire),
                     fill_rgb: None,
                     stroke_width: (stroke_mm * xform.mm_to_unit) as f32,
                 },
@@ -153,7 +173,7 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some(bus_colour()),
+                    stroke_rgb: Some(palette.bus),
                     fill_rgb: None,
                     stroke_width: (0.3 * xform.mm_to_unit) as f32,
                 },
@@ -173,7 +193,7 @@ impl SvgRenderContext {
                     )),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some(entry_colour()),
+                    stroke_rgb: Some(palette.bus_entry),
                     fill_rgb: None,
                     stroke_width: (0.2 * xform.mm_to_unit) as f32,
                 },
@@ -192,8 +212,8 @@ impl SvgRenderContext {
                 side,
                 side,
                 SvgStyle {
-                    stroke_rgb: Some(junction_colour()),
-                    fill_rgb: Some(junction_colour()),
+                    stroke_rgb: Some(palette.junction),
+                    fill_rgb: Some(palette.junction),
                     stroke_width: 0.8,
                 },
             ));
@@ -209,7 +229,7 @@ impl SvgRenderContext {
                 let cx = xform.x(nc.position.x);
                 let cy = xform.px_y(nc.position.y);
                 let style = SvgStyle {
-                    stroke_rgb: Some(no_connect_colour()),
+                    stroke_rgb: Some(palette.no_connect),
                     fill_rgb: None,
                     stroke_width: 0.8,
                 };
@@ -252,7 +272,7 @@ impl SvgRenderContext {
                 align,
                 v_align,
                 rotation_deg: rot,
-                fill_rgb: label_colour(label.label_type),
+                fill_rgb: label_colour(label.label_type, palette),
                 text: normalize_standard_text(&label.text),
             });
         }
@@ -270,7 +290,7 @@ impl SvgRenderContext {
                     align: halign_to_svg(note.justify_h),
                     v_align: valign_to_svg(note.justify_v),
                     rotation_deg: note.rotation as f32,
-                    fill_rgb: (0.14, 0.14, 0.14),
+                    fill_rgb: palette.note_text,
                     text: normalize_standard_text(&note.text),
                 });
             }
@@ -287,7 +307,7 @@ impl SvgRenderContext {
                 w,
                 h,
                 SvgStyle {
-                    stroke_rgb: Some((0.25, 0.25, 0.25)),
+                    stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
                     stroke_width: ((if child.stroke_width > 0.0 {
                         child.stroke_width
@@ -305,7 +325,7 @@ impl SvgRenderContext {
                     align: SvgTextAlign::Left,
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
-                    fill_rgb: (0.18, 0.18, 0.18),
+                    fill_rgb: palette.child_sheet_text,
                     text: normalize_standard_text(&child.name),
                 });
             }
@@ -318,14 +338,14 @@ impl SvgRenderContext {
                     align: SvgTextAlign::Left,
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
-                    fill_rgb: (0.25, 0.25, 0.25),
+                    fill_rgb: palette.child_sheet_stroke,
                     text: normalize_standard_text(&child.filename),
                 });
             }
         }
 
         for drawing in &sheet.schematic.drawings {
-            push_sch_drawing_path(&mut elements, drawing, &xform);
+            push_sch_drawing_path(&mut elements, drawing, &xform, palette);
         }
 
         // Full symbol body graphics from library definitions.
@@ -353,7 +373,7 @@ impl SvgRenderContext {
                 .values()
                 .find(|ls| ls.id == sym.lib_id)
             {
-                push_symbol_lib_graphics(&mut elements, sym, lib, &xform);
+                push_symbol_lib_graphics(&mut elements, sym, lib, &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
@@ -361,6 +381,7 @@ impl SvgRenderContext {
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
+                    palette,
                 );
             } else {
                 // Fallback if library is missing.
@@ -370,7 +391,7 @@ impl SvgRenderContext {
                     (10.0 * xform.mm_to_unit) as f32,
                     (10.0 * xform.mm_to_unit) as f32,
                     SvgStyle {
-                        stroke_rgb: Some((0.22, 0.22, 0.22)),
+                        stroke_rgb: Some(palette.symbol_stroke),
                         fill_rgb: None,
                         stroke_width: (0.1 * xform.mm_to_unit) as f32,
                     },
@@ -393,7 +414,7 @@ impl SvgRenderContext {
                     align: halign_to_svg(field_effective_style(ref_text, sym).1),
                     v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
                     rotation_deg: field_effective_style(ref_text, sym).0 as f32,
-                    fill_rgb: (0.1, 0.1, 0.1),
+                    fill_rgb: palette.reference,
                     text: normalize_standard_text_with_ctx(&sym.reference, &symbol_eval_ctx),
                 });
             }
@@ -410,7 +431,7 @@ impl SvgRenderContext {
                     align: halign_to_svg(field_effective_style(val_text, sym).1),
                     v_align: valign_to_svg(field_effective_style(val_text, sym).2),
                     rotation_deg: field_effective_style(val_text, sym).0 as f32,
-                    fill_rgb: (0.2, 0.2, 0.2),
+                    fill_rgb: palette.value,
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
@@ -500,7 +521,14 @@ impl SvgRenderContext {
     }
 }
 
-fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform: &PageTransform) {
+fn push_sch_drawing_path(
+    out: &mut Vec<SvgElement>,
+    drawing: &SchDrawing,
+    xform: &PageTransform,
+    palette: &SchematicPalette,
+) {
+    let stroke = palette.symbol_stroke;
+    let body_fill = palette.symbol_fill;
     match drawing {
         SchDrawing::Line {
             start, end, width, ..
@@ -512,7 +540,7 @@ fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform:
                     SvgPathCommand::LineTo(pt(xform.x(end.x), xform.px_y(end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some((0.2, 0.2, 0.2)),
+                    stroke_rgb: Some(stroke),
                     fill_rgb: None,
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
                 },
@@ -536,8 +564,8 @@ fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform:
                 x2 - x1,
                 y2 - y1,
                 SvgStyle {
-                    stroke_rgb: Some((0.2, 0.2, 0.2)),
-                    fill_rgb: fill_to_rgb(*fill, (0.2, 0.2, 0.2)),
+                    stroke_rgb: Some(stroke),
+                    fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
                 },
             ));
@@ -566,8 +594,8 @@ fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform:
             out.push(SvgElement::Path {
                 commands: cmds,
                 style: SvgStyle {
-                    stroke_rgb: Some((0.2, 0.2, 0.2)),
-                    fill_rgb: fill_to_rgb(*fill, (0.2, 0.2, 0.2)),
+                    stroke_rgb: Some(stroke),
+                    fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
                 },
             });
@@ -587,8 +615,8 @@ fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform:
                 cy,
                 r,
                 SvgStyle {
-                    stroke_rgb: Some((0.2, 0.2, 0.2)),
-                    fill_rgb: fill_to_rgb(*fill, (0.2, 0.2, 0.2)),
+                    stroke_rgb: Some(stroke),
+                    fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
                 },
             ));
@@ -613,8 +641,8 @@ fn push_sch_drawing_path(out: &mut Vec<SvgElement>, drawing: &SchDrawing, xform:
             out.push(SvgElement::Path {
                 commands: cmds,
                 style: SvgStyle {
-                    stroke_rgb: Some((0.2, 0.2, 0.2)),
-                    fill_rgb: fill_to_rgb(*fill, (0.2, 0.2, 0.2)),
+                    stroke_rgb: Some(stroke),
+                    fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
                 },
             });
@@ -627,6 +655,7 @@ fn push_symbol_lib_graphics(
     sym: &Symbol,
     lib: &LibSymbol,
     xform: &PageTransform,
+    palette: &SchematicPalette,
 ) {
     for lg in &lib.graphics {
         if lg.unit != 0 && lg.unit != sym.unit {
@@ -662,8 +691,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -691,8 +720,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -710,8 +739,8 @@ fn push_symbol_lib_graphics(
                     xform.px_y(wcy),
                     r,
                     SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 ));
@@ -737,8 +766,8 @@ fn push_symbol_lib_graphics(
                 out.push(SvgElement::Path {
                     commands: cmds,
                     style: SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -765,8 +794,8 @@ fn push_symbol_lib_graphics(
                         ),
                     ],
                     style: SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 });
@@ -817,8 +846,8 @@ fn push_symbol_lib_graphics(
                     x2 - x1,
                     y2 - y1,
                     SvgStyle {
-                        stroke_rgb: Some(symbol_stroke_colour()),
-                        fill_rgb: fill_to_rgb(*fill, symbol_stroke_colour()),
+                        stroke_rgb: Some(palette.symbol_stroke),
+                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
                         stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
                     },
                 ));
@@ -849,6 +878,7 @@ fn push_symbol_pins(
     xform: &PageTransform,
     eval_ctx: &ExpressionEvalContext<'_>,
     pin_net_names: Option<&HashMap<String, String>>,
+    palette: &SchematicPalette,
 ) {
     for lp in &lib.pins {
         if lp.unit != 0 && lp.unit != sym.unit {
@@ -884,7 +914,7 @@ fn push_symbol_pins(
                 SvgPathCommand::LineTo(pt(xform.x(wx2), xform.px_y(wy2))),
             ],
             style: SvgStyle {
-                stroke_rgb: Some(symbol_stroke_colour()),
+                stroke_rgb: Some(palette.pin),
                 fill_rgb: None,
                 stroke_width: (0.15 * xform.mm_to_unit) as f32,
             },
@@ -967,7 +997,7 @@ fn push_symbol_pins(
                 align,
                 v_align,
                 rotation_deg,
-                fill_rgb: (0.12, 0.12, 0.12),
+                fill_rgb: palette.pin,
                 text: normalize_standard_text_with_ctx(&pin.name, &pin_eval_ctx),
             });
         }
@@ -996,7 +1026,7 @@ fn push_symbol_pins(
                 align,
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
-                fill_rgb: (0.1, 0.1, 0.1),
+                fill_rgb: palette.field_text,
                 text: normalize_standard_text_with_ctx(&pin.number, &pin_eval_ctx),
             });
         }
@@ -1209,11 +1239,19 @@ fn to_svg_path_d(commands: &[SvgPathCommand]) -> String {
     out.trim().to_string()
 }
 
-fn fill_to_rgb(fill: FillType, stroke: (f32, f32, f32)) -> Option<(f32, f32, f32)> {
+fn fill_to_rgb(
+    fill: FillType,
+    stroke: (f32, f32, f32),
+    body_fill: (f32, f32, f32),
+) -> Option<(f32, f32, f32)> {
     match fill {
         FillType::None => None,
+        // Standard's "Outline" fill means "fill with the stroke
+        // colour" — produces solid-shape glyphs like the anode
+        // triangle of a diode. "Background" fills with the
+        // theme's symbol body tint.
         FillType::Outline => Some(stroke),
-        FillType::Background => Some(symbol_fill_colour()),
+        FillType::Background => Some(body_fill),
     }
 }
 
@@ -1227,41 +1265,13 @@ fn label_size_pt(font_size_mm: f64, mm_to_unit: f64, scale: &PdfScale) -> f32 {
     }
 }
 
-fn label_colour(label_type: LabelType) -> (f32, f32, f32) {
+fn label_colour(label_type: LabelType, palette: &SchematicPalette) -> (f32, f32, f32) {
     match label_type {
-        LabelType::Net => (0.08, 0.08, 0.08),
-        LabelType::Global => (0.14, 0.24, 0.52),
-        LabelType::Hierarchical => (0.28, 0.2, 0.06),
-        LabelType::Power => (0.42, 0.09, 0.09),
+        LabelType::Net => palette.net_label,
+        LabelType::Global => palette.global_label,
+        LabelType::Hierarchical => palette.hier_label,
+        LabelType::Power => palette.power_label,
     }
-}
-
-fn wire_colour() -> (f32, f32, f32) {
-    (0.09, 0.21, 0.66)
-}
-
-fn bus_colour() -> (f32, f32, f32) {
-    (0.1, 0.2, 0.56)
-}
-
-fn entry_colour() -> (f32, f32, f32) {
-    (0.12, 0.24, 0.62)
-}
-
-fn junction_colour() -> (f32, f32, f32) {
-    (0.03, 0.56, 0.2)
-}
-
-fn no_connect_colour() -> (f32, f32, f32) {
-    (0.78, 0.18, 0.18)
-}
-
-fn symbol_stroke_colour() -> (f32, f32, f32) {
-    (0.53, 0.41, 0.04)
-}
-
-fn symbol_fill_colour() -> (f32, f32, f32) {
-    (0.93, 0.93, 0.56)
 }
 
 fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {

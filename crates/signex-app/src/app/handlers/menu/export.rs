@@ -542,7 +542,8 @@ impl Signex {
 
         // Derive page size and orientation from the active schematic document
         // so the preview matches the actual sheet dimensions rather than
-        // always defaulting to A4 landscape.
+        // always defaulting to A4 landscape. Pull the palette from the
+        // active theme so PDF wires / symbols / labels match the canvas.
         let pdf_opts = {
             let paper_str = ctx
                 .sheets
@@ -551,18 +552,26 @@ impl Signex {
                 .unwrap_or("A4");
             let page_size = PageSize::from_standard_str(paper_str);
             let orientation = PageSize::default_orientation_for_standard(paper_str);
+            let palette = signex_output::SchematicPalette::from(
+                &signex_types::theme::canvas_colors(self.ui_state.theme_id),
+            );
             PdfOptions {
                 page_size,
                 orientation,
+                palette,
                 ..PdfOptions::default()
             }
         };
 
+        // Open-modal default quality is Medium — same value seeded
+        // into `PreviewState.quality` below, so the very first
+        // rasterisation matches what the picker shows.
+        let initial_quality = crate::app::state::PdfQuality::Medium300;
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
                 pdf: pdf_opts.clone(),
-                dpi: 96.0,
+                dpi: initial_quality.preview_dpi(),
             },
         );
 
@@ -623,7 +632,7 @@ impl Signex {
             panning: None,
             selected_files,
             variants,
-            quality: crate::app::state::PdfQuality::Medium300,
+            quality: initial_quality,
         });
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
@@ -735,11 +744,7 @@ impl Signex {
                 // PdfQuality enum, the exporter wants a DPI float.
                 // Mapping happens here so the rest of the options
                 // struct can stay authoritative.
-                options.dpi = match preview.quality {
-                    crate::app::state::PdfQuality::Draft72 => 72.0,
-                    crate::app::state::PdfQuality::Medium300 => 300.0,
-                    crate::app::state::PdfQuality::High600 => 600.0,
-                };
+                options.dpi = preview.quality.export_dpi();
                 (options, preview.selected_files.clone())
             }
             None => return Some(Task::none()),
@@ -794,8 +799,12 @@ impl Signex {
     }
 
     fn rerasterize_print_preview(&mut self) {
-        let (pdf_opts, file_filter) = match self.document_state.preview.as_ref() {
-            Some(preview) => (preview.pdf_options.clone(), preview.selected_files.clone()),
+        let (pdf_opts, file_filter, preview_dpi) = match self.document_state.preview.as_ref() {
+            Some(preview) => (
+                preview.pdf_options.clone(),
+                preview.selected_files.clone(),
+                preview.quality.preview_dpi(),
+            ),
             None => return,
         };
 
@@ -826,7 +835,7 @@ impl Signex {
             &ctx,
             &PreviewOptions {
                 pdf: pdf_opts.clone(),
-                dpi: 96.0,
+                dpi: preview_dpi,
             },
         );
 

@@ -27,7 +27,7 @@ pub use bom::{
 pub use netlist::{NetlistExporter, NetlistOptions, NetlistOutput};
 pub use pdf::{
     ColourMode, Margins, Orientation, PageRange, PageSize, PdfExporter, PdfOptions, PdfOutput,
-    PdfScale,
+    PdfScale, SchematicPalette,
 };
 pub use preview::{PreviewOptions, PreviewPage, PreviewRasterizer};
 pub use substitution::{SubstitutionContext, resolve};
