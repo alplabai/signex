@@ -31,7 +31,9 @@ url = { version = "2", features = ["serde"] }
 
 # Phase 1 / WS-C — gated behind `distributors-community`.
 keyring = { workspace = true, optional = true }
-oauth2 = { workspace = true, optional = true }
+# Workspace `oauth2` defaults are fine, but DigiKey scaffolding uses the
+# blocking sync HTTP client integration which needs `reqwest-blocking`.
+oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls", "reqwest-blocking"], optional = true }
 # Workspace `reqwest` is async-only; LCSC/JLCPCB/Mouser adapters call
 # blocking variants from a sync `DistributorAdapter` impl, so we re-declare
 # here with the `blocking` feature enabled (additive: same major + crates.io).
