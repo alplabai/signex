@@ -165,9 +165,41 @@ pub struct ProjectPanelInfo {
     pub pcb_file_dirty: bool,
     pub pcb_file_active: bool,
     pub sheets: Vec<SheetInfo>,
+    // WS-H: Project tree library wiring
+    /// Component libraries attached to this project (v0.9 WS-H).
+    /// One entry per `Project::libraries[]`. Drives the `Libraries`
+    /// branch under the project root — each entry renders as a
+    /// `*.snxlib` leaf and (when the library is mounted) a small
+    /// list of cached components beneath it.
+    pub libraries: Vec<LibraryNodeInfo>,
     /// Whether this is the currently-active project — drives accent
     /// styling on the root node.
     pub is_active: bool,
+}
+
+/// Per-library bundle for the project tree's `Libraries` group.
+/// Mirrors what [`signex_types::project::LibraryEntry`] records on
+/// the project, plus a few cached fields the panel pulls from
+/// `LibraryState` so the view doesn't have to re-borrow the library
+/// crate at render time.
+#[derive(Debug, Clone)]
+pub struct LibraryNodeInfo {
+    /// Display name for the row — `<entry.path>.file_name()` or the
+    /// manifest name when the library is mounted.
+    pub display_name: String,
+    /// Absolute on-disk root of the library — feeds the right-click
+    /// menu (Add New ▸ Component pre-selects this path).
+    pub root: std::path::PathBuf,
+    /// Cached component summaries — empty until the library is
+    /// expanded for the first time. Each tuple is
+    /// `(internal_pn_text, mpn_text)` so the leaf row can render an
+    /// Altium-style "PN — MPN" label without pulling the full
+    /// `ComponentSummary`.
+    pub components: Vec<(String, String)>,
+    /// True when the library is currently mounted in
+    /// `LibraryState::open_libraries`. Drives the icon tint —
+    /// unmounted entries render in the muted "missing" colour.
+    pub mounted: bool,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -876,15 +908,48 @@ fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> T
         );
     }
 
-    let lib_count = if fallback_lib_count > 0 {
-        fallback_lib_count
+    // WS-H: Project tree library wiring — render each
+    // `Project::libraries[i]` entry as a `*.snxlib` leaf with the
+    // mounted library's component summaries listed beneath it.
+    // When the project carries no library entries we fall back to
+    // the legacy "N symbols loaded" placeholder so single-project
+    // workspaces without a library still get a useful tree row.
+    let lib_children: Vec<TreeNode> = if project.libraries.is_empty() {
+        let lib_count = if fallback_lib_count > 0 {
+            fallback_lib_count
+        } else {
+            project.sheets.iter().map(|s| s.sym_count).sum::<usize>()
+        };
+        vec![TreeNode::leaf(
+            format!("{} symbols loaded", lib_count),
+            TreeIcon::Component,
+        )]
     } else {
-        project.sheets.iter().map(|s| s.sym_count).sum::<usize>()
+        project
+            .libraries
+            .iter()
+            .map(|lib| {
+                let component_children: Vec<TreeNode> = lib
+                    .components
+                    .iter()
+                    .map(|(pn, mpn)| {
+                        let label = if mpn.is_empty() {
+                            pn.clone()
+                        } else {
+                            format!("{pn} — {mpn}")
+                        };
+                        TreeNode::leaf(label, TreeIcon::Component)
+                    })
+                    .collect();
+                let display = format!("{}.snxlib", lib.display_name);
+                if component_children.is_empty() {
+                    TreeNode::leaf(display, TreeIcon::SnxLibrary)
+                } else {
+                    TreeNode::branch(display, TreeIcon::SnxLibrary, component_children)
+                }
+            })
+            .collect()
     };
-    let lib_children = vec![TreeNode::leaf(
-        format!("{} symbols loaded", lib_count),
-        TreeIcon::Component,
-    )];
 
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
     settings.expanded = false;

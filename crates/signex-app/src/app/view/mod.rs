@@ -234,18 +234,30 @@ impl Signex {
         // - Container branch: everything else with children (Source
         //   Documents, Libraries, Settings folders).
         let is_root = path.len() == 1;
-        let is_openable_leaf = matches!(
-            node.icon,
-            TreeIcon::Schematic
-                | TreeIcon::Pcb
-                | TreeIcon::SnxSchematic
-                | TreeIcon::SnxPcb
-                | TreeIcon::SnxProject
-                | TreeIcon::SnxFootprint
-                | TreeIcon::SnxSimulation
-                | TreeIcon::SnxLibrary
-                | TreeIcon::SnxSymbol
-        );
+        // WS-H: Project tree library wiring — library leaves under
+        // the project tree's `Libraries ▸ <name>.snxlib` row carry
+        // the SnxLibrary icon. The right-click menu for those rows
+        // is the Altium-style `Add New ▸ Component / Symbol /
+        // Footprint` submenu, which is distinct from the per-file
+        // open / explore / rename menu the rest of the openable-
+        // leaf icons share. Detect by icon + tree depth — the
+        // Libraries group sits two levels below the project root
+        // (path = `[project_idx, libraries_idx, library_idx]`).
+        let is_library_node =
+            matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
+        let is_openable_leaf = !is_library_node
+            && matches!(
+                node.icon,
+                TreeIcon::Schematic
+                    | TreeIcon::Pcb
+                    | TreeIcon::SnxSchematic
+                    | TreeIcon::SnxPcb
+                    | TreeIcon::SnxProject
+                    | TreeIcon::SnxFootprint
+                    | TreeIcon::SnxSimulation
+                    | TreeIcon::SnxLibrary
+                    | TreeIcon::SnxSymbol
+            );
         let is_container = !node.children.is_empty();
         let has_schematic = panel_ctx.has_schematic;
 
@@ -325,6 +337,46 @@ impl Signex {
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Share...", Some("v3.4")));
             items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
+        } else if is_library_node {
+            // WS-H: Project tree library wiring — library node menu.
+            // Mirrors Altium's "Add New ▸" submenu on a library
+            // node: Component is wired to the existing New Component
+            // modal flow; Symbol / Footprint are stubs until single-
+            // primitive editors land in v0.9.x. The basic
+            // expand / refresh actions stay so empty libraries are
+            // still navigable from the keyboard.
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Component",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Symbol",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Footprint",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
+            ));
+            items.push(self.ctx_menu_sep());
+            let toggle_label = if node.expanded { "Collapse" } else { "Expand" };
+            items.push(self.ctx_menu_item_msg(
+                None,
+                toggle_label,
+                "",
+                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
         } else if is_openable_leaf {
             // Sheet / PCB / library leaf — Altium's per-document menu.
             // Rows match the Altium screenshot exactly: Open + Explore
@@ -951,20 +1003,26 @@ impl Signex {
             }
             ContextSubmenu::AddNewToProject => {
                 // Altium parity: this is the master "Add New" picker for
-                // the active project. Every entry below requires
-                // project-file write support (v0.9) plus the matching
-                // editor — none ship in v0.8, so each row carries a
-                // version badge and stays disabled. The submenu still
-                // launches so the user can see what's coming.
+                // the active project. v0.9 WS-H wires the Component
+                // Library row through to `commands::create_library`.
+                // The other rows stay version-badged stubs until their
+                // respective editors land.
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
                     Some("v0.9"),
                 ));
-                items.push(self.ctx_menu_item_disabled(
+                // WS-H: Project tree library wiring — Component Library
+                // is the Altium-style replacement for the legacy
+                // "Schematic Library" row. Wired through the menu
+                // bridge so the existing menu-message dispatcher
+                // resolves the active project and emits
+                // `LibraryMessage::CreateLibraryAt(...)`.
+                items.push(self.ctx_menu_item_msg(
                     Some(ic::icon_component(tid)),
-                    "Schematic Library",
-                    Some("v0.9"),
+                    "Component Library",
+                    "",
+                    Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
                 ));
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_part_actions(tid)),

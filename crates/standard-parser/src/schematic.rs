@@ -1552,6 +1552,11 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         collect_sheets(dir, root_name, &mut sheets)?;
     }
 
+    // Component library list is empty when reading a `.standard_pro`;
+    // populated only when reading a Signex `.snxprj` (handled below
+    // via the serde struct's `#[serde(default)]` fallback). For the
+    // hand-built `ProjectData` here we emit an empty vec — Signex
+    // libraries are recorded by `Project::libraries` (v0.9 WS-H).
     Ok(ProjectData {
         name: project_name,
         dir: dir.to_string_lossy().to_string(),
@@ -1560,6 +1565,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         sheets,
         variant_definitions,
         active_variant,
+        libraries: Vec::new(),
     })
 }
 
