@@ -192,6 +192,15 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
+    /// Editable symbol document — parsed lazily from
+    /// `draft.schematic.symbol.sexpr` on editor open. Edits are
+    /// serialised back via the `SymbolEdited` message.
+    pub symbol_doc: super::editor::symbol::state::SymbolDoc,
+    /// Active tool on the Symbol-tab canvas.
+    pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
+    /// AI-stub PDF preview — populated after a successful PDF pick,
+    /// dismissed on Apply / Cancel.
+    pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -282,6 +291,10 @@ impl ComponentEditorState {
             .unwrap_or_else(|| draft_starter(component.head));
         let internal_pn = component.internal_pn.as_str().to_string();
         let displayed_version = component.head;
+        let symbol_doc = super::editor::symbol::state::SymbolDoc::parse(
+            &head.schematic.symbol.sexpr,
+            internal_pn.as_str(),
+        );
         Self {
             library_root,
             component_id: component.uuid,
@@ -292,6 +305,9 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
+            symbol_doc,
+            symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
+            symbol_ai_preview: None,
         }
     }
 
