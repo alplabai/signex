@@ -2,21 +2,22 @@
 //! open component. Each window's state lives in
 //! `LibraryState.open_editors` keyed by `iced::window::Id`.
 //!
-//! See LIBRARY_PLAN §10 for the spec.
+//! WS-E (refactor): the editor surface is **trimmed back to Overview +
+//! History + Where-Used + Submit-for-Review** while the rest of the
+//! tabs are rewritten against the new primitives shape:
+//!
+//! - **WS-F** rewires Symbol / Footprint (and adds 3D body editing
+//!   inside the Footprint tab).
+//! - **WS-G** adds the new Pin Map tab.
+//! - **WS-?** restores Sim against the new `SimModel` primitive.
+//!
+//! All non-trivial tabs render `placeholder_card` until those waves
+//! land. The footer + tabs router still works so the user can move
+//! around the editor without breakage.
 
-pub mod datasheet_picker;
-pub mod footprint;
 pub mod history;
 pub mod overview;
-pub mod params;
-// WS-G: Pin Map
-pub mod pin_map;
-pub mod sim;
 pub mod submit_for_review;
-pub mod supply;
-pub mod symbol;
-pub mod tabs;
-pub mod three_d;
 pub mod where_used;
 
 use iced::widget::{Space, button, column, container, row, text};
@@ -27,11 +28,7 @@ use signex_widgets::theme_ext;
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentEditorState, EditorTab, LibraryState};
 
-/// Render a Component Editor window. The caller hosts this in the
-/// new OS window opened via `iced::window::open`. `library_state` is
-/// borrowed by Where-Used so the tab can read use-sites; passing it
-/// here keeps the view function pure (no globals) while letting the
-/// History/Where-Used tabs reach across the library subsystem.
+/// Render a Component Editor window.
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     library_state: &'a LibraryState,
@@ -39,7 +36,7 @@ pub fn view<'a>(
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
     let header = view_header(editor, tokens, window_id);
-    let tabs = tabs::view(editor.active_tab, tokens, window_id);
+    let tabs = view_tabs(editor.active_tab, tokens, window_id);
     let body = view_active_tab(editor, library_state, tokens, window_id);
     let footer = view_footer(editor, tokens, window_id);
 
@@ -49,10 +46,6 @@ pub fn view<'a>(
         .height(Length::Fill)
         .into();
 
-    // Layer the SubmitForReview modal on top of the editor when it's
-    // open. iced's Stack handles the dim backdrop + click-eat for us
-    // — we wrap the modal card in a centred container with a
-    // semi-transparent fill.
     if editor.review_dialog_open {
         let modal_card = submit_for_review::view(editor, tokens, window_id);
         let backdrop: Element<'_, LibraryMessage> = container(modal_card)
@@ -89,8 +82,6 @@ fn view_header<'a>(
             text("Component Editor — ").size(13).color(muted),
             text(title).size(13).color(text_c),
             Space::new().width(Length::Fill),
-            // No native lock badge in Phase 1; placeholder to mirror
-            // the LIBRARY_PLAN §10 reference layout.
             text("\u{1F512}").size(13).color(muted),
             Space::new().width(8),
             close_btn(window_id, tokens),
@@ -102,25 +93,98 @@ fn view_header<'a>(
     .into()
 }
 
+fn view_tabs<'a>(
+    active: EditorTab,
+    tokens: &'a ThemeTokens,
+    window_id: iced::window::Id,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let mut row_widget = row![].spacing(0).align_y(iced::Alignment::Center);
+    for tab in EditorTab::ORDER {
+        let is_active = *tab == active;
+        let bg_color = if is_active {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+        } else {
+            iced::Color::TRANSPARENT
+        };
+        let label = container(text(tab.label()).size(11).color(text_c)).padding([3, 10]);
+        let inner_btn = button(label)
+            .padding(0)
+            .on_press(LibraryMessage::EditorEvent {
+                window_id,
+                msg: EditorMsg::SelectTab(*tab),
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(bg_color)),
+                text_color: text_c,
+                border: Border::default(),
+                ..iced::widget::button::Style::default()
+            });
+        row_widget = row_widget.push(inner_btn);
+    }
+    container(row_widget)
+        .padding([2, 4])
+        .width(Length::Fill)
+        .style(crate::styles::tab_bar_strip(tokens))
+        .into()
+}
+
 fn view_active_tab<'a>(
     editor: &'a ComponentEditorState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
-    let inner = match editor.active_tab {
+    let inner: Element<'_, LibraryMessage> = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, window_id),
-        EditorTab::Symbol => symbol::view(tokens),
-        EditorTab::Footprint => footprint::view(tokens),
-        EditorTab::ThreeD => three_d::view(editor, tokens, window_id),
-        // WS-G: Pin Map — symbol/footprint primitive resolution lands
-        // with WS-E; for now pass `None` so the tab degrades to its
-        // info card. Once WS-E threads `Symbol` + `Footprint` onto
-        // `ComponentEditorState`, replace `None` with the loaded pair.
-        EditorTab::PinMap => pin_map::view(editor, None, tokens, window_id),
-        EditorTab::Params => params::view(editor, tokens, window_id),
-        EditorTab::Supply => supply::view(editor, tokens, window_id),
-        EditorTab::Sim => sim::view(editor, tokens, window_id),
+        EditorTab::Symbol => placeholder_card(
+            "Symbol",
+            &[
+                "WS-F (in flight) rewires the Symbol tab against the new `Symbol` primitive.",
+                "Pins, graphics, schematic params; loaded by `LibrarySet::resolve_symbol`.",
+            ],
+            tokens,
+        ),
+        EditorTab::Footprint => placeholder_card(
+            "Footprint",
+            &[
+                "WS-F adds the new Footprint tab — pads, courtyard, body 3D editor + preview.",
+                "Loaded by `LibrarySet::resolve_footprint`.",
+            ],
+            tokens,
+        ),
+        EditorTab::PinMap => placeholder_card(
+            "Pin Map",
+            &[
+                "WS-G adds the Pin Map tab — auto-match by number/name + per-pin overrides.",
+                "Defaults to 1:1 binding by pin/pad number string equality.",
+            ],
+            tokens,
+        ),
+        EditorTab::Params => placeholder_card(
+            "Parameters",
+            &[
+                "Parametric values stored on `Revision::parameters`; schema-validated by class template.",
+                "Editor wires up after WS-F so the params editor can use the resolved class template.",
+            ],
+            tokens,
+        ),
+        EditorTab::Supply => placeholder_card(
+            "Supply",
+            &[
+                "Primary MPN + alternates editor — WS-F polishes the multi-row picker.",
+                "Distributor listings live on `Revision::supply`.",
+            ],
+            tokens,
+        ),
+        EditorTab::Sim => placeholder_card(
+            "Sim",
+            &[
+                "Sim tab rewires against the new `SimModel` primitive (post-WS-F).",
+                "Per-pin SPICE node mapping moves onto `SimModel::default_node_map`.",
+            ],
+            tokens,
+        ),
         EditorTab::History => history::view(editor, tokens, window_id),
         EditorTab::WhereUsed => where_used::view(editor, library_state, tokens),
     };
@@ -223,7 +287,7 @@ fn close_btn<'a>(window_id: iced::window::Id, tokens: &ThemeTokens) -> Element<'
 }
 
 /// Helper used by every placeholder tab — shared message and TODO list
-/// pulled from LIBRARY_PLAN §10.
+/// pulled from the v0.9 refactor plan.
 pub(crate) fn placeholder_card<'a>(
     title: &'a str,
     todos: &'a [&'a str],
@@ -232,7 +296,7 @@ pub(crate) fn placeholder_card<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let mut col = column![
-        text(format!("{title} — Coming in Phase 2"))
+        text(format!("{title} — Coming in WS-F / WS-G"))
             .size(14)
             .color(text_c),
         Space::new().height(8),

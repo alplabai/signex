@@ -4372,6 +4372,30 @@ impl Signex {
             layers.push(backdrop.into());
         }
 
+        // WS-E: New Component modal — same overlay shape as the picker.
+        // Opened by File ▸ Library ▸ New Component… (and, post-WS-H,
+        // from the project tree's library-node right-click menu).
+        if let Some(nc) = self.library.new_component.as_ref() {
+            let card = crate::library::new_component::view(
+                &self.library,
+                nc,
+                &document.panel_ctx.tokens,
+            )
+            .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
         layers
     }
 }

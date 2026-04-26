@@ -1,15 +1,19 @@
 //! Overview tab — display name, internal PN, MPN, manufacturer,
 //! description, datasheet, lifecycle state.
+//!
+//! WS-E (refactor): rewired against the new `Revision` shape — the
+//! description / datasheet / mpn / manufacturer fields are no longer
+//! grouped under `draft.shared`; they live on `draft.primary_mpn` and
+//! `draft.datasheet` directly.
 
 use iced::widget::{Space, column, container, pick_list, row, scrollable, text, text_input};
 use iced::{Element, Length};
-use signex_library::LifecycleState;
+use signex_library::{DatasheetRef, LifecycleState};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::ComponentEditorState;
-use super::datasheet_picker;
 
 const LIFECYCLE_OPTS: [LifecycleState; 5] = [
     LifecycleState::Draft,
@@ -30,9 +34,6 @@ impl std::fmt::Display for LifecyclePick {
             LifecycleState::Released => "Released",
             LifecycleState::Deprecated => "Deprecated",
             LifecycleState::Obsolete => "Obsolete",
-            // LifecycleState is `non_exhaustive` — fall back to a
-            // debug rendering for any future variant so the picker
-            // still functions if signex-library adds states.
             other => return write!(f, "{other:?}"),
         };
         f.write_str(s)
@@ -46,20 +47,26 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
-    let datasheet_block: Element<'a, LibraryMessage> = datasheet_picker::view(
-        editor.draft.shared.datasheet.as_ref(),
-        tokens,
-        window_id,
-    );
+    let datasheet_url: String = match &editor.draft.datasheet {
+        DatasheetRef::Url { url } => url.clone(),
+        DatasheetRef::HashPinned { filename, .. } => filename.clone(),
+    };
+
+    let description: String = editor
+        .draft
+        .primary_mpn
+        .notes
+        .clone()
+        .unwrap_or_default();
 
     let field = |label: &'static str,
-                 value: &'a str,
+                 value: String,
                  placeholder: &'static str,
                  msg: fn(String) -> EditorMsg|
      -> Element<'a, LibraryMessage> {
         column![
             text(label).size(10).color(muted),
-            text_input(placeholder, value)
+            text_input(placeholder, &value)
                 .on_input(move |s| LibraryMessage::EditorEvent {
                     window_id,
                     msg: msg(s),
@@ -91,18 +98,17 @@ pub fn view<'a>(
     .into();
 
     let body = column![
-        // Display name + internal PN side by side.
         row![
             field(
                 "Display Name",
-                &editor.display_internal_pn,
+                editor.display_internal_pn.clone(),
                 "Friendly label",
                 EditorMsg::OverviewSetDisplayName,
             ),
             Space::new().width(12),
             field(
                 "Internal PN",
-                editor.component.internal_pn.as_str(),
+                editor.component.internal_pn.as_str().to_string(),
                 "R0805_10k",
                 EditorMsg::OverviewSetInternalPn,
             ),
@@ -112,27 +118,32 @@ pub fn view<'a>(
         row![
             field(
                 "Manufacturer",
-                &editor.draft.shared.manufacturer,
+                editor.draft.primary_mpn.manufacturer.clone(),
                 "Yageo",
                 EditorMsg::OverviewSetManufacturer,
             ),
             Space::new().width(12),
             field(
                 "Manufacturer Part Number (MPN)",
-                &editor.draft.shared.mpn,
+                editor.draft.primary_mpn.mpn.clone(),
                 "RC0805FR-0710KL",
                 EditorMsg::OverviewSetMpn,
             ),
         ],
         Space::new().height(10),
         field(
-            "Description",
-            &editor.draft.shared.description,
+            "Description / Notes",
+            description,
             "Resistor 10k 1% 0805",
             EditorMsg::OverviewSetDescription,
         ),
         Space::new().height(10),
-        datasheet_block,
+        field(
+            "Datasheet URL",
+            datasheet_url,
+            "https://example.com/datasheet.pdf",
+            EditorMsg::OverviewSetDatasheet,
+        ),
         Space::new().height(10),
         lifecycle_block,
     ]
