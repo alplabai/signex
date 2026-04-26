@@ -118,32 +118,36 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
             continue;
         }
 
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            if let Some((expr, next_index)) = read_braced(input, i + 2) {
-                if let Some(value) = eval_dollar_expression(expr.trim(), ctx) {
-                    out.push_str(&value);
-                } else {
-                    out.push_str("${");
-                    out.push_str(expr);
-                    out.push('}');
-                }
-                i = next_index;
-                continue;
+        if bytes[i] == b'$'
+            && i + 1 < bytes.len()
+            && bytes[i + 1] == b'{'
+            && let Some((expr, next_index)) = read_braced(input, i + 2)
+        {
+            if let Some(value) = eval_dollar_expression(expr.trim(), ctx) {
+                out.push_str(&value);
+            } else {
+                out.push_str("${");
+                out.push_str(expr);
+                out.push('}');
             }
+            i = next_index;
+            continue;
         }
 
-        if bytes[i] == b'@' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            if let Some((expr, next_index)) = read_braced(input, i + 2) {
-                if let Some(value) = eval_at_expression(expr.trim(), ctx) {
-                    out.push_str(&value);
-                } else {
-                    out.push_str("@{");
-                    out.push_str(expr);
-                    out.push('}');
-                }
-                i = next_index;
-                continue;
+        if bytes[i] == b'@'
+            && i + 1 < bytes.len()
+            && bytes[i + 1] == b'{'
+            && let Some((expr, next_index)) = read_braced(input, i + 2)
+        {
+            if let Some(value) = eval_at_expression(expr.trim(), ctx) {
+                out.push_str(&value);
+            } else {
+                out.push_str("@{");
+                out.push_str(expr);
+                out.push('}');
             }
+            i = next_index;
+            continue;
         }
 
         if starts_with_ascii_ci(bytes, i, b"CELL()") {
@@ -156,18 +160,19 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
             continue;
         }
 
-        if starts_with_ascii_ci(bytes, i, b"NET_NAME(") {
-            if let Some((arg, next_index)) = read_parenthesized(input, i + "NET_NAME(".len()) {
-                if let Some(value) = eval_net_name(arg.trim(), ctx) {
-                    out.push_str(&value);
-                } else {
-                    out.push_str("NET_NAME(");
-                    out.push_str(arg);
-                    out.push(')');
-                }
-                i = next_index;
-                continue;
+        if starts_with_ascii_ci(bytes, i, b"NET_NAME(")
+            && let Some((arg, next_index)) =
+                read_parenthesized(input, i + "NET_NAME(".len())
+        {
+            if let Some(value) = eval_net_name(arg.trim(), ctx) {
+                out.push_str(&value);
+            } else {
+                out.push_str("NET_NAME(");
+                out.push_str(arg);
+                out.push(')');
             }
+            i = next_index;
+            continue;
         }
 
         let ch = input[i..].chars().next().unwrap_or('\0');

@@ -661,6 +661,139 @@ impl Signex {
                 }
                 return Task::none();
             }
+            // Symbol-tab side effects — open the PDF picker, hand the
+            // chosen path to a worker that runs the heuristic.
+            EditorMsg::SymbolPickAiPdf => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select datasheet PDF")
+                            .add_filter("PDF", &["pdf"])
+                            .pick_file()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    move |path| {
+                        Message::Library(LibraryMessage::EditorEvent {
+                            window_id,
+                            msg: EditorMsg::SymbolPickedAiPdf(path),
+                        })
+                    },
+                );
+            }
+            EditorMsg::SymbolPickedAiPdf(None) => return Task::none(),
+            EditorMsg::SymbolPickedAiPdf(Some(path)) => {
+                use crate::library::editor::symbol::ai_stub::AiPinoutPreview;
+                let preview = match std::fs::read(&path) {
+                    Ok(bytes) => AiPinoutPreview::from_pdf(&bytes),
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            error = %e,
+                            path = %path.display(),
+                            "failed to read datasheet PDF"
+                        );
+                        AiPinoutPreview::default()
+                    }
+                };
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.symbol_ai_preview = Some(preview);
+                }
+                return Task::none();
+            }
+            EditorMsg::SymbolApplyAiPreview => {
+                let mut should_save = false;
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id)
+                    && let Some(preview) = editor.symbol_ai_preview.take()
+                {
+                    let pins = preview.into_apply_list();
+                    crate::library::editor::symbol::state::apply_ai_pinout(
+                        &mut editor.symbol,
+                        pins,
+                    );
+                    should_save = true;
+                }
+                if should_save {
+                    save_symbol(&mut self.library, window_id);
+                }
+                return Task::none();
+            }
+            EditorMsg::SymbolDismissAiPreview => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.symbol_ai_preview = None;
+                }
+                return Task::none();
+            }
+            EditorMsg::DatasheetUploadDialog => {
+                return Task::future(async move {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Pin Datasheet PDF")
+                        .add_filter("PDF", &["pdf"])
+                        .pick_file()
+                        .await;
+                    let resolved = match picked {
+                        Some(f) => {
+                            let bytes = f.read().await;
+                            let filename = f
+                                .file_name();
+                            Some((bytes, filename))
+                        }
+                        None => None,
+                    };
+                    Message::Library(crate::library::LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::DatasheetUploadResult(resolved),
+                    })
+                });
+            }
+            EditorMsg::Model3dUploadDialog => {
+                return Task::future(async move {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Upload 3D Model")
+                        .add_filter("3D Models", &["step", "stp", "wrl", "glb", "gltf"])
+                        .add_filter("STEP", &["step", "stp"])
+                        .add_filter("VRML", &["wrl"])
+                        .add_filter("glTF / GLB", &["glb", "gltf"])
+                        .pick_file()
+                        .await;
+                    let resolved = match picked {
+                        Some(f) => {
+                            let bytes = f.read().await;
+                            let filename = f.file_name();
+                            Some((bytes, filename))
+                        }
+                        None => None,
+                    };
+                    Message::Library(crate::library::LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::Model3dUploadResult(resolved),
+                    })
+                });
+            }
+            // WS-F: STEP attach picker — runs `rfd`, hashes the file
+            // bytes, and lands in `EditorMsg::StepAttachResult` where
+            // the dispatcher writes the file under `<lib_root>/step/`.
+            EditorMsg::StepAttachDialog => {
+                return Task::future(async move {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Attach STEP file")
+                        .add_filter("STEP", &["step", "stp"])
+                        .pick_file()
+                        .await;
+                    let resolved = match picked {
+                        Some(f) => {
+                            let bytes = f.read().await;
+                            let filename = f.file_name();
+                            Some((bytes, filename))
+                        }
+                        None => None,
+                    };
+                    Message::Library(crate::library::LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::StepAttachResult(resolved),
+                    })
+                });
+            }
             _ => {}
         }
 
@@ -673,44 +806,312 @@ impl Signex {
     }
 }
 
-/// Apply an inline form edit to the editor draft. WS-E only handles
-/// the Overview + History fields that survive the data-model refactor.
-/// Symbol / Footprint / 3D / Sim / Pin Map dispatch returns when WS-F
-/// + WS-G land.
+/// WS-F: persist the in-memory editor.symbol back into LibrarySet so
+/// the next `from_head` re-read sees the new pin layout. Replaces the
+/// pre-refactor `sync_symbol_sexpr` round-trip — Symbol primitives are
+/// now typed, no sexpr serialisation involved.
+fn save_symbol(library: &mut crate::library::state::LibraryState, window_id: iced::window::Id) {
+    if let Some(editor) = library.open_editors.get_mut(&window_id) {
+        editor.symbol.updated = chrono::Utc::now();
+        let sym = editor.symbol.clone();
+        let uuid = sym.uuid;
+        // Write the binding ref so the editor doesn't lose its
+        // primitive on the next reload.
+        editor.draft.symbol_ref = signex_library::PrimitiveRef::new(
+            editor.draft.symbol_ref.library_id,
+            uuid,
+        );
+        library.set.save_symbol(sym);
+    }
+}
+
+/// WS-F: persist the in-memory editor.footprint back into LibrarySet.
+fn save_footprint(library: &mut crate::library::state::LibraryState, window_id: iced::window::Id) {
+    if let Some(editor) = library.open_editors.get_mut(&window_id)
+        && let Some(fp) = editor.footprint.as_mut()
+    {
+        fp.updated = chrono::Utc::now();
+        let new_fp = fp.clone();
+        let uuid = new_fp.uuid;
+        editor.draft.footprint_ref = Some(signex_library::PrimitiveRef::new(
+            editor
+                .draft
+                .footprint_ref
+                .as_ref()
+                .map(|r| r.library_id)
+                .unwrap_or_default(),
+            uuid,
+        ));
+        library.set.save_footprint(new_fp);
+    }
+}
+
+/// WS-F-only inline-edit dispatcher.
+///
+/// Pre-refactor `apply_inline_edit` covered every tab. WS-E owns the
+/// rebuild for Overview / Params / Supply / Sim / 3D / History; until
+/// it merges, this stub handles only Tab selection plus the WS-F
+/// surfaces (Symbol primitive edits, Footprint primitive edits, Body3D
+/// fields). Every other variant is a no-op.
+///
+/// TODO(merge-with-WS-E): restore the per-tab dispatch arms against
+/// the new Revision binding fields.
 fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
+    use crate::library::editor::footprint::state::FootprintEditorState;
     match msg {
         EditorMsg::SelectTab(tab) => editor.active_tab = tab,
+        EditorMsg::HistorySelectRevision(version) => {
+            editor.history_selected = Some(version);
+        }
+        // ── Symbol-tab inline edits (WS-F) ──────────────────────
+        EditorMsg::SymbolSetTool(tool) => {
+            use crate::library::editor::symbol::canvas::SymbolTool;
+            use crate::library::messages::SymbolToolMsg;
+            editor.symbol_tool = match tool {
+                SymbolToolMsg::Select => SymbolTool::Select,
+                SymbolToolMsg::AddPin => SymbolTool::AddPin,
+            };
+        }
+        EditorMsg::SymbolAddPin { x, y } => {
+            let idx = crate::library::editor::symbol::state::add_pin(&mut editor.symbol, x, y);
+            editor.symbol_selected = Some(
+                crate::library::editor::symbol::state::SymbolSelection::Pin(idx),
+            );
+            editor.dirty = true;
+        }
+        EditorMsg::SymbolSelect(sel) => {
+            use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+            use crate::library::messages::SymbolSelectionMsg;
+            editor.symbol_selected = Some(match sel {
+                SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
+                SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
+                SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
+            });
+        }
+        EditorMsg::SymbolDeselect => {
+            editor.symbol_selected = None;
+        }
+        EditorMsg::SymbolMoveSelected { x, y } => {
+            crate::library::editor::symbol::state::move_selected(
+                &mut editor.symbol,
+                editor.symbol_selected,
+                x,
+                y,
+            );
+            editor.dirty = true;
+        }
+        EditorMsg::SymbolDeleteSelected => {
+            if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
+                &mut editor.symbol,
+                editor.symbol_selected,
+            ) {
+                editor.symbol_selected = new_sel;
+            }
+            editor.dirty = true;
+        }
+        EditorMsg::SymbolSetField { .. } => {
+            // WS-F: symbol fields (Designator/Value) live on the
+            // *Component* binding now, not the Symbol primitive.
+            // WS-E owns rebuilding the Designator + Value editor on
+            // top of `Component.internal_pn` / `primary_mpn`.
+            editor.dirty = true;
+        }
+        EditorMsg::SymbolSetPinNumber { idx, number } => {
+            if let Some(p) = editor.symbol.pins.get_mut(idx) {
+                p.number = number;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolSetPinName { idx, name } => {
+            if let Some(p) = editor.symbol.pins.get_mut(idx) {
+                p.name = name;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SaveSymbol(uuid, sym) => {
+            // WS-F: in-place primitive replacement. The dispatcher's
+            // outer `save_symbol` helper writes through to LibrarySet
+            // *and* updates symbol_ref.uuid; this arm just lets a
+            // caller stash the new primitive for the next save.
+            editor.symbol = sym;
+            editor.draft.symbol_ref =
+                signex_library::PrimitiveRef::new(editor.draft.symbol_ref.library_id, uuid);
+            editor.dirty = true;
+        }
+        // ── Footprint tab ────────────────────────────────────────
+        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let (Some(canvas_state), Some(fp)) =
+                (editor.footprint_state.as_mut(), editor.footprint.as_mut())
+            {
+                let idx = canvas_state.add_pad_at(x_mm, y_mm);
+                FootprintEditorState::sync_pads_to_primitive(canvas_state, fp);
+                canvas_state.selected_pad = Some(idx);
+            }
+            editor.invalidate_footprint_cache();
+            editor.dirty = true;
+        }
+        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let (Some(canvas_state), Some(fp)) =
+                (editor.footprint_state.as_mut(), editor.footprint.as_mut())
+            {
+                canvas_state.move_pad(idx, x_mm, y_mm);
+                FootprintEditorState::sync_pads_to_primitive(canvas_state, fp);
+            }
+            editor.invalidate_footprint_cache();
+            editor.dirty = true;
+        }
+        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(canvas_state) = editor.footprint_state.as_mut() {
+                canvas_state.cursor_mm = Some((x_mm, y_mm));
+            }
+        }
+        EditorMsg::FootprintSelectPad(idx) => {
+            editor.ensure_footprint_state();
+            if let Some(canvas_state) = editor.footprint_state.as_mut() {
+                canvas_state.selected_pad = idx;
+            }
+        }
+        EditorMsg::FootprintDeleteSelected => {
+            editor.ensure_footprint_state();
+            if let (Some(canvas_state), Some(fp)) =
+                (editor.footprint_state.as_mut(), editor.footprint.as_mut())
+                && let Some(sel) = canvas_state.selected_pad
+            {
+                canvas_state.delete_pad(sel);
+                FootprintEditorState::sync_pads_to_primitive(canvas_state, fp);
+            }
+            editor.invalidate_footprint_cache();
+            editor.dirty = true;
+        }
+        EditorMsg::FootprintToggleLayer(name) => {
+            editor.ensure_footprint_state();
+            if let Some(canvas_state) = editor.footprint_state.as_mut()
+                && let Some(layer) =
+                    crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
+            {
+                canvas_state.layer_visibility.toggle(layer);
+            }
+            editor.invalidate_footprint_cache();
+        }
+        EditorMsg::FootprintToggleAutoFit => {
+            editor.ensure_footprint_state();
+            if let Some(canvas_state) = editor.footprint_state.as_mut() {
+                canvas_state.toggle_auto_fit();
+            }
+            editor.invalidate_footprint_cache();
+            editor.dirty = true;
+        }
+        EditorMsg::SaveFootprint(uuid, fp) => {
+            editor.footprint = Some(fp);
+            editor.draft.footprint_ref = Some(signex_library::PrimitiveRef::new(
+                editor
+                    .draft
+                    .footprint_ref
+                    .as_ref()
+                    .map(|r| r.library_id)
+                    .unwrap_or_default(),
+                uuid,
+            ));
+            editor.invalidate_footprint_cache();
+            editor.dirty = true;
+        }
+        // ── Body 3D editor pane (WS-F) ──────────────────────────
+        EditorMsg::SetBodyHeight(h) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.height_mm = h;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyOffsetZ(z) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.offset_z_mm = z;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyTopColor(c) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.top_color = c;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodySideColor(c) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.side_color = c;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyShape(shape) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.shape = shape;
+                editor.dirty = true;
+            }
+        }
+        // ── STEP attachment (WS-F) ──────────────────────────────
+        EditorMsg::StepAttachResult(Some((bytes, filename))) => {
+            if let Some(fp) = editor.footprint.as_mut()
+                && let Some(att) = crate::library::editor::footprint::step_attach::stash_step(
+                    &editor.library_root,
+                    &bytes,
+                    &filename,
+                )
+            {
+                fp.step_attachment = Some(att);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::StepAttachResult(None) => {
+            // User cancelled — no state change.
+        }
+        EditorMsg::StepAttachRemove => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.step_attachment = None;
+                editor.dirty = true;
+            }
+        }
+        // ── Stubs for messages WS-E owns ─────────────────────────
+        // Variants below all hit pre-refactor SchematicSide / PcbSide
+        // / SharedSide / SpiceModel surfaces. WS-E rebuilds them on top
+        // of the new Revision binding fields. Until then they're
+        // accepted but no-op so the message tree shape stays stable
+        // and the dispatcher compiles cleanly.
+        // TODO(merge-with-WS-E): restore each arm's behaviour.
         EditorMsg::OverviewSetDisplayName(s) => editor.display_internal_pn = s,
         EditorMsg::OverviewSetInternalPn(s) => {
             editor.component.internal_pn = signex_library::InternalPn::new(s.clone());
             editor.display_internal_pn = s;
         }
-        EditorMsg::OverviewSetMpn(s) => {
-            editor.draft.primary_mpn.mpn = s;
-        }
-        EditorMsg::OverviewSetManufacturer(s) => {
-            editor.draft.primary_mpn.manufacturer = s;
-        }
-        EditorMsg::OverviewSetDescription(s) => {
-            // WS-E: description is a free-form note field; the binding
-            // record carries it on the primary MPN's `notes` slot for
-            // now. WS-F will move it to a first-class field if needed.
-            editor.draft.primary_mpn.notes =
-                if s.trim().is_empty() { None } else { Some(s) };
-        }
-        EditorMsg::OverviewSetDatasheet(s) => {
-            let trimmed = s.trim();
-            editor.draft.datasheet = if trimmed.is_empty() {
-                signex_library::DatasheetRef::default()
-            } else {
-                signex_library::DatasheetRef::url(trimmed)
-            };
-        }
-        EditorMsg::OverviewSetLifecycle(state) => editor.draft.state = state,
-        EditorMsg::HistorySelectRevision(version) => {
-            editor.history_selected = Some(version);
-        }
-        // Already handled in the outer match.
+        EditorMsg::OverviewSetMpn(_)
+        | EditorMsg::OverviewSetManufacturer(_)
+        | EditorMsg::OverviewSetDescription(_)
+        | EditorMsg::OverviewSetDatasheet(_)
+        | EditorMsg::OverviewSetLifecycle(_)
+        | EditorMsg::DatasheetSetMode(_)
+        | EditorMsg::DatasheetSetUrl(_)
+        | EditorMsg::DatasheetUploadResult(_)
+        | EditorMsg::Model3dUploadResult(_)
+        | EditorMsg::Model3dRemove
+        | EditorMsg::Model3dSetOffset { .. }
+        | EditorMsg::Model3dSetRotation { .. }
+        | EditorMsg::ParamAddRow
+        | EditorMsg::ParamRemoveRow(_)
+        | EditorMsg::ParamSetKey { .. }
+        | EditorMsg::ParamSetValueText { .. }
+        | EditorMsg::SupplyAddRow
+        | EditorMsg::SupplyRemoveRow(_)
+        | EditorMsg::SupplySetDistributor { .. }
+        | EditorMsg::SupplySetSku { .. }
+        | EditorMsg::SupplySetUrl { .. }
+        | EditorMsg::SupplyPasteUrlChanged(_)
+        | EditorMsg::SupplyRefreshFromApi
+        | EditorMsg::SimSetEnabled(_)
+        | EditorMsg::SimBodyAction(_)
+        | EditorMsg::SimSetPinNode { .. }
+        | EditorMsg::SimChanged => {}
+        // ── Already handled in the outer match (Task-returning
+        // arms or modal flows). ─────────────────────────────────
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
@@ -719,6 +1120,13 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         | EditorMsg::SubmitForReviewCancel
         | EditorMsg::SubmitForReviewConfirm
         | EditorMsg::SubmitForReviewResult(_)
-        | EditorMsg::OpenWhereUsedTab => {}
+        | EditorMsg::OpenWhereUsedTab
+        | EditorMsg::SymbolPickAiPdf
+        | EditorMsg::SymbolPickedAiPdf(_)
+        | EditorMsg::SymbolApplyAiPreview
+        | EditorMsg::SymbolDismissAiPreview
+        | EditorMsg::DatasheetUploadDialog
+        | EditorMsg::Model3dUploadDialog
+        | EditorMsg::StepAttachDialog => {}
     }
 }

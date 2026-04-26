@@ -16,19 +16,23 @@
 //!   `iced::window::Id`. The non-main window itself is registered in
 //!   `Signex::ui_state.windows` as `WindowKind::ComponentEditor`.
 //! * `picker` — Phase 1 component picker modal state.
-//! * `new_component` — modal state for the "New Component" flow (PN +
-//!   library + class + category).
-//! * `template_registry` — bundled + per-library parameter templates,
-//!   resolved at component-class lookup time.
+//! * `settings` — Distributor-APIs panel local state.
+//!
+//! WS-F note: this module was simplified during the v0.9 refactor —
+//! the legacy `SchematicSide` / `PcbSide` / `SharedSide` + `SpiceModel`
+//! UI surfaces compiled against pre-refactor `signex-library`. WS-E
+//! owns rebuilding the proper editor state on top of the new
+//! `Symbol` / `Footprint` / `Component` (binding) shape; WS-F here
+//! threads only the Symbol/Footprint primitive editing surface and
+//! stubs every other tab as "WS-E pending".
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    Component, ComponentClass, ComponentId, ComponentSummary, DistributorSource, Footprint,
-    LibraryAdapter, LibraryError, LibraryQuery, LocalGitAdapter, PrimitiveRef, Revision, SimModel,
-    Symbol, TemplateRegistry, UseSite, Version, WhereUsedIndex,
+    Component, ComponentId, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
+    LibraryError, LibraryQuery, LocalGitAdapter, Revision, Symbol, UseSite, Version, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -173,11 +177,13 @@ pub struct LibraryState {
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     #[allow(dead_code)]
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
-    /// Bundled + per-library parameter templates. Reference-counted
-    /// because both the editor and the validator borrow it. WS-F/WS-G
-    /// surface this through the editor; WS-E only owns the field.
-    #[allow(dead_code)]
-    pub template_registry: Arc<TemplateRegistry>,
+    /// WS-F: in-memory primitive resolver while WS-C's `LibrarySet`
+    /// trait + cross-library dependency mounting hasn't merged. Symbol
+    /// and Footprint primitives currently load through this map; once
+    /// WS-C ships, callers swap the `Box<dyn LibrarySet>` resolver in
+    /// without touching the editor surface.
+    /// TODO(merge-with-WS-C): replace with `LibrarySet::resolve_*`.
+    pub set: LibrarySet,
 }
 
 impl Default for LibraryState {
@@ -197,7 +203,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             new_component: None,
             close_library_confirm: None,
-            template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
+            set: LibrarySet::default(),
         }
     }
 }
@@ -417,27 +423,46 @@ pub struct CloseLibraryConfirmState {
     pub dirty_editors: Vec<iced::window::Id>,
 }
 
-/// Pin Map tab state — populated by WS-G with the per-pin/pad match
-/// table. WS-E ships a placeholder so the editor compiles before
-/// WS-G's view lands.
+/// WS-F stub for the upcoming WS-C `LibrarySet`. Holds Symbol /
+/// Footprint primitives keyed by uuid so the editor can resolve a
+/// `PrimitiveRef::uuid` without a real adapter call. Cross-library
+/// resolution by `library_id` is a no-op until WS-C ships.
+///
+/// TODO(merge-with-WS-C): replace this whole struct with
+/// `signex_library::adapters::library_set::LibrarySet`.
 #[derive(Debug, Default)]
-#[allow(dead_code)]
-pub struct PinMapTabState {
-    /// TODO(WS-G): replace with `Vec<PinPadMatch>` per the plan §12.
-    pub matches: Vec<()>,
+pub struct LibrarySet {
+    pub symbols: HashMap<Uuid, Symbol>,
+    pub footprints: HashMap<Uuid, Footprint>,
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Component Editor
-// ─────────────────────────────────────────────────────────────────────
+impl LibrarySet {
+    pub fn resolve_symbol(&self, uuid: Uuid) -> Option<Symbol> {
+        self.symbols.get(&uuid).cloned()
+    }
+
+    pub fn resolve_footprint(&self, uuid: Uuid) -> Option<Footprint> {
+        self.footprints.get(&uuid).cloned()
+    }
+
+    pub fn save_symbol(&mut self, sym: Symbol) {
+        self.symbols.insert(sym.uuid, sym);
+    }
+
+    pub fn save_footprint(&mut self, fp: Footprint) {
+        self.footprints.insert(fp.uuid, fp);
+    }
+}
 
 /// Component Editor window state — one per editor window.
 ///
-/// Per the v0.9 refactor a `Revision` no longer embeds symbol/footprint
-/// blobs; it points at primitives by `PrimitiveRef`. The editor lazily
-/// loads the bound primitives via `LibrarySet::resolve_*` on first
-/// switch into the relevant tab so the editor-open path stays cheap.
-#[derive(Debug)]
+/// WS-F refactor: instead of carrying the legacy
+/// `SchematicSide.symbol.sexpr` blob and round-tripping it into a
+/// `SymbolDoc`, the editor now holds a typed [`Symbol`] primitive
+/// loaded by reference (`Revision::symbol_ref`) and a typed
+/// [`Footprint`] primitive (`Revision::footprint_ref`). Save dispatches
+/// `LibraryMessage::SaveSymbol` / `SaveFootprint` onto the adapter via
+/// the `LibrarySet`.
 pub struct ComponentEditorState {
     pub library_root: PathBuf,
     pub component_id: ComponentId,
@@ -460,10 +485,31 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
-
-    // ── Primitive bindings (loaded lazily by WS-F/WS-G) ─────────────
-    /// Resolved symbol primitive — `None` until WS-F's Symbol tab is
-    /// opened or the primitive ref is missing.
+    /// WS-F: editable [`Symbol`] primitive — loaded via
+    /// `LibrarySet::resolve_symbol(rev.symbol_ref.uuid)` on editor
+    /// open. Save dispatches `LibraryMessage::SaveSymbol` to the
+    /// dispatcher, which routes through the adapter.
+    pub symbol: Symbol,
+    /// WS-F: editable [`Footprint`] primitive — loaded via
+    /// `LibrarySet::resolve_footprint(rev.footprint_ref.uuid)`. `None`
+    /// when the binding has no footprint (a chip with symbol-only
+    /// representation, e.g. a power port).
+    pub footprint: Option<Footprint>,
+    /// Active tool on the Symbol-tab canvas.
+    pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
+    /// Selection on the Symbol canvas — pin / field / etc.
+    pub symbol_selected: Option<super::editor::symbol::state::SymbolSelection>,
+    /// AI-stub PDF preview — populated after a successful PDF pick,
+    /// dismissed on Apply / Cancel.
+    pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
+    /// Footprint canvas interaction state — kept across redraws.
+    pub footprint_state:
+        Option<crate::library::editor::footprint::state::FootprintEditorState>,
+    /// Cache reused across redraws so `iced::widget::Canvas`'s draw
+    /// path only retessellates when the model actually changes.
+    /// Held in `OnceLock` because the canvas program needs a
+    /// borrowed reference; the lock is initialised once on the
+    /// first render and cleared on every model mutation.
     #[allow(dead_code)]
     pub symbol: Option<Symbol>,
     /// Resolved footprint primitive.
@@ -488,10 +534,22 @@ pub struct ComponentEditorState {
     pub dirty: bool,
 }
 
-/// Component Editor tabs in display order.
-///
-/// WS-E adds `PinMap` between Footprint and Params per
-/// `v0.9-library-refactor-plan.md` §12.5 — WS-G fleshes out the tab.
+impl std::fmt::Debug for ComponentEditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentEditorState")
+            .field("library_root", &self.library_root)
+            .field("component_id", &self.component_id)
+            .field("display_internal_pn", &self.display_internal_pn)
+            .field("displayed_version", &self.displayed_version)
+            .field("active_tab", &self.active_tab)
+            .field("symbol_uuid", &self.symbol.uuid)
+            .field("footprint_uuid", &self.footprint.as_ref().map(|f| f.uuid))
+            .field("dirty", &self.dirty)
+            .finish()
+    }
+}
+
+/// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditorTab {
     Overview,
@@ -585,13 +643,33 @@ impl Default for DistributorSettings {
 
 impl ComponentEditorState {
     /// Build a fresh editor state from the head revision of `component`.
-    pub fn from_head(library_root: PathBuf, component: Component, review_required: bool) -> Self {
+    /// WS-F: resolves `symbol_ref` / `footprint_ref` against
+    /// `library_set`. Falls back to empty primitives when the resolver
+    /// has no entry yet — matches the New Component flow's "draft a
+    /// fresh part" path until WS-C/E land the full create wiring.
+    pub fn from_head(
+        library_root: PathBuf,
+        component: Component,
+        review_required: bool,
+        library_set: &LibrarySet,
+    ) -> Self {
         let head = component
             .head_revision()
             .cloned()
             .unwrap_or_else(|| draft_starter(&component));
         let internal_pn = component.internal_pn.as_str().to_string();
         let displayed_version = component.head;
+
+        // Resolve primitives. Empty fallbacks let a brand-new part open
+        // before WS-C's adapter primitive CRUD ships.
+        let symbol = library_set
+            .resolve_symbol(head.symbol_ref.uuid)
+            .unwrap_or_else(|| Symbol::empty(internal_pn.clone()));
+        let footprint = head
+            .footprint_ref
+            .as_ref()
+            .and_then(|r| library_set.resolve_footprint(r.uuid));
+
         Self {
             library_root,
             component_id: component.uuid,
@@ -602,10 +680,13 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            symbol: None,
-            footprint: None,
-            sim: None,
-            pin_map: PinMapTabState::default(),
+            symbol,
+            footprint,
+            symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
+            symbol_selected: None,
+            symbol_ai_preview: None,
+            footprint_state: None,
+            footprint_canvas_cache: std::sync::OnceLock::new(),
             review_dialog_open: false,
             review_notes_buf: String::new(),
             review_status: None,
@@ -623,18 +704,36 @@ impl ComponentEditorState {
     pub fn clear_dirty(&mut self) {
         self.dirty = false;
     }
+
+    /// Lazily initialise the Footprint tab's in-memory canvas state
+    /// from the current footprint primitive. Idempotent — subsequent
+    /// calls are no-ops.
+    pub fn ensure_footprint_state(&mut self) {
+        if self.footprint_state.is_none() {
+            let parsed = match self.footprint.as_ref() {
+                Some(fp) => crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
+                None => crate::library::editor::footprint::state::FootprintEditorState::empty(),
+            };
+            self.footprint_state = Some(parsed);
+        }
+    }
+
+    /// Clear the canvas cache (called after every footprint mutation
+    /// so the next draw rebuilds geometry).
+    pub fn invalidate_footprint_cache(&mut self) {
+        self.footprint_canvas_cache = std::sync::OnceLock::new();
+    }
 }
 
 /// Internal helper — produce a fresh draft starting at the supplied
-/// component. Used as a fallback when a component has no head revision
-/// to clone from.
-fn draft_starter(component: &Component) -> Revision {
-    use signex_library::{DatasheetRef, LifecycleState, ManufacturerPart, PlmReserved};
-    // No head revision → seed an empty draft. The empty primitive UUIDs
-    // here are "all-zeros" sentinels; WS-F's editor will pick the
-    // canonical primitives bound to the component on first save.
-    let lib = component.uuid;
-    let _ = lib; // unused — sentinel comment only.
+/// version. Used as a fallback when a component has no head revision
+/// to clone from (which the Phase 1 flow shouldn't hit, but defends
+/// the unwrap above).
+fn draft_starter(version: Version) -> Revision {
+    use signex_library::{
+        DatasheetRef, LifecycleState, ManufacturerPart, ParamMap, PinPadOverride, PlmReserved,
+        PrimitiveRef,
+    };
     Revision {
         version: component.head,
         state: LifecycleState::Draft,
@@ -644,12 +743,12 @@ fn draft_starter(component: &Component) -> Revision {
         symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
         footprint_ref: None,
         sim_ref: None,
-        pin_map_overrides: Vec::new(),
+        pin_map_overrides: Vec::<PinPadOverride>::new(),
         primary_mpn: ManufacturerPart::draft("", ""),
         alternates: Vec::new(),
         supply: Vec::new(),
         datasheet: DatasheetRef::default(),
-        parameters: signex_library::ParamMap::new(),
+        parameters: ParamMap::new(),
         plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     }
@@ -689,21 +788,26 @@ mod tests {
     }
 
     #[test]
-    fn new_component_state_defaults_to_generic_class() {
-        let nc = NewComponentState::default();
-        assert!(nc.internal_pn.is_empty());
-        assert!(nc.library_idx.is_none());
-        assert_eq!(nc.class, ComponentClass::generic());
-        assert!(nc.category.is_empty());
-    }
+    fn ingest_sheet_round_trips_through_state_to_where_used_index() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/sample.snxprj");
+        let sheet = PathBuf::from("/tmp/sample.snxprj/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v = Version::new(1, 2);
 
-    #[test]
-    fn library_set_mount_unmount_is_symmetric() {
-        let mut set = LibrarySet::new();
-        assert!(set.is_empty());
-        // Mounting requires a real adapter; testing only the bookkeeping
-        // shape here. (Full end-to-end test lives in `commands.rs`.)
-        let _ = set.unmount(Uuid::nil());
-        assert!(set.is_empty());
+        // Empty state → no sites.
+        assert!(state.where_used_for(uuid, None).is_empty());
+
+        // Ingest one ref under a project/sheet → one site visible.
+        state.ingest_sheet(&project, &sheet, &[(uuid, "U7".into(), v)]);
+        let sites = state.where_used_for(uuid, None);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].instance_id, "U7");
+        assert_eq!(sites[0].version_pinned, v);
+        assert_eq!(sites[0].sheet_path, sheet);
+
+        // Re-ingesting the same sheet with empty refs clears the entry.
+        state.ingest_sheet(&project, &sheet, &[]);
+        assert!(state.where_used_for(uuid, None).is_empty());
     }
 }

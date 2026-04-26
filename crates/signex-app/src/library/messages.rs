@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentClass, ComponentId, ComponentSummary, DistributorSource, LifecycleState, UseSite,
-    Version,
+    BodyShape, ComponentId, ComponentSummary, DistributorSource, Footprint, LifecycleState, Symbol,
+    UseSite, Version,
 };
 
 use super::state::EditorTab;
@@ -151,6 +151,120 @@ pub enum EditorMsg {
 
     // ── History tab ─────────────────────────────────────────
     HistorySelectRevision(Version),
+    // ── Sim tab ─────────────────────────────────────────────
+    /// Toggle "Has SPICE model". When `false` the editor clears
+    /// `draft.shared.simulation` to `None`. When flipped from `false`
+    /// to `true` the editor seeds an empty [`SpiceModel`] and rebuilds
+    /// the pin-map skeleton from the symbol's pins.
+    SimSetEnabled(bool),
+    /// Multi-line SPICE body editor action — applied to the local
+    /// `text_editor::Content` and then mirrored back into
+    /// `draft.shared.simulation.body`.
+    SimBodyAction(iced::widget::text_editor::Action),
+    /// Edit a single pin → SPICE node mapping row. `pin_number` is the
+    /// Standard pin number (the BTreeMap key).
+    SimSetPinNode {
+        pin_number: String,
+        value: String,
+    },
+    /// Coarse-grained SPICE model snapshot — used for whole-model
+    /// replacement (e.g. paste-from-template flows in Phase 2).
+    /// WS-F stub: SimModel rewire lives in WS-E. Variant retained so
+    /// the message tree's shape doesn't churn between WSes.
+    SimChanged,
+    // (Where-Used has no inner messages beyond the row click which
+    //  fires `LibraryMessage::JumpToUseSite` directly.)
+    // ── Symbol tab ──────────────────────────────────────────
+    /// Switch the active symbol-canvas tool.
+    SymbolSetTool(SymbolToolMsg),
+    /// Place a new pin at the snapped world coordinate.
+    SymbolAddPin {
+        x: f64,
+        y: f64,
+    },
+    /// Select an existing pin or field on the canvas.
+    SymbolSelect(SymbolSelectionMsg),
+    /// Drop the current selection (background click).
+    SymbolDeselect,
+    /// Drag the currently-selected element to a new world coordinate.
+    SymbolMoveSelected {
+        x: f64,
+        y: f64,
+    },
+    /// Delete-key on the canvas — removes the selected pin (fields
+    /// keep their slot but get cleared).
+    SymbolDeleteSelected,
+    /// Edit Designator / Value text from the side panel.
+    SymbolSetField {
+        key: FieldKeyMsg,
+        value: String,
+    },
+    /// Edit a pin number from the side-panel pin table.
+    SymbolSetPinNumber {
+        idx: usize,
+        number: String,
+    },
+    /// Edit a pin name from the side-panel pin table.
+    SymbolSetPinName {
+        idx: usize,
+        name: String,
+    },
+    /// "AI: From Datasheet PDF" — opens an `rfd` PDF picker.
+    SymbolPickAiPdf,
+    /// Result of the PDF picker: `None` = cancelled. The path is read
+    /// from disk in the dispatcher and run through
+    /// `signex_library::ai_stub::extract_pinout`.
+    SymbolPickedAiPdf(Option<std::path::PathBuf>),
+    /// User clicked "Apply" in the AI preview card.
+    SymbolApplyAiPreview,
+    /// User clicked "Cancel" in the AI preview card.
+    SymbolDismissAiPreview,
+    /// WS-F: persist the current Symbol primitive through the adapter.
+    /// Carries the new uuid so the dispatcher can round-trip into the
+    /// `LibrarySet` entry under `Component.symbol_ref.uuid`.
+    SaveSymbol(uuid::Uuid, Symbol),
+    // ── Footprint tab ───────────────────────────────────────
+    /// Click-add a pad at the given world position (mm). Pad number
+    /// is auto-incremented in the dispatcher.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag a pad to a new world position (mm).
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Hover position update — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` clears the selection.
+    FootprintSelectPad(Option<usize>),
+    /// Delete the currently-selected pad (Del key).
+    FootprintDeleteSelected,
+    /// Toggle a layer's visibility — the string is the Standard layer
+    /// name (e.g. "F.Cu"). Unknown names are silently ignored.
+    FootprintToggleLayer(String),
+    /// Toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+    /// WS-F: persist the current Footprint primitive through the
+    /// adapter. Carries the new uuid so the dispatcher can round-trip
+    /// into the `LibrarySet` entry under `Component.footprint_ref.uuid`.
+    SaveFootprint(uuid::Uuid, Footprint),
+    // ── Body 3D editor pane (WS-F, inside Footprint tab) ─────
+    /// Set the procedural body height in mm.
+    SetBodyHeight(f32),
+    /// Set the body's offset above the PCB surface in mm.
+    SetBodyOffsetZ(f32),
+    /// Set the body's top RGBA color.
+    SetBodyTopColor([f32; 4]),
+    /// Set the body's side RGBA color.
+    SetBodySideColor([f32; 4]),
+    /// Switch the procedural body shape (Extrude / Dome / Cylinder / Custom).
+    SetBodyShape(BodyShape),
+    // ── STEP attachment (WS-F) ───────────────────────────────
+    /// Click "Attach STEP…" — runs the file picker.
+    StepAttachDialog,
+    /// File-picker resolved. `Some(bytes, filename)` succeeded; `None` =
+    /// user cancelled. Dispatcher SHA-256s, copies into `step/<hash>.step`,
+    /// and updates `Footprint::step_attachment`.
+    StepAttachResult(Option<(Vec<u8>, String)>),
+    /// Drop the current STEP attachment.
+    StepAttachRemove,
+}
 
     // TODO(WS-F): Symbol / Footprint / 3D / Sim editor messages —
     //  add when those tabs land. WS-E only ships the

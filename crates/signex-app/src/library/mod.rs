@@ -1,4 +1,4 @@
-//! `signex-app`'s library subsystem (v0.9 Phase 1).
+//! `signex-app`'s library subsystem.
 //!
 //! This module wires the [`signex_library`] crate (data + adapters)
 //! into the iced UI. It owns:
@@ -12,10 +12,16 @@
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 //!
-//! Phase 1 fills Overview / Params / Supply / History / Where-Used;
-//! Symbol / Footprint / 3D / Sim render placeholder cards with
-//! TODO(v0.9-phase-2) markers. See LIBRARY_PLAN §10–§11 for the
-//! full scope.
+//! WS-F refactor: Symbol + Footprint tabs now operate on typed
+//! `Symbol` / `Footprint` primitives loaded by `PrimitiveRef`. The
+//! Footprint tab also hosts the new Body3D editor + procedural 3D
+//! preview + STEP attachment pane. The Overview / Params / Supply /
+//! Sim / 3D / History tabs render WS-E-pending placeholders until
+//! WS-E lands the binding-record rewire.
+
+// WS-F: most legacy view modules and message variants are stubbed
+// pending WS-E. Each stubbed module carries a `TODO(merge-with-WS-E)`
+// marker pointing at the rebuild.
 
 pub mod close_prompt;
 pub mod commands;

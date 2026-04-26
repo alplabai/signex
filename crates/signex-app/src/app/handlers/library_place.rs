@@ -72,10 +72,17 @@ impl Signex {
                 .expect("non-empty component has at least one revision"),
         };
 
-        // WS-F: emit the engine command here once the schematic engine
-        // grows the slot for placed library symbols (resolved via
-        // `LibrarySet::resolve_symbol`). Until then, structured trace +
-        // close the picker.
+        // Phase 3 emits the engine command here. Until the schematic
+        // Symbol type grows the embedded fields the only thing we can
+        // do is leave a structured trace + close the picker so the
+        // message routing is still exercised end-to-end.
+        // WS-F note: the pre-refactor place flow embedded the symbol
+        // sexpr + a `SharedSlice` snapshot; both paths went away with
+        // WS-B. Phase 3 will resolve the symbol primitive via
+        // `LibrarySet::resolve_symbol(rev.symbol_ref)` and embed THAT
+        // typed graph instead.
+        // TODO(merge-with-WS-E): replace the trace below with the
+        // actual engine command writing the bound `Symbol`.
         tracing::warn!(
             target: "signex::library",
             library_id = %library_id,
@@ -83,8 +90,9 @@ impl Signex {
             version = %revision.version,
             symbol_ref = %revision.symbol_ref,
             content_hash = %hex_short(&revision.content_hash),
+            symbol_ref = %revision.symbol_ref,
             mpn = %revision.primary_mpn.mpn,
-            "schematic engine wire-up shipped in WS-F — picker dismissed"
+            "schematic engine wire-up shipped in Phase 3 — picker dismissed"
         );
 
         self.library.picker = None;

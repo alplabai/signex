@@ -18,7 +18,7 @@ use iced::{Color, Point, Rectangle, Renderer, Theme};
 use crate::library::messages::{EditorMsg, LibraryMessage};
 
 use super::layers::FpLayer;
-use super::state::{EditorPad, FootprintEditorState, GraphicKind};
+use super::state::{EditorPad, FootprintEditorState};
 
 /// Drag threshold in screen pixels — below this we treat the press
 /// as a click, above this as a drag.
@@ -353,41 +353,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.30)),
             );
 
-            // Graphics (silk / fab / etc.) — render below pads.
-            for g in &self.state.graphics {
-                if !self.state.layer_visibility.get(g.layer) {
-                    continue;
-                }
-                let color = g.layer.color();
-                let stroke = Stroke::default()
-                    .with_width((g.width as f32 * cstate.scale).max(1.0))
-                    .with_color(Color { a: 0.85, ..color });
-                match &g.kind {
-                    GraphicKind::Line { start, end } => {
-                        let s = cstate.world_to_screen(*start);
-                        let e = cstate.world_to_screen(*end);
-                        frame.stroke(&Path::line(s, e), stroke);
-                    }
-                    GraphicKind::Circle { center, radius } => {
-                        let c = cstate.world_to_screen(*center);
-                        let r = (*radius as f32 * cstate.scale).max(1.0);
-                        frame.stroke(&Path::circle(c, r), stroke);
-                    }
-                    GraphicKind::Polygon { points } => {
-                        if points.len() >= 2 {
-                            let path = Path::new(|b| {
-                                let p0 = cstate.world_to_screen(points[0]);
-                                b.move_to(p0);
-                                for pt in &points[1..] {
-                                    b.line_to(cstate.world_to_screen(*pt));
-                                }
-                                b.close();
-                            });
-                            frame.stroke(&path, stroke);
-                        }
-                    }
-                }
-            }
+            // WS-F: silk/fab graphics live on the Footprint primitive
+            // (`silk_f` / `silk_b` / `fab_f` / `fab_b`). The pre-refactor
+            // canvas rendered these from a per-canvas `EditorGraphic`
+            // slice; WS-E will rebuild that pipeline reading directly
+            // from the primitive. Pads-only rendering for now.
+            // TODO(merge-with-WS-E): render `Footprint::silk_f` etc.
 
             // Courtyard — drawn as a hollow rectangle on Edge.Cuts.
             if self.state.layer_visibility.get(FpLayer::EdgeCuts)
