@@ -382,6 +382,23 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
             extend(&mut bbox, wx, wy);
         }
     }
+    // Include pin endpoints so the autoplace anchors to the same selection
+    // bounding box that `draw_symbol_selection` shows on screen.
+    for p in &lib.pins {
+        if p.unit != 0 && p.unit != symbol.unit {
+            continue;
+        }
+        if !p.pin.visible {
+            continue;
+        }
+        let rad = p.pin.rotation.to_radians();
+        let (sx, sy) = (p.pin.position.x, p.pin.position.y);
+        let (ex, ey) = (sx + p.pin.length * rad.cos(), sy + p.pin.length * rad.sin());
+        for (lx, ly) in [(sx, sy), (ex, ey)] {
+            let (wx, wy) = transform_local_point(symbol, lx, ly);
+            extend(&mut bbox, wx, wy);
+        }
+    }
     // Fallback to symbol position if symbol has no graphics.
     let (min_x, min_y, max_x, max_y) = bbox.unwrap_or((
         symbol.position.x - 1.27,
