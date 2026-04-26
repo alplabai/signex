@@ -184,30 +184,163 @@ impl Signex {
     }
 
     fn handle_library_settings_message(&mut self, msg: SettingsMsg) -> Task<Message> {
+        use crate::library::settings::{digikey_oauth, persistence};
+        use signex_library::distributor::DistributorAdapter;
+        use signex_library::distributors::digikey::{DIGIKEY_AUTH_URL, DIGIKEY_TOKEN_URL};
+        use signex_library::distributors::keyring::KeyringStore;
+        use signex_library::distributors::mouser::MouserAdapter;
+
         match msg {
+            // ── DigiKey OAuth ────────────────────────────────────
             SettingsMsg::DigiKeyConnect => {
-                tracing::info!(
-                    target: "signex::library",
-                    "DigiKey OAuth flow stub — Phase 2 wires the real PKCE flow"
+                if self.library.settings.digikey_in_flight {
+                    return Task::none();
+                }
+                self.library.settings.digikey_in_flight = true;
+                self.library.settings.digikey_status =
+                    Some("Waiting for browser…".to_string());
+                let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                self.library.settings.digikey_cancel = Some(cancel_flag.clone());
+                let (client_id, client_secret) = digikey_oauth::read_env_credentials();
+                let auth_url = DIGIKEY_AUTH_URL.to_string();
+                let token_url = DIGIKEY_TOKEN_URL.to_string();
+                return Task::perform(
+                    async move {
+                        let cancel = digikey_oauth::CancelHandle::from_flag(cancel_flag);
+                        tokio::task::spawn_blocking(move || {
+                            digikey_oauth::run_blocking(
+                                client_id,
+                                client_secret,
+                                auth_url,
+                                token_url,
+                                cancel,
+                                true,
+                            )
+                        })
+                        .await
+                        .unwrap_or(digikey_oauth::Outcome::Failed {
+                            reason: "worker thread panicked".into(),
+                        })
+                    },
+                    |outcome| {
+                        let (label, err) = match outcome {
+                            digikey_oauth::Outcome::Connected { account_label } => {
+                                (Some(account_label), None)
+                            }
+                            digikey_oauth::Outcome::Failed { reason } => (None, Some(reason)),
+                            digikey_oauth::Outcome::Cancelled => (None, None),
+                        };
+                        Message::Library(LibraryMessage::Settings(
+                            SettingsMsg::DigiKeyOAuthResult {
+                                connected_label: label,
+                                error: err,
+                            },
+                        ))
+                    },
                 );
             }
+            SettingsMsg::DigiKeyCancel => {
+                if let Some(flag) = self.library.settings.digikey_cancel.as_ref() {
+                    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                self.library.settings.digikey_cancel = None;
+                self.library.settings.digikey_in_flight = false;
+                self.library.settings.digikey_status = Some("Cancelled".to_string());
+            }
+            SettingsMsg::DigiKeyOAuthResult {
+                connected_label,
+                error,
+            } => {
+                self.library.settings.digikey_in_flight = false;
+                self.library.settings.digikey_cancel = None;
+                match (connected_label, error) {
+                    (Some(label), _) => {
+                        self.library.settings.digikey_account_email = Some(label.clone());
+                        self.library.settings.digikey_status =
+                            Some(format!("Connected as {label}"));
+                    }
+                    (_, Some(reason)) => {
+                        self.library.settings.digikey_status =
+                            Some(format!("Failed: {reason}"));
+                    }
+                    (None, None) => {
+                        self.library.settings.digikey_status = Some("Cancelled".to_string());
+                    }
+                }
+            }
+            // ── Mouser ───────────────────────────────────────────
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
             }
             SettingsMsg::MouserTest => {
-                let len = self.library.settings.mouser_api_key_buf.len();
-                self.library.settings.mouser_status = Some(if len == 0 {
-                    "Cannot test — paste an API key first.".to_string()
-                } else {
-                    format!("Phase 1 stub — would test key (len = {len}) against Mouser API.")
+                if self.library.settings.mouser_in_flight {
+                    return Task::none();
+                }
+                let key = self.library.settings.mouser_api_key_buf.clone();
+                if key.is_empty() {
+                    self.library.settings.mouser_status =
+                        Some("Cannot test — paste an API key first.".to_string());
+                    return Task::none();
+                }
+                self.library.settings.mouser_in_flight = true;
+                self.library.settings.mouser_status = Some("Testing…".to_string());
+                let key_for_writeback = key.clone();
+                return Task::perform(
+                    async move {
+                        let key_for_test = key.clone();
+                        tokio::task::spawn_blocking(move || {
+                            // Sentinel MPN per spec — known-good Yageo
+                            // resistor ID that Mouser stocks.
+                            const SENTINEL_MPN: &str = "RC0805FR-0710KL";
+                            let adapter = MouserAdapter::with_api_key(
+                                "https://api.mouser.com/api/v1/search/keyword",
+                                key_for_test,
+                                None,
+                            );
+                            adapter
+                                .lookup_by_mpn(SENTINEL_MPN)
+                                .map(|_| ())
+                                .map_err(|e| e.to_string())
+                        })
+                        .await
+                        .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                    },
+                    move |result| {
+                        let result = match result {
+                            Ok(()) => {
+                                // Persist the key on success — same
+                                // path the keyring CLI uses.
+                                let store =
+                                    KeyringStore::for_provider("mouser", "default");
+                                if let Err(e) = store.set_secret(&key_for_writeback) {
+                                    Err(format!("API key valid, but keyring write failed: {e}"))
+                                } else {
+                                    Ok(())
+                                }
+                            }
+                            Err(e) => Err(e),
+                        };
+                        Message::Library(LibraryMessage::Settings(
+                            SettingsMsg::MouserTestResult(result),
+                        ))
+                    },
+                );
+            }
+            SettingsMsg::MouserTestResult(result) => {
+                self.library.settings.mouser_in_flight = false;
+                self.library.settings.mouser_status = Some(match result {
+                    Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
+                    Err(e) => format!("Failed: {e}"),
                 });
             }
+            // ── Preference order ────────────────────────────────
             SettingsMsg::PreferenceUp(src) => {
                 let order = &mut self.library.settings.preferred_order;
                 if let Some(i) = order.iter().position(|s| *s == src)
                     && i > 0
                 {
                     order.swap(i, i - 1);
+                    persistence::save_preferred_order(order);
                 }
             }
             SettingsMsg::PreferenceDown(src) => {
@@ -216,6 +349,7 @@ impl Signex {
                     && i + 1 < order.len()
                 {
                     order.swap(i, i + 1);
+                    persistence::save_preferred_order(order);
                 }
             }
         }
@@ -262,10 +396,105 @@ impl Signex {
                 return Task::none();
             }
             EditorMsg::SubmitForReview => {
-                tracing::info!(
-                    target: "signex::library",
-                    "submit-for-review flow stub — Phase 2 wires the review request UI"
-                );
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.review_dialog_open = true;
+                    editor.review_status = None;
+                }
+                return Task::none();
+            }
+            EditorMsg::SubmitForReviewNotesChanged(s) => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.review_notes_buf = s;
+                }
+                return Task::none();
+            }
+            EditorMsg::SubmitForReviewCancel => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.review_dialog_open = false;
+                    editor.review_status = None;
+                    // Keep `review_notes_buf` so the user doesn't
+                    // lose their typing if they re-open the modal.
+                }
+                return Task::none();
+            }
+            EditorMsg::SubmitForReviewConfirm => {
+                let editor = match self.library.open_editors.get_mut(&window_id) {
+                    Some(e) => e,
+                    None => return Task::none(),
+                };
+                if editor.review_in_flight {
+                    return Task::none();
+                }
+                editor.review_in_flight = true;
+                editor.review_status = Some("Submitting…".to_string());
+
+                // Snapshot everything we need before letting go of
+                // the &mut borrow.
+                let library_root = editor.library_root.clone();
+                let component_id = editor.component_id;
+                let mut revision = editor.draft.clone();
+                revision.state = signex_library::LifecycleState::InReview;
+                revision.refresh_content_hash();
+                let message = if editor.review_notes_buf.trim().is_empty() {
+                    format!("submit for review: {}", editor.display_internal_pn)
+                } else {
+                    format!(
+                        "submit for review: {}\n\n{}",
+                        editor.display_internal_pn,
+                        editor.review_notes_buf.trim()
+                    )
+                };
+
+                // Run the save_revision call on a worker thread —
+                // git2 / fs are blocking and we don't want to stall
+                // the iced runtime even briefly.
+                //
+                // Note: the LocalGitAdapter does the `review/<uuid>`
+                // branch routing automatically when
+                // `manifest.workflow.review_required` is true (see
+                // `signex-library/src/adapters/local_git.rs`).
+                let library_root_clone = library_root.clone();
+                let lib_now = self.library.library_at_mut(&library_root);
+                let Some(lib) = lib_now else {
+                    return Task::done(Message::Library(LibraryMessage::EditorEvent {
+                        window_id,
+                        msg: EditorMsg::SubmitForReviewResult(Err(
+                            "library no longer open".into()
+                        )),
+                    }));
+                };
+                // Run inline — adapter is on the main state. Phase 2
+                // can lift this to a worker thread once the adapter
+                // implements Send + Sync wrappers properly.
+                let _ = library_root_clone;
+                let result = lib
+                    .adapter
+                    .save_revision(component_id, revision, &message)
+                    .map_err(|e| e.to_string());
+                return Task::done(Message::Library(LibraryMessage::EditorEvent {
+                    window_id,
+                    msg: EditorMsg::SubmitForReviewResult(result),
+                }));
+            }
+            EditorMsg::SubmitForReviewResult(result) => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.review_in_flight = false;
+                    match result {
+                        Ok(()) => {
+                            editor.review_dialog_open = false;
+                            editor.review_status = None;
+                            editor.review_notes_buf.clear();
+                            // Reflect the InReview state in the
+                            // header bar so the user sees the
+                            // transition immediately.
+                            editor.draft.state =
+                                signex_library::LifecycleState::InReview;
+                        }
+                        Err(reason) => {
+                            editor.review_status = Some(format!("Failed: {reason}"));
+                        }
+                    }
+                }
                 return Task::none();
             }
             EditorMsg::OpenWhereUsedTab => {
@@ -393,6 +622,10 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
         | EditorMsg::SubmitForReview
+        | EditorMsg::SubmitForReviewNotesChanged(_)
+        | EditorMsg::SubmitForReviewCancel
+        | EditorMsg::SubmitForReviewConfirm
+        | EditorMsg::SubmitForReviewResult(_)
         | EditorMsg::OpenWhereUsedTab => {}
     }
 }

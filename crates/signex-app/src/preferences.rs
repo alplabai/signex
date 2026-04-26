@@ -19,6 +19,7 @@ pub enum PrefNav {
     /// Electrical Rule Check — per-rule severity override.
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
+    /// First-class Preferences pane as of UI-WS7.
     LibraryDistributors,
     // Future: Editor, Shortcuts, ...
 }
@@ -78,6 +79,12 @@ pub enum PrefMsg {
     DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
     /// Clear every ERC severity override — reset to defaults.
     ResetErcSeverities,
+    /// Library → Distributor APIs pane forwarded a settings message.
+    /// Folded into `PrefMsg` so the Preferences modal can mount the
+    /// live panel as a first-class pane (UI-WS7) without breaking the
+    /// existing `Message::PreferencesMsg` plumbing. The handler
+    /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
+    LibrarySettings(crate::library::messages::SettingsMsg),
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -125,6 +132,8 @@ pub fn view<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -136,6 +145,8 @@ pub fn view<'a>(
         custom_name,
         dirty,
         erc_overrides,
+        distributor_settings,
+        panel_tokens,
     );
 
     container(
@@ -173,6 +184,8 @@ fn build_dialog<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     // ── Header ──
     let header = container(
@@ -216,6 +229,8 @@ fn build_dialog<'a>(
             draft_label_style,
             custom_name,
             erc_overrides,
+            distributor_settings,
+            panel_tokens,
         ),
     ]
     .width(Length::Fill)
@@ -338,6 +353,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn build_content<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -347,6 +363,8 @@ fn build_content<'a>(
     draft_label_style: LabelStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -358,13 +376,19 @@ fn build_content<'a>(
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
-        // The Library Distributor APIs panel is owned by the
-        // library subsystem (it edits `LibraryState.settings`, not
-        // the preferences draft). The Preferences modal renders an
-        // inline placeholder pointing at the `Tools ▸ Library` flow
-        // until v0.9.1 promotes the panel to a first-class
-        // preferences pane.
-        PrefNav::LibraryDistributors => content_library_distributors_placeholder(),
+        // UI-WS7: Library → Distributor APIs is now a first-class
+        // pane. The library subsystem owns the actual form
+        // (`crate::library::settings::distributor_apis::view`); we
+        // re-emit its `LibraryMessage::Settings(_)` wrapper as
+        // `PrefMsg::LibrarySettings(_)` so the Preferences modal's
+        // single message bus stays cohesive. The handler in
+        // `app/handlers/preferences.rs` re-dispatches via
+        // `Message::Library` to keep the canonical settings state on
+        // `LibraryState.settings`.
+        PrefNav::LibraryDistributors => content_library_distributors(
+            distributor_settings,
+            panel_tokens,
+        ),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -378,26 +402,42 @@ fn build_content<'a>(
         .into()
 }
 
-// ─── Library Distributor APIs page (placeholder) ─────────────────
+// ─── Library Distributor APIs page (live) ─────────────────
 
-/// Placeholder copy directing users at the Tools-menu surface where
-/// the live Distributor APIs panel mounts in Phase 1. Promoting this
-/// to a first-class preferences pane (with the live state) lands in
-/// v0.9.1 once the keyring writeback runs through prefs persistence.
-fn content_library_distributors_placeholder<'a>() -> Element<'a, PrefMsg> {
-    column![
+/// Mount the live Distributor APIs panel inside the Preferences modal.
+///
+/// UI-WS7: the panel emits `LibraryMessage::Settings(_)`; we wrap
+/// every message in `PrefMsg::LibrarySettings(_)` so the modal's
+/// outer `Message::PreferencesMsg(_)` map stays a single layer. The
+/// `app/handlers/preferences.rs` handler unwraps and re-dispatches
+/// via `Message::Library` so the canonical state writeback runs
+/// through the same dispatcher the Tools-menu surface uses.
+fn content_library_distributors<'a>(
+    settings: &'a crate::library::state::DistributorSettings,
+    tokens: &'a signex_types::theme::ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    let header: Element<'a, PrefMsg> = column![
         section_title("Library — Distributor APIs"),
         Space::new().height(8),
-        text(
-            "Phase 1 ships the live Distributor APIs panel inline in the Library settings \
-             surface (mounted from the library subsystem). Promote-to-Preferences lands in \
-             v0.9.1 once keyring writeback rides through the preferences persistence layer.",
-        )
-        .size(11)
-        .color(TEXT_MUT),
     ]
     .padding([16, 20])
-    .into()
+    .into();
+
+    // The library panel returns `Element<'a, LibraryMessage>`. We
+    // map to `PrefMsg::LibrarySettings` for every Settings sub-
+    // variant; non-Settings library messages are ignored (they're
+    // never produced by `distributor_apis::view`).
+    let pane = crate::library::settings::distributor_apis::view(settings, tokens).map(
+        |lm| match lm {
+            crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
+            // distributor_apis::view never produces anything else.
+            _ => PrefMsg::Close,
+        },
+    );
+
+    column![header, container(pane).padding([0, 20]).width(Length::Fill)]
+        .spacing(0)
+        .into()
 }
 
 // ─── Appearance page ──────────────────────────────────────────

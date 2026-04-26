@@ -37,26 +37,43 @@ pub fn view<'a>(
     };
 
     // ── DigiKey ──────────────────────────────────────────────
-    let digikey_status = match &settings.digikey_account_email {
-        Some(email) => format!("Connected as {email}"),
-        None => "Not connected".to_string(),
+    let digikey_status = match (
+        settings.digikey_in_flight,
+        settings.digikey_status.as_deref(),
+        settings.digikey_account_email.as_deref(),
+    ) {
+        (true, Some(s), _) => s.to_string(),
+        (false, _, Some(label)) => format!("Connected as {label}"),
+        (false, Some(s), _) => s.to_string(),
+        _ => "Not connected".to_string(),
     };
+    let mut digikey_actions = row![text(digikey_status).size(11).color(text_c)]
+        .align_y(iced::Alignment::Center);
+    digikey_actions = digikey_actions.push(Space::new().width(Length::Fill));
+    if settings.digikey_in_flight {
+        digikey_actions = digikey_actions.push(secondary_btn(
+            "Cancel",
+            LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
+            text_c,
+            border,
+        ));
+    } else {
+        digikey_actions = digikey_actions.push(primary_btn(
+            "Connect via OAuth",
+            LibraryMessage::Settings(SettingsMsg::DigiKeyConnect),
+        ));
+    }
     let digikey_section = column![
         section_title("DigiKey"),
         Space::new().height(4),
-        row![
-            text(digikey_status).size(11).color(text_c),
-            Space::new().width(Length::Fill),
-            primary_btn(
-                "Connect via OAuth",
-                LibraryMessage::Settings(SettingsMsg::DigiKeyConnect)
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
+        digikey_actions,
         Space::new().height(4),
-        text("Phase 1 stub — Phase 2 wires the OAuth2 PKCE flow.")
-            .size(10)
-            .color(muted),
+        text(
+            "OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS \
+             keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first."
+        )
+        .size(10)
+        .color(muted),
     ]
     .spacing(2);
 
@@ -167,9 +184,12 @@ pub fn view<'a>(
         order_col = order_col.push(bg_row);
     }
     order_col = order_col.push(
-        text("Phase 1 holds order in memory only; persistence ships in Phase 2.")
-            .size(10)
-            .color(muted),
+        text(
+            "Saved to <config_dir>/signex/distributors.toml. The first matching adapter is \
+             tried first when you paste a distributor URL into the Supply tab.",
+        )
+        .size(10)
+        .color(muted),
     );
 
     container(
@@ -226,6 +246,30 @@ fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, Libra
                 width: 0.0,
                 radius: 3.0.into(),
                 ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+}
+
+#[allow(dead_code)]
+fn secondary_btn<'a>(
+    label: &'a str,
+    message: LibraryMessage,
+    text_c: iced::Color,
+    border: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    button(container(text(label.to_string()).size(11).color(text_c)).padding([4, 12]))
+        .on_press(message)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
             },
             ..iced::widget::button::Style::default()
         })
