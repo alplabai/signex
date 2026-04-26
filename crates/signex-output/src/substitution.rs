@@ -23,6 +23,18 @@ pub struct SubstitutionContext<'a> {
     pub sheet_number: usize,
     pub sheet_count: usize,
     pub signex_version: &'static str,
+    /// Active variant (or `None` for "no variant override"). Surfaces
+    /// as `${VARIANT}` when `physical_structure` is on; resolves to
+    /// empty string otherwise so legacy templates don't pick up
+    /// stray variant text.
+    pub variant: Option<String>,
+    /// PDF Settings → Use Physical Structure. Gates `${VARIANT}` and
+    /// the per-instance number/document fields.
+    pub physical_structure: bool,
+    /// Drop the sheet number / document number from the title block
+    /// when the corresponding physical toggle is off.
+    pub physical_sheet_number: bool,
+    pub physical_document_number: bool,
 }
 
 impl<'a> SubstitutionContext<'a> {
@@ -41,8 +53,25 @@ impl<'a> SubstitutionContext<'a> {
             "COMMENT4" => Some(m.comments[3].clone()),
             "FILENAME" => Some(self.filename.clone()),
             "SHEETNAME" => Some(self.sheet_name.clone()),
-            "SHEETNUMBER" => Some(self.sheet_number.to_string()),
+            "SHEETNUMBER" => Some(if self.physical_sheet_number {
+                self.sheet_number.to_string()
+            } else {
+                String::new()
+            }),
             "SHEETCOUNT" => Some(self.sheet_count.to_string()),
+            "DOCUMENTNUMBER" => Some(if self.physical_document_number {
+                m.custom_fields
+                    .get("document_number")
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            }),
+            "VARIANT" => Some(if self.physical_structure {
+                self.variant.clone().unwrap_or_default()
+            } else {
+                String::new()
+            }),
             "VERSION" => Some(self.signex_version.to_string()),
             other => m.custom_fields.get(other).cloned(),
         }
@@ -135,6 +164,10 @@ mod tests {
             sheet_number: 2,
             sheet_count: 5,
             signex_version: "0.8.0",
+            variant: None,
+            physical_structure: true,
+            physical_sheet_number: true,
+            physical_document_number: true,
         }
     }
 
@@ -239,5 +272,36 @@ mod tests {
         let c = ctx(&m);
         assert_eq!(resolve("Cost: $42", &c), "Cost: $42");
         assert_eq!(resolve("$TITLE", &c), "$TITLE");
+    }
+
+    #[test]
+    fn variant_token_only_emits_when_physical_structure_on() {
+        let m = metadata();
+        let mut c = ctx(&m);
+        c.variant = Some("VarA".into());
+        c.physical_structure = true;
+        assert_eq!(resolve("[${VARIANT}]", &c), "[VarA]");
+        c.physical_structure = false;
+        assert_eq!(resolve("[${VARIANT}]", &c), "[]");
+    }
+
+    #[test]
+    fn sheet_number_token_drops_when_toggle_off() {
+        let m = metadata();
+        let mut c = ctx(&m);
+        c.physical_sheet_number = false;
+        assert_eq!(resolve("Sheet ${SHEETNUMBER}", &c), "Sheet ");
+    }
+
+    #[test]
+    fn document_number_falls_back_to_custom_field() {
+        let mut m = metadata();
+        m.custom_fields
+            .insert("document_number".into(), "DOC-42".into());
+        let mut c = ctx(&m);
+        c.physical_document_number = true;
+        assert_eq!(resolve("${DOCUMENTNUMBER}", &c), "DOC-42");
+        c.physical_document_number = false;
+        assert_eq!(resolve("${DOCUMENTNUMBER}", &c), "");
     }
 }
