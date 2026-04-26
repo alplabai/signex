@@ -388,6 +388,67 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
         }
+        // ── Footprint tab ─────────────────────────────────────
+        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.add_pad_at(x_mm, y_mm);
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.move_pad(idx, x_mm, y_mm);
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.cursor_mm = Some((x_mm, y_mm));
+            }
+        }
+        EditorMsg::FootprintSelectPad(idx) => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.selected_pad = idx;
+            }
+        }
+        EditorMsg::FootprintDeleteSelected => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut()
+                && let Some(sel) = fp.selected_pad
+            {
+                fp.delete_pad(sel);
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintToggleLayer(name) => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut()
+                && let Some(layer) =
+                    crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
+            {
+                fp.layer_visibility.toggle(layer);
+            }
+        }
+        EditorMsg::FootprintToggleAutoFit => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.toggle_auto_fit();
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintEdited(sexpr) => {
+            editor.draft.pcb.footprint.sexpr = sexpr.clone();
+            editor.footprint_state = Some(
+                crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
+                    &sexpr,
+                ),
+            );
+            editor.footprint_canvas_cache = std::sync::OnceLock::new();
+        }
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
