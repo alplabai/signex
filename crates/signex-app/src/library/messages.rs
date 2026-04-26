@@ -100,6 +100,30 @@ pub enum EditorMsg {
     /// `DatasheetRef::Url`. Phase 2 adds the hash-pinned upload flow.
     OverviewSetDatasheet(String),
     OverviewSetLifecycle(LifecycleState),
+    // ── Datasheet picker (URL ↔ Pinned PDF) ─────────────────
+    /// User flipped the URL/Pinned toggle on the Overview tab.
+    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
+    /// URL text-input changed (active when mode == URL). Convenience
+    /// alias for `OverviewSetDatasheet` so the picker widget can stay
+    /// decoupled from the older field name.
+    DatasheetSetUrl(String),
+    /// Click "Upload PDF…" — runs `rfd::AsyncFileDialog`.
+    DatasheetUploadDialog,
+    /// File-picker resolved. `Some(bytes, filename)` = succeeded;
+    /// `None` = user cancelled.
+    DatasheetUploadResult(Option<(Vec<u8>, String)>),
+    // ── 3D model upload + transform ─────────────────────────
+    /// Click "Upload STEP/WRL/GLB…" — runs `rfd::AsyncFileDialog`.
+    Model3dUploadDialog,
+    /// File-picker resolved. `Some(bytes, filename)` = succeeded;
+    /// `None` = user cancelled.
+    Model3dUploadResult(Option<(Vec<u8>, String)>),
+    /// Click "Remove" on the 3D model card.
+    Model3dRemove,
+    /// Edit one axis of the 3D model offset (`offset[axis] = value`).
+    Model3dSetOffset { axis: usize, value: f64 },
+    /// Edit one axis of the 3D model rotation.
+    Model3dSetRotation { axis: usize, value: f64 },
     // ── Params tab ──────────────────────────────────────────
     ParamSetKey {
         idx: usize,
