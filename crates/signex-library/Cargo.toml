@@ -16,6 +16,12 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
+# Database adapter — HTTP client. Optional so non-server consumers stay lean.
+reqwest = { workspace = true, features = ["blocking", "json"], optional = true }
+
+[features]
+# Enable the HTTP `DatabaseAdapter` for server-flavour libraries.
+database = ["dep:reqwest"]
 
 [dev-dependencies]
 tempfile = "3"
