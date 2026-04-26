@@ -108,9 +108,12 @@ impl MouserAdapter {
 
     fn search_by_keyword(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         let api_key = self.resolve_api_key()?;
-        // Mouser's API places the key on the query string and the search
-        // payload in the JSON body.
-        let url = format!("{base}?apiKey={key}", base = self.base_url, key = api_key);
+        // H2: previously the Mouser API key was placed on the query string
+        // (`?apiKey=...`), which leaks into proxy logs, CDN access logs, and
+        // browser history if the URL is ever inspected via the wire. The
+        // Mouser SearchAPI also accepts the key via the `apiKey` HTTP header,
+        // which keeps the credential out of URL space.
+        let url = self.base_url.clone();
         let body = serde_json::json!({
             "SearchByKeywordRequest": {
                 "keyword": mpn,
@@ -123,6 +126,7 @@ impl MouserAdapter {
             .http
             .post(&url)
             .header("Accept", "application/json")
+            .header("apiKey", &api_key)
             .json(&body)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;

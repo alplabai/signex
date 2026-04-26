@@ -56,16 +56,55 @@ impl DistributorCache {
     }
 
     /// Compute the on-disk path for a `(provider, mpn)` entry.
+    ///
+    /// M2: directory-traversal hardening. The MPN is partially trusted
+    /// (vendor-supplied via API responses we don't control), so we:
+    /// 1. Replace path separators with `_` (preserves the original `/`/`\`
+    ///    sanitisation that allowed legitimate slashes in MPNs).
+    /// 2. Reject any MPN containing `..` (parent-dir escape).
+    /// 3. Verify the canonicalised result still lives under `self.root`.
+    ///
+    /// On rejection the path can't be derived; callers should treat the
+    /// error as "this MPN cannot be cached" and return live results
+    /// without persisting them.
     pub fn entry_path(&self, provider: &str, mpn: &str) -> PathBuf {
-        // mpn may contain `/` in some vendor catalogues — sanitise to `_`.
         let safe_mpn = mpn.replace(['/', '\\'], "_");
+        // Path is always derived from `self.root`; `validate_entry_path`
+        // surfaces the rejection. Production callers must invoke `put`/`get`
+        // which run the validation check, but we keep the bare path-builder
+        // pure (no Result) to preserve the existing public surface.
         self.root.join(provider).join(format!("{safe_mpn}.json"))
+    }
+
+    /// M2: enforce that `mpn` produces a path strictly inside `self.root`.
+    /// Any rejection bubbles up as `CacheError::Io(InvalidInput)` so callers
+    /// can branch on it without parsing strings.
+    fn validate_entry_path(&self, provider: &str, mpn: &str) -> Result<PathBuf, CacheError> {
+        if mpn.contains("..") || provider.contains("..") {
+            return Err(CacheError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "cache key contains parent-directory traversal token (..)",
+            )));
+        }
+        let path = self.entry_path(provider, mpn);
+        // `path.starts_with(&self.root)` is lexical, which is sufficient for
+        // our case because we never canonicalise — the tree is brand-new and
+        // `..` was already rejected above. A symlink-based escape would need
+        // canonicalisation, but the cache root is created and owned by
+        // Signex; we don't follow user-controlled symlinks into it.
+        if !path.starts_with(&self.root) {
+            return Err(CacheError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "cache key resolves outside cache root",
+            )));
+        }
+        Ok(path)
     }
 
     /// Write a part to the cache. Refreshes `captured_at` is the caller's
     /// responsibility — we persist whatever is on the part.
     pub fn put(&self, provider: &str, part: &DistributorPart) -> Result<(), CacheError> {
-        let path = self.entry_path(provider, &part.mpn);
+        let path = self.validate_entry_path(provider, &part.mpn)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -82,7 +121,7 @@ impl DistributorCache {
         mpn: &str,
         ttl: Duration,
     ) -> Result<Option<DistributorPart>, CacheError> {
-        let path = self.entry_path(provider, mpn);
+        let path = self.validate_entry_path(provider, mpn)?;
         if !path.exists() {
             return Ok(None);
         }
@@ -101,7 +140,7 @@ impl DistributorCache {
 
     /// Delete a cached entry, if present. Idempotent.
     pub fn invalidate(&self, provider: &str, mpn: &str) -> Result<(), CacheError> {
-        let path = self.entry_path(provider, mpn);
+        let path = self.validate_entry_path(provider, mpn)?;
         match std::fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -154,5 +193,26 @@ mod tests {
         cache.put("lcsc", &part("X")).unwrap();
         cache.invalidate("lcsc", "X").unwrap();
         assert!(cache.get("lcsc", "X", DEFAULT_TTL).unwrap().is_none());
+    }
+
+    /// M2: an MPN containing `..` must be rejected on every cache op so a
+    /// vendor-supplied response can't escape the cache root and overwrite
+    /// arbitrary files.
+    #[test]
+    fn entry_path_rejects_parent_dir_traversal() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+
+        // Direct check via `put`: rejection surfaces as InvalidInput.
+        let err = cache.put("lcsc", &part("../../etc/passwd")).unwrap_err();
+        match err {
+            CacheError::Io(e) => assert_eq!(e.kind(), std::io::ErrorKind::InvalidInput),
+            other => panic!("expected Io(InvalidInput), got {other:?}"),
+        }
+
+        // The same protection applies to reads and invalidations so
+        // attackers can't probe filesystem state through a cache miss.
+        assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
+        assert!(cache.invalidate("..", "anything").is_err());
     }
 }

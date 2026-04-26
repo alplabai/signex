@@ -7,7 +7,7 @@ use std::future::Future;
 use serde_json::json;
 use signex_library::distributor::{DistributorAdapter, DistributorSource};
 use signex_library::distributors::mouser::MouserAdapter;
-use wiremock::matchers::{method, path, query_param};
+use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn fixture_response(mpn: &str) -> serde_json::Value {
@@ -50,13 +50,15 @@ where
 }
 
 #[test]
-fn lookup_by_mpn_passes_apikey_query_param() {
+fn lookup_by_mpn_passes_apikey_header() {
     with_mock_server(
         |server| {
             Box::pin(async move {
+                // H2: the API key now travels in the `apiKey` HTTP header,
+                // not the URL query string — keeps it out of proxy logs.
                 Mock::given(method("POST"))
                     .and(path("/api/v1/search/keyword"))
-                    .and(query_param("apiKey", "DEADBEEF-1234"))
+                    .and(header("apiKey", "DEADBEEF-1234"))
                     .respond_with(
                         ResponseTemplate::new(200)
                             .set_body_json(fixture_response("RC0805FR-0710KL")),
