@@ -29,17 +29,19 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 
-# Phase 1 / WS-C — gated behind `distributors-community`.
-keyring = { workspace = true, optional = true }
-oauth2 = { workspace = true, optional = true }
-# Workspace `reqwest` is async-only; LCSC/JLCPCB/Mouser adapters call
-# blocking variants from a sync `DistributorAdapter` impl, so we re-declare
-# here with the `blocking` feature enabled (additive: same major + crates.io).
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"], optional = true }
-tokio = { workspace = true, optional = true }
-dirs = { version = "5", optional = true }
+# Heuristic AI-stub for symbol pinout extraction (WS-F).
+# Gated behind the `ai-stub` feature so the default build skips the
+# pdf-extract / regex compile cost.
+pdf-extract = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+
+[features]
+default = []
+# Enables `signex_library::ai_stub` — heuristic pinout extraction from
+# datasheet PDFs (no LLM, no network calls). Pulls in `pdf-extract` and
+# `regex`. Real LLM-based synthesis is deferred to v3.x per LIBRARY_PLAN.
+ai-stub = ["dep:pdf-extract", "dep:regex"]
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { workspace = true }
-wiremock = "0.6"
+pdf-writer = { workspace = true }

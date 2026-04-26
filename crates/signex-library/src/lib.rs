@@ -3,7 +3,8 @@
 //! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
 
 pub mod adapter;
-pub mod adapters;
+#[cfg(feature = "ai-stub")]
+pub mod ai_stub;
 pub mod component;
 pub mod diff;
 pub mod distributor;
@@ -19,6 +20,8 @@ pub mod snxpart;
 pub mod where_used;
 
 pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
+#[cfg(feature = "ai-stub")]
+pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use component::{Component, Revision};
 pub use diff::{RevisionDiff, diff_revisions};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
