@@ -2092,7 +2092,7 @@ impl Signex {
                 super::state::WindowKind::ComponentEditor { .. } => {
                     let tokens = &self.document_state.panel_ctx.tokens;
                     if let Some(editor) = self.library.open_editors.get(&window_id) {
-                        crate::library::editor::view(editor, tokens, window_id)
+                        crate::library::editor::view(editor, &self.library, tokens, window_id)
                             .map(Message::Library)
                     } else {
                         // Window mapping exists but state hasn't landed yet —

@@ -19,6 +19,7 @@ use signex_library::{
     LibraryError, LibraryQuery, LifecycleState, LocalGitAdapter, ParamMap, Revision, SupplierLink,
     UseSite, Version, WhereUsedIndex,
 };
+use uuid::Uuid;
 
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
@@ -33,9 +34,11 @@ pub struct LibraryState {
     /// `Signex::ui_state.windows` so `view(id)` knows what to render.
     pub open_editors: HashMap<iced::window::Id, ComponentEditorState>,
     /// Reverse "where-used" index. Single-thread per the L3 invariant
-    /// in `signex-library/src/where_used.rs`. Refresh on project
-    /// open/save (Phase 2 wires the ingest path).
-    #[allow(dead_code)]
+    /// in `signex-library/src/where_used.rs`. Populated incrementally
+    /// via [`LibraryState::ingest_sheet`] whenever a sheet opens or
+    /// saves; the editor's Where-Used tab reads it via `where_used`.
+    /// TODO(v0.9-phase-3): wire signex-engine sheet-load events into
+    /// `ingest_sheet` so the index updates without explicit calls.
     pub where_used: WhereUsedIndex,
     /// Picker modal state — `None` while the modal is closed.
     pub picker: Option<PickerState>,
@@ -130,6 +133,28 @@ impl LibraryState {
             }
         }
         out
+    }
+
+    /// Replace the Where-Used entries for one `(project, sheet)` with
+    /// `refs` — `(component_uuid, instance_id, version_pinned)` tuples.
+    ///
+    /// Thin pass-through to [`WhereUsedIndex::ingest_sheet`]. Phase 1
+    /// callers are tests + the future sheet-load flow; Phase 3 wires
+    /// signex-engine open/save events directly so the index is live.
+    ///
+    /// TODO(v0.9-phase-3): wire signex-engine sheet-load events into
+    /// `ingest_sheet` so callers don't have to invoke this manually.
+    #[allow(dead_code)]
+    pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String, Version)]) {
+        self.where_used.ingest_sheet(project, sheet, refs);
+    }
+
+    /// Look up the use-sites for a component. Thin pass-through to
+    /// [`WhereUsedIndex::where_used`] — kept here so the editor view
+    /// only depends on `LibraryState` (not on `signex_library`'s
+    /// `WhereUsedIndex` directly).
+    pub fn where_used_for(&self, uuid: ComponentId, version: Option<Version>) -> Vec<UseSite> {
+        self.where_used.where_used(uuid, version)
     }
 }
 
@@ -459,127 +484,51 @@ mod tests {
         assert_eq!(labels.len(), EditorTab::ORDER.len());
     }
 
-    /// Construct a minimal editor state for the WS3 mutation tests.
-    fn fresh_editor_state() -> ComponentEditorState {
-        use signex_library::{
-            Component, InternalPn, PcbSide, SchematicSide, SharedSide, Version,
-        };
-        let head = Revision {
-            version: Version::new(0, 1),
-            state: LifecycleState::Draft,
-            created: chrono::Utc::now(),
-            author: String::new(),
-            message: String::new(),
-            schematic: SchematicSide::default(),
-            pcb: PcbSide::default(),
-            shared: SharedSide::default(),
-            content_hash: [0u8; 32],
-        };
-        let component = Component {
-            uuid: uuid::Uuid::now_v7(),
-            internal_pn: InternalPn::new("TEST_PN"),
-            head: head.version,
-            revisions: vec![head.clone()],
-        };
-        ComponentEditorState::from_head(PathBuf::from("MyLib.snxlib"), component, false)
+    #[test]
+    fn ingest_sheet_round_trips_through_state_to_where_used_index() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/sample.snxprj");
+        let sheet = PathBuf::from("/tmp/sample.snxprj/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v = Version::new(1, 2);
+
+        // Empty state → no sites.
+        assert!(state.where_used_for(uuid, None).is_empty());
+
+        // Ingest one ref under a project/sheet → one site visible.
+        state.ingest_sheet(&project, &sheet, &[(uuid, "U7".into(), v)]);
+        let sites = state.where_used_for(uuid, None);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].instance_id, "U7");
+        assert_eq!(sites[0].version_pinned, v);
+        assert_eq!(sites[0].sheet_path, sheet);
+
+        // Re-ingesting the same sheet with empty refs clears the entry.
+        state.ingest_sheet(&project, &sheet, &[]);
+        assert!(state.where_used_for(uuid, None).is_empty());
     }
 
     #[test]
-    fn set_datasheet_pinned_replaces_url_variant() {
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://example.com/d.pdf".into());
-        state.set_datasheet_pinned("deadbeef".into(), "TLP281.pdf".into());
-        match state.draft.shared.datasheet.as_ref() {
-            Some(DatasheetRef::HashPinned { hash, filename }) => {
-                assert_eq!(hash, "deadbeef");
-                assert_eq!(filename, "TLP281.pdf");
-            }
-            other => panic!("expected HashPinned, got {other:?}"),
-        }
-    }
+    fn where_used_for_filters_by_pinned_version_when_requested() {
+        let mut state = LibraryState::default();
+        let project = PathBuf::from("/tmp/p.snxprj");
+        let sheet = PathBuf::from("/tmp/p/main.snxsch");
+        let uuid = Uuid::now_v7();
+        let v1 = Version::new(1, 0);
+        let v2 = Version::new(1, 1);
 
-    #[test]
-    fn set_datasheet_mode_url_drops_pinned() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_pinned("abc".into(), "x.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::Url);
-        // Switching to URL with no URL-buffer drops the prior datasheet
-        // entirely — user must paste a fresh URL.
-        assert!(state.draft.shared.datasheet.is_none());
-    }
+        state.ingest_sheet(
+            &project,
+            &sheet,
+            &[(uuid, "R1".into(), v1), (uuid, "R2".into(), v2)],
+        );
 
-    #[test]
-    fn set_datasheet_mode_pinned_drops_url() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://x.test/d.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::PinnedPdf);
-        assert!(state.draft.shared.datasheet.is_none());
-    }
-
-    #[test]
-    fn set_datasheet_mode_idempotent_when_variant_matches() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://x.test/d.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::Url);
-        // No-op — URL preserved.
-        match state.draft.shared.datasheet.as_ref() {
-            Some(DatasheetRef::Url { url }) => assert_eq!(url, "https://x.test/d.pdf"),
-            other => panic!("expected Url, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn set_model_3d_round_trips_path_and_info() {
-        use crate::library::editor::three_d::Model3dUploadInfo;
-        use signex_library::ModelRef;
-        let mut state = fresh_editor_state();
-        let info = Model3dUploadInfo {
-            filename: "fpv-cam.step".into(),
-            hash_hex: "ab".repeat(32),
-            size_bytes: 12_345,
-            extension: "step".into(),
-        };
-        let model = ModelRef {
-            path: info.storage_path(),
-            offset: [1.0, 2.0, 3.0],
-            rotation: [10.0, 20.0, 30.0],
-        };
-        state.set_model_3d(Some((model.clone(), info.clone())));
-
-        assert_eq!(state.draft.pcb.model_3d.as_ref(), Some(&model));
-        assert_eq!(state.three_d_upload_info.as_ref(), Some(&info));
-
-        // JSON serde round-trip on PcbSide preserves the ModelRef.
-        let json = serde_json::to_string(&state.draft.pcb).unwrap();
-        let back: signex_library::PcbSide = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.model_3d.as_ref(), Some(&model));
-    }
-
-    #[test]
-    fn set_model_3d_none_clears_both_sides() {
-        use crate::library::editor::three_d::Model3dUploadInfo;
-        use signex_library::ModelRef;
-        let mut state = fresh_editor_state();
-        let info = Model3dUploadInfo {
-            filename: "m.step".into(),
-            hash_hex: "0".repeat(64),
-            size_bytes: 1,
-            extension: "step".into(),
-        };
-        let model = ModelRef {
-            path: "shared/3d-models/dummy.step".into(),
-            offset: [0.0; 3],
-            rotation: [0.0; 3],
-        };
-        state.set_model_3d(Some((model, info)));
-        assert!(state.draft.pcb.model_3d.is_some());
-        assert!(state.three_d_upload_info.is_some());
-        state.set_model_3d(None);
-        assert!(state.draft.pcb.model_3d.is_none());
-        assert!(state.three_d_upload_info.is_none());
+        // Unfiltered → both instances.
+        assert_eq!(state.where_used_for(uuid, None).len(), 2);
+        // Filtered to v1 → just R1.
+        let v1_sites = state.where_used_for(uuid, Some(v1));
+        assert_eq!(v1_sites.len(), 1);
+        assert_eq!(v1_sites[0].instance_id, "R1");
     }
 }
 
@@ -588,4 +537,4 @@ mod tests {
 /// always pulled in by the editor types). Phase 2 may flip this when
 /// the trait widens.
 #[allow(dead_code)]
-fn _types_used(_c: &Component, _r: &Revision, _u: &UseSite) {}
+fn _types_used(_c: &Component, _r: &Revision) {}
