@@ -56,6 +56,154 @@ pub struct PcbSide {
     pub pcb_params: ParamMap,
 }
 
+/// Reference to a datasheet — either remote URL or hash-pinned local PDF.
+///
+/// Note: `Url` variant uses a named field so the enum is serializable with
+/// `tag = "kind"` (serde_json forbids tagged newtype variants over strings).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DatasheetRef {
+    Url { url: String },
+    HashPinned { hash: String, filename: String },
+}
+
+impl DatasheetRef {
+    /// Convenience constructor mirroring the original `DatasheetRef::Url(s)` shape.
+    pub fn url(s: impl Into<String>) -> Self {
+        Self::Url { url: s.into() }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SupplierLink {
+    pub distributor: String,
+    pub sku: String,
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct VariantOverride {
+    #[serde(default)]
+    pub fitted: Option<bool>,
+    #[serde(default)]
+    pub mpn: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpiceModel {
+    pub body: String,
+    /// pin name → SPICE node mapping
+    pub pin_map: BTreeMap<String, String>,
+}
+
+/// Identifier for a parameter inheritance template (LIBRARY_PLAN §10).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TemplateId(pub String);
+
+// ── PLM-reserved fields (LIBRARY_PLAN §14.2) ──────────────────────────
+// Inert in v0.9; populated when the Plm adapter ships in v3.0.
+
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct AvlEntry {
+    pub manufacturer: String,
+    pub mpn: String,
+    pub status: String, // "Approved" | "Conditional" | "Disqualified"
+    pub notes: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct ComplianceTags {
+    #[serde(default)]
+    pub rohs: Option<String>,
+    #[serde(default)]
+    pub reach: Option<String>,
+    #[serde(default)]
+    pub other: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct PlmLink {
+    #[serde(default)]
+    pub plm_part_id: Option<String>,
+    #[serde(default)]
+    pub eco_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PricingSnapshot {
+    pub captured_at: chrono::DateTime<chrono::Utc>,
+    pub by_distributor: BTreeMap<String, Vec<PriceBreak>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PriceBreak {
+    pub qty: u32,
+    pub unit_price_usd: f64,
+}
+
+/// Cross-domain shared data — MPN, parameters, supply chain, etc.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct SharedSide {
+    pub mpn: String,
+    pub manufacturer: String,
+    pub description: String,
+    #[serde(default)]
+    pub datasheet: Option<DatasheetRef>,
+    #[serde(default)]
+    pub suppliers: Vec<SupplierLink>,
+    #[serde(default)]
+    pub variants: BTreeMap<String, VariantOverride>,
+    #[serde(default)]
+    pub simulation: Option<SpiceModel>,
+    #[serde(default)]
+    pub parameters: ParamMap,
+    #[serde(default)]
+    pub parameter_template: Option<TemplateId>,
+
+    // PLM-reserved (LIBRARY_PLAN §14.2). Inert in v0.9.
+    #[serde(default)]
+    pub avl: Vec<AvlEntry>,
+    #[serde(default)]
+    pub compliance: ComplianceTags,
+    #[serde(default)]
+    pub plm_link: Option<PlmLink>,
+    #[serde(default)]
+    pub distributor_pricing_hint: Option<PricingSnapshot>,
+}
+
+/// Subset of `SharedSide` that gets embedded in both `.snxsch` and `.snxpcb`
+/// for fast BOM/fab access without forcing a cross-file dependency.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct SharedSlice {
+    pub mpn: String,
+    pub manufacturer: String,
+    pub description: String,
+    #[serde(default)]
+    pub bom_params: ParamMap, // value, tolerance, package, etc — keyed for BOM rollup
+}
+
+impl SharedSide {
+    /// Project the BOM-relevant subset for `.snxsch` / `.snxpcb` embed.
+    pub fn slice_for_embed(&self) -> SharedSlice {
+        let mut bom_params = ParamMap::new();
+        // Conservative subset — anything else stays in shared, snapshot stays small.
+        for key in ["value", "tolerance", "package", "rating"] {
+            if let Some(v) = self.parameters.get(key) {
+                bom_params.insert(key.to_string(), v.clone());
+            }
+        }
+        SharedSlice {
+            mpn: self.mpn.clone(),
+            manufacturer: self.manufacturer.clone(),
+            description: self.description.clone(),
+            bom_params,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,5 +250,53 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let back: PcbSide = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn shared_side_round_trips_with_plm_reserved() {
+        let s = SharedSide {
+            mpn: "RC0805FR-0710KL".into(),
+            manufacturer: "Yageo".into(),
+            description: "Resistor 10k 1% 0805".into(),
+            datasheet: Some(DatasheetRef::url("https://example.com/ds.pdf")),
+            suppliers: vec![SupplierLink {
+                distributor: "DigiKey".into(),
+                sku: "311-10.0KCRCT-ND".into(),
+                url: None,
+            }],
+            variants: BTreeMap::new(),
+            simulation: None,
+            parameters: ParamMap::new(),
+            parameter_template: Some(TemplateId("Resistor".into())),
+            avl: vec![AvlEntry {
+                manufacturer: "Yageo".into(),
+                mpn: "RC0805FR-0710KL".into(),
+                status: "Approved".into(),
+                notes: None,
+            }],
+            compliance: ComplianceTags::default(),
+            plm_link: None,
+            distributor_pricing_hint: None,
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        let back: SharedSide = serde_json::from_str(&json).unwrap();
+        assert_eq!(s, back);
+    }
+
+    #[test]
+    fn shared_slice_only_carries_bom_relevant_params() {
+        let mut params = ParamMap::new();
+        params.insert("value".into(), ParamValue::Text("10k".into()));
+        params.insert(
+            "temperature_coefficient".into(),
+            ParamValue::Text("X7R".into()),
+        );
+        let shared = SharedSide {
+            parameters: params,
+            ..Default::default()
+        };
+        let slice = shared.slice_for_embed();
+        assert!(slice.bom_params.contains_key("value"));
+        assert!(!slice.bom_params.contains_key("temperature_coefficient"));
     }
 }
