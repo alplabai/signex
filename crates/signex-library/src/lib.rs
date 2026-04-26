@@ -3,6 +3,7 @@
 //! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
 
 pub mod adapter;
+pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
 pub mod component;
@@ -39,6 +40,9 @@ pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 pub use where_used::{UseSite, WhereUsedIndex};
+
+#[cfg(feature = "local-git")]
+pub use adapters::local_git::LocalGitAdapter;
 
 #[cfg(test)]
 mod smoke {
