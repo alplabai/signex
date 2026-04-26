@@ -1,143 +1,118 @@
 //! Footprint editor in-memory state.
 //!
-//! `PcbSide.footprint.sexpr` is the on-disk ground truth. We parse it
-//! into typed structs on first display and re-serialize on every
-//! mutation so the draft round-trips cleanly through Save Draft /
-//! Commit.
+//! WS-F refactor: the canvas state now derives from a typed
+//! [`signex_library::Footprint`] primitive. The pre-refactor
+//! `from_sexpr` round-trip is gone — pad geometry mirrors
+//! `Footprint::pads: Vec<Pad>`. Two-way sync runs through
+//! [`FootprintEditorState::sync_pads_to_primitive`] so the dispatcher
+//! keeps the primitive authoritative.
+//!
+//! Dispatcher convention: every mutating op edits the canvas state,
+//! then calls `sync_pads_to_primitive(&canvas_state, &mut footprint)`
+//! to write the new pad list back onto the primitive.
 
-use standard_parser::pcb as kp;
-use signex_types::pcb::{Pad, PadShape, PadType};
+use signex_library::{Footprint, LayerId, Pad, PadKind, PadShape};
 
 use super::layers::{FpLayer, LayerVisibility};
 
-/// Default new-pad size in mm — 1.0 mm × 1.0 mm rect, matching
-/// `PCB_DEFAULT_PAD_SIZE_MM`. The user resizes via the Properties
-/// panel in v0.9.x; the MVP only exposes pad placement.
+/// Default new-pad size in mm.
 const NEW_PAD_SIZE_MM: f64 = 1.0;
-
 /// Slack on each side of the pad bounding box when auto-fitting the
-/// courtyard polygon. Altium's default footprint courtyard expansion
-/// is 0.25 mm — we match it.
+/// courtyard polygon.
 const COURTYARD_SLACK_MM: f64 = 0.25;
 
-/// Footprint name written into the `(footprint <name>)` envelope when
-/// the part is brand new. The user re-names this from the Component
-/// Editor's Overview tab in Phase 2; the MVP just keeps the existing
-/// id intact during round-trips.
-const DEFAULT_FOOTPRINT_ID: &str = "snx-footprint";
-
-/// One pad in the in-memory footprint. A subset of
-/// [`signex_types::pcb::Pad`] — we only carry what the MVP renders or
-/// edits. Re-serialization fills in defaults for the rest.
+/// One pad in the editor canvas. A subset of [`signex_library::Pad`] —
+/// we only carry the fields the canvas renders or hit-tests. Extra
+/// fields on `Pad` (drill, mask/paste margins, etc.) round-trip via
+/// [`FootprintEditorState::sync_pads_to_primitive`] without a UI yet.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorPad {
-    /// Pad number / name (Standard uses a free-form string here so
-    /// "1", "GND", "A1" are all valid).
     pub number: String,
-    /// Centre position in mm relative to the footprint origin.
     pub position_mm: (f64, f64),
-    /// Pad width × height in mm.
     pub size_mm: (f64, f64),
-    pub pad_type: PadType,
+    pub kind: PadKind,
     pub shape: PadShape,
-    /// Layers the pad lives on. SMD pads on F.Cu use
-    /// `["F.Cu", "F.Mask", "F.Paste"]`; we only render the first
-    /// entry but preserve the rest for round-trips.
-    pub layers: Vec<String>,
+    /// Layers the pad lives on — first entry is treated as the
+    /// primary layer for hit-test/visibility gating.
+    pub layers: Vec<LayerId>,
 }
 
 impl EditorPad {
-    /// Default new-pad: rect SMD on F.Cu, 1mm square.
     pub fn new_default(number: String, position_mm: (f64, f64)) -> Self {
         Self {
             number,
             position_mm,
             size_mm: (NEW_PAD_SIZE_MM, NEW_PAD_SIZE_MM),
-            pad_type: PadType::Smd,
+            kind: PadKind::Smd,
             shape: PadShape::Rect,
             layers: vec![
-                "F.Cu".to_string(),
-                "F.Mask".to_string(),
-                "F.Paste".to_string(),
+                LayerId::new("F.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("F.Paste"),
             ],
         }
     }
 
-    /// Layer the pad lives on for hit-testing / toggle gating —
-    /// derived from the first entry in `layers`.
+    /// Layer the pad lives on for hit-testing / toggle gating.
     pub fn primary_layer(&self) -> FpLayer {
         self.layers
             .first()
-            .and_then(|name| FpLayer::from_standard_name(name))
+            .and_then(|name| FpLayer::from_standard_name(name.as_str()))
             .unwrap_or(FpLayer::FCu)
     }
 
-    /// Bounding box (min_x, min_y, max_x, max_y) in mm — used for
-    /// hit-testing and auto-fit.
+    /// Bounding box (min_x, min_y, max_x, max_y) in mm.
     pub fn bbox_mm(&self) -> (f64, f64, f64, f64) {
         let (cx, cy) = self.position_mm;
         let (w, h) = self.size_mm;
         (cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0)
     }
 
-    /// Hit test against a world-space point in mm. Pads are
-    /// rendered as axis-aligned rectangles in the MVP, so the test
-    /// is the obvious AABB containment.
+    /// AABB containment check.
     pub fn contains_mm(&self, x: f64, y: f64) -> bool {
         let (xmin, ymin, xmax, ymax) = self.bbox_mm();
         x >= xmin && x <= xmax && y >= ymin && y <= ymax
     }
+
+    fn from_pad(p: &Pad) -> Self {
+        Self {
+            number: p.number.clone(),
+            position_mm: (p.position[0], p.position[1]),
+            size_mm: (p.size[0], p.size[1]),
+            kind: p.kind,
+            shape: p.shape.clone(),
+            layers: p.layers.clone(),
+        }
+    }
+
+    fn to_pad(&self) -> Pad {
+        Pad {
+            number: self.number.clone(),
+            kind: self.kind,
+            shape: self.shape.clone(),
+            size: [self.size_mm.0, self.size_mm.1],
+            position: [self.position_mm.0, self.position_mm.1],
+            rotation: 0.0,
+            layers: self.layers.clone(),
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+        }
+    }
 }
 
-/// One graphic stroke / poly preserved verbatim from the source
-/// footprint. Phase 2 (router stages) graduates this into a typed
-/// drawing model; the MVP only renders.
-#[derive(Debug, Clone, PartialEq)]
-pub struct EditorGraphic {
-    pub layer: FpLayer,
-    pub kind: GraphicKind,
-    /// Standard-format layer name, kept so round-tripping unknown layers
-    /// (which `FpLayer::from_standard_name` collapses) preserves the
-    /// original string.
-    pub raw_layer_name: String,
-    /// Stroke width in mm.
-    pub width: f64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum GraphicKind {
-    Line {
-        start: (f64, f64),
-        end: (f64, f64),
-    },
-    Circle {
-        center: (f64, f64),
-        radius: f64,
-    },
-    Polygon {
-        points: Vec<(f64, f64)>,
-    },
-}
-
-/// Live, in-memory state of the Footprint tab.
+/// Live, in-memory state of the Footprint canvas — drives interaction
+/// and rendering. The authoritative pad list lives on
+/// `ComponentEditorState.footprint.pads`; this struct mirrors it for
+/// the canvas's hit-test + draw layer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FootprintEditorState {
-    /// Display id retained from the parsed footprint envelope.
-    pub footprint_id: String,
     pub pads: Vec<EditorPad>,
-    /// Decorative graphics (silk / fab / edge-cuts polylines).
-    /// Pure-display in the MVP — Phase 2 surfaces an editing UI.
-    pub graphics: Vec<EditorGraphic>,
     pub layer_visibility: LayerVisibility,
-    /// `Some(idx)` while a pad is selected. Cleared on background
-    /// click or Delete.
+    /// `Some(idx)` while a pad is selected.
     pub selected_pad: Option<usize>,
-    /// `true` when the courtyard polygon should track the pad
-    /// bounding box. Toggled by the canvas footer button.
+    /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
-    /// Courtyard polygon. When `auto_fit_courtyard` is true this is
-    /// derived from `pads`; otherwise it's user-controlled (Phase 2
-    /// drawing tools).
     pub courtyard_mm: Option<CourtyardRect>,
     /// Last known cursor world position in mm — drives the footer
     /// readout.
@@ -153,36 +128,11 @@ pub struct CourtyardRect {
 }
 
 impl FootprintEditorState {
-    /// Parse a Standard footprint S-expression into editable state. An
-    /// empty / blank `sexpr` yields a fresh empty footprint so the
-    /// "new component" flow can drop the user straight into the
-    /// editor.
-    pub fn from_sexpr(sexpr: &str) -> Self {
-        let trimmed = sexpr.trim();
-        if trimmed.is_empty() {
-            return Self::empty();
-        }
-
-        match kp::parse_footprint_file(trimmed) {
-            Ok(fp) => Self::from_parsed(fp),
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library::footprint",
-                    error = %e,
-                    "footprint sexpr parse failed; opening blank canvas",
-                );
-                Self::empty()
-            }
-        }
-    }
-
-    /// Empty footprint — used for brand-new components and as the
-    /// fallback when parsing fails.
-    pub fn empty() -> Self {
+    /// Build canvas state from the primitive's pad list.
+    pub fn from_footprint(fp: &Footprint) -> Self {
+        let pads = fp.pads.iter().map(EditorPad::from_pad).collect();
         let mut s = Self {
-            footprint_id: DEFAULT_FOOTPRINT_ID.to_string(),
-            pads: Vec::new(),
-            graphics: Vec::new(),
+            pads,
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
             auto_fit_courtyard: true,
@@ -193,34 +143,11 @@ impl FootprintEditorState {
         s
     }
 
-    fn from_parsed(fp: signex_types::pcb::Footprint) -> Self {
-        let pads = fp
-            .pads
-            .into_iter()
-            .map(|p: Pad| EditorPad {
-                number: p.number,
-                position_mm: (p.position.x, p.position.y),
-                size_mm: (p.size.x, p.size.y),
-                pad_type: p.pad_type,
-                shape: p.shape,
-                layers: p.layers,
-            })
-            .collect();
-
-        let graphics = fp
-            .graphics
-            .into_iter()
-            .filter_map(graphic_from_fp)
-            .collect();
-
+    /// Empty state — used for brand-new components and as the fallback
+    /// when the binding has no footprint primitive yet.
+    pub fn empty() -> Self {
         let mut s = Self {
-            footprint_id: if fp.footprint_id.is_empty() {
-                DEFAULT_FOOTPRINT_ID.to_string()
-            } else {
-                fp.footprint_id
-            },
-            pads,
-            graphics,
+            pads: Vec::new(),
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
             auto_fit_courtyard: true,
@@ -232,8 +159,6 @@ impl FootprintEditorState {
     }
 
     /// Bounding box of the entire footprint (pads + courtyard) in mm.
-    /// Used by the canvas to fit-to-content. Returns `None` for an
-    /// empty footprint so the caller can apply its own default rect.
     pub fn content_bbox_mm(&self) -> Option<(f64, f64, f64, f64)> {
         let mut bbox: Option<(f64, f64, f64, f64)> = None;
         let mut expand = |x0: f64, y0: f64, x1: f64, y1: f64| {
@@ -265,7 +190,6 @@ impl FootprintEditorState {
     }
 
     /// Click-add a new default pad at the given world position.
-    /// Returns the new pad's index for downstream selection.
     pub fn add_pad_at(&mut self, x_mm: f64, y_mm: f64) -> usize {
         let number = self.next_pad_number();
         self.pads.push(EditorPad::new_default(number, (x_mm, y_mm)));
@@ -275,8 +199,7 @@ impl FootprintEditorState {
         idx
     }
 
-    /// Move the pad at `idx` to a new world position. No-op if the
-    /// index is out of range.
+    /// Move the pad at `idx` to a new world position.
     pub fn move_pad(&mut self, idx: usize, x_mm: f64, y_mm: f64) {
         if let Some(pad) = self.pads.get_mut(idx) {
             pad.position_mm = (x_mm, y_mm);
@@ -284,15 +207,12 @@ impl FootprintEditorState {
         }
     }
 
-    /// Delete the pad at `idx`. No-op if out of range.
-    /// Adjusts `selected_pad` so it doesn't dangle.
+    /// Delete the pad at `idx`.
     pub fn delete_pad(&mut self, idx: usize) {
         if idx >= self.pads.len() {
             return;
         }
         self.pads.remove(idx);
-        // Selection cleared whenever the deleted pad was selected;
-        // otherwise shift down so it still points at the same pad.
         self.selected_pad = match self.selected_pad {
             Some(sel) if sel == idx => None,
             Some(sel) if sel > idx => Some(sel - 1),
@@ -316,7 +236,6 @@ impl FootprintEditorState {
     }
 
     /// Recompute the courtyard polygon when auto-fit is enabled.
-    /// Called after every pad mutation.
     pub fn recompute_courtyard(&mut self) {
         if !self.auto_fit_courtyard {
             return;
@@ -352,174 +271,74 @@ impl FootprintEditorState {
         });
     }
 
-    /// Toggle the auto-fit courtyard flag. Recomputes when re-enabled.
+    /// Toggle the auto-fit courtyard flag.
     pub fn toggle_auto_fit(&mut self) {
         self.auto_fit_courtyard = !self.auto_fit_courtyard;
         self.recompute_courtyard();
     }
 
-    /// Re-emit the editor state as a Standard-format S-expression that
-    /// round-trips through `parse_footprint_file`. Pad fields not
-    /// edited by the MVP (drill, net, properties) are written with
-    /// safe defaults; preserved-but-unedited graphics are written
-    /// back unchanged.
-    ///
-    /// Output is whitespace-friendly so a future diff against
-    /// `parse_footprint_file` can rely on stable line breaks.
-    pub fn to_sexpr(&self) -> String {
-        let mut out = String::new();
-        out.push_str("(footprint \"");
-        out.push_str(&escape(&self.footprint_id));
-        out.push_str("\"\n  (layer \"F.Cu\")\n");
-
-        // Pads.
-        for pad in &self.pads {
-            let kind = pad_type_str(pad.pad_type);
-            let shape = pad_shape_str(pad.shape);
-            out.push_str(&format!(
-                "  (pad \"{}\" {} {}\n",
-                escape(&pad.number),
-                kind,
-                shape,
-            ));
-            out.push_str(&format!(
-                "    (at {:.4} {:.4})\n",
-                pad.position_mm.0, pad.position_mm.1
-            ));
-            out.push_str(&format!(
-                "    (size {:.4} {:.4})\n",
-                pad.size_mm.0, pad.size_mm.1
-            ));
-            out.push_str("    (layers");
-            for layer in &pad.layers {
-                out.push(' ');
-                out.push('"');
-                out.push_str(&escape(layer));
-                out.push('"');
-            }
-            out.push_str(")\n  )\n");
+    /// WS-F: write the canvas-side pad list back onto the primitive.
+    /// Called after every mutation so save_revision sees the current
+    /// pad layout. Other Footprint fields (graphics, body_3d, etc.)
+    /// are left untouched — they're edited by their own panes.
+    pub fn sync_pads_to_primitive(canvas: &Self, fp: &mut Footprint) {
+        fp.pads = canvas.pads.iter().map(EditorPad::to_pad).collect();
+        // Auto-fit courtyard is mirrored as a Polygon for downstream
+        // PCB renderers.
+        if let Some(c) = canvas.courtyard_mm {
+            fp.courtyard = signex_library::Polygon::new(vec![
+                [c.min_x, c.min_y],
+                [c.max_x, c.min_y],
+                [c.max_x, c.max_y],
+                [c.min_x, c.max_y],
+            ]);
         }
-
-        // Courtyard polygon — drawn as a rectangle of fp_lines on
-        // Edge.Cuts. Rendered conditionally on auto-fit + presence.
-        if let Some(c) = self.courtyard_mm {
-            let layer_name = "Edge.Cuts";
-            let corners = [
-                (c.min_x, c.min_y),
-                (c.max_x, c.min_y),
-                (c.max_x, c.max_y),
-                (c.min_x, c.max_y),
-            ];
-            for i in 0..4 {
-                let (x0, y0) = corners[i];
-                let (x1, y1) = corners[(i + 1) % 4];
-                out.push_str(&format!(
-                    "  (fp_line (start {:.4} {:.4}) (end {:.4} {:.4}) (layer \"{}\") (stroke (width 0.05)))\n",
-                    x0, y0, x1, y1, layer_name,
-                ));
-            }
-        }
-
-        // Round-trip the silk/fab/etc. graphics we parsed but don't edit.
-        for g in &self.graphics {
-            // Skip Edge.Cuts strokes — they're regenerated from the
-            // courtyard each save so we don't double-write.
-            if g.raw_layer_name == "Edge.Cuts" {
-                continue;
-            }
-            match &g.kind {
-                GraphicKind::Line { start, end } => {
-                    out.push_str(&format!(
-                        "  (fp_line (start {:.4} {:.4}) (end {:.4} {:.4}) (layer \"{}\") (stroke (width {:.4})))\n",
-                        start.0, start.1, end.0, end.1, escape(&g.raw_layer_name), g.width,
-                    ));
-                }
-                GraphicKind::Circle { center, radius } => {
-                    let edge = (center.0 + radius, center.1);
-                    out.push_str(&format!(
-                        "  (fp_circle (center {:.4} {:.4}) (end {:.4} {:.4}) (layer \"{}\") (stroke (width {:.4})))\n",
-                        center.0, center.1, edge.0, edge.1, escape(&g.raw_layer_name), g.width,
-                    ));
-                }
-                GraphicKind::Polygon { points } => {
-                    out.push_str("  (fp_poly (pts");
-                    for (x, y) in points {
-                        out.push_str(&format!(" (xy {:.4} {:.4})", x, y));
-                    }
-                    out.push_str(&format!(
-                        ") (layer \"{}\") (stroke (width {:.4})))\n",
-                        escape(&g.raw_layer_name),
-                        g.width
-                    ));
-                }
-            }
-        }
-
-        out.push(')');
-        out
     }
 }
 
-fn graphic_from_fp(g: signex_types::pcb::FpGraphic) -> Option<EditorGraphic> {
-    let layer = FpLayer::from_standard_name(&g.layer).unwrap_or(FpLayer::FFab);
-    let raw_layer_name = if g.layer.is_empty() {
-        layer.standard_name().to_string()
-    } else {
-        g.layer
-    };
-    let kind = match g.graphic_type.as_str() {
-        "line" => {
-            let start = g.start?;
-            let end = g.end?;
-            GraphicKind::Line {
-                start: (start.x, start.y),
-                end: (end.x, end.y),
-            }
-        }
-        "circle" => {
-            let center = g.center?;
-            GraphicKind::Circle {
-                center: (center.x, center.y),
-                radius: g.radius,
-            }
-        }
-        "poly" => GraphicKind::Polygon {
-            points: g.points.into_iter().map(|p| (p.x, p.y)).collect(),
-        },
-        // Drop fp_text and fp_arc in the MVP — they're preserved as raw
-        // sexpr in `draft.pcb.footprint.sexpr`'s pre-edit value if the
-        // editor is never opened, and re-introduced once Phase 2 adds
-        // text/arc tooling.
-        _ => return None,
-    };
-    Some(EditorGraphic {
-        layer,
-        kind,
-        raw_layer_name,
-        width: if g.width <= 0.0 { 0.1 } else { g.width },
-    })
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::Footprint;
 
-fn pad_type_str(t: PadType) -> &'static str {
-    match t {
-        PadType::Thru => "thru_hole",
-        PadType::Smd => "smd",
-        PadType::Connect => "connect",
-        PadType::NpThru => "np_thru_hole",
+    #[test]
+    fn from_footprint_round_trips_pads() {
+        let mut fp = Footprint::empty("test");
+        fp.pads.push(Pad {
+            number: "1".into(),
+            kind: PadKind::Smd,
+            shape: PadShape::Rect,
+            size: [1.0, 1.5],
+            position: [-2.0, 0.0],
+            rotation: 0.0,
+            layers: vec![LayerId::new("F.Cu")],
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+        });
+        let s = FootprintEditorState::from_footprint(&fp);
+        assert_eq!(s.pads.len(), 1);
+        assert_eq!(s.pads[0].number, "1");
+        assert_eq!(s.pads[0].size_mm, (1.0, 1.5));
     }
-}
 
-fn pad_shape_str(s: PadShape) -> &'static str {
-    match s {
-        PadShape::Circle => "circle",
-        PadShape::Rect => "rect",
-        PadShape::Oval => "oval",
-        PadShape::Trapezoid => "trapezoid",
-        PadShape::RoundRect => "roundrect",
-        PadShape::Custom => "custom",
+    #[test]
+    fn add_pad_assigns_next_number() {
+        let mut s = FootprintEditorState::empty();
+        let i = s.add_pad_at(0.0, 0.0);
+        assert_eq!(i, 0);
+        assert_eq!(s.pads[0].number, "1");
+        s.add_pad_at(1.0, 0.0);
+        assert_eq!(s.pads[1].number, "2");
     }
-}
 
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    #[test]
+    fn sync_pads_to_primitive_writes_back() {
+        let mut s = FootprintEditorState::empty();
+        s.add_pad_at(0.0, 0.0);
+        let mut fp = Footprint::empty("test");
+        FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+        assert_eq!(fp.pads.len(), 1);
+        assert_eq!(fp.pads[0].number, "1");
+    }
 }

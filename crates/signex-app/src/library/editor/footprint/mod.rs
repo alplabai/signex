@@ -1,13 +1,19 @@
-//! Footprint tab — minimum-viable editor with pad placement,
-//! drag-move, delete, and an auto-fit courtyard.
+//! Footprint tab — interactive editor + Body 3D / 3D preview / STEP
+//! attachment side-pane.
 //!
-//! See `LIBRARY_PLAN.md §10` for the spec; this MVP wraps the
-//! upcoming PCB footprint editor (pads + courtyard + silk + fab
-//! layers) inside the Component Editor's tabbed surface.
+//! WS-F refactor: the tab now hosts a two-column layout. Left column
+//! is the existing 2D pad editor (canvas + layer toolbar + footer);
+//! right column is `[Body 3D editor | 3D preview | STEP attach]`
+//! stacked. All three right-column panes operate on the
+//! `Footprint::body_3d` / `Footprint::step_attachment` fields directly
+//! per `v0.9-library-refactor-plan.md` §11.
 
+pub mod body3d;
 pub mod canvas;
 pub mod layers;
+pub mod preview3d;
 pub mod state;
+pub mod step_attach;
 
 #[cfg(test)]
 mod tests;
@@ -24,18 +30,41 @@ use crate::library::state::ComponentEditorState;
 use canvas::FootprintCanvas;
 use layers::FpLayer;
 
-/// Render the Footprint tab. Builds the layer toolbar, the canvas,
-/// and a footer status line in a single column.
+/// Render the Footprint tab.
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
-    // Panel-region background colour for the canvas — the same tone the
-    // rest of the panels use so the editor doesn't look like a popup.
-    // ThemeTokens doesn't carry canvas-specific colours, so we derive
-    // a slightly darker shade from the editor body bg and use the
-    // border colour for the grid lines.
+    // Two-column split: 2D editor (left, FillPortion(2)) + body3d/3d/STEP
+    // pane (right, FillPortion(1)).
+    let left = view_two_d_editor(editor, tokens, window_id);
+    let right = view_three_d_panel(editor, tokens, window_id);
+
+    let split = row![
+        container(left)
+            .width(Length::FillPortion(2))
+            .height(Length::Fill),
+        Space::new().width(8),
+        container(right)
+            .width(Length::FillPortion(1))
+            .height(Length::Fill),
+    ]
+    .height(Length::Fill);
+
+    container(split)
+        .padding(0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+/// Left column — pad editor canvas + layer toolbar + footer.
+fn view_two_d_editor<'a>(
+    editor: &'a ComponentEditorState,
+    tokens: &'a ThemeTokens,
+    window_id: iced::window::Id,
+) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.bg);
     let grid = crate::styles::ti(tokens.text_secondary);
 
@@ -50,8 +79,53 @@ pub fn view<'a>(
         .into()
 }
 
-/// Layer toggle bar — one pill per `FpLayer`. Each pill flips the
-/// per-layer visibility flag.
+/// Right column — Body 3D editor on top, 3D preview in the middle,
+/// STEP attach pane at the bottom.
+fn view_three_d_panel<'a>(
+    editor: &'a ComponentEditorState,
+    tokens: &'a ThemeTokens,
+    window_id: iced::window::Id,
+) -> Element<'a, LibraryMessage> {
+    let muted = theme_ext::text_secondary(tokens);
+    let text_c = theme_ext::text_primary(tokens);
+
+    let Some(fp) = editor.footprint.as_ref() else {
+        return container(
+            text("This component has no footprint binding yet — Symbol-only.")
+                .size(11)
+                .color(muted),
+        )
+        .padding(14)
+        .style(crate::styles::modal_card(tokens))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    };
+
+    let body_editor = body3d::view(&fp.body_3d, tokens, window_id);
+    let preview = container(preview3d::view(fp))
+        .padding(0)
+        .width(Length::Fill)
+        .height(Length::FillPortion(2))
+        .style(crate::styles::modal_card(tokens));
+    let step = step_attach::view(fp, tokens, window_id);
+
+    column![
+        text("Body 3D & STEP").size(13).color(text_c),
+        Space::new().height(8),
+        body_editor,
+        Space::new().height(10),
+        preview,
+        Space::new().height(10),
+        step,
+    ]
+    .spacing(0)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+/// Layer toggle bar — one pill per `FpLayer`.
 fn layer_toolbar<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
@@ -127,7 +201,6 @@ fn layer_toolbar<'a>(
         });
         row_widget = row_widget.push(pill);
     }
-    // Push the auto-fit toggle to the right.
     row_widget = row_widget.push(Space::new().width(Length::Fill));
 
     let auto_fit_label = if auto_fit_on {
@@ -162,9 +235,6 @@ fn layer_toolbar<'a>(
         .into()
 }
 
-/// The canvas itself — wrapped in a container so the borders match
-/// the rest of the editor surface, and surrounded by a key-listener
-/// container that catches Delete.
 fn canvas_area<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
@@ -175,9 +245,7 @@ fn canvas_area<'a>(
     let border = theme_ext::border_color(tokens);
 
     if let Some(fp_state) = editor.footprint_state.as_ref() {
-        let cache = editor
-            .footprint_canvas_cache
-            .get_or_init(Cache::new);
+        let cache = editor.footprint_canvas_cache.get_or_init(Cache::new);
         let prog = FootprintCanvas {
             state: fp_state,
             window_id,
@@ -203,9 +271,6 @@ fn canvas_area<'a>(
             })
             .into()
     } else {
-        // Footprint state not yet initialised — should be rare in
-        // practice because mod.rs initialises it on the first tab
-        // switch, but we handle the race for safety.
         container(text("Initialising footprint…").size(12))
             .padding(20)
             .center_x(Length::Fill)
@@ -214,7 +279,6 @@ fn canvas_area<'a>(
     }
 }
 
-/// Footer line — cursor readout in mm + selected-pad summary.
 fn footer_status<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
@@ -264,4 +328,3 @@ fn footer_status<'a>(
     .width(Length::Fill)
     .into()
 }
-

@@ -1,17 +1,17 @@
 //! Symbol-tab interactive canvas.
 //!
-//! A small `iced::widget::canvas::Program` that renders the editable
-//! [`SymbolDoc`](super::state::SymbolDoc) (body rectangle + pins +
-//! Designator/Value fields) and emits user actions as
-//! [`CanvasAction`] messages. Pan/zoom is intentionally fixed —
-//! Phase-1 keeps focus on the placement primitives so the parent view
-//! can render the canvas side-by-side with a properties pane without
-//! contending for cursor input.
+//! WS-F refactor: the canvas now reads the typed
+//! [`signex_library::Symbol`] primitive directly. The body rectangle
+//! is derived from `Symbol.graphics` (first `Rectangle` graphic), or
+//! defaults to a `[-5.08, -2.54] .. [5.08, 2.54]` rectangle when the
+//! primitive carries no body geometry yet.
 //!
-//! World-space convention mirrors the schematic editor: 1.27 mm
-//! schematic grid, Standard y-axis (positive going down on screen).
-//! World origin is centred in the canvas; the active scale is computed
-//! from the canvas size at draw time so the body always fits.
+//! Pan/zoom is intentionally fixed — the canvas auto-fits the body so
+//! the parent view can render side-by-side with the properties pane
+//! without contending for cursor input.
+//!
+//! World-space convention mirrors the schematic editor: 1.27 mm grid,
+//! Standard y-axis (positive going up; on screen y goes down so we flip).
 
 use iced::Color;
 use iced::Rectangle;
@@ -21,22 +21,17 @@ use iced::Theme;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
+use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
 
-use super::state::{FieldKey, SymbolDoc, SymbolPin, SymbolSelection};
+use super::state::{self, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
 #[derive(Debug, Clone, Copy)]
 pub enum CanvasAction {
-    /// Add-pin tool: click the empty canvas → place a pin at the
-    /// snapped world coordinate.
     AddPin { x: f64, y: f64 },
-    /// Selection click on a pin or field.
     Select(SymbolSelection),
-    /// Drop selection (background click, no item under cursor).
     Deselect,
-    /// In-flight move drag — pin or field follows the cursor.
     Move { x: f64, y: f64 },
-    /// User pressed Delete / Backspace.
     DeleteSelected,
 }
 
@@ -57,18 +52,17 @@ impl SymbolTool {
     }
 }
 
-/// Canvas-program ephemeral state — drag tracking only. Persists
-/// across frames via iced's per-program state, but is volatile across
-/// view rebuilds.
+/// Canvas-program ephemeral state — drag tracking only.
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    /// True when the user is mid-drag (cursor moved past threshold).
+    /// True when the user is mid-drag (cursor pressed and moved).
     pub dragging: bool,
 }
 
 /// The canvas program.
 pub struct SymbolCanvas<'a> {
-    pub doc: &'a SymbolDoc,
+    pub symbol: &'a Symbol,
+    pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
     pub bg_color: Color,
     pub grid_color: Color,
@@ -79,9 +73,10 @@ pub struct SymbolCanvas<'a> {
 }
 
 impl<'a> SymbolCanvas<'a> {
-    pub fn new(doc: &'a SymbolDoc, tool: SymbolTool) -> Self {
+    pub fn new(symbol: &'a Symbol, selected: Option<SymbolSelection>, tool: SymbolTool) -> Self {
         Self {
-            doc,
+            symbol,
+            selected,
             tool,
             bg_color: Color::from_rgb(0.10, 0.11, 0.13),
             grid_color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
@@ -92,8 +87,18 @@ impl<'a> SymbolCanvas<'a> {
         }
     }
 
-    /// Build the active world↔screen transform. Returns `(scale,
-    /// world_origin_x_in_pixels, world_origin_y_in_pixels)`.
+    /// Body rectangle: derived from the first `SymbolGraphicKind::Rectangle`
+    /// in `symbol.graphics`, or a sensible default.
+    fn body_rect(&self) -> (f64, f64, f64, f64) {
+        for g in &self.symbol.graphics {
+            if let SymbolGraphicKind::Rectangle { from, to } = &g.kind {
+                return (from[0], from[1], to[0], to[1]);
+            }
+        }
+        (-5.08, -2.54, 5.08, 2.54)
+    }
+
+    /// Build the active world↔screen transform.
     fn transform(&self, bounds: Rectangle) -> (f32, f32, f32) {
         let (min_x, min_y, max_x, max_y) = self.bbox();
         let w = (max_x - min_x).max(0.1) as f32;
@@ -109,36 +114,27 @@ impl<'a> SymbolCanvas<'a> {
         (scale, ox, oy)
     }
 
-    /// Bounding box around all drawable elements, with a generous pad
-    /// so the user can drag pins beyond the body rectangle.
+    /// Bounding box around the body + every pin, with a generous pad.
     fn bbox(&self) -> (f64, f64, f64, f64) {
-        let mut min_x = self.doc.body.x0.min(self.doc.body.x1) - 5.08;
-        let mut min_y = self.doc.body.y0.min(self.doc.body.y1) - 5.08;
-        let mut max_x = self.doc.body.x0.max(self.doc.body.x1) + 5.08;
-        let mut max_y = self.doc.body.y0.max(self.doc.body.y1) + 5.08;
-        for pin in &self.doc.pins {
-            min_x = min_x.min(pin.x - 1.27);
-            min_y = min_y.min(pin.y - 1.27);
-            max_x = max_x.max(pin.x + pin.length + 1.27);
-            max_y = max_y.max(pin.y + 1.27);
-        }
-        for f in [&self.doc.designator, &self.doc.value_field] {
-            min_x = min_x.min(f.x);
-            min_y = min_y.min(f.y);
-            max_x = max_x.max(f.x);
-            max_y = max_y.max(f.y);
+        let (bx0, by0, bx1, by1) = self.body_rect();
+        let mut min_x = bx0.min(bx1) - 5.08;
+        let mut min_y = by0.min(by1) - 5.08;
+        let mut max_x = bx0.max(bx1) + 5.08;
+        let mut max_y = by0.max(by1) + 5.08;
+        for pin in &self.symbol.pins {
+            min_x = min_x.min(pin.position[0] - 1.27);
+            min_y = min_y.min(pin.position[1] - 1.27);
+            max_x = max_x.max(pin.position[0] + pin.length + 1.27);
+            max_y = max_y.max(pin.position[1] + 1.27);
         }
         (min_x, min_y, max_x, max_y)
     }
-
 }
 
 /// Convert screen coords → schematic-mm, snapped to the 1.27 mm grid.
-/// Pulled out as a free function so the canvas program can call it
-/// from `update` without tripping borrow rules.
 fn world_for(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangle) -> (f64, f64) {
     let (scale, ox, oy) = canvas.transform(bounds);
-    // Standard y is positive-down; our screen coordinate is also positive-down.
+    // Standard y is positive-up in the data model; screen y is positive-down.
     let wx = ((sx - ox) / scale) as f64;
     let wy = -((sy - oy) / scale) as f64;
     let snap = 1.27_f64;
@@ -163,7 +159,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 match self.tool {
                     SymbolTool::Select => {
-                        if let Some(sel) = self.doc.hit_test(wx, wy) {
+                        if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
                             state.dragging = true;
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
                         } else {
@@ -209,7 +205,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
-        // Background.
         frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.bg_color);
 
         let (scale, ox, oy) = self.transform(bounds);
@@ -231,9 +226,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         }
 
         // Body rectangle.
-        let body = &self.doc.body;
-        let p1 = w2s(body.x0, body.y0);
-        let p2 = w2s(body.x1, body.y1);
+        let (bx0, by0, bx1, by1) = self.body_rect();
+        let p1 = w2s(bx0, by0);
+        let p2 = w2s(bx1, by1);
         let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
         let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
         let body_path = canvas::Path::rectangle(top_left, size);
@@ -252,29 +247,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         );
 
         // Pins.
-        for (i, pin) in self.doc.pins.iter().enumerate() {
+        for (i, pin) in self.symbol.pins.iter().enumerate() {
             self.draw_pin(&mut frame, &w2s, scale, pin, i);
         }
-
-        // Fields.
-        self.draw_field(
-            &mut frame,
-            &w2s,
-            FieldKey::Reference,
-            &self.doc.designator.value,
-            self.doc.designator.x,
-            self.doc.designator.y,
-            matches!(self.doc.selected, Some(SymbolSelection::Field(FieldKey::Reference))),
-        );
-        self.draw_field(
-            &mut frame,
-            &w2s,
-            FieldKey::Value,
-            &self.doc.value_field.value,
-            self.doc.value_field.x,
-            self.doc.value_field.y,
-            matches!(self.doc.selected, Some(SymbolSelection::Field(FieldKey::Value))),
-        );
 
         // Tool hint.
         let tool_label = match self.tool {
@@ -307,16 +282,19 @@ impl<'a> SymbolCanvas<'a> {
     ) where
         F: Fn(f64, f64) -> iced::Point,
     {
-        let (dx, dy) = match pin.rotation as i32 {
-            0 => (pin.length, 0.0),
-            90 => (0.0, pin.length),
-            180 => (-pin.length, 0.0),
-            270 => (0.0, -pin.length),
+        use signex_library::PinOrientation;
+        let (dx, dy) = match pin.orientation {
+            PinOrientation::Right => (pin.length, 0.0),
+            PinOrientation::Up => (0.0, pin.length),
+            PinOrientation::Left => (-pin.length, 0.0),
+            PinOrientation::Down => (0.0, -pin.length),
+            // `PinOrientation` is `non_exhaustive` — fall back to a
+            // sensible default if signex-library adds new variants.
             _ => (-pin.length, 0.0),
         };
-        let tip = w2s(pin.x, pin.y);
-        let body_end = w2s(pin.x + dx, pin.y + dy);
-        let selected = matches!(self.doc.selected, Some(SymbolSelection::Pin(i)) if i == idx);
+        let tip = w2s(pin.position[0], pin.position[1]);
+        let body_end = w2s(pin.position[0] + dx, pin.position[1] + dy);
+        let selected = matches!(self.selected, Some(SymbolSelection::Pin(i)) if i == idx);
         let stroke_color = if selected {
             self.selected_color
         } else {
@@ -366,44 +344,5 @@ impl<'a> SymbolCanvas<'a> {
             },
             ..canvas::Text::default()
         });
-    }
-
-    fn draw_field<F>(
-        &self,
-        frame: &mut canvas::Frame,
-        w2s: &F,
-        _key: FieldKey,
-        value: &str,
-        wx: f64,
-        wy: f64,
-        selected: bool,
-    ) where
-        F: Fn(f64, f64) -> iced::Point,
-    {
-        let p = w2s(wx, wy);
-        let color = if selected {
-            self.selected_color
-        } else {
-            Color {
-                a: 0.95,
-                ..self.text_color
-            }
-        };
-        frame.fill_text(canvas::Text {
-            content: value.to_string(),
-            position: iced::Point::new(p.x, p.y),
-            size: 12.0.into(),
-            color,
-            ..canvas::Text::default()
-        });
-        if selected {
-            // Tiny halo around the anchor so the user sees what's grabbed.
-            frame.stroke(
-                &canvas::Path::circle(p, 6.0),
-                canvas::Stroke::default()
-                    .with_color(self.selected_color)
-                    .with_width(1.0),
-            );
-        }
     }
 }
