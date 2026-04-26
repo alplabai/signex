@@ -6,6 +6,18 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+# Enables the 4 community distributor adapters (DigiKey/Mouser/LCSC/JLCPCB),
+# OS keyring-backed credential storage, and reqwest-based HTTP. See WS-C.
+distributors-community = [
+    "dep:keyring",
+    "dep:oauth2",
+    "dep:reqwest",
+    "dep:tokio",
+    "dep:dirs",
+]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -17,5 +29,14 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 
+# Phase 1 / WS-C — gated behind `distributors-community`.
+keyring = { workspace = true, optional = true }
+oauth2 = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+dirs = { version = "5", optional = true }
+
 [dev-dependencies]
 tempfile = "3"
+tokio = { workspace = true }
+wiremock = "0.6"
