@@ -36,7 +36,7 @@ pub use embed::{
     SupplierLink, SymbolBody, TemplateId, VariantOverride,
 };
 pub use hash::hash_revision_content;
-pub use identity::{ComponentId, InternalPn, Mpn, Version};
+pub use identity::{ComponentId, InternalPn, Mpn, ParseVersionError, Version};
 pub use lifecycle::LifecycleState;
 pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, WorkflowConfig};
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};

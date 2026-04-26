@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub type ComponentId = Uuid;
 
 /// Library-internal part number. Unique within a library; user-renameable.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct InternalPn(pub String);
 
@@ -16,6 +16,12 @@ impl InternalPn {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl std::fmt::Display for InternalPn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -61,14 +67,24 @@ impl std::fmt::Display for Version {
     }
 }
 
+/// M7: typed error for `Version::from_str` so `?` propagation keeps structure
+/// instead of stringifying. `MissingDot` distinguishes a malformed input
+/// (`"3"`) from a non-numeric segment (`"3.x"`); the latter wraps the
+/// underlying `ParseIntError` so callers can dig into `kind()` if needed.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ParseVersionError {
+    #[error("version must contain a single dot separator (e.g. \"1.2\")")]
+    MissingDot,
+    #[error("version segment is not a valid u32: {0}")]
+    InvalidNumber(#[from] std::num::ParseIntError),
+}
+
 impl std::str::FromStr for Version {
-    type Err = String;
+    type Err = ParseVersionError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (maj, min) = s
-            .split_once('.')
-            .ok_or_else(|| format!("bad version: {s}"))?;
-        let major = maj.parse::<u32>().map_err(|e| e.to_string())?;
-        let minor = min.parse::<u32>().map_err(|e| e.to_string())?;
+        let (maj, min) = s.split_once('.').ok_or(ParseVersionError::MissingDot)?;
+        let major = maj.parse::<u32>()?;
+        let minor = min.parse::<u32>()?;
         Ok(Self::new(major, minor))
     }
 }
