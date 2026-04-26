@@ -447,20 +447,39 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         return;
     }
 
-    // 5. Anchor and per-field offsets. Fields are always stacked vertically.
+    // 5. Anchor and per-field justify. Fields are always stacked vertically.
     //    `line_height` is roughly KiCad's 1.6 * text_size; using the first
     //    visible field's font size keeps it scale-correct.
+    //
+    //    Justify-V is chosen so the field block sits cleanly outside the
+    //    body: VAlign::Top below the body grows downward from the anchor,
+    //    VAlign::Bottom above the body grows upward, and Center is used
+    //    on horizontal sides where the block straddles cy symmetrically.
     let font_size = fields[0].font_size.max(0.1);
     let line_height = font_size * 1.6;
     let margin = 0.508; // 20 mils, KiCad default field clearance
     let n = fields.len() as f64;
-    let total_height = (n - 1.0) * line_height;
 
-    let (anchor_x, anchor_y, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
-        Side::Right => (max_x + margin, cy - total_height * 0.5, HAlign::Left, VAlign::Center),
-        Side::Left => (min_x - margin, cy - total_height * 0.5, HAlign::Right, VAlign::Center),
-        Side::Top => (cx, min_y - margin - total_height, HAlign::Center, VAlign::Center),
-        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Center),
+    let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
+        Side::Right => (
+            max_x + margin,
+            cy - (n - 1.0) * line_height * 0.5,
+            HAlign::Left,
+            VAlign::Center,
+        ),
+        Side::Left => (
+            min_x - margin,
+            cy - (n - 1.0) * line_height * 0.5,
+            HAlign::Right,
+            VAlign::Center,
+        ),
+        Side::Top => (
+            cx,
+            min_y - margin - (n - 1.0) * line_height,
+            HAlign::Center,
+            VAlign::Bottom,
+        ),
+        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
     };
 
     // 6. Field rotation must fold to 0 in `field_effective_style` so the
@@ -469,7 +488,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
 
     for (i, prop) in fields.iter_mut().enumerate() {
         prop.position.x = anchor_x;
-        prop.position.y = anchor_y + i as f64 * line_height;
+        prop.position.y = anchor_y_first + i as f64 * line_height;
         prop.justify_h = justify_h;
         prop.justify_v = justify_v;
         prop.rotation = field_rotation;
