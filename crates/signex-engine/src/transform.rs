@@ -482,7 +482,10 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     //    on horizontal sides where the block straddles cy symmetrically.
     let font_size = fields[0].font_size.max(0.1);
     let line_height = font_size * 1.6;
-    let margin = 0.508; // 20 mils, KiCad default field clearance
+    // KiCad reserves roughly one text height of clearance between the
+    // selection bbox and the first field, so the block clearly sits
+    // outside the symbol envelope rather than hugging the body edge.
+    let margin = font_size.max(0.508);
     let n = fields.len() as f64;
 
     let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
