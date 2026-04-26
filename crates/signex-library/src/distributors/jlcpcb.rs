@@ -156,7 +156,14 @@ impl DistributorAdapter for JlcpcbAdapter {
         }
         let hits = self.search_by_keyword(mpn)?;
         if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {
-            let _ = cache.put(JLCPCB_PROVIDER_KEY, first);
+            // H4: silenced cache writes hide disk-full / permission failures.
+            if let Err(e) = cache.put(JLCPCB_PROVIDER_KEY, first) {
+                tracing::warn!(
+                    error = %e,
+                    mpn = %mpn,
+                    "JLCPCB cache write failed; live result returned but not persisted",
+                );
+            }
         }
         Ok(hits)
     }

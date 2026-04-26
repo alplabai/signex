@@ -356,15 +356,22 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn release_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError> {
+        // H5: TOCTOU — the previous `path.exists() && remove_file(&path)` race
+        // could delete a *fresh* lock written by another process in the
+        // microsecond between the two syscalls. `remove_file` already returns
+        // `NotFound` atomically when the file is gone, so we collapse the
+        // check into a single syscall and translate the error directly.
         let path = self.lock_path(id, field_set);
-        if !path.exists() {
-            return Err(LibraryError::NotFound(format!(
-                "no lock for {id}.{}",
-                field_set_slug(field_set)
-            )));
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Err(LibraryError::NotFound(format!(
+                    "no lock for {id}.{}",
+                    field_set_slug(field_set)
+                )))
+            }
+            Err(e) => Err(LibraryError::Io(e)),
         }
-        fs::remove_file(&path)?;
-        Ok(())
     }
 
     fn root_path(&self) -> Option<PathBuf> {
