@@ -180,10 +180,10 @@ impl DistributorAdapter for LcscAdapter {
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        if let Some(cache) = &self.cache {
-            if let Ok(Some(hit)) = cache.get(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL) {
-                return Ok(vec![hit]);
-            }
+        if let Some(cache) = &self.cache
+            && let Ok(Some(hit)) = cache.get(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
+        {
+            return Ok(vec![hit]);
         }
         let hits = self.search_by_keyword(mpn)?;
         if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {

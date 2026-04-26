@@ -20,6 +20,10 @@ pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, Libr
 pub use component::{Component, Revision};
 pub use diff::{RevisionDiff, diff_revisions};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
+#[cfg(feature = "distributors-community")]
+pub use distributors::{
+    DigiKeyAdapter, DistributorCache, JlcpcbAdapter, KeyringStore, LcscAdapter, MouserAdapter,
+};
 pub use embed::{
     AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue, PcbSide,
     PlmLink, PriceBreak, PricingSnapshot, SchematicSide, SharedSide, SharedSlice, SpiceModel,
