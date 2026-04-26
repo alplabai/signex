@@ -41,6 +41,11 @@ oauth2 = { version = "5", default-features = false, features = ["reqwest", "rust
 tokio = { workspace = true, optional = true }
 dirs = { version = "5", optional = true }
 
+# Logging — used to surface non-fatal errors (cache writes, token rotation,
+# mutex poison, etc.) without aborting the call. Light-weight and pure-Rust;
+# kept un-feature-gated so every adapter can `tracing::warn!` consistently.
+tracing = { workspace = true }
+
 [features]
 default = []
 ai-stub = ["dep:pdf-extract", "dep:regex"]

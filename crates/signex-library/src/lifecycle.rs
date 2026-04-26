@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// LIBRARY_PLAN §4 lifecycle states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum LifecycleState {
     /// Working state; placeable only with explicit opt-in.
     Draft,

@@ -481,4 +481,28 @@ mod tests {
         let s = "(symbol (pin 1) (pin 2) (pin 3))";
         assert_eq!(pin_count(s), 3);
     }
+
+    /// L4: Documents the known false-positive in the `(pin ` token heuristic.
+    ///
+    /// `pin_count` is a deliberately naive byte-substring scan used only as a
+    /// stub-friendly fallback when the symbol body is not yet a well-formed
+    /// KiCad S-expression. A property value that literally contains the string
+    /// `(pin ` (e.g. a free-form description) will inflate the count and
+    /// incorrectly trigger a major bump in `requires_major_bump`.
+    ///
+    /// Production call sites should prefer `crate::diff::auto_bump_kind`,
+    /// which structurally walks the parsed pin nodes. This test pins the
+    /// limitation so the next refactor knows to swap the heuristic — not to
+    /// "fix" the off-by-one count.
+    #[test]
+    fn pin_count_false_positive_on_property_string() {
+        // A property value that mentions "(pin " as plain text — not a real
+        // KiCad pin node. The heuristic still counts it.
+        let s = r#"(symbol (property "Description" "Connector with (pin 1) terminal"))"#;
+        assert_eq!(
+            pin_count(s),
+            1,
+            "byte-substring scan cannot distinguish KiCad pin nodes from property text"
+        );
+    }
 }

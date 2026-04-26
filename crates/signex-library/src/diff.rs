@@ -73,6 +73,7 @@ pub struct LifecycleDiff {
 /// A revision counts as **major** if any pin or pad set changed
 /// (added/removed/moved); otherwise it is a **minor** bump.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BumpKind {
     Minor,
     Major,
