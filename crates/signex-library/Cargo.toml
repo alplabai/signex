@@ -15,6 +15,7 @@ chrono = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+url = { version = "2", features = ["serde"] }
 
 [dev-dependencies]
 tempfile = "3"
