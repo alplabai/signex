@@ -4895,9 +4895,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
- "pdf-extract",
- "pdf-writer",
- "regex",
+ "kicad-parser",
  "serde",
  "serde_json",
  "sha2",

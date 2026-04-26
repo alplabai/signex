@@ -28,6 +28,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
+standard-parser = { workspace = true }
 
 # Heuristic AI-stub for symbol pinout extraction (WS-F).
 # Gated behind the `ai-stub` feature so the default build skips the
