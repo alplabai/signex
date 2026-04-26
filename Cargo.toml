@@ -13,6 +13,8 @@ members = [
     "crates/signex-erc-dsl",
     "crates/signex-output",
     "crates/chrome-catalog",
+    "crates/signex-library",
+    "crates/signex-library-server",
 ]
 
 [workspace.package]
@@ -35,7 +37,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Identity
-uuid = { version = "1.23.1", features = ["v4", "serde"] }
+uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }
 
 # Error handling
 thiserror = "2"
@@ -65,6 +67,28 @@ signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-output = { path = "crates/signex-output" }
+
+# Library subsystem (v0.9)
+toml = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+
+# Phase 1 additions (declared early so adapter Cargo.tomls reference them)
+git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+keyring = "3"
+tantivy = "0.22"
+oauth2 = "5"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "sqlite", "macros", "chrono", "uuid"] }
+pdf-extract = "0.7"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Internal — library
+signex-library = { path = "crates/signex-library" }
 
 [profile.release]
 lto = "thin"
