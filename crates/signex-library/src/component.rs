@@ -19,6 +19,14 @@ pub struct Revision {
     pub content_hash: [u8; 32],
 }
 
+impl Revision {
+    /// Recompute and store the content hash from current side data.
+    pub fn refresh_content_hash(&mut self) {
+        self.content_hash =
+            crate::hash::hash_revision_content(&self.schematic, &self.pcb, &self.shared);
+    }
+}
+
 /// A logical component with N revisions sorted by version.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Component {
@@ -110,5 +118,13 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let back: Component = serde_json::from_str(&json).unwrap();
         assert_eq!(c, back);
+    }
+
+    #[test]
+    fn refresh_content_hash_populates() {
+        let mut rev = fixture_revision(Version::new(1, 0), LifecycleState::Released);
+        assert_eq!(rev.content_hash, [0u8; 32]);
+        rev.refresh_content_hash();
+        assert_ne!(rev.content_hash, [0u8; 32]);
     }
 }
