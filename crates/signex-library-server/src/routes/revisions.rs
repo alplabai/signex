@@ -52,11 +52,12 @@ async fn get_revision(
     Path((uuid, version)): Path<(String, String)>,
 ) -> Result<Json<Revision>, ApiError> {
     let uuid = ComponentId::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
-    let version: Version = version
-        .parse()
-        .map_err(|e: signex_library::identity::ParseVersionError| {
-            ApiError::bad_request(e.to_string())
-        })?;
+    let version: Version =
+        version
+            .parse()
+            .map_err(|e: signex_library::identity::ParseVersionError| {
+                ApiError::bad_request(e.to_string())
+            })?;
     let comp = state
         .fetch_component(uuid)
         .await?

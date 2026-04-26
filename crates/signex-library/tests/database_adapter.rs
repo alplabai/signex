@@ -114,7 +114,10 @@ fn search_round_trips_through_get_components() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/components"))
-                    .and(header("authorization", format!("Bearer {TEST_TOKEN}").as_str()))
+                    .and(header(
+                        "authorization",
+                        format!("Bearer {TEST_TOKEN}").as_str(),
+                    ))
                     .respond_with(ResponseTemplate::new(200).set_body_json(body))
                     .expect(1)
                     .mount(server)
@@ -144,7 +147,10 @@ fn get_component_round_trips_through_get_components_uuid() {
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
-                    .and(header("authorization", format!("Bearer {TEST_TOKEN}").as_str()))
+                    .and(header(
+                        "authorization",
+                        format!("Bearer {TEST_TOKEN}").as_str(),
+                    ))
                     .respond_with(ResponseTemplate::new(200).set_body_json(body))
                     .expect(1)
                     .mount(server)
@@ -172,7 +178,10 @@ fn save_revision_posts_to_components_uuid_revisions() {
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path(path_for_mock.as_str()))
-                    .and(header("authorization", format!("Bearer {TEST_TOKEN}").as_str()))
+                    .and(header(
+                        "authorization",
+                        format!("Bearer {TEST_TOKEN}").as_str(),
+                    ))
                     .respond_with(ResponseTemplate::new(201))
                     .expect(1)
                     .mount(server)
@@ -198,7 +207,10 @@ fn try_lock_happy_path_returns_201() {
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path(path_for_mock.as_str()))
-                    .and(header("authorization", format!("Bearer {TEST_TOKEN}").as_str()))
+                    .and(header(
+                        "authorization",
+                        format!("Bearer {TEST_TOKEN}").as_str(),
+                    ))
                     .and(header("x-signex-holder", TEST_HOLDER))
                     .respond_with(ResponseTemplate::new(201))
                     .expect(1)

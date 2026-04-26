@@ -212,7 +212,10 @@ impl LibraryAdapter for LocalGitAdapter {
         if let Some(text) = &query.text {
             let needle = text.to_ascii_lowercase();
             hits.retain(|h| {
-                h.internal_pn.as_str().to_ascii_lowercase().contains(&needle)
+                h.internal_pn
+                    .as_str()
+                    .to_ascii_lowercase()
+                    .contains(&needle)
                     || h.mpn.to_ascii_lowercase().contains(&needle)
                     || h.description.to_ascii_lowercase().contains(&needle)
             });
@@ -364,12 +367,9 @@ impl LibraryAdapter for LocalGitAdapter {
         let path = self.lock_path(id, field_set);
         match fs::remove_file(&path) {
             Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                Err(LibraryError::NotFound(format!(
-                    "no lock for {id}.{}",
-                    field_set_slug(field_set)
-                )))
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(LibraryError::NotFound(
+                format!("no lock for {id}.{}", field_set_slug(field_set)),
+            )),
             Err(e) => Err(LibraryError::Io(e)),
         }
     }

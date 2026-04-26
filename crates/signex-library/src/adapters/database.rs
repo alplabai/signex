@@ -44,7 +44,11 @@ impl DatabaseAdapter {
         let client = reqwest::blocking::Client::builder()
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
-        let token = if auth.is_empty() { None } else { Some(auth.clone()) };
+        let token = if auth.is_empty() {
+            None
+        } else {
+            Some(auth.clone())
+        };
         Ok(Self {
             manifest,
             base_url,
@@ -99,10 +103,7 @@ impl DatabaseAdapter {
     }
 
     /// Apply the `Authorization: Bearer <token>` header when configured.
-    fn auth(
-        &self,
-        req: reqwest::blocking::RequestBuilder,
-    ) -> reqwest::blocking::RequestBuilder {
+    fn auth(&self, req: reqwest::blocking::RequestBuilder) -> reqwest::blocking::RequestBuilder {
         if let Some(token) = &self.token {
             req.header("authorization", format!("Bearer {token}"))
         } else {
