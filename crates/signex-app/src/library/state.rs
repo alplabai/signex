@@ -53,12 +53,19 @@ pub struct LibraryState {
 
 impl Default for LibraryState {
     fn default() -> Self {
+        let mut settings = DistributorSettings::default();
+        // UI-WS7: rehydrate the preferred-order list from
+        // `<config_dir>/signex/distributors.toml`. The persistence
+        // layer falls back to the LIBRARY_PLAN default when the file
+        // is absent / corrupt, so this is always safe.
+        settings.preferred_order =
+            super::settings::persistence::load_preferred_order();
         Self {
             open_libraries: Vec::new(),
             open_editors: HashMap::new(),
             where_used: WhereUsedIndex::new(),
             picker: None,
-            settings: DistributorSettings::default(),
+            settings,
             expanded: Vec::new(),
             panel_search: String::new(),
         }
@@ -217,11 +224,19 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
-    /// Sim tab editor state — owns the multi-line `text_editor::Content`
-    /// for the SPICE body plus the cached pin-number list. Stays in
-    /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
-    /// dispatcher arms.
-    pub sim: super::editor::sim::SimTabState,
+    /// True while the SubmitForReview modal is up. Switched on by
+    /// the footer button and off by Cancel / successful submit.
+    pub review_dialog_open: bool,
+    /// Free-form reviewer-notes buffer; used as the commit message
+    /// when the user clicks Submit. Persists across re-renders for
+    /// the lifetime of the editor.
+    pub review_notes_buf: String,
+    /// Status-line text shown in the modal footer. Used by the
+    /// dispatcher to surface async failures back to the UI.
+    pub review_status: Option<String>,
+    /// True while the SubmitForReview save_revision call is in
+    /// flight. Disables the Submit button to avoid double-submits.
+    pub review_in_flight: bool,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -268,22 +283,40 @@ impl EditorTab {
 
 /// Distributor APIs Settings panel state.
 ///
-/// Phase 1: held in memory only; Phase 2 persists to disk alongside
-/// the rest of `~/.config/signex/prefs.json`.
+/// UI-WS7: persisted across sessions via
+/// `<config_dir>/signex/distributors.toml` for the order-of-preference
+/// list. The DigiKey refresh-token + Mouser API key live in the OS
+/// keyring (handled by `signex-library`), not on this struct.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct DistributorSettings {
-    /// Connected DigiKey OAuth account email — `None` when no
-    /// keyring entry exists.
+    /// Connected DigiKey OAuth account label — `None` until the
+    /// OAuth handshake succeeds. The label is best-effort (DigiKey's
+    /// token endpoint doesn't return identity claims) so it usually
+    /// reads "DigiKey" rather than an email.
     pub digikey_account_email: Option<String>,
+    /// User-visible status string. Drives the OAuth status line:
+    /// "Not connected" → "Waiting for browser…" → "Connected as <x>"
+    /// or "Failed: <reason>".
+    pub digikey_status: Option<String>,
+    /// True while the OAuth flow is mid-handshake. Disables the
+    /// Connect button + reveals the Cancel button.
+    pub digikey_in_flight: bool,
+    /// Cancel handle for the in-flight OAuth flow. Held here so the
+    /// Cancel button can dispatch a cancel from the UI thread.
+    pub digikey_cancel:
+        Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Live edit buffer for the Mouser API key text input. Masked at
     /// render time. Empty string = "no key in keyring".
     pub mouser_api_key_buf: String,
     /// User-visible status from the most recent "Test" press.
     pub mouser_status: Option<String>,
+    /// True while the Mouser Test request is in flight.
+    pub mouser_in_flight: bool,
     /// Active order-of-preference list. The first matching adapter
     /// is queried first when a user pastes a URL into the Supply
-    /// tab. Defaults to the LIBRARY_PLAN matrix.
+    /// tab. Defaults to the LIBRARY_PLAN matrix; loaded from
+    /// `distributors.toml` on startup.
     pub preferred_order: Vec<DistributorSource>,
 }
 
@@ -291,8 +324,12 @@ impl Default for DistributorSettings {
     fn default() -> Self {
         Self {
             digikey_account_email: None,
+            digikey_status: None,
+            digikey_in_flight: false,
+            digikey_cancel: None,
             mouser_api_key_buf: String::new(),
             mouser_status: None,
+            mouser_in_flight: false,
             preferred_order: vec![
                 DistributorSource::DigiKey,
                 DistributorSource::Mouser,
@@ -326,7 +363,10 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            sim,
+            review_dialog_open: false,
+            review_notes_buf: String::new(),
+            review_status: None,
+            review_in_flight: false,
         }
     }
 

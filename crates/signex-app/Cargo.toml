@@ -38,13 +38,23 @@ sha2 = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# UI-WS7 — Distributor APIs flows
+# `webbrowser` opens the DigiKey OAuth2 authorization URL in the user's
+# default browser; `tiny_http` runs the one-shot localhost callback
+# server that catches the OAuth redirect; `dirs` finds the OS config
+# directory for `distributors.toml` persistence; `toml` (de)serialises
+# the order-of-preference list. `tokio` is already a transitive dep
+# (iced) but we use the multi-thread runtime explicitly for the OAuth
+# exchange + Mouser test flow on a worker thread.
+webbrowser = "1"
+tiny_http = "0.12"
+dirs = "5"
+toml = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
-# Used by `library::editor::symbol` integration tests to build a
-# synthetic LM317-style datasheet PDF without checking a binary into
-# the repo.
-pdf-writer = { workspace = true }
+wiremock = "0.6"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

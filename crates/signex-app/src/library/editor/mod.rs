@@ -10,6 +10,7 @@ pub mod history;
 pub mod overview;
 pub mod params;
 pub mod sim;
+pub mod submit_for_review;
 pub mod supply;
 pub mod symbol;
 pub mod tabs;
@@ -40,11 +41,34 @@ pub fn view<'a>(
     let body = view_active_tab(editor, library_state, tokens, window_id);
     let footer = view_footer(editor, tokens, window_id);
 
-    column![header, tabs, body, footer]
+    let main: Element<'_, LibraryMessage> = column![header, tabs, body, footer]
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .into();
+
+    // Layer the SubmitForReview modal on top of the editor when it's
+    // open. iced's Stack handles the dim backdrop + click-eat for us
+    // — we wrap the modal card in a centred container with a
+    // semi-transparent fill.
+    if editor.review_dialog_open {
+        let modal_card = submit_for_review::view(editor, tokens, window_id);
+        let backdrop: Element<'_, LibraryMessage> = container(modal_card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(|_: &Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    0.0, 0.0, 0.0, 0.45,
+                ))),
+                ..Default::default()
+            })
+            .into();
+        iced::widget::stack![main, backdrop].into()
+    } else {
+        main
+    }
 }
 
 fn view_header<'a>(

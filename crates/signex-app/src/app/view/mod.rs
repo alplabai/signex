@@ -4306,6 +4306,8 @@ impl Signex {
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
                 &ui.erc_severity_override,
+                &self.library.settings,
+                &document.panel_ctx.tokens,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
