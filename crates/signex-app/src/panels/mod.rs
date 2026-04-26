@@ -35,12 +35,16 @@ pub enum PanelKind {
     Snippets,
     Todo,
     Wiki,
+    /// v0.9 Library panel — open `*.snxlib/` libraries, drill into
+    /// their components, drag onto the canvas (Phase 2).
+    Library,
 }
 
 /// All available panel kinds for the panel list button.
 pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Projects,
     PanelKind::Components,
+    PanelKind::Library,
     PanelKind::Navigator,
     PanelKind::Properties,
     PanelKind::Filter,
@@ -108,6 +112,7 @@ impl PanelKind {
             PanelKind::Todo => "To-Do",
             PanelKind::Wiki => "Wiki",
             PanelKind::OutputJobs => "Output Jobs",
+            PanelKind::Library => "Library",
         }
     }
 }
@@ -711,6 +716,13 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
         PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
         PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
+        PanelKind::Library => view_stub(
+            "Library",
+            "Library panel — see Signex.library state. Use the dock host's Library panel \
+             rendering path; this stub fires only if Library is mounted via PanelMsg \
+             instead of LibraryMessage routing.",
+            ctx,
+        ),
     };
 
     scrollable(content).width(Length::Fill).into()

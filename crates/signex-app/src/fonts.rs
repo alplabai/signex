@@ -499,6 +499,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Wiki => "wiki",
         LayerStack => "layer_stack",
         NetClasses => "net_classes",
+        Library => "library",
     }
 }
 
@@ -525,6 +526,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "wiki" => Wiki,
         "layer_stack" => LayerStack,
         "net_classes" => NetClasses,
+        "library" => Library,
         _ => return None,
     })
 }

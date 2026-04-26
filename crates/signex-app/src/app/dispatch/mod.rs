@@ -3,6 +3,7 @@ use iced::Task;
 use super::*;
 
 mod document;
+mod library;
 mod overlay;
 mod routed;
 mod text_edit;
@@ -244,6 +245,12 @@ impl Signex {
                             self.document_state
                                 .dock
                                 .add_panel(crate::dock::PanelPosition::Right, kind);
+                        }
+                        // v0.9 Component Editor — drop the editor's
+                        // working state. Phase 2 will surface a save
+                        // prompt before letting the close go through.
+                        WindowKind::ComponentEditor { .. } => {
+                            self.library.open_editors.remove(&id);
                         }
                     }
                 }
@@ -624,6 +631,7 @@ impl Signex {
                 Task::none()
             }
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
+            Message::Library(msg) => self.dispatch_library_message(msg),
             Message::Noop => Task::none(),
         }
     }

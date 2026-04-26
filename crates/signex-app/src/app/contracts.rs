@@ -455,6 +455,11 @@ pub enum Message {
     PrintPreviewSetPcbColourMode(signex_output::ColourMode),
     /// User clicked the OK button on the export-error modal.
     DismissExportError,
+    /// v0.9 Library subsystem message — folded under one variant so
+    /// the dispatcher can route to `library_dispatch::handle` in one
+    /// shot. See `crate::library::LibraryMessage` for the inner
+    /// shape.
+    Library(crate::library::LibraryMessage),
     Noop,
 }
 

@@ -265,7 +265,11 @@ impl Signex {
                 .and_then(|p| p.path.parent())
                 .is_some();
 
-            items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "Make Project Available Online...",
+                Some("v3.4"),
+            ));
             items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
             let active_submenu = self.interaction_state.context_submenu;
             items.push(self.ctx_menu_item_submenu(
@@ -274,7 +278,11 @@ impl Signex {
                 ContextSubmenu::AddNewToProject,
                 active_submenu == Some(ContextSubmenu::AddNewToProject),
             ));
-            items.push(self.ctx_menu_item_disabled(None, "Add Existing to Project...", Some("v0.9")));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "Add Existing to Project...",
+                Some("v0.9"),
+            ));
             items.push(self.save_menu_item(has_schematic));
             items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
             items.push(self.ctx_menu_sep());
@@ -306,7 +314,11 @@ impl Signex {
             });
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
-            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "History & Version Control",
+                Some(SUBMENU_ARROW),
+            ));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
             items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
@@ -334,11 +346,8 @@ impl Signex {
                 .and_then(|tab| tab.path.file_name())
                 .and_then(|f| f.to_str())
                 .zip(
-                    signex_widgets::tree_view::get_node(
-                        panel_ctx.project_tree.as_slice(),
-                        path,
-                    )
-                    .map(|n| n.label.as_str()),
+                    signex_widgets::tree_view::get_node(panel_ctx.project_tree.as_slice(), path)
+                        .map(|n| n.label.as_str()),
                 )
                 .is_some_and(|(active_name, clicked_label)| active_name == clicked_label);
 
@@ -390,7 +399,11 @@ impl Signex {
                 self.ctx_menu_item_disabled(None, "Print...", None)
             });
             items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
-            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "History & Version Control",
+                Some(SUBMENU_ARROW),
+            ));
         } else if is_container {
             // Source Documents / Libraries / Settings folders. These have
             // no Altium direct analogue (Altium groups these under the
@@ -446,10 +459,7 @@ impl Signex {
     /// "others" to close). The split / tile / merge rows from
     /// Altium's screenshot are intentionally left out: Signex's
     /// editor doesn't support split-pane layout yet.
-    fn view_tab_context_menu(
-        &self,
-        ctx: &crate::app::TabContextMenuState,
-    ) -> Element<'_, Message> {
+    fn view_tab_context_menu(&self, ctx: &crate::app::TabContextMenuState) -> Element<'_, Message> {
         use crate::app::TabContextAction as A;
 
         let panel_ctx = &self.document_state.panel_ctx;
@@ -466,11 +476,10 @@ impl Signex {
         // does too) — undocking a sole tab leaves the main window
         // empty, which is fine.
         use super::state::WindowKind;
-        let already_undocked = self
-            .ui_state
-            .windows
-            .values()
-            .any(|kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path));
+        let already_undocked =
+            self.ui_state.windows.values().any(
+                |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
+            );
 
         items.push(self.ctx_menu_item_msg(
             None,
@@ -1113,10 +1122,10 @@ impl Signex {
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
-            close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
-            MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+            MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
+            detached_header, draggable_header,
         };
-        use iced::widget::{button, column, container, row, text, Space};
+        use iced::widget::{Space, button, column, container, row, text};
         let theme_id = self.ui_state.theme_id;
 
         let preview = match &self.document_state.preview {
@@ -1132,7 +1141,9 @@ impl Signex {
         // Header — same chrome as every other modal.
         let header_content: Element<'_, Message> = container(
             row![
-                text("Export PDF").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
+                text("Export PDF")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
             ]
@@ -1208,12 +1219,9 @@ impl Signex {
     /// the active tab, fill that fades for inactive. `is_last=true`
     /// on the rightmost so the trailing border doesn't double up
     /// against an adjacent tab's left edge.
-    fn view_pdf_tab_strip(
-        &self,
-        active: crate::app::state::PdfPreviewTab,
-    ) -> Element<'_, Message> {
+    fn view_pdf_tab_strip(&self, active: crate::app::state::PdfPreviewTab) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
-        use iced::widget::{container, mouse_area, row, text, Space};
+        use iced::widget::{Space, container, mouse_area, row, text};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -1244,8 +1252,7 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(12).color(label_color))
-                .padding([6, 18]);
+            let inner = container(text(label).size(12).color(label_color)).padding([6, 18]);
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreviewSetTab(this))
                 .interaction(iced::mouse::Interaction::Pointer)
@@ -1271,8 +1278,8 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{
-            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
-            text_input, Space,
+            Space, button, checkbox, column, container, image, mouse_area, row, scrollable, text,
+            text_input,
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
@@ -1320,17 +1327,26 @@ impl Signex {
             text("Colour").size(11).color(text_muted),
             mode_button(
                 "Color",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Colour
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
             ),
             mode_button(
                 "Gray",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Grayscale
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
             ),
             mode_button(
                 "B/W",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::BlackAndWhite
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
             ),
         ]
@@ -1341,17 +1357,26 @@ impl Signex {
             text("Pages").size(11).color(text_muted),
             mode_button(
                 "All",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::All
+                ),
                 Message::PrintPreviewSetPageRangeAll,
             ),
             mode_button(
                 "Current",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Current
+                ),
                 Message::PrintPreviewSetPageRangeCurrent,
             ),
             mode_button(
                 "Specific",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Specific(_)
+                ),
                 Message::PrintPreviewSetPageRangeSpecific,
             ),
         ]
@@ -1366,9 +1391,9 @@ impl Signex {
                 text("Page").size(11).color(text_muted),
                 text_input("1", &preview.specific_page_input)
                     .on_input(Message::PrintPreviewSetSpecificPageInput)
-                .padding([4, 8])
-                .size(12)
-                .width(80),
+                    .padding([4, 8])
+                    .size(12)
+                    .width(80),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center)
@@ -1611,7 +1636,7 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{column, scrollable, Space};
+        use iced::widget::{Space, column, scrollable};
         let body = column![
             self.view_pdf_files_section(preview),
             Space::new().height(10),
@@ -1655,7 +1680,7 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{button, checkbox, column, container, row, scrollable, text, Space};
+        use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -1758,30 +1783,23 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{checkbox, column, container, row, text, Space};
+        use iced::widget::{Space, checkbox, column, container, row, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
 
-        let variant_label = opts
-            .variant
-            .clone()
-            .unwrap_or_else(|| "Base".to_string());
+        let variant_label = opts.variant.clone().unwrap_or_else(|| "Base".to_string());
         let mut variant_options: Vec<String> = vec!["Base".to_string()];
         variant_options.extend(preview.variants.clone());
         variant_options.dedup();
-        let variant_picker = iced::widget::pick_list(
-            variant_options,
-            Some(variant_label),
-            |s| {
-                if s.eq_ignore_ascii_case("Base") {
-                    Message::PrintPreviewSetVariant(None)
-                } else {
-                    Message::PrintPreviewSetVariant(Some(s))
-                }
-            },
-        )
+        let variant_picker = iced::widget::pick_list(variant_options, Some(variant_label), |s| {
+            if s.eq_ignore_ascii_case("Base") {
+                Message::PrintPreviewSetVariant(None)
+            } else {
+                Message::PrintPreviewSetVariant(Some(s))
+            }
+        })
         .text_size(11)
         .width(220);
 
@@ -1840,7 +1858,7 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use crate::app::state::PdfQuality;
-        use iced::widget::{checkbox, column, container, row, text, Space};
+        use iced::widget::{Space, checkbox, column, container, row, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -1893,9 +1911,21 @@ impl Signex {
             row![
                 Space::new().width(14),
                 column![
-                    lbl_check("Pins", opts.bookmark_pins, Message::PrintPreviewSetBookmarkPins),
-                    lbl_check("Net Labels", opts.bookmark_net_labels, Message::PrintPreviewSetBookmarkNetLabels),
-                    lbl_check("Ports", opts.bookmark_ports, Message::PrintPreviewSetBookmarkPorts),
+                    lbl_check(
+                        "Pins",
+                        opts.bookmark_pins,
+                        Message::PrintPreviewSetBookmarkPins
+                    ),
+                    lbl_check(
+                        "Net Labels",
+                        opts.bookmark_net_labels,
+                        Message::PrintPreviewSetBookmarkNetLabels
+                    ),
+                    lbl_check(
+                        "Ports",
+                        opts.bookmark_ports,
+                        Message::PrintPreviewSetBookmarkPorts
+                    ),
                 ]
                 .spacing(2),
             ],
@@ -1916,19 +1946,47 @@ impl Signex {
         let schematics_include_col = column![
             text("Schematics include").size(11).color(text_c),
             Space::new().height(4),
-            lbl_check("No-ERC Markers", opts.include_no_erc_markers, Message::PrintPreviewSetIncludeNoErcMarkers),
-            lbl_check("Parameter Sets", opts.include_parameter_sets, Message::PrintPreviewSetIncludeParameterSets),
-            lbl_check("Probes", opts.include_probes, Message::PrintPreviewSetIncludeProbes),
-            lbl_check("Blankets", opts.include_blankets, Message::PrintPreviewSetIncludeBlankets),
-            lbl_check("Notes", opts.include_notes, Message::PrintPreviewSetIncludeNotes),
+            lbl_check(
+                "No-ERC Markers",
+                opts.include_no_erc_markers,
+                Message::PrintPreviewSetIncludeNoErcMarkers
+            ),
+            lbl_check(
+                "Parameter Sets",
+                opts.include_parameter_sets,
+                Message::PrintPreviewSetIncludeParameterSets
+            ),
+            lbl_check(
+                "Probes",
+                opts.include_probes,
+                Message::PrintPreviewSetIncludeProbes
+            ),
+            lbl_check(
+                "Blankets",
+                opts.include_blankets,
+                Message::PrintPreviewSetIncludeBlankets
+            ),
+            lbl_check(
+                "Notes",
+                opts.include_notes,
+                Message::PrintPreviewSetIncludeNotes
+            ),
             row![
                 Space::new().width(14),
-                lbl_check("Collapsed notes", opts.include_collapsed_notes, Message::PrintPreviewSetIncludeCollapsedNotes),
+                lbl_check(
+                    "Collapsed notes",
+                    opts.include_collapsed_notes,
+                    Message::PrintPreviewSetIncludeCollapsedNotes
+                ),
             ],
             Space::new().height(8),
             text("Quality").size(11).color(text_c),
             iced::widget::pick_list(
-                vec![PdfQuality::Draft72, PdfQuality::Medium300, PdfQuality::High600],
+                vec![
+                    PdfQuality::Draft72,
+                    PdfQuality::Medium300,
+                    PdfQuality::High600
+                ],
                 Some(preview.quality),
                 Message::PrintPreviewSetQuality,
             )
@@ -1949,15 +2007,45 @@ impl Signex {
         let sch_color_col = column![
             text("Schematics Color Mode").size(11).color(text_c),
             Space::new().height(4),
-            radio("Color", signex_output::ColourMode::Colour, opts.colour_mode, Message::PrintPreviewSetColourMode),
-            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.colour_mode, Message::PrintPreviewSetColourMode),
-            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio(
+                "Color",
+                signex_output::ColourMode::Colour,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
+            radio(
+                "Greyscale",
+                signex_output::ColourMode::Grayscale,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
+            radio(
+                "Monochrome",
+                signex_output::ColourMode::BlackAndWhite,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
             Space::new().height(8),
             text("PCB Color Mode").size(11).color(text_c),
             Space::new().height(4),
-            radio("Color", signex_output::ColourMode::Colour, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
-            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
-            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio(
+                "Color",
+                signex_output::ColourMode::Colour,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
+            radio(
+                "Greyscale",
+                signex_output::ColourMode::Grayscale,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
+            radio(
+                "Monochrome",
+                signex_output::ColourMode::BlackAndWhite,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
         ]
         .spacing(2);
 
@@ -2001,6 +2089,19 @@ impl Signex {
                         .padding(8)
                         .into()
                 }
+                super::state::WindowKind::ComponentEditor { .. } => {
+                    let tokens = &self.document_state.panel_ctx.tokens;
+                    if let Some(editor) = self.library.open_editors.get(&window_id) {
+                        crate::library::editor::view(editor, tokens, window_id)
+                            .map(Message::Library)
+                    } else {
+                        // Window mapping exists but state hasn't landed yet —
+                        // render an empty placeholder; the next view
+                        // invocation will catch up once the
+                        // EditorWindowOpened message is handled.
+                        iced::widget::container(iced::widget::Space::new()).into()
+                    }
+                }
             };
         }
         self.view_main_for(window_id)
@@ -2024,15 +2125,18 @@ impl Signex {
         // glyphs that were removed when the tab right-click menu
         // landed.
         let pill_style = TabPillStyle {
-            fill: iced::Color { a: 0.88, ..active_bg },
+            fill: iced::Color {
+                a: 0.88,
+                ..active_bg
+            },
             border: crate::styles::ti(tokens.border),
             accent,
             is_active: true,
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner = container(row![text(title.to_string()).size(11).color(text_c)])
-            .padding([4, 10]);
+        let inner =
+            container(row![text(title.to_string()).size(11).color(text_c)]).padding([4, 10]);
         let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -2397,7 +2501,7 @@ impl Signex {
                 .height(iced::Length::Fixed(560.0)),
             )
             .style(crate::styles::modal_card(tokens))
-        .clip(true)
+            .clip(true)
             .into();
         };
         let doc = engine.document();
@@ -3006,28 +3110,27 @@ impl Signex {
     /// emitting `StartDetachedModalResize { modal, direction }`
     /// so it dispatches to the right OS window. Used as a stack
     /// layer above the modal's body in `view_detached_modal`.
-    fn detached_modal_resize_overlay<'a>(
-        modal: super::state::ModalId,
-    ) -> Element<'a, Message> {
+    fn detached_modal_resize_overlay<'a>(modal: super::state::ModalId) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;
 
         const EDGE: f32 = 6.0;
 
-        let straight =
-            move |direction: Direction, cursor: Interaction, horizontal: bool|
-                -> Element<'a, Message> {
-                let (w, h) = if horizontal {
-                    (Length::Fill, Length::Fixed(EDGE))
-                } else {
-                    (Length::Fixed(EDGE), Length::Fill)
-                };
-                mouse_area(Space::new().width(w).height(h))
-                    .on_press(Message::StartDetachedModalResize { modal, direction })
-                    .interaction(cursor)
-                    .into()
+        let straight = move |direction: Direction,
+                             cursor: Interaction,
+                             horizontal: bool|
+              -> Element<'a, Message> {
+            let (w, h) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
             };
+            mouse_area(Space::new().width(w).height(h))
+                .on_press(Message::StartDetachedModalResize { modal, direction })
+                .interaction(cursor)
+                .into()
+        };
         let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
             mouse_area(
                 Space::new()
@@ -3204,9 +3307,7 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(
-                    &document.panel_ctx.tokens,
-                )),
+                .style(crate::styles::chrome_separator(&document.panel_ctx.tokens)),
         );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             // Resolve "really dragging" — Some only after the
@@ -3244,9 +3345,7 @@ impl Signex {
             let placeholder = container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(26)
-                .style(crate::styles::toolbar_strip(
-                    &document.panel_ctx.tokens,
-                ));
+                .style(crate::styles::toolbar_strip(&document.panel_ctx.tokens));
             main = main.push(placeholder);
         }
         let main = main
@@ -3300,9 +3399,7 @@ impl Signex {
                 let (mx, my) = interaction.last_mouse_pos;
                 let dx = mx - ox;
                 let dy = my - oy;
-                if dx * dx + dy * dy
-                    > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX
-                {
+                if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
                     overlays.push(self.view_tab_drag_ghost(&tab.title));
                 }
             }
@@ -3412,7 +3509,7 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx)
+            .view_region(pos, &self.document_state.panel_ctx, &self.library)
             .map(Message::Dock);
         let width = if !has_panels {
             0.0
@@ -3440,7 +3537,7 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx)
+            .view_region(pos, &self.document_state.panel_ctx, &self.library)
             .map(Message::Dock);
         let height = if !has_panels {
             0.0
@@ -3615,19 +3712,23 @@ impl Signex {
         // window (see `handle_print_preview_requested → handle_detach_modal`)
         // so it can be dragged outside the app's client area. Only fall
         // back to the in-window overlay if the OS window failed to open.
-        let preview_detached = ui
-            .windows
-            .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)));
+        let preview_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)
+            )
+        });
         if document.preview.is_some() && !preview_detached {
             layers.push(self.view_print_preview());
         }
 
         // BOM preview overlay — same detach-first pattern as Print Preview.
-        let bom_detached = ui
-            .windows
-            .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)));
+        let bom_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)
+            )
+        });
         if document.bom_preview.is_some() && !bom_detached {
             layers.push(self.view_bom_preview());
         }
@@ -4176,7 +4277,11 @@ impl Signex {
         }
 
         for i in 0..document.dock.floating.len() {
-            if let Some(panel_widget) = document.dock.view_floating_panel(i, &document.panel_ctx) {
+            if let Some(panel_widget) =
+                document
+                    .dock
+                    .view_floating_panel(i, &document.panel_ctx, &self.library)
+            {
                 let fp = &document.dock.floating[i];
                 // No clamp — panels follow Altium behaviour and may be
                 // dragged anywhere, even past the window edge. The OS clips
@@ -4241,6 +4346,28 @@ impl Signex {
         }
         if ui.erc_dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
             layers.push(self.view_erc_dialog());
+        }
+
+        // v0.9 Library — picker modal overlay. Centered + dismiss-on-
+        // ESC handled via the close X. Modal-detached path lands in
+        // Phase 2 once Library overlays opt into the modal-id system.
+        if let Some(picker) = self.library.picker.as_ref() {
+            let card =
+                crate::library::picker::view(&self.library, picker, &document.panel_ctx.tokens)
+                    .map(Message::Library);
+            // Wrap the centered card on a dim backdrop.
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
         }
 
         layers

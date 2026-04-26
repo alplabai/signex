@@ -12,6 +12,13 @@ mod property_editor;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {
+        // v0.9 Library — bubbled from the Library dock panel via
+        // DockMessage::Library(LibraryMessage). Re-dispatch through
+        // the library subsystem.
+        if let DockMessage::Library(lib_msg) = msg.clone() {
+            return self.dispatch_library_message(lib_msg);
+        }
+
         if let DockMessage::Panel(panel_msg) = &msg
             && (self.handle_dock_panel_control_message(panel_msg)
                 || self.handle_dock_library_browser_message(panel_msg)
