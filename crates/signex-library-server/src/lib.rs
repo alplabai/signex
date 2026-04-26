@@ -59,7 +59,10 @@ pub fn router_with_state(state: AppState) -> Router {
     let mut protected = Router::new()
         .merge(routes::components::router())
         .merge(routes::revisions::router())
-        .merge(routes::locks::router());
+        .merge(routes::locks::router())
+        .merge(routes::symbols::router())
+        .merge(routes::footprints::router())
+        .merge(routes::sims::router());
 
     match std::env::var(API_TOKEN_ENV) {
         Ok(token) if !token.is_empty() => {

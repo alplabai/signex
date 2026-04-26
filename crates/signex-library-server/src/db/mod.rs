@@ -12,13 +12,24 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use signex_library::adapter::ComponentSummary;
 use signex_library::component::{Component, Revision};
-use signex_library::embed::{ParamMap, ParamValue};
-use signex_library::identity::{ComponentId, InternalPn, Version};
+use signex_library::identity::{ComponentClass, ComponentId, InternalPn, Version};
 use signex_library::lifecycle::LifecycleState;
+use signex_library::param::{ParamMap, ParamValue};
+use signex_library::primitive::{Footprint, SimModel, Symbol};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{Executor, Row};
+use uuid::Uuid;
 
 use crate::locks::LockManager;
+
+/// Summary record for a primitive (Symbol / Footprint / SimModel) — what the
+/// `GET /symbols` etc. routes return when listing a library.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PrimitiveSummary {
+    pub library_id: Uuid,
+    pub uuid: Uuid,
+    pub name: String,
+}
 
 /// Pool variant selected by URL scheme.
 #[derive(Clone)]
@@ -145,6 +156,9 @@ impl AppState {
         let parent = Component {
             uuid,
             internal_pn: internal_pn_default.clone(),
+            class: ComponentClass::generic(),
+            category: std::path::PathBuf::new(),
+            family: None,
             revisions: vec![revision.clone()],
             head: revision.version,
         };
@@ -162,6 +176,240 @@ impl AppState {
             }
         }
         Ok(())
+    }
+
+    // ---------- Primitive CRUD (WS-D §9) -----------------------------------
+    //
+    // The primitives table layout is identical for all three kinds, so we
+    // share one generic helper per backend with the table name as a parameter.
+    // sqlx doesn't templatise table names, so we route through a `match`.
+
+    pub async fn insert_symbol(&self, library_id: Uuid, sym: &Symbol) -> sqlx::Result<()> {
+        let payload = serde_json::to_string(sym).map_err(decode_err)?;
+        upsert_primitive(
+            &self.pool, "symbols", library_id, sym.uuid, &sym.name, &payload,
+        )
+        .await
+    }
+
+    pub async fn fetch_symbol(&self, library_id: Uuid, uuid: Uuid) -> sqlx::Result<Option<Symbol>> {
+        fetch_primitive_payload(&self.pool, "symbols", library_id, uuid)
+            .await?
+            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .transpose()
+    }
+
+    pub async fn list_symbols(
+        &self,
+        library_id: Option<Uuid>,
+    ) -> sqlx::Result<Vec<PrimitiveSummary>> {
+        list_primitive_summaries(&self.pool, "symbols", library_id).await
+    }
+
+    pub async fn insert_footprint(&self, library_id: Uuid, fp: &Footprint) -> sqlx::Result<()> {
+        let payload = serde_json::to_string(fp).map_err(decode_err)?;
+        upsert_primitive(
+            &self.pool,
+            "footprints",
+            library_id,
+            fp.uuid,
+            &fp.name,
+            &payload,
+        )
+        .await
+    }
+
+    pub async fn fetch_footprint(
+        &self,
+        library_id: Uuid,
+        uuid: Uuid,
+    ) -> sqlx::Result<Option<Footprint>> {
+        fetch_primitive_payload(&self.pool, "footprints", library_id, uuid)
+            .await?
+            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .transpose()
+    }
+
+    pub async fn list_footprints(
+        &self,
+        library_id: Option<Uuid>,
+    ) -> sqlx::Result<Vec<PrimitiveSummary>> {
+        list_primitive_summaries(&self.pool, "footprints", library_id).await
+    }
+
+    pub async fn insert_sim(&self, library_id: Uuid, sm: &SimModel) -> sqlx::Result<()> {
+        let payload = serde_json::to_string(sm).map_err(decode_err)?;
+        upsert_primitive(&self.pool, "sims", library_id, sm.uuid, &sm.name, &payload).await
+    }
+
+    pub async fn fetch_sim(&self, library_id: Uuid, uuid: Uuid) -> sqlx::Result<Option<SimModel>> {
+        fetch_primitive_payload(&self.pool, "sims", library_id, uuid)
+            .await?
+            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .transpose()
+    }
+
+    pub async fn list_sims(&self, library_id: Option<Uuid>) -> sqlx::Result<Vec<PrimitiveSummary>> {
+        list_primitive_summaries(&self.pool, "sims", library_id).await
+    }
+}
+
+// ---------- Primitive query helpers ----------------------------------------
+
+/// Whitelist of primitive table names — guards against SQL injection through
+/// the `table` parameter that callers in this module supply.
+fn assert_primitive_table(table: &str) {
+    debug_assert!(
+        matches!(table, "symbols" | "footprints" | "sims"),
+        "primitive table name `{table}` is not whitelisted",
+    );
+}
+
+async fn upsert_primitive(
+    pool: &DbPool,
+    table: &'static str,
+    library_id: Uuid,
+    uuid: Uuid,
+    name: &str,
+    payload: &str,
+) -> sqlx::Result<()> {
+    assert_primitive_table(table);
+    let now = Utc::now().to_rfc3339();
+    match pool {
+        DbPool::Sqlite(pool) => {
+            // sqlx 0.8 doesn't templatise identifiers; format!() with the
+            // whitelisted table is safe (see `assert_primitive_table`).
+            let sql = format!(
+                "INSERT INTO {table} (library_id, uuid, name, payload, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?) \
+                 ON CONFLICT(library_id, uuid) DO UPDATE SET \
+                     name = excluded.name, \
+                     payload = excluded.payload, \
+                     updated_at = excluded.updated_at",
+            );
+            sqlx::query(&sql)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .bind(name)
+                .bind(payload)
+                .bind(&now)
+                .bind(&now)
+                .execute(pool)
+                .await?;
+        }
+        DbPool::Postgres(pool) => {
+            let sql = format!(
+                "INSERT INTO {table} (library_id, uuid, name, payload, created_at, updated_at) \
+                 VALUES ($1, $2, $3, $4, $5, $6) \
+                 ON CONFLICT (library_id, uuid) DO UPDATE SET \
+                     name = EXCLUDED.name, \
+                     payload = EXCLUDED.payload, \
+                     updated_at = EXCLUDED.updated_at",
+            );
+            sqlx::query(&sql)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .bind(name)
+                .bind(payload)
+                .bind(&now)
+                .bind(&now)
+                .execute(pool)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn fetch_primitive_payload(
+    pool: &DbPool,
+    table: &'static str,
+    library_id: Uuid,
+    uuid: Uuid,
+) -> sqlx::Result<Option<String>> {
+    assert_primitive_table(table);
+    match pool {
+        DbPool::Sqlite(pool) => {
+            let sql = format!("SELECT payload FROM {table} WHERE library_id = ? AND uuid = ?");
+            let row = sqlx::query(&sql)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .fetch_optional(pool)
+                .await?;
+            Ok(row.map(|r| r.get::<String, _>("payload")))
+        }
+        DbPool::Postgres(pool) => {
+            let sql = format!("SELECT payload FROM {table} WHERE library_id = $1 AND uuid = $2");
+            let row = sqlx::query(&sql)
+                .bind(library_id.to_string())
+                .bind(uuid.to_string())
+                .fetch_optional(pool)
+                .await?;
+            Ok(row.map(|r| r.get::<String, _>("payload")))
+        }
+    }
+}
+
+async fn list_primitive_summaries(
+    pool: &DbPool,
+    table: &'static str,
+    library_id: Option<Uuid>,
+) -> sqlx::Result<Vec<PrimitiveSummary>> {
+    assert_primitive_table(table);
+    match pool {
+        DbPool::Sqlite(pool) => {
+            let rows = if let Some(lib) = library_id {
+                let sql = format!(
+                    "SELECT library_id, uuid, name FROM {table} \
+                     WHERE library_id = ? ORDER BY name"
+                );
+                sqlx::query(&sql)
+                    .bind(lib.to_string())
+                    .fetch_all(pool)
+                    .await?
+            } else {
+                let sql = format!("SELECT library_id, uuid, name FROM {table} ORDER BY name");
+                sqlx::query(&sql).fetch_all(pool).await?
+            };
+            rows.into_iter()
+                .map(|r| {
+                    let lib: String = r.get("library_id");
+                    let id: String = r.get("uuid");
+                    let name: String = r.get("name");
+                    Ok(PrimitiveSummary {
+                        library_id: Uuid::parse_str(&lib).unwrap_or(Uuid::nil()),
+                        uuid: Uuid::parse_str(&id).unwrap_or(Uuid::nil()),
+                        name,
+                    })
+                })
+                .collect()
+        }
+        DbPool::Postgres(pool) => {
+            let rows = if let Some(lib) = library_id {
+                let sql = format!(
+                    "SELECT library_id, uuid, name FROM {table} \
+                     WHERE library_id = $1 ORDER BY name"
+                );
+                sqlx::query(&sql)
+                    .bind(lib.to_string())
+                    .fetch_all(pool)
+                    .await?
+            } else {
+                let sql = format!("SELECT library_id, uuid, name FROM {table} ORDER BY name");
+                sqlx::query(&sql).fetch_all(pool).await?
+            };
+            rows.into_iter()
+                .map(|r| {
+                    let lib: String = r.get("library_id");
+                    let id: String = r.get("uuid");
+                    let name: String = r.get("name");
+                    Ok(PrimitiveSummary {
+                        library_id: Uuid::parse_str(&lib).unwrap_or(Uuid::nil()),
+                        uuid: Uuid::parse_str(&id).unwrap_or(Uuid::nil()),
+                        name,
+                    })
+                })
+                .collect()
+        }
     }
 }
 
@@ -286,16 +534,12 @@ async fn insert_parameters_tx_sqlite(
         .bind(rev.version.minor as i64)
         .execute(&mut **tx)
         .await?;
-    insert_param_set_tx_sqlite(tx, uuid, rev.version, "shared", &rev.shared.parameters).await?;
-    insert_param_set_tx_sqlite(
-        tx,
-        uuid,
-        rev.version,
-        "schematic",
-        &rev.schematic.schematic_params,
-    )
-    .await?;
-    insert_param_set_tx_sqlite(tx, uuid, rev.version, "pcb", &rev.pcb.pcb_params).await?;
+    // Refactored Component carries a single `parameters` map per revision —
+    // the old `shared / schematic / pcb` side-buckets fold together. We keep
+    // the `side` column for forward compatibility (per-primitive params land
+    // when WS-C/E lift symbol/footprint defaults onto the component view) and
+    // tag the unified flat list as `"shared"`.
+    insert_param_set_tx_sqlite(tx, uuid, rev.version, "shared", &rev.parameters).await?;
     Ok(())
 }
 
@@ -343,7 +587,7 @@ async fn insert_suppliers_tx_sqlite(
         .bind(rev.version.minor as i64)
         .execute(&mut **tx)
         .await?;
-    for link in &rev.shared.suppliers {
+    for link in &rev.supply {
         sqlx::query(
             "INSERT OR IGNORE INTO suppliers (component_uuid, major, minor, distributor, sku) VALUES (?, ?, ?, ?, ?)",
         )
@@ -402,6 +646,9 @@ async fn fetch_component_sqlite(
     Ok(Some(Component {
         uuid,
         internal_pn: InternalPn::new(internal_pn),
+        class: ComponentClass::generic(),
+        category: std::path::PathBuf::new(),
+        family: None,
         revisions,
         head: Version::new(head_major as u32, head_minor as u32),
     }))
@@ -439,10 +686,20 @@ async fn rows_to_summaries(
         let (state, description, mpn) = match (state, payload) {
             (Some(s), Some(p)) => {
                 let rev: Revision = serde_json::from_str(&p).map_err(decode_err)?;
+                // The refactored Component model has no top-level
+                // `description`; we synthesise a short one for legacy summary
+                // consumers from the manufacturer + class. The picker UI
+                // surfaces the parametric fields directly, so this is just a
+                // fallback for older API clients still expecting the field.
+                let description = rev
+                    .parameters
+                    .get("description")
+                    .map(|v| v.display())
+                    .unwrap_or_default();
                 (
                     parse_lifecycle(&s).unwrap_or(LifecycleState::Draft),
-                    rev.shared.description.clone(),
-                    rev.shared.mpn.clone(),
+                    description,
+                    rev.primary_mpn.mpn.clone(),
                 )
             }
             _ => (LifecycleState::Draft, String::new(), String::new()),
@@ -618,6 +875,9 @@ async fn fetch_component_postgres(
     Ok(Some(Component {
         uuid,
         internal_pn: InternalPn::new(internal_pn),
+        class: ComponentClass::generic(),
+        category: std::path::PathBuf::new(),
+        family: None,
         revisions,
         head: Version::new(head_major as u32, head_minor as u32),
     }))
@@ -648,10 +908,15 @@ async fn list_components_postgres(pool: &sqlx::PgPool) -> sqlx::Result<Vec<Compo
         let (state, description, mpn) = match (state, payload) {
             (Some(s), Some(p)) => {
                 let rev: Revision = serde_json::from_str(&p).map_err(decode_err)?;
+                let description = rev
+                    .parameters
+                    .get("description")
+                    .map(|v| v.display())
+                    .unwrap_or_default();
                 (
                     parse_lifecycle(&s).unwrap_or(LifecycleState::Draft),
-                    rev.shared.description.clone(),
-                    rev.shared.mpn.clone(),
+                    description,
+                    rev.primary_mpn.mpn.clone(),
                 )
             }
             _ => (LifecycleState::Draft, String::new(), String::new()),
