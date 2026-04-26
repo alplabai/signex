@@ -1203,62 +1203,64 @@ impl Signex {
     }
 
     /// Two-tab strip — Preview | Settings — sitting just under the
-    /// modal header. Active tab gets the accent text + accent under-
-    /// stripe; the other shows a hover affordance via the button.
+    /// modal header. Uses the same `TabPill` widget the document tab
+    /// bar paints with: 3-sided border (top + L/R), accent stripe on
+    /// the active tab, fill that fades for inactive. `is_last=true`
+    /// on the rightmost so the trailing border doesn't double up
+    /// against an adjacent tab's left edge.
     fn view_pdf_tab_strip(
         &self,
         active: crate::app::state::PdfPreviewTab,
     ) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
-        use iced::widget::{button, container, row, text, Space};
+        use iced::widget::{container, mouse_area, row, text, Space};
+        use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
         let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::ti(tokens.hover);
 
-        let tab = move |label: &'static str, this: PdfPreviewTab| {
+        let pill_fill = |is_active: bool| -> iced::Color {
+            if is_active {
+                hover_c
+            } else {
+                iced::Color {
+                    a: hover_c.a * 0.35,
+                    ..hover_c
+                }
+            }
+        };
+
+        let tab = |label: &'static str, this: PdfPreviewTab, is_last: bool| {
             let is_active = this == active;
             let label_color = if is_active { text_c } else { text_muted };
-            let underline_h = if is_active { 2.0 } else { 0.0 };
-            let pill = iced::widget::column![
-                text(label).size(12).color(label_color),
-                Space::new().height(4),
-                container(Space::new().width(Length::Fill).height(underline_h))
-                    .style(move |_: &iced::Theme| iced::widget::container::Style {
-                        background: Some(accent_c.into()),
-                        ..iced::widget::container::Style::default()
-                    }),
-            ]
-            .align_x(iced::Alignment::Center);
-            button(container(pill).padding([6, 14]))
+            let style = TabPillStyle {
+                fill: pill_fill(is_active),
+                border: border_c,
+                accent: accent_c,
+                is_active,
+                is_last,
+                accent_position: AccentPosition::Bottom,
+            };
+            let inner = container(text(label).size(12).color(label_color))
+                .padding([6, 18]);
+            mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreviewSetTab(this))
-                .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: None,
-                    text_color: label_color,
-                    border: iced::Border::default(),
-                    ..iced::widget::button::Style::default()
-                })
+                .interaction(iced::mouse::Interaction::Pointer)
         };
 
         container(
             row![
-                tab("Preview", PdfPreviewTab::Preview),
-                tab("Settings", PdfPreviewTab::Settings),
+                tab("Preview", PdfPreviewTab::Preview, false),
+                tab("Settings", PdfPreviewTab::Settings, true),
                 Space::new().width(Length::Fill),
             ]
-            .spacing(2)
+            .spacing(0)
             .align_y(iced::Alignment::Center),
         )
         .padding([0, 14])
-        .style(move |_: &iced::Theme| iced::widget::container::Style {
-            border: iced::Border {
-                color: border_c,
-                width: 0.0,
-                radius: iced::border::Radius::default(),
-            },
-            ..iced::widget::container::Style::default()
-        })
         .into()
     }
 
