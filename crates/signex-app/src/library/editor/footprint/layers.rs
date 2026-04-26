@@ -38,16 +38,18 @@ impl FpLayer {
         FpLayer::EdgeCuts,
     ];
 
-    /// Short display label for the toolbar pill.
+    /// Short display label for the toolbar pill — Altium nomenclature
+    /// per `docs/UX_REFERENCE_ALTIUM.md`. The Standard/data-layer name is
+    /// available via [`Self::standard_name`] for sexpr round-trips.
     pub fn label(self) -> &'static str {
         match self {
-            FpLayer::FCu => "F.Cu",
-            FpLayer::BCu => "B.Cu",
-            FpLayer::FSilks => "F.SilkS",
-            FpLayer::BSilks => "B.SilkS",
-            FpLayer::FFab => "F.Fab",
-            FpLayer::BFab => "B.Fab",
-            FpLayer::EdgeCuts => "Edge.Cuts",
+            FpLayer::FCu => "Top Layer",
+            FpLayer::BCu => "Bottom Layer",
+            FpLayer::FSilks => "Top Overlay",
+            FpLayer::BSilks => "Bottom Overlay",
+            FpLayer::FFab => "Top Assembly",
+            FpLayer::BFab => "Bottom Assembly",
+            FpLayer::EdgeCuts => "Keep-Out",
         }
     }
 
