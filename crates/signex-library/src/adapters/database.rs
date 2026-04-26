@@ -14,11 +14,22 @@ use crate::manifest::{LibraryMode, Manifest};
 pub struct DatabaseAdapter {
     manifest: Manifest,
     base_url: String,
+    /// Bearer token sent via `Authorization: Bearer <token>`. M3/H1: every
+    /// request to a protected route now needs this; `None` keeps the legacy
+    /// anonymous flow which still works against `/health` and `/version` but
+    /// will fail with 401 against any mutating endpoint when the server is
+    /// configured (production) with `SIGNEX_API_TOKEN`.
+    token: Option<String>,
+    /// Caller-facing string used for advisory locks — defaults to the bearer
+    /// token's caller identity. When OIDC lands this becomes the JWT `sub`.
     holder: String,
     client: reqwest::blocking::Client,
 }
 
 impl DatabaseAdapter {
+    /// Construct from a manifest. The manifest's `auth` field is treated as
+    /// the bearer token; the holder is derived from it (one-token-per-caller
+    /// model). Use [`Self::with_token`] for explicit control.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -33,16 +44,70 @@ impl DatabaseAdapter {
         let client = reqwest::blocking::Client::builder()
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
+        let token = if auth.is_empty() { None } else { Some(auth.clone()) };
         Ok(Self {
             manifest,
             base_url,
+            token,
             holder: auth,
+            client,
+        })
+    }
+
+    /// M3: explicit bearer-token + holder constructor. Prefer this over
+    /// [`Self::new`] when the lock holder is a real user identity (user@host)
+    /// distinct from the bearer credential.
+    pub fn with_token(
+        url: impl Into<String>,
+        token: impl Into<String>,
+        holder: impl Into<String>,
+    ) -> Result<Self, LibraryError> {
+        let base_url = url.into().trim_end_matches('/').to_string();
+        let token = token.into();
+        let token = if token.is_empty() { None } else { Some(token) };
+        let holder = holder.into();
+        let client = reqwest::blocking::Client::builder()
+            .build()
+            .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
+        // We don't have a real Manifest here — fabricate the minimal one
+        // callers might inspect. The `auth` slot is filled with the holder
+        // (not the token) so logging never accidentally leaks the credential.
+        let manifest = Manifest {
+            library: crate::manifest::LibraryMeta {
+                name: "remote".into(),
+                library_id: uuid::Uuid::nil(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: base_url.clone(),
+                auth: holder.clone(),
+            },
+            workflow: Default::default(),
+            users: Default::default(),
+        };
+        Ok(Self {
+            manifest,
+            base_url,
+            token,
+            holder,
             client,
         })
     }
 
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
+    }
+
+    /// Apply the `Authorization: Bearer <token>` header when configured.
+    fn auth(
+        &self,
+        req: reqwest::blocking::RequestBuilder,
+    ) -> reqwest::blocking::RequestBuilder {
+        if let Some(token) = &self.token {
+            req.header("authorization", format!("Bearer {token}"))
+        } else {
+            req
+        }
     }
 }
 
@@ -59,8 +124,7 @@ impl LibraryAdapter for DatabaseAdapter {
             url.push_str(&qs);
         }
         let resp = self
-            .client
-            .get(&url)
+            .auth(self.client.get(&url))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
@@ -77,8 +141,7 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn get_component(&self, id: ComponentId) -> Result<Component, LibraryError> {
         let resp = self
-            .client
-            .get(self.url(&format!("/components/{id}")))
+            .auth(self.client.get(self.url(&format!("/components/{id}"))))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
@@ -94,8 +157,10 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn get_revision(&self, id: ComponentId, version: Version) -> Result<Revision, LibraryError> {
         let resp = self
-            .client
-            .get(self.url(&format!("/components/{id}/revisions/{version}")))
+            .auth(
+                self.client
+                    .get(self.url(&format!("/components/{id}/revisions/{version}"))),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
@@ -116,9 +181,11 @@ impl LibraryAdapter for DatabaseAdapter {
         _message: &str,
     ) -> Result<(), LibraryError> {
         let resp = self
-            .client
-            .post(self.url(&format!("/components/{id}/revisions")))
-            .json(&revision)
+            .auth(
+                self.client
+                    .post(self.url(&format!("/components/{id}/revisions")))
+                    .json(&revision),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
@@ -132,10 +199,12 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn try_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError> {
         let resp = self
-            .client
-            .post(self.url(&format!("/components/{id}/locks")))
-            .header("x-signex-holder", &self.holder)
-            .json(&serde_json::json!({ "field_set": field_set_str(field_set) }))
+            .auth(
+                self.client
+                    .post(self.url(&format!("/components/{id}/locks")))
+                    .header("x-signex-holder", &self.holder)
+                    .json(&serde_json::json!({ "field_set": field_set_str(field_set) })),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
@@ -157,10 +226,12 @@ impl LibraryAdapter for DatabaseAdapter {
 
     fn release_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError> {
         let resp = self
-            .client
-            .delete(self.url(&format!("/components/{id}/locks")))
-            .header("x-signex-holder", &self.holder)
-            .json(&serde_json::json!({ "field_set": field_set_str(field_set) }))
+            .auth(
+                self.client
+                    .delete(self.url(&format!("/components/{id}/locks")))
+                    .header("x-signex-holder", &self.holder)
+                    .json(&serde_json::json!({ "field_set": field_set_str(field_set) })),
+            )
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {

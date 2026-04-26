@@ -20,9 +20,26 @@ use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
 use signex_library::snxpart::{read_snxpart, snxpart_filename};
 use signex_library_server::db::AppState;
 use signex_library_server::git_export::export_to_dir;
-use signex_library_server::router_with_state;
+use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use tower::ServiceExt;
 use uuid::Uuid;
+
+/// Test-fixture bearer token. H1: every protected route in the test harness
+/// must pass `Authorization: Bearer <TEST_BEARER>`. Set via `SIGNEX_API_TOKEN`
+/// on the test process so `router_with_state` picks it up at construction.
+const TEST_BEARER: &str = "test-bearer-token";
+
+/// Install the test bearer-token env var. Called by every test before they
+/// build a router; idempotent and side-effect-safe across parallel tests
+/// because the value never changes.
+fn ensure_test_token() {
+    // SAFETY: `set_var` requires unsynchronised access on Unix; here all
+    // tests set the same constant value, so racing writers cannot disagree.
+    // Once stabilised we can switch to `std::env::set_var` directly.
+    unsafe {
+        std::env::set_var(API_TOKEN_ENV, TEST_BEARER);
+    }
+}
 
 fn fixture_revision(version: Version) -> Revision {
     let mut rev = Revision {
@@ -55,11 +72,17 @@ fn fixture_component() -> Component {
 }
 
 async fn fresh_state() -> AppState {
+    ensure_test_token();
     let state = AppState::new_sqlite_memory()
         .await
         .expect("sqlite memory state");
     state.migrate().await.expect("migrations apply");
     state
+}
+
+/// Build an `Authorization: Bearer <TEST_BEARER>` header value once.
+fn bearer_header() -> String {
+    format!("Bearer {TEST_BEARER}")
 }
 
 #[tokio::test]
@@ -103,6 +126,7 @@ async fn post_then_get_component_round_trip() {
                 .method("POST")
                 .uri("/components")
                 .header("content-type", "application/json")
+                .header("authorization", bearer_header())
                 .body(Body::from(body))
                 .unwrap(),
         )
@@ -114,6 +138,7 @@ async fn post_then_get_component_round_trip() {
         .oneshot(
             Request::builder()
                 .uri(format!("/components/{}", comp.uuid))
+                .header("authorization", bearer_header())
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -247,6 +272,9 @@ async fn database_adapter_round_trips_through_http() {
         axum::serve(listener, app).await.unwrap();
     });
 
+    // H1: the manifest's `auth` slot now carries the bearer token; the
+    // server's `ValidateRequestHeaderLayer` checks it against
+    // `SIGNEX_API_TOKEN` (set by `ensure_test_token` above).
     let manifest = Manifest {
         library: LibraryMeta {
             name: "test".into(),
@@ -255,7 +283,7 @@ async fn database_adapter_round_trips_through_http() {
         },
         mode: LibraryMode::Database {
             url: format!("http://{addr}"),
-            auth: "test-token".into(),
+            auth: TEST_BEARER.into(),
         },
         workflow: Default::default(),
         users: Default::default(),
@@ -301,6 +329,7 @@ async fn locks_endpoint_returns_409_when_held() {
             .method("POST")
             .uri(format!("/components/{comp_uuid}/locks"))
             .header("content-type", "application/json")
+            .header("authorization", bearer_header())
             .header("x-signex-holder", holder)
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({"field_set": "Symbol"})).unwrap(),
