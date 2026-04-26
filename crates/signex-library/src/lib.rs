@@ -16,19 +16,19 @@ pub mod snxpart;
 
 pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 pub use component::{Component, Revision};
-pub use diff::{diff_revisions, RevisionDiff};
+pub use diff::{RevisionDiff, diff_revisions};
 pub use distributor::{DistributorAdapter, DistributorError, DistributorPart, DistributorSource};
 pub use embed::{
-    AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue,
-    PcbSide, PlmLink, PriceBreak, PricingSnapshot, SchematicSide, SharedSide, SharedSlice,
-    SpiceModel, SupplierLink, SymbolBody, TemplateId, VariantOverride,
+    AvlEntry, ComplianceTags, DatasheetRef, FootprintBody, ModelRef, ParamMap, ParamValue, PcbSide,
+    PlmLink, PriceBreak, PricingSnapshot, SchematicSide, SharedSide, SharedSlice, SpiceModel,
+    SupplierLink, SymbolBody, TemplateId, VariantOverride,
 };
 pub use hash::hash_revision_content;
 pub use identity::{ComponentId, InternalPn, Mpn, Version};
 pub use lifecycle::LifecycleState;
 pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, WorkflowConfig};
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
-pub use snxpart::{read_snxpart, snxpart_filename, write_snxpart, SnxPartError, SnxPartFile};
+pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 
 #[cfg(test)]
 mod smoke {

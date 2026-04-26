@@ -1,6 +1,6 @@
 //! Signex library DB-flavour server. v0.9.2 fills in components/revisions/locks routes.
 
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use serde_json::json;
 
 pub fn router() -> Router {

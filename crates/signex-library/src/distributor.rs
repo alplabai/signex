@@ -51,17 +51,11 @@ pub trait DistributorAdapter: Send + Sync {
     fn name(&self) -> &'static str;
     fn source(&self) -> DistributorSource;
 
-    fn lookup_by_url(
-        &self,
-        url: &url::Url,
-    ) -> Result<Option<DistributorPart>, DistributorError>;
+    fn lookup_by_url(&self, url: &url::Url) -> Result<Option<DistributorPart>, DistributorError>;
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError>;
 
-    fn refresh_pricing(
-        &self,
-        part: &DistributorPart,
-    ) -> Result<PricingSnapshot, DistributorError>;
+    fn refresh_pricing(&self, part: &DistributorPart) -> Result<PricingSnapshot, DistributorError>;
 }
 
 #[cfg(test)]

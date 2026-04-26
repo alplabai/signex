@@ -93,7 +93,9 @@ mod tests {
     fn write_then_read_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let f = fixture_file();
-        let path = dir.path().join(snxpart_filename(f.uuid, f.revision.version));
+        let path = dir
+            .path()
+            .join(snxpart_filename(f.uuid, f.revision.version));
         write_snxpart(&path, &f).unwrap();
         let back = read_snxpart(&path).unwrap();
         assert_eq!(f, back);
