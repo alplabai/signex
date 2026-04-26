@@ -5039,6 +5039,7 @@ name = "signex-app"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "fontdb",
  "iced",
  "iced_aw",
@@ -5053,10 +5054,13 @@ dependencies = [
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",
+ "signex-library",
  "signex-output",
  "signex-render",
  "signex-types",
  "signex-widgets",
+ "tempfile",
+ "tracing",
  "uuid",
  "windows-sys 0.61.2",
  "winres",

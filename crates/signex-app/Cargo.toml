@@ -26,10 +26,22 @@ signex-widgets = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
 signex-output = { workspace = true }
+signex-library = { workspace = true, features = [
+    "local-git",
+    "database",
+    "distributors-community",
+    "ai-stub",
+    "search-tantivy",
+] }
+tracing = { workspace = true }
+chrono = { workspace = true }
 rfd = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[dev-dependencies]
+tempfile = "3"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
