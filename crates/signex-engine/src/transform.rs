@@ -310,78 +310,221 @@ impl Engine {
 
     pub(super) fn rotate_selected_item(&mut self, item: &SelectedItem, angle_degrees: f64) -> bool {
         match item.kind {
-            SelectedKind::Symbol => self
-                .document
-                .symbols
-                .iter_mut()
-                .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
-                    let pivot = symbol.position;
-                    symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
-                    // Standard rotates property field positions around the symbol's
-                    // pivot and bumps each field's stored rotation by the same
-                    // delta so text follows the symbol on rotate operations.
-                    if let Some(rt) = symbol.ref_text.as_mut() {
-                        let (nx, ny) = rotate_point_around(rt.position.x, rt.position.y, pivot.x, pivot.y, angle_degrees);
-                        rt.position.x = nx;
-                        rt.position.y = ny;
-                        rt.rotation = (rt.rotation + angle_degrees).rem_euclid(360.0);
-                    }
-                    if let Some(vt) = symbol.val_text.as_mut() {
-                        let (nx, ny) = rotate_point_around(vt.position.x, vt.position.y, pivot.x, pivot.y, angle_degrees);
-                        vt.position.x = nx;
-                        vt.position.y = ny;
-                        vt.rotation = (vt.rotation + angle_degrees).rem_euclid(360.0);
-                    }
-                    for cp in &mut symbol.custom_properties {
-                        if let Some(tp) = cp.text.as_mut() {
-                            let (nx, ny) = rotate_point_around(tp.position.x, tp.position.y, pivot.x, pivot.y, angle_degrees);
-                            tp.position.x = nx;
-                            tp.position.y = ny;
-                            tp.rotation = (tp.rotation + angle_degrees).rem_euclid(360.0);
+            SelectedKind::Symbol => {
+                let lib_symbols = &self.document.lib_symbols.clone();
+                self.document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == item.uuid)
+                    .map(|symbol| {
+                        symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
+                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+                            autoplace_fields(symbol, lib);
                         }
-                    }
-                    true
-                })
-                .unwrap_or(false),
+                        true
+                    })
+                    .unwrap_or(false)
+            }
             _ => false,
         }
     }
 
     pub(super) fn mirror_selected_item(&mut self, item: &SelectedItem, axis: MirrorAxis) -> bool {
         match item.kind {
-            SelectedKind::Symbol => self
-                .document
-                .symbols
-                .iter_mut()
-                .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
-                    let pivot = symbol.position;
-                    match axis {
-                        MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
-                        MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
-                    }
-                    // Reflect property field positions across the symbol's pivot
-                    // axis so text mirrors with the symbol body.
-                    let mirror_field = |pos_x: &mut f64, pos_y: &mut f64| match axis {
-                        MirrorAxis::Horizontal => *pos_x = 2.0 * pivot.x - *pos_x,
-                        MirrorAxis::Vertical => *pos_y = 2.0 * pivot.y - *pos_y,
-                    };
-                    if let Some(rt) = symbol.ref_text.as_mut() {
-                        mirror_field(&mut rt.position.x, &mut rt.position.y);
-                    }
-                    if let Some(vt) = symbol.val_text.as_mut() {
-                        mirror_field(&mut vt.position.x, &mut vt.position.y);
-                    }
-                    for cp in &mut symbol.custom_properties {
-                        if let Some(tp) = cp.text.as_mut() {
-                            mirror_field(&mut tp.position.x, &mut tp.position.y);
+            SelectedKind::Symbol => {
+                let lib_symbols = &self.document.lib_symbols.clone();
+                self.document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == item.uuid)
+                    .map(|symbol| {
+                        match axis {
+                            MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
+                            MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
                         }
-                    }
-                    true
-                })
-                .unwrap_or(false),
+                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+                            autoplace_fields(symbol, lib);
+                        }
+                        true
+                    })
+                    .unwrap_or(false)
+            }
             _ => false,
+        }
+    }
+}
+
+/// Reposition the visible Reference and Value fields on the side of the
+/// symbol body with the fewest pins, mirroring Standard's `AutoplaceFields`
+/// behaviour. Fields are stacked vertically and given a justify/rotation
+/// that always renders horizontally.
+fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
+    use signex_types::schematic::{HAlign, VAlign};
+
+    // 1. Body bounding box in world coordinates from library graphics.
+    let mut bbox: Option<(f64, f64, f64, f64)> = None;
+    let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
+        None => *bbox = Some((x, y, x, y)),
+        Some((lx, ly, hx, hy)) => {
+            if x < *lx { *lx = x; }
+            if y < *ly { *ly = y; }
+            if x > *hx { *hx = x; }
+            if y > *hy { *hy = y; }
+        }
+    };
+    for g in &lib.graphics {
+        if g.unit != 0 && g.unit != symbol.unit {
+            continue;
+        }
+        let pts = graphic_extent_points(&g.graphic);
+        for (lx, ly) in pts {
+            let (wx, wy) = transform_local_point(symbol, lx, ly);
+            extend(&mut bbox, wx, wy);
+        }
+    }
+    // Fallback to symbol position if symbol has no graphics.
+    let (min_x, min_y, max_x, max_y) = bbox.unwrap_or((
+        symbol.position.x - 1.27,
+        symbol.position.y - 1.27,
+        symbol.position.x + 1.27,
+        symbol.position.y + 1.27,
+    ));
+    let cx = (min_x + max_x) * 0.5;
+    let cy = (min_y + max_y) * 0.5;
+
+    // 2. Count pins on each side of the body using each pin's wire endpoint
+    //    direction relative to the body centre.
+    let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
+    for p in &lib.pins {
+        if p.unit != 0 && p.unit != symbol.unit {
+            continue;
+        }
+        let rad = p.pin.rotation.to_radians();
+        let ex = p.pin.position.x + p.pin.length * rad.cos();
+        let ey = p.pin.position.y + p.pin.length * rad.sin();
+        let (wex, wey) = transform_local_point(symbol, ex, ey);
+        let dx = wex - cx;
+        let dy = wey - cy;
+        if dx.abs() >= dy.abs() {
+            if dx >= 0.0 { pins_right += 1; } else { pins_left += 1; }
+        } else if dy >= 0.0 {
+            pins_bottom += 1;
+        } else {
+            pins_top += 1;
+        }
+    }
+
+    // 3. Pick the side with the fewest pins. Ties resolved Right > Left > Top > Bottom
+    //    to match Standard's preference for horizontal placement.
+    #[derive(Clone, Copy)]
+    enum Side { Right, Left, Top, Bottom }
+    let candidates = [
+        (Side::Right, pins_right, 0),
+        (Side::Left, pins_left, 1),
+        (Side::Top, pins_top, 2),
+        (Side::Bottom, pins_bottom, 3),
+    ];
+    let side = candidates
+        .iter()
+        .min_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
+        .map(|(s, _, _)| *s)
+        .unwrap_or(Side::Right);
+
+    // 4. Collect visible fields in stacking order: Reference first, Value second.
+    let mut fields: Vec<&mut signex_types::schematic::TextProp> = Vec::new();
+    if let Some(rt) = symbol.ref_text.as_mut()
+        && !rt.hidden
+    {
+        fields.push(rt);
+    }
+    if let Some(vt) = symbol.val_text.as_mut()
+        && !vt.hidden
+    {
+        fields.push(vt);
+    }
+    if fields.is_empty() {
+        symbol.fields_autoplaced = true;
+        return;
+    }
+
+    // 5. Anchor and per-field offsets. Fields are always stacked vertically.
+    //    `line_height` is roughly Standard's 1.6 * text_size; using the first
+    //    visible field's font size keeps it scale-correct.
+    let font_size = fields[0].font_size.max(0.1);
+    let line_height = font_size * 1.6;
+    let margin = 0.508; // 20 mils, Standard default field clearance
+    let n = fields.len() as f64;
+    let total_height = (n - 1.0) * line_height;
+
+    let (anchor_x, anchor_y, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
+        Side::Right => (max_x + margin, cy - total_height * 0.5, HAlign::Left, VAlign::Center),
+        Side::Left => (min_x - margin, cy - total_height * 0.5, HAlign::Right, VAlign::Center),
+        Side::Top => (cx, min_y - margin - total_height, HAlign::Center, VAlign::Center),
+        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Center),
+    };
+
+    // 6. Field rotation must fold to 0 in `field_effective_style` so the
+    //    rendered text is always horizontal regardless of symbol rotation.
+    let field_rotation = (360.0 - symbol.rotation).rem_euclid(360.0);
+
+    for (i, prop) in fields.iter_mut().enumerate() {
+        prop.position.x = anchor_x;
+        prop.position.y = anchor_y + i as f64 * line_height;
+        prop.justify_h = justify_h;
+        prop.justify_v = justify_v;
+        prop.rotation = field_rotation;
+    }
+
+    symbol.fields_autoplaced = true;
+}
+
+/// Apply a symbol instance's position, rotation, and mirror to a local
+/// library-space point, returning the world-space coordinates. Mirrors
+/// `signex_render::instance_transform`'s convention so engine geometry
+/// matches the renderer.
+fn transform_local_point(sym: &signex_types::schematic::Symbol, lx: f64, ly: f64) -> (f64, f64) {
+    let x = lx;
+    let y = -ly; // library Y-up → schematic Y-down
+    let rad = -sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let mut rx = x * cos - y * sin;
+    let mut ry = x * sin + y * cos;
+    if sym.mirror_y {
+        rx = -rx;
+    }
+    if sym.mirror_x {
+        ry = -ry;
+    }
+    (rx + sym.position.x, ry + sym.position.y)
+}
+
+/// Return all extreme points of a library graphic for bounding-box
+/// computation. For closed shapes this returns the corners; for open
+/// shapes the vertices.
+fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)> {
+    use signex_types::schematic::Graphic;
+    match g {
+        Graphic::Polyline { points, .. } | Graphic::Bezier { points, .. } => {
+            points.iter().map(|p| (p.x, p.y)).collect()
+        }
+        Graphic::Rectangle { start, end, .. } => vec![
+            (start.x, start.y),
+            (end.x, start.y),
+            (end.x, end.y),
+            (start.x, end.y),
+        ],
+        Graphic::Circle { center, radius, .. } => vec![
+            (center.x - *radius, center.y - *radius),
+            (center.x + *radius, center.y - *radius),
+            (center.x - *radius, center.y + *radius),
+            (center.x + *radius, center.y + *radius),
+        ],
+        Graphic::Arc { start, mid, end, .. } => {
+            vec![(start.x, start.y), (mid.x, mid.y), (end.x, end.y)]
+        }
+        Graphic::Text { position, .. } | Graphic::TextBox { position, .. } => {
+            vec![(position.x, position.y)]
         }
     }
 }
@@ -393,6 +536,7 @@ impl Engine {
 ///
 /// In a Y-down coordinate space the standard rotation matrix gives a visual
 /// CW rotation, so we negate the angle to recover the expected visual CCW.
+#[allow(dead_code)]
 fn rotate_point_around(x: f64, y: f64, cx: f64, cy: f64, angle_deg: f64) -> (f64, f64) {
     let rx = x - cx;
     let ry = y - cy;
