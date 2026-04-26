@@ -90,11 +90,9 @@ fn lookup_by_mpn_handles_empty_list() {
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path("/jlcpcb-search"))
-                    .respond_with(
-                        ResponseTemplate::new(200).set_body_json(json!({
-                            "data": { "list": [] }
-                        })),
-                    )
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                        "data": { "list": [] }
+                    })))
                     .mount(server)
                     .await;
             })

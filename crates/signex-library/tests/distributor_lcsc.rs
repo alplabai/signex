@@ -189,5 +189,8 @@ fn live_lookup_smoke() {
     // Hits the real LCSC search endpoint. Skipped in CI.
     let adapter = LcscAdapter::new(None);
     let parts = adapter.lookup_by_mpn("RC0805FR-0710KL").expect("network");
-    assert!(!parts.is_empty(), "live LCSC should return at least one hit");
+    assert!(
+        !parts.is_empty(),
+        "live LCSC should return at least one hit"
+    );
 }

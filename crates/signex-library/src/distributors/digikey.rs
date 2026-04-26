@@ -37,7 +37,7 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
-use crate::distributors::cache::{DistributorCache, DEFAULT_TTL};
+use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
 use crate::embed::ParamMap;
 
@@ -119,8 +119,8 @@ impl DigiKeyAuth {
     ) -> Result<Self, DigiKeyAuthError> {
         let auth_url =
             AuthUrl::new(auth_url.into()).map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
-        let token_url = TokenUrl::new(token_url.into())
-            .map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
+        let token_url =
+            TokenUrl::new(token_url.into()).map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
         let redirect_url = RedirectUrl::new(redirect_uri.into())
             .map_err(|e| DigiKeyAuthError::Config(e.to_string()))?;
 
@@ -148,9 +148,7 @@ impl DigiKeyAuth {
     /// Step 1 of the flow: produce the authorization URL the UI should open
     /// in a browser. Returned tuple: `(url, csrf_token, pkce_verifier)`.
     /// The UI keeps the verifier until the redirect callback fires.
-    pub fn start_authorization(
-        &self,
-    ) -> (Url, CsrfToken, PkceCodeVerifier) {
+    pub fn start_authorization(&self) -> (Url, CsrfToken, PkceCodeVerifier) {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
         let (auth_url, csrf_token) = self
             .client
@@ -346,10 +344,7 @@ impl DigiKeyAdapter {
             });
         }
         if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!(
-                "HTTP {}",
-                resp.status()
-            )));
+            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
         }
         let raw: DigiKeyResponse = resp
             .json()

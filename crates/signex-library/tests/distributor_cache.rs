@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use signex_library::distributor::{DistributorPart, DistributorSource};
-use signex_library::distributors::cache::{DistributorCache, DEFAULT_TTL};
+use signex_library::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use signex_library::embed::ParamMap;
 
 fn sample_part(mpn: &str, source: DistributorSource) -> DistributorPart {
