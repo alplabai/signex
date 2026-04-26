@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::component::{Component, Revision};
-use crate::identity::{ComponentId, Version};
+use crate::identity::{ComponentId, InternalPn, Version};
 use crate::lifecycle::LifecycleState;
 use crate::manifest::Manifest;
 
@@ -46,10 +46,14 @@ pub struct LibraryQuery {
 }
 
 /// One result row from a library query — header info, NOT full revisions.
+///
+/// M5: `internal_pn` is `InternalPn`, matching the rest of the identity layer.
+/// `serde(transparent)` keeps the wire format a bare string, so existing
+/// payloads round-trip unchanged.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentSummary {
     pub uuid: ComponentId,
-    pub internal_pn: String,
+    pub internal_pn: InternalPn,
     pub mpn: String,
     pub head: Version,
     pub state: LifecycleState,

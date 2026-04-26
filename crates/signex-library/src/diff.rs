@@ -113,10 +113,71 @@ pub fn diff_revisions(a: &Revision, b: &Revision) -> RevisionDiff {
 // Symbol / footprint pin & pad extraction
 // ---------------------------------------------------------------------------
 
-/// (pin_number, [x_mm, y_mm]) — number is the diff identity. Empty body or
-/// unparseable text returns an empty list (treat as "no pins").
+/// `("<unit_index>:<pin_number>", [x_mm, y_mm])` — diff identity.
+///
+/// M9: KiCad multi-unit symbols (e.g. dual op-amps, gate arrays) reuse pin
+/// numbers across the unit sub-symbols. Keying purely by `pin_number` then
+/// collecting into a `BTreeMap` silently dropped duplicates. The compound key
+/// `<unit>:<pin>` keeps every (unit, pin) pair distinct so a real pin move on
+/// unit 2 of a dual op-amp shows up as a `moved_pins` entry instead of being
+/// shadowed by unit 1's pin of the same number.
+///
+/// Empty body or unparseable text returns an empty list (treat as "no pins").
 fn extract_pins(sexpr_text: &str) -> Vec<(String, [f64; 2])> {
-    extract_at_keyed(sexpr_text, "pin", pin_number)
+    extract_pins_with_unit(sexpr_text)
+}
+
+/// Walk the parsed tree once, tracking the enclosing unit sub-symbol so each
+/// pin's key is `<unit_index>:<pin_number>`. The unit index is parsed from the
+/// KiCad `<root>_<unit>_<style>` sub-symbol naming convention; symbols without
+/// the suffix collapse to unit `0` (which preserves pre-M9 behaviour for
+/// single-unit parts).
+fn extract_pins_with_unit(sexpr_text: &str) -> Vec<(String, [f64; 2])> {
+    let trimmed = sexpr_text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let parsed = match sexpr::parse(trimmed) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    // DFS keeping the enclosing unit number in scope.
+    let mut out = Vec::new();
+    let mut stack: Vec<(&SExpr, u32)> = vec![(&parsed, 0)];
+    while let Some((node, unit)) = stack.pop() {
+        let next_unit = if node.keyword() == Some("symbol") {
+            node.first_arg()
+                .and_then(parse_symbol_unit_index)
+                .unwrap_or(unit)
+        } else {
+            unit
+        };
+        if node.keyword() == Some("pin")
+            && let Some(num) = pin_number(node)
+        {
+            let pos = at_position(node).unwrap_or([0.0, 0.0]);
+            out.push((format!("{next_unit}:{num}"), pos));
+        }
+        for child in node.children() {
+            if matches!(child, SExpr::List(_)) {
+                stack.push((child, next_unit));
+            }
+        }
+    }
+    out
+}
+
+/// KiCad sub-symbol names use the convention `<root>_<unit>_<style>` (e.g.
+/// `LM358_1_1`, `LM358_2_1`). Returns the `<unit>` segment when both numeric
+/// suffixes are present, otherwise `None` (root or non-conforming name).
+fn parse_symbol_unit_index(name: &str) -> Option<u32> {
+    let unquoted = name.trim_matches('"');
+    let mut parts = unquoted.rsplitn(3, '_');
+    let _style = parts.next()?.parse::<u32>().ok()?;
+    let unit = parts.next()?.parse::<u32>().ok()?;
+    let _root = parts.next()?;
+    Some(unit)
 }
 
 /// (pad_number, [x_mm, y_mm]) — first arg of `(pad N ...)` is the pad number.
@@ -345,9 +406,10 @@ mod tests {
         let pins = extract_pins(SYMBOL_2_PINS);
         assert_eq!(pins.len(), 2);
         let by_num: BTreeMap<String, [f64; 2]> = pins.into_iter().collect();
-        assert!(by_num.contains_key("1"));
-        assert!(by_num.contains_key("2"));
-        assert!((by_num["1"][0] - -2.54).abs() < POS_EPS_MM);
+        // M9: keys are now `<unit>:<pin>`; single-unit symbols emit unit 0.
+        assert!(by_num.contains_key("0:1"));
+        assert!(by_num.contains_key("0:2"));
+        assert!((by_num["0:1"][0] - -2.54).abs() < POS_EPS_MM);
     }
 
     #[test]
@@ -373,10 +435,11 @@ mod tests {
         let b = rev_with(SYMBOL_3_PINS, "");
         let forward = diff_revisions(&a, &b);
         let reverse = diff_revisions(&b, &a);
-        assert_eq!(forward.symbol.added_pins, vec!["3".to_string()]);
+        // M9: keys carry the unit prefix even for single-unit symbols.
+        assert_eq!(forward.symbol.added_pins, vec!["0:3".to_string()]);
         assert!(forward.symbol.removed_pins.is_empty());
         assert!(reverse.symbol.added_pins.is_empty());
-        assert_eq!(reverse.symbol.removed_pins, vec!["3".to_string()]);
+        assert_eq!(reverse.symbol.removed_pins, vec!["0:3".to_string()]);
     }
 
     #[test]
@@ -386,9 +449,52 @@ mod tests {
         let d = diff_revisions(&a, &b);
         assert_eq!(d.symbol.moved_pins.len(), 1);
         let (num, from, to) = &d.symbol.moved_pins[0];
-        assert_eq!(num, "1");
+        // M9: key is `<unit>:<pin>` — unit 0 for the single-unit fixture.
+        assert_eq!(num, "0:1");
         assert!((from[0] - -2.54).abs() < POS_EPS_MM);
         assert!((to[0] - -3.81).abs() < POS_EPS_MM);
+    }
+
+    /// M9: regression test for multi-unit pin keying.
+    ///
+    /// A dual op-amp (e.g. LM358) shares pin numbers across its two unit
+    /// sub-symbols. Pre-M9 the diff collapsed both `pin "1"` entries into a
+    /// single map slot, hiding any change on the second unit. With unit-aware
+    /// keying, moving unit 2's pin 1 surfaces as a clean `moved_pins` entry
+    /// while unit 1's identical pin stays put.
+    #[test]
+    fn extract_pins_keeps_multi_unit_duplicates_distinct() {
+        let dual_a = r#"
+            (symbol "LM358"
+                (symbol "LM358_1_1"
+                    (pin input line (at -5 0 0) (length 2)
+                        (name "IN+") (number "1")))
+                (symbol "LM358_2_1"
+                    (pin input line (at -5 -10 0) (length 2)
+                        (name "IN+") (number "1"))))
+        "#;
+        let dual_b = r#"
+            (symbol "LM358"
+                (symbol "LM358_1_1"
+                    (pin input line (at -5 0 0) (length 2)
+                        (name "IN+") (number "1")))
+                (symbol "LM358_2_1"
+                    (pin input line (at -7 -10 0) (length 2)
+                        (name "IN+") (number "1"))))
+        "#;
+        let pins_a: BTreeMap<String, [f64; 2]> = extract_pins(dual_a).into_iter().collect();
+        // Two distinct keys despite shared pin number "1".
+        assert_eq!(pins_a.len(), 2, "multi-unit pins must not collide");
+        assert!(pins_a.contains_key("1:1"));
+        assert!(pins_a.contains_key("2:1"));
+
+        let a = rev_with(dual_a, "");
+        let b = rev_with(dual_b, "");
+        let d = diff_revisions(&a, &b);
+        assert!(d.symbol.added_pins.is_empty());
+        assert!(d.symbol.removed_pins.is_empty());
+        assert_eq!(d.symbol.moved_pins.len(), 1);
+        assert_eq!(d.symbol.moved_pins[0].0, "2:1");
     }
 
     #[test]

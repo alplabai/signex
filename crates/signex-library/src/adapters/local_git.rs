@@ -201,7 +201,7 @@ impl LibraryAdapter for LocalGitAdapter {
                 let head = c.head_revision()?;
                 Some(ComponentSummary {
                     uuid: c.uuid,
-                    internal_pn: c.internal_pn.as_str().to_string(),
+                    internal_pn: c.internal_pn.clone(),
                     mpn: head.shared.mpn.clone(),
                     head: c.head,
                     state: head.state,
@@ -212,7 +212,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if let Some(text) = &query.text {
             let needle = text.to_ascii_lowercase();
             hits.retain(|h| {
-                h.internal_pn.to_ascii_lowercase().contains(&needle)
+                h.internal_pn.as_str().to_ascii_lowercase().contains(&needle)
                     || h.mpn.to_ascii_lowercase().contains(&needle)
                     || h.description.to_ascii_lowercase().contains(&needle)
             });

@@ -182,7 +182,8 @@ fn text_query_pinpoints_the_single_matching_part() {
     assert!(!hits.is_empty(), "expected at least one hit");
     // Highest-scoring hit must be the unique 10 µF 0805 25V X7R cap.
     assert_eq!(
-        hits[0].internal_pn, "C0805_10uF_25V_X7R",
+        hits[0].internal_pn.as_str(),
+        "C0805_10uF_25V_X7R",
         "top hit was {:?}",
         hits[0].internal_pn
     );
@@ -244,7 +245,10 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
         .collect();
     expected.sort();
 
-    let mut got: Vec<String> = hits.iter().map(|h| h.internal_pn.clone()).collect();
+    let mut got: Vec<String> = hits
+        .iter()
+        .map(|h| h.internal_pn.as_str().to_string())
+        .collect();
     got.sort();
 
     assert_eq!(
@@ -281,7 +285,7 @@ fn index_persists_across_drop_and_reopen() {
         !hits.is_empty(),
         "reopened index should still answer queries"
     );
-    assert_eq!(hits[0].internal_pn, "C0805_10uF_25V_X7R");
+    assert_eq!(hits[0].internal_pn.as_str(), "C0805_10uF_25V_X7R");
 }
 
 #[test]
@@ -358,10 +362,10 @@ fn category_only_query_filters_corpus() {
     );
     for h in &hits {
         assert!(
-            h.internal_pn.starts_with("R0402")
-                || h.internal_pn.starts_with("R0603")
-                || h.internal_pn.starts_with("R0805")
-                || h.internal_pn.starts_with("R1206"),
+            h.internal_pn.as_str().starts_with("R0402")
+                || h.internal_pn.as_str().starts_with("R0603")
+                || h.internal_pn.as_str().starts_with("R0805")
+                || h.internal_pn.as_str().starts_with("R1206"),
             "unexpected non-resistor in result: {}",
             h.internal_pn
         );

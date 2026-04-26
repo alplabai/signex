@@ -41,7 +41,7 @@ use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, TantivyError, Term}
 use crate::adapter::ComponentSummary;
 use crate::component::Component;
 use crate::embed::ParamValue;
-use crate::identity::Version;
+use crate::identity::{InternalPn, Version};
 use crate::lifecycle::LifecycleState;
 use crate::search::{Facet, FacetOp, SearchIndex, SearchQuery};
 
@@ -83,6 +83,7 @@ pub enum TantivyIndexError {
     OpenDirectory(#[from] tantivy::directory::error::OpenDirectoryError),
     #[error("directory read: {0}")]
     OpenRead(#[from] tantivy::directory::error::OpenReadError),
+    /// M10: schema drift recovery hint — see `wipe_and_recreate`.
     #[error("schema mismatch on existing index at {path}: {reason}")]
     SchemaMismatch { path: PathBuf, reason: String },
     #[error("invalid query: {0}")]
@@ -93,6 +94,11 @@ pub enum TantivyIndexError {
         value: String,
         reason: String,
     },
+    /// M8: catch-all for non-query, non-IO library errors that operators need
+    /// to see — currently used for poisoned mutexes (writer lock guard) which
+    /// were previously misreported as `InvalidQuery` and skewed telemetry.
+    #[error("internal index error: {0}")]
+    Internal(String),
 }
 
 #[derive(Clone)]
@@ -229,10 +235,50 @@ impl TantivySearchIndex {
         })
     }
 
+    /// M10: nuke the on-disk index at `path` and re-open with the current
+    /// schema. The canonical recovery flow when [`TantivyIndexError::SchemaMismatch`]
+    /// is returned by [`TantivySearchIndex::open`]:
+    ///
+    /// ```ignore
+    /// match TantivySearchIndex::open(&p) {
+    ///     Ok(idx) => idx,
+    ///     Err(TantivyIndexError::SchemaMismatch { .. }) => {
+    ///         TantivySearchIndex::wipe_and_recreate(&p)?
+    ///         // caller must re-ingest every component
+    ///     }
+    ///     Err(e) => return Err(e.into()),
+    /// }
+    /// ```
+    ///
+    /// Wipes only the directory contents — the directory itself is reused.
+    /// Callers are responsible for re-populating the index from the canonical
+    /// component store; this helper does **not** rebuild documents.
+    pub fn wipe_and_recreate(path: impl AsRef<Path>) -> Result<Self, TantivyIndexError> {
+        let path = path.as_ref();
+        if path.exists() {
+            // Walk one level deep — Tantivy stores its files flat under
+            // `path`, and we must not nuke the directory itself in case a
+            // caller has a file watcher pinned to it.
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let p = entry.path();
+                if p.is_dir() {
+                    std::fs::remove_dir_all(&p)?;
+                } else {
+                    std::fs::remove_file(&p)?;
+                }
+            }
+        }
+        Self::open(path)
+    }
+
     fn writer(&self) -> Result<MutexGuard<'_, IndexWriter>, TantivyIndexError> {
+        // M8: a poisoned mutex is an internal failure, not a malformed query —
+        // route it through `Internal` so operator dashboards can distinguish
+        // user errors from process-level corruption.
         self.writer
             .lock()
-            .map_err(|_| TantivyIndexError::InvalidQuery("writer mutex poisoned".into()))
+            .map_err(|_| TantivyIndexError::Internal("writer mutex poisoned".into()))
     }
 
     /// Add or replace the doc for a single component.
@@ -514,7 +560,7 @@ impl TantivySearchIndex {
 
         Some(ComponentSummary {
             uuid,
-            internal_pn,
+            internal_pn: InternalPn::new(internal_pn),
             mpn,
             head: Version::new(major, minor),
             state,
@@ -527,8 +573,11 @@ impl SearchIndex for TantivySearchIndex {
     fn query(&self, q: &SearchQuery) -> Vec<ComponentSummary> {
         let limit = if q.limit == 0 { 50 } else { q.limit };
 
-        // Make sure the latest commit is visible.
-        let _ = self.reader.reload();
+        // M6: no manual reload — `ReloadPolicy::OnCommitWithDelay` (set in
+        // `open_internal`) already refreshes the searcher after each commit.
+        // The previous `let _ = self.reader.reload();` swallowed errors and
+        // doubled the work; trusting the policy keeps reads consistent and
+        // surfaces real reload failures via the policy's own logging.
         let searcher = self.reader.searcher();
 
         let query = match self.build_query(q) {

@@ -450,7 +450,7 @@ async fn rows_to_summaries(
 
         out.push(ComponentSummary {
             uuid: ComponentId::from_str(&uuid_str).unwrap_or_else(|_| ComponentId::nil()),
-            internal_pn,
+            internal_pn: InternalPn::new(internal_pn),
             mpn,
             head: Version::new(head_major as u32, head_minor as u32),
             state,
@@ -658,7 +658,7 @@ async fn list_components_postgres(pool: &sqlx::PgPool) -> sqlx::Result<Vec<Compo
         };
         out.push(ComponentSummary {
             uuid: ComponentId::from_str(&uuid_str).unwrap_or_else(|_| ComponentId::nil()),
-            internal_pn,
+            internal_pn: InternalPn::new(internal_pn),
             mpn,
             head: Version::new(head_major as u32, head_minor as u32),
             state,
