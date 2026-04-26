@@ -1,4 +1,4 @@
-use signex_library_server::router;
+use signex_library_server::router_with_in_memory_state;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -10,6 +10,7 @@ async fn main() -> anyhow::Result<()> {
         "signex-library-server listening on {}",
         listener.local_addr()?
     );
-    axum::serve(listener, router()).await?;
+    let app = router_with_in_memory_state().await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
