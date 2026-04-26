@@ -24,18 +24,15 @@ kicad-parser = { workspace = true }
 pdf-extract = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 
+# Phase 1 WS-E: Tantivy search backend (gated behind `search-tantivy`).
+tantivy = { workspace = true, optional = true }
+
 [features]
 default = []
 # Enables `signex_library::ai_stub` — heuristic pinout extraction from
 # datasheet PDFs (no LLM, no network calls). Pulls in `pdf-extract` and
 # `regex`. Real LLM-based synthesis is deferred to v3.x per LIBRARY_PLAN.
 ai-stub = ["dep:pdf-extract", "dep:regex"]
-
-# Phase 1 WS-E: Tantivy search backend (gated behind `search-tantivy`).
-tantivy = { workspace = true, optional = true }
-
-[features]
-default = []
 # Enable the Tantivy-backed `TantivySearchIndex` impl of `SearchIndex`.
 search-tantivy = ["dep:tantivy"]
 
