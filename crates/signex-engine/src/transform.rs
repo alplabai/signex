@@ -482,10 +482,11 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     //    on horizontal sides where the block straddles cy symmetrically.
     let font_size = fields[0].font_size.max(0.1);
     let line_height = font_size * 1.6;
-    // Standard reserves roughly one text height of clearance between the
-    // selection bbox and the first field, so the block clearly sits
-    // outside the symbol envelope rather than hugging the body edge.
-    let margin = font_size.max(0.508);
+    // Standard's AutoplaceFields keeps roughly two text-heights of clearance
+    // between the body bbox and the closest field so the stack visibly
+    // separates from the symbol. A single text-height was still cramped
+    // compared to Standard's reference rendering.
+    let margin = (font_size * 2.0).max(1.016);
     let n = fields.len() as f64;
 
     let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
