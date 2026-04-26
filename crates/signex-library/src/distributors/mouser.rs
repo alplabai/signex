@@ -202,7 +202,17 @@ impl DistributorAdapter for MouserAdapter {
         }
         let hits = self.search_by_keyword(mpn)?;
         if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {
-            let _ = cache.put(MOUSER_PROVIDER_KEY, first);
+            // H4: cache-write failures (disk full, permissions, traversal-rejected
+            // MPN) used to be silently swallowed. Surface them via tracing so
+            // the next API call doesn't burn quota with no operator signal —
+            // the lookup still succeeds because the live result is in `hits`.
+            if let Err(e) = cache.put(MOUSER_PROVIDER_KEY, first) {
+                tracing::warn!(
+                    error = %e,
+                    mpn = %mpn,
+                    "Mouser cache write failed; live result returned but not persisted",
+                );
+            }
         }
         Ok(hits)
     }
