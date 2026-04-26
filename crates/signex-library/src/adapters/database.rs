@@ -6,10 +6,16 @@
 
 use std::sync::OnceLock;
 
-use crate::adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
+use serde::{Serialize, de::DeserializeOwned};
+use uuid::Uuid;
+
+use crate::adapter::{
+    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery, PrimitiveSummary,
+};
 use crate::component::{Component, Revision};
 use crate::identity::{ComponentId, Version};
 use crate::manifest::{LibraryMode, Manifest};
+use crate::primitive::{Footprint, SimModel, Symbol};
 
 pub struct DatabaseAdapter {
     manifest: Manifest,
@@ -109,6 +115,74 @@ impl DatabaseAdapter {
         } else {
             req
         }
+    }
+
+    /// Generic GET → JSON for a primitive at `/{collection}/{uuid}`.
+    fn get_primitive_json<T: DeserializeOwned>(
+        &self,
+        collection: &str,
+        uuid: Uuid,
+        kind_label: &str,
+    ) -> Result<T, LibraryError> {
+        let resp = self
+            .auth(self.client.get(self.url(&format!("/{collection}/{uuid}"))))
+            .send()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        match resp.status() {
+            s if s.is_success() => resp
+                .json::<T>()
+                .map_err(|e| LibraryError::Backend(e.to_string())),
+            reqwest::StatusCode::NOT_FOUND => {
+                Err(LibraryError::NotFound(format!("{kind_label} {uuid}")))
+            }
+            other => Err(LibraryError::Backend(format!("get {kind_label}: {other}"))),
+        }
+    }
+
+    /// Generic POST primitive JSON to `/{collection}` with the supplied
+    /// commit message in the `x-signex-message` header. Mirrors the wire
+    /// shape WS-D wires up on the server side.
+    fn post_primitive_json<T: Serialize>(
+        &self,
+        collection: &str,
+        body: &T,
+        message: &str,
+    ) -> Result<(), LibraryError> {
+        let resp = self
+            .auth(
+                self.client
+                    .post(self.url(&format!("/{collection}")))
+                    .header("x-signex-message", message)
+                    .json(body),
+            )
+            .send()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(LibraryError::Backend(format!(
+                "save {collection}: {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Generic GET → list at `/{collection}` returning [`PrimitiveSummary`].
+    fn list_primitives_json(
+        &self,
+        collection: &str,
+    ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        let resp = self
+            .auth(self.client.get(self.url(&format!("/{collection}"))))
+            .send()
+            .map_err(|e| LibraryError::Backend(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(LibraryError::Backend(format!(
+                "list {collection}: {}",
+                resp.status()
+            )));
+        }
+        resp.json::<Vec<PrimitiveSummary>>()
+            .map_err(|e| LibraryError::Backend(e.to_string()))
     }
 }
 
@@ -242,6 +316,44 @@ impl LibraryAdapter for DatabaseAdapter {
             )));
         }
         Ok(())
+    }
+
+    // ── Primitive CRUD over HTTP routes (mirrors WS-D server contract) ───
+
+    fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
+        self.get_primitive_json::<Symbol>("symbols", uuid, "symbol")
+    }
+
+    fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
+        self.get_primitive_json::<Footprint>("footprints", uuid, "footprint")
+    }
+
+    fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
+        self.get_primitive_json::<SimModel>("sims", uuid, "sim")
+    }
+
+    fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
+        self.post_primitive_json("symbols", &sym, message)
+    }
+
+    fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
+        self.post_primitive_json("footprints", &fp, message)
+    }
+
+    fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
+        self.post_primitive_json("sims", &sm, message)
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitives_json("symbols")
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitives_json("footprints")
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitives_json("sims")
     }
 }
 
