@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentId, ComponentSummary, DistributorSource, LifecycleState, UseSite, Version,
+    ComponentId, ComponentSummary, DistributorSource, LifecycleState, SpiceModel, UseSite, Version,
 };
 
 use super::state::EditorTab;
@@ -156,6 +156,26 @@ pub enum EditorMsg {
     SupplyRefreshFromApi,
     // ── History tab ─────────────────────────────────────────
     HistorySelectRevision(Version),
+    // ── Sim tab ─────────────────────────────────────────────
+    /// Toggle "Has SPICE model". When `false` the editor clears
+    /// `draft.shared.simulation` to `None`. When flipped from `false`
+    /// to `true` the editor seeds an empty [`SpiceModel`] and rebuilds
+    /// the pin-map skeleton from the symbol's pins.
+    SimSetEnabled(bool),
+    /// Multi-line SPICE body editor action — applied to the local
+    /// `text_editor::Content` and then mirrored back into
+    /// `draft.shared.simulation.body`.
+    SimBodyAction(iced::widget::text_editor::Action),
+    /// Edit a single pin → SPICE node mapping row. `pin_number` is the
+    /// Standard pin number (the BTreeMap key).
+    SimSetPinNode {
+        pin_number: String,
+        value: String,
+    },
+    /// Coarse-grained SPICE model snapshot — used for whole-model
+    /// replacement (e.g. paste-from-template flows in Phase 2). The
+    /// canonical save path documented in LIBRARY_PLAN §10.
+    SimChanged(SpiceModel),
     // (Where-Used has no inner messages beyond the row click which
     //  fires `LibraryMessage::JumpToUseSite` directly.)
     // ── Symbol tab ──────────────────────────────────────────

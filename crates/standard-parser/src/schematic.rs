@@ -1976,8 +1976,14 @@ mod tests {
             .find(|property| property.key == "Fitted")
             .unwrap();
 
-        assert_eq!(fitted.variant_overrides.get("DEFAULT"), Some(&"yes".to_string()));
-        assert_eq!(fitted.variant_overrides.get("LITE"), Some(&"no".to_string()));
+        assert_eq!(
+            fitted.variant_overrides.get("DEFAULT"),
+            Some(&"yes".to_string())
+        );
+        assert_eq!(
+            fitted.variant_overrides.get("LITE"),
+            Some(&"no".to_string())
+        );
     }
 
     #[test]

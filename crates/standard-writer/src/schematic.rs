@@ -192,7 +192,10 @@ fn custom_property_node(property: &SchematicProperty, fallback_pos: Point) -> SE
     if !property.variant_overrides.is_empty() {
         let mut variants = Vec::new();
         for (variant_name, variant_value) in &property.variant_overrides {
-            variants.push(node("variant", vec![atom(variant_name), atom(variant_value)]));
+            variants.push(node(
+                "variant",
+                vec![atom(variant_name), atom(variant_value)],
+            ));
         }
         if let SExpr::List(items) = &mut property_node {
             items.push(node("variants", variants));

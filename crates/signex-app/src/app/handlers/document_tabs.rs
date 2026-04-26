@@ -190,5 +190,4 @@ impl Signex {
             A::Undock(idx) => Task::done(Message::UndockTab(idx)),
         }
     }
-
 }

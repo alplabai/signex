@@ -103,7 +103,9 @@ fn parse_page_size(root: &SExpr) -> Result<PageSize, SnxshtError> {
         }
         Ok(PageSize::from_standard_str(first))
     } else {
-        Err(SnxshtError::Invalid("(page ...) missing argument".to_string()))
+        Err(SnxshtError::Invalid(
+            "(page ...) missing argument".to_string(),
+        ))
     }
 }
 
@@ -157,12 +159,10 @@ fn parse_title_block(root: &SExpr) -> Result<TitleBlock, SnxshtError> {
     };
     let (width_mm, height_mm) = match node.find("size") {
         Some(size) => (
-            size.arg_f64(0).ok_or_else(|| {
-                SnxshtError::Invalid("(size ...) missing width".to_string())
-            })?,
-            size.arg_f64(1).ok_or_else(|| {
-                SnxshtError::Invalid("(size ...) missing height".to_string())
-            })?,
+            size.arg_f64(0)
+                .ok_or_else(|| SnxshtError::Invalid("(size ...) missing width".to_string()))?,
+            size.arg_f64(1)
+                .ok_or_else(|| SnxshtError::Invalid("(size ...) missing height".to_string()))?,
         ),
         None => (0.0, 0.0),
     };
@@ -221,9 +221,7 @@ fn parse_font_style(s: &str) -> Result<FontStyle, SnxshtError> {
         "bold" => Ok(FontStyle::Bold),
         "italic" => Ok(FontStyle::Italic),
         "bold_italic" | "bolditalic" => Ok(FontStyle::BoldItalic),
-        other => Err(SnxshtError::Invalid(format!(
-            "unknown font_style {other}"
-        ))),
+        other => Err(SnxshtError::Invalid(format!("unknown font_style {other}"))),
     }
 }
 
@@ -242,10 +240,7 @@ pub fn emit_template(template: &Template) -> String {
     let mut out = String::new();
     out.push_str("(signex_template\n");
     out.push_str(&format!("  (id {})\n", quote(&template.id.0)));
-    out.push_str(&format!(
-        "  (display {})\n",
-        quote(&template.display_name)
-    ));
+    out.push_str(&format!("  (display {})\n", quote(&template.display_name)));
     out.push_str(&emit_page(&template.page_size));
     out.push_str(&format!(
         "  (orientation {})\n",
@@ -296,10 +291,7 @@ fn emit_frame(frame: &Frame) -> String {
         "    (horizontal_zones {})\n",
         frame.horizontal_zones,
     ));
-    s.push_str(&format!(
-        "    (vertical_zones {}))\n",
-        frame.vertical_zones,
-    ));
+    s.push_str(&format!("    (vertical_zones {}))\n", frame.vertical_zones,));
     s
 }
 
@@ -358,17 +350,18 @@ mod tests {
 
     #[test]
     fn round_trip_a4_landscape() {
-        let original = super::super::builtin::load_builtin(&TemplateId::from(
-            "iso_a4_landscape",
-        ))
-        .expect("a4 landscape builtin");
+        let original = super::super::builtin::load_builtin(&TemplateId::from("iso_a4_landscape"))
+            .expect("a4 landscape builtin");
         let s = emit_template(&original);
         let parsed = parse_template(&s, "iso_a4_landscape").expect("parse round-trip");
         assert_eq!(parsed.id, original.id);
         assert_eq!(parsed.page_size, original.page_size);
         assert_eq!(parsed.orientation, original.orientation);
         assert_eq!(parsed.frame, original.frame);
-        assert_eq!(parsed.title_block.fields.len(), original.title_block.fields.len());
+        assert_eq!(
+            parsed.title_block.fields.len(),
+            original.title_block.fields.len()
+        );
     }
 
     #[test]

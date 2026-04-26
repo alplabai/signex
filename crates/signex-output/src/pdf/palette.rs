@@ -130,11 +130,7 @@ impl From<CanvasColors> for SchematicPalette {
 /// `signex_types::theme::Color` is u8 RGBA — strip alpha and divide
 /// by 255 so the renderer can feed PDF / tiny-skia f32 colour ops.
 fn rgb(c: signex_types::theme::Color) -> (f32, f32, f32) {
-    (
-        c.r as f32 / 255.0,
-        c.g as f32 / 255.0,
-        c.b as f32 / 255.0,
-    )
+    (c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0)
 }
 
 #[cfg(test)]

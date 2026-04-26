@@ -208,6 +208,11 @@ pub struct ComponentEditorState {
     /// without forcing a re-read off disk on every draw. Cleared when
     /// the user removes the model.
     pub three_d_upload_info: Option<crate::library::editor::three_d::Model3dUploadInfo>,
+    /// Sim tab editor state — owns the multi-line `text_editor::Content`
+    /// for the SPICE body plus the cached pin-number list. Stays in
+    /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
+    /// dispatcher arms.
+    pub sim: super::editor::sim::SimTabState,
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -302,6 +307,10 @@ impl ComponentEditorState {
             &head.schematic.symbol.sexpr,
             internal_pn.as_str(),
         );
+        let sim = super::editor::sim::SimTabState::from_model(
+            head.shared.simulation.as_ref(),
+            &head.schematic.symbol.sexpr,
+        );
         Self {
             library_root,
             component_id: component.uuid,
@@ -316,6 +325,7 @@ impl ComponentEditorState {
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
             symbol_ai_preview: None,
             three_d_upload_info: None,
+            sim,
         }
     }
 

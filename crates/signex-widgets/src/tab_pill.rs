@@ -122,10 +122,7 @@ where
         // layout band. Inactive tabs and active tabs occupy the
         // exact same footprint; the only difference is whether
         // the borders + accent are drawn.
-        let child = self
-            .content
-            .as_widget_mut()
-            .layout(tree, renderer, limits);
+        let child = self.content.as_widget_mut().layout(tree, renderer, limits);
         let total_size = child.size();
         Node::with_children(total_size, vec![child])
     }

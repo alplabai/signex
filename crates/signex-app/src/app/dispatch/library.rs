@@ -400,8 +400,9 @@ fn sync_symbol_sexpr(editor: &mut ComponentEditorState) {
 /// dispatcher's match arm stays small and the borrow scope is
 /// obvious.
 fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
+    use crate::library::editor::sim;
     use crate::library::editor::three_d::{Model3dUploadInfo, hash_bytes_hex, is_supported_extension};
-    use signex_library::{ModelRef, ParamValue, SupplierLink};
+    use signex_library::{ModelRef, ParamValue, SpiceModel, SupplierLink};
     match msg {
         EditorMsg::SelectTab(tab) => editor.active_tab = tab,
         EditorMsg::OverviewSetDisplayName(s) => editor.display_internal_pn = s,
@@ -629,6 +630,61 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         }
         EditorMsg::SymbolEdited(sexpr) => {
             editor.draft.schematic.symbol.sexpr = sexpr;
+        }
+        // ── Sim-tab inline edits ────────────────────────────────
+        EditorMsg::SimSetEnabled(on) => {
+            if on {
+                // Re-derive pin numbers from the current symbol body
+                // so a freshly-edited symbol always seeds the right
+                // skeleton when the toggle is flipped on.
+                let pins = sim::extract_pin_numbers(&editor.draft.schematic.symbol.sexpr);
+                editor.sim.pin_numbers = pins;
+                let body = editor.sim.body_text();
+                let pin_map = editor
+                    .draft
+                    .shared
+                    .simulation
+                    .as_ref()
+                    .map(|m| m.pin_map.clone())
+                    .unwrap_or_else(|| sim::seed_empty_pin_map(&editor.sim.pin_numbers));
+                editor.draft.shared.simulation = Some(SpiceModel { body, pin_map });
+            } else {
+                editor.draft.shared.simulation = None;
+            }
+        }
+        EditorMsg::SimBodyAction(action) => {
+            editor.sim.body.perform(action);
+            // Mirror the new text back into the canonical model so a
+            // Save Draft / Commit captures the body verbatim.
+            if let Some(model) = editor.draft.shared.simulation.as_mut() {
+                model.body = editor.sim.body_text();
+            }
+        }
+        EditorMsg::SimSetPinNode { pin_number, value } => {
+            // Toggling the model on is implicit — typing into a row
+            // means the user wants a model. Avoids surprise behaviour
+            // when the user starts mapping pins before checking the box.
+            if editor.draft.shared.simulation.is_none() {
+                editor.draft.shared.simulation = Some(SpiceModel {
+                    body: editor.sim.body_text(),
+                    pin_map: Default::default(),
+                });
+                if editor.sim.pin_numbers.is_empty() {
+                    editor.sim.pin_numbers =
+                        sim::extract_pin_numbers(&editor.draft.schematic.symbol.sexpr);
+                }
+            }
+            if let Some(model) = editor.draft.shared.simulation.as_mut() {
+                model.pin_map = sim::apply_pin_node_edit(&model.pin_map, &pin_number, value);
+            }
+        }
+        EditorMsg::SimChanged(model) => {
+            // Keep the live editor's body widget aligned with the
+            // canonical model — used by paste-from-template / reset.
+            if editor.sim.body_text() != model.body {
+                editor.sim.body = iced::widget::text_editor::Content::with_text(&model.body);
+            }
+            editor.draft.shared.simulation = Some(model);
         }
         // Already handled in the outer match.
         EditorMsg::CloseEditor

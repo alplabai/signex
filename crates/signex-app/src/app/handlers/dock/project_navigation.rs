@@ -34,8 +34,7 @@ impl Signex {
                             | TreeIcon::SnxLibrary
                             | TreeIcon::SnxSymbol
                     )
-                    && let Err(error) =
-                        self.open_project_tree_document(path, node.label.clone())
+                    && let Err(error) = self.open_project_tree_document(path, node.label.clone())
                 {
                     crate::diagnostics::log_error("Failed to open project tree document", &error);
                 }
@@ -93,16 +92,10 @@ impl Signex {
                 );
             }
             ProjectTreeAction::ExpandAll => {
-                set_expanded_recursive(
-                    &mut self.document_state.panel_ctx.project_tree,
-                    true,
-                );
+                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, true);
             }
             ProjectTreeAction::CollapseAll => {
-                set_expanded_recursive(
-                    &mut self.document_state.panel_ctx.project_tree,
-                    false,
-                );
+                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, false);
             }
             ProjectTreeAction::Refresh => {
                 self.document_state.panel_ctx.project_tree =
@@ -191,12 +184,11 @@ impl Signex {
         };
 
         if !dirty.is_empty() {
-            self.ui_state.project_close_confirm =
-                Some(crate::app::ProjectCloseConfirmState {
-                    tree_path: tree_path.to_vec(),
-                    project_name: project.data.name.clone(),
-                    dirty_paths: dirty,
-                });
+            self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
+                tree_path: tree_path.to_vec(),
+                project_name: project.data.name.clone(),
+                dirty_paths: dirty,
+            });
             return Task::none();
         }
 
@@ -212,12 +204,7 @@ impl Signex {
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
-        let Some(target_id) = self
-            .document_state
-            .projects
-            .get(project_idx)
-            .map(|p| p.id)
-        else {
+        let Some(target_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
             return Task::none();
         };
 
@@ -333,7 +320,9 @@ impl Signex {
                     let listing: Vec<String> = failed
                         .iter()
                         .filter_map(|p| {
-                            p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
+                            p.file_name()
+                                .and_then(|s| s.to_str())
+                                .map(|s| s.to_string())
                         })
                         .collect();
                     self.document_state.export_error = Some(format!(
@@ -407,10 +396,7 @@ impl Signex {
     /// index picks which project's directory to resolve against, so a
     /// leaf under project B isn't accidentally resolved against project
     /// A's parent directory.
-    fn tree_path_to_file_path(
-        &self,
-        tree_path: &[usize],
-    ) -> Option<std::path::PathBuf> {
+    fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,
@@ -588,11 +574,7 @@ impl Signex {
         }
     }
 
-    fn open_project_tree_document(
-        &mut self,
-        tree_path: &[usize],
-        filename: String,
-    ) -> Result<()> {
+    fn open_project_tree_document(&mut self, tree_path: &[usize], filename: String) -> Result<()> {
         // Multi-project: walk to the owning project via tree_path[0]
         // instead of the active project, so clicking a leaf inside
         // project B opens B's file even when A is the active project.
@@ -663,10 +645,7 @@ impl Signex {
 
 /// Recursively set every node's `expanded` state — used by
 /// Expand all / Collapse all menu items.
-fn set_expanded_recursive(
-    nodes: &mut [signex_widgets::tree_view::TreeNode],
-    expanded: bool,
-) {
+fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {
     for node in nodes {
         node.expanded = expanded;
         set_expanded_recursive(&mut node.children, expanded);

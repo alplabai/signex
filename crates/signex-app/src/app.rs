@@ -26,10 +26,10 @@ mod state;
 mod view;
 
 pub use contracts::{
-    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
-    ProjectCloseChoice, ProjectCloseConfirmState, ProjectTreeAction,
-    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RenameDialogState,
-    StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
+    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RenameDialogState, StatusBarRequest, TabContextAction, TabContextMenuState,
+    TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
 pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};

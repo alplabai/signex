@@ -87,7 +87,11 @@ impl Catalog {
 
         let header = self.theme_picker(&tokens);
         let body = column![
-            section("Document tabs (3 visible, middle is active)", &tokens, doc_tab_strip(&tokens)),
+            section(
+                "Document tabs (3 visible, middle is active)",
+                &tokens,
+                doc_tab_strip(&tokens)
+            ),
             section(
                 "Document tabs — every state side-by-side",
                 &tokens,
@@ -117,9 +121,7 @@ impl Catalog {
         // 660 px tall + every other section above it overflowed
         // the catalog's 900 px window. Wrap in a scrollable so
         // every variant stays reachable at any window size.
-        let scrollable_body = scrollable(body)
-            .width(Length::Fill)
-            .height(Length::Fill);
+        let scrollable_body = scrollable(body).width(Length::Fill).height(Length::Fill);
         container(column![header, scrollable_body].spacing(0))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -165,10 +167,9 @@ fn theme_pill<'a>(id: ThemeId, is_on: bool, tokens: &ThemeTokens) -> Element<'a,
         .style(move |_: &Theme, status: button::Status| {
             let bg = match (is_on, status) {
                 (true, _) => accent,
-                (false, button::Status::Hovered | button::Status::Pressed) => Color {
-                    a: 0.18,
-                    ..accent
-                },
+                (false, button::Status::Hovered | button::Status::Pressed) => {
+                    Color { a: 0.18, ..accent }
+                }
                 _ => Color::from_rgba(1.0, 1.0, 1.0, 0.04),
             };
             button::Style {
@@ -224,9 +225,33 @@ fn section<'a>(
 fn doc_tab_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let tabs_row = Row::new()
         .spacing(0)
-        .push(tab("MCU_IO", false, false, false, false, AccentPosition::Bottom, tokens))
-        .push(tab("Loratis-SN", true, false, false, false, AccentPosition::Bottom, tokens))
-        .push(tab("Power", false, false, false, true, AccentPosition::Bottom, tokens));
+        .push(tab(
+            "MCU_IO",
+            false,
+            false,
+            false,
+            false,
+            AccentPosition::Bottom,
+            tokens,
+        ))
+        .push(tab(
+            "Loratis-SN",
+            true,
+            false,
+            false,
+            false,
+            AccentPosition::Bottom,
+            tokens,
+        ))
+        .push(tab(
+            "Power",
+            false,
+            false,
+            false,
+            true,
+            AccentPosition::Bottom,
+            tokens,
+        ));
     strip_with_baseline(tabs_row, AccentPosition::Bottom, tokens)
 }
 
@@ -242,20 +267,42 @@ fn tab_state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         ("Dragging", false, true, false, false),
         ("Last", false, false, false, true),
     ] {
-        r = r.push(tab(label, active, dragging, hovered, last, AccentPosition::Bottom, tokens));
+        r = r.push(tab(
+            label,
+            active,
+            dragging,
+            hovered,
+            last,
+            AccentPosition::Bottom,
+            tokens,
+        ));
     }
     strip_with_baseline(r, AccentPosition::Bottom, tokens)
 }
 
 fn panel_tab_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let mut r: Row<'a, Message> = Row::new().spacing(0);
-    for (i, label) in ["Components", "Manufacturer Part Search", "PCB CoDesign", "Messages", "Properties"]
-        .iter()
-        .enumerate()
+    for (i, label) in [
+        "Components",
+        "Manufacturer Part Search",
+        "PCB CoDesign",
+        "Messages",
+        "Properties",
+    ]
+    .iter()
+    .enumerate()
     {
         let active = i == 0;
         let last = i == 4;
-        r = r.push(tab(label, active, false, false, last, AccentPosition::Top, tokens));
+        r = r.push(tab(
+            label,
+            active,
+            false,
+            false,
+            last,
+            AccentPosition::Top,
+            tokens,
+        ));
     }
     strip_with_baseline(r, AccentPosition::Top, tokens)
 }
@@ -294,9 +341,7 @@ fn strip_with_baseline<'a>(
             left: 6.0,
         },
     };
-    let row_container = container(tabs_row)
-        .width(Length::Fill)
-        .padding(row_padding);
+    let row_container = container(tabs_row).width(Length::Fill).padding(row_padding);
     let inner: Column<'a, Message> = match accent_position {
         AccentPosition::Bottom => column![row_container, baseline],
         AccentPosition::Top => column![baseline, row_container],
@@ -347,8 +392,7 @@ fn tab<'a>(
         accent_position,
     };
     let txt_c = if is_active { text_primary } else { text_muted };
-    let inner = container(text(label.to_string()).size(11).color(txt_c))
-        .padding([4, 10]);
+    let inner = container(text(label.to_string()).size(11).color(txt_c)).padding([4, 10]);
     TabPill::new(inner, pill_style).into()
 }
 
@@ -420,9 +464,7 @@ fn modal_card_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         background: Some(Background::Color(toolbar_bg)),
         border: Border {
             width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(8.0)
-                .top_right(8.0),
+            radius: iced::border::Radius::default().top_left(8.0).top_right(8.0),
             color: Color::TRANSPARENT,
         },
         ..container::Style::default()
@@ -522,9 +564,7 @@ fn bom_modal_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         background: Some(Background::Color(toolbar_bg)),
         border: Border {
             width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(8.0)
-                .top_right(8.0),
+            radius: iced::border::Radius::default().top_left(8.0).top_right(8.0),
             color: Color::TRANSPARENT,
         },
         ..container::Style::default()
@@ -741,10 +781,7 @@ fn info_icon_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(Color {
-                a: 0.7,
-                ..accent
-            })),
+            background: Some(Background::Color(Color { a: 0.7, ..accent })),
             border: Border {
                 width: 0.0,
                 radius: 10.0.into(),
@@ -787,16 +824,96 @@ fn bom_table_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     // Sample rows
     let rows = [
-        ("1", "SBR1M100BLP-7", "BRIDGE RECT 1P 100V", "BR1, BR2", "DIODES U-DFN303…", "SBR1M100BLP-7", "2"),
-        ("2", "10µF", "CAP CER 10UF 10V", "C1, C28, C29, C34…", "CAP 0603/1608", "GRM188Z71A106K…", "5"),
-        ("3", "0.1µF", "CAP CER 0.1UF 10V…", "C2, C3, C7, C8, C17…", "CAP 0603/1608", "C0603X7S1A104K03…", "35"),
-        ("4", "4.7µF", "CAP CER 4.7UF 6.3…", "C4, C61, C65", "CAP 0603/1608", "CL10B475K6JNQNC", "3"),
-        ("5", "30pF", "CAP CER 30PF 50V…", "C5, C6", "CAP 0402/1005", "GRM1555C1H300J…", "2"),
-        ("6", "12nF", "CAP CER 0.012UF 1…", "C9, C10, C11, C12", "CAP 0402/1005", "06031C123KAT2A", "4"),
-        ("7", "1nF", "CAP CER 1000PF 2K…", "C13, C14", "CAP 1206/3216", "CL31B102KJHNNNE", "2"),
-        ("8", "100µF", "CAP ALUM POLY 10…", "C15, C25", "WURTH WCAP-PH…", "875015119003", "2"),
-        ("9", "10µF", "CAP CER 10UF 10V…", "C16, C52", "CAP 0805/2012", "C2012X7R1A106K1…", "2"),
-        ("10", "10µF", "CAP CER 10UF 6.3V…", "C19, C20, C21, C22…", "CAP 0402/1005", "C0402X5R1A106K…", "16"),
+        (
+            "1",
+            "SBR1M100BLP-7",
+            "BRIDGE RECT 1P 100V",
+            "BR1, BR2",
+            "DIODES U-DFN303…",
+            "SBR1M100BLP-7",
+            "2",
+        ),
+        (
+            "2",
+            "10µF",
+            "CAP CER 10UF 10V",
+            "C1, C28, C29, C34…",
+            "CAP 0603/1608",
+            "GRM188Z71A106K…",
+            "5",
+        ),
+        (
+            "3",
+            "0.1µF",
+            "CAP CER 0.1UF 10V…",
+            "C2, C3, C7, C8, C17…",
+            "CAP 0603/1608",
+            "C0603X7S1A104K03…",
+            "35",
+        ),
+        (
+            "4",
+            "4.7µF",
+            "CAP CER 4.7UF 6.3…",
+            "C4, C61, C65",
+            "CAP 0603/1608",
+            "CL10B475K6JNQNC",
+            "3",
+        ),
+        (
+            "5",
+            "30pF",
+            "CAP CER 30PF 50V…",
+            "C5, C6",
+            "CAP 0402/1005",
+            "GRM1555C1H300J…",
+            "2",
+        ),
+        (
+            "6",
+            "12nF",
+            "CAP CER 0.012UF 1…",
+            "C9, C10, C11, C12",
+            "CAP 0402/1005",
+            "06031C123KAT2A",
+            "4",
+        ),
+        (
+            "7",
+            "1nF",
+            "CAP CER 1000PF 2K…",
+            "C13, C14",
+            "CAP 1206/3216",
+            "CL31B102KJHNNNE",
+            "2",
+        ),
+        (
+            "8",
+            "100µF",
+            "CAP ALUM POLY 10…",
+            "C15, C25",
+            "WURTH WCAP-PH…",
+            "875015119003",
+            "2",
+        ),
+        (
+            "9",
+            "10µF",
+            "CAP CER 10UF 10V…",
+            "C16, C52",
+            "CAP 0805/2012",
+            "C2012X7R1A106K1…",
+            "2",
+        ),
+        (
+            "10",
+            "10µF",
+            "CAP CER 10UF 6.3V…",
+            "C19, C20, C21, C22…",
+            "CAP 0402/1005",
+            "C0402X5R1A106K…",
+            "16",
+        ),
     ];
     let mut row_col: Column<'a, Message> = Column::new().spacing(0);
     for (i, r) in rows.iter().enumerate() {
@@ -925,9 +1042,13 @@ fn bom_properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             },
             ..container::Style::default()
         });
-        row![pip, Space::new().width(8), text(label.to_string()).size(11).color(text_c)]
-            .align_y(iced::Alignment::Center)
-            .into()
+        row![
+            pip,
+            Space::new().width(8),
+            text(label.to_string()).size(11).color(text_c)
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
     };
     let bom_items = column![
         checkbox_row("Show Not Fitted", false),
@@ -939,8 +1060,7 @@ fn bom_properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     // Export Options section
     let label_field = |label: &'static str, value: &'static str| -> Element<'a, Message> {
         row![
-            container(text(label.to_string()).size(11).color(muted))
-                .width(Length::Fixed(80.0)),
+            container(text(label.to_string()).size(11).color(muted)).width(Length::Fixed(80.0)),
             container(
                 row![
                     text(value.to_string()).size(11).color(text_c),
@@ -1019,9 +1139,7 @@ fn tree_row<'a>(
     };
     let dirty_red = Color::from_rgba(0.85, 0.30, 0.30, 1.0);
     let dot_size = 6.0;
-    let mut r: Row<'a, Message> = Row::new()
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
+    let mut r: Row<'a, Message> = Row::new().spacing(8).align_y(iced::Alignment::Center);
     r = r.push(text(label.to_string()).size(11).color(text_c));
     r = r.push(Space::new().width(Length::Fill));
     if is_open || is_dirty {
