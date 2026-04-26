@@ -21,18 +21,22 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{EditorMsg, LibraryMessage};
-use super::state::{ComponentEditorState, EditorTab};
+use super::state::{ComponentEditorState, EditorTab, LibraryState};
 
 /// Render a Component Editor window. The caller hosts this in the
-/// new OS window opened via `iced::window::open`.
+/// new OS window opened via `iced::window::open`. `library_state` is
+/// borrowed by Where-Used so the tab can read use-sites; passing it
+/// here keeps the view function pure (no globals) while letting the
+/// History/Where-Used tabs reach across the library subsystem.
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
+    library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
     let header = view_header(editor, tokens, window_id);
     let tabs = tabs::view(editor.active_tab, tokens, window_id);
-    let body = view_active_tab(editor, tokens, window_id);
+    let body = view_active_tab(editor, library_state, tokens, window_id);
     let footer = view_footer(editor, tokens, window_id);
 
     column![header, tabs, body, footer]
@@ -73,6 +77,7 @@ fn view_header<'a>(
 
 fn view_active_tab<'a>(
     editor: &'a ComponentEditorState,
+    library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     window_id: iced::window::Id,
 ) -> Element<'a, LibraryMessage> {
@@ -85,7 +90,7 @@ fn view_active_tab<'a>(
         EditorTab::Supply => supply::view(editor, tokens, window_id),
         EditorTab::Sim => sim::view(tokens),
         EditorTab::History => history::view(editor, tokens, window_id),
-        EditorTab::WhereUsed => where_used::view(editor, tokens),
+        EditorTab::WhereUsed => where_used::view(editor, library_state, tokens),
     };
     container(inner)
         .padding(14)

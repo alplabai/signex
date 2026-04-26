@@ -102,6 +102,7 @@ impl Signex {
                 commands::jump_to_use_site(&site);
                 Task::none()
             }
+            LibraryMessage::Noop => Task::none(),
         }
     }
 
