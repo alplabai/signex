@@ -21,7 +21,7 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
-use crate::distributors::cache::{DistributorCache, DEFAULT_TTL};
+use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
 use crate::embed::ParamMap;
 
@@ -149,10 +149,7 @@ impl MouserAdapter {
             return Err(DistributorError::NotFound);
         }
         if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!(
-                "HTTP {}",
-                resp.status()
-            )));
+            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
         }
         let raw: MouserResponse = resp
             .json()

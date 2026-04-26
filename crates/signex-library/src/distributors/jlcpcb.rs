@@ -15,12 +15,13 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
-use crate::distributors::cache::{DistributorCache, DEFAULT_TTL};
+use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::embed::ParamMap;
 
 const JLCPCB_PROVIDER_KEY: &str = "jlcpcb";
 const JLCPCB_NAME: &str = "JLCPCB";
-const JLCPCB_DEFAULT_BASE: &str = "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/list";
+const JLCPCB_DEFAULT_BASE: &str =
+    "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/list";
 const THROTTLE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct JlcpcbAdapter {
@@ -95,10 +96,7 @@ impl JlcpcbAdapter {
             return Err(DistributorError::NotFound);
         }
         if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!(
-                "HTTP {}",
-                resp.status()
-            )));
+            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
         }
         resp.json::<T>()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))
@@ -223,7 +221,10 @@ impl JlcpcbResponse {
                     mpn: i.mfr_part,
                     manufacturer: i.manufacturer,
                     description: i.describe,
-                    datasheet_url: i.data_manual_url.as_deref().and_then(|u| Url::parse(u).ok()),
+                    datasheet_url: i
+                        .data_manual_url
+                        .as_deref()
+                        .and_then(|u| Url::parse(u).ok()),
                     footprint_hint: i.component_specification_en,
                     parameters: ParamMap::new(),
                     pricing: None,

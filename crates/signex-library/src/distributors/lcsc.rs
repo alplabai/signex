@@ -26,7 +26,7 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
-use crate::distributors::cache::{DistributorCache, DEFAULT_TTL};
+use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::embed::ParamMap;
 
 const LCSC_PROVIDER_KEY: &str = "lcsc";
@@ -125,10 +125,7 @@ impl LcscAdapter {
             return Err(DistributorError::NotFound);
         }
         if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!(
-                "HTTP {}",
-                resp.status()
-            )));
+            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
         }
         resp.json::<T>()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))
@@ -275,10 +272,7 @@ impl LcscSearchResponse {
                     mpn: p.product_model,
                     manufacturer: p.brand_name_en,
                     description: p.product_intro_en,
-                    datasheet_url: p
-                        .pdf_url
-                        .as_deref()
-                        .and_then(|u| Url::parse(u).ok()),
+                    datasheet_url: p.pdf_url.as_deref().and_then(|u| Url::parse(u).ok()),
                     footprint_hint: p.encap_standard,
                     parameters: ParamMap::new(),
                     pricing: None,
