@@ -134,80 +134,27 @@ pub enum EditorMsg {
     HistorySelectRevision(Version),
     // (Where-Used has no inner messages beyond the row click which
     //  fires `LibraryMessage::JumpToUseSite` directly.)
-    // ── Symbol tab ──────────────────────────────────────────
-    /// Switch the active symbol-canvas tool.
-    SymbolSetTool(SymbolToolMsg),
-    /// Place a new pin at the snapped world coordinate.
-    SymbolAddPin {
-        x: f64,
-        y: f64,
-    },
-    /// Select an existing pin or field on the canvas.
-    SymbolSelect(SymbolSelectionMsg),
-    /// Drop the current selection (background click).
-    SymbolDeselect,
-    /// Drag the currently-selected element to a new world coordinate.
-    SymbolMoveSelected {
-        x: f64,
-        y: f64,
-    },
-    /// Delete-key on the canvas — removes the selected pin (fields
-    /// keep their slot but get cleared).
-    SymbolDeleteSelected,
-    /// Edit Designator / Value text from the side panel.
-    SymbolSetField {
-        key: FieldKeyMsg,
-        value: String,
-    },
-    /// Edit a pin number from the side-panel pin table.
-    SymbolSetPinNumber {
-        idx: usize,
-        number: String,
-    },
-    /// Edit a pin name from the side-panel pin table.
-    SymbolSetPinName {
-        idx: usize,
-        name: String,
-    },
-    /// "AI: From Datasheet PDF" — opens an `rfd` PDF picker.
-    SymbolPickAiPdf,
-    /// Result of the PDF picker: `None` = cancelled. The path is read
-    /// from disk in the dispatcher and run through
-    /// `signex_library::ai_stub::extract_pinout`.
-    SymbolPickedAiPdf(Option<std::path::PathBuf>),
-    /// User clicked "Apply" in the AI preview card.
-    SymbolApplyAiPreview,
-    /// User clicked "Cancel" in the AI preview card.
-    SymbolDismissAiPreview,
-    /// Carrier message — fired after every doc edit, lets the
-    /// dispatcher round-trip the new sexpr into
-    /// `SchematicSide.symbol.sexpr`. Mirrors the LIBRARY_PLAN
-    /// `SaveDraft` flow for non-modal edits.
-    SymbolEdited(String),
-}
-
-/// Kind copy of [`super::editor::symbol::canvas::SymbolTool`] used
-/// inside [`EditorMsg`]. Kept separate so the messages module doesn't
-/// pull in the canvas widget types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolToolMsg {
-    Select,
-    AddPin,
-}
-
-/// Kind copy of [`super::editor::symbol::state::SymbolSelection`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolSelectionMsg {
-    Pin(usize),
-    FieldReference,
-    FieldValue,
-}
-
-/// Kind copy of [`super::editor::symbol::state::FieldKey`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FieldKeyMsg {
-    Reference,
-    Value,
+    // ── Footprint tab ───────────────────────────────────────
+    /// Click-add a pad at the given world position (mm). Pad number
+    /// is auto-incremented in the dispatcher.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag a pad to a new world position (mm).
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Hover position update — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` clears the selection.
+    FootprintSelectPad(Option<usize>),
+    /// Delete the currently-selected pad (Del key).
+    FootprintDeleteSelected,
+    /// Toggle a layer's visibility — the string is the Standard layer
+    /// name (e.g. "F.Cu"). Unknown names are silently ignored.
+    FootprintToggleLayer(String),
+    /// Toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+    /// Replace the entire footprint sexpr — used when external code
+    /// (e.g. paste, AI-stub) wants to atomically swap in a new
+    /// footprint. Re-parses into the editor state.
+    FootprintEdited(String),
 }
 
 /// Picker modal messages.

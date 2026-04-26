@@ -452,62 +452,66 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
         }
-        // ── Symbol-tab inline edits ─────────────────────────────
-        EditorMsg::SymbolSetTool(tool) => {
-            use crate::library::editor::symbol::canvas::SymbolTool;
-            use crate::library::messages::SymbolToolMsg;
-            editor.symbol_tool = match tool {
-                SymbolToolMsg::Select => SymbolTool::Select,
-                SymbolToolMsg::AddPin => SymbolTool::AddPin,
-            };
+        // ── Footprint tab ─────────────────────────────────────
+        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.add_pad_at(x_mm, y_mm);
+            }
+            editor.flush_footprint_to_draft();
         }
-        EditorMsg::SymbolAddPin { x, y } => {
-            let idx = editor.symbol_doc.add_pin(x, y);
-            editor.symbol_doc.selected = Some(
-                crate::library::editor::symbol::state::SymbolSelection::Pin(idx),
+        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.move_pad(idx, x_mm, y_mm);
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.cursor_mm = Some((x_mm, y_mm));
+            }
+        }
+        EditorMsg::FootprintSelectPad(idx) => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.selected_pad = idx;
+            }
+        }
+        EditorMsg::FootprintDeleteSelected => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut()
+                && let Some(sel) = fp.selected_pad
+            {
+                fp.delete_pad(sel);
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintToggleLayer(name) => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut()
+                && let Some(layer) =
+                    crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
+            {
+                fp.layer_visibility.toggle(layer);
+            }
+        }
+        EditorMsg::FootprintToggleAutoFit => {
+            editor.ensure_footprint_state();
+            if let Some(fp) = editor.footprint_state.as_mut() {
+                fp.toggle_auto_fit();
+            }
+            editor.flush_footprint_to_draft();
+        }
+        EditorMsg::FootprintEdited(sexpr) => {
+            editor.draft.pcb.footprint.sexpr = sexpr.clone();
+            editor.footprint_state = Some(
+                crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
+                    &sexpr,
+                ),
             );
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolSelect(sel) => {
-            use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
-            use crate::library::messages::SymbolSelectionMsg;
-            editor.symbol_doc.selected = Some(match sel {
-                SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
-                SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
-                SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
-            });
-        }
-        EditorMsg::SymbolDeselect => {
-            editor.symbol_doc.selected = None;
-        }
-        EditorMsg::SymbolMoveSelected { x, y } => {
-            editor.symbol_doc.move_selected(x, y);
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolDeleteSelected => {
-            editor.symbol_doc.delete_selected();
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolSetField { key, value } => {
-            use crate::library::editor::symbol::state::FieldKey;
-            use crate::library::messages::FieldKeyMsg;
-            let key = match key {
-                FieldKeyMsg::Reference => FieldKey::Reference,
-                FieldKeyMsg::Value => FieldKey::Value,
-            };
-            editor.symbol_doc.set_field_value(key, value);
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolSetPinNumber { idx, number } => {
-            editor.symbol_doc.set_pin_number(idx, number);
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolSetPinName { idx, name } => {
-            editor.symbol_doc.set_pin_name(idx, name);
-            sync_symbol_sexpr(editor);
-        }
-        EditorMsg::SymbolEdited(sexpr) => {
-            editor.draft.schematic.symbol.sexpr = sexpr;
+            editor.footprint_canvas_cache = std::sync::OnceLock::new();
         }
         // Already handled in the outer match.
         EditorMsg::CloseEditor
