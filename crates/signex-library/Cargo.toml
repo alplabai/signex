@@ -32,7 +32,10 @@ url = { version = "2", features = ["serde"] }
 # Phase 1 / WS-C — gated behind `distributors-community`.
 keyring = { workspace = true, optional = true }
 oauth2 = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
+# Workspace `reqwest` is async-only; LCSC/JLCPCB/Mouser adapters call
+# blocking variants from a sync `DistributorAdapter` impl, so we re-declare
+# here with the `blocking` feature enabled (additive: same major + crates.io).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"], optional = true }
 tokio = { workspace = true, optional = true }
 dirs = { version = "5", optional = true }
 
