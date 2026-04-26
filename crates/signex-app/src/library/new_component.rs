@@ -1,9 +1,11 @@
 //! "New Component" modal — opened from File ▸ Library ▸ New
-//! Component… Phase 1 collects an `internal_pn` + which open
-//! library to add the new draft to. On Submit the dispatcher
-//! creates a fresh `Component` with one `LifecycleState::Draft`
-//! revision, persists via `adapter.save_revision`, and opens the
-//! Component Editor on the new component.
+//! Component… (and, post-WS-H, from the project tree's library node
+//! right-click menu).
+//!
+//! WS-E (refactor): adds `class` pick_list + `category` text_input on
+//! top of the existing PN + library picker so the new `Component`
+//! binding record is created with the right class for template
+//! resolution and the right category-tree slot for the panel view.
 //!
 //! Shape:
 //!
@@ -11,31 +13,28 @@
 //! ┌─[New Component ─────────────────────────────────────── X]─┐
 //! │ Internal PN  [______________________________________]    │
 //! │ Library      [▾ MyComponents                          ]   │
+//! │ Class        [▾ Generic                                ] │
+//! │ Category     [Passives/Resistors/0805________________ ] │
 //! │                                                          │
 //! │ <error string, if any>                                   │
 //! ├──────────────────────────────────────────────────────────┤
 //! │                                  [ Cancel ] [ Create ]   │
 //! └──────────────────────────────────────────────────────────┘
 //! ```
-//!
-//! Reuses the picker modal's chrome (modal_card / modal_header_strip
-//! / modal_footer_strip) for visual parity with the rest of the
-//! Library subsystem.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
+use signex_library::ComponentClass;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::state::{LibraryState, NewComponentState};
+use super::state::{BUILTIN_CLASSES, LibraryState, NewComponentState};
 
 const MODAL_W: f32 = 520.0;
-const MODAL_H: f32 = 320.0;
+const MODAL_H: f32 = 420.0;
 
-/// `pick_list` adapter — wraps the index so we can derive a printable
-/// string from the open-library list for the dropdown rendering, but
-/// emit the index when the user picks.
+/// `pick_list` adapter for the library dropdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LibraryPick {
     idx: usize,
@@ -43,6 +42,22 @@ struct LibraryPick {
 }
 
 impl std::fmt::Display for LibraryPick {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+/// `pick_list` adapter for the class dropdown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ClassPick {
+    /// Canonical class string ("resistor", "opamp", …) — what gets
+    /// stored on `Component::class`.
+    key: String,
+    /// Display label.
+    label: String,
+}
+
+impl std::fmt::Display for ClassPick {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.label)
     }
@@ -68,15 +83,13 @@ pub fn view<'a>(
     .padding([10, 14])
     .style(crate::styles::modal_header_strip(tokens));
 
+    // Internal PN ────────────────────────────────────────────
     let pn_input = text_input("e.g. R0805_10k", &nc.internal_pn)
         .on_input(LibraryMessage::NewComponentSetInternalPn)
         .padding(6)
         .size(12);
 
-    // Library dropdown — every open library shows up by display name.
-    // We map the picked variant back to its `idx` and emit
-    // `NewComponentSetLibrary(idx)`. The dropdown is empty (and
-    // submit disabled) when no libraries are open.
+    // Library picker ─────────────────────────────────────────
     let lib_picks: Vec<LibraryPick> = state
         .open_libraries
         .iter()
@@ -105,14 +118,51 @@ pub fn view<'a>(
         .into()
     };
 
-    let pn_label: Element<'_, LibraryMessage> =
-        text("Internal PN").size(11).color(muted).into();
-    let lib_label: Element<'_, LibraryMessage> = text("Library").size(11).color(muted).into();
+    // Class picker (WS-E) ────────────────────────────────────
+    let class_picks: Vec<ClassPick> = BUILTIN_CLASSES
+        .iter()
+        .map(|(key, label)| ClassPick {
+            key: (*key).to_string(),
+            label: (*label).to_string(),
+        })
+        .collect();
+    let selected_class_pick = class_picks
+        .iter()
+        .find(|p| p.key == nc.class.as_str())
+        .cloned();
+    let class_picker: Element<'_, LibraryMessage> =
+        pick_list(class_picks.clone(), selected_class_pick, |pick: ClassPick| {
+            LibraryMessage::NewComponentSetClass(ComponentClass::new(pick.key))
+        })
+        .placeholder("Select class…")
+        .padding(6)
+        .text_size(12)
+        .into();
+
+    // Category text input (WS-E) ─────────────────────────────
+    let category_input = text_input("Passives/Resistors/0805", &nc.category)
+        .on_input(LibraryMessage::NewComponentSetCategory)
+        .padding(6)
+        .size(12);
+
+    // Form layout ─────────────────────────────────────────────
+    let labelled = |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
+        column![
+            text(lbl).size(11).color(muted),
+            container(body).padding([2, 0])
+        ]
+        .spacing(4)
+        .into()
+    };
 
     let form = column![
-        column![pn_label, container(pn_input).padding([2, 0])].spacing(4),
+        labelled("Internal PN", pn_input.into()),
         Space::new().height(8),
-        column![lib_label, container(lib_picker).padding([2, 0])].spacing(4),
+        labelled("Library", lib_picker),
+        Space::new().height(8),
+        labelled("Class", class_picker),
+        Space::new().height(8),
+        labelled("Category", category_input.into()),
     ]
     .spacing(0)
     .padding([16, 16]);
@@ -140,19 +190,17 @@ pub fn view<'a>(
     } else {
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
-    let mut submit_btn = button(
-        container(text("Create").size(11).color(submit_fg)).padding([4, 14]),
-    )
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(submit_bg)),
-        text_color: submit_fg,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    let mut submit_btn = button(container(text("Create").size(11).color(submit_fg)).padding([4, 14]))
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(submit_bg)),
+            text_color: submit_fg,
+            border: Border {
+                width: 0.0,
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        });
     if submit_enabled {
         submit_btn = submit_btn.on_press(LibraryMessage::NewComponentSubmit);
     }
@@ -183,9 +231,15 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, form, error_row, Space::new().height(Length::Fill), footer]
-            .width(Length::Fixed(MODAL_W))
-            .height(Length::Fixed(MODAL_H)),
+        column![
+            header,
+            form,
+            error_row,
+            Space::new().height(Length::Fill),
+            footer
+        ]
+        .width(Length::Fixed(MODAL_W))
+        .height(Length::Fixed(MODAL_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
