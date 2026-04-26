@@ -17,9 +17,11 @@
 //! TODO(v0.9-phase-2) markers. See LIBRARY_PLAN §10–§11 for the
 //! full scope.
 
+pub mod close_prompt;
 pub mod commands;
 pub mod editor;
 pub mod messages;
+pub mod new_component;
 pub mod panel;
 pub mod picker;
 pub mod settings;

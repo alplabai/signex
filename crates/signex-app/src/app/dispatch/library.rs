@@ -103,6 +103,50 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::Noop => Task::none(),
+            // ── WS-6 follow-ups (place flow, new component, close prompt) ──
+            // Phase 1 stubs: log + close any modal so the message routing is
+            // exercised. Full handlers ship in a Phase 3 wire-up.
+            LibraryMessage::ConfirmCloseLibrary {
+                library_path,
+                dirty_editors,
+            } => {
+                tracing::info!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    dirty = dirty_editors.len(),
+                    "close-library confirm modal — full UI ships Phase 3"
+                );
+                Task::none()
+            }
+            LibraryMessage::CloseLibraryConfirm(_) => Task::none(),
+            LibraryMessage::CloseNewComponent => {
+                self.library.new_component = None;
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetInternalPn(_)
+            | LibraryMessage::NewComponentSetLibrary(_) => Task::none(),
+            LibraryMessage::NewComponentSubmit => {
+                tracing::info!(
+                    target: "signex::library",
+                    "new component submit — full UI ships Phase 3"
+                );
+                self.library.new_component = None;
+                Task::none()
+            }
+            LibraryMessage::PlaceLibraryComponent {
+                library_path,
+                component_id,
+                version,
+            } => {
+                tracing::info!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    component = %component_id,
+                    version = %version,
+                    "place library component — engine wire-up ships Phase 3"
+                );
+                Task::none()
+            }
         }
     }
 
