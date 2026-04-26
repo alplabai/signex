@@ -361,7 +361,9 @@ impl Engine {
 fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    // 1. Body bounding box in world coordinates from library graphics.
+    // 1. Bounding box in world coordinates. Use library graphics AND visible
+    //    pin endpoints so the autoplace anchors to the same outer rectangle
+    //    that the selection overlay shows on screen.
     let mut bbox: Option<(f64, f64, f64, f64)> = None;
     let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
         None => *bbox = Some((x, y, x, y)),
@@ -382,8 +384,6 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
             extend(&mut bbox, wx, wy);
         }
     }
-    // Include pin endpoints so the autoplace anchors to the same selection
-    // bounding box that `draw_symbol_selection` shows on screen.
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
             continue;
@@ -399,7 +399,6 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
             extend(&mut bbox, wx, wy);
         }
     }
-    // Fallback to symbol position if symbol has no graphics.
     let (min_x, min_y, max_x, max_y) = bbox.unwrap_or((
         symbol.position.x - 1.27,
         symbol.position.y - 1.27,
@@ -409,19 +408,21 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     let cx = (min_x + max_x) * 0.5;
     let cy = (min_y + max_y) * 0.5;
 
-    // 2. Count pins on each side of the body using each pin's wire endpoint
-    //    direction relative to the body centre.
+    // 2. Count pins on each side using the pin's outgoing direction in world
+    //    space (independent of the bounding box, so adding pins to the bbox
+    //    does not perturb the side classification).
     let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
             continue;
         }
         let rad = p.pin.rotation.to_radians();
-        let ex = p.pin.position.x + p.pin.length * rad.cos();
-        let ey = p.pin.position.y + p.pin.length * rad.sin();
-        let (wex, wey) = transform_local_point(symbol, ex, ey);
-        let dx = wex - cx;
-        let dy = wey - cy;
+        let (lx0, ly0) = (p.pin.position.x, p.pin.position.y);
+        let (lx1, ly1) = (lx0 + rad.cos(), ly0 + rad.sin());
+        let (wx0, wy0) = transform_local_point(symbol, lx0, ly0);
+        let (wx1, wy1) = transform_local_point(symbol, lx1, ly1);
+        let dx = wx1 - wx0;
+        let dy = wy1 - wy0;
         if dx.abs() >= dy.abs() {
             if dx >= 0.0 { pins_right += 1; } else { pins_left += 1; }
         } else if dy >= 0.0 {
