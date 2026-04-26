@@ -3,8 +3,7 @@
 //! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
 
 pub mod adapter;
-#[cfg(feature = "ai-stub")]
-pub mod ai_stub;
+pub mod adapters;
 pub mod component;
 pub mod diff;
 pub mod distributor;
