@@ -13,6 +13,7 @@ pub mod lifecycle;
 pub mod manifest;
 pub mod search;
 pub mod snxpart;
+pub mod where_used;
 
 pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 pub use component::{Component, Revision};
@@ -29,6 +30,7 @@ pub use lifecycle::LifecycleState;
 pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, WorkflowConfig};
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 pub use snxpart::{SnxPartError, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
+pub use where_used::{UseSite, WhereUsedIndex};
 
 #[cfg(test)]
 mod smoke {
