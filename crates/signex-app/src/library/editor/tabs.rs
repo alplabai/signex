@@ -1,6 +1,11 @@
 //! Tab pill router for the Component Editor — reuses
 //! [`signex_widgets::tab_pill::TabPill`] so the editor tabs share
 //! the document tab bar's chrome.
+//!
+//! WS-G: Pin Map — the tab pill list is data-driven from
+//! `EditorTab::ORDER`, so adding `EditorTab::PinMap` to the slice in
+//! `state.rs` is the only change this module needs. No new pill code
+//! lives here.
 
 use iced::widget::{button, container, row, text};
 use iced::{Border, Element, Length, Theme};

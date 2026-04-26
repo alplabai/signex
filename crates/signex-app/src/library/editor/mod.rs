@@ -9,6 +9,8 @@ pub mod footprint;
 pub mod history;
 pub mod overview;
 pub mod params;
+// WS-G: Pin Map
+pub mod pin_map;
 pub mod sim;
 pub mod submit_for_review;
 pub mod supply;
@@ -111,6 +113,11 @@ fn view_active_tab<'a>(
         EditorTab::Symbol => symbol::view(tokens),
         EditorTab::Footprint => footprint::view(tokens),
         EditorTab::ThreeD => three_d::view(editor, tokens, window_id),
+        // WS-G: Pin Map — symbol/footprint primitive resolution lands
+        // with WS-E; for now pass `None` so the tab degrades to its
+        // info card. Once WS-E threads `Symbol` + `Footprint` onto
+        // `ComponentEditorState`, replace `None` with the loaded pair.
+        EditorTab::PinMap => pin_map::view(editor, None, tokens, window_id),
         EditorTab::Params => params::view(editor, tokens, window_id),
         EditorTab::Supply => supply::view(editor, tokens, window_id),
         EditorTab::Sim => sim::view(editor, tokens, window_id),
