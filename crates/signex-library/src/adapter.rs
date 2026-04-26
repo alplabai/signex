@@ -62,11 +62,7 @@ pub trait LibraryAdapter: Send + Sync {
 
     fn get_component(&self, id: ComponentId) -> Result<Component, LibraryError>;
 
-    fn get_revision(
-        &self,
-        id: ComponentId,
-        version: Version,
-    ) -> Result<Revision, LibraryError>;
+    fn get_revision(&self, id: ComponentId, version: Version) -> Result<Revision, LibraryError>;
 
     /// Save a new revision. Backend chooses commit vs review-request based on workflow.
     fn save_revision(

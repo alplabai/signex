@@ -101,10 +101,7 @@ mod tests {
             ],
             head: Version::new(1, 0),
         };
-        assert_eq!(
-            c.highest_released().unwrap().version,
-            Version::new(1, 0)
-        );
+        assert_eq!(c.highest_released().unwrap().version, Version::new(1, 0));
     }
 
     #[test]
@@ -112,7 +109,10 @@ mod tests {
         let c = Component {
             uuid: Uuid::now_v7(),
             internal_pn: InternalPn::new("R0805_10k"),
-            revisions: vec![fixture_revision(Version::new(1, 0), LifecycleState::Released)],
+            revisions: vec![fixture_revision(
+                Version::new(1, 0),
+                LifecycleState::Released,
+            )],
             head: Version::new(1, 0),
         };
         let json = serde_json::to_string(&c).unwrap();
