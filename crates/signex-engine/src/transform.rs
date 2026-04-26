@@ -361,10 +361,10 @@ impl Engine {
 fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    // 1. Bounding box in world coordinates. Use library graphics AND visible
-    //    pin endpoints so the autoplace anchors to the same outer rectangle
-    //    that the selection overlay shows on screen.
-    let mut bbox: Option<(f64, f64, f64, f64)> = None;
+    // 1a. Body bbox in world space (graphics only). Used as the geometric
+    //     reference for pin-side classification — its centre is the natural
+    //     pivot, just like Standard's `SCH_SYMBOL::GetBodyBoundingBox()`.
+    let mut body_bbox: Option<(f64, f64, f64, f64)> = None;
     let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
         None => *bbox = Some((x, y, x, y)),
         Some((lx, ly, hx, hy)) => {
@@ -381,9 +381,23 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         let pts = graphic_extent_points(&g.graphic);
         for (lx, ly) in pts {
             let (wx, wy) = transform_local_point(symbol, lx, ly);
-            extend(&mut bbox, wx, wy);
+            extend(&mut body_bbox, wx, wy);
         }
     }
+    let body = body_bbox.unwrap_or((
+        symbol.position.x - 1.27,
+        symbol.position.y - 1.27,
+        symbol.position.x + 1.27,
+        symbol.position.y + 1.27,
+    ));
+    let (body_min_x, body_min_y, body_max_x, body_max_y) = body;
+    let body_cx = (body_min_x + body_max_x) * 0.5;
+    let body_cy = (body_min_y + body_max_y) * 0.5;
+
+    // 1b. Outer bbox = body + visible pin endpoints. This is the same
+    //     rectangle the selection overlay shows, and the autoplace anchors
+    //     here so fields sit just past the pin extents.
+    let mut outer_bbox = body_bbox;
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
             continue;
@@ -396,33 +410,26 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         let (ex, ey) = (sx + p.pin.length * rad.cos(), sy + p.pin.length * rad.sin());
         for (lx, ly) in [(sx, sy), (ex, ey)] {
             let (wx, wy) = transform_local_point(symbol, lx, ly);
-            extend(&mut bbox, wx, wy);
+            extend(&mut outer_bbox, wx, wy);
         }
     }
-    let (min_x, min_y, max_x, max_y) = bbox.unwrap_or((
-        symbol.position.x - 1.27,
-        symbol.position.y - 1.27,
-        symbol.position.x + 1.27,
-        symbol.position.y + 1.27,
-    ));
+    let (min_x, min_y, max_x, max_y) = outer_bbox.unwrap_or(body);
     let cx = (min_x + max_x) * 0.5;
     let cy = (min_y + max_y) * 0.5;
 
-    // 2. Count pins on each side using the pin's outgoing direction in world
-    //    space (independent of the bounding box, so adding pins to the bbox
-    //    does not perturb the side classification).
+    // 2. Count pins on each side by the world-space position of each pin's
+    //    connection point relative to the body bbox centre. Using the body
+    //    centre (not the outer centre) keeps the classification independent
+    //    of the pin lengths the user happens to have, matching Standard's
+    //    AutoplaceFields side-selection.
     let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
             continue;
         }
-        let rad = p.pin.rotation.to_radians();
-        let (lx0, ly0) = (p.pin.position.x, p.pin.position.y);
-        let (lx1, ly1) = (lx0 + rad.cos(), ly0 + rad.sin());
-        let (wx0, wy0) = transform_local_point(symbol, lx0, ly0);
-        let (wx1, wy1) = transform_local_point(symbol, lx1, ly1);
-        let dx = wx1 - wx0;
-        let dy = wy1 - wy0;
+        let (wx, wy) = transform_local_point(symbol, p.pin.position.x, p.pin.position.y);
+        let dx = wx - body_cx;
+        let dy = wy - body_cy;
         if dx.abs() >= dy.abs() {
             if dx >= 0.0 { pins_right += 1; } else { pins_left += 1; }
         } else if dy >= 0.0 {
