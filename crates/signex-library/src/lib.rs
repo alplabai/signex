@@ -3,6 +3,7 @@
 //! See `docs/internal/docs/LIBRARY_PLAN.md` for design.
 
 pub mod adapter;
+pub mod adapters;
 pub mod component;
 pub mod diff;
 pub mod distributor;
