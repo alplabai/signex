@@ -32,7 +32,10 @@ pub mod snxpart;
 pub mod templates;
 pub mod where_used;
 
-pub use adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
+pub use adapter::{
+    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery, PrimitiveSummary,
+};
+pub use adapters::library_set::LibrarySet;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use component::{Component, DatasheetRef, PinPadOverride, PlmReserved, Revision};
@@ -52,7 +55,7 @@ pub use manifest::{LibraryMeta, LibraryMode, Manifest, UserEntry, UsersConfig, W
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
-    Body3D, BodyShape, Drill, FpGraphic, FpGraphicKind, Footprint, LayerId, Pad, PadKind, PadShape,
+    Body3D, BodyShape, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
     PinElectricalType, PinOrientation, Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel,
     StepAttachment, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };

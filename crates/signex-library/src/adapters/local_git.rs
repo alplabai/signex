@@ -16,13 +16,25 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
+use serde::{Serialize, de::DeserializeOwned};
+use uuid::Uuid;
+
+use crate::adapter::{
+    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery, PrimitiveSummary,
+};
 use crate::component::{Component, Revision};
 use crate::identity::{ComponentClass, ComponentId, InternalPn, Version};
 use crate::manifest::Manifest;
+use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
 use crate::snxpart::{SCHEMA_VERSION, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 
 const PARTS_DIR: &str = "parts";
+const SYMBOLS_DIR: &str = "symbols";
+const FOOTPRINTS_DIR: &str = "footprints";
+const SIMS_DIR: &str = "sims";
+const SYMBOL_EXT: &str = "snxsym";
+const FOOTPRINT_EXT: &str = "snxfpt";
+const SIM_EXT: &str = "snxsim";
 const MANIFEST_FILE: &str = "manifest.toml";
 const REVIEW_BRANCH_PREFIX: &str = "review/";
 
@@ -113,6 +125,15 @@ impl LocalGitAdapter {
         self.root.join(PARTS_DIR)
     }
 
+    fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
+        self.root.join(primitive_subdir(kind))
+    }
+
+    fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
+        self.primitive_dir(kind)
+            .join(format!("{uuid}.{}", primitive_ext(kind)))
+    }
+
     fn lock_path(&self, id: ComponentId, field_set: FieldSet) -> PathBuf {
         self.parts_dir()
             .join(format!("{id}.{}.lock", field_set_slug(field_set)))
@@ -147,6 +168,132 @@ impl LocalGitAdapter {
         } else {
             prev.version.bump_minor()
         }
+    }
+
+    /// Read a primitive JSON file at `<root>/<subdir>/<uuid>.<ext>`.
+    fn read_primitive<T: DeserializeOwned>(
+        &self,
+        kind: PrimitiveKind,
+        uuid: Uuid,
+    ) -> Result<T, LibraryError> {
+        let path = self.primitive_path(kind, uuid);
+        if !path.exists() {
+            return Err(LibraryError::NotFound(format!(
+                "{} {uuid}",
+                primitive_kind_str(kind)
+            )));
+        }
+        let bytes = fs::read(&path)?;
+        let value: T = serde_json::from_slice(&bytes)
+            .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
+        Ok(value)
+    }
+
+    /// Persist a primitive JSON file under `<root>/<subdir>/<uuid>.<ext>`,
+    /// stage + commit it via libgit2 with the supplied message. Mirrors the
+    /// per-kind save path that drives the
+    /// `save_symbol/save_footprint/save_sim` arms of the trait.
+    fn write_primitive<T: Serialize>(
+        &self,
+        kind: PrimitiveKind,
+        uuid: Uuid,
+        value: &T,
+        message: &str,
+    ) -> Result<(), LibraryError> {
+        let dir = self.primitive_dir(kind);
+        fs::create_dir_all(&dir)?;
+        let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
+        let abs_path = self.root.join(&rel_path);
+        let bytes = serde_json::to_vec_pretty(value)
+            .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+        fs::write(&abs_path, bytes)?;
+
+        // Stage + commit. We don't switch branches here — primitives live on
+        // trunk; the review-required workflow only redirects component saves
+        // (per plan §6 step C2).
+        let repo = git2::Repository::open(&self.root)
+            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        let (sig_name, sig_email) = identity_for_repo(&repo);
+        let sig = git2::Signature::now(&sig_name, &sig_email)
+            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+        let mut index = repo
+            .index()
+            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+        index
+            .add_path(Path::new(&rel_path))
+            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
+        index
+            .write()
+            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
+        let commit_message = if message.is_empty() {
+            format!("save {} {uuid}", primitive_kind_str(kind))
+        } else {
+            message.to_string()
+        };
+        repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
+            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
+        Ok(())
+    }
+
+    /// Walk a primitive directory and produce one [`PrimitiveSummary`] per
+    /// `<uuid>.<ext>` file. `name` is read from the file's payload (a
+    /// trait-bound is added at the call site so we can reach the field).
+    fn list_primitive_summaries<T>(
+        &self,
+        kind: PrimitiveKind,
+        name_of: impl Fn(&T) -> &str,
+    ) -> Result<Vec<PrimitiveSummary>, LibraryError>
+    where
+        T: DeserializeOwned,
+    {
+        let dir = self.primitive_dir(kind);
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let suffix = format!(".{}", primitive_ext(kind));
+        let mut out: Vec<PrimitiveSummary> = Vec::new();
+        for entry in walkdir::WalkDir::new(&dir)
+            .min_depth(1)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !name.ends_with(&suffix) {
+                continue;
+            }
+            let stem = &name[..name.len() - suffix.len()];
+            let Ok(uuid) = stem.parse::<Uuid>() else {
+                continue;
+            };
+            let bytes = fs::read(path)?;
+            let value: T = serde_json::from_slice(&bytes)
+                .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+            out.push(PrimitiveSummary {
+                uuid,
+                name: name_of(&value).to_string(),
+                kind,
+                used_by_count: 0,
+            });
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(out)
     }
 
     /// Walk `parts/` and load every `.snxprt` file. One file per component
@@ -382,8 +529,68 @@ impl LibraryAdapter for LocalGitAdapter {
         }
     }
 
+    fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
+        self.read_primitive::<Symbol>(PrimitiveKind::Symbol, uuid)
+    }
+
+    fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
+        self.read_primitive::<Footprint>(PrimitiveKind::Footprint, uuid)
+    }
+
+    fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
+        self.read_primitive::<SimModel>(PrimitiveKind::Sim, uuid)
+    }
+
+    fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
+        self.write_primitive(PrimitiveKind::Symbol, sym.uuid, &sym, message)
+    }
+
+    fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
+        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)
+    }
+
+    fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
+        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)
+    }
+
+    fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitive_summaries::<Symbol>(PrimitiveKind::Symbol, |s| &s.name)
+    }
+
+    fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitive_summaries::<Footprint>(PrimitiveKind::Footprint, |f| &f.name)
+    }
+
+    fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        self.list_primitive_summaries::<SimModel>(PrimitiveKind::Sim, |s| &s.name)
+    }
+
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root.clone())
+    }
+}
+
+fn primitive_subdir(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => SYMBOLS_DIR,
+        PrimitiveKind::Footprint => FOOTPRINTS_DIR,
+        PrimitiveKind::Sim => SIMS_DIR,
+    }
+}
+
+fn primitive_ext(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => SYMBOL_EXT,
+        PrimitiveKind::Footprint => FOOTPRINT_EXT,
+        PrimitiveKind::Sim => SIM_EXT,
+    }
+}
+
+fn primitive_kind_str(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "symbol",
+        PrimitiveKind::Footprint => "footprint",
+        PrimitiveKind::Sim => "sim",
     }
 }
 
