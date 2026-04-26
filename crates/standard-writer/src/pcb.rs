@@ -159,7 +159,7 @@ fn build_general(board: &PcbBoard) -> SExpr {
         "general",
         [
             node("thickness", [coord(board.thickness)]),
-            uuid_node(&board.uuid),
+            uuid_node(board.uuid),
         ],
     )
 }
@@ -427,7 +427,7 @@ fn build_fp_pad(p: &Pad) -> SExpr {
             items.push(node("drill", [coord(drill.diameter)]));
         }
     }
-    items.push(node("layers", p.layers.iter().map(|l| atom(l))));
+    items.push(node("layers", p.layers.iter().map(atom)));
     if p.roundrect_ratio != 0.0 {
         items.push(node("roundrect_rratio", [coord(p.roundrect_ratio)]));
     }

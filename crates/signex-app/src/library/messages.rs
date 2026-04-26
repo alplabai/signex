@@ -12,7 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentId, ComponentSummary, DistributorSource, LifecycleState, SpiceModel, UseSite, Version,
+    BodyShape, ComponentId, ComponentSummary, DistributorSource, Footprint, LifecycleState, Symbol,
+    UseSite, Version,
 };
 
 use super::state::EditorTab;
@@ -230,9 +231,10 @@ pub enum EditorMsg {
         value: String,
     },
     /// Coarse-grained SPICE model snapshot — used for whole-model
-    /// replacement (e.g. paste-from-template flows in Phase 2). The
-    /// canonical save path documented in LIBRARY_PLAN §10.
-    SimChanged(SpiceModel),
+    /// replacement (e.g. paste-from-template flows in Phase 2).
+    /// WS-F stub: SimModel rewire lives in WS-E. Variant retained so
+    /// the message tree's shape doesn't churn between WSes.
+    SimChanged,
     // (Where-Used has no inner messages beyond the row click which
     //  fires `LibraryMessage::JumpToUseSite` directly.)
     // ── Symbol tab ──────────────────────────────────────────
@@ -280,11 +282,10 @@ pub enum EditorMsg {
     SymbolApplyAiPreview,
     /// User clicked "Cancel" in the AI preview card.
     SymbolDismissAiPreview,
-    /// Carrier message — fired after every doc edit, lets the
-    /// dispatcher round-trip the new sexpr into
-    /// `SchematicSide.symbol.sexpr`. Mirrors the LIBRARY_PLAN
-    /// `SaveDraft` flow for non-modal edits.
-    SymbolEdited(String),
+    /// WS-F: persist the current Symbol primitive through the adapter.
+    /// Carries the new uuid so the dispatcher can round-trip into the
+    /// `LibrarySet` entry under `Component.symbol_ref.uuid`.
+    SaveSymbol(uuid::Uuid, Symbol),
     // ── Footprint tab ───────────────────────────────────────
     /// Click-add a pad at the given world position (mm). Pad number
     /// is auto-incremented in the dispatcher.
@@ -302,10 +303,30 @@ pub enum EditorMsg {
     FootprintToggleLayer(String),
     /// Toggle the auto-fit-courtyard flag.
     FootprintToggleAutoFit,
-    /// Replace the entire footprint sexpr — used when external code
-    /// (e.g. paste, AI-stub) wants to atomically swap in a new
-    /// footprint. Re-parses into the editor state.
-    FootprintEdited(String),
+    /// WS-F: persist the current Footprint primitive through the
+    /// adapter. Carries the new uuid so the dispatcher can round-trip
+    /// into the `LibrarySet` entry under `Component.footprint_ref.uuid`.
+    SaveFootprint(uuid::Uuid, Footprint),
+    // ── Body 3D editor pane (WS-F, inside Footprint tab) ─────
+    /// Set the procedural body height in mm.
+    SetBodyHeight(f32),
+    /// Set the body's offset above the PCB surface in mm.
+    SetBodyOffsetZ(f32),
+    /// Set the body's top RGBA color.
+    SetBodyTopColor([f32; 4]),
+    /// Set the body's side RGBA color.
+    SetBodySideColor([f32; 4]),
+    /// Switch the procedural body shape (Extrude / Dome / Cylinder / Custom).
+    SetBodyShape(BodyShape),
+    // ── STEP attachment (WS-F) ───────────────────────────────
+    /// Click "Attach STEP…" — runs the file picker.
+    StepAttachDialog,
+    /// File-picker resolved. `Some(bytes, filename)` succeeded; `None` =
+    /// user cancelled. Dispatcher SHA-256s, copies into `step/<hash>.step`,
+    /// and updates `Footprint::step_attachment`.
+    StepAttachResult(Option<(Vec<u8>, String)>),
+    /// Drop the current STEP attachment.
+    StepAttachRemove,
 }
 
 /// Kind copy of [`super::editor::symbol::canvas::SymbolTool`] used

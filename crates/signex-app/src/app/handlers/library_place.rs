@@ -91,16 +91,21 @@ impl Signex {
         // Symbol type grows the embedded fields the only thing we can
         // do is leave a structured trace + close the picker so the
         // message routing is still exercised end-to-end.
-        let embedded_pin_bytes = revision.schematic.symbol.sexpr.len();
-        let shared_snapshot = revision.shared.slice_for_embed();
+        // WS-F note: the pre-refactor place flow embedded the symbol
+        // sexpr + a `SharedSlice` snapshot; both paths went away with
+        // WS-B. Phase 3 will resolve the symbol primitive via
+        // `LibrarySet::resolve_symbol(rev.symbol_ref)` and embed THAT
+        // typed graph instead.
+        // TODO(merge-with-WS-E): replace the trace below with the
+        // actual engine command writing the bound `Symbol`.
         tracing::warn!(
             target: "signex::library",
             library_id = %library_id,
             component_id = %component_id,
             version = %revision.version,
             content_hash = %hex_short(&revision.content_hash),
-            embedded_bytes = embedded_pin_bytes,
-            mpn = %shared_snapshot.mpn,
+            symbol_ref = %revision.symbol_ref,
+            mpn = %revision.primary_mpn.mpn,
             "schematic engine wire-up shipped in Phase 3 — picker dismissed"
         );
 

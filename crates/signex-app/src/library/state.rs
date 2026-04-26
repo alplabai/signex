@@ -10,14 +10,21 @@
 //!   `Signex::ui_state.windows` as `WindowKind::ComponentEditor`.
 //! * `picker` — Phase 1 component picker modal state.
 //! * `settings` — Distributor-APIs panel local state.
+//!
+//! WS-F note: this module was simplified during the v0.9 refactor —
+//! the legacy `SchematicSide` / `PcbSide` / `SharedSide` + `SpiceModel`
+//! UI surfaces compiled against pre-refactor `signex-library`. WS-E
+//! owns rebuilding the proper editor state on top of the new
+//! `Symbol` / `Footprint` / `Component` (binding) shape; WS-F here
+//! threads only the Symbol/Footprint primitive editing surface and
+//! stubs every other tab as "WS-E pending".
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use signex_library::{
-    Component, ComponentId, ComponentSummary, DatasheetRef, DistributorSource, LibraryAdapter,
-    LibraryError, LibraryQuery, LifecycleState, LocalGitAdapter, ParamMap, Revision, SupplierLink,
-    UseSite, Version, WhereUsedIndex,
+    Component, ComponentId, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
+    LibraryError, LibraryQuery, LocalGitAdapter, Revision, Symbol, UseSite, Version, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -55,6 +62,13 @@ pub struct LibraryState {
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     #[allow(dead_code)]
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
+    /// WS-F: in-memory primitive resolver while WS-C's `LibrarySet`
+    /// trait + cross-library dependency mounting hasn't merged. Symbol
+    /// and Footprint primitives currently load through this map; once
+    /// WS-C ships, callers swap the `Box<dyn LibrarySet>` resolver in
+    /// without touching the editor surface.
+    /// TODO(merge-with-WS-C): replace with `LibrarySet::resolve_*`.
+    pub set: LibrarySet,
 }
 
 impl Default for LibraryState {
@@ -76,6 +90,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             new_component: None,
             close_library_confirm: None,
+            set: LibrarySet::default(),
         }
     }
 }
@@ -254,13 +269,50 @@ pub struct CloseLibraryConfirmState {
     pub dirty_editors: Vec<iced::window::Id>,
 }
 
+/// WS-F stub for the upcoming WS-C `LibrarySet`. Holds Symbol /
+/// Footprint primitives keyed by uuid so the editor can resolve a
+/// `PrimitiveRef::uuid` without a real adapter call. Cross-library
+/// resolution by `library_id` is a no-op until WS-C ships.
+///
+/// TODO(merge-with-WS-C): replace this whole struct with
+/// `signex_library::adapters::library_set::LibrarySet`.
+#[derive(Debug, Default)]
+pub struct LibrarySet {
+    pub symbols: HashMap<Uuid, Symbol>,
+    pub footprints: HashMap<Uuid, Footprint>,
+}
+
+impl LibrarySet {
+    pub fn resolve_symbol(&self, uuid: Uuid) -> Option<Symbol> {
+        self.symbols.get(&uuid).cloned()
+    }
+
+    pub fn resolve_footprint(&self, uuid: Uuid) -> Option<Footprint> {
+        self.footprints.get(&uuid).cloned()
+    }
+
+    pub fn save_symbol(&mut self, sym: Symbol) {
+        self.symbols.insert(sym.uuid, sym);
+    }
+
+    pub fn save_footprint(&mut self, fp: Footprint) {
+        self.footprints.insert(fp.uuid, fp);
+    }
+}
+
 /// Component Editor window state — one per editor window.
-#[derive(Debug)]
+///
+/// WS-F refactor: instead of carrying the legacy
+/// `SchematicSide.symbol.sexpr` blob and round-tripping it into a
+/// `SymbolDoc`, the editor now holds a typed [`Symbol`] primitive
+/// loaded by reference (`Revision::symbol_ref`) and a typed
+/// [`Footprint`] primitive (`Revision::footprint_ref`). Save dispatches
+/// `LibraryMessage::SaveSymbol` / `SaveFootprint` onto the adapter via
+/// the `LibrarySet`.
 pub struct ComponentEditorState {
     pub library_root: PathBuf,
     pub component_id: ComponentId,
-    /// Internal PN at the time the editor opened. Mirrored to
-    /// `draft.shared.mpn`, etc., for inline rename.
+    /// Internal PN at the time the editor opened.
     pub display_internal_pn: String,
     /// Currently-displayed lifecycle state (header bar) — sourced
     /// from `draft.state` while editing.
@@ -281,31 +333,24 @@ pub struct ComponentEditorState {
     /// Whether the workflow requires reviews — drives the "Submit
     /// for Review" footer button.
     pub review_required: bool,
-    /// Editable symbol document — parsed lazily from
-    /// `draft.schematic.symbol.sexpr` on editor open. Edits are
-    /// serialised back via the `SymbolEdited` message.
-    pub symbol_doc: super::editor::symbol::state::SymbolDoc,
+    /// WS-F: editable [`Symbol`] primitive — loaded via
+    /// `LibrarySet::resolve_symbol(rev.symbol_ref.uuid)` on editor
+    /// open. Save dispatches `LibraryMessage::SaveSymbol` to the
+    /// dispatcher, which routes through the adapter.
+    pub symbol: Symbol,
+    /// WS-F: editable [`Footprint`] primitive — loaded via
+    /// `LibrarySet::resolve_footprint(rev.footprint_ref.uuid)`. `None`
+    /// when the binding has no footprint (a chip with symbol-only
+    /// representation, e.g. a power port).
+    pub footprint: Option<Footprint>,
     /// Active tool on the Symbol-tab canvas.
     pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
+    /// Selection on the Symbol canvas — pin / field / etc.
+    pub symbol_selected: Option<super::editor::symbol::state::SymbolSelection>,
     /// AI-stub PDF preview — populated after a successful PDF pick,
     /// dismissed on Apply / Cancel.
     pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
-    /// UI sidecar for the most recently uploaded 3D model — filename,
-    /// hash, byte size. The canonical [`signex_library::ModelRef`] on
-    /// `draft.pcb.model_3d` only carries (path, offset, rotation), so
-    /// this struct keeps the human metadata for the placeholder card
-    /// without forcing a re-read off disk on every draw. Cleared when
-    /// the user removes the model.
-    pub three_d_upload_info: Option<crate::library::editor::three_d::Model3dUploadInfo>,
-    /// Sim tab editor state — owns the multi-line `text_editor::Content`
-    /// for the SPICE body plus the cached pin-number list. Stays in
-    /// sync with `draft.shared.simulation` via the `EditorMsg::Sim*`
-    /// dispatcher arms.
-    pub sim: super::editor::sim::SimTabState,
-    /// Footprint tab live editor state — lazily parsed from
-    /// `draft.pcb.footprint.sexpr` on first switch to the Footprint
-    /// tab. `None` until then so the parse cost stays out of the
-    /// editor-open critical path.
+    /// Footprint canvas interaction state — kept across redraws.
     pub footprint_state:
         Option<crate::library::editor::footprint::state::FootprintEditorState>,
     /// Cache reused across redraws so `iced::widget::Canvas`'s draw
@@ -332,6 +377,21 @@ pub struct ComponentEditorState {
     /// Save Draft / Commit. Drives the close_library dirty prompt.
     #[allow(dead_code)]
     pub dirty: bool,
+}
+
+impl std::fmt::Debug for ComponentEditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentEditorState")
+            .field("library_root", &self.library_root)
+            .field("component_id", &self.component_id)
+            .field("display_internal_pn", &self.display_internal_pn)
+            .field("displayed_version", &self.displayed_version)
+            .field("active_tab", &self.active_tab)
+            .field("symbol_uuid", &self.symbol.uuid)
+            .field("footprint_uuid", &self.footprint.as_ref().map(|f| f.uuid))
+            .field("dirty", &self.dirty)
+            .finish()
+    }
 }
 
 /// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
@@ -437,21 +497,33 @@ impl Default for DistributorSettings {
 
 impl ComponentEditorState {
     /// Build a fresh editor state from the head revision of `component`.
-    pub fn from_head(library_root: PathBuf, component: Component, review_required: bool) -> Self {
+    /// WS-F: resolves `symbol_ref` / `footprint_ref` against
+    /// `library_set`. Falls back to empty primitives when the resolver
+    /// has no entry yet — matches the New Component flow's "draft a
+    /// fresh part" path until WS-C/E land the full create wiring.
+    pub fn from_head(
+        library_root: PathBuf,
+        component: Component,
+        review_required: bool,
+        library_set: &LibrarySet,
+    ) -> Self {
         let head = component
             .head_revision()
             .cloned()
             .unwrap_or_else(|| draft_starter(component.head));
         let internal_pn = component.internal_pn.as_str().to_string();
         let displayed_version = component.head;
-        let symbol_doc = super::editor::symbol::state::SymbolDoc::parse(
-            &head.schematic.symbol.sexpr,
-            internal_pn.as_str(),
-        );
-        let sim = super::editor::sim::SimTabState::from_model(
-            head.shared.simulation.as_ref(),
-            &head.schematic.symbol.sexpr,
-        );
+
+        // Resolve primitives. Empty fallbacks let a brand-new part open
+        // before WS-C's adapter primitive CRUD ships.
+        let symbol = library_set
+            .resolve_symbol(head.symbol_ref.uuid)
+            .unwrap_or_else(|| Symbol::empty(internal_pn.clone()));
+        let footprint = head
+            .footprint_ref
+            .as_ref()
+            .and_then(|r| library_set.resolve_footprint(r.uuid));
+
         Self {
             library_root,
             component_id: component.uuid,
@@ -462,11 +534,11 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            symbol_doc,
+            symbol,
+            footprint,
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
+            symbol_selected: None,
             symbol_ai_preview: None,
-            three_d_upload_info: None,
-            sim,
             footprint_state: None,
             footprint_canvas_cache: std::sync::OnceLock::new(),
             review_dialog_open: false,
@@ -490,104 +562,23 @@ impl ComponentEditorState {
         self.dirty = false;
     }
 
-    /// Lazily initialise the Footprint tab's in-memory state from
-    /// `draft.pcb.footprint.sexpr`. Idempotent — subsequent calls are
-    /// no-ops. The dispatcher calls this before any Footprint*
-    /// message handler runs so the rest of the dispatch logic can
-    /// assume `footprint_state` is `Some`.
+    /// Lazily initialise the Footprint tab's in-memory canvas state
+    /// from the current footprint primitive. Idempotent — subsequent
+    /// calls are no-ops.
     pub fn ensure_footprint_state(&mut self) {
         if self.footprint_state.is_none() {
-            let parsed = crate::library::editor::footprint::state::FootprintEditorState::from_sexpr(
-                &self.draft.pcb.footprint.sexpr,
-            );
+            let parsed = match self.footprint.as_ref() {
+                Some(fp) => crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
+                None => crate::library::editor::footprint::state::FootprintEditorState::empty(),
+            };
             self.footprint_state = Some(parsed);
         }
     }
 
-    /// Re-emit the in-memory footprint state into `draft.pcb.footprint.sexpr`.
-    /// Called after every Footprint mutation so Save Draft / Commit
-    /// pick up the latest pad layout. The render cache is cleared so
-    /// the next draw rebuilds the geometry against the fresh model.
-    pub fn flush_footprint_to_draft(&mut self) {
-        if let Some(fp) = &self.footprint_state {
-            self.draft.pcb.footprint.sexpr = fp.to_sexpr();
-            // Cache invalidates on mutation by replacing the OnceLock —
-            // cheaper than reaching for interior mutability through
-            // the lock.
-            self.footprint_canvas_cache = std::sync::OnceLock::new();
-        }
-    }
-
-    /// Mutate the draft's `SupplierLink` list — one of the only
-    /// list-typed fields the Phase 1 form exposes.
-    pub fn supplier_links_mut(&mut self) -> &mut Vec<SupplierLink> {
-        &mut self.draft.shared.suppliers
-    }
-
-    pub fn parameters_mut(&mut self) -> &mut ParamMap {
-        &mut self.draft.shared.parameters
-    }
-
-    /// Apply an Overview-tab datasheet edit. Phase 1 only writes
-    /// `DatasheetRef::Url` — the hash-pinned variant lands with the
-    /// PDF upload flow in Phase 2.
-    pub fn set_datasheet_url(&mut self, raw: String) {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            self.draft.shared.datasheet = None;
-        } else {
-            self.draft.shared.datasheet = Some(DatasheetRef::url(trimmed));
-        }
-    }
-
-    /// Set the datasheet to a hash-pinned PDF. Used by the WS3 upload
-    /// flow in `dispatch::library`.
-    pub fn set_datasheet_pinned(&mut self, hash: String, filename: String) {
-        self.draft.shared.datasheet = Some(DatasheetRef::HashPinned { hash, filename });
-    }
-
-    /// Switch the datasheet "mode" — preserves nothing across the
-    /// switch (the previous variant's payload is dropped). Phase 2 may
-    /// add per-mode buffers if reviewers ask.
-    pub fn set_datasheet_mode(&mut self, mode: crate::library::editor::datasheet_picker::DatasheetMode) {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        match mode {
-            DatasheetMode::Url => match self.draft.shared.datasheet.as_ref() {
-                Some(DatasheetRef::Url { .. }) => { /* no-op */ }
-                _ => {
-                    // Drop the pinned variant; user must paste a URL.
-                    self.draft.shared.datasheet = None;
-                }
-            },
-            DatasheetMode::PinnedPdf => match self.draft.shared.datasheet.as_ref() {
-                Some(DatasheetRef::HashPinned { .. }) => { /* no-op */ }
-                _ => {
-                    // Drop the URL; user must upload a PDF.
-                    self.draft.shared.datasheet = None;
-                }
-            },
-        }
-    }
-
-    /// Set or clear the 3D model alongside its UI sidecar info. Pass
-    /// `None` to remove the model.
-    pub fn set_model_3d(
-        &mut self,
-        model: Option<(
-            signex_library::ModelRef,
-            crate::library::editor::three_d::Model3dUploadInfo,
-        )>,
-    ) {
-        match model {
-            Some((m, info)) => {
-                self.draft.pcb.model_3d = Some(m);
-                self.three_d_upload_info = Some(info);
-            }
-            None => {
-                self.draft.pcb.model_3d = None;
-                self.three_d_upload_info = None;
-            }
-        }
+    /// Clear the canvas cache (called after every footprint mutation
+    /// so the next draw rebuilds geometry).
+    pub fn invalidate_footprint_cache(&mut self) {
+        self.footprint_canvas_cache = std::sync::OnceLock::new();
     }
 }
 
@@ -596,16 +587,26 @@ impl ComponentEditorState {
 /// to clone from (which the Phase 1 flow shouldn't hit, but defends
 /// the unwrap above).
 fn draft_starter(version: Version) -> Revision {
-    use signex_library::{PcbSide, SchematicSide, SharedSide};
+    use signex_library::{
+        DatasheetRef, LifecycleState, ManufacturerPart, ParamMap, PinPadOverride, PlmReserved,
+        PrimitiveRef,
+    };
     Revision {
         version,
         state: LifecycleState::Draft,
         created: chrono::Utc::now(),
         author: String::new(),
         message: String::new(),
-        schematic: SchematicSide::default(),
-        pcb: PcbSide::default(),
-        shared: SharedSide::default(),
+        symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::<PinPadOverride>::new(),
+        primary_mpn: ManufacturerPart::draft("", ""),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        datasheet: DatasheetRef::default(),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     }
 }
@@ -672,129 +673,6 @@ mod tests {
         assert_eq!(labels.len(), EditorTab::ORDER.len());
     }
 
-    /// Construct a minimal editor state for the WS3 mutation tests.
-    fn fresh_editor_state() -> ComponentEditorState {
-        use signex_library::{
-            Component, InternalPn, PcbSide, SchematicSide, SharedSide, Version,
-        };
-        let head = Revision {
-            version: Version::new(0, 1),
-            state: LifecycleState::Draft,
-            created: chrono::Utc::now(),
-            author: String::new(),
-            message: String::new(),
-            schematic: SchematicSide::default(),
-            pcb: PcbSide::default(),
-            shared: SharedSide::default(),
-            content_hash: [0u8; 32],
-        };
-        let component = Component {
-            uuid: uuid::Uuid::now_v7(),
-            internal_pn: InternalPn::new("TEST_PN"),
-            head: head.version,
-            revisions: vec![head.clone()],
-        };
-        ComponentEditorState::from_head(PathBuf::from("MyLib.snxlib"), component, false)
-    }
-
-    #[test]
-    fn set_datasheet_pinned_replaces_url_variant() {
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://example.com/d.pdf".into());
-        state.set_datasheet_pinned("deadbeef".into(), "TLP281.pdf".into());
-        match state.draft.shared.datasheet.as_ref() {
-            Some(DatasheetRef::HashPinned { hash, filename }) => {
-                assert_eq!(hash, "deadbeef");
-                assert_eq!(filename, "TLP281.pdf");
-            }
-            other => panic!("expected HashPinned, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn set_datasheet_mode_url_drops_pinned() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_pinned("abc".into(), "x.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::Url);
-        // Switching to URL with no URL-buffer drops the prior datasheet
-        // entirely — user must paste a fresh URL.
-        assert!(state.draft.shared.datasheet.is_none());
-    }
-
-    #[test]
-    fn set_datasheet_mode_pinned_drops_url() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://x.test/d.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::PinnedPdf);
-        assert!(state.draft.shared.datasheet.is_none());
-    }
-
-    #[test]
-    fn set_datasheet_mode_idempotent_when_variant_matches() {
-        use crate::library::editor::datasheet_picker::DatasheetMode;
-        let mut state = fresh_editor_state();
-        state.set_datasheet_url("https://x.test/d.pdf".into());
-        state.set_datasheet_mode(DatasheetMode::Url);
-        // No-op — URL preserved.
-        match state.draft.shared.datasheet.as_ref() {
-            Some(DatasheetRef::Url { url }) => assert_eq!(url, "https://x.test/d.pdf"),
-            other => panic!("expected Url, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn set_model_3d_round_trips_path_and_info() {
-        use crate::library::editor::three_d::Model3dUploadInfo;
-        use signex_library::ModelRef;
-        let mut state = fresh_editor_state();
-        let info = Model3dUploadInfo {
-            filename: "fpv-cam.step".into(),
-            hash_hex: "ab".repeat(32),
-            size_bytes: 12_345,
-            extension: "step".into(),
-        };
-        let model = ModelRef {
-            path: info.storage_path(),
-            offset: [1.0, 2.0, 3.0],
-            rotation: [10.0, 20.0, 30.0],
-        };
-        state.set_model_3d(Some((model.clone(), info.clone())));
-
-        assert_eq!(state.draft.pcb.model_3d.as_ref(), Some(&model));
-        assert_eq!(state.three_d_upload_info.as_ref(), Some(&info));
-
-        // JSON serde round-trip on PcbSide preserves the ModelRef.
-        let json = serde_json::to_string(&state.draft.pcb).unwrap();
-        let back: signex_library::PcbSide = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.model_3d.as_ref(), Some(&model));
-    }
-
-    #[test]
-    fn set_model_3d_none_clears_both_sides() {
-        use crate::library::editor::three_d::Model3dUploadInfo;
-        use signex_library::ModelRef;
-        let mut state = fresh_editor_state();
-        let info = Model3dUploadInfo {
-            filename: "m.step".into(),
-            hash_hex: "0".repeat(64),
-            size_bytes: 1,
-            extension: "step".into(),
-        };
-        let model = ModelRef {
-            path: "shared/3d-models/dummy.step".into(),
-            offset: [0.0; 3],
-            rotation: [0.0; 3],
-        };
-        state.set_model_3d(Some((model, info)));
-        assert!(state.draft.pcb.model_3d.is_some());
-        assert!(state.three_d_upload_info.is_some());
-        state.set_model_3d(None);
-        assert!(state.draft.pcb.model_3d.is_none());
-        assert!(state.three_d_upload_info.is_none());
-    }
-
     #[test]
     fn ingest_sheet_round_trips_through_state_to_where_used_index() {
         let mut state = LibraryState::default();
@@ -817,29 +695,6 @@ mod tests {
         // Re-ingesting the same sheet with empty refs clears the entry.
         state.ingest_sheet(&project, &sheet, &[]);
         assert!(state.where_used_for(uuid, None).is_empty());
-    }
-
-    #[test]
-    fn where_used_for_filters_by_pinned_version_when_requested() {
-        let mut state = LibraryState::default();
-        let project = PathBuf::from("/tmp/p.snxprj");
-        let sheet = PathBuf::from("/tmp/p/main.snxsch");
-        let uuid = Uuid::now_v7();
-        let v1 = Version::new(1, 0);
-        let v2 = Version::new(1, 1);
-
-        state.ingest_sheet(
-            &project,
-            &sheet,
-            &[(uuid, "R1".into(), v1), (uuid, "R2".into(), v2)],
-        );
-
-        // Unfiltered → both instances.
-        assert_eq!(state.where_used_for(uuid, None).len(), 2);
-        // Filtered to v1 → just R1.
-        let v1_sites = state.where_used_for(uuid, Some(v1));
-        assert_eq!(v1_sites.len(), 1);
-        assert_eq!(v1_sites[0].instance_id, "R1");
     }
 }
 
