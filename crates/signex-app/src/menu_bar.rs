@@ -105,7 +105,28 @@ pub enum MenuMessage {
     LibraryOpenLibrary,
     /// File ▸ Library ▸ Place Component… (v0.9 Phase 1).
     LibraryPlaceComponent,
-    /// File ▸ Library ▸ New Component… (v0.9 Phase 1).
+    // WS-H: Project tree library wiring
+    /// Project tree → right-click → Add New to Project ▸ Component
+    /// Library. Emitted from `view_context_submenu` for the project
+    /// root; the dispatcher resolves the active project and forwards
+    /// to `LibraryMessage::CreateLibraryAt(project_root)`.
+    AddComponentLibrary,
+    /// Library node → right-click → Add New ▸ Component. Emitted
+    /// from `view_project_tree_context_menu` when the user right-
+    /// clicks a library node; the dispatcher folds it into the
+    /// existing `LibraryMessage::NewComponent` flow with the clicked
+    /// library pre-selected. Symbol / Footprint variants are stubs
+    /// for v0.9.x follow-up.
+    AddLibraryComponent,
+    /// Library node → right-click → Add New ▸ Symbol. Stubbed —
+    /// single-primitive Symbol editing isn't critical until v0.9.x.
+    AddLibrarySymbol,
+    /// Library node → right-click → Add New ▸ Footprint. Stubbed.
+    AddLibraryFootprint,
+    /// Legacy File ▸ Library ▸ New Component… — preserved only as
+    /// a thunk for the old menu wiring; the menu bar no longer
+    /// surfaces it. Component creation lives on the project tree
+    /// (see `AddLibraryComponent`).
     LibraryNewComponent,
     // Edit
     Undo,
@@ -303,7 +324,11 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         ]),
     );
 
-    // v0.9 Library submenu — open / place / new component.
+    // v0.9 Library submenu — open / place. New-component creation
+    // moved to the project tree → right-click → Library ▸ Add New
+    // ▸ Component flow (v0.9 WS-H), so File ▸ Library only carries
+    // "open libraries outside the active project" + the canvas-side
+    // place picker.
     let library_menu = Item::with_menu(
         submenu_item_btn("Library", mc),
         menu_template(vec![
@@ -314,12 +339,6 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 None,
                 MenuMessage::LibraryPlaceComponent,
                 ctx.has_schematic,
-            ),
-            leaf(
-                "New Component...",
-                None,
-                MenuMessage::LibraryNewComponent,
-                mc,
             ),
         ]),
     );

@@ -51,6 +51,45 @@ impl Signex {
             MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::NewComponent,
             ))),
+            // WS-H: Project tree library wiring
+            MenuMessage::AddComponentLibrary => {
+                let path = self
+                    .document_state
+                    .active_project
+                    .and_then(|id| {
+                        self.document_state
+                            .projects
+                            .iter()
+                            .find(|p| p.id == id)
+                            .map(|p| p.path.clone())
+                    });
+                match path {
+                    Some(path) => Some(self.update(Message::Library(
+                        crate::library::LibraryMessage::CreateLibraryAt(path),
+                    ))),
+                    None => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            "Add Component Library: no active project to attach to"
+                        );
+                        Some(iced::Task::none())
+                    }
+                }
+            }
+            // Library node → Add New ▸ Component fires through the
+            // existing New Component modal flow. Symbol / Footprint
+            // arms stub for now (single-primitive editors land in
+            // v0.9.x).
+            MenuMessage::AddLibraryComponent => Some(self.update(Message::Library(
+                crate::library::LibraryMessage::NewComponent,
+            ))),
+            MenuMessage::AddLibrarySymbol | MenuMessage::AddLibraryFootprint => {
+                tracing::info!(
+                    target: "signex::library",
+                    "single-primitive Symbol/Footprint editor — v0.9.x follow-up"
+                );
+                Some(iced::Task::none())
+            }
             _ => None,
         }
     }

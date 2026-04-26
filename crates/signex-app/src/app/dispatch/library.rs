@@ -147,7 +147,93 @@ impl Signex {
                 );
                 Task::none()
             }
+            // WS-H: Project tree library wiring
+            LibraryMessage::CreateLibraryAt(project_root) => {
+                self.handle_create_library_for_project(project_root)
+            }
         }
+    }
+
+    /// WS-H: create a fresh `<name>.snxlib/` under the project rooted at
+    /// `project_root` (the `.snxprj` / `.standard_pro` path). The library
+    /// name is auto-derived from the project stem so the right-click
+    /// flow stays one click — name conflicts surface as a tracing
+    /// warn and the user can re-run from the menu when needed; a
+    /// proper rename modal lands with the v0.9.x project-tree polish.
+    fn handle_create_library_for_project(
+        &mut self,
+        project_root: std::path::PathBuf,
+    ) -> Task<Message> {
+        // Locate the LoadedProject so we can mutate its `libraries`
+        // list. We match on `project_root` against the project file
+        // path and against its parent dir — callers in WS-H emit the
+        // file path, but a future menu wired to a tree-row right-
+        // click could reasonably emit the directory.
+        let Some(loaded) = self
+            .document_state
+            .projects
+            .iter_mut()
+            .find(|p| p.path == project_root || p.path.parent() == Some(project_root.as_path()))
+        else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %project_root.display(),
+                "create library: no loaded project matches root"
+            );
+            return Task::none();
+        };
+
+        // Default name: `<project stem>-lib`. The plan calls for a
+        // name dialog (Goal #2 / step H4); v0.9 WS-H ships the
+        // round-trip first and a Phase 2 patch can drop a TextInput
+        // modal in place of the auto-name.
+        let stem = loaded
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("project");
+        let mut name = format!("{stem}-lib");
+
+        // Disambiguate against the project-dir contents so back-to-
+        // back invocations don't collide with a `Conflict` error.
+        let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        if project_dir.join(format!("{name}.snxlib")).exists() {
+            for n in 2..=99 {
+                let candidate = format!("{stem}-lib-{n}");
+                if !project_dir.join(format!("{candidate}.snxlib")).exists() {
+                    name = candidate;
+                    break;
+                }
+            }
+        }
+
+        match crate::library::commands::create_library(&mut self.library, &mut loaded.data, &name) {
+            Ok(library_id) => {
+                tracing::info!(
+                    target: "signex::library",
+                    project = %loaded.path.display(),
+                    library_name = %name,
+                    library_id = %library_id,
+                    "created project-local library"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    project = %loaded.path.display(),
+                    library_name = %name,
+                    error = %e,
+                    "create_library failed"
+                );
+            }
+        }
+
+        // Refresh the panel so the new library appears under the
+        // Libraries node immediately. The project tree is rebuilt
+        // from `PanelContext::projects`, so the new entry shows up
+        // on the next view tick.
+        self.refresh_panel_ctx();
+        Task::none()
     }
 
     fn handle_open_editor(

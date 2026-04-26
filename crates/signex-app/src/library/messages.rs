@@ -46,6 +46,14 @@ pub enum LibraryMessage {
     ClosePicker,
     /// File ▸ Library ▸ New Component… — opens the New Component modal.
     NewComponent,
+    // WS-H: Project tree library wiring
+    /// Project tree → right-click → Add New to Project ▸ Component
+    /// Library. Carries the active project's root directory; the
+    /// dispatcher prompts for a name (default `<project>-lib`),
+    /// creates `<root>/<name>.snxlib` via [`crate::library::commands::create_library`],
+    /// then registers it in `Project::libraries` so the project
+    /// tree picks it up on the next `refresh_panel_ctx`.
+    CreateLibraryAt(std::path::PathBuf),
     /// Dismiss the New Component modal without creating anything.
     CloseNewComponent,
     /// Live-edit of the New Component modal's "Internal PN" field.

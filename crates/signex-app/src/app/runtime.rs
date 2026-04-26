@@ -65,6 +65,51 @@ impl Signex {
                     .as_deref()
                     .map(lookup)
                     .unwrap_or((false, false, false));
+                // WS-H: Project tree library wiring — flatten
+                // `Project::libraries` into the panel struct alongside
+                // the sheet list. Each entry resolves to an absolute
+                // path so the right-click menu can dispatch back to
+                // the correct library; cached components come from
+                // `LibraryState::library_at` when the library is
+                // currently mounted.
+                let libraries: Vec<crate::panels::LibraryNodeInfo> = p
+                    .data
+                    .libraries
+                    .iter()
+                    .map(|entry| {
+                        let resolved = p.data.resolve_library_path(entry);
+                        let mounted_lib = self.library.library_at(&resolved);
+                        let (display_name, components) = match mounted_lib {
+                            Some(lib) => (
+                                lib.display_name.clone(),
+                                lib.cached_components
+                                    .iter()
+                                    .map(|c| {
+                                        (
+                                            c.internal_pn.as_str().to_string(),
+                                            c.mpn.clone(),
+                                        )
+                                    })
+                                    .collect(),
+                            ),
+                            None => {
+                                let fallback = entry
+                                    .path
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .map(str::to_string)
+                                    .unwrap_or_else(|| entry.path.display().to_string());
+                                (fallback, Vec::new())
+                            }
+                        };
+                        crate::panels::LibraryNodeInfo {
+                            display_name,
+                            root: resolved,
+                            components,
+                            mounted: mounted_lib.is_some(),
+                        }
+                    })
+                    .collect();
                 crate::panels::ProjectPanelInfo {
                     id: p.id,
                     name: p.data.name.clone(),
@@ -94,6 +139,7 @@ impl Signex {
                             }
                         })
                         .collect(),
+                    libraries,
                     is_active: Some(p.id) == active_id,
                 }
             })
