@@ -1,0 +1,9 @@
+[package]
+name = "signex-library-server"
+description = "axum HTTP+WS server for Signex database-flavour libraries (v0.9.2) — placeholder pending Task 17"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
