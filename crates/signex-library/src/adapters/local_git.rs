@@ -16,21 +16,18 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::adapter::{
-    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery,
-};
+use crate::adapter::{ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery};
 use crate::component::{Component, Revision};
 use crate::identity::{ComponentId, InternalPn, Version};
 use crate::manifest::Manifest;
-use crate::snxpart::{
-    SCHEMA_VERSION, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart,
-};
+use crate::snxpart::{SCHEMA_VERSION, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 
 const PARTS_DIR: &str = "parts";
 const MANIFEST_FILE: &str = "manifest.toml";
 const REVIEW_BRANCH_PREFIX: &str = "review/";
 
 /// Adapter over a `*.snxlib/` directory + git repo.
+#[derive(Debug)]
 pub struct LocalGitAdapter {
     root: PathBuf,
     manifest: Manifest,
@@ -307,10 +304,7 @@ impl LibraryAdapter for LocalGitAdapter {
             .find_tree(tree_oid)
             .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
 
-        let parent = repo
-            .head()
-            .ok()
-            .and_then(|h| h.peel_to_commit().ok());
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             format!("save {id} v{new_version}")
