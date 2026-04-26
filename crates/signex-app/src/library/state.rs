@@ -417,16 +417,6 @@ pub struct CloseLibraryConfirmState {
     pub dirty_editors: Vec<iced::window::Id>,
 }
 
-/// Pin Map tab state — populated by WS-G with the per-pin/pad match
-/// table. WS-E ships a placeholder so the editor compiles before
-/// WS-G's view lands.
-#[derive(Debug, Default)]
-#[allow(dead_code)]
-pub struct PinMapTabState {
-    /// TODO(WS-G): replace with `Vec<PinPadMatch>` per the plan §12.
-    pub matches: Vec<()>,
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // Component Editor
 // ─────────────────────────────────────────────────────────────────────
@@ -532,6 +522,22 @@ impl EditorTab {
         }
     }
 }
+
+// ── WS-G: Pin Map ────────────────────────────────────────────────────
+/// Per-window UI state for the Pin Map tab. The Pin/Pad bindings
+/// themselves live on `Revision::pin_map_overrides`; this struct only
+/// holds the inline-editor flags (which row is being overridden, the
+/// live edit buffer for the new pad-number text-input).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PinMapTabState {
+    /// `Some(pin_number)` while the override editor is expanded for
+    /// that specific pin row. `None` when collapsed.
+    pub expanded_row: Option<String>,
+    /// Live buffer for the target pad-number text input. Cleared on
+    /// open / save / cancel.
+    pub override_buf: String,
+}
+// ── /WS-G ────────────────────────────────────────────────────────────
 
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]

@@ -17,6 +17,7 @@
 
 pub mod history;
 pub mod overview;
+pub mod pin_map;
 pub mod submit_for_review;
 pub mod where_used;
 
@@ -153,13 +154,11 @@ fn view_active_tab<'a>(
             ],
             tokens,
         ),
-        EditorTab::PinMap => placeholder_card(
-            "Pin Map",
-            &[
-                "WS-G adds the Pin Map tab — auto-match by number/name + per-pin overrides.",
-                "Defaults to 1:1 binding by pin/pad number string equality.",
-            ],
+        EditorTab::PinMap => pin_map::view(
+            editor,
+            editor.symbol.as_ref().zip(editor.footprint.as_ref()),
             tokens,
+            window_id,
         ),
         EditorTab::Params => placeholder_card(
             "Parameters",

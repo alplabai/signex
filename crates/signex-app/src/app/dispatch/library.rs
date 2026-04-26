@@ -624,6 +624,77 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
         }
+        // ── WS-G: Pin Map ─────────────────────────────────────
+        EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
+            editor.draft.pin_map_overrides.clear();
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        EditorMsg::PinMapAutoMatchByName => {
+            // Stub — the name-based heuristic ships in a follow-up.
+            tracing::warn!(
+                target: "signex::library",
+                "Pin Map: Auto-Match by Name is stubbed; awaiting heuristic implementation"
+            );
+        }
+        EditorMsg::PinMapOpenOverrideEdit(pin) => {
+            let seed = editor
+                .draft
+                .pin_map_overrides
+                .iter()
+                .find(|o| o.symbol_pin_number == pin)
+                .map(|o| o.footprint_pad_number.clone())
+                .unwrap_or_default();
+            editor.pin_map.expanded_row = Some(pin);
+            editor.pin_map.override_buf = seed;
+        }
+        EditorMsg::PinMapOverrideBufChanged { pin, value } => {
+            if editor.pin_map.expanded_row.as_deref() == Some(pin.as_str()) {
+                editor.pin_map.override_buf = value;
+            }
+        }
+        EditorMsg::PinMapAddOverride { pin, pad } => {
+            let trimmed = pad.trim();
+            if trimmed.is_empty() {
+                editor
+                    .draft
+                    .pin_map_overrides
+                    .retain(|o| o.symbol_pin_number != pin);
+            } else {
+                use signex_library::PinPadOverride;
+                if let Some(existing) = editor
+                    .draft
+                    .pin_map_overrides
+                    .iter_mut()
+                    .find(|o| o.symbol_pin_number == pin)
+                {
+                    existing.footprint_pad_number = trimmed.to_string();
+                } else {
+                    editor
+                        .draft
+                        .pin_map_overrides
+                        .push(PinPadOverride::new(pin, trimmed));
+                }
+            }
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        EditorMsg::PinMapCancelOverrideEdit => {
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+        }
+        EditorMsg::PinMapRemoveOverride { pin } => {
+            editor
+                .draft
+                .pin_map_overrides
+                .retain(|o| o.symbol_pin_number != pin);
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        // ── /WS-G ─────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
