@@ -58,6 +58,53 @@ pub struct PdfOptions {
     pub margins: Margins,
     pub scale: PdfScale,
     pub include_title_block: bool,
+    /// Render PCB content (when present) in the chosen colour mode.
+    /// The schematic-only PDF path ignores this, but it's stored on the
+    /// options so the future PCB exporter and the unified Print Preview
+    /// modal share one source of truth.
+    pub pcb_colour_mode: ColourMode,
+    /// DPI hint for raster fallbacks and PDF object resolution. Vector
+    /// content doesn't depend on DPI, but rasterized previews and any
+    /// embedded image content do; the value seeds `PreviewOptions.dpi`
+    /// when set up by the unified preview modal.
+    pub dpi: f32,
+    /// Variant override for sheet rendering — `None` means use the
+    /// project's active variant (or Base when none is set). The
+    /// preview/export modal can pin this to a specific variant
+    /// without mutating the project's active variant.
+    pub variant: Option<String>,
+    /// Use Altium-style "physical structure" expansion: logical sheets
+    /// expand to physical sheets named after the variant.
+    pub use_physical_structure: bool,
+    pub physical_designators: bool,
+    pub physical_net_labels: bool,
+    pub physical_ports: bool,
+    pub physical_sheet_number: bool,
+    pub physical_document_number: bool,
+    /// Render schematic chrome elements when set. False hides each
+    /// element from the exported PDF. Mirrors Altium's "Schematics
+    /// include" checklist verbatim.
+    pub include_no_erc_markers: bool,
+    pub include_parameter_sets: bool,
+    pub include_probes: bool,
+    pub include_blankets: bool,
+    pub include_notes: bool,
+    pub include_collapsed_notes: bool,
+    /// Bookmark target zoom level for component / net jumps inside the
+    /// PDF reader. Range 0.0 (Far) → 1.0 (Close).
+    pub bookmark_zoom: f32,
+    /// Emit per-net "Generate Nets Information" bookmarks.
+    pub generate_nets_info: bool,
+    /// Sub-bookmarks for nets — each toggle scopes which entity
+    /// children appear under the per-net bookmark.
+    pub bookmark_pins: bool,
+    pub bookmark_net_labels: bool,
+    pub bookmark_ports: bool,
+    /// Add component-parameter rows to bookmarks for components.
+    pub include_component_parameters: bool,
+    /// Emit a top-level "Components & Nets" pair of bookmarks instead
+    /// of nesting them under the sheet they appear on.
+    pub global_bookmarks: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +183,28 @@ impl Default for PdfOptions {
             },
             scale: PdfScale::FitToPage,
             include_title_block: true,
+            pcb_colour_mode: ColourMode::Colour,
+            dpi: 96.0,
+            variant: None,
+            use_physical_structure: true,
+            physical_designators: true,
+            physical_net_labels: true,
+            physical_ports: true,
+            physical_sheet_number: true,
+            physical_document_number: true,
+            include_no_erc_markers: true,
+            include_parameter_sets: true,
+            include_probes: true,
+            include_blankets: true,
+            include_notes: true,
+            include_collapsed_notes: false,
+            bookmark_zoom: 0.5,
+            generate_nets_info: true,
+            bookmark_pins: true,
+            bookmark_net_labels: true,
+            bookmark_ports: true,
+            include_component_parameters: true,
+            global_bookmarks: false,
         }
     }
 }

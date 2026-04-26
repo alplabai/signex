@@ -352,6 +352,13 @@ pub struct DocumentState {
     /// `handle_export_pdf_finished` to apply user-selected options
     /// instead of defaults. Cleared after export.
     pub pending_pdf_options: Option<signex_output::PdfOptions>,
+    /// Companion to `pending_pdf_options` — sheet paths to include in
+    /// the export, copied from the preview's file picker. Empty set
+    /// (after a Clear) means "no files chosen" and the export is
+    /// rejected with a user-visible error. `None` means the preview
+    /// path was bypassed (legacy direct-export caller); the export
+    /// then includes every sheet by default.
+    pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
     /// Pending BOM options stashed from the BOM preview modal while
     /// the file picker is running. Without this, the user's column /
     /// grouping / variant / include-DNP picks in the preview would
@@ -431,9 +438,47 @@ pub struct ColumnResizeState {
     pub start_width: f32,
 }
 
+/// Tabs inside the unified Export PDF modal — Preview is the
+/// rasterised page view, Settings is the multi-section configuration
+/// panel (file picker, additional settings, structure settings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfPreviewTab {
+    Preview,
+    Settings,
+}
+
+/// Output PDF resolution preset — Altium parity. Drives the Quality
+/// dropdown in the Settings tab. State-only for v0.8.0 (the export
+/// pipeline always rasterises at 96 DPI today); the hook is here so
+/// the picker can move once the export crate gains DPI support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfQuality {
+    Draft72,
+    Medium300,
+    High600,
+}
+
+impl std::fmt::Display for PdfQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            PdfQuality::Draft72 => "Draft (72 dpi)",
+            PdfQuality::Medium300 => "Medium (300 dpi)",
+            PdfQuality::High600 => "High (600 dpi)",
+        };
+        f.write_str(s)
+    }
+}
+
 /// Open-print-preview state — rasterised pages + which one is currently
 /// shown full-size. Pages are produced by `signex_output::PreviewRasterizer`
 /// when the user invokes File → Print Preview (Ctrl+P).
+///
+/// **Single source of truth.** Every option that's also on
+/// `signex_output::PdfOptions` lives ONLY on `pdf_options`; the
+/// dispatcher mutates that struct directly so the rasterizer and
+/// exporter see one consistent view. Fields on this struct itself are
+/// the leftovers — UI presentation (active tab, quality enum), the
+/// rasterised pages, and pan/zoom interaction state.
 pub struct PreviewState {
     pub pages: Vec<signex_output::PreviewPage>,
     pub page_handles: Vec<iced::widget::image::Handle>,
@@ -445,6 +490,29 @@ pub struct PreviewState {
     /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
     /// wheel bursts can't blow the image up to gigabytes.
     pub zoom: f32,
+    /// Currently-shown tab inside the Export PDF modal.
+    pub active_tab: PdfPreviewTab,
+    /// Pan offset in logical pixels — added to the image origin so the
+    /// user can drag a zoomed-in page around the viewport. Reset to
+    /// (0, 0) when zoom ≤ 1 (no pan needed) and on page change.
+    pub pan: (f32, f32),
+    /// In-flight pan drag — `Some((origin_pan, press_x, press_y))`
+    /// while the user is holding the mouse down on the preview
+    /// surface. Updated every move via the global mouse handler.
+    pub panning: Option<((f32, f32), f32, f32)>,
+    /// Files chosen for export from the active project's sheet list.
+    /// Empty = all files (default at open). When non-empty, only the
+    /// listed paths are rasterised + exported. Driven by the file
+    /// picker in the Settings tab.
+    pub selected_files: std::collections::HashSet<PathBuf>,
+    /// Available variants for the active project — drives the variant
+    /// picker dropdown options. The currently-selected value lives on
+    /// `pdf_options.variant`.
+    pub variants: Vec<String>,
+    /// Quality preset shown in the Settings tab dropdown. Mapped to
+    /// `pdf_options.dpi` at export time; the preview always rasterises
+    /// at 96 DPI for speed.
+    pub quality: PdfQuality,
 }
 
 impl PreviewState {

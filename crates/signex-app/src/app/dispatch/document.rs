@@ -120,6 +120,170 @@ impl Signex {
                 let task = self.handle_print_preview_close();
                 iced::Task::batch([task, self.finish_update()])
             }
+            Message::PrintPreviewSetTab(tab) => {
+                self.handle_print_preview_set_tab(tab);
+                self.finish_update()
+            }
+            Message::PrintPreviewPanStart => {
+                self.handle_print_preview_pan_start();
+                self.finish_update()
+            }
+            Message::PrintPreviewPanFinished => {
+                self.handle_print_preview_pan_finished();
+                self.finish_update()
+            }
+            Message::PrintPreviewToggleFile(path) => {
+                self.handle_print_preview_toggle_file(path);
+                self.finish_update()
+            }
+            Message::PrintPreviewSelectAllFiles => {
+                self.handle_print_preview_select_all_files();
+                self.finish_update()
+            }
+            Message::PrintPreviewClearAllFiles => {
+                self.handle_print_preview_clear_all_files();
+                self.finish_update()
+            }
+            Message::PrintPreviewSetVariant(v) => {
+                self.handle_print_preview_set_variant(v);
+                self.finish_update()
+            }
+            // Visual toggles (No-ERC Markers, Notes) — affect what
+            // the SVG renderer emits, so we mutate `pdf_options`
+            // directly and trigger a rerasterize so the Preview tab
+            // reflects the change immediately.
+            Message::PrintPreviewSetIncludeNoErcMarkers(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_no_erc_markers = v;
+                }
+                self.handle_print_preview_rerender();
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeNotes(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_notes = v;
+                }
+                self.handle_print_preview_rerender();
+                self.finish_update()
+            }
+            // Bookkeeping toggles — stored on `pdf_options` for the
+            // exporter to honour later, but no render hookup yet so
+            // skip the rerasterize. Adding render support is a
+            // one-line move into the visual-toggle group above.
+            Message::PrintPreviewSetUsePhysicalStructure(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.use_physical_structure = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPhysicalDesignators(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.physical_designators = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPhysicalNetLabels(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.physical_net_labels = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPhysicalPorts(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.physical_ports = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPhysicalSheetNumber(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.physical_sheet_number = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPhysicalDocumentNumber(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.physical_document_number = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeParameterSets(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_parameter_sets = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeProbes(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_probes = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeBlankets(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_blankets = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeCollapsedNotes(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_collapsed_notes = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetQuality(q) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.quality = q;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetBookmarkZoom(z) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.bookmark_zoom = z.clamp(0.0, 1.0);
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetGenerateNetsInfo(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.generate_nets_info = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetBookmarkPins(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.bookmark_pins = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetBookmarkNetLabels(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.bookmark_net_labels = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetBookmarkPorts(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.bookmark_ports = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetIncludeComponentParameters(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_component_parameters = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetGlobalBookmarks(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.global_bookmarks = v;
+                }
+                self.finish_update()
+            }
+            Message::PrintPreviewSetPcbColourMode(m) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.pcb_colour_mode = m;
+                }
+                self.finish_update()
+            }
             Message::ExportPdfOpenDialog => {
                 let task = self.handle_export_pdf_open_dialog();
                 iced::Task::batch([task, self.finish_update()])

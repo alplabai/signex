@@ -40,6 +40,12 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
 
 impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
+    /// Default size of the unified Export PDF / Print Preview modal.
+    /// Both `view_print_preview` (in-window) and the detached-window
+    /// path read from these so resizing the modal happens in one
+    /// place instead of two duplicated literals.
+    pub(super) const PDF_MODAL_W: f32 = 1180.0;
+    pub(super) const PDF_MODAL_H: f32 = 760.0;
 
     pub fn new() -> (Self, Task<Message>) {
         // Default panel layout — restored from disk if a previous
@@ -218,6 +224,7 @@ impl Signex {
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 pending_pdf_options: None,
+                pending_pdf_files: None,
                 pending_bom_options: None,
                 export_error: None,
                 bom_preview: None,

@@ -412,6 +412,47 @@ pub enum Message {
     PrintPreviewExport,
     /// User closed the print preview dialog.
     PrintPreviewClose,
+    /// User clicked the Preview / Settings tab inside the unified
+    /// Export PDF modal.
+    PrintPreviewSetTab(super::state::PdfPreviewTab),
+    /// User pressed mouse-down on the preview viewport — kicks off
+    /// pan-drag. The handler reads the cursor from
+    /// `interaction_state.last_mouse_pos` rather than carrying it on
+    /// the message; iced builds messages eagerly at view-render time
+    /// so embedded coords would be one frame stale.
+    PrintPreviewPanStart,
+    /// User released the pan drag — clears `panning`.
+    PrintPreviewPanFinished,
+    /// User toggled a project file in the Settings → Files list.
+    PrintPreviewToggleFile(std::path::PathBuf),
+    /// Select all project files in the Settings → Files list.
+    PrintPreviewSelectAllFiles,
+    /// Deselect all project files (effectively "no override —
+    /// fall back to all").
+    PrintPreviewClearAllFiles,
+    /// Variant picker dropdown — None = Base.
+    PrintPreviewSetVariant(Option<String>),
+    PrintPreviewSetUsePhysicalStructure(bool),
+    PrintPreviewSetPhysicalDesignators(bool),
+    PrintPreviewSetPhysicalNetLabels(bool),
+    PrintPreviewSetPhysicalPorts(bool),
+    PrintPreviewSetPhysicalSheetNumber(bool),
+    PrintPreviewSetPhysicalDocumentNumber(bool),
+    PrintPreviewSetIncludeNoErcMarkers(bool),
+    PrintPreviewSetIncludeParameterSets(bool),
+    PrintPreviewSetIncludeProbes(bool),
+    PrintPreviewSetIncludeBlankets(bool),
+    PrintPreviewSetIncludeNotes(bool),
+    PrintPreviewSetIncludeCollapsedNotes(bool),
+    PrintPreviewSetQuality(super::state::PdfQuality),
+    PrintPreviewSetBookmarkZoom(f32),
+    PrintPreviewSetGenerateNetsInfo(bool),
+    PrintPreviewSetBookmarkPins(bool),
+    PrintPreviewSetBookmarkNetLabels(bool),
+    PrintPreviewSetBookmarkPorts(bool),
+    PrintPreviewSetIncludeComponentParameters(bool),
+    PrintPreviewSetGlobalBookmarks(bool),
+    PrintPreviewSetPcbColourMode(signex_output::ColourMode),
     /// User clicked the OK button on the export-error modal.
     DismissExportError,
     Noop,
