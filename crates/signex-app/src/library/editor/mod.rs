@@ -4,6 +4,7 @@
 //!
 //! See LIBRARY_PLAN §10 for the spec.
 
+pub mod datasheet_picker;
 pub mod footprint;
 pub mod history;
 pub mod overview;
@@ -79,8 +80,8 @@ fn view_active_tab<'a>(
     let inner = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, window_id),
         EditorTab::Symbol => symbol::view(tokens),
-        EditorTab::Footprint => footprint::view(editor, tokens, window_id),
-        EditorTab::ThreeD => three_d::view(tokens),
+        EditorTab::Footprint => footprint::view(tokens),
+        EditorTab::ThreeD => three_d::view(editor, tokens, window_id),
         EditorTab::Params => params::view(editor, tokens, window_id),
         EditorTab::Supply => supply::view(editor, tokens, window_id),
         EditorTab::Sim => sim::view(tokens),

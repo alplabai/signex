@@ -4984,6 +4984,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "sha2",
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",

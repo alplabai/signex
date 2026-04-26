@@ -3,12 +3,13 @@
 
 use iced::widget::{Space, column, container, pick_list, row, scrollable, text, text_input};
 use iced::{Element, Length};
-use signex_library::{DatasheetRef, LifecycleState};
+use signex_library::LifecycleState;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::ComponentEditorState;
+use super::datasheet_picker;
 
 const LIFECYCLE_OPTS: [LifecycleState; 5] = [
     LifecycleState::Draft,
@@ -45,11 +46,11 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
-    let datasheet_url_value = match editor.draft.shared.datasheet.as_ref() {
-        Some(DatasheetRef::Url { url }) => url.clone(),
-        Some(DatasheetRef::HashPinned { filename, .. }) => filename.clone(),
-        None => String::new(),
-    };
+    let datasheet_block: Element<'a, LibraryMessage> = datasheet_picker::view(
+        editor.draft.shared.datasheet.as_ref(),
+        tokens,
+        window_id,
+    );
 
     let field = |label: &'static str,
                  value: &'a str,
@@ -131,20 +132,7 @@ pub fn view<'a>(
             EditorMsg::OverviewSetDescription,
         ),
         Space::new().height(10),
-        column![
-            text("Datasheet").size(10).color(muted),
-            text_input("https://example.com/datasheet.pdf", &datasheet_url_value)
-                .on_input(move |s| LibraryMessage::EditorEvent {
-                    window_id,
-                    msg: EditorMsg::OverviewSetDatasheet(s),
-                })
-                .padding([4, 8])
-                .size(12),
-            text("Phase 2 will add a hash-pinned PDF upload alongside the URL field.")
-                .size(10)
-                .color(muted),
-        ]
-        .spacing(4),
+        datasheet_block,
         Space::new().height(10),
         lifecycle_block,
     ]
