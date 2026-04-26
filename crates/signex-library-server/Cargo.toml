@@ -22,6 +22,10 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
+# Re-import signex-library with the `database` feature so the in-tree integration
+# tests can construct a `DatabaseAdapter` against an in-process server.
+signex-library = { workspace = true, features = ["database"] }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
