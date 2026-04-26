@@ -199,29 +199,35 @@ impl SvgRenderContext {
             ));
         }
 
-        for nc in &sheet.schematic.no_connects {
-            let arm = (1.0 * xform.mm_to_unit) as f32;
-            let cx = xform.x(nc.position.x);
-            let cy = xform.px_y(nc.position.y);
-            let style = SvgStyle {
-                stroke_rgb: Some(no_connect_colour()),
-                fill_rgb: None,
-                stroke_width: 0.8,
-            };
-            elements.push(SvgElement::Path {
-                commands: vec![
-                    SvgPathCommand::MoveTo(pt(cx - arm, cy - arm)),
-                    SvgPathCommand::LineTo(pt(cx + arm, cy + arm)),
-                ],
-                style,
-            });
-            elements.push(SvgElement::Path {
-                commands: vec![
-                    SvgPathCommand::MoveTo(pt(cx - arm, cy + arm)),
-                    SvgPathCommand::LineTo(pt(cx + arm, cy - arm)),
-                ],
-                style,
-            });
+        // Standard's "no_connect" X markers map to Altium's "No-ERC
+        // Markers" — render them only when the user kept the toggle
+        // on. Altium's checklist hides these from the printed PDF
+        // for cleaner deliverables.
+        if opts.include_no_erc_markers {
+            for nc in &sheet.schematic.no_connects {
+                let arm = (1.0 * xform.mm_to_unit) as f32;
+                let cx = xform.x(nc.position.x);
+                let cy = xform.px_y(nc.position.y);
+                let style = SvgStyle {
+                    stroke_rgb: Some(no_connect_colour()),
+                    fill_rgb: None,
+                    stroke_width: 0.8,
+                };
+                elements.push(SvgElement::Path {
+                    commands: vec![
+                        SvgPathCommand::MoveTo(pt(cx - arm, cy - arm)),
+                        SvgPathCommand::LineTo(pt(cx + arm, cy + arm)),
+                    ],
+                    style,
+                });
+                elements.push(SvgElement::Path {
+                    commands: vec![
+                        SvgPathCommand::MoveTo(pt(cx - arm, cy + arm)),
+                        SvgPathCommand::LineTo(pt(cx + arm, cy - arm)),
+                    ],
+                    style,
+                });
+            }
         }
 
         for label in &sheet.schematic.labels {
@@ -251,19 +257,23 @@ impl SvgRenderContext {
             });
         }
 
-        for note in &sheet.schematic.text_notes {
-            let size_pt = label_size_pt(note.font_size, xform.mm_to_unit, &opts.scale);
-            elements.push(SvgElement::Text {
-                x: xform.x(note.position.x),
-                y: xform.px_y(note.position.y),
-                font_alias: "F1",
-                size_pt,
-                align: halign_to_svg(note.justify_h),
-                v_align: valign_to_svg(note.justify_v),
-                rotation_deg: note.rotation as f32,
-                fill_rgb: (0.14, 0.14, 0.14),
-                text: normalize_standard_text(&note.text),
-            });
+        // Free-floating text annotations = Altium "Notes". Hidden
+        // from the export when the user unchecks the Notes toggle.
+        if opts.include_notes {
+            for note in &sheet.schematic.text_notes {
+                let size_pt = label_size_pt(note.font_size, xform.mm_to_unit, &opts.scale);
+                elements.push(SvgElement::Text {
+                    x: xform.x(note.position.x),
+                    y: xform.px_y(note.position.y),
+                    font_alias: "F1",
+                    size_pt,
+                    align: halign_to_svg(note.justify_h),
+                    v_align: valign_to_svg(note.justify_v),
+                    rotation_deg: note.rotation as f32,
+                    fill_rgb: (0.14, 0.14, 0.14),
+                    text: normalize_standard_text(&note.text),
+                });
+            }
         }
 
         for child in &sheet.schematic.child_sheets {

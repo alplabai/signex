@@ -1089,8 +1089,6 @@ impl Signex {
     fn view_print_preview(&self) -> Element<'_, Message> {
         use crate::app::state::ModalId;
         use crate::app::view::dialogs::wrap_modal;
-        let modal_w = 1100.0_f32;
-        let modal_h = 780.0_f32;
         let body = self.view_print_preview_inner(true);
         let offset = self
             .ui_state
@@ -1098,7 +1096,12 @@ impl Signex {
             .get(&ModalId::PrintPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(body, offset, self.ui_state.window_size, (modal_w, modal_h))
+        wrap_modal(
+            body,
+            offset,
+            self.ui_state.window_size,
+            (Self::PDF_MODAL_W, Self::PDF_MODAL_H),
+        )
     }
 
     /// Detached-window flavour — bare body, no backdrop, no in-window
@@ -1108,15 +1111,12 @@ impl Signex {
     }
 
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
-        use iced::widget::{
-            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
-            text_input, Space,
-        };
+        use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
             close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
             MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
         };
-        use crate::app::state::ModalId;
+        use iced::widget::{button, column, container, row, text, Space};
         let theme_id = self.ui_state.theme_id;
 
         let preview = match &self.document_state.preview {
@@ -1124,6 +1124,154 @@ impl Signex {
             None => return iced::widget::Space::new().into(),
         };
 
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let accent_c = crate::styles::ti(tokens.accent);
+
+        // Header — same chrome as every other modal.
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Export PDF").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                ModalId::PrintPreview,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(header_content, ModalId::PrintPreview)
+        };
+
+        // Tab strip — Preview | Settings.
+        let tab_strip = self.view_pdf_tab_strip(preview.active_tab);
+
+        // Body switches by tab.
+        let body: Element<'_, Message> = match preview.active_tab {
+            PdfPreviewTab::Preview => self.view_pdf_preview_tab(preview),
+            PdfPreviewTab::Settings => self.view_pdf_settings_tab(preview),
+        };
+
+        // Footer — page count + Export PDF.
+        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
+            .padding([6, 14])
+            .on_press(Message::PrintPreviewExport)
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(accent_c.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            );
+        let footer_caption = if preview.pages.is_empty() {
+            "No files selected for export".to_string()
+        } else {
+            format!("{} page(s) — preview at 96 DPI", preview.pages.len())
+        };
+        let footer = container(
+            row![
+                text(footer_caption).size(11).color(text_muted),
+                Space::new().width(Length::Fill),
+                export_btn,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14]);
+
+        let dialog = container(
+            column![header, tab_strip, body, footer]
+                .width(Self::PDF_MODAL_W)
+                .height(Self::PDF_MODAL_H),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    /// Two-tab strip — Preview | Settings — sitting just under the
+    /// modal header. Active tab gets the accent text + accent under-
+    /// stripe; the other shows a hover affordance via the button.
+    fn view_pdf_tab_strip(
+        &self,
+        active: crate::app::state::PdfPreviewTab,
+    ) -> Element<'_, Message> {
+        use crate::app::state::PdfPreviewTab;
+        use iced::widget::{button, container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+
+        let tab = move |label: &'static str, this: PdfPreviewTab| {
+            let is_active = this == active;
+            let label_color = if is_active { text_c } else { text_muted };
+            let underline_h = if is_active { 2.0 } else { 0.0 };
+            let pill = iced::widget::column![
+                text(label).size(12).color(label_color),
+                Space::new().height(4),
+                container(Space::new().width(Length::Fill).height(underline_h))
+                    .style(move |_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(accent_c.into()),
+                        ..iced::widget::container::Style::default()
+                    }),
+            ]
+            .align_x(iced::Alignment::Center);
+            button(container(pill).padding([6, 14]))
+                .on_press(Message::PrintPreviewSetTab(this))
+                .style(move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: None,
+                    text_color: label_color,
+                    border: iced::Border::default(),
+                    ..iced::widget::button::Style::default()
+                })
+        };
+
+        container(
+            row![
+                tab("Preview", PdfPreviewTab::Preview),
+                tab("Settings", PdfPreviewTab::Settings),
+                Space::new().width(Length::Fill),
+            ]
+            .spacing(2)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([0, 14])
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            border: iced::Border {
+                color: border_c,
+                width: 0.0,
+                radius: iced::border::Radius::default(),
+            },
+            ..iced::widget::container::Style::default()
+        })
+        .into()
+    }
+
+    /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
+    /// rail on the left, pan/zoom viewport on the right.
+    fn view_pdf_preview_tab(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{
+            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
+            text_input, Space,
+        };
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let text_c = crate::styles::ti(tokens.text);
@@ -1170,26 +1318,17 @@ impl Signex {
             text("Colour").size(11).color(text_muted),
             mode_button(
                 "Color",
-                matches!(
-                    preview.pdf_options.colour_mode,
-                    signex_output::ColourMode::Colour
-                ),
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
             ),
             mode_button(
                 "Gray",
-                matches!(
-                    preview.pdf_options.colour_mode,
-                    signex_output::ColourMode::Grayscale
-                ),
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
             ),
             mode_button(
                 "B/W",
-                matches!(
-                    preview.pdf_options.colour_mode,
-                    signex_output::ColourMode::BlackAndWhite
-                ),
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
             ),
         ]
@@ -1200,26 +1339,17 @@ impl Signex {
             text("Pages").size(11).color(text_muted),
             mode_button(
                 "All",
-                matches!(
-                    preview.pdf_options.page_range,
-                    signex_output::PageRange::All
-                ),
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
                 Message::PrintPreviewSetPageRangeAll,
             ),
             mode_button(
                 "Current",
-                matches!(
-                    preview.pdf_options.page_range,
-                    signex_output::PageRange::Current
-                ),
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
                 Message::PrintPreviewSetPageRangeCurrent,
             ),
             mode_button(
                 "Specific",
-                matches!(
-                    preview.pdf_options.page_range,
-                    signex_output::PageRange::Specific(_)
-                ),
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
                 Message::PrintPreviewSetPageRangeSpecific,
             ),
         ]
@@ -1232,11 +1362,8 @@ impl Signex {
         ) {
             row![
                 text("Page").size(11).color(text_muted),
-                text_input::<Message, iced::Theme, iced::Renderer>(
-                    "1",
-                    &preview.specific_page_input
-                )
-                .on_input(|value| Message::PrintPreviewSetSpecificPageInput(value))
+                text_input("1", &preview.specific_page_input)
+                    .on_input(Message::PrintPreviewSetSpecificPageInput)
                 .padding([4, 8])
                 .size(12)
                 .width(80),
@@ -1248,10 +1375,6 @@ impl Signex {
             iced::widget::Space::new().height(0).into()
         };
 
-        // Output toggles — pulled in from the old standalone PDF
-        // settings dialog so the unified preview modal exposes every
-        // export decision the user previously made via two separate
-        // dialogs.
         let fit_to_page = matches!(
             preview.pdf_options.scale,
             signex_output::PdfScale::FitToPage
@@ -1275,11 +1398,6 @@ impl Signex {
         .spacing(12)
         .align_y(iced::Alignment::Center);
 
-        // Page-size / orientation summary so the user can verify the
-        // sheet dimensions the preview was rasterized at without
-        // hunting through a separate dialog. Display-only for now —
-        // they're seeded from the active schematic's paper size and
-        // can't be overridden until the page-size picker lands.
         let page_size_label = match &preview.pdf_options.page_size {
             signex_output::PageSize::IsoA0 => "ISO A0",
             signex_output::PageSize::IsoA1 => "ISO A1",
@@ -1309,8 +1427,22 @@ impl Signex {
         .spacing(8)
         .align_y(iced::Alignment::Center);
 
-        // Left rail: one thumbnail button per rendered page. Bounded width
-        // and scrollable so 20-sheet projects don't break the layout.
+        let toolbar = container(
+            row![
+                summary_row,
+                Space::new().width(16),
+                colour_controls,
+                Space::new().width(12),
+                range_controls,
+                specific_page_input,
+                Space::new().width(Length::Fill),
+                toggles_row,
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([8, 14]);
+
+        // Thumb rail.
         let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
@@ -1345,178 +1477,505 @@ impl Signex {
         }
         let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
 
-        // Centre: the selected page rendered full-size, constrained to a
-        // reasonable viewport. The image is wrapped in a scrollable so
-        // scroll-wheel zoom can blow it up past the visible area; the
-        // outer mouse_area intercepts the wheel and converts it into a
-        // `PrintPreviewZoom` message that scales the image around its
-        // current centre.
-        let selected_page = &preview.pages[preview.selected];
-        let zoom = preview.zoom;
-        let scaled_w = (selected_page.width_px as f32 * zoom).max(64.0);
-        let scaled_h = (selected_page.height_px as f32 * zoom).max(64.0);
-        let img: Element<'_, Message> = if zoom <= 1.0 {
-            // Fit to viewport at zoom ≤ 1 so the page never gets
-            // smaller than the available area; matches the previous
-            // "fill viewport, preserve aspect" behaviour at default
-            // zoom.
-            image(preview.page_handles[preview.selected].clone())
-                .content_fit(iced::ContentFit::Contain)
+        // Pan/zoom viewport. The image is positioned via Translate so
+        // pan delta moves it inside a clipped container — no
+        // scrollbars, just drag-to-pan + wheel-zoom.
+        let viewport: Element<'_, Message> = if preview.pages.is_empty() {
+            container(
+                text("No files selected — toggle files in Settings → Files.")
+                    .size(12)
+                    .color(text_muted),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(iced::Color::WHITE.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(2.0),
+                },
+                ..container::Style::default()
+            })
+            .into()
+        } else {
+            let selected_page = &preview.pages[preview.selected];
+            let zoom = preview.zoom;
+            let scaled_w = (selected_page.width_px as f32 * zoom).max(64.0);
+            let scaled_h = (selected_page.height_px as f32 * zoom).max(64.0);
+            // At zoom ≤ 1 we want the page to fill the viewport
+            // preserving aspect; above 1× we render at exact scaled
+            // pixels and let the user pan around.
+            let img_el: Element<'_, Message> = if zoom <= 1.0 {
+                image(preview.page_handles[preview.selected].clone())
+                    .content_fit(iced::ContentFit::Contain)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                image(preview.page_handles[preview.selected].clone())
+                    .content_fit(iced::ContentFit::Fill)
+                    .width(Length::Fixed(scaled_w))
+                    .height(Length::Fixed(scaled_h))
+                    .into()
+            };
+            // Position the image at the pan offset. Below 1× the pan
+            // is forced to (0, 0) (see the zoom handler) so the
+            // translate is a no-op.
+            let positioned: Element<'_, Message> = if zoom <= 1.0 {
+                img_el
+            } else {
+                super::view::translate::Translate::new(img_el, preview.pan).into()
+            };
+            let surface = container(positioned)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
-        } else {
-            // Above 1× we want the image to be exactly its scaled
-            // pixel size + the wrapper scrollable lets the user
-            // pan around when it overflows.
-            image(preview.page_handles[preview.selected].clone())
-                .content_fit(iced::ContentFit::Fill)
-                .width(Length::Fixed(scaled_w))
-                .height(Length::Fixed(scaled_h))
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(iced::Color::WHITE.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(2.0),
+                    },
+                    ..container::Style::default()
+                })
+                .clip(true);
+            let interaction = if zoom > 1.0 {
+                if preview.panning.is_some() {
+                    iced::mouse::Interaction::Grabbing
+                } else {
+                    iced::mouse::Interaction::Grab
+                }
+            } else {
+                iced::mouse::Interaction::default()
+            };
+            iced::widget::mouse_area(surface)
+                .on_press(Message::PrintPreviewPanStart)
+                .on_release(Message::PrintPreviewPanFinished)
+                .on_scroll(|delta| {
+                    use iced::mouse::ScrollDelta;
+                    let dy = match delta {
+                        ScrollDelta::Lines { y, .. } => y,
+                        ScrollDelta::Pixels { y, .. } => y,
+                    };
+                    Message::PrintPreviewZoom(dy)
+                })
+                .interaction(interaction)
                 .into()
         };
-        let viewport = container(
-            scrollable(img)
-                .direction(iced::widget::scrollable::Direction::Both {
-                    vertical: iced::widget::scrollable::Scrollbar::default(),
-                    horizontal: iced::widget::scrollable::Scrollbar::default(),
-                })
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(16)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Color::WHITE.into()),
-            border: iced::Border {
-                color: border_c,
-                width: 1.0,
-                radius: iced::border::Radius::from(2.0),
-            },
-            ..container::Style::default()
-        });
-        let full_image = iced::widget::mouse_area(viewport).on_scroll(|delta| {
-            use iced::mouse::ScrollDelta;
-            let dy = match delta {
-                ScrollDelta::Lines { y, .. } => y,
-                ScrollDelta::Pixels { y, .. } => y,
-            };
-            Message::PrintPreviewZoom(dy)
-        });
 
-        let page_caption = text(format!(
-            "Page {} of {} — {}×{} px · {:.0}%",
-            selected_page.page_number,
-            preview.pages.len(),
-            selected_page.width_px,
-            selected_page.height_px,
-            zoom * 100.0,
-        ))
-        .size(11)
-        .color(text_muted);
+        let zoom = preview.zoom;
+        let page_caption = if preview.pages.is_empty() {
+            text("—".to_string()).size(11).color(text_muted)
+        } else {
+            let selected_page = &preview.pages[preview.selected];
+            text(format!(
+                "Page {} of {} — {}×{} px · {:.0}%",
+                selected_page.page_number,
+                preview.pages.len(),
+                selected_page.width_px,
+                selected_page.height_px,
+                zoom * 100.0,
+            ))
+            .size(11)
+            .color(text_muted)
+        };
 
-        let centre = column![full_image, page_caption]
+        let centre = column![viewport, page_caption]
             .spacing(6)
             .width(Length::Fill)
             .height(Length::Fill);
 
-        // Bottom bar: Export PDF only — the header X handles dismissal,
-        // a redundant text "Close" just adds visual noise.
-        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
-            .padding([6, 14])
-            .on_press(Message::PrintPreviewExport)
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(accent_c.into()),
-                    text_color: iced::Color::WHITE,
-                    border: iced::Border {
-                        radius: iced::border::Radius::from(4.0),
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            );
-
-        let bottom_bar = row![
-            text(format!(
-                "{} page(s) — preview at 96 DPI",
-                preview.pages.len()
-            ))
-            .size(11)
-            .color(text_muted),
-            iced::widget::Space::new().width(Length::Fill),
-            export_btn,
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
-
-        // Header: title + close X. The same draggable_header /
-        // close_x_button helpers used by the Annotate / ERC modals so
-        // every modal in the app shares one chrome.
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Export PDF")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .into();
-        let _ = border_c;
-        let header = if draggable {
-            draggable_header(
-                header_content,
-                ModalId::PrintPreview,
-                self.interaction_state.last_mouse_pos,
-            )
-        } else {
-            detached_header(header_content, ModalId::PrintPreview)
-        };
-
-        // Settings strip + thumbnails/content row + bottom bar.
-        let settings_strip = container(
-            row![
-                summary_row,
-                Space::new().width(16),
-                colour_controls,
-                Space::new().width(12),
-                range_controls,
-                specific_page_input,
-                Space::new().width(Length::Fill),
-                toggles_row,
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([8, 14]);
-
-        let modal_w = 1100.0_f32;
-        let modal_h = 780.0_f32;
-        let dialog = container(
-            column![
-                header,
-                settings_strip,
-                container(
-                    row![thumb_rail, Space::new().width(8), centre]
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                )
-                .padding([0, 14])
+        let body_row = container(
+            row![thumb_rail, Space::new().width(8), centre]
                 .width(Length::Fill)
                 .height(Length::Fill),
-                container(bottom_bar).padding([10, 14]),
-            ]
-            .width(modal_w)
-            .height(modal_h),
         )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
-        dialog.into()
+        .padding([0, 14])
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        column![toolbar, body_row]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Settings tab — stitches the three section helpers below into a
+    /// single scrollable column. Each helper owns its own widgets and
+    /// reads/writes through `preview.pdf_options.*` directly so the
+    /// rasterizer and exporter stay in lockstep with the UI.
+    fn view_pdf_settings_tab(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{column, scrollable, Space};
+        let body = column![
+            self.view_pdf_files_section(preview),
+            Space::new().height(10),
+            self.view_pdf_structure_section(preview),
+            Space::new().height(10),
+            self.view_pdf_additional_section(preview),
+        ]
+        .spacing(0)
+        .padding([10, 14]);
+        scrollable(body)
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
+    }
+
+    /// Section header strip — accent panel-bg with a 1 px border.
+    /// Reused by every Settings-tab section.
+    fn pdf_section_title(&self, label: &'static str) -> Element<'_, Message> {
+        use iced::widget::{container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let border_c = crate::styles::ti(tokens.border);
+        container(text(label).size(12).color(text_c))
+            .padding([6, 10])
+            .width(Length::Fill)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::default(),
+                },
+                ..container::Style::default()
+            })
+            .into()
+    }
+
+    /// Settings → Choose Project Files.
+    fn view_pdf_files_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{button, checkbox, column, container, row, scrollable, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+
+        let project_sheets: Vec<(std::path::PathBuf, String)> = self
+            .document_state
+            .active_loaded_project()
+            .map(|p| {
+                let dir = std::path::PathBuf::from(&p.data.dir);
+                p.data
+                    .sheets
+                    .iter()
+                    .map(|s| (dir.join(&s.filename), s.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut file_list: iced::widget::Column<'_, Message> =
+            column![].spacing(2).padding([8, 12]);
+        if project_sheets.is_empty() {
+            file_list = file_list.push(
+                text("No project loaded — load a .standard_pro to pick files.")
+                    .size(11)
+                    .color(text_muted),
+            );
+        } else {
+            for (path, name) in &project_sheets {
+                let is_selected = preview.selected_files.contains(path);
+                let path_str = path.display().to_string();
+                let row_el = row![
+                    checkbox(is_selected).on_toggle({
+                        let path = path.clone();
+                        move |_| Message::PrintPreviewToggleFile(path.clone())
+                    }),
+                    column![
+                        text(name.clone()).size(11).color(text_c),
+                        text(path_str).size(10).color(text_muted),
+                    ]
+                    .spacing(1),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center);
+                file_list = file_list.push(row_el);
+            }
+        }
+        let secondary_btn_style = move |_: &iced::Theme, _status| iced::widget::button::Style {
+            background: Some(panel_bg.into()),
+            text_color: text_c,
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: iced::border::Radius::from(3.0),
+            },
+            ..iced::widget::button::Style::default()
+        };
+        let file_actions = row![
+            button(text("Select All").size(11).color(text_c))
+                .padding([3, 8])
+                .on_press(Message::PrintPreviewSelectAllFiles)
+                .style(secondary_btn_style),
+            button(text("Clear").size(11).color(text_c))
+                .padding([3, 8])
+                .on_press(Message::PrintPreviewClearAllFiles)
+                .style(secondary_btn_style),
+        ]
+        .spacing(6);
+
+        column![
+            self.pdf_section_title("Choose Project Files"),
+            container(
+                column![
+                    text("Select the files in the project to export from the list. Multiple files can be selected.")
+                        .size(11)
+                        .color(text_muted),
+                    Space::new().height(6),
+                    container(scrollable(file_list).height(160))
+                        .width(Length::Fill)
+                        .style(move |_: &iced::Theme| container::Style {
+                            border: iced::Border {
+                                color: border_c,
+                                width: 1.0,
+                                radius: iced::border::Radius::default(),
+                            },
+                            ..container::Style::default()
+                        }),
+                    Space::new().height(6),
+                    file_actions,
+                ]
+                .padding([10, 12]),
+            ),
+        ]
+        .spacing(0)
+        .into()
+    }
+
+    /// Settings → Structure Settings.
+    fn view_pdf_structure_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{checkbox, column, container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let opts = &preview.pdf_options;
+
+        let variant_label = opts
+            .variant
+            .clone()
+            .unwrap_or_else(|| "Base".to_string());
+        let mut variant_options: Vec<String> = vec!["Base".to_string()];
+        variant_options.extend(preview.variants.clone());
+        variant_options.dedup();
+        let variant_picker = iced::widget::pick_list(
+            variant_options,
+            Some(variant_label),
+            |s| {
+                if s.eq_ignore_ascii_case("Base") {
+                    Message::PrintPreviewSetVariant(None)
+                } else {
+                    Message::PrintPreviewSetVariant(Some(s))
+                }
+            },
+        )
+        .text_size(11)
+        .width(220);
+
+        let labelled_check = |label: &'static str,
+                              value: bool,
+                              on: fn(bool) -> Message|
+         -> iced::widget::Row<'_, Message> {
+            row![
+                text(label).size(11).color(text_muted).width(150),
+                checkbox(value).on_toggle(on),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+        };
+
+        column![
+            self.pdf_section_title("Structure Settings"),
+            container(
+                column![
+                    text("If checked, exported sheets are expanded from logical to physical sheets. Choose a variant and which expanded names appear.")
+                        .size(11)
+                        .color(text_muted),
+                    Space::new().height(8),
+                    row![
+                        checkbox(opts.use_physical_structure)
+                            .on_toggle(Message::PrintPreviewSetUsePhysicalStructure),
+                        text("Use Physical Structure").size(11).color(text_c),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center),
+                    Space::new().height(6),
+                    row![
+                        text("Variant").size(11).color(text_muted).width(150),
+                        variant_picker,
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                    Space::new().height(8),
+                    labelled_check("Designators", opts.physical_designators, Message::PrintPreviewSetPhysicalDesignators),
+                    labelled_check("Net Labels", opts.physical_net_labels, Message::PrintPreviewSetPhysicalNetLabels),
+                    labelled_check("Ports and Sheet Entries", opts.physical_ports, Message::PrintPreviewSetPhysicalPorts),
+                    labelled_check("Sheet Number Parameter", opts.physical_sheet_number, Message::PrintPreviewSetPhysicalSheetNumber),
+                    labelled_check("Document Number Parameter", opts.physical_document_number, Message::PrintPreviewSetPhysicalDocumentNumber),
+                ]
+                .padding([10, 12])
+                .spacing(2),
+            ),
+        ]
+        .spacing(0)
+        .into()
+    }
+
+    /// Settings → Additional PDF Settings.
+    fn view_pdf_additional_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use crate::app::state::PdfQuality;
+        use iced::widget::{checkbox, column, container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let opts = &preview.pdf_options;
+
+        let lbl_check = move |label: &'static str, value: bool, on: fn(bool) -> Message| {
+            row![
+                checkbox(value).on_toggle(on),
+                text(label).size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+        };
+
+        let zoom_slider = iced::widget::slider(
+            0.0_f32..=1.0,
+            opts.bookmark_zoom,
+            Message::PrintPreviewSetBookmarkZoom,
+        )
+        .step(0.05_f32)
+        .width(180);
+        let zoom_col = column![
+            text("Zoom").size(11).color(text_c),
+            text("Slider controls the zoom level in the PDF reader when jumping to components or nets.")
+                .size(10)
+                .color(text_muted),
+            Space::new().height(6),
+            row![
+                text("Far").size(10).color(text_muted),
+                zoom_slider,
+                text("Close").size(10).color(text_muted),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(2);
+
+        let info_col = column![
+            text("Additional Information").size(11).color(text_c),
+            Space::new().height(4),
+            lbl_check(
+                "Generate nets information",
+                opts.generate_nets_info,
+                Message::PrintPreviewSetGenerateNetsInfo,
+            ),
+            Space::new().height(4),
+            text("The following bookmarks can be created in the PDF for nets:")
+                .size(10)
+                .color(text_muted),
+            row![
+                Space::new().width(14),
+                column![
+                    lbl_check("Pins", opts.bookmark_pins, Message::PrintPreviewSetBookmarkPins),
+                    lbl_check("Net Labels", opts.bookmark_net_labels, Message::PrintPreviewSetBookmarkNetLabels),
+                    lbl_check("Ports", opts.bookmark_ports, Message::PrintPreviewSetBookmarkPorts),
+                ]
+                .spacing(2),
+            ],
+            Space::new().height(4),
+            lbl_check(
+                "Include Component Parameters",
+                opts.include_component_parameters,
+                Message::PrintPreviewSetIncludeComponentParameters,
+            ),
+            lbl_check(
+                "Global Bookmarks for Components and Nets",
+                opts.global_bookmarks,
+                Message::PrintPreviewSetGlobalBookmarks,
+            ),
+        ]
+        .spacing(2);
+
+        let schematics_include_col = column![
+            text("Schematics include").size(11).color(text_c),
+            Space::new().height(4),
+            lbl_check("No-ERC Markers", opts.include_no_erc_markers, Message::PrintPreviewSetIncludeNoErcMarkers),
+            lbl_check("Parameter Sets", opts.include_parameter_sets, Message::PrintPreviewSetIncludeParameterSets),
+            lbl_check("Probes", opts.include_probes, Message::PrintPreviewSetIncludeProbes),
+            lbl_check("Blankets", opts.include_blankets, Message::PrintPreviewSetIncludeBlankets),
+            lbl_check("Notes", opts.include_notes, Message::PrintPreviewSetIncludeNotes),
+            row![
+                Space::new().width(14),
+                lbl_check("Collapsed notes", opts.include_collapsed_notes, Message::PrintPreviewSetIncludeCollapsedNotes),
+            ],
+            Space::new().height(8),
+            text("Quality").size(11).color(text_c),
+            iced::widget::pick_list(
+                vec![PdfQuality::Draft72, PdfQuality::Medium300, PdfQuality::High600],
+                Some(preview.quality),
+                Message::PrintPreviewSetQuality,
+            )
+            .text_size(11)
+            .width(180),
+        ]
+        .spacing(2);
+
+        let radio = move |label: &'static str,
+                          this: signex_output::ColourMode,
+                          current: signex_output::ColourMode,
+                          on: fn(signex_output::ColourMode) -> Message| {
+            iced::widget::radio(label, this, Some(current), on)
+                .text_size(11)
+                .size(14)
+        };
+
+        let sch_color_col = column![
+            text("Schematics Color Mode").size(11).color(text_c),
+            Space::new().height(4),
+            radio("Color", signex_output::ColourMode::Colour, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            Space::new().height(8),
+            text("PCB Color Mode").size(11).color(text_c),
+            Space::new().height(4),
+            radio("Color", signex_output::ColourMode::Colour, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+        ]
+        .spacing(2);
+
+        column![
+            self.pdf_section_title("Additional PDF Settings"),
+            container(
+                row![
+                    column![zoom_col, Space::new().height(12), info_col]
+                        .spacing(0)
+                        .width(Length::FillPortion(2)),
+                    Space::new().width(16),
+                    schematics_include_col.width(Length::FillPortion(2)),
+                    Space::new().width(16),
+                    sch_color_col.width(Length::FillPortion(2)),
+                ]
+                .padding([10, 12]),
+            ),
+        ]
+        .spacing(0)
+        .into()
     }
 
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
