@@ -274,6 +274,62 @@ impl Signex {
                 }
                 return Task::none();
             }
+            // Symbol-tab side effects — open the PDF picker, hand the
+            // chosen path to a worker that runs the heuristic.
+            EditorMsg::SymbolPickAiPdf => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select datasheet PDF")
+                            .add_filter("PDF", &["pdf"])
+                            .pick_file()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    move |path| {
+                        Message::Library(LibraryMessage::EditorEvent {
+                            window_id,
+                            msg: EditorMsg::SymbolPickedAiPdf(path),
+                        })
+                    },
+                );
+            }
+            EditorMsg::SymbolPickedAiPdf(None) => return Task::none(),
+            EditorMsg::SymbolPickedAiPdf(Some(path)) => {
+                use crate::library::editor::symbol::ai_stub::AiPinoutPreview;
+                let preview = match std::fs::read(&path) {
+                    Ok(bytes) => AiPinoutPreview::from_pdf(&bytes),
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            error = %e,
+                            path = %path.display(),
+                            "failed to read datasheet PDF"
+                        );
+                        AiPinoutPreview::default()
+                    }
+                };
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.symbol_ai_preview = Some(preview);
+                }
+                return Task::none();
+            }
+            EditorMsg::SymbolApplyAiPreview => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id)
+                    && let Some(preview) = editor.symbol_ai_preview.take()
+                {
+                    let pins = preview.into_apply_list();
+                    editor.symbol_doc.apply_ai_pinout(pins);
+                    sync_symbol_sexpr(editor);
+                }
+                return Task::none();
+            }
+            EditorMsg::SymbolDismissAiPreview => {
+                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
+                    editor.symbol_ai_preview = None;
+                }
+                return Task::none();
+            }
             _ => {}
         }
 
@@ -284,6 +340,14 @@ impl Signex {
         apply_inline_edit(editor, msg);
         Task::none()
     }
+}
+
+/// Round-trip the editable [`SymbolDoc`] back into
+/// `SchematicSide.symbol.sexpr`. Called after every symbol-edit so
+/// `Save Draft` / `Commit` see the current canvas state without an
+/// explicit "save symbol" affordance.
+fn sync_symbol_sexpr(editor: &mut ComponentEditorState) {
+    editor.draft.schematic.symbol.sexpr = editor.symbol_doc.to_sexpr();
 }
 
 /// Apply an inline form edit to the editor draft. Pulled out so the
@@ -388,11 +452,72 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
         }
+        // ── Symbol-tab inline edits ─────────────────────────────
+        EditorMsg::SymbolSetTool(tool) => {
+            use crate::library::editor::symbol::canvas::SymbolTool;
+            use crate::library::messages::SymbolToolMsg;
+            editor.symbol_tool = match tool {
+                SymbolToolMsg::Select => SymbolTool::Select,
+                SymbolToolMsg::AddPin => SymbolTool::AddPin,
+            };
+        }
+        EditorMsg::SymbolAddPin { x, y } => {
+            let idx = editor.symbol_doc.add_pin(x, y);
+            editor.symbol_doc.selected = Some(
+                crate::library::editor::symbol::state::SymbolSelection::Pin(idx),
+            );
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolSelect(sel) => {
+            use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+            use crate::library::messages::SymbolSelectionMsg;
+            editor.symbol_doc.selected = Some(match sel {
+                SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
+                SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
+                SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
+            });
+        }
+        EditorMsg::SymbolDeselect => {
+            editor.symbol_doc.selected = None;
+        }
+        EditorMsg::SymbolMoveSelected { x, y } => {
+            editor.symbol_doc.move_selected(x, y);
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolDeleteSelected => {
+            editor.symbol_doc.delete_selected();
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolSetField { key, value } => {
+            use crate::library::editor::symbol::state::FieldKey;
+            use crate::library::messages::FieldKeyMsg;
+            let key = match key {
+                FieldKeyMsg::Reference => FieldKey::Reference,
+                FieldKeyMsg::Value => FieldKey::Value,
+            };
+            editor.symbol_doc.set_field_value(key, value);
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolSetPinNumber { idx, number } => {
+            editor.symbol_doc.set_pin_number(idx, number);
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolSetPinName { idx, name } => {
+            editor.symbol_doc.set_pin_name(idx, name);
+            sync_symbol_sexpr(editor);
+        }
+        EditorMsg::SymbolEdited(sexpr) => {
+            editor.draft.schematic.symbol.sexpr = sexpr;
+        }
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
         | EditorMsg::SubmitForReview
-        | EditorMsg::OpenWhereUsedTab => {}
+        | EditorMsg::OpenWhereUsedTab
+        | EditorMsg::SymbolPickAiPdf
+        | EditorMsg::SymbolPickedAiPdf(_)
+        | EditorMsg::SymbolApplyAiPreview
+        | EditorMsg::SymbolDismissAiPreview => {}
     }
 }

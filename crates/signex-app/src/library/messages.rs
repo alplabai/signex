@@ -134,6 +134,80 @@ pub enum EditorMsg {
     HistorySelectRevision(Version),
     // (Where-Used has no inner messages beyond the row click which
     //  fires `LibraryMessage::JumpToUseSite` directly.)
+    // ── Symbol tab ──────────────────────────────────────────
+    /// Switch the active symbol-canvas tool.
+    SymbolSetTool(SymbolToolMsg),
+    /// Place a new pin at the snapped world coordinate.
+    SymbolAddPin {
+        x: f64,
+        y: f64,
+    },
+    /// Select an existing pin or field on the canvas.
+    SymbolSelect(SymbolSelectionMsg),
+    /// Drop the current selection (background click).
+    SymbolDeselect,
+    /// Drag the currently-selected element to a new world coordinate.
+    SymbolMoveSelected {
+        x: f64,
+        y: f64,
+    },
+    /// Delete-key on the canvas — removes the selected pin (fields
+    /// keep their slot but get cleared).
+    SymbolDeleteSelected,
+    /// Edit Designator / Value text from the side panel.
+    SymbolSetField {
+        key: FieldKeyMsg,
+        value: String,
+    },
+    /// Edit a pin number from the side-panel pin table.
+    SymbolSetPinNumber {
+        idx: usize,
+        number: String,
+    },
+    /// Edit a pin name from the side-panel pin table.
+    SymbolSetPinName {
+        idx: usize,
+        name: String,
+    },
+    /// "AI: From Datasheet PDF" — opens an `rfd` PDF picker.
+    SymbolPickAiPdf,
+    /// Result of the PDF picker: `None` = cancelled. The path is read
+    /// from disk in the dispatcher and run through
+    /// `signex_library::ai_stub::extract_pinout`.
+    SymbolPickedAiPdf(Option<std::path::PathBuf>),
+    /// User clicked "Apply" in the AI preview card.
+    SymbolApplyAiPreview,
+    /// User clicked "Cancel" in the AI preview card.
+    SymbolDismissAiPreview,
+    /// Carrier message — fired after every doc edit, lets the
+    /// dispatcher round-trip the new sexpr into
+    /// `SchematicSide.symbol.sexpr`. Mirrors the LIBRARY_PLAN
+    /// `SaveDraft` flow for non-modal edits.
+    SymbolEdited(String),
+}
+
+/// Kind copy of [`super::editor::symbol::canvas::SymbolTool`] used
+/// inside [`EditorMsg`]. Kept separate so the messages module doesn't
+/// pull in the canvas widget types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolToolMsg {
+    Select,
+    AddPin,
+}
+
+/// Kind copy of [`super::editor::symbol::state::SymbolSelection`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolSelectionMsg {
+    Pin(usize),
+    FieldReference,
+    FieldValue,
+}
+
+/// Kind copy of [`super::editor::symbol::state::FieldKey`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldKeyMsg {
+    Reference,
+    Value,
 }
 
 /// Picker modal messages.

@@ -78,7 +78,7 @@ fn view_active_tab<'a>(
 ) -> Element<'a, LibraryMessage> {
     let inner = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, window_id),
-        EditorTab::Symbol => symbol::view(tokens),
+        EditorTab::Symbol => symbol::view(editor, tokens, window_id),
         EditorTab::Footprint => footprint::view(tokens),
         EditorTab::ThreeD => three_d::view(tokens),
         EditorTab::Params => params::view(editor, tokens, window_id),

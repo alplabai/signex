@@ -5048,6 +5048,7 @@ dependencies = [
  "kicad-writer",
  "log",
  "num-traits",
+ "pdf-writer",
  "rfd",
  "serde",
  "serde_json",
