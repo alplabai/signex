@@ -304,6 +304,7 @@ impl Signex {
             custom_paper_w_mm,
             custom_paper_h_mm,
             sheet_color,
+            symbol_editor: build_symbol_editor_panel_ctx(self),
         };
         self.document_state.panel_ctx.project_tree =
             crate::panels::build_project_tree(&self.document_state.panel_ctx);
@@ -473,6 +474,64 @@ impl Signex {
 ///
 /// Order is filename-stem-sorted so the project tree stays stable
 /// across sessions (read_dir order is platform-dependent on Windows).
+/// Project the active `.snxsym` editor's data into a panel-side
+/// snapshot. Called from `refresh_panel_ctx` so the right-dock
+/// Properties panel and the SCH-Library left-dock panel can render
+/// context-aware content while the active tab is a Symbol editor.
+/// Returns `None` for any other tab kind.
+fn build_symbol_editor_panel_ctx(
+    app: &super::Signex,
+) -> Option<crate::panels::SymbolEditorPanelContext> {
+    use crate::library::editor::symbol::state as sym_state;
+    use crate::panels::{SymbolEditorPanelContext, SymbolEditorSelection, SymbolPinSummary};
+
+    let active = app.document_state.tabs.get(app.document_state.active_tab)?;
+    let path = match &active.kind {
+        crate::app::TabKind::SymbolEditor(p) => p.clone(),
+        _ => return None,
+    };
+    let editor = app.document_state.symbol_editors.get(&path)?;
+    let sym = &editor.primitive;
+
+    let pins: Vec<SymbolPinSummary> = sym
+        .pins
+        .iter()
+        .enumerate()
+        .map(|(idx, pin)| SymbolPinSummary {
+            idx,
+            number: pin.number.clone(),
+            name: pin.name.clone(),
+            electrical: format!("{:?}", pin.electrical),
+            position: pin.position,
+            orientation: format!("{:?}", pin.orientation),
+            length: pin.length,
+        })
+        .collect();
+
+    let selected = match editor.selected {
+        Some(sym_state::SymbolSelection::Pin(idx)) => pins
+            .get(idx)
+            .cloned()
+            .map(SymbolEditorSelection::Pin)
+            .unwrap_or(SymbolEditorSelection::None),
+        Some(sym_state::SymbolSelection::Field(sym_state::FieldKey::Reference)) => {
+            SymbolEditorSelection::FieldReference
+        }
+        Some(sym_state::SymbolSelection::Field(sym_state::FieldKey::Value)) => {
+            SymbolEditorSelection::FieldValue
+        }
+        None => SymbolEditorSelection::None,
+    };
+
+    Some(SymbolEditorPanelContext {
+        path,
+        symbol_name: sym.name.clone(),
+        symbol_uuid: sym.uuid,
+        pins,
+        selected,
+    })
+}
+
 fn scan_library_primitives(
     root: &std::path::Path,
 ) -> (

@@ -14,7 +14,7 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -30,11 +30,13 @@ use crate::library::messages::{
 
 // ── Symbol ──────────────────────────────────────────────────────────
 
-/// Render the standalone Symbol editor for a `.snxsym` tab. Two-column
-/// layout: live canvas on the left, properties + pin table on the
-/// right — same shape as the in-Component Editor Symbol tab so users
-/// see the same surface whether they opened a `.snxsym` directly or
-/// via a Component.
+/// Render the standalone Symbol editor for a `.snxsym` tab. Altium
+/// SchLib parity: the canvas takes the full tab width; the right-dock
+/// Properties panel renders symbol/pin properties driven by the
+/// selection (see `panels::view_symbol_editor_properties`). The
+/// in-tab properties column was retired in v0.9 phase 1 so the user
+/// sees the same Properties surface whether editing a schematic or
+/// a symbol library — single source of truth, no duplicated panes.
 pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     tokens: &'a ThemeTokens,
@@ -43,20 +45,11 @@ pub fn view_symbol<'a>(
 
     let toolbar = view_symbol_toolbar(editor, tokens);
     let canvas_widget = view_symbol_canvas(editor);
-    let props = view_symbol_properties(editor, tokens);
 
-    let split = row![
-        container(canvas_widget)
-            .width(Length::FillPortion(3))
-            .height(Length::Fill),
-        Space::new().width(10),
-        container(props)
-            .width(Length::FillPortion(2))
-            .height(Length::Fill),
-    ]
-    .height(Length::Fill);
-
-    let body = column![toolbar, split].spacing(10).width(Length::Fill);
+    let body = column![toolbar, canvas_widget]
+        .spacing(10)
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     let status_line = row![
         text(format!("{} pins", editor.primitive.pins.len()))
@@ -196,94 +189,6 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
         SymbolSelection::Field(FieldKey::Reference) => SymbolSelectionMsg::FieldReference,
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
     }
-}
-
-fn view_symbol_properties<'a>(
-    editor: &'a SymbolEditorState,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
-    let sym = &editor.primitive;
-
-    let mut col = column![
-        text("Symbol Properties").size(13).color(text_c),
-        Space::new().height(6),
-        text(format!("Name: {}", sym.name)).size(11).color(text_c),
-        text(format!("UUID: {}", sym.uuid)).size(10).color(muted),
-        Space::new().height(8),
-        text("Pins").size(13).color(text_c),
-        Space::new().height(6),
-    ]
-    .spacing(0)
-    .width(Length::Fill);
-
-    if sym.pins.is_empty() {
-        col = col.push(
-            text("No pins yet — switch to Add Pin and click on the canvas.")
-                .size(11)
-                .color(muted),
-        );
-    } else {
-        col = col.push(view_symbol_pin_table(editor, tokens));
-    }
-
-    container(scrollable(col).width(Length::Fill).height(Length::Fill))
-        .padding(10)
-        .style(crate::styles::modal_card(tokens))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
-}
-
-fn view_symbol_pin_table<'a>(
-    editor: &'a SymbolEditorState,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let path = editor.path.clone();
-
-    let mut col = column![
-        row![
-            container(text("#").size(11).color(muted)).width(Length::Fixed(36.0)),
-            container(text("Number").size(11).color(muted)).width(Length::Fixed(80.0)),
-            container(text("Name").size(11).color(muted)).width(Length::Fill),
-        ]
-        .spacing(6)
-    ]
-    .spacing(2)
-    .width(Length::Fill);
-
-    for (idx, pin) in editor.primitive.pins.iter().enumerate() {
-        let row_path_num = path.clone();
-        let row_path_name = path.clone();
-        let number_input = iced::widget::text_input("number", pin.number.as_str())
-            .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
-                path: row_path_num.clone(),
-                msg: PrimitiveEditorMsg::SymbolSetPinNumber { idx, number: s },
-            })
-            .padding([2, 4])
-            .size(11);
-        let name_input = iced::widget::text_input("name", pin.name.as_str())
-            .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
-                path: row_path_name.clone(),
-                msg: PrimitiveEditorMsg::SymbolSetPinName { idx, name: s },
-            })
-            .padding([2, 4])
-            .size(11);
-
-        col = col.push(
-            row![
-                container(text(format!("{}", idx + 1)).size(11).color(muted))
-                    .width(Length::Fixed(36.0)),
-                container(number_input).width(Length::Fixed(80.0)),
-                container(name_input).width(Length::Fill),
-            ]
-            .spacing(6),
-        );
-    }
-
-    col.into()
 }
 
 // ── Footprint ───────────────────────────────────────────────────────
