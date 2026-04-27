@@ -59,8 +59,26 @@ impl Signex {
                 self.sym_editor_set_pin_y(*pin_idx, *value);
                 true
             }
+            crate::panels::PanelMsg::SymEditorSelectPin(idx) => {
+                self.sym_editor_select_pin(*idx);
+                true
+            }
             _ => false,
         }
+    }
+
+    fn sym_editor_select_pin(&mut self, pin_idx: usize) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if pin_idx >= editor.primitive().pins.len() {
+            return;
+        }
+        editor.selected = Some(
+            crate::library::editor::symbol::state::SymbolSelection::Pin(pin_idx),
+        );
+        editor.canvas_cache.clear();
+        self.refresh_panel_ctx();
     }
 
     fn sym_editor_set_pin_electrical(

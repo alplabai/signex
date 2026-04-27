@@ -715,6 +715,10 @@ pub enum PanelMsg {
     SymEditorSetPinX { pin_idx: usize, value: f64 },
     /// Properties panel — set a pin's Y coordinate in mm.
     SymEditorSetPinY { pin_idx: usize, value: f64 },
+    /// SCH Library panel — click on a row in the Pins sub-list.
+    /// Selects the pin on the canvas (Properties panel switches
+    /// to pin-mode automatically via the next refresh_panel_ctx).
+    SymEditorSelectPin(usize),
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -1073,6 +1077,86 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(row_btn);
     }
 
+    col = col.push(thin_sep(border_c));
+
+    // ── Pins sub-list (Altium SchLib parity) — pins of the active
+    //    symbol with Designator / Name / Type columns. Click a row
+    //    to select that pin on the canvas; the Properties panel
+    //    picks up the selection.
+    col = col.push(
+        container(text("Pins").size(10).color(primary))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+    if sym.pins.is_empty() {
+        col = col.push(
+            container(
+                text("No pins yet — switch to Add Pin and click on the canvas.")
+                    .size(10)
+                    .color(muted),
+            )
+            .padding([4, 8])
+            .width(Length::Fill),
+        );
+    } else {
+        // Header row.
+        col = col.push(
+            container(
+                row![
+                    text("#").size(10).color(muted).width(Length::Fixed(28.0)),
+                    text("Name").size(10).color(muted).width(Length::Fill),
+                    text("Type").size(10).color(muted).width(Length::Fixed(80.0)),
+                ]
+                .spacing(6),
+            )
+            .padding([2, 8]),
+        );
+        for pin in &sym.pins {
+            let pin_idx = pin.idx;
+            let active_pin =
+                matches!(&sym.selected, SymbolEditorSelection::Pin(p) if p.idx == pin_idx);
+            let label_color = if active_pin { primary } else { muted };
+            let bg_active = crate::styles::ti(ctx.tokens.selection);
+            let pin_row_btn = iced::widget::button(
+                row![
+                    text(pin.number.clone())
+                        .size(10)
+                        .color(label_color)
+                        .width(Length::Fixed(28.0)),
+                    text(pin.name.clone())
+                        .size(10)
+                        .color(label_color)
+                        .width(Length::Fill),
+                    text(pin.electrical.clone())
+                        .size(9)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .on_press(PanelMsg::SymEditorSelectPin(pin_idx))
+            .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+                iced::widget::button::Style {
+                    background: if active_pin {
+                        Some(iced::Background::Color(bg_active))
+                    } else if matches!(status, iced::widget::button::Status::Hovered) {
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )))
+                    } else {
+                        None
+                    },
+                    border: iced::Border::default(),
+                    text_color: label_color,
+                    ..iced::widget::button::Style::default()
+                }
+            });
+            col = col.push(pin_row_btn);
+        }
+    }
     col = col.push(thin_sep(border_c));
 
     // ── Action row: Add / Delete ──
