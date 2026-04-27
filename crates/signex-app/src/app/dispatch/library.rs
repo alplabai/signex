@@ -20,8 +20,8 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, SettingsMsg, SymbolSelectionMsg,
-    SymbolToolMsg,
+    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, PrimitiveEditorMsg, SettingsMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::{
     ComponentEditorState, EditorAddress, EditorTab, NewComponentState, PickerState,
@@ -280,77 +280,10 @@ impl Signex {
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
-            // ── WS-5 (DBLib): row-tier panel wiring ──────────────
-            LibraryMessage::OpenComponentRow {
-                library_path,
-                table,
-                row_id,
-            } => {
-                // WS-6 owns the actual Component Preview tab
-                // construction. v0.9-refactor-2 plan §11 lays out the
-                // 5-tab `ComponentPreviewState`; until that lands we
-                // emit a tracing breadcrumb and re-fire
-                // `ComponentPreviewOpened` so WS-6 can pick the
-                // synthetic-tab-path off the same address shape used
-                // here.
-                let synthetic_path = library_path
-                    .join("tables")
-                    .join(format!("{table}.tsv#{row_id}"));
-                tracing::info!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    table = %table,
-                    row_id = %row_id,
-                    "OpenComponentRow — Component Preview tab construction lands in WS-6"
-                );
-                Task::done(Message::Library(LibraryMessage::ComponentPreviewOpened {
-                    path: synthetic_path,
-                    table,
-                    row_id,
-                }))
-            }
-            LibraryMessage::OpenPrimitiveEditor { path } => {
-                // WS-7 owns the standalone `.snxsym` / `.snxfpt`
-                // document-tab handler. Until that lands, log the
-                // request so the panel-side trace is visible end to
-                // end.
-                tracing::info!(
-                    target: "signex::library",
-                    primitive = %path.display(),
-                    "OpenPrimitiveEditor — standalone primitive tab lands in WS-7"
-                );
-                Task::none()
-            }
-            LibraryMessage::ComponentPreviewOpened {
-                path,
-                table,
-                row_id,
-            } => {
-                // Trace-only sink. WS-6 will replace the body with
-                // real tab construction; the variant exists in the
-                // Wave 2 contract so all four slices stitch together
-                // at merge time without further enum churn.
-                tracing::debug!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    table = %table,
-                    row_id = %row_id,
-                    "ComponentPreviewOpened — placeholder until WS-6"
-                );
-                Task::none()
-            }
-            LibraryMessage::NewComponentSetTable(table) => {
-                // WS-8 owns the New Component modal's table picker;
-                // the dispatcher shape is already wired so the four
-                // Wave 2 slices stitch at merge. v0.9 keeps this as
-                // a trace-only no-op until the modal grows the
-                // Table pick_list.
-                tracing::debug!(
-                    target: "signex::library",
-                    table = %table,
-                    "NewComponentSetTable — modal pre-select lands in WS-8"
-                );
-                Task::none()
+            // WS-7 (refactor-2): standalone primitive editor tabs
+            LibraryMessage::OpenPrimitiveEditor { path } => self.handle_open_primitive(path),
+            LibraryMessage::PrimitiveEditorEvent { path, msg } => {
+                self.handle_primitive_editor_event(path, msg)
             }
         }
     }
@@ -784,6 +717,51 @@ impl Signex {
                         "Submit-for-Review wires through to the new update_row path in WS-6".into(),
                     );
                 }
+                editor.review_in_flight = true;
+                editor.review_status = Some("Submitting…".to_string());
+
+                let library_root = editor.library_root.clone();
+                let component_id = editor.component_id;
+                let mut revision = editor.draft.clone();
+                revision.state = signex_library::LifecycleState::InReview;
+                revision.refresh_content_hash();
+                let message = if editor.review_notes_buf.trim().is_empty() {
+                    format!("submit for review: {}", editor.display_internal_pn)
+                } else {
+                    format!(
+                        "submit for review: {}\n\n{}",
+                        editor.display_internal_pn,
+                        editor.review_notes_buf.trim()
+                    )
+                };
+
+                let library_id = match self.library.library_at(&library_root) {
+                    Some(lib) => lib.library_id,
+                    None => {
+                        return Task::done(Message::Library(LibraryMessage::EditorEvent {
+                            library_path: address.library_path.clone(),
+                            component_id: address.component_id,
+                            msg: EditorMsg::SubmitForReviewResult(Err(
+                                "library no longer open".into()
+                            )),
+                        }));
+                    }
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => {
+                        return Task::done(Message::Library(LibraryMessage::EditorEvent {
+                            library_path: address.library_path.clone(),
+                            component_id: address.component_id,
+                            msg: EditorMsg::SubmitForReviewResult(
+                                Err("library not mounted".into()),
+                            ),
+                        }));
+                    }
+                };
+                let result = adapter
+                    .save_revision(component_id, revision, &message)
+                    .map_err(|e| e.to_string());
                 return Task::done(Message::Library(LibraryMessage::EditorEvent {
                     library_path: address.library_path.clone(),
                     component_id: address.component_id,
@@ -1079,6 +1057,449 @@ impl Signex {
             fp.step_attachment = Some(att);
             editor.dirty = true;
         }
+    }
+
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.
+    /// Reads the file from disk, builds the matching editor state,
+    /// and pushes a `TabKind::SymbolEditor(path)` /
+    /// `FootprintEditor(path)` tab into `DocumentState.tabs`.
+    ///
+    /// Activates an existing tab when the same path is already open
+    /// instead of duplicating; surfaces parse / IO failures via
+    /// `tracing::warn` (and silently bails — leaving the tab bar
+    /// untouched).
+    pub(crate) fn handle_open_primitive(&mut self, path: std::path::PathBuf) -> Task<Message> {
+        // Already open? Just activate the existing tab.
+        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
+            if idx != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = idx;
+                self.sync_active_tab();
+            }
+            return Task::none();
+        }
+
+        // Dispatch on extension. `.snxsym` → Symbol; `.snxfpt` →
+        // Footprint. Anything else is rejected with a tracing warn so
+        // a stray dispatch from the project tree doesn't push a
+        // bogus tab.
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+
+        match ext.as_str() {
+            "snxsym" => {
+                let bytes = match std::fs::read_to_string(&path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            error = %e,
+                            "open primitive: read .snxsym failed",
+                        );
+                        return Task::none();
+                    }
+                };
+                let symbol: signex_library::Symbol = match serde_json::from_str(&bytes) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            error = %e,
+                            "open primitive: parse .snxsym failed",
+                        );
+                        return Task::none();
+                    }
+                };
+
+                let title = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| symbol.name.clone());
+                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+
+                let state = crate::app::SymbolEditorState::new(path.clone(), symbol);
+                self.document_state
+                    .symbol_editors
+                    .insert(path.clone(), state);
+
+                self.park_active_schematic_session();
+                self.document_state.tabs.push(crate::app::TabInfo {
+                    title,
+                    path: path.clone(),
+                    cached_document: None,
+                    dirty: false,
+                    project_id,
+                    kind: crate::app::TabKind::SymbolEditor(path),
+                });
+                self.document_state.active_tab = self.document_state.tabs.len() - 1;
+                // Standalone primitive tabs don't drive `active_path`
+                // — clear so the canvas doesn't render a stale schematic.
+                self.document_state.active_path = None;
+                self.refresh_panel_ctx();
+                Task::none()
+            }
+            "snxfpt" => {
+                let bytes = match std::fs::read_to_string(&path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            error = %e,
+                            "open primitive: read .snxfpt failed",
+                        );
+                        return Task::none();
+                    }
+                };
+                let footprint: signex_library::Footprint = match serde_json::from_str(&bytes) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            error = %e,
+                            "open primitive: parse .snxfpt failed",
+                        );
+                        return Task::none();
+                    }
+                };
+
+                let title = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| footprint.name.clone());
+                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+
+                let state = crate::app::FootprintEditorState::new(path.clone(), footprint);
+                self.document_state
+                    .footprint_editors
+                    .insert(path.clone(), state);
+
+                self.park_active_schematic_session();
+                self.document_state.tabs.push(crate::app::TabInfo {
+                    title,
+                    path: path.clone(),
+                    cached_document: None,
+                    dirty: false,
+                    project_id,
+                    kind: crate::app::TabKind::FootprintEditor(path),
+                });
+                self.document_state.active_tab = self.document_state.tabs.len() - 1;
+                self.document_state.active_path = None;
+                self.refresh_panel_ctx();
+                Task::none()
+            }
+            other => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    ext = %other,
+                    "open primitive: unsupported extension",
+                );
+                Task::none()
+            }
+        }
+    }
+
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// Apply a primitive-editor inner message to the matching tab's
+    /// editor state. Path-keyed lookup distinguishes Symbol vs
+    /// Footprint; the dispatcher routes to the existing canvas-state
+    /// helpers so the behaviour matches the in-Component Editor
+    /// experience verbatim.
+    pub(crate) fn handle_primitive_editor_event(
+        &mut self,
+        path: std::path::PathBuf,
+        msg: PrimitiveEditorMsg,
+    ) -> Task<Message> {
+        // Save is a sibling of the canvas-mutation messages — route
+        // through the standalone save path which writes JSON back to
+        // disk and (when applicable) reloads in the LibrarySet.
+        if matches!(msg, PrimitiveEditorMsg::Save) {
+            self.save_primitive_tab_at(&path);
+            return Task::none();
+        }
+
+        // Symbol-only mutations.
+        if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+            apply_symbol_primitive_edit(editor, msg);
+            return Task::none();
+        }
+
+        // Footprint-only mutations.
+        if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+            apply_footprint_primitive_edit(editor, msg);
+            return Task::none();
+        }
+
+        tracing::warn!(
+            target: "signex::library",
+            path = %path.display(),
+            "primitive editor event: no matching tab state",
+        );
+        Task::none()
+    }
+
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// Write the primitive at `path` back to disk as JSON, mark the
+    /// tab clean, and (when the file lives under a `.snxlib/`) ask
+    /// the matching `LibrarySet` adapter to reload its cached copy
+    /// so any open Component Preview tabs (WS-6) see the new bytes.
+    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
+        // Symbol path.
+        if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
+            // Refresh the `updated` timestamp before serialising so
+            // downstream consumers can detect the rewrite.
+            editor.primitive.updated = chrono::Utc::now();
+            let json = match serde_json::to_string_pretty(&editor.primitive) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        error = %e,
+                        "save primitive: serialize symbol failed",
+                    );
+                    return;
+                }
+            };
+            if let Err(e) = std::fs::write(path, json) {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "save primitive: write .snxsym failed",
+                );
+                return;
+            }
+            editor.dirty = false;
+            // Clear the project-scoped dirty marker if any callers
+            // had set it.
+            self.document_state.dirty_paths.remove(path);
+            // Clear the matching tab's dirty flag too.
+            if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+                tab.dirty = false;
+            }
+            // Best-effort LibrarySet reload — only fires when the
+            // primitive lives under a `.snxlib/` we already have
+            // mounted. Failures are non-fatal.
+            self.reload_primitive_in_library_set(path);
+            return;
+        }
+
+        // Footprint path.
+        if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
+            // Sync the canvas-mirrored pad list back into the
+            // primitive before serialising — `state.pads` is
+            // authoritative on the editor side; without this, in-
+            // editor pad edits wouldn't persist.
+            crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
+                &editor.state,
+                &mut editor.primitive,
+            );
+            editor.primitive.updated = chrono::Utc::now();
+            let json = match serde_json::to_string_pretty(&editor.primitive) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        error = %e,
+                        "save primitive: serialize footprint failed",
+                    );
+                    return;
+                }
+            };
+            if let Err(e) = std::fs::write(path, json) {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "save primitive: write .snxfpt failed",
+                );
+                return;
+            }
+            editor.dirty = false;
+            self.document_state.dirty_paths.remove(path);
+            if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+                tab.dirty = false;
+            }
+            self.reload_primitive_in_library_set(path);
+        }
+    }
+
+    /// Walk the open libraries to find one whose root contains
+    /// `path` (e.g. `…/mylib.snxlib/symbols/foo.snxsym` lives under
+    /// `…/mylib.snxlib/`), and ask the matching adapter to reload
+    /// the primitive UUID encoded in the file. The adapter's
+    /// `reload_primitive` (where supported) repopulates its in-memory
+    /// cache so any Component Preview tabs that resolve through
+    /// `LibrarySet` see the new bytes on the next render.
+    ///
+    /// Best-effort — returns silently when the path isn't under a
+    /// mounted library or when the adapter has no reload hook.
+    fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
+        // Stubbed pending the corresponding `LibrarySet::reload_primitive`
+        // helper (called out in plan §12 Step 7.4 as a small change in
+        // `signex-library`). The standalone editor tab already holds
+        // the authoritative copy of the primitive in memory; on-disk
+        // round-trips happen here, and Component Preview tabs (WS-6)
+        // pull through `LibrarySet::resolve_*` on the next view, so
+        // the only hole this leaves is a Preview tab that's already
+        // resolved + cached its primitive in editor state. WS-6 owns
+        // that cache; we mark this as "no-op for now" so the wave
+        // doesn't add a dependency on a sibling slice.
+    }
+}
+
+/// Apply a primitive-editor event to a standalone Symbol editor
+/// state. Mirrors the symbol-tab arms of `apply_inline_edit` but
+/// against the path-keyed standalone state. Visibility is
+/// `pub(crate)` so unit tests in sibling modules can drive the editor
+/// through the same code path the dispatcher uses.
+pub(crate) fn apply_symbol_primitive_edit(
+    editor: &mut crate::app::SymbolEditorState,
+    msg: PrimitiveEditorMsg,
+) {
+    use crate::library::editor::symbol::canvas::SymbolTool;
+    use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+
+    match msg {
+        PrimitiveEditorMsg::SymbolSetTool(tool) => {
+            editor.tool = match tool {
+                SymbolToolMsg::Select => SymbolTool::Select,
+                SymbolToolMsg::AddPin => SymbolTool::AddPin,
+            };
+        }
+        PrimitiveEditorMsg::SymbolAddPin { x, y } => {
+            let idx = crate::library::editor::symbol::state::add_pin(&mut editor.primitive, x, y);
+            editor.selected = Some(SymbolSelection::Pin(idx));
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolSelect(sel) => {
+            editor.selected = Some(match sel {
+                SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
+                SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
+                SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
+            });
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolDeselect => {
+            editor.selected = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
+            crate::library::editor::symbol::state::move_selected(
+                &mut editor.primitive,
+                editor.selected,
+                x,
+                y,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolDeleteSelected => {
+            if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
+                &mut editor.primitive,
+                editor.selected,
+            ) {
+                editor.selected = new_sel;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
+            if let Some(pin) = editor.primitive.pins.get_mut(idx) {
+                pin.number = number;
+                editor.dirty = true;
+            }
+        }
+        PrimitiveEditorMsg::SymbolSetPinName { idx, name } => {
+            if let Some(pin) = editor.primitive.pins.get_mut(idx) {
+                pin.name = name;
+                editor.dirty = true;
+            }
+        }
+        // Footprint variants are no-ops on a Symbol editor — the
+        // dispatcher uses path-keyed lookup so a misrouted event
+        // can't actually reach this match arm in practice.
+        PrimitiveEditorMsg::FootprintAddPad { .. }
+        | PrimitiveEditorMsg::FootprintMovePad { .. }
+        | PrimitiveEditorMsg::FootprintCursorAt { .. }
+        | PrimitiveEditorMsg::FootprintSelectPad(_)
+        | PrimitiveEditorMsg::FootprintDeleteSelected
+        | PrimitiveEditorMsg::FootprintToggleLayer(_)
+        | PrimitiveEditorMsg::FootprintToggleAutoFit
+        | PrimitiveEditorMsg::Save => {}
+    }
+}
+
+/// Apply a primitive-editor event to a standalone Footprint editor
+/// state. Mirrors the footprint-tab arms of `apply_inline_edit` but
+/// against the path-keyed standalone state.
+pub(crate) fn apply_footprint_primitive_edit(
+    editor: &mut crate::app::FootprintEditorState,
+    msg: PrimitiveEditorMsg,
+) {
+    use crate::library::editor::footprint::layers::FpLayer;
+    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+
+    match msg {
+        PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm } => {
+            let _idx = editor.state.add_pad_at(x_mm, y_mm);
+            CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+            editor.state.move_pad(idx, x_mm, y_mm);
+            CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+            editor.state.cursor_mm = Some((x_mm, y_mm));
+        }
+        PrimitiveEditorMsg::FootprintSelectPad(sel) => {
+            editor.state.selected_pad = sel;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintDeleteSelected => {
+            if let Some(idx) = editor.state.selected_pad {
+                editor.state.delete_pad(idx);
+                CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+        }
+        PrimitiveEditorMsg::FootprintToggleLayer(name) => {
+            if let Some(layer) = FpLayer::from_standard_name(&name) {
+                editor.state.layer_visibility.toggle(layer);
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintToggleAutoFit => {
+            editor.state.toggle_auto_fit();
+            CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
+            editor.canvas_cache.clear();
+        }
+        // Symbol variants are no-ops on a Footprint editor.
+        PrimitiveEditorMsg::SymbolSetTool(_)
+        | PrimitiveEditorMsg::SymbolAddPin { .. }
+        | PrimitiveEditorMsg::SymbolSelect(_)
+        | PrimitiveEditorMsg::SymbolDeselect
+        | PrimitiveEditorMsg::SymbolMoveSelected { .. }
+        | PrimitiveEditorMsg::SymbolDeleteSelected
+        | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
+        | PrimitiveEditorMsg::SymbolSetPinName { .. }
+        | PrimitiveEditorMsg::Save => {}
     }
 }
 

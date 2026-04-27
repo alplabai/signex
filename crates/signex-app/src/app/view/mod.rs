@@ -243,8 +243,7 @@ impl Signex {
         // leaf icons share. Detect by icon + tree depth — the
         // Libraries group sits two levels below the project root
         // (path = `[project_idx, libraries_idx, library_idx]`).
-        let is_library_node =
-            matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
+        let is_library_node = matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
         let is_openable_leaf = !is_library_node
             && matches!(
                 node.icon,
@@ -3669,10 +3668,7 @@ impl Signex {
         // `WindowKind::ComponentEditor` branch in `view()` when the
         // user undocks the tab into its own OS window.
         if is_main
-            && let Some(active_tab) = self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(editor_id) = active_tab.kind.as_component_editor()
         {
             let tokens = &self.document_state.panel_ctx.tokens;
@@ -3697,6 +3693,29 @@ impl Signex {
                 .style(crate::styles::panel_region(tokens))
                 .into()
             };
+        }
+
+        // WS-7 (refactor-2): standalone primitive editor tabs.
+        // `.snxsym` / `.snxfpt` open as main-window document tabs
+        // alongside `.snxsch` / `.snxpcb`. Lookup is path-keyed via
+        // `DocumentState.symbol_editors` / `footprint_editors`.
+        if is_main
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+        {
+            if let Some(path) = active_tab.kind.as_symbol_editor()
+                && let Some(editor) = self.document_state.symbol_editors.get(path)
+            {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                return crate::library::editor::standalone::view_symbol(editor, tokens)
+                    .map(Message::Library);
+            }
+            if let Some(path) = active_tab.kind.as_footprint_editor()
+                && let Some(editor) = self.document_state.footprint_editors.get(path)
+            {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                return crate::library::editor::standalone::view_footprint(editor, tokens)
+                    .map(Message::Library);
+            }
         }
 
         let has_schematic = if is_main {
@@ -4485,12 +4504,9 @@ impl Signex {
         // Opened by File ▸ Library ▸ New Component… (and, post-WS-H,
         // from the project tree's library-node right-click menu).
         if let Some(nc) = self.library.new_component.as_ref() {
-            let card = crate::library::new_component::view(
-                &self.library,
-                nc,
-                &document.panel_ctx.tokens,
-            )
-            .map(Message::Library);
+            let card =
+                crate::library::new_component::view(&self.library, nc, &document.panel_ctx.tokens)
+                    .map(Message::Library);
             let backdrop = container(card)
                 .width(Length::Fill)
                 .height(Length::Fill)

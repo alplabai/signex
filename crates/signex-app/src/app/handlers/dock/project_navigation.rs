@@ -657,11 +657,13 @@ impl Signex {
             return Ok(());
         }
 
-        if filename.ends_with(".standard_sch") || filename.ends_with(".standard_pcb") {
-            anyhow::bail!(
-                "Signex Community no longer opens Standard files directly. \
-                 Convert with the signex-standard-import companion tool first."
-            );
+        // WS-7 (refactor-2): standalone primitive editor tabs.
+        // `.snxsym` / `.snxfpt` route through the library subsystem
+        // so the same `OpenPrimitiveEditor` path used by the Library
+        // panel right-click handles project-tree double-clicks too.
+        if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
+            let _ = self.handle_open_primitive(file_path);
+            return Ok(());
         }
 
         anyhow::bail!("unsupported project tree document: {filename}")
