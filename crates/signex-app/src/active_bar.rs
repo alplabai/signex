@@ -1758,16 +1758,6 @@ fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
         .into()
 }
 
-/// Dropdown item with optional inline SVG icon (Altium-style).
-fn dd_item(
-    label: &str,
-    action: ActiveBarAction,
-    text_c: Color,
-    hover_c: Color,
-) -> Element<'static, ActiveBarMsg> {
-    dd_item_icon(None, label, text_c, hover_c, action)
-}
-
 /// Dropdown item with a themed icon handle.
 fn dd_item_svg(
     icon: svg::Handle,

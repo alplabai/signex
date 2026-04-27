@@ -34,53 +34,6 @@ impl PinKind {
             _ => PinKind::Unknown,
         }
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            PinKind::Input => "Input",
-            PinKind::Output => "Output",
-            PinKind::Bidirectional => "Bidi",
-            PinKind::Power => "Power",
-            PinKind::Passive => "Passive",
-            PinKind::Unknown => "Unspec",
-        }
-    }
-
-    pub fn into_electrical(self) -> PinElectricalType {
-        match self {
-            PinKind::Input => PinElectricalType::Input,
-            PinKind::Output => PinElectricalType::Output,
-            PinKind::Bidirectional => PinElectricalType::Bidirectional,
-            PinKind::Power => PinElectricalType::Power,
-            PinKind::Passive => PinElectricalType::Passive,
-            PinKind::Unknown => PinElectricalType::Unspecified,
-        }
-    }
-
-    pub fn from_electrical(e: PinElectricalType) -> Self {
-        match e {
-            PinElectricalType::Input => PinKind::Input,
-            PinElectricalType::Output => PinKind::Output,
-            PinElectricalType::Bidirectional => PinKind::Bidirectional,
-            PinElectricalType::Power => PinKind::Power,
-            PinElectricalType::Passive => PinKind::Passive,
-            _ => PinKind::Unknown,
-        }
-    }
-}
-
-/// One on-canvas text field (Designator / Value). The Designator +
-/// Value lookup roots on the host `ComponentRow::internal_pn` /
-/// `primary_mpn`, not on the Symbol primitive itself. The struct
-/// (and the `Field` variant on [`SymbolSelection`]) keeps the
-/// canvas hit-test surface compatible while the on-canvas
-/// drag-edit pipeline gets rebuilt.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SymbolField {
-    pub key: FieldKey,
-    pub value: String,
-    pub x: f64,
-    pub y: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -89,14 +42,6 @@ pub enum FieldKey {
     Value,
 }
 
-impl FieldKey {
-    pub fn label(self) -> &'static str {
-        match self {
-            FieldKey::Reference => "Designator",
-            FieldKey::Value => "Value",
-        }
-    }
-}
 
 /// Selected element on the Symbol canvas — drives delete + drag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -182,31 +127,6 @@ pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
     None
 }
 
-/// Replace the symbol's pin layout with one synthesised from the
-/// AI-stub guess. Pins are laid out down the right-hand side of an
-/// implicit body rectangle. Mirrors the pre-refactor
-/// `SymbolDoc::apply_ai_pinout`.
-pub fn apply_ai_pinout(sym: &mut Symbol, pins: Vec<(String, String, PinKind)>) {
-    sym.pins.clear();
-    if pins.is_empty() {
-        return;
-    }
-    let pitch = 2.54_f64;
-    let total_h = pitch * (pins.len() as f64 - 1.0);
-    let top = total_h / 2.0;
-    let x = 5.08; // half-body width + 1 grid step
-    for (i, (number, name, kind)) in pins.into_iter().enumerate() {
-        let y = top - (i as f64 * pitch);
-        sym.pins.push(SymbolPin {
-            number,
-            name,
-            electrical: kind.into_electrical(),
-            position: [x, y],
-            orientation: PinOrientation::Right,
-            length: DEFAULT_PIN_LENGTH_MM,
-        });
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -246,16 +166,4 @@ mod tests {
         assert_eq!(sel, Some(SymbolSelection::Pin(0)));
     }
 
-    #[test]
-    fn apply_ai_pinout_seeds_pins() {
-        let mut s = Symbol::empty("test");
-        let guesses = vec![
-            ("1".into(), "VDD".into(), PinKind::Power),
-            ("2".into(), "GND".into(), PinKind::Power),
-        ];
-        apply_ai_pinout(&mut s, guesses);
-        assert_eq!(s.pins.len(), 2);
-        assert_eq!(s.pins[0].name, "VDD");
-        assert!(matches!(s.pins[0].electrical, PinElectricalType::Power));
-    }
 }
