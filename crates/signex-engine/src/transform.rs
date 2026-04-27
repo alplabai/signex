@@ -325,6 +325,39 @@ impl Engine {
                     })
                     .unwrap_or(false)
             }
+            SelectedKind::SymbolRefField => self
+                .document
+                .symbols
+                .iter_mut()
+                .find(|symbol| symbol.uuid == item.uuid)
+                .map(|symbol| {
+                    if let Some(ref mut ref_text) = symbol.ref_text {
+                        ref_text.rotation =
+                            (ref_text.rotation + angle_degrees).rem_euclid(360.0);
+                        // Manual field rotation overrides KiCad's autoplace.
+                        symbol.fields_autoplaced = false;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(false),
+            SelectedKind::SymbolValField => self
+                .document
+                .symbols
+                .iter_mut()
+                .find(|symbol| symbol.uuid == item.uuid)
+                .map(|symbol| {
+                    if let Some(ref mut val_text) = symbol.val_text {
+                        val_text.rotation =
+                            (val_text.rotation + angle_degrees).rem_euclid(360.0);
+                        symbol.fields_autoplaced = false;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(false),
             _ => false,
         }
     }
