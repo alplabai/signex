@@ -29,8 +29,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryError,
-    LibrarySet, LocalGitAdapter, RowId, SimModel, Symbol, TemplateRegistry, UseSite,
+    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
+    LibraryError, LibrarySet, LocalGitAdapter, RowId, SimModel, Symbol, TemplateRegistry, UseSite,
     WhereUsedIndex,
 };
 use uuid::Uuid;
@@ -148,6 +148,12 @@ impl LibraryState {
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
     /// `library_id` on `set` and registering the display entry in
     /// `open_libraries`. Idempotent.
+    ///
+    /// WS-5 (DBLib): also primes the per-library `tables` cache by
+    /// running `list_tables` + `read_table` for every table the
+    /// adapter exposes. Read errors warn through `tracing` and the
+    /// affected entries are left empty — one bad table doesn't sink
+    /// the open flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
@@ -160,12 +166,24 @@ impl LibraryState {
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
         self.set.mount(Box::new(adapter));
-        self.open_libraries.push(OpenLibrary {
+        let mut entry = OpenLibrary {
             root,
             display_name,
             library_id,
+            tables: HashMap::new(),
             cached_components: Vec::new(),
-        });
+        };
+        if let Some(adapter) = self.set.get(library_id) {
+            if let Err(e) = entry.reload_tables(adapter) {
+                tracing::warn!(
+                    target: "signex::library",
+                    library_id = %library_id,
+                    error = %e,
+                    "open_library: reload_tables failed; library opens with empty cache"
+                );
+            }
+        }
+        self.open_libraries.push(entry);
         self.expanded.push(true);
         Ok(())
     }
@@ -185,30 +203,58 @@ impl LibraryState {
         }
     }
 
-    /// Refresh the cached component list for a library — walks every
-    /// row in every table via `LibraryAdapter::iter_rows` and projects
-    /// each into a [`ComponentSummary`] for the panel grid.
+    /// Refresh the cached table contents for a library — re-reads every
+    /// TSV via the mounted adapter's `list_tables` + `read_table`.
+    ///
+    /// WS-5 (DBLib): replaces the per-revision `search` call from
+    /// v0.9-original. Returns `LibraryError::NotFound` when the
+    /// library at `root` isn't mounted, otherwise the underlying
+    /// adapter error. The cached `Vec<ComponentSummary>` is rebuilt
+    /// alongside `tables` so the picker (legacy summary tier) and the
+    /// panel grid (row tier) stay coherent.
     pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
         let library_id = self
             .library_at(root)
             .map(|lib| lib.library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let rows = self
+        // Snapshot the table data through the adapter, then move it
+        // onto the OpenLibrary entry. Two passes keep the borrow
+        // checker happy — `set.get` and `library_at_mut` both
+        // straddle `&self`/`&mut self`.
+        let adapter = self
             .set
             .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?
-            .iter_rows()?;
-        let summaries: Vec<ComponentSummary> = rows
-            .into_iter()
-            .map(|(_table, row)| ComponentSummary {
-                row_id: row.row_id,
-                internal_pn: row.internal_pn,
-                mpn: row.primary_mpn.mpn,
-                state: row.state,
-                description: String::new(),
-            })
-            .collect();
+            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
+        let names = adapter.list_tables()?;
+        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
+        let mut summaries: Vec<ComponentSummary> = Vec::new();
+        for name in names {
+            match adapter.read_table(&name) {
+                Ok(rows) => {
+                    for row in &rows {
+                        summaries.push(ComponentSummary {
+                            row_id: row.row_id,
+                            internal_pn: row.internal_pn.clone(),
+                            mpn: row.primary_mpn.mpn.clone(),
+                            state: row.state,
+                            description: String::new(),
+                        });
+                    }
+                    tables.insert(name, rows);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        table = %name,
+                        error = %e,
+                        "refresh_components: read_table failed; entry left empty"
+                    );
+                    tables.insert(name, Vec::new());
+                }
+            }
+        }
         if let Some(lib) = self.library_at_mut(root) {
+            lib.tables = tables;
             lib.cached_components = summaries;
         }
         Ok(())
@@ -228,14 +274,17 @@ impl LibraryState {
 
     /// Replace the Where-Used entries for one `(project, sheet)` with
     /// `refs` — `(row_id, instance_id)` tuples (DBLib model).
+    ///
+    /// WS-5 (DBLib): `WhereUsedIndex::ingest_sheet` keys by `RowId`
+    /// directly now that revisions are gone — the per-instance
+    /// version pin from v0.9-original folds away.
     #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
-        // The current `WhereUsedIndex::ingest_sheet` shape is owned by
-        // signex-library and re-built when WS-9 ships its row-shaped
-        // ingest helper. v0.9-refactor-2 leaves this method as a stub
-        // so callers compile; the panel/where-used wiring is rebuilt
-        // outside this slice.
-        let _ = (project, sheet, refs);
+        let trimmed: Vec<(RowId, String)> = refs
+            .iter()
+            .map(|(uuid, inst)| (RowId::from_uuid(*uuid), inst.clone()))
+            .collect();
+        self.where_used.ingest_sheet(project, sheet, &trimmed);
     }
 
     /// Look up the use-sites for a row.
@@ -280,13 +329,75 @@ impl LibraryState {
 /// One open `*.snxlib/` directory — display cache only. The owning
 /// `LibraryAdapter` lives on [`LibraryState::set`] keyed by
 /// `library_id`.
+///
+/// WS-5 (DBLib): in the v0.9-refactor-2 model components are rows in
+/// per-category TSV tables, not standalone files. The display cache
+/// is keyed by table name; each entry holds the full row payload so
+/// the panel can render a grid view per category without re-reading
+/// disk between view ticks. Hot tables can be re-read on edit; v0.9
+/// keeps it simple — every row write triggers a full table reload.
 pub struct OpenLibrary {
     pub root: PathBuf,
     pub display_name: String,
     pub library_id: Uuid,
-    /// Last-loaded summary list. Refreshed on demand; doubles as the
-    /// data source for the panel's component list.
+    /// Cached table contents — keyed by table filename stem. Populated
+    /// on `open_library` by scanning every TSV via `list_tables` +
+    /// `read_table`. The Library panel renders a category node per
+    /// entry and an inline row grid per category.
+    pub tables: HashMap<String, Vec<ComponentRow>>,
+    /// Last-loaded summary list. Compatibility shim used by the
+    /// `picker.rs` modal until WS-6 retargets it at the row tier;
+    /// kept in lock-step with `tables` by `reload_tables`.
     pub cached_components: Vec<ComponentSummary>,
+}
+
+impl OpenLibrary {
+    /// Re-read every TSV via the supplied adapter. Replaces both
+    /// `tables` and `cached_components` atomically — readers see one
+    /// consistent snapshot regardless of which view they query.
+    ///
+    /// `LibraryError::Backend` from the adapter (e.g. an adapter that
+    /// hasn't implemented `list_tables` yet) is propagated to the
+    /// caller; partial table loads on per-table read errors are
+    /// tolerated and merely warn through `tracing`.
+    pub fn reload_tables(&mut self, adapter: &dyn LibraryAdapter) -> Result<(), LibraryError> {
+        let names = adapter.list_tables()?;
+        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
+        let mut summaries: Vec<ComponentSummary> = Vec::new();
+        for name in names {
+            match adapter.read_table(&name) {
+                Ok(rows) => {
+                    for row in &rows {
+                        summaries.push(ComponentSummary {
+                            row_id: row.row_id,
+                            internal_pn: row.internal_pn.clone(),
+                            mpn: row.primary_mpn.mpn.clone(),
+                            state: row.state,
+                            description: String::new(),
+                        });
+                    }
+                    tables.insert(name, rows);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        table = %name,
+                        error = %e,
+                        "read_table failed; entry left empty"
+                    );
+                    tables.insert(name, Vec::new());
+                }
+            }
+        }
+        self.tables = tables;
+        self.cached_components = summaries;
+        Ok(())
+    }
+
+    /// Total number of rows across every cached table.
+    pub fn total_rows(&self) -> usize {
+        self.tables.values().map(|v| v.len()).sum()
+    }
 }
 
 impl std::fmt::Debug for OpenLibrary {
@@ -295,7 +406,8 @@ impl std::fmt::Debug for OpenLibrary {
             .field("root", &self.root)
             .field("display_name", &self.display_name)
             .field("library_id", &self.library_id)
-            .field("cached_components_len", &self.cached_components.len())
+            .field("tables_len", &self.tables.len())
+            .field("total_rows", &self.total_rows())
             .finish()
     }
 }
@@ -341,7 +453,7 @@ pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
 ];
 
 /// "New Component" modal state — collected before the dispatcher
-/// creates a draft revision and opens the Component Editor.
+/// creates a row and opens the Component Preview tab.
 #[derive(Debug, Clone)]
 pub struct NewComponentState {
     /// Live edit buffer for the Internal PN field.
@@ -353,6 +465,11 @@ pub struct NewComponentState {
     /// Tree-style category path ("Passives/Resistors/0805"). Free-form
     /// — validation happens at submit time.
     pub category: String,
+    /// WS-8 (DBLib): target table the row will be written to. `None`
+    /// while the modal first opens; the dispatcher requires it before
+    /// `NewComponentSubmit` can run because rows live in TSV tables
+    /// addressed by name.
+    pub table: Option<String>,
     /// Latest validation error.
     pub error: Option<String>,
 }
@@ -364,6 +481,7 @@ impl Default for NewComponentState {
             library_idx: None,
             class: ComponentClass::generic(),
             category: String::new(),
+            table: None,
             error: None,
         }
     }
@@ -610,5 +728,54 @@ mod tests {
         // shape here. (Full end-to-end test lives in `commands.rs`.)
         let _ = set.unmount(Uuid::nil());
         assert!(set.is_empty());
+    }
+
+    /// WS-5 (DBLib): `OpenLibrary::total_rows` sums every cached
+    /// table's length — feeds the panel's library-node `(N)` count.
+    #[test]
+    fn open_library_total_rows_sums_tables() {
+        let mut lib = OpenLibrary {
+            root: PathBuf::from("/tmp/x.snxlib"),
+            display_name: "X".into(),
+            library_id: Uuid::nil(),
+            tables: HashMap::new(),
+            cached_components: Vec::new(),
+        };
+        assert_eq!(lib.total_rows(), 0);
+        lib.tables.insert("resistors".into(), Vec::new());
+        assert_eq!(lib.total_rows(), 0);
+        lib.tables
+            .insert("capacitors".into(), vec![fixture_row("C1"), fixture_row("C2")]);
+        lib.tables.insert("resistors".into(), vec![fixture_row("R1")]);
+        assert_eq!(lib.total_rows(), 3);
+    }
+
+    /// Helper — minimal `ComponentRow` for the panel-side cache tests.
+    /// The full row schema lives in `signex_library`'s tests.
+    fn fixture_row(pn: &str) -> ComponentRow {
+        use signex_library::{
+            DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap, PinPadOverride,
+            PlmReserved,
+        };
+        let _ = (PinPadOverride::new("1", "1"),); // module touch
+        ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new(pn),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Mfr", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+        }
     }
 }

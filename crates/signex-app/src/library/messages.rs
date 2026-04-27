@@ -112,6 +112,15 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// Internal trace-only signal: a Component Preview tab was opened
+    /// for the given address. WS-5 fires this from
+    /// `OpenComponentRow` so WS-6 has a single message to subscribe
+    /// to once the row-shaped editor lands.
+    ComponentPreviewOpened {
+        path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
 }
 
 /// User choice from the close-library confirmation modal.

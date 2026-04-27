@@ -97,13 +97,6 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::NewComponentSetTable(s) => {
-                if let Some(nc) = self.library.new_component.as_mut() {
-                    nc.category = s;
-                    nc.error = None;
-                }
-                Task::none()
-            }
             LibraryMessage::NewComponentSubmit => {
                 // WS-8 will replace `commands::create_component` with the
                 // row-based `create_component_row`. Until that lands, the
@@ -115,7 +108,7 @@ impl Signex {
                 self.library.new_component = None;
                 Task::none()
             }
-
+            // ────────────────────────────────────────────────────────
             LibraryMessage::ToggleLibraryTreeNode(idx) => {
                 if let Some(slot) = self.library.expanded.get_mut(idx) {
                     *slot = !*slot;
@@ -179,6 +172,38 @@ impl Signex {
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
+            LibraryMessage::ComponentPreviewOpened {
+                path,
+                table,
+                row_id,
+            } => {
+                // Trace-only sink. WS-5 fires this from
+                // `OpenComponentRow` so WS-6 has a single message to
+                // subscribe to once the row-shaped editor lands. WS-6
+                // is now the canonical owner of the actual Component
+                // Preview tab construction (see
+                // `handle_open_component_row`); this message stays
+                // defined as a trace breadcrumb for the panel-side
+                // open flow.
+                tracing::debug!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    table = %table,
+                    row_id = %row_id,
+                    "ComponentPreviewOpened — Component Preview tab opened"
+                );
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetTable(table) => {
+                // WS-8: pin the row's target table on the modal state.
+                // The actual create flow runs through `NewComponentSubmit`
+                // → `commands::create_component_row`.
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    nc.table = Some(table);
+                    nc.error = None;
+                }
+                Task::none()
+            }
         }
     }
 
@@ -191,6 +216,11 @@ impl Signex {
         &mut self,
         project_root: std::path::PathBuf,
     ) -> Task<Message> {
+        // Locate the LoadedProject so we can mutate its `libraries`
+        // list. We match on `project_root` against the project file
+        // path and against its parent dir — callers in WS-H emit the
+        // file path, but a future menu wired to a tree-row right-
+        // click could reasonably emit the directory.
         let Some(loaded) =
             self.document_state.projects.iter_mut().find(|p| {
                 p.path == project_root || p.path.parent() == Some(project_root.as_path())
@@ -273,7 +303,8 @@ impl Signex {
         }
 
         // Pre-load the row from the adapter. WS-2's `read_row` is the
-        // canonical lookup; if it fails we surface and bail.
+        // canonical lookup; if it fails we surface and bail without
+        // leaving an empty tab behind.
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => {
@@ -336,6 +367,9 @@ impl Signex {
                 picker.filter = s;
             }
             PickerMsg::SelectComponent(summary) => {
+                // WS-5 (DBLib): `ComponentSummary` lost its `uuid`
+                // alias when WS-1 renamed `ComponentId` → `RowId`.
+                // Match against the row tier's `row_id` directly.
                 let path = self
                     .library
                     .open_libraries
