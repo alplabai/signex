@@ -115,6 +115,11 @@ impl Signex {
                 });
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetPinPartNumber { pin_idx, value } => {
+                let value = *value;
+                self.sym_editor_mutate_pin(*pin_idx, move |pin| pin.part_number = value);
+                true
+            }
             _ => false,
         }
     }

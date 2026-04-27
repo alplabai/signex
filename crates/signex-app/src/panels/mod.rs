@@ -426,6 +426,9 @@ pub struct SymbolPinDetails {
     pub outside_symbol: signex_library::PinSymbolKind,
     pub hidden: bool,
     pub locked: bool,
+    /// Multi-part scoping: 1 = single-part default, 0 = "Part Zero"
+    /// (pin appears on every part), 2..N = scoped to that part.
+    pub part_number: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -765,6 +768,10 @@ pub enum PanelMsg {
         slot: u8,
         value: signex_library::PinSymbolKind,
     },
+    /// Properties panel — set a pin's multi-part scope (Altium
+    /// "Part Number" spinner). `0` is the special Part Zero (pin
+    /// appears on every part); `1..=N` scopes to a specific part.
+    SymEditorSetPinPartNumber { pin_idx: usize, value: u8 },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -2328,6 +2335,37 @@ fn view_symbol_editor_properties<'a>(
             .width(Length::Fill)
             .into();
             col = col.push(length_row);
+
+            // ── Part Number (multi-part components) ──
+            let part_now = pin.details.part_number;
+            let part_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Part Number")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input(
+                        "1, or 0 for shared",
+                        &part_now.to_string(),
+                    )
+                    .padding([2, 4])
+                    .size(11)
+                    .on_input(move |s| {
+                        let parsed = s.trim().parse::<u8>().unwrap_or(part_now);
+                        PanelMsg::SymEditorSetPinPartNumber {
+                            pin_idx,
+                            value: parsed,
+                        }
+                    })
+                    .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(part_row);
 
             // ── Description (text) ──
             let description_row: Element<'a, PanelMsg> = container(
