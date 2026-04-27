@@ -19,10 +19,7 @@ use iced::Task;
 
 use super::super::*;
 use crate::library::commands;
-use crate::library::messages::{
-    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, SettingsMsg, SymbolSelectionMsg,
-    SymbolToolMsg,
-};
+use crate::library::messages::{EditorMsg, LibraryMessage, PickerMsg, SettingsMsg};
 use crate::library::state::{
     ComponentEditorState, EditorAddress, EditorTab, NewComponentState, PickerState,
 };
@@ -219,23 +216,6 @@ impl Signex {
                 library_path,
                 component_id,
             } => self.handle_open_editor(library_path, component_id),
-            // WS-8: DBLib-row preview tab — placeholder until WS-6's
-            // editor host wires the actual tab. Surface via tracing so
-            // the New Component flow's success path is observable.
-            LibraryMessage::OpenComponentRow {
-                library_path,
-                table,
-                row_id,
-            } => {
-                tracing::info!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    table = %table,
-                    row_id = %row_id,
-                    "open component row — Component Preview tab ships in WS-6"
-                );
-                Task::none()
-            }
             LibraryMessage::EditorEvent {
                 library_path,
                 component_id,
@@ -395,17 +375,14 @@ impl Signex {
 
         // Pre-load the editor state. If the load fails, surface the
         // error and bail without leaving an empty tab behind.
-        let editor = match commands::load_component_for_editor(
-            &mut self.library,
-            &library_path,
-            component_id,
-        ) {
-            Ok(e) => e,
-            Err(e) => {
-                tracing::warn!(target: "signex::library", error = %e, "open editor pre-load failed");
-                return Task::none();
-            }
-        };
+        let editor =
+            match commands::load_component_for_editor(&mut self.library, &library_path, component_id) {
+                Ok(e) => e,
+                Err(e) => {
+                    tracing::warn!(target: "signex::library", error = %e, "open editor pre-load failed");
+                    return Task::none();
+                }
+            };
 
         let title = editor.display_internal_pn.clone();
         let project_id = self
@@ -630,7 +607,11 @@ impl Signex {
     }
 
     // WS-I: tab-not-window
-    fn handle_editor_event(&mut self, address: EditorAddress, msg: EditorMsg) -> Task<Message> {
+    fn handle_editor_event(
+        &mut self,
+        address: EditorAddress,
+        msg: EditorMsg,
+    ) -> Task<Message> {
         match msg {
             EditorMsg::CloseEditor => {
                 // Close the editor tab carrying this address. The
@@ -742,9 +723,9 @@ impl Signex {
                         return Task::done(Message::Library(LibraryMessage::EditorEvent {
                             library_path: address.library_path.clone(),
                             component_id: address.component_id,
-                            msg: EditorMsg::SubmitForReviewResult(
-                                Err("library not mounted".into()),
-                            ),
+                            msg: EditorMsg::SubmitForReviewResult(Err(
+                                "library not mounted".into()
+                            )),
                         }));
                     }
                 };

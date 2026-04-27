@@ -199,7 +199,10 @@ pub fn load_component_for_editor(
 /// Save the editor's draft revision locally.
 // WS-I: tab-not-window — editors are addressed by
 // `EditorAddress(library_path, component_id)` instead of by window id.
-pub fn save_draft(state: &mut LibraryState, address: &EditorAddress) -> Result<(), LibraryError> {
+pub fn save_draft(
+    state: &mut LibraryState,
+    address: &EditorAddress,
+) -> Result<(), LibraryError> {
     let editor = state
         .editors
         .get_mut(address)

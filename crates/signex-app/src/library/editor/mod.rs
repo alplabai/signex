@@ -154,13 +154,35 @@ fn view_active_tab<'a>(
 ) -> Element<'a, LibraryMessage> {
     let inner: Element<'_, LibraryMessage> = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, address),
-        EditorTab::Symbol => symbol::view(editor, tokens, address.clone()),
-        EditorTab::Footprint => footprint::view(editor, tokens, address.clone()),
+        EditorTab::Symbol => placeholder_card(
+            "Symbol",
+            &[
+                "WS-F (in flight) rewires the Symbol tab against the new `Symbol` primitive.",
+                "Pins, graphics, schematic params; loaded by `LibrarySet::resolve_symbol`.",
+            ],
+            tokens,
+        ),
+        EditorTab::Footprint => placeholder_card(
+            "Footprint",
+            &[
+                "WS-F adds the new Footprint tab — pads, courtyard, body 3D editor + preview.",
+                "Loaded by `LibrarySet::resolve_footprint`.",
+            ],
+            tokens,
+        ),
         EditorTab::PinMap => pin_map::view(
             editor,
             editor.symbol.as_ref().zip(editor.footprint.as_ref()),
             tokens,
             address,
+        ),
+        EditorTab::Params => placeholder_card(
+            "Parameters",
+            &[
+                "Parametric values stored on `Revision::parameters`; schema-validated by class template.",
+                "Editor wires up after WS-F so the params editor can use the resolved class template.",
+            ],
+            tokens,
         ),
         // WS-J: Params tab
         EditorTab::Params => params::view(editor, library_state, tokens, address.clone()),
@@ -172,10 +194,14 @@ fn view_active_tab<'a>(
             ],
             tokens,
         ),
-        // WS-L: Sim tab — replaces the placeholder with the real
-        // SPICE deck editor + pin/node mapping table backed by the
-        // typed `SimModel` primitive bound through `Revision::sim_ref`.
-        EditorTab::Sim => sim::view(editor, tokens, address.clone()),
+        EditorTab::Sim => placeholder_card(
+            "Sim",
+            &[
+                "Sim tab rewires against the new `SimModel` primitive (post-WS-F).",
+                "Per-pin SPICE node mapping moves onto `SimModel::default_node_map`.",
+            ],
+            tokens,
+        ),
         EditorTab::History => history::view(editor, tokens, address),
         EditorTab::WhereUsed => where_used::view(editor, library_state, tokens),
     };

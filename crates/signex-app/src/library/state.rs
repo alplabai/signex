@@ -73,6 +73,42 @@ impl EditorAddress {
     }
 }
 
+/// WS-E shim for the cross-library resolver.
+///
+/// WS-C is adding the canonical `LibrarySet` inside
+/// `signex_library::adapters::library_set` — when that lands the field
+/// type on [`LibraryState`] flips to `signex_library::LibrarySet` and this
+/// shim is deleted.
+///
+/// Ownership rule: an open `*.snxlib/` is mounted **here** by
+/// `library_id`. `OpenLibrary` records the root path so the panel can
+/// render it; the underlying adapter is reached via `set.adapter(...)`.
+pub struct LibrarySet {
+    libs: HashMap<Uuid, Box<dyn LibraryAdapter>>,
+}
+
+impl EditorAddress {
+    pub fn new(library_path: PathBuf, component_id: ComponentId) -> Self {
+        Self {
+            library_path,
+            component_id,
+        }
+    }
+
+    /// Synthetic on-disk identity for a Component Editor tab — used by
+    /// `TabInfo.path` so the tab bar, undock detector, and dirty-paths
+    /// machinery have a single unique `PathBuf` per editor without
+    /// needing to teach them about a second identity scheme. Mirrors
+    /// the `<library>/components/<uuid>.snxprt` storage layout from
+    /// the v0.9 plan §3 so the synthetic path lines up with where the
+    /// component actually persists on disk.
+    pub fn synthetic_tab_path(&self) -> PathBuf {
+        self.library_path
+            .join("components")
+            .join(format!("{}.snxprt", self.component_id))
+    }
+}
+
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
@@ -257,10 +293,8 @@ impl LibraryState {
         library_root: &Path,
         component_id: ComponentId,
     ) -> Option<&ComponentEditorState> {
-        self.editors.get(&EditorAddress::new(
-            library_root.to_path_buf(),
-            component_id,
-        ))
+        self.editors
+            .get(&EditorAddress::new(library_root.to_path_buf(), component_id))
     }
 }
 

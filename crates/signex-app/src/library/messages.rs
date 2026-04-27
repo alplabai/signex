@@ -88,16 +88,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         component_id: ComponentId,
     },
-    /// WS-8 (DBLib model): open a Component Preview tab for a row in
-    /// the named table. Fired by the New Component modal on success
-    /// and consumed by WS-6's editor host (Wave 3 follow-up). The
-    /// dispatcher in this slice surfaces the message via `tracing`
-    /// until WS-6 lands the tab handler.
-    OpenComponentRow {
-        library_path: PathBuf,
-        table: String,
-        row_id: RowId,
-    },
     // WS-I: tab-not-window
     /// Inner editor message — keyed by `(library_path, component_id)`
     /// so the same EditorEvent dispatches to the editor regardless of
