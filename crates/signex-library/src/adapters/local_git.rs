@@ -1,42 +1,42 @@
 //! Local + git storage adapter — `*.snxlib/` directory backed by libgit2.
 //!
-//! Layout per `LIBRARY_PLAN.md` §6:
+//! Per `v0.9-refactor-2-plan.md` §7, this WS-1 step keeps the primitive
+//! CRUD wiring intact (it remains correct under the row model) but the
+//! component / revision pieces are *not yet* re-implemented for the row
+//! model — that's WS-2's job. Trait methods that used to live on this
+//! adapter (`get_component`, `get_revision`, `save_revision`, etc.) now
+//! fall through to the trait's default `Backend("not impl")` errors so
+//! callers see the gap explicitly.
+//!
+//! Layout per the refactor (§3):
 //!
 //! ```text
 //! MyComponents.snxlib/
-//! ├── manifest.toml
-//! ├── parts/
-//! │   ├── <uuid>-<version>.snxpart       (one file per immutable revision)
-//! │   ├── <uuid>.<field_set>.lock        (advisory locks)
-//! │   └── .draft/<uuid>.snxpart          (mutable drafts)
+//! ├── library.toml
+//! ├── tables/                       (WS-2 — `.tsv` files, one per category)
+//! ├── symbols/<uuid>.snxsym
+//! ├── footprints/<uuid>.snxfpt
+//! ├── sims/<uuid>.snxsim
 //! └── .git/
 //! ```
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::adapter::{
-    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery, PrimitiveSummary,
-};
-use crate::component::{Component, Revision};
-use crate::identity::{ComponentClass, ComponentId, InternalPn, Version};
+use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::manifest::Manifest;
 use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
-use crate::snxpart::{SCHEMA_VERSION, SnxPartFile, read_snxpart, snxpart_filename, write_snxpart};
 
-const PARTS_DIR: &str = "parts";
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
-const MANIFEST_FILE: &str = "manifest.toml";
-const REVIEW_BRANCH_PREFIX: &str = "review/";
+const MANIFEST_FILE: &str = "library.toml";
 
 /// Adapter over a `*.snxlib/` directory + git repo.
 #[derive(Debug)]
@@ -48,7 +48,7 @@ pub struct LocalGitAdapter {
 impl LocalGitAdapter {
     /// Initialise a fresh `.snxlib/` at `root` and run `git init` on it.
     ///
-    /// Creates the directory layout, writes `manifest.toml`, and stages the
+    /// Creates the directory layout, writes `library.toml`, and stages the
     /// initial commit. Fails with `Conflict` if `root` already contains a
     /// manifest.
     pub fn init(root: impl AsRef<Path>, manifest: Manifest) -> Result<Self, LibraryError> {
@@ -61,7 +61,7 @@ impl LocalGitAdapter {
             )));
         }
 
-        fs::create_dir_all(root.join(PARTS_DIR))?;
+        fs::create_dir_all(&root)?;
         let manifest_text = manifest
             .write()
             .map_err(|e| LibraryError::Backend(format!("manifest serialise: {e}")))?;
@@ -121,8 +121,9 @@ impl LocalGitAdapter {
         Ok(Self { root, manifest })
     }
 
-    fn parts_dir(&self) -> PathBuf {
-        self.root.join(PARTS_DIR)
+    /// Borrow the on-disk root directory.
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
@@ -132,42 +133,6 @@ impl LocalGitAdapter {
     fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
         self.primitive_dir(kind)
             .join(format!("{uuid}.{}", primitive_ext(kind)))
-    }
-
-    fn lock_path(&self, id: ComponentId, field_set: FieldSet) -> PathBuf {
-        self.parts_dir()
-            .join(format!("{id}.{}.lock", field_set_slug(field_set)))
-    }
-
-    /// Path to the on-disk `<uuid>.snxprt` file for `id`. WS-C will use this
-    /// from the `library_id` + primitive CRUD wiring; the search path uses
-    /// `load_components` rather than reading by id.
-    #[allow(dead_code)]
-    fn component_file_path(&self, id: ComponentId) -> PathBuf {
-        self.parts_dir().join(snxpart_filename(id))
-    }
-
-    /// Compute the auto-bump heuristic per `v0.9-library-refactor-plan.md`
-    /// §7 step B5.
-    ///
-    /// Returns the new version that `revision` should take, given the
-    /// previous head revision on disk (if any). Any change in the bound
-    /// primitive refs (symbol/footprint/sim) or pin-map overrides counts as a
-    /// major bump; pure metadata swaps (MPN, parameters, supply, datasheet)
-    /// stay minor. First revision starts at `1.0`.
-    pub fn auto_bump(prev: Option<&Revision>, next: &Revision) -> Version {
-        let Some(prev) = prev else {
-            return Version::new(1, 0);
-        };
-        let major = prev.symbol_ref != next.symbol_ref
-            || prev.footprint_ref != next.footprint_ref
-            || prev.sim_ref != next.sim_ref
-            || prev.pin_map_overrides != next.pin_map_overrides;
-        if major {
-            prev.version.bump_major()
-        } else {
-            prev.version.bump_minor()
-        }
     }
 
     /// Read a primitive JSON file at `<root>/<subdir>/<uuid>.<ext>`.
@@ -190,9 +155,7 @@ impl LocalGitAdapter {
     }
 
     /// Persist a primitive JSON file under `<root>/<subdir>/<uuid>.<ext>`,
-    /// stage + commit it via libgit2 with the supplied message. Mirrors the
-    /// per-kind save path that drives the
-    /// `save_symbol/save_footprint/save_sim` arms of the trait.
+    /// stage + commit it via libgit2 with the supplied message.
     fn write_primitive<T: Serialize>(
         &self,
         kind: PrimitiveKind,
@@ -208,9 +171,6 @@ impl LocalGitAdapter {
             .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
         fs::write(&abs_path, bytes)?;
 
-        // Stage + commit. We don't switch branches here — primitives live on
-        // trunk; the review-required workflow only redirects component saves
-        // (per plan §6 step C2).
         let repo = git2::Repository::open(&self.root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
@@ -246,8 +206,7 @@ impl LocalGitAdapter {
     }
 
     /// Walk a primitive directory and produce one [`PrimitiveSummary`] per
-    /// `<uuid>.<ext>` file. `name` is read from the file's payload (a
-    /// trait-bound is added at the call site so we can reach the field).
+    /// `<uuid>.<ext>` file.
     fn list_primitive_summaries<T>(
         &self,
         kind: PrimitiveKind,
@@ -295,41 +254,6 @@ impl LocalGitAdapter {
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
     }
-
-    /// Walk `parts/` and load every `.snxprt` file. One file per component
-    /// since the v0.9 refactor — revisions live inside the file.
-    fn load_components(&self) -> Result<BTreeMap<ComponentId, Component>, LibraryError> {
-        let mut by_uuid: BTreeMap<ComponentId, Component> = BTreeMap::new();
-        let parts = self.parts_dir();
-        if !parts.exists() {
-            return Ok(by_uuid);
-        }
-        for entry in walkdir::WalkDir::new(&parts)
-            .min_depth(1)
-            .max_depth(1)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let name = match path.file_name().and_then(|s| s.to_str()) {
-                Some(s) => s,
-                None => continue,
-            };
-            if !name.ends_with(".snxprt") || name.contains(".lock") {
-                continue;
-            }
-            let file = read_snxpart(path)
-                .map_err(|e| LibraryError::Backend(format!("read {name}: {e}")))?;
-            by_uuid.insert(file.component.uuid, file.component);
-        }
-        for comp in by_uuid.values_mut() {
-            comp.revisions.sort_by_key(|r| r.version);
-        }
-        Ok(by_uuid)
-    }
 }
 
 impl LibraryAdapter for LocalGitAdapter {
@@ -337,197 +261,9 @@ impl LibraryAdapter for LocalGitAdapter {
         &self.manifest
     }
 
-    fn search(&self, query: &LibraryQuery) -> Result<Vec<ComponentSummary>, LibraryError> {
-        let comps = self.load_components()?;
-        let mut hits: Vec<ComponentSummary> = comps
-            .values()
-            .filter_map(|c| {
-                let head = c.head_revision()?;
-                Some(ComponentSummary {
-                    uuid: c.uuid,
-                    internal_pn: c.internal_pn.clone(),
-                    mpn: head.primary_mpn.mpn.clone(),
-                    head: c.head,
-                    state: head.state,
-                    description: head.primary_mpn.manufacturer.clone(),
-                })
-            })
-            .collect();
-        if let Some(text) = &query.text {
-            let needle = text.to_ascii_lowercase();
-            hits.retain(|h| {
-                h.internal_pn
-                    .as_str()
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-                    || h.mpn.to_ascii_lowercase().contains(&needle)
-                    || h.description.to_ascii_lowercase().contains(&needle)
-            });
-        }
-        hits.sort_by(|a, b| a.internal_pn.cmp(&b.internal_pn));
-        Ok(hits)
-    }
-
-    fn get_component(&self, id: ComponentId) -> Result<Component, LibraryError> {
-        self.load_components()?
-            .remove(&id)
-            .ok_or_else(|| LibraryError::NotFound(format!("component {id}")))
-    }
-
-    fn get_revision(&self, id: ComponentId, version: Version) -> Result<Revision, LibraryError> {
-        let comp = self.get_component(id)?;
-        comp.revisions
-            .into_iter()
-            .find(|r| r.version == version)
-            .ok_or_else(|| LibraryError::NotFound(format!("{id}-{version}")))
-    }
-
-    fn save_revision(
-        &self,
-        id: ComponentId,
-        mut revision: Revision,
-        message: &str,
-    ) -> Result<(), LibraryError> {
-        // Pick the parent revision (if any) so we can compute the next version.
-        let comps = self.load_components()?;
-        let prev_component = comps.get(&id);
-        let prev_head = prev_component.and_then(|c| c.head_revision());
-
-        let new_version = Self::auto_bump(prev_head, &revision);
-        revision.version = new_version;
-        revision.refresh_content_hash();
-
-        // Build the up-to-date Component (append revision, advance head).
-        let mut component = match prev_component.cloned() {
-            Some(mut c) => {
-                c.revisions.push(revision);
-                c.head = new_version;
-                c
-            }
-            None => Component {
-                uuid: id,
-                internal_pn: InternalPn::new(format!("PART_{id}")),
-                class: ComponentClass::generic(),
-                category: PathBuf::new(),
-                family: None,
-                head: new_version,
-                revisions: vec![revision],
-            },
-        };
-        component.revisions.sort_by_key(|r| r.version);
-
-        let file = SnxPartFile {
-            schema_version: SCHEMA_VERSION,
-            component,
-        };
-        let parts_dir = self.parts_dir();
-        fs::create_dir_all(&parts_dir)?;
-        let rel_path = format!("{}/{}", PARTS_DIR, snxpart_filename(id));
-        let abs_path = self.root.join(&rel_path);
-
-        // Open repo once so we can switch branches before writing the file.
-        let repo = git2::Repository::open(&self.root)
-            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo);
-        let sig = git2::Signature::now(&sig_name, &sig_email)
-            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-
-        let trunk_branch = head_branch_name(&repo)?;
-        let target_branch = if self.manifest.workflow.review_required {
-            Some(format!("{REVIEW_BRANCH_PREFIX}{id}"))
-        } else {
-            None
-        };
-
-        if let Some(branch) = &target_branch {
-            checkout_or_create_branch(&repo, branch, &trunk_branch)?;
-        }
-
-        write_snxpart(&abs_path, &file)
-            .map_err(|e| LibraryError::Backend(format!("write snxpart: {e}")))?;
-
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(Path::new(&rel_path))
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-
-        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
-        let commit_message = if message.is_empty() {
-            format!("save {id} v{new_version}")
-        } else {
-            message.to_string()
-        };
-        repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-
-        // Hop back to trunk so subsequent reads see the manifest's main branch.
-        if target_branch.is_some() {
-            checkout_branch(&repo, &trunk_branch)?;
-        }
-
-        Ok(())
-    }
-
-    fn try_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError> {
-        let path = self.lock_path(id, field_set);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        // O_CREAT | O_EXCL — fails if another holder already wrote the file.
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut f) => {
-                use std::io::Write;
-                let holder = lock_holder();
-                writeln!(f, "{holder}")?;
-                Ok(())
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                let holder = fs::read_to_string(&path).unwrap_or_default();
-                let holder = holder.trim().to_string();
-                Err(LibraryError::Locked {
-                    holder: if holder.is_empty() {
-                        "unknown".into()
-                    } else {
-                        holder
-                    },
-                    field_set: field_set_slug(field_set).into(),
-                })
-            }
-            Err(e) => Err(LibraryError::Io(e)),
-        }
-    }
-
-    fn release_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError> {
-        // H5: TOCTOU — the previous `path.exists() && remove_file(&path)` race
-        // could delete a *fresh* lock written by another process in the
-        // microsecond between the two syscalls. `remove_file` already returns
-        // `NotFound` atomically when the file is gone, so we collapse the
-        // check into a single syscall and translate the error directly.
-        let path = self.lock_path(id, field_set);
-        match fs::remove_file(&path) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(LibraryError::NotFound(
-                format!("no lock for {id}.{}", field_set_slug(field_set)),
-            )),
-            Err(e) => Err(LibraryError::Io(e)),
-        }
-    }
+    // Row CRUD lands in WS-2; until then the trait defaults
+    // (`Backend("not impl")`) cover every row method so the adapter still
+    // satisfies the trait shape.
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
         self.read_primitive::<Symbol>(PrimitiveKind::Symbol, uuid)
@@ -594,24 +330,6 @@ fn primitive_kind_str(kind: PrimitiveKind) -> &'static str {
     }
 }
 
-fn field_set_slug(fs: FieldSet) -> &'static str {
-    match fs {
-        FieldSet::Symbol => "symbol",
-        FieldSet::Footprint => "footprint",
-        FieldSet::Model3d => "model_3d",
-        FieldSet::SharedParams => "shared_params",
-        FieldSet::SharedSupplyChain => "shared_supply_chain",
-        FieldSet::SharedSimulation => "shared_simulation",
-        FieldSet::Lifecycle => "lifecycle",
-    }
-}
-
-fn lock_holder() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string())
-}
-
 fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
     let cfg = repo.config().ok();
     let name = cfg
@@ -625,53 +343,81 @@ fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
     (name, email)
 }
 
-fn head_branch_name(repo: &git2::Repository) -> Result<String, LibraryError> {
-    match repo.head() {
-        Ok(head) => head
-            .shorthand()
-            .map(|s| s.to_string())
-            .ok_or_else(|| LibraryError::Backend("HEAD has no shorthand".into())),
-        Err(_) => Ok("master".to_string()),
-    }
-}
-
-fn checkout_or_create_branch(
-    repo: &git2::Repository,
-    branch: &str,
-    base: &str,
-) -> Result<(), LibraryError> {
-    if repo.find_branch(branch, git2::BranchType::Local).is_err() {
-        let base_commit = repo
-            .find_branch(base, git2::BranchType::Local)
-            .map_err(|e| LibraryError::Backend(format!("base branch {base}: {e}")))?
-            .get()
-            .peel_to_commit()
-            .map_err(|e| LibraryError::Backend(format!("base commit: {e}")))?;
-        repo.branch(branch, &base_commit, false)
-            .map_err(|e| LibraryError::Backend(format!("create branch {branch}: {e}")))?;
-    }
-    checkout_branch(repo, branch)
-}
-
-fn checkout_branch(repo: &git2::Repository, branch: &str) -> Result<(), LibraryError> {
-    let refname = format!("refs/heads/{branch}");
-    let obj = repo
-        .revparse_single(&refname)
-        .map_err(|e| LibraryError::Backend(format!("revparse {branch}: {e}")))?;
-    repo.checkout_tree(&obj, None)
-        .map_err(|e| LibraryError::Backend(format!("checkout tree {branch}: {e}")))?;
-    repo.set_head(&refname)
-        .map_err(|e| LibraryError::Backend(format!("set head {branch}: {e}")))?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
+    use crate::primitive::{PinElectricalType, PinOrientation, Symbol, SymbolPin};
+    use uuid::Uuid;
+
+    fn fixture_manifest() -> Manifest {
+        Manifest {
+            library: LibraryMeta {
+                name: "TestLib".into(),
+                library_id: Uuid::now_v7(),
+                description: None,
+            },
+            mode: LibraryMode::default(),
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+            tables: Vec::new(),
+        }
+    }
+
+    fn fixture_symbol(name: &str) -> Symbol {
+        Symbol {
+            uuid: Uuid::now_v7(),
+            name: name.into(),
+            anchor: [0.0, 0.0],
+            pins: vec![SymbolPin {
+                number: "1".into(),
+                name: "1".into(),
+                electrical: PinElectricalType::Unspecified,
+                position: [0.0, 0.0],
+                orientation: PinOrientation::Right,
+                length: 2.54,
+            }],
+            graphics: Vec::new(),
+            schematic_params: Default::default(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+        }
+    }
 
     #[test]
-    fn field_set_slugs_are_stable() {
-        assert_eq!(field_set_slug(FieldSet::Symbol), "symbol");
-        assert_eq!(field_set_slug(FieldSet::SharedParams), "shared_params");
+    fn init_creates_manifest_and_repo() {
+        let dir = tempfile::tempdir().unwrap();
+        let _adapter =
+            LocalGitAdapter::init(dir.path(), fixture_manifest()).expect("init succeeds");
+        assert!(dir.path().join(MANIFEST_FILE).exists());
+        assert!(dir.path().join(".git").exists());
+    }
+
+    #[test]
+    fn save_then_load_symbol_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let adapter = LocalGitAdapter::init(dir.path(), fixture_manifest()).unwrap();
+        let sym = fixture_symbol("R");
+        let uuid = sym.uuid;
+        adapter.save_symbol(sym.clone(), "save R").unwrap();
+        let back = adapter.get_symbol(uuid).unwrap();
+        assert_eq!(back.uuid, uuid);
+        assert_eq!(back.name, "R");
+    }
+
+    #[test]
+    fn list_symbols_returns_saved_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let adapter = LocalGitAdapter::init(dir.path(), fixture_manifest()).unwrap();
+        adapter
+            .save_symbol(fixture_symbol("Aaa"), "init Aaa")
+            .unwrap();
+        adapter
+            .save_symbol(fixture_symbol("Bbb"), "init Bbb")
+            .unwrap();
+        let summaries = adapter.list_symbols().unwrap();
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].name, "Aaa");
+        assert_eq!(summaries[1].name, "Bbb");
     }
 }

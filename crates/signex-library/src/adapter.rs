@@ -1,12 +1,18 @@
 //! `LibraryAdapter` — the trait every storage flavour implements.
+//!
+//! Per `v0.9-refactor-2-plan.md` §7, the trait is row-shaped: the legacy
+//! `get_component` / `get_revision` / `save_revision` methods are gone,
+//! replaced by table CRUD that targets [`ComponentRow`] (the DBLib model).
+//! Every adapter — LocalGit (TSV) or Database (JSONB) — answers the same
+//! row-oriented surface.
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::component::{Component, Revision};
-use crate::identity::{ComponentId, InternalPn, Version};
+use crate::component::ComponentRow;
+use crate::identity::{InternalPn, RowId};
 use crate::lifecycle::LifecycleState;
 use crate::manifest::Manifest;
 use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
@@ -47,25 +53,25 @@ pub struct LibraryQuery {
     pub facets: Vec<(String, String)>,
 }
 
-/// One result row from a library query — header info, NOT full revisions.
+/// One result row from a library query — header info derived from a
+/// [`ComponentRow`].
 ///
-/// M5: `internal_pn` is `InternalPn`, matching the rest of the identity layer.
-/// `serde(transparent)` keeps the wire format a bare string, so existing
-/// payloads round-trip unchanged.
+/// Used to be tied to the per-component head revision; now it's just a
+/// thin projection of a row's display fields. Kept around for UI grids
+/// that don't want to materialise full row payloads.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentSummary {
-    pub uuid: ComponentId,
+    pub row_id: Uuid,
     pub internal_pn: InternalPn,
     pub mpn: String,
-    pub head: Version,
     pub state: LifecycleState,
     pub description: String,
 }
 
 /// Header row for a primitive listing — name + uuid + kind tag, plus a hint
-/// of how many components depend on it (for the library editor's "in use"
-/// badge). The `used_by_count` is a snapshot the adapter computes from its
-/// own state; it's not authoritative across an open `LibrarySet` (resolver
+/// of how many rows depend on it (for the library editor's "in use" badge).
+/// The `used_by_count` is a snapshot the adapter computes from its own
+/// state; it's not authoritative across an open `LibrarySet` (resolver
 /// aggregation is the caller's job).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrimitiveSummary {
@@ -76,46 +82,123 @@ pub struct PrimitiveSummary {
     pub used_by_count: usize,
 }
 
-/// Storage backend abstraction. All flavours (LocalGit, Database, Plm) implement this.
+/// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
+/// implement this.
+///
+/// **Default impls:** every method has a `LibraryError::Backend("not impl")`
+/// default so individual adapters can override only the surface they
+/// actually support. WS-2 (LocalGit) and WS-3 (Database) supply real
+/// implementations; this WS (WS-1) ships only the trait shape.
 pub trait LibraryAdapter: Send + Sync {
     /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
     ///
     /// Used by [`crate::adapters::library_set::LibrarySet`] to key resolution
     /// of cross-library [`crate::primitive::PrimitiveRef`]s. The default
     /// implementation pulls it from `manifest().library.library_id` so any
-    /// adapter whose manifest is honest gets it for free; adapters that
-    /// fabricate a placeholder manifest (e.g. remote DB shim before login)
-    /// should override.
+    /// adapter whose manifest is honest gets it for free.
     fn library_id(&self) -> Uuid {
         self.manifest().library.library_id
     }
 
     fn manifest(&self) -> &Manifest;
 
-    fn search(&self, query: &LibraryQuery) -> Result<Vec<ComponentSummary>, LibraryError>;
-
-    fn get_component(&self, id: ComponentId) -> Result<Component, LibraryError>;
-
-    fn get_revision(&self, id: ComponentId, version: Version) -> Result<Revision, LibraryError>;
-
-    /// Save a new revision. Backend chooses commit vs review-request based on workflow.
-    fn save_revision(
-        &self,
-        id: ComponentId,
-        revision: Revision,
-        message: &str,
-    ) -> Result<(), LibraryError>;
-
-    fn try_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError>;
-
-    fn release_lock(&self, id: ComponentId, field_set: FieldSet) -> Result<(), LibraryError>;
-
-    // ── Primitive CRUD (WS-C) ────────────────────────────────────────────
+    // ── Tables (WS-2 / WS-3) ────────────────────────────────────────────
     //
-    // Reusable shape primitives addressed by the adapter's `library_id` plus
-    // a primitive UUID. Default impls return `LibraryError::Backend` so older
-    // adapters compile while WS-D / WS-E / WS-F / WS-G / WS-H land — every
-    // production adapter SHOULD override.
+    // The unit of storage is now a row inside a category table. WS-2 lands
+    // the LocalGit (TSV) implementation; WS-3 lands the Database (JSONB)
+    // implementation. Until then every method default-errors with
+    // `Backend("not impl")` so adapter authors can layer in pieces.
+
+    /// List the names of every table this library exposes (filename stem,
+    /// no extension).
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Err(LibraryError::Backend(
+            "list_tables not implemented for this adapter".into(),
+        ))
+    }
+
+    /// Read every row from the named table.
+    fn read_table(&self, _name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
+        Err(LibraryError::Backend(
+            "read_table not implemented for this adapter".into(),
+        ))
+    }
+
+    /// Iterate every row across every table — `(table_name, row)` pairs.
+    /// Used by `WhereUsedIndex::rebuild_from_rows` and the search index.
+    fn iter_rows(&self) -> Result<Vec<(String, ComponentRow)>, LibraryError> {
+        Err(LibraryError::Backend(
+            "iter_rows not implemented for this adapter".into(),
+        ))
+    }
+
+    // ── Row CRUD ────────────────────────────────────────────────────────
+
+    fn read_row(&self, _table: &str, _row_id: RowId) -> Result<ComponentRow, LibraryError> {
+        Err(LibraryError::Backend(
+            "read_row not implemented for this adapter".into(),
+        ))
+    }
+
+    fn read_row_by_pn(&self, _pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
+        Err(LibraryError::Backend(
+            "read_row_by_pn not implemented for this adapter".into(),
+        ))
+    }
+
+    fn insert_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "insert_row not implemented for this adapter".into(),
+        ))
+    }
+
+    fn update_row(
+        &self,
+        _table: &str,
+        _row: ComponentRow,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "update_row not implemented for this adapter".into(),
+        ))
+    }
+
+    fn delete_row(
+        &self,
+        _table: &str,
+        _row_id: RowId,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "delete_row not implemented for this adapter".into(),
+        ))
+    }
+
+    // ── Locks (advisory) ────────────────────────────────────────────────
+
+    fn try_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "try_lock not implemented for this adapter".into(),
+        ))
+    }
+
+    fn release_lock(&self, _row_id: RowId, _field_set: FieldSet) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "release_lock not implemented for this adapter".into(),
+        ))
+    }
+
+    // ── Primitive CRUD (unchanged from v0.9-original) ───────────────────
+    //
+    // Symbols, footprints, sim models stay as standalone editable primitive
+    // files (v0.9-refactor-2 only changes the *component* storage; primitives
+    // are already row-shaped). Default impls error so adapters layer in
+    // their own implementation when ready.
 
     fn get_symbol(&self, _uuid: Uuid) -> Result<Symbol, LibraryError> {
         Err(LibraryError::Backend(

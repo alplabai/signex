@@ -1,23 +1,23 @@
-//! Round-trip integration smoke tests for the v0.9 refactored library shape.
+//! Round-trip integration smoke tests for the v0.9-refactor-2 row model.
 //!
-//! Per `v0.9-library-refactor-plan.md` §7, the on-disk format flips from
-//! "one .snxpart per revision" to "one .snxprt per component (carries every
-//! revision)" and the schema version bumps to `2`.
+//! Per `v0.9-refactor-2-plan.md` §3, the on-disk format flips from
+//! "one .snxprt per component" to "one row inside `tables/<name>.tsv`".
+//! This test verifies the table TSV round-trip and the parameter-template
+//! validation pipeline still works on the new row payload.
 
-use std::path::PathBuf;
-
+use chrono::Utc;
 use signex_library::*;
 use uuid::Uuid;
 
 #[test]
-fn full_component_round_trip_via_snxprt() {
+fn full_row_round_trip_via_tsv() {
     let lib = Uuid::new_v4();
-    let mut rev = Revision {
-        version: Version::new(1, 0),
+    let row = ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: InternalPn::new("R0805_10k"),
+        class: ComponentClass::new("resistor"),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         state: LifecycleState::Released,
-        created: chrono::Utc::now(),
-        author: "caner@alplab".into(),
-        message: "initial release".into(),
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
         sim_ref: None,
@@ -25,37 +25,18 @@ fn full_component_round_trip_via_snxprt() {
         primary_mpn: ManufacturerPart::draft("Yageo", "RC0805FR-0710KL"),
         alternates: Vec::new(),
         supply: Vec::new(),
-        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         parameters: ParamMap::new(),
         plm: PlmReserved::default(),
+        created: Utc::now(),
+        updated: Utc::now(),
         content_hash: [0u8; 32],
     };
-    rev.refresh_content_hash();
 
-    let comp = Component {
-        uuid: Uuid::now_v7(),
-        internal_pn: InternalPn::new("R0805_10k"),
-        class: ComponentClass::new("resistor"),
-        category: PathBuf::from("Passives/Resistors/0805"),
-        family: None,
-        revisions: vec![rev],
-        head: Version::new(1, 0),
-    };
-
-    let file = SnxPartFile {
-        schema_version: 2,
-        component: comp,
-    };
-
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join(snxpart_filename(file.component.uuid));
-    write_snxpart(&path, &file).unwrap();
-    let back = read_snxpart(&path).unwrap();
-    assert_eq!(file, back);
-    assert_ne!(
-        back.component.head_revision().unwrap().content_hash,
-        [0u8; 32]
-    );
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    write_table(tmp.path(), std::slice::from_ref(&row)).unwrap();
+    let back = read_table(tmp.path()).unwrap();
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0], row);
 }
 
 #[test]

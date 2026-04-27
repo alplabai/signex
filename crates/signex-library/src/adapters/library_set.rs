@@ -138,9 +138,7 @@ impl std::fmt::Debug for LibrarySet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::{ComponentSummary, FieldSet, LibraryError, LibraryQuery};
-    use crate::component::{Component, Revision};
-    use crate::identity::{ComponentId, Version};
+    use crate::adapter::LibraryError;
     use crate::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
     use crate::primitive::{PinElectricalType, PinOrientation, SymbolPin};
 
@@ -164,6 +162,7 @@ mod tests {
                     mode: LibraryMode::default(),
                     workflow: WorkflowConfig::default(),
                     users: UsersConfig::default(),
+                    tables: Vec::new(),
                 },
                 symbols: HashMap::new(),
             }
@@ -178,35 +177,6 @@ mod tests {
     impl LibraryAdapter for FakeAdapter {
         fn manifest(&self) -> &Manifest {
             &self.manifest
-        }
-
-        fn search(&self, _q: &LibraryQuery) -> Result<Vec<ComponentSummary>, LibraryError> {
-            Ok(Vec::new())
-        }
-
-        fn get_component(&self, id: ComponentId) -> Result<Component, LibraryError> {
-            Err(LibraryError::NotFound(format!("{id}")))
-        }
-
-        fn get_revision(&self, id: ComponentId, _v: Version) -> Result<Revision, LibraryError> {
-            Err(LibraryError::NotFound(format!("{id}")))
-        }
-
-        fn save_revision(
-            &self,
-            _id: ComponentId,
-            _rev: Revision,
-            _msg: &str,
-        ) -> Result<(), LibraryError> {
-            Ok(())
-        }
-
-        fn try_lock(&self, _id: ComponentId, _f: FieldSet) -> Result<(), LibraryError> {
-            Ok(())
-        }
-
-        fn release_lock(&self, _id: ComponentId, _f: FieldSet) -> Result<(), LibraryError> {
-            Ok(())
         }
 
         fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
