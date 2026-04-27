@@ -338,9 +338,10 @@ impl Signex {
             items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
         } else if is_library_node {
             // Library node menu — mirrors Altium's "Add New ▸"
-            // submenu: Component is wired to the New Component modal
-            // flow; Symbol / Footprint are stubs until standalone
-            // primitive editors land in v0.9.x. The basic
+            // submenu: Component opens the New Component modal;
+            // Symbol / Footprint mint a fresh primitive via the
+            // adapter and open it as a standalone editor tab
+            // (see `handle_add_library_primitive`). The basic
             // expand / refresh actions stay so empty libraries are
             // still navigable from the keyboard.
             items.push(self.ctx_menu_item_msg(

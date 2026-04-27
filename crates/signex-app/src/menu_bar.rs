@@ -113,14 +113,16 @@ pub enum MenuMessage {
     /// Library node → right-click → Add New ▸ Component. Emitted
     /// from `view_project_tree_context_menu` when the user right-
     /// clicks a library node; the dispatcher folds it into the
-    /// existing `LibraryMessage::NewComponent` flow with the clicked
-    /// library pre-selected. Symbol / Footprint variants are stubs
-    /// for v0.9.x follow-up.
+    /// existing `LibraryMessage::NewComponent` modal flow.
     AddLibraryComponent,
-    /// Library node → right-click → Add New ▸ Symbol. Stubbed —
-    /// single-primitive Symbol editing isn't critical until v0.9.x.
+    /// Library node → right-click → Add New ▸ Symbol. Resolves the
+    /// clicked library, mints `Symbol::empty()` via the mounted
+    /// adapter, and opens the new `.snxsym` as a standalone editor
+    /// tab. See `handle_add_library_primitive`.
     AddLibrarySymbol,
-    /// Library node → right-click → Add New ▸ Footprint. Stubbed.
+    /// Library node → right-click → Add New ▸ Footprint. Same flow
+    /// as `AddLibrarySymbol` but mints `Footprint::empty()` and
+    /// opens a `.snxfpt` tab.
     AddLibraryFootprint,
     /// Legacy File ▸ Library ▸ New Component… — preserved only as
     /// a thunk for the old menu wiring; the menu bar no longer
