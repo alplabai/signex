@@ -221,8 +221,9 @@ impl SchematicCanvas {
             placement_paused: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
-            snap_grid_mm: 2.54,
-            visible_grid_mm: 2.54,
+            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
+            snap_grid_mm: 1.27,
+            visible_grid_mm: 1.27,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             auto_focus: false,
@@ -606,15 +607,30 @@ impl canvas::Program<Message> for SchematicCanvas {
                 if let Some(cursor_pos) = cursor.position_in(bounds) {
                     // Pan if right/middle button held
                     if state.panning {
+                        let mut pan_just_started = false;
                         if let Some(last) = state.last_pan_pos {
                             let dx = cursor_pos.x - last.x;
                             let dy = cursor_pos.y - last.y;
-                            if dx.abs() > 2.0 || dy.abs() > 2.0 {
+                            if (dx.abs() > 2.0 || dy.abs() > 2.0) && !state.pan_moved {
                                 state.pan_moved = true;
+                                pan_just_started = true;
                             }
                             state.camera.pan(dx, dy);
                         }
                         state.last_pan_pos = Some(cursor_pos);
+                        // On the very first frame where the pan actually
+                        // moves, close the context menu (matches Altium:
+                        // right-drag-to-pan dismisses the menu). Skipping
+                        // the CursorMoved publish for this one frame is
+                        // harmless — `camera.pan` above already moved the
+                        // view and the next cursor tick will publish
+                        // normally.
+                        if pan_just_started {
+                            return Some(
+                                canvas::Action::publish(Message::CloseContextMenu)
+                                    .and_capture(),
+                            );
+                        }
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
                                 .and_capture(),

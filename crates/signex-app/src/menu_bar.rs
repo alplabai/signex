@@ -2,38 +2,105 @@
 //!
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
 //! iced_aw handles all overlay positioning, hover-to-switch, and keyboard navigation.
-//! Anchored on the left by the Signex wordmark (brand/signex-logo.svg).
+//! Anchored on the left by the Signex wordmark — PNGs rasterised from
+//! `brand/signex-logo-{white,black}.svg` into `brand/generated/` at 1×/2×/3×
+//! the on-screen 96×31 logical size. Regenerate via
+//! `python installer/build-wordmark.py`.
 
 use std::sync::LazyLock;
 
-use iced::widget::{button, container, row, svg, text};
+use iced::widget::{button, container, image, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use iced_aw::menu::{Item, Menu, MenuBar};
+use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
 
 use crate::styles;
 
-/// Horizontal mark + lowercase "signex" wordmark, rendered in white so it
-/// reads on dark themes. Loaded once at startup and cloned cheaply.
-static BRAND_WORDMARK_WHITE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-white.svg"))
+/// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
+/// 1× / 2× / 3× the on-screen 96×31 logical size. Picked at view-time by
+/// window scale factor so the lockup renders 1:1 with device pixels —
+/// which is the only way to get crisp path-text at a size this small
+/// (resvg's path rasterization has no font hinting, so a single SVG
+/// stretched across DPI tiers aliases at the stems). Regenerate with
+/// `python installer/build-wordmark.py` after editing the source SVGs.
+static BRAND_WORDMARK_WHITE_1X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-1x.png").as_slice(),
+    )
 });
-/// Same lockup in near-black for light themes.
-static BRAND_WORDMARK_BLACK: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../assets/brand/signex-logo-black.svg"))
+static BRAND_WORDMARK_WHITE_2X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-2x.png").as_slice(),
+    )
 });
+static BRAND_WORDMARK_WHITE_3X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-white-3x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_1X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-1x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_2X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-2x.png").as_slice(),
+    )
+});
+static BRAND_WORDMARK_BLACK_3X: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(
+        include_bytes!("../assets/brand/generated/wordmark-black-3x.png").as_slice(),
+    )
+});
+
+/// Logical on-screen size of the wordmark (matches the SVG aspect of
+/// 1600:520 → ~3.08:1). Changing this requires regenerating the PNGs at
+/// matching multiples via `build-wordmark.py`. Stored as `f32` because
+/// `iced::widget::Image::{width,height}` take `impl Into<Length>` and
+/// `Length` implements `From<f32>` but not `From<u16>`.
+const WORDMARK_LOGICAL_W: f32 = 96.0;
+const WORDMARK_LOGICAL_H: f32 = 31.0;
+
+/// Pick the PNG tier that will render closest to 1:1 with device pixels
+/// at the given OS scale factor. The small slack (`+ 0.05`) absorbs
+/// floating-point jitter — at exactly 1.0 we want the 1× asset, not the
+/// 2× downsampled to 96 px.
+fn wordmark_tier(scale: f32) -> u8 {
+    let s = if scale > 0.0 { scale } else { 1.0 };
+    if s <= 1.05 {
+        1
+    } else if s <= 2.05 {
+        2
+    } else {
+        3
+    }
+}
 
 // ─── Messages ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum MenuMessage {
+    /// No-op dispatched by passive menu-bar roots ("File", "Edit", …) and
+    /// submenu headers ("Export", "Annotation"). iced's `button` widget
+    /// (0.14, `src/button.rs:342`) forces `Status::Disabled` whenever
+    /// `on_press` is `None`, which means the hover style never fires. By
+    /// wiring these buttons to `NoOp` we unlock `Status::Hovered` so the
+    /// highlight shows on pointer-over alone, even before iced_aw opens a
+    /// dropdown. The message is swallowed by `handle_menu_message` via
+    /// its `Task::none()` fallthrough — no handler needs to match it.
+    NoOp,
     // File
     NewProject,
     OpenProject,
     Save,
     SaveAs,
+    PrintPreview,
+    ExportPdf,
+    ExportNetlist,
+    ExportBom,
     // Edit
     Undo,
     Redo,
@@ -84,7 +151,7 @@ pub enum MenuMessage {
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct MenuContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
@@ -97,12 +164,42 @@ pub struct MenuContext {
     pub has_selection: bool,
     pub can_undo: bool,
     pub can_redo: bool,
+    /// OS scale factor of the window hosting this menu bar. Drives the
+    /// wordmark PNG tier picker (1× / 2× / 3×) so the lockup is rendered
+    /// at 1:1 with device pixels. Defaults to 1.0 before the main
+    /// window opens and for detached-modal / undocked-tab windows until
+    /// per-window scale tracking lands.
+    pub scale_factor: f32,
+}
+
+impl Default for MenuContext {
+    fn default() -> Self {
+        Self {
+            has_schematic: false,
+            has_pcb: false,
+            has_project: false,
+            has_selection: false,
+            can_undo: false,
+            can_redo: false,
+            scale_factor: 1.0,
+        }
+    }
 }
 
 // ─── Constants ────────────────────────────────────────────────
 
 pub const MENU_BAR_HEIGHT: f32 = 36.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
+
+/// Menu typography scale. Labels are the baseline; shortcuts ride a step
+/// smaller so they read as metadata; the submenu chevron rides a step
+/// larger because the `›` glyph is optically lighter than Latin letters
+/// at the same pixel height and would otherwise look shrunken next to the
+/// label. Exposed as constants so every menu row pulls from the same
+/// scale — no `size(11)`/`size(12)`/`size(14)` sprinkled around.
+const MENU_LABEL_SIZE: f32 = 12.0;
+const MENU_SHORTCUT_SIZE: f32 = 11.0;
+const MENU_CHEVRON_SIZE: f32 = 18.0;
 
 /// Extracted theme colors (all Copy+ʼstatic so closures remain ʼstatic).
 #[derive(Clone, Copy)]
@@ -156,9 +253,49 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let menu_template = |items| {
         Menu::new(items)
             .max_width(DROPDOWN_WIDTH)
-            .offset(4.0)
+            // Sit a couple of pixels below the bar — offset(0) overlaps
+            // the bar's bottom row because the dropdown's 1px border
+            // paints on the same pixel as the bar's baseline.
+            .offset(2.0)
             .spacing(2.0)
+            // iced_aw paints the dropdown's background quad at
+            // `items.x - padding.left` (see `pad_rectangle` in
+            // `iced_aw/src/widget/menu/menu_tree.rs`). Any positive
+            // left-padding here drags the visible dropdown LEFT of the
+            // root button's highlight box. Zero on the left keeps the
+            // dropdown's left border flush with the root's layout
+            // bounds, matching Altium's alignment.
+            .padding(iced::Padding {
+                top: 5.0,
+                right: 5.0,
+                bottom: 5.0,
+                left: 0.0,
+            })
     };
+
+    let export_menu = Item::with_menu(
+        submenu_item_btn("Export", mc),
+        menu_template(vec![
+            leaf_if(
+                "PDF…",
+                Some("Ctrl+Shift+P"),
+                MenuMessage::ExportPdf,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Netlist (Standard .net)...",
+                None,
+                MenuMessage::ExportNetlist,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Bill of Materials…",
+                None,
+                MenuMessage::ExportBom,
+                ctx.has_schematic,
+            ),
+        ]),
+    );
 
     let file_menu = Item::with_menu(
         root_btn("File", mc),
@@ -173,6 +310,14 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::SaveAs,
                 ctx.has_schematic,
             ),
+            separator(mc),
+            // Print Preview... previously lived here as a top-level
+            // leaf duplicating Export → PDF's shortcut. Consolidated
+            // under Export → PDF so there's one surface that opens the
+            // same preview flow. Ctrl+P (the former top-level shortcut)
+            // still fires `MenuMessage::PrintPreview` through the
+            // global key handler; only the menu row moves.
+            export_menu,
             separator(mc),
             leaf_stub("Exit", None, mc),
         ]),
@@ -408,6 +553,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     .padding([1, 4])
     .close_on_item_click_global(true)
     .close_on_background_click_global(true)
+    // `Backdrop` paints `styling.path` behind the active root while its
+    // dropdown is open, so "File / Edit / Place / …" stays visibly lit
+    // after the pointer leaves the root and enters the submenu — matches
+    // Altium. `FakeHovering` (the default) only affects items inside the
+    // dropdown and leaves the root dark.
+    .draw_path(DrawPath::Backdrop)
     .style(move |_theme: &Theme, _status| menu_style::Style {
         bar_background: Background::Color(mc.toolbar_bg),
         bar_border: Border::default(),
@@ -424,20 +575,34 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             blur_radius: 8.0,
         },
         path: Background::Color(mc.hover),
-        path_border: Border::default(),
+        path_border: Border {
+            width: 1.0,
+            radius: 2.0.into(),
+            color: mc.border,
+        },
     });
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
     // by toolbar background luminance so custom themes also resolve
-    // correctly. SVG is ~3.08:1 (viewBox 1600×520), so 96×31 keeps the
-    // lockup proportions and gives the wordmark enough pixel height to
-    // stay readable against the 36 px chrome strip.
-    let handle = if is_dark_surface(tokens.toolbar_bg) {
-        (*BRAND_WORDMARK_WHITE).clone()
-    } else {
-        (*BRAND_WORDMARK_BLACK).clone()
+    // correctly. The asset is a PNG pre-rasterised at 1×/2×/3× the
+    // on-screen 96×31 logical size; `wordmark_tier` picks the one that
+    // matches the window's scale factor so text edges stay crisp at
+    // 100 %, 125 %, 150 %, 200 %, 300 % Windows scaling. Filter method
+    // is Linear so fractional in-between scales (e.g. 1.5×) downsample
+    // cleanly from the 2× asset rather than hard-pixelating.
+    let dark = is_dark_surface(tokens.toolbar_bg);
+    let handle = match (dark, wordmark_tier(ctx.scale_factor)) {
+        (true, 1) => (*BRAND_WORDMARK_WHITE_1X).clone(),
+        (true, 2) => (*BRAND_WORDMARK_WHITE_2X).clone(),
+        (true, _) => (*BRAND_WORDMARK_WHITE_3X).clone(),
+        (false, 1) => (*BRAND_WORDMARK_BLACK_1X).clone(),
+        (false, 2) => (*BRAND_WORDMARK_BLACK_2X).clone(),
+        (false, _) => (*BRAND_WORDMARK_BLACK_3X).clone(),
     };
-    let wordmark = svg(handle).width(96).height(31);
+    let wordmark = image(handle)
+        .width(WORDMARK_LOGICAL_W)
+        .height(WORDMARK_LOGICAL_H)
+        .filter_method(image::FilterMethod::Linear);
 
     // Just the wordmark + menu roots. The caller decides how to wrap this
     // (plain strip on secondary windows, draggable chrome with window
@@ -472,11 +637,41 @@ fn is_dark_surface(c: signex_types::theme::Color) -> bool {
 // ─── Private helpers ─────────────────────────────────────────
 
 /// Root-level menu button (top bar).
+///
+/// Altium paints a subtle framed highlight behind the label on hover and
+/// keeps it lit while the dropdown is open. `button::Status::Hovered` covers
+/// the pointer case; `Pressed` is the "menu is open" state (iced_aw holds
+/// the root in Pressed while its submenu is visible).
 fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
-    button(text(label).size(12).color(mc.text))
-        .padding([3, 10])
-        .style(button::text)
+    let hover_bg = mc.hover;
+    let border = mc.border;
+    let text_c = mc.text;
+    button(text(label).size(MENU_LABEL_SIZE).color(text_c))
+        // Tight horizontal padding so the highlight box hugs the label —
+        // Altium's root buttons don't extend far past their text. A wide
+        // highlight pushes the dropdown's anchor (iced_aw uses the
+        // button's layout bounds) out to the left of where the label
+        // sits, which reads as "dropdown starts too far left."
+        .padding([7, 6])
+        .on_press(MenuMessage::NoOp)
+        .style(move |_: &Theme, status: button::Status| {
+            let lit = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: if lit {
+                    Some(Background::Color(hover_bg))
+                } else {
+                    None
+                },
+                text_color: text_c,
+                border: Border {
+                    width: if lit { 1.0 } else { 0.0 },
+                    radius: 2.0.into(),
+                    color: border,
+                },
+                ..button::Style::default()
+            }
+        })
         .into()
 }
 
@@ -505,18 +700,23 @@ fn leaf_stub(
 fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
     let r = row![
-        text(label).size(12).color(mc.text),
+        text(label).size(MENU_LABEL_SIZE).color(mc.text),
         iced::widget::Space::new().width(Length::Fill),
-        text("›".to_string()).size(14).color(mc.text_muted),
+        text("›".to_string())
+            .size(MENU_CHEVRON_SIZE)
+            .color(mc.text_muted),
     ]
     .spacing(8)
     .align_y(iced::Alignment::Center);
     button(r)
-        .padding([4, 10])
+        // Match the padding used by `menu_item_btn` so Export sits on the
+        // same left/right grid as the normal leaf rows (Save, Open…).
+        .padding([4, 12])
         .width(Length::Fill)
+        .on_press(MenuMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
             let bg = match status {
-                button::Status::Hovered => {
+                button::Status::Hovered | button::Status::Pressed => {
                     Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
                 }
                 _ => None,
@@ -558,7 +758,7 @@ fn menu_item_btn(
     let label = label.to_owned();
     let mut r = row![
         text(label)
-            .size(12)
+            .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
     ]
@@ -571,7 +771,7 @@ fn menu_item_btn(
         r = r.push(iced::widget::Space::new().width(Length::Fill));
         r = r.push(
             text(sc)
-                .size(11)
+                .size(MENU_SHORTCUT_SIZE)
                 .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),
         );

@@ -54,21 +54,28 @@ impl Signex {
                     self.document_state.active_tab = idx;
                     self.sync_active_tab();
                 }
+                // Always clear the drag state on release. The
+                // press-handler arms it on every mouse-down; if
+                // the cursor never moved past the threshold (which
+                // gates the ghost in `view`), we still need to
+                // reset state so the next render doesn't paint the
+                // ghost on the resting cursor.
+                self.ui_state.tab_dragging = None;
                 Task::none()
             }
-            TabMessage::Close(idx) => {
-                if idx < self.document_state.tabs.len() {
-                    if self.document_state.tabs[idx].dirty {
-                        // Ask the user before discarding edits. Modal is
-                        // rendered as an overlay by `view_close_tab_confirm`.
-                        self.ui_state.close_tab_confirm = Some(idx);
-                        return Task::none();
-                    }
-                    return self.close_tab_now(idx);
+            TabMessage::ContextMenu(idx) => {
+                // Right-click on a tab — route to the overlay
+                // dispatcher so the menu opens with all the standard
+                // hover/dismiss plumbing (mutex with the canvas /
+                // project-tree menus, hover-tick subscription armed,
+                // etc.). Only the main tab bar produces these — the
+                // single-tab undocked window has nothing useful to
+                // offer in a context menu.
+                if !is_main {
+                    return Task::none();
                 }
-                Task::none()
+                Task::done(Message::ShowTabContextMenu(idx))
             }
-            TabMessage::Undock(idx) => Task::done(Message::UndockTab(idx)),
             TabMessage::StartDrag(idx, x, y) => {
                 // Drag-to-reorder / drag-out-to-detach originates only
                 // from the main tab bar. The single-tab bar inside an
@@ -91,10 +98,6 @@ impl Signex {
         if idx >= self.document_state.tabs.len() {
             return Task::none();
         }
-        // Drop the engine for the tab being closed, whether it was the
-        // active one or a background schematic. The HashMap keeps every
-        // open tab's engine live — closing the tab is the only point
-        // where we prune an entry.
         let closing_path = self.document_state.tabs[idx].path.clone();
 
         // If the tab has an undocked window open, close that window
@@ -112,7 +115,12 @@ impl Signex {
             })
             .collect();
 
-        self.document_state.engines.remove(&closing_path);
+        // Park dirty engines: when the file is in `dirty_paths`, keep its
+        // engine entry alive so reopening the tab restores the in-memory
+        // edits. Drop the engine only when the file is clean.
+        if !self.document_state.dirty_paths.contains(&closing_path) {
+            self.document_state.engines.remove(&closing_path);
+        }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
         }
@@ -123,6 +131,9 @@ impl Signex {
             self.document_state.active_tab -= 1;
         }
         self.sync_active_tab();
+        // Refresh so the open-dot drops immediately on tab close. The
+        // dirty dot stays since `dirty_paths` is untouched.
+        self.refresh_panel_ctx();
 
         if orphan_window_ids.is_empty() {
             Task::none()
@@ -131,33 +142,53 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_close_tab_confirm(&mut self, choice: CloseTabChoice) -> Task<Message> {
-        let Some(idx) = self.ui_state.close_tab_confirm.take() else {
-            return Task::none();
-        };
-        match choice {
-            CloseTabChoice::Cancel => Task::none(),
-            CloseTabChoice::DiscardAndClose => {
-                if idx < self.document_state.tabs.len() {
-                    self.document_state.tabs[idx].dirty = false;
-                    return self.close_tab_now(idx);
+    pub(crate) fn handle_tab_context_action(
+        &mut self,
+        action: crate::app::TabContextAction,
+    ) -> Task<Message> {
+        use crate::app::TabContextAction as A;
+        // Dismiss the menu first — every action takes effect
+        // immediately and a lingering menu is always wrong after.
+        self.interaction_state.tab_context_menu = None;
+
+        match action {
+            A::Close(idx) => self.close_tab_now(idx),
+            A::CloseAllOthers(keep_idx) => {
+                // Close every tab except `keep_idx`, descending so
+                // each `close_tab_now(i)` removes a tab without
+                // shifting the indices of tabs we haven't visited
+                // yet. The kept tab's index does shift as tabs
+                // below it close, but `close_tab_now`'s active-tab
+                // adjuster (`if active_tab >= len ... -= 1`) tracks
+                // the live position correctly without us needing
+                // to thread the kept path through this loop.
+                let mut indices: Vec<usize> = (0..self.document_state.tabs.len())
+                    .filter(|&i| i != keep_idx)
+                    .collect();
+                indices.sort_unstable_by(|a, b| b.cmp(a));
+                let mut tasks = Vec::with_capacity(indices.len());
+                for i in indices {
+                    tasks.push(self.close_tab_now(i));
                 }
-                Task::none()
-            }
-            CloseTabChoice::SaveAndClose => {
-                // Save path: only meaningful for the active tab with a live
-                // engine. For background tabs (which we'd have to activate
-                // first) we fall back to discard-and-close; the save flow
-                // across parked sessions is v0.7 scope.
-                if idx == self.document_state.active_tab
-                    && let Some(engine) = self.document_state.active_engine_mut()
-                    && engine.save().is_ok()
-                    && let Some(tab) = self.document_state.tabs.get_mut(idx)
-                {
-                    tab.dirty = false;
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
                 }
-                self.close_tab_now(idx)
             }
+            A::CloseAll => {
+                let mut tasks = Vec::new();
+                for idx in (0..self.document_state.tabs.len()).rev() {
+                    tasks.push(self.close_tab_now(idx));
+                }
+                if tasks.is_empty() {
+                    Task::none()
+                } else {
+                    Task::batch(tasks)
+                }
+            }
+            A::Undock(idx) => Task::done(Message::UndockTab(idx)),
         }
     }
+
 }

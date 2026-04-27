@@ -42,8 +42,12 @@ mod windows_impl {
     };
 
     pub(super) fn set_rounded(w: &dyn iced::window::Window) {
-        let Ok(handle) = w.window_handle() else { return };
-        let RawWindowHandle::Win32(win32) = handle.as_raw() else { return };
+        let Ok(handle) = w.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return;
+        };
         // NonZeroIsize -> HWND (*mut c_void). Safe cast on 32- and 64-bit
         // Windows where isize and pointer widths match.
         let hwnd: HWND = win32.hwnd.get() as HWND;

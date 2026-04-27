@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -7,10 +7,10 @@ use uuid::Uuid;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::property::SchematicProperty;
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, FillType, Graphic, HAlign, Junction, Label, LabelType, LibGraphic,
-    LibPin, LibSymbol, NoConnect, Pin, PinElectricalType, PinShape, Point, SchDrawing,
-    SchematicSheet, SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign,
-    Wire, GRID_MM, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, SCHEMATIC_TEXT_MM,
+    Bus, BusEntry, ChildSheet, FillType, GRID_MM, Graphic, HAlign, Junction, Label, LabelType,
+    LibGraphic, LibPin, LibSymbol, NoConnect, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, Pin,
+    PinElectricalType, PinShape, Point, SCHEMATIC_TEXT_MM, SchDrawing, SchematicSheet,
+    SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign, Wire,
 };
 
 use crate::error::ParseError;
@@ -82,16 +82,44 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
+    // Standard spec: when (justify ...) is omitted, both axes default to centered.
+    // (See Standard S-expression effects token reference.)
     let mut justify_h = HAlign::Center;
     let mut justify_v = VAlign::Center;
+    let mut seen_h = false;
+    let mut seen_v = false;
     if let Some(j) = justify {
         for child in j.children() {
             if let SExpr::Atom(s) = child {
                 match s.as_str() {
-                    "left" => justify_h = HAlign::Left,
-                    "right" => justify_h = HAlign::Right,
-                    "top" => justify_v = VAlign::Top,
-                    "bottom" => justify_v = VAlign::Bottom,
+                    "left" => {
+                        justify_h = HAlign::Left;
+                        seen_h = true;
+                    }
+                    "right" => {
+                        justify_h = HAlign::Right;
+                        seen_h = true;
+                    }
+                    "top" => {
+                        justify_v = VAlign::Top;
+                        seen_v = true;
+                    }
+                    "bottom" => {
+                        justify_v = VAlign::Bottom;
+                        seen_v = true;
+                    }
+                    // Standard may emit explicit `center` in some contexts. Treat it
+                    // as center for any axis not already pinned by a directional token.
+                    "center" => {
+                        if !seen_h {
+                            justify_h = HAlign::Center;
+                            seen_h = true;
+                        }
+                        if !seen_v {
+                            justify_v = VAlign::Center;
+                            seen_v = true;
+                        }
+                    }
                     "mirror" => {} // ignore mirror for now
                     _ => {}
                 }
@@ -125,6 +153,18 @@ fn parse_schematic_property(prop_node: &SExpr, fallback_pos: Point) -> Schematic
     let text = prop_node
         .find("at")
         .map(|_| parse_text_prop(prop_node, fallback_pos));
+    let mut variant_overrides = BTreeMap::new();
+    if let Some(variants) = prop_node.find("variants") {
+        for variant in variants.find_all("variant") {
+            let Some(variant_name) = variant.first_arg() else {
+                continue;
+            };
+            let Some(variant_value) = variant.arg(1) else {
+                continue;
+            };
+            variant_overrides.insert(variant_name.to_string(), variant_value.to_string());
+        }
+    }
 
     SchematicProperty {
         key: prop_node.first_arg().unwrap_or("").to_string(),
@@ -133,7 +173,27 @@ fn parse_schematic_property(prop_node: &SExpr, fallback_pos: Point) -> Schematic
         text,
         show_name,
         do_not_autoplace,
+        variant_overrides,
     }
+}
+
+fn parse_variant_definitions(root: &SExpr) -> Vec<String> {
+    let mut variants = Vec::new();
+    if let Some(defs) = root.find("variant_definitions") {
+        for variant in defs.find_all("variant") {
+            let Some(name) = variant.first_arg() else {
+                continue;
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if !variants.iter().any(|existing| existing == name) {
+                variants.push(name.to_string());
+            }
+        }
+    }
+    variants
 }
 
 fn parse_uuid(node: &SExpr) -> Uuid {
@@ -178,13 +238,34 @@ fn parse_stroke_width(node: &SExpr) -> f64 {
 /// the stroke has no color override — callers default to the theme.
 fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let color = node.find("stroke")?.find("color")?;
+    parse_rgba_quad(color)
+}
+
+/// Parse `(fill (color R G B A))` if present. Used by `(sheet ...)` blocks
+/// where the fill is a literal RGBA, not a `type` enum. Returns None when
+/// the colour is fully transparent (Standard's "use default").
+fn parse_fill_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
+    let color = node.find("fill")?.find("color")?;
+    parse_rgba_quad(color)
+}
+
+/// Decode a Standard `(color R G B A)` quad. RGB channels are 0..255 integers.
+/// Alpha may be either a 0..1 float (the form Standard writes for sheets and
+/// strokes) or a 0..255 integer (rare legacy form); values <= 1.0 are
+/// treated as the float form and rescaled to 0..255 so renderers can use a
+/// single byte representation. A fully transparent zero-RGBA quad is mapped
+/// to None so callers fall back to the theme default and the file round-
+/// trips cleanly when the user has not customised the colour.
+fn parse_rgba_quad(color: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
     let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
     let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
-    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
-    // A zero RGBA is Standard's way of saying "use theme default" — we
-    // treat that as None so the sheet round-trips cleanly when the
-    // user hasn't customised the colour.
+    let a_raw = color.arg_f64(3).unwrap_or(1.0);
+    let a = if a_raw <= 1.0 {
+        (a_raw.clamp(0.0, 1.0) * 255.0).round() as u8
+    } else {
+        a_raw.clamp(0.0, 255.0) as u8
+    };
     if r == 0 && g == 0 && b == 0 && a == 0 {
         return None;
     }
@@ -851,11 +932,28 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         .and_then(|f| f.find("size"))
         .and_then(|s| s.arg_f64(0))
         .unwrap_or(SCHEMATIC_TEXT_MM);
-    let justify = effects
+    // Standard may emit multiple justify tokens (e.g. "left bottom").
+    // Preserve both horizontal and vertical parts regardless of token order.
+    let (justify, justify_v) = effects
         .and_then(|e| e.find("justify"))
-        .and_then(|j| j.first_arg())
-        .map(|v| parse_halign(v))
-        .unwrap_or(HAlign::Left);
+        .map(|j| {
+            let mut parsed_h = HAlign::Left;
+            let mut parsed_v = VAlign::Bottom;
+            for child in j.children() {
+                if let SExpr::Atom(token) = child {
+                    match token.as_str() {
+                        "left" => parsed_h = HAlign::Left,
+                        "right" => parsed_h = HAlign::Right,
+                        "center" => parsed_h = HAlign::Center,
+                        "top" => parsed_v = VAlign::Top,
+                        "bottom" => parsed_v = VAlign::Bottom,
+                        _ => {}
+                    }
+                }
+            }
+            (parsed_h, parsed_v)
+        })
+        .unwrap_or((HAlign::Left, VAlign::Bottom));
     Label {
         uuid: parse_uuid(node),
         text: node.first_arg().unwrap_or("").to_string(),
@@ -865,6 +963,7 @@ fn parse_label(node: &SExpr, label_type: LabelType) -> Label {
         shape,
         font_size,
         justify,
+        justify_v,
     }
 }
 
@@ -1058,6 +1157,8 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
         size,
         stroke_width: parse_stroke_width(s),
         fill: parse_fill_type(s),
+        stroke_color: parse_stroke_color(s),
+        fill_color: parse_fill_color(s),
         fields_autoplaced,
         pins,
         instances: parse_sheet_instances(s),
@@ -1226,11 +1327,19 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
         .and_then(|v| v.first_arg())
         .unwrap_or("")
         .to_string();
-    let paper_size = root
-        .find("paper")
-        .and_then(|v| v.first_arg())
-        .unwrap_or("A4")
-        .to_string();
+    let paper_size = if let Some(paper_node) = root.find("paper") {
+        let size = paper_node.first_arg().unwrap_or("A4");
+        let orientation = paper_node.arg(1).unwrap_or("");
+        if orientation.eq_ignore_ascii_case("portrait") {
+            format!("{size} portrait")
+        } else if orientation.eq_ignore_ascii_case("landscape") {
+            format!("{size} landscape")
+        } else {
+            size.to_string()
+        }
+    } else {
+        "A4".to_string()
+    };
     let root_sheet_page = parse_root_sheet_page(&root);
     let uuid = parse_uuid(&root);
 
@@ -1321,7 +1430,12 @@ pub fn parse_schematic(content: &str) -> Result<SchematicSheet, ParseError> {
             let (position, _) = parse_at(be);
             let size = be
                 .find("size")
-                .map(|s| (s.arg_f64(0).unwrap_or(GRID_MM), s.arg_f64(1).unwrap_or(GRID_MM)))
+                .map(|s| {
+                    (
+                        s.arg_f64(0).unwrap_or(GRID_MM),
+                        s.arg_f64(1).unwrap_or(GRID_MM),
+                    )
+                })
                 .unwrap_or((GRID_MM, GRID_MM));
             BusEntry {
                 uuid: parse_uuid(be),
@@ -1447,7 +1561,16 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     };
 
     let mut sheets = Vec::new();
+    let mut variant_definitions = Vec::new();
+    let mut active_variant = None;
     if let Some(ref root_name) = schematic_root {
+        let root_path = dir.join(root_name);
+        if let Ok(content) = std::fs::read_to_string(&root_path)
+            && let Ok(root) = sexpr::parse(&content)
+        {
+            variant_definitions = parse_variant_definitions(&root);
+            active_variant = variant_definitions.first().cloned();
+        }
         collect_sheets(dir, root_name, &mut sheets)?;
     }
 
@@ -1457,6 +1580,8 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
         schematic_root,
         pcb_file,
         sheets,
+        variant_definitions,
+        active_variant,
     })
 }
 
@@ -1689,6 +1814,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_label_justify_reads_horizontal_token_independent_of_order() {
+        let content = r#"(standard_sch
+    (version 20231120)
+    (generator "eeschema")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (label "L1"
+        (at 10 10 0)
+        (effects (font (size 1.27 1.27)) (justify bottom right))
+        (uuid "00000000-0000-0000-0000-000000000002")
+    )
+)"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        assert_eq!(sheet.labels.len(), 1);
+        assert_eq!(sheet.labels[0].justify, HAlign::Right);
+        assert_eq!(sheet.labels[0].justify_v, VAlign::Bottom);
+    }
+
+    #[test]
     fn parse_no_connect_has_uuid() {
         let content = minimal_standard_sch();
         let sheet = parse_schematic(&content).unwrap();
@@ -1768,12 +1913,12 @@ mod tests {
         assert!(sym.on_board);
         assert!(!sym.exclude_from_sim);
         assert!(!sym.locked);
-                assert!(sym.custom_properties.is_empty());
+        assert!(sym.custom_properties.is_empty());
     }
 
-        #[test]
-        fn parse_symbol_custom_property_metadata() {
-                let content = r#"(standard_sch
+    #[test]
+    fn parse_symbol_custom_property_metadata() {
+        let content = r#"(standard_sch
     (version 20260326)
     (generator "test")
     (uuid "00000000-0000-0000-0000-000000000010")
@@ -1798,24 +1943,84 @@ mod tests {
     )
 )"#;
 
-                let sheet = parse_schematic(content).unwrap();
-                let property = &sheet.symbols[0].custom_properties[0];
+        let sheet = parse_schematic(content).unwrap();
+        let property = &sheet.symbols[0].custom_properties[0];
 
-                assert_eq!(property.key, "Tolerance");
-                assert_eq!(property.value, "1%");
-                assert_eq!(property.id, Some(7));
-                assert_eq!(property.show_name, Some(true));
-                assert_eq!(property.do_not_autoplace, Some(true));
-                let text = property.text.as_ref().unwrap();
-                assert_eq!(text.position.x, 110.0);
-                assert_eq!(text.position.y, 60.0);
-                assert_eq!(text.rotation, 90.0);
-                assert_eq!(text.font_size, 1.5);
-                assert_eq!(text.justify_h, HAlign::Left);
-                assert_eq!(text.justify_v, VAlign::Bottom);
-                assert!(text.hidden);
-                assert_eq!(sheet.symbols[0].fields.get("Tolerance"), Some(&"1%".to_string()));
-        }
+        assert_eq!(property.key, "Tolerance");
+        assert_eq!(property.value, "1%");
+        assert_eq!(property.id, Some(7));
+        assert_eq!(property.show_name, Some(true));
+        assert_eq!(property.do_not_autoplace, Some(true));
+        let text = property.text.as_ref().unwrap();
+        assert_eq!(text.position.x, 110.0);
+        assert_eq!(text.position.y, 60.0);
+        assert_eq!(text.rotation, 90.0);
+        assert_eq!(text.font_size, 1.5);
+        assert_eq!(text.justify_h, HAlign::Left);
+        assert_eq!(text.justify_v, VAlign::Bottom);
+        assert!(text.hidden);
+        assert_eq!(
+            sheet.symbols[0].fields.get("Tolerance"),
+            Some(&"1%".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_symbol_property_variant_overrides() {
+        let content = r#"(standard_sch
+    (version 20260326)
+    (generator "test")
+    (generator_version "10.0")
+    (uuid "00000000-0000-0000-0000-000000000010")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 100 50 0)
+        (unit 1)
+        (uuid "00000000-0000-0000-0000-000000000011")
+        (property "Reference" "R1" (at 100 48 0) (effects (font (size 1.27 1.27))))
+        (property "Value" "10k" (at 100 52 0) (effects (font (size 1.27 1.27))))
+        (property "Fitted" "yes"
+            (at 102 55 0)
+            (effects (font (size 1.27 1.27)) (hide yes))
+            (variants
+                (variant "DEFAULT" "yes")
+                (variant "LITE" "no")
+            )
+        )
+    )
+)"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        let fitted = sheet.symbols[0]
+            .custom_properties
+            .iter()
+            .find(|property| property.key == "Fitted")
+            .unwrap();
+
+        assert_eq!(fitted.variant_overrides.get("DEFAULT"), Some(&"yes".to_string()));
+        assert_eq!(fitted.variant_overrides.get("LITE"), Some(&"no".to_string()));
+    }
+
+    #[test]
+    fn parse_variant_definitions_from_root() {
+        let root = sexpr::parse(
+            r#"(standard_sch
+  (version 20260326)
+  (generator "eeschema")
+  (generator_version "10.0")
+  (variant_definitions
+    (variant "DEFAULT")
+    (variant "LITE")
+    (variant "PRO")
+  )
+)"#,
+        )
+        .unwrap();
+
+        let variants = super::parse_variant_definitions(&root);
+        assert_eq!(variants, vec!["DEFAULT", "LITE", "PRO"]);
+    }
 
     #[test]
     fn parse_lib_symbol_preserves_parent_metadata() {
@@ -1844,6 +2049,84 @@ mod tests {
         assert_eq!(parsed.fp_filters, "LQFP*");
         assert!(parsed.in_pos_files);
         assert!(!parsed.duplicate_pin_numbers_are_jumpers);
+    }
+
+    #[test]
+    fn parse_property_justify_left_defaults_vertical_to_center() {
+        let content = r#"(standard_sch
+    (version 20231120)
+    (generator "eeschema")
+    (uuid "00000000-0000-0000-0000-000000000001")
+    (paper "A4")
+    (symbol
+        (lib_id "Device:R")
+        (at 100 50 0)
+        (unit 1)
+        (uuid "00000000-0000-0000-0000-000000000011")
+        (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left)))
+        (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left)))
+        (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+        (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+    )
+)"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Left);
+        assert_eq!(value_text.justify_v, VAlign::Center);
+    }
+
+    #[test]
+    fn parse_property_justify_center_sets_both_axes_to_center() {
+        let content = r#"(standard_sch
+            (version 20231120)
+            (generator "eeschema")
+            (uuid "00000000-0000-0000-0000-000000000001")
+            (paper "A4")
+            (symbol
+            (lib_id "Device:R")
+            (at 100 50 0)
+            (unit 1)
+            (uuid "00000000-0000-0000-0000-000000000011")
+            (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify center)))
+            (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify center)))
+            (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            )
+        )"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Center);
+        assert_eq!(value_text.justify_v, VAlign::Center);
+    }
+
+    #[test]
+    fn parse_property_justify_left_center_keeps_left_and_centers_vertical() {
+        let content = r#"(standard_sch
+            (version 20231120)
+            (generator "eeschema")
+            (uuid "00000000-0000-0000-0000-000000000001")
+            (paper "A4")
+            (symbol
+            (lib_id "Device:R")
+            (at 100 50 0)
+            (unit 1)
+            (uuid "00000000-0000-0000-0000-000000000011")
+            (property "Reference" "R26" (at 100 48 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left center)))
+            (property "Value" "26.7k" (at 100 52 90) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left center)))
+            (property "Footprint" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            (property "Datasheet" "" (at 100 50 0) (effects (font (size 1.27 1.27)) (hide yes)))
+            )
+        )"#;
+
+        let sheet = parse_schematic(content).unwrap();
+        let sym = &sheet.symbols[0];
+        let value_text = sym.val_text.as_ref().expect("value text exists");
+        assert_eq!(value_text.justify_h, HAlign::Left);
+        assert_eq!(value_text.justify_v, VAlign::Center);
     }
 
     #[test]

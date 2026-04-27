@@ -6,30 +6,82 @@ mod translate;
 
 use super::*;
 
+// ── Submenu chevron — single source of truth ─────────────────────────
+//
+// Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
+// TRIANGLE (U+25B6) which Windows renders via the colour emoji font.
+// Same glyph the menu_bar dropdowns use; the matching size below keeps
+// every submenu launcher visually aligned across the whole app
+// (canvas right-click, project-tree right-click, File/Edit/View menu).
+const SUBMENU_ARROW: &str = "›";
+const SUBMENU_ARROW_SIZE: f32 = 18.0;
+
 impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
+        use crate::icons as ic;
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
         let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
+        let tid = self.ui_state.theme_id;
 
-        // Right-pointing angle quote (not the BLACK RIGHT-POINTING TRIANGLE
-        // U+25B6, which Windows renders via the color emoji font).
-        const SUBMENU_ARROW: &str = "›";
-
-        items.push(self.ctx_menu_item_disabled("Find Similar Objects...", None));
-        items.push(self.ctx_menu_item_msg("Find Text...", "Ctrl+F", Message::OpenFind));
-        items.push(self.ctx_menu_item_disabled("Clear Filter", Some("Shift+C")));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_find_similar(tid)),
+            "Find Similar Objects...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_msg(
+            Some(ic::icon_chrome_search(tid)),
+            "Find Text...",
+            "Ctrl+F",
+            Message::OpenFind,
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_clear_filter(tid)),
+            "Clear Filter",
+            Some("Shift+C"),
+        ));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_disabled("Place", Some(SUBMENU_ARROW)));
-        items.push(self.ctx_menu_item_disabled("Part Actions", Some(SUBMENU_ARROW)));
-        items.push(self.ctx_menu_item_disabled("Sheet Actions", Some(SUBMENU_ARROW)));
+        let active_submenu = self.interaction_state.context_submenu;
+        items.push(self.ctx_menu_item_submenu(
+            Some(ic::icon_dd_place_menu(tid)),
+            "Place",
+            ContextSubmenu::Place,
+            active_submenu == Some(ContextSubmenu::Place),
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_part_actions(tid)),
+            "Part Actions",
+            Some(SUBMENU_ARROW),
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_sheet_actions(tid)),
+            "Sheet Actions",
+            Some(SUBMENU_ARROW),
+        ));
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("References", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Align", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Unions", Some(SUBMENU_ARROW)));
-            items.push(self.ctx_menu_item_disabled("Snippets", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_references(tid)),
+                "References",
+                Some(SUBMENU_ARROW),
+            ));
+            items.push(self.ctx_menu_item_submenu(
+                Some(ic::icon_dd_align_menu(tid)),
+                "Align",
+                ContextSubmenu::Align,
+                active_submenu == Some(ContextSubmenu::Align),
+            ));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_unions(tid)),
+                "Unions",
+                Some(SUBMENU_ARROW),
+            ));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_snippets(tid)),
+                "Snippets",
+                Some(SUBMENU_ARROW),
+            ));
         }
 
         let child_sheet_selected = canvas
@@ -38,6 +90,7 @@ impl Signex {
             .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
         if child_sheet_selected {
             items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_open_child_sheet(tid)),
                 "Open Child Sheet",
                 "Enter",
                 ContextAction::OpenChildSheet,
@@ -45,33 +98,95 @@ impl Signex {
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled("Cross Probe", None));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_cross_probe(tid)),
+            "Cross Probe",
+            None,
+        ));
         items.push(self.ctx_menu_sep());
-        items.push(self.ctx_menu_item_kb("Cut", "Ctrl+X", ContextAction::Cut));
-        items.push(self.ctx_menu_item_kb("Copy", "Ctrl+C", ContextAction::Copy));
-        items.push(self.ctx_menu_item_kb("Paste", "Ctrl+V", ContextAction::Paste));
-        items.push(self.ctx_menu_item_kb("Smart Paste", "Shift+Ctrl+V", ContextAction::SmartPaste));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_cut(tid)),
+            "Cut",
+            "Ctrl+X",
+            ContextAction::Cut,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_copy(tid)),
+            "Copy",
+            "Ctrl+C",
+            ContextAction::Copy,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_paste(tid)),
+            "Paste",
+            "Ctrl+V",
+            ContextAction::Paste,
+        ));
+        items.push(self.ctx_menu_item_kb(
+            Some(ic::icon_dd_smart_paste(tid)),
+            "Smart Paste",
+            "Shift+Ctrl+V",
+            ContextAction::SmartPaste,
+        ));
         items.push(self.ctx_menu_sep());
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_kb("Rotate", "Space", ContextAction::RotateSelected));
-            items.push(self.ctx_menu_item_kb("Mirror X", "X", ContextAction::MirrorX));
-            items.push(self.ctx_menu_item_kb("Mirror Y", "Y", ContextAction::MirrorY));
-            items.push(self.ctx_menu_item_kb("Delete", "Del", ContextAction::Delete));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_rotate(tid)),
+                "Rotate",
+                "Space",
+                ContextAction::RotateSelected,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_flip_x(tid)),
+                "Mirror X",
+                "X",
+                ContextAction::MirrorX,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_flip_y(tid)),
+                "Mirror Y",
+                "Y",
+                ContextAction::MirrorY,
+            ));
+            items.push(self.ctx_menu_item_kb(
+                Some(ic::icon_dd_delete(tid)),
+                "Delete",
+                "Del",
+                ContextAction::Delete,
+            ));
             items.push(self.ctx_menu_sep());
         }
 
-        items.push(self.ctx_menu_item_disabled("Comment...", None));
-        items.push(self.ctx_menu_item_disabled("Pin Mapping...", None));
-        items.push(self.ctx_menu_item_disabled("Project Options...", None));
-        items.push(self.ctx_menu_item_msg("Preferences...", "", Message::OpenPreferences));
+        items.push(self.ctx_menu_item_disabled(Some(ic::icon_dd_comment(tid)), "Comment...", None));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_pin_mapping(tid)),
+            "Pin Mapping...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            None,
+        ));
+        items.push(self.ctx_menu_item_msg(
+            Some(ic::icon_dd_preferences(tid)),
+            "Preferences...",
+            "",
+            Message::OpenPreferences,
+        ));
 
         if !canvas.selected.is_empty() {
-            items.push(self.ctx_menu_item_disabled("Supplier Links...", None));
+            items.push(self.ctx_menu_item_disabled(
+                Some(ic::icon_dd_supplier_links(tid)),
+                "Supplier Links...",
+                None,
+            ));
             // Properties → ensure the Properties panel is visible. The
             // panel already tracks the current selection, so it populates
             // with the right-clicked item's fields once shown.
             items.push(self.ctx_menu_item_msg(
+                Some(ic::icon_dd_properties(tid)),
                 "Properties...",
                 "F11",
                 Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
@@ -84,8 +199,371 @@ impl Signex {
             .into()
     }
 
+    /// Build the Projects-panel tree-view right-click menu. The item
+    /// set is derived from the clicked node's role in the tree —
+    /// project root vs openable leaf vs container branch — so the
+    /// menu matches what Altium shows in each context. Empty-area
+    /// clicks are filtered out upstream (no menu shown), so `path`
+    /// is guaranteed `Some` whenever this function runs.
+    fn view_project_tree_context_menu(
+        &self,
+        ctx: &crate::app::ProjectTreeContextMenuState,
+    ) -> Element<'_, Message> {
+        use crate::app::ProjectTreeAction as A;
+        use signex_widgets::tree_view::{TreeIcon, get_node};
+
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(18);
+
+        let Some(path) = ctx.path.as_ref() else {
+            // Background (empty-area) clicks currently produce no menu —
+            // Altium shows a "New Project..." flow there which we do
+            // not ship yet. Return an empty placeholder container so
+            // the overlay layer above has something to render into.
+            return container(iced::widget::Space::new()).into();
+        };
+        let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
+            return container(iced::widget::Space::new()).into();
+        };
+
+        // Role detection:
+        // - Root: the single top-level node created in `build_project_tree`,
+        //   always at path `[0]`. Represents the whole project.
+        // - Openable leaf: file-backed tree entry the project-navigation
+        //   handler knows how to open (see `handle_dock_project_navigation_panel_message`).
+        // - Container branch: everything else with children (Source
+        //   Documents, Libraries, Settings folders).
+        let is_root = path.len() == 1;
+        let is_openable_leaf = matches!(
+            node.icon,
+            TreeIcon::Schematic
+                | TreeIcon::Pcb
+                | TreeIcon::SnxSchematic
+                | TreeIcon::SnxPcb
+                | TreeIcon::SnxProject
+                | TreeIcon::SnxFootprint
+                | TreeIcon::SnxSimulation
+                | TreeIcon::SnxLibrary
+                | TreeIcon::SnxSymbol
+        );
+        let is_container = !node.children.is_empty();
+        let has_schematic = panel_ctx.has_schematic;
+
+        if is_root {
+            // Project root — Altium's "right-click project" menu. Items
+            // we have not wired yet carry a "vX.Y" right-column badge
+            // so the user knows which release lands the feature rather
+            // than staring at a silently-greyed row.
+            let has_tabs = !self.document_state.tabs.is_empty();
+            // Multi-project: gate on the *clicked* project's directory,
+            // not the active project's. Right-clicking project B's root
+            // while project A is active should still enable Explore for
+            // B. (#54)
+            let has_project_dir = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .and_then(|p| p.path.parent())
+                .is_some();
+
+            items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
+            let active_submenu = self.interaction_state.context_submenu;
+            items.push(self.ctx_menu_item_submenu(
+                None,
+                "Add New to Project",
+                ContextSubmenu::AddNewToProject,
+                active_submenu == Some(ContextSubmenu::AddNewToProject),
+            ));
+            items.push(self.ctx_menu_item_disabled(None, "Add Existing to Project...", Some("v0.9")));
+            items.push(self.save_menu_item(has_schematic));
+            items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
+            items.push(self.ctx_menu_sep());
+            items.push(if has_tabs {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Close Project Documents",
+                    "",
+                    Message::ProjectTreeAction(A::CloseAllDocuments),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Close Project Documents", None)
+            });
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Close Project",
+                "",
+                Message::ProjectTreeAction(A::CloseProject(path.clone())),
+            ));
+            items.push(if has_project_dir {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Explore",
+                    "",
+                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Explore", None)
+            });
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
+            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
+            items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_disabled(None, "Share...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
+        } else if is_openable_leaf {
+            // Sheet / PCB / library leaf — Altium's per-document menu.
+            // Rows match the Altium screenshot exactly: Open + Explore
+            // are wired; Print fires only when the clicked leaf is the
+            // active tab (the print-preview flow renders the active
+            // document). Other items are disabled stubs until the
+            // matching engine actions land.
+            // Same multi-project gate as above — leaf rows resolve
+            // against their owning project, not the active one.
+            let has_project_dir = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .and_then(|p| p.path.parent())
+                .is_some();
+            let is_active_tab = self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .and_then(|tab| tab.path.file_name())
+                .and_then(|f| f.to_str())
+                .zip(
+                    signex_widgets::tree_view::get_node(
+                        panel_ctx.project_tree.as_slice(),
+                        path,
+                    )
+                    .map(|n| n.label.as_str()),
+                )
+                .is_some_and(|(active_name, clicked_label)| active_name == clicked_label);
+
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Open",
+                "",
+                Message::ProjectTreeAction(A::OpenNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_sep());
+            items.push(if has_project_dir {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Explore",
+                    "",
+                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Explore", None)
+            });
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Rename...",
+                "",
+                Message::ProjectTreeAction(A::OpenRenameDialog(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Remove from Project",
+                "",
+                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
+            ));
+            items.push(self.ctx_menu_sep());
+            // Print follows the Altium convention: it exports / prints
+            // the active document. Enabled whenever a schematic tab is
+            // open, regardless of which tree row was clicked — the
+            // previous label-match gate silently disabled the row when
+            // the tree label differed from the active tab's filename.
+            let _ = is_active_tab;
+            items.push(if has_schematic {
+                self.ctx_menu_item_msg(
+                    None,
+                    "Print...",
+                    "",
+                    Message::ProjectTreeAction(A::PrintActive),
+                )
+            } else {
+                self.ctx_menu_item_disabled(None, "Print...", None)
+            });
+            items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
+            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+        } else if is_container {
+            // Source Documents / Libraries / Settings folders. These have
+            // no Altium direct analogue (Altium groups these under the
+            // project root); the minimum useful action is the tree-
+            // widget's own expand/collapse.
+            let label = if node.expanded { "Collapse" } else { "Expand" };
+            items.push(self.ctx_menu_item_msg(
+                None,
+                label,
+                "",
+                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Expand All",
+                "",
+                Message::ProjectTreeAction(A::ExpandAll),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Collapse All",
+                "",
+                Message::ProjectTreeAction(A::CollapseAll),
+            ));
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
+        } else {
+            // Unknown role — give the user at least Refresh so a stale
+            // tree can be rebuilt without restarting.
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
+        }
+
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
+            .into()
+    }
+
+    /// Build the document-tab right-click menu. Items are derived
+    /// from the clicked tab index — the per-tab "Close [filename]"
+    /// row carries the live tab title, and the bulk-close rows are
+    /// gated on whether they'd be no-ops (single tab open → no
+    /// "others" to close). The split / tile / merge rows from
+    /// Altium's screenshot are intentionally left out: Signex's
+    /// editor doesn't support split-pane layout yet.
+    fn view_tab_context_menu(
+        &self,
+        ctx: &crate::app::TabContextMenuState,
+    ) -> Element<'_, Message> {
+        use crate::app::TabContextAction as A;
+
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(6);
+
+        let Some(tab) = self.document_state.tabs.get(ctx.tab_idx) else {
+            return container(iced::widget::Space::new()).into();
+        };
+
+        let title = tab.title.clone();
+        let total_tabs = self.document_state.tabs.len();
+        // A tab can be undocked iff it's not already living in its own
+        // OS window. Single-tab workspaces still show the row (Altium
+        // does too) — undocking a sole tab leaves the main window
+        // empty, which is fine.
+        use super::state::WindowKind;
+        let already_undocked = self
+            .ui_state
+            .windows
+            .values()
+            .any(|kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path));
+
+        items.push(self.ctx_menu_item_msg(
+            None,
+            &format!("Close {title}"),
+            "",
+            Message::TabContextAction(A::Close(ctx.tab_idx)),
+        ));
+        if total_tabs > 1 {
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Close All Other Documents",
+                "",
+                Message::TabContextAction(A::CloseAllOthers(ctx.tab_idx)),
+            ));
+        } else {
+            items.push(self.ctx_menu_item_disabled(None, "Close All Other Documents", None));
+        }
+        items.push(self.ctx_menu_item_msg(
+            None,
+            "Close All Documents",
+            "",
+            Message::TabContextAction(A::CloseAll),
+        ));
+        items.push(self.ctx_menu_sep());
+        items.push(if already_undocked {
+            self.ctx_menu_item_disabled(None, "Open In New Window", None)
+        } else {
+            self.ctx_menu_item_msg(
+                None,
+                "Open In New Window",
+                "",
+                Message::TabContextAction(A::Undock(ctx.tab_idx)),
+            )
+        });
+
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
+            .into()
+    }
+
+    /// Save menu row, active only when a schematic tab is open —
+    /// used by the project-tree context menu's project-root variant.
+    /// Altium's right-click menus do not surface keyboard shortcuts,
+    /// so the shortcut column is intentionally empty here even though
+    /// Ctrl+S still fires `MenuMessage::Save` globally.
+    fn save_menu_item<'a>(&self, enabled: bool) -> Element<'a, Message> {
+        if enabled {
+            self.ctx_menu_item_msg(
+                None,
+                "Save",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::Save),
+            )
+        } else {
+            self.ctx_menu_item_disabled(None, "Save", None)
+        }
+    }
+
+    /// Build the 26-wide icon column for a context-menu row. Mirrors
+    /// `dd_item_icon` in `active_bar.rs` so the icons in the right-
+    /// click menu visually align with the dropdown menus in the bar.
+    /// `None` still reserves the column so labels in icon-less rows
+    /// line up with their iconed neighbours.
+    fn ctx_menu_icon_slot<'a>(
+        icon: Option<iced::widget::svg::Handle>,
+        muted: bool,
+    ) -> Element<'a, Message> {
+        match icon {
+            Some(h) => {
+                let mut s = iced::widget::svg(h)
+                    .width(20)
+                    .height(20)
+                    .content_fit(iced::ContentFit::Contain);
+                if muted {
+                    s = s.style(|_: &iced::Theme, _| iced::widget::svg::Style {
+                        color: Some(iced::Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0)),
+                    });
+                }
+                container(s)
+                    .width(26)
+                    .height(20)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .into()
+            }
+            None => iced::widget::Space::new().width(26).height(20).into(),
+        }
+    }
+
     fn ctx_menu_item_kb<'a>(
         &self,
+        icon: Option<iced::widget::svg::Handle>,
         label: &str,
         shortcut: &str,
         action: ContextAction,
@@ -95,13 +573,15 @@ impl Signex {
         let hover_c = crate::styles::ti(tokens.hover);
         iced::widget::button(
             iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
                 iced::widget::text(label.to_string()).size(11).color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(shortcut.to_string())
                     .size(10)
                     .color(crate::styles::ti(tokens.text_secondary)),
             ]
-            .spacing(12)
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         )
         .width(Self::CONTEXT_MENU_WIDTH)
@@ -126,6 +606,7 @@ impl Signex {
 
     fn ctx_menu_item_msg<'a>(
         &self,
+        icon: Option<iced::widget::svg::Handle>,
         label: &str,
         shortcut: &str,
         message: Message,
@@ -135,13 +616,15 @@ impl Signex {
         let hover_c = crate::styles::ti(tokens.hover);
         iced::widget::button(
             iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
                 iced::widget::text(label.to_string()).size(11).color(text_c),
                 iced::widget::Space::new().width(Length::Fill),
                 iced::widget::text(shortcut.to_string())
                     .size(10)
                     .color(crate::styles::ti(tokens.text_secondary)),
             ]
-            .spacing(12)
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
             .width(Length::Fill),
         )
         .width(Self::CONTEXT_MENU_WIDTH)
@@ -164,24 +647,94 @@ impl Signex {
         .into()
     }
 
-    fn ctx_menu_item_disabled<'a>(&self, label: &str, right: Option<&str>) -> Element<'a, Message> {
+    /// Submenu launcher row — hover to open after a 200 ms delay
+    /// (subscription-driven), or click for instant open. Active state
+    /// highlights the row so the user can tell which submenu is open.
+    fn ctx_menu_item_submenu<'a>(
+        &self,
+        icon: Option<iced::widget::svg::Handle>,
+        label: &str,
+        kind: ContextSubmenu,
+        active: bool,
+    ) -> Element<'a, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let hover_c = crate::styles::ti(tokens.hover);
+        let active_bg = crate::styles::ti(tokens.selection);
+        let arrow_c = crate::styles::ti(tokens.text_secondary);
+        let btn = iced::widget::button(
+            iced::widget::row![
+                Self::ctx_menu_icon_slot(icon, false),
+                iced::widget::text(label.to_string()).size(11).color(text_c),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(SUBMENU_ARROW.to_string())
+                    .size(SUBMENU_ARROW_SIZE)
+                    .color(arrow_c),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .width(Self::CONTEXT_MENU_WIDTH)
+        .padding([4, 12])
+        .on_press(Message::OpenContextSubmenu(kind))
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ if active => Some(iced::Background::Color(active_bg)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        );
+        // Wrap in mouse_area for on_enter / on_exit so the hover timer
+        // (handled by `Message::TickContextSubmenuHover`) can open the
+        // submenu after 200 ms without the user clicking.
+        iced::widget::mouse_area(btn)
+            .on_enter(Message::HoverContextSubmenu(kind))
+            .on_exit(Message::LeaveContextSubmenu)
+            .into()
+    }
+
+    fn ctx_menu_item_disabled<'a>(
+        &self,
+        icon: Option<iced::widget::svg::Handle>,
+        label: &str,
+        right: Option<&str>,
+    ) -> Element<'a, Message> {
         let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
         let mut row = iced::widget::row![
+            Self::ctx_menu_icon_slot(icon, true),
             iced::widget::text(label.to_string())
                 .size(11)
                 .color(text_secondary),
             iced::widget::Space::new().width(Length::Fill),
         ]
-        .spacing(12)
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
         .width(Length::Fill);
 
         if let Some(right_text) = right {
-            // Submenu/shortcut column. Bigger than the label so the arrow
-            // (›) is readable at a glance. Non-emoji glyph so Windows does
-            // not render it through the color emoji font.
+            // Submenu arrow (›) renders at the unified `SUBMENU_ARROW_SIZE`
+            // so disabled placeholder rows showing the chevron line up
+            // with live submenu launchers and the menu_bar dropdowns.
+            // Every other right-column string (keyboard shortcuts,
+            // "coming in vX.Y" version badges) renders at 10 to match
+            // the shortcut-column sizing used by enabled rows.
+            let size = if right_text == SUBMENU_ARROW {
+                SUBMENU_ARROW_SIZE
+            } else {
+                10.0
+            };
             row = row.push(
                 iced::widget::text(right_text.to_string())
-                    .size(14)
+                    .size(size)
                     .color(text_secondary),
             );
         }
@@ -189,6 +742,258 @@ impl Signex {
         container(row)
             .padding([4, 12])
             .width(Self::CONTEXT_MENU_WIDTH)
+            .into()
+    }
+
+    /// Build the secondary submenu (Place / Align) shown to the right
+    /// of the parent context menu. Each row dispatches an Active Bar
+    /// action via `ContextAction::ActiveBar(...)` so the placement /
+    /// transform pipelines stay shared with the toolbar.
+    fn view_context_submenu(&self, kind: ContextSubmenu) -> Element<'_, Message> {
+        use crate::active_bar::ActiveBarAction as A;
+        use crate::icons as ic;
+        let tid = self.ui_state.theme_id;
+        let panel_ctx = &self.document_state.panel_ctx;
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
+        let mk = |icon: iced::widget::svg::Handle,
+                  label: &'static str,
+                  action: A|
+         -> Element<'_, Message> {
+            self.ctx_menu_item_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
+        };
+        match kind {
+            ContextSubmenu::Place => {
+                // Wires + buses + entries
+                items.push(mk(ic::icon_dd_wire(tid), "Wire", A::DrawWire));
+                items.push(mk(ic::icon_dd_bus(tid), "Bus", A::DrawBus));
+                items.push(mk(
+                    ic::icon_dd_bus_entry(tid),
+                    "Bus Entry",
+                    A::PlaceBusEntry,
+                ));
+                items.push(mk(
+                    ic::icon_dd_net_label(tid),
+                    "Net Label",
+                    A::PlaceNetLabel,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Ports
+                items.push(mk(ic::icon_dd_port(tid), "Port", A::PlacePort));
+                items.push(mk(
+                    ic::icon_dd_off_sheet(tid),
+                    "Off Sheet Connector",
+                    A::PlaceOffSheetConnector,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Power ports (the four most common)
+                items.push(mk(ic::icon_dd_gnd(tid), "GND Power Port", A::PlacePowerGND));
+                items.push(mk(ic::icon_dd_vcc(tid), "VCC Power Port", A::PlacePowerVCC));
+                items.push(mk(
+                    ic::icon_dd_pwr_plus5(tid),
+                    "+5 Power Port",
+                    A::PlacePowerPlus5,
+                ));
+                items.push(mk(
+                    ic::icon_dd_pwr_plus12(tid),
+                    "+12 Power Port",
+                    A::PlacePowerPlus12,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Directives
+                items.push(mk(
+                    ic::icon_dd_param_set(tid),
+                    "Parameter Set",
+                    A::PlaceParameterSet,
+                ));
+                items.push(mk(ic::icon_dd_no_erc(tid), "Generic No ERC", A::PlaceNoERC));
+                items.push(mk(
+                    ic::icon_dd_diff_pair(tid),
+                    "Differential Pair",
+                    A::PlaceDiffPair,
+                ));
+                items.push(mk(ic::icon_dd_blanket(tid), "Blanket", A::PlaceBlanket));
+                items.push(self.ctx_menu_sep());
+                // Harness
+                items.push(mk(
+                    ic::icon_dd_harness(tid),
+                    "Signal Harness",
+                    A::PlaceSignalHarness,
+                ));
+                items.push(mk(
+                    ic::icon_dd_harness_conn(tid),
+                    "Harness Connector",
+                    A::PlaceHarnessConnector,
+                ));
+                items.push(mk(
+                    ic::icon_dd_harness_entry(tid),
+                    "Harness Entry",
+                    A::PlaceHarnessEntry,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Sheet symbols
+                items.push(mk(
+                    ic::icon_dd_sheet_symbol(tid),
+                    "Sheet Symbol",
+                    A::PlaceSheetSymbol,
+                ));
+                items.push(mk(
+                    ic::icon_dd_sheet_entry(tid),
+                    "Sheet Entry",
+                    A::PlaceSheetEntry,
+                ));
+                items.push(mk(
+                    ic::icon_dd_device_sheet(tid),
+                    "Device Sheet Symbol",
+                    A::PlaceDeviceSheetSymbol,
+                ));
+                items.push(self.ctx_menu_sep());
+                // Component
+                items.push(mk(ic::icon_component(tid), "Part", A::PlaceComponent));
+                items.push(self.ctx_menu_sep());
+                // Text
+                items.push(mk(
+                    ic::icon_dd_text_string(tid),
+                    "Text String",
+                    A::PlaceTextString,
+                ));
+                items.push(mk(
+                    ic::icon_dd_text_frame(tid),
+                    "Text Frame",
+                    A::PlaceTextFrame,
+                ));
+                items.push(mk(ic::icon_dd_note(tid), "Note", A::PlaceNote));
+            }
+            ContextSubmenu::Align => {
+                // Altium gating: pairwise aligns (Left/Right/Top/Bottom/H/V
+                // Centers) need ≥2 items to make sense; Distribute needs
+                // ≥3 (two endpoints + at least one item to space between
+                // them); Align To Grid works on a single item too. The
+                // submenu is only opened when something is selected, so
+                // grid is always enabled here.
+                let n = self.interaction_state.canvas.selected.len();
+                let pair = n >= 2;
+                let dist = n >= 3;
+                let mk_or_disabled = |icon: iced::widget::svg::Handle,
+                                      label: &'static str,
+                                      action: A,
+                                      enabled: bool|
+                 -> Element<'_, Message> {
+                    if enabled {
+                        mk(icon, label, action)
+                    } else {
+                        self.ctx_menu_item_disabled(Some(icon), label, None)
+                    }
+                };
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_left(tid),
+                    "Align Left",
+                    A::AlignLeft,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_right(tid),
+                    "Align Right",
+                    A::AlignRight,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_hcenter(tid),
+                    "Align Horizontal Centers",
+                    A::AlignHorizontalCenters,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_dist_horiz(tid),
+                    "Distribute Horizontally",
+                    A::DistributeHorizontally,
+                    dist,
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_top(tid),
+                    "Align Top",
+                    A::AlignTop,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_bottom(tid),
+                    "Align Bottom",
+                    A::AlignBottom,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_align_vcenter(tid),
+                    "Align Vertical Centers",
+                    A::AlignVerticalCenters,
+                    pair,
+                ));
+                items.push(mk_or_disabled(
+                    ic::icon_dd_dist_vert(tid),
+                    "Distribute Vertically",
+                    A::DistributeVertically,
+                    dist,
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(mk(
+                    ic::icon_dd_align_grid(tid),
+                    "Align To Grid",
+                    A::AlignToGrid,
+                ));
+            }
+            ContextSubmenu::AddNewToProject => {
+                // Altium parity: this is the master "Add New" picker for
+                // the active project. Every entry below requires
+                // project-file write support (v0.9) plus the matching
+                // editor — none ship in v0.8, so each row carries a
+                // version badge and stays disabled. The submenu still
+                // launches so the user can see what's coming.
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_wire(tid)),
+                    "Schematic",
+                    Some("v0.9"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_component(tid)),
+                    "Schematic Library",
+                    Some("v0.9"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_part_actions(tid)),
+                    "PCB",
+                    Some("v2.0"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_component(tid)),
+                    "PCB Library",
+                    Some("v2.0"),
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "Output Job",
+                    Some("v1.3"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_frame(tid)),
+                    "Design Notebook",
+                    Some("v1.4"),
+                ));
+                items.push(self.ctx_menu_sep());
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "Constraint File",
+                    Some("v3.x"),
+                ));
+                items.push(self.ctx_menu_item_disabled(
+                    Some(ic::icon_dd_text_string(tid)),
+                    "VHDL File",
+                    Some("v3.x"),
+                ));
+            }
+        }
+        container(column(items).spacing(0).width(Self::CONTEXT_MENU_WIDTH))
+            .padding([4, 0])
+            .style(crate::styles::context_menu(&panel_ctx.tokens))
             .into()
     }
 
@@ -202,6 +1007,977 @@ impl Signex {
                 ..container::Style::default()
             })
             .into()
+    }
+
+    /// Export-error modal — plain "something went wrong, here's the
+    /// message" dialog with an OK button. Sits on top of the print-preview
+    /// overlay when both would otherwise render; dismiss_layer handles
+    /// click-outside-to-close.
+    fn view_export_error(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, row, text};
+        let msg = match &self.document_state.export_error {
+            Some(m) => m.clone(),
+            None => return iced::widget::Space::new().into(),
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let border_c = crate::styles::ti(tokens.border);
+        let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
+
+        let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
+            .padding([6, 20])
+            .on_press(Message::DismissExportError)
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(err_red.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            );
+
+        let body = column![
+            row![
+                text("\u{26A0}").size(24).color(err_red),
+                iced::widget::Space::new().width(10),
+                text("Export Failed").size(14).color(text_c),
+            ]
+            .align_y(iced::Alignment::Center),
+            iced::widget::Space::new().height(8),
+            text(msg).size(12).color(text_c),
+            iced::widget::Space::new().height(12),
+            row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
+        ]
+        .padding(20);
+
+        let card = container(body)
+            .max_width(480)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(8.0),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 16.0,
+                },
+                ..container::Style::default()
+            });
+
+        container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+    }
+
+    /// Print Preview overlay. Shows thumbnails of every rendered page on
+    /// the left, the selected page full-size on the right, with Export PDF
+    /// and Close buttons at the bottom. Triggered by File → Print Preview
+    /// (Ctrl+P) and File → Export PDF; disappears on Close or when the
+    /// export completes. In-window flavour wraps the body in `wrap_modal`
+    /// for backdrop + drag-to-position.
+    fn view_print_preview(&self) -> Element<'_, Message> {
+        use crate::app::state::ModalId;
+        use crate::app::view::dialogs::wrap_modal;
+        let body = self.view_print_preview_inner(true);
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&ModalId::PrintPreview)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(
+            body,
+            offset,
+            self.ui_state.window_size,
+            (Self::PDF_MODAL_W, Self::PDF_MODAL_H),
+        )
+    }
+
+    /// Detached-window flavour — bare body, no backdrop, no in-window
+    /// drag handler (the OS window-drag covers the header).
+    pub(super) fn view_print_preview_body(&self) -> Element<'_, Message> {
+        self.view_print_preview_inner(false)
+    }
+
+    fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
+        use crate::app::state::{ModalId, PdfPreviewTab};
+        use crate::app::view::dialogs::{
+            close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
+            MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+        };
+        use iced::widget::{button, column, container, row, text, Space};
+        let theme_id = self.ui_state.theme_id;
+
+        let preview = match &self.document_state.preview {
+            Some(p) => p,
+            None => return iced::widget::Space::new().into(),
+        };
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let accent_c = crate::styles::ti(tokens.accent);
+
+        // Header — same chrome as every other modal.
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Export PDF").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = if draggable {
+            draggable_header(
+                header_content,
+                ModalId::PrintPreview,
+                self.interaction_state.last_mouse_pos,
+            )
+        } else {
+            detached_header(header_content, ModalId::PrintPreview)
+        };
+
+        // Tab strip — Preview | Settings.
+        let tab_strip = self.view_pdf_tab_strip(preview.active_tab);
+
+        // Body switches by tab.
+        let body: Element<'_, Message> = match preview.active_tab {
+            PdfPreviewTab::Preview => self.view_pdf_preview_tab(preview),
+            PdfPreviewTab::Settings => self.view_pdf_settings_tab(preview),
+        };
+
+        // Footer — page count + Export PDF.
+        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
+            .padding([6, 14])
+            .on_press(Message::PrintPreviewExport)
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(accent_c.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            );
+        let footer_caption = if preview.pages.is_empty() {
+            "No files selected for export".to_string()
+        } else {
+            format!("{} page(s) — preview at 96 DPI", preview.pages.len())
+        };
+        let footer = container(
+            row![
+                text(footer_caption).size(11).color(text_muted),
+                Space::new().width(Length::Fill),
+                export_btn,
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14]);
+
+        let dialog = container(
+            column![header, tab_strip, body, footer]
+                .width(Self::PDF_MODAL_W)
+                .height(Self::PDF_MODAL_H),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    /// Two-tab strip — Preview | Settings — sitting just under the
+    /// modal header. Uses the same `TabPill` widget the document tab
+    /// bar paints with: 3-sided border (top + L/R), accent stripe on
+    /// the active tab, fill that fades for inactive. `is_last=true`
+    /// on the rightmost so the trailing border doesn't double up
+    /// against an adjacent tab's left edge.
+    fn view_pdf_tab_strip(
+        &self,
+        active: crate::app::state::PdfPreviewTab,
+    ) -> Element<'_, Message> {
+        use crate::app::state::PdfPreviewTab;
+        use iced::widget::{container, mouse_area, row, text, Space};
+        use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::ti(tokens.hover);
+
+        let pill_fill = |is_active: bool| -> iced::Color {
+            if is_active {
+                hover_c
+            } else {
+                iced::Color {
+                    a: hover_c.a * 0.35,
+                    ..hover_c
+                }
+            }
+        };
+
+        let tab = |label: &'static str, this: PdfPreviewTab, is_last: bool| {
+            let is_active = this == active;
+            let label_color = if is_active { text_c } else { text_muted };
+            let style = TabPillStyle {
+                fill: pill_fill(is_active),
+                border: border_c,
+                accent: accent_c,
+                is_active,
+                is_last,
+                accent_position: AccentPosition::Bottom,
+            };
+            let inner = container(text(label).size(12).color(label_color))
+                .padding([6, 18]);
+            mouse_area(TabPill::new(inner, style))
+                .on_press(Message::PrintPreviewSetTab(this))
+                .interaction(iced::mouse::Interaction::Pointer)
+        };
+
+        container(
+            row![
+                tab("Preview", PdfPreviewTab::Preview, false),
+                tab("Settings", PdfPreviewTab::Settings, true),
+                Space::new().width(Length::Fill),
+            ]
+            .spacing(0)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([0, 14])
+        .into()
+    }
+
+    /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
+    /// rail on the left, pan/zoom viewport on the right.
+    fn view_pdf_preview_tab(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{
+            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
+            text_input, Space,
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::ti(tokens.hover);
+
+        let mode_button = |label: &'static str, selected: bool, msg: Message| {
+            let selected_bg = accent_c;
+            let selected_text = iced::Color::WHITE;
+            let default_bg = panel_bg;
+            let default_text = text_c;
+            button(text(label).size(11).color(if selected {
+                selected_text
+            } else {
+                default_text
+            }))
+            .padding([4, 10])
+            .on_press(msg)
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(if selected {
+                        selected_bg.into()
+                    } else {
+                        default_bg.into()
+                    }),
+                    text_color: if selected {
+                        selected_text
+                    } else {
+                        default_text
+                    },
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(4.0),
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            )
+        };
+
+        let colour_controls = row![
+            text("Colour").size(11).color(text_muted),
+            mode_button(
+                "Color",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
+            ),
+            mode_button(
+                "Gray",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
+            ),
+            mode_button(
+                "B/W",
+                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let range_controls = row![
+            text("Pages").size(11).color(text_muted),
+            mode_button(
+                "All",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
+                Message::PrintPreviewSetPageRangeAll,
+            ),
+            mode_button(
+                "Current",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
+                Message::PrintPreviewSetPageRangeCurrent,
+            ),
+            mode_button(
+                "Specific",
+                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
+                Message::PrintPreviewSetPageRangeSpecific,
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let specific_page_input: Element<'_, Message> = if matches!(
+            preview.pdf_options.page_range,
+            signex_output::PageRange::Specific(_)
+        ) {
+            row![
+                text("Page").size(11).color(text_muted),
+                text_input("1", &preview.specific_page_input)
+                    .on_input(Message::PrintPreviewSetSpecificPageInput)
+                .padding([4, 8])
+                .size(12)
+                .width(80),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            iced::widget::Space::new().height(0).into()
+        };
+
+        let fit_to_page = matches!(
+            preview.pdf_options.scale,
+            signex_output::PdfScale::FitToPage
+        );
+        let toggles_row = row![
+            text("Output").size(11).color(text_muted),
+            row![
+                checkbox(fit_to_page).on_toggle(Message::PrintPreviewSetFitToPage),
+                text("Fit to Page").size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+            row![
+                checkbox(preview.pdf_options.include_title_block)
+                    .on_toggle(Message::PrintPreviewSetIncludeTitleBlock),
+                text("Title Block").size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center);
+
+        let page_size_label = match &preview.pdf_options.page_size {
+            signex_output::PageSize::IsoA0 => "ISO A0",
+            signex_output::PageSize::IsoA1 => "ISO A1",
+            signex_output::PageSize::IsoA2 => "ISO A2",
+            signex_output::PageSize::IsoA3 => "ISO A3",
+            signex_output::PageSize::IsoA4 => "ISO A4",
+            signex_output::PageSize::IsoA5 => "ISO A5",
+            signex_output::PageSize::AnsiA => "ANSI A",
+            signex_output::PageSize::AnsiB => "ANSI B",
+            signex_output::PageSize::AnsiC => "ANSI C",
+            signex_output::PageSize::AnsiD => "ANSI D",
+            signex_output::PageSize::AnsiE => "ANSI E",
+            signex_output::PageSize::UsLetter => "US Letter",
+            signex_output::PageSize::UsLegal => "US Legal",
+            signex_output::PageSize::Custom { .. } => "Custom",
+        };
+        let orientation_label = match preview.pdf_options.orientation {
+            signex_output::Orientation::Portrait => "Portrait",
+            signex_output::Orientation::Landscape => "Landscape",
+        };
+        let summary_row = row![
+            text("Sheet").size(11).color(text_muted),
+            text(format!("{} • {}", page_size_label, orientation_label))
+                .size(11)
+                .color(text_c),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        let toolbar = container(
+            row![
+                summary_row,
+                Space::new().width(16),
+                colour_controls,
+                Space::new().width(12),
+                range_controls,
+                specific_page_input,
+                Space::new().width(Length::Fill),
+                toggles_row,
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([8, 14]);
+
+        // Thumb rail.
+        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
+        for (i, page) in preview.pages.iter().enumerate() {
+            let selected = i == preview.selected;
+            let thumb = image(preview.page_handles[i].clone())
+                .content_fit(iced::ContentFit::Contain)
+                .width(120)
+                .height(85);
+            let card_bg = if selected { hover_c } else { panel_bg };
+            let card_border = if selected { accent_c } else { border_c };
+            let card = container(
+                column![
+                    thumb,
+                    text(format!("Page {}", page.page_number))
+                        .size(10)
+                        .color(text_c)
+                ]
+                .spacing(2)
+                .align_x(iced::Alignment::Center),
+            )
+            .padding(4)
+            .width(132)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(card_bg.into()),
+                border: iced::Border {
+                    color: card_border,
+                    width: if selected { 2.0 } else { 1.0 },
+                    radius: iced::border::Radius::from(4.0),
+                },
+                ..container::Style::default()
+            });
+            thumbs = thumbs.push(mouse_area(card).on_press(Message::PrintPreviewSelectPage(i)));
+        }
+        let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
+
+        // Pan/zoom viewport. The image is positioned via Translate so
+        // pan delta moves it inside a clipped container — no
+        // scrollbars, just drag-to-pan + wheel-zoom.
+        let viewport: Element<'_, Message> = if preview.pages.is_empty() {
+            container(
+                text("No files selected — toggle files in Settings → Files.")
+                    .size(12)
+                    .color(text_muted),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(iced::Color::WHITE.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::from(2.0),
+                },
+                ..container::Style::default()
+            })
+            .into()
+        } else {
+            let selected_page = &preview.pages[preview.selected];
+            let zoom = preview.zoom;
+            let scaled_w = (selected_page.width_px as f32 * zoom).max(64.0);
+            let scaled_h = (selected_page.height_px as f32 * zoom).max(64.0);
+            // At zoom ≤ 1 we want the page to fill the viewport
+            // preserving aspect; above 1× we render at exact scaled
+            // pixels and let the user pan around.
+            let img_el: Element<'_, Message> = if zoom <= 1.0 {
+                image(preview.page_handles[preview.selected].clone())
+                    .content_fit(iced::ContentFit::Contain)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                image(preview.page_handles[preview.selected].clone())
+                    .content_fit(iced::ContentFit::Fill)
+                    .width(Length::Fixed(scaled_w))
+                    .height(Length::Fixed(scaled_h))
+                    .into()
+            };
+            // Position the image at the pan offset. Below 1× the pan
+            // is forced to (0, 0) (see the zoom handler) so the
+            // translate is a no-op.
+            let positioned: Element<'_, Message> = if zoom <= 1.0 {
+                img_el
+            } else {
+                super::view::translate::Translate::new(img_el, preview.pan).into()
+            };
+            let surface = container(positioned)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(iced::Color::WHITE.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(2.0),
+                    },
+                    ..container::Style::default()
+                })
+                .clip(true);
+            let interaction = if zoom > 1.0 {
+                if preview.panning.is_some() {
+                    iced::mouse::Interaction::Grabbing
+                } else {
+                    iced::mouse::Interaction::Grab
+                }
+            } else {
+                iced::mouse::Interaction::default()
+            };
+            iced::widget::mouse_area(surface)
+                .on_press(Message::PrintPreviewPanStart)
+                .on_release(Message::PrintPreviewPanFinished)
+                .on_scroll(|delta| {
+                    use iced::mouse::ScrollDelta;
+                    let dy = match delta {
+                        ScrollDelta::Lines { y, .. } => y,
+                        ScrollDelta::Pixels { y, .. } => y,
+                    };
+                    Message::PrintPreviewZoom(dy)
+                })
+                .interaction(interaction)
+                .into()
+        };
+
+        let zoom = preview.zoom;
+        let page_caption = if preview.pages.is_empty() {
+            text("—".to_string()).size(11).color(text_muted)
+        } else {
+            let selected_page = &preview.pages[preview.selected];
+            text(format!(
+                "Page {} of {} — {}×{} px · {:.0}%",
+                selected_page.page_number,
+                preview.pages.len(),
+                selected_page.width_px,
+                selected_page.height_px,
+                zoom * 100.0,
+            ))
+            .size(11)
+            .color(text_muted)
+        };
+
+        let centre = column![viewport, page_caption]
+            .spacing(6)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let body_row = container(
+            row![thumb_rail, Space::new().width(8), centre]
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .padding([0, 14])
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        column![toolbar, body_row]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+
+    /// Settings tab — stitches the three section helpers below into a
+    /// single scrollable column. Each helper owns its own widgets and
+    /// reads/writes through `preview.pdf_options.*` directly so the
+    /// rasterizer and exporter stay in lockstep with the UI.
+    fn view_pdf_settings_tab(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{column, scrollable, Space};
+        let body = column![
+            self.view_pdf_files_section(preview),
+            Space::new().height(10),
+            self.view_pdf_structure_section(preview),
+            Space::new().height(10),
+            self.view_pdf_additional_section(preview),
+        ]
+        .spacing(0)
+        .padding([10, 14]);
+        scrollable(body)
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
+    }
+
+    /// Section header strip — accent panel-bg with a 1 px border.
+    /// Reused by every Settings-tab section.
+    fn pdf_section_title(&self, label: &'static str) -> Element<'_, Message> {
+        use iced::widget::{container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let border_c = crate::styles::ti(tokens.border);
+        container(text(label).size(12).color(text_c))
+            .padding([6, 10])
+            .width(Length::Fill)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(panel_bg.into()),
+                border: iced::Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: iced::border::Radius::default(),
+                },
+                ..container::Style::default()
+            })
+            .into()
+    }
+
+    /// Settings → Choose Project Files.
+    fn view_pdf_files_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{button, checkbox, column, container, row, scrollable, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+
+        let project_sheets: Vec<(std::path::PathBuf, String)> = self
+            .document_state
+            .active_loaded_project()
+            .map(|p| {
+                let dir = std::path::PathBuf::from(&p.data.dir);
+                p.data
+                    .sheets
+                    .iter()
+                    .map(|s| (dir.join(&s.filename), s.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut file_list: iced::widget::Column<'_, Message> =
+            column![].spacing(2).padding([8, 12]);
+        if project_sheets.is_empty() {
+            file_list = file_list.push(
+                text("No project loaded — load a .standard_pro to pick files.")
+                    .size(11)
+                    .color(text_muted),
+            );
+        } else {
+            for (path, name) in &project_sheets {
+                let is_selected = preview.selected_files.contains(path);
+                let path_str = path.display().to_string();
+                let row_el = row![
+                    checkbox(is_selected).on_toggle({
+                        let path = path.clone();
+                        move |_| Message::PrintPreviewToggleFile(path.clone())
+                    }),
+                    column![
+                        text(name.clone()).size(11).color(text_c),
+                        text(path_str).size(10).color(text_muted),
+                    ]
+                    .spacing(1),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center);
+                file_list = file_list.push(row_el);
+            }
+        }
+        let secondary_btn_style = move |_: &iced::Theme, _status| iced::widget::button::Style {
+            background: Some(panel_bg.into()),
+            text_color: text_c,
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: iced::border::Radius::from(3.0),
+            },
+            ..iced::widget::button::Style::default()
+        };
+        let file_actions = row![
+            button(text("Select All").size(11).color(text_c))
+                .padding([3, 8])
+                .on_press(Message::PrintPreviewSelectAllFiles)
+                .style(secondary_btn_style),
+            button(text("Clear").size(11).color(text_c))
+                .padding([3, 8])
+                .on_press(Message::PrintPreviewClearAllFiles)
+                .style(secondary_btn_style),
+        ]
+        .spacing(6);
+
+        column![
+            self.pdf_section_title("Choose Project Files"),
+            container(
+                column![
+                    text("Select the files in the project to export from the list. Multiple files can be selected.")
+                        .size(11)
+                        .color(text_muted),
+                    Space::new().height(6),
+                    container(scrollable(file_list).height(160))
+                        .width(Length::Fill)
+                        .style(move |_: &iced::Theme| container::Style {
+                            border: iced::Border {
+                                color: border_c,
+                                width: 1.0,
+                                radius: iced::border::Radius::default(),
+                            },
+                            ..container::Style::default()
+                        }),
+                    Space::new().height(6),
+                    file_actions,
+                ]
+                .padding([10, 12]),
+            ),
+        ]
+        .spacing(0)
+        .into()
+    }
+
+    /// Settings → Structure Settings.
+    fn view_pdf_structure_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use iced::widget::{checkbox, column, container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let opts = &preview.pdf_options;
+
+        let variant_label = opts
+            .variant
+            .clone()
+            .unwrap_or_else(|| "Base".to_string());
+        let mut variant_options: Vec<String> = vec!["Base".to_string()];
+        variant_options.extend(preview.variants.clone());
+        variant_options.dedup();
+        let variant_picker = iced::widget::pick_list(
+            variant_options,
+            Some(variant_label),
+            |s| {
+                if s.eq_ignore_ascii_case("Base") {
+                    Message::PrintPreviewSetVariant(None)
+                } else {
+                    Message::PrintPreviewSetVariant(Some(s))
+                }
+            },
+        )
+        .text_size(11)
+        .width(220);
+
+        let labelled_check = |label: &'static str,
+                              value: bool,
+                              on: fn(bool) -> Message|
+         -> iced::widget::Row<'_, Message> {
+            row![
+                text(label).size(11).color(text_muted).width(150),
+                checkbox(value).on_toggle(on),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+        };
+
+        column![
+            self.pdf_section_title("Structure Settings"),
+            container(
+                column![
+                    text("If checked, exported sheets are expanded from logical to physical sheets. Choose a variant and which expanded names appear.")
+                        .size(11)
+                        .color(text_muted),
+                    Space::new().height(8),
+                    row![
+                        checkbox(opts.use_physical_structure)
+                            .on_toggle(Message::PrintPreviewSetUsePhysicalStructure),
+                        text("Use Physical Structure").size(11).color(text_c),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center),
+                    Space::new().height(6),
+                    row![
+                        text("Variant").size(11).color(text_muted).width(150),
+                        variant_picker,
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                    Space::new().height(8),
+                    labelled_check("Designators", opts.physical_designators, Message::PrintPreviewSetPhysicalDesignators),
+                    labelled_check("Net Labels", opts.physical_net_labels, Message::PrintPreviewSetPhysicalNetLabels),
+                    labelled_check("Ports and Sheet Entries", opts.physical_ports, Message::PrintPreviewSetPhysicalPorts),
+                    labelled_check("Sheet Number Parameter", opts.physical_sheet_number, Message::PrintPreviewSetPhysicalSheetNumber),
+                    labelled_check("Document Number Parameter", opts.physical_document_number, Message::PrintPreviewSetPhysicalDocumentNumber),
+                ]
+                .padding([10, 12])
+                .spacing(2),
+            ),
+        ]
+        .spacing(0)
+        .into()
+    }
+
+    /// Settings → Additional PDF Settings.
+    fn view_pdf_additional_section(
+        &self,
+        preview: &crate::app::state::PreviewState,
+    ) -> Element<'_, Message> {
+        use crate::app::state::PdfQuality;
+        use iced::widget::{checkbox, column, container, row, text, Space};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let opts = &preview.pdf_options;
+
+        let lbl_check = move |label: &'static str, value: bool, on: fn(bool) -> Message| {
+            row![
+                checkbox(value).on_toggle(on),
+                text(label).size(11).color(text_c),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+        };
+
+        let zoom_slider = iced::widget::slider(
+            0.0_f32..=1.0,
+            opts.bookmark_zoom,
+            Message::PrintPreviewSetBookmarkZoom,
+        )
+        .step(0.05_f32)
+        .width(180);
+        let zoom_col = column![
+            text("Zoom").size(11).color(text_c),
+            text("Slider controls the zoom level in the PDF reader when jumping to components or nets.")
+                .size(10)
+                .color(text_muted),
+            Space::new().height(6),
+            row![
+                text("Far").size(10).color(text_muted),
+                zoom_slider,
+                text("Close").size(10).color(text_muted),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(2);
+
+        let info_col = column![
+            text("Additional Information").size(11).color(text_c),
+            Space::new().height(4),
+            lbl_check(
+                "Generate nets information",
+                opts.generate_nets_info,
+                Message::PrintPreviewSetGenerateNetsInfo,
+            ),
+            Space::new().height(4),
+            text("The following bookmarks can be created in the PDF for nets:")
+                .size(10)
+                .color(text_muted),
+            row![
+                Space::new().width(14),
+                column![
+                    lbl_check("Pins", opts.bookmark_pins, Message::PrintPreviewSetBookmarkPins),
+                    lbl_check("Net Labels", opts.bookmark_net_labels, Message::PrintPreviewSetBookmarkNetLabels),
+                    lbl_check("Ports", opts.bookmark_ports, Message::PrintPreviewSetBookmarkPorts),
+                ]
+                .spacing(2),
+            ],
+            Space::new().height(4),
+            lbl_check(
+                "Include Component Parameters",
+                opts.include_component_parameters,
+                Message::PrintPreviewSetIncludeComponentParameters,
+            ),
+            lbl_check(
+                "Global Bookmarks for Components and Nets",
+                opts.global_bookmarks,
+                Message::PrintPreviewSetGlobalBookmarks,
+            ),
+        ]
+        .spacing(2);
+
+        let schematics_include_col = column![
+            text("Schematics include").size(11).color(text_c),
+            Space::new().height(4),
+            lbl_check("No-ERC Markers", opts.include_no_erc_markers, Message::PrintPreviewSetIncludeNoErcMarkers),
+            lbl_check("Parameter Sets", opts.include_parameter_sets, Message::PrintPreviewSetIncludeParameterSets),
+            lbl_check("Probes", opts.include_probes, Message::PrintPreviewSetIncludeProbes),
+            lbl_check("Blankets", opts.include_blankets, Message::PrintPreviewSetIncludeBlankets),
+            lbl_check("Notes", opts.include_notes, Message::PrintPreviewSetIncludeNotes),
+            row![
+                Space::new().width(14),
+                lbl_check("Collapsed notes", opts.include_collapsed_notes, Message::PrintPreviewSetIncludeCollapsedNotes),
+            ],
+            Space::new().height(8),
+            text("Quality").size(11).color(text_c),
+            iced::widget::pick_list(
+                vec![PdfQuality::Draft72, PdfQuality::Medium300, PdfQuality::High600],
+                Some(preview.quality),
+                Message::PrintPreviewSetQuality,
+            )
+            .text_size(11)
+            .width(180),
+        ]
+        .spacing(2);
+
+        let radio = move |label: &'static str,
+                          this: signex_output::ColourMode,
+                          current: signex_output::ColourMode,
+                          on: fn(signex_output::ColourMode) -> Message| {
+            iced::widget::radio(label, this, Some(current), on)
+                .text_size(11)
+                .size(14)
+        };
+
+        let sch_color_col = column![
+            text("Schematics Color Mode").size(11).color(text_c),
+            Space::new().height(4),
+            radio("Color", signex_output::ColourMode::Colour, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            Space::new().height(8),
+            text("PCB Color Mode").size(11).color(text_c),
+            Space::new().height(4),
+            radio("Color", signex_output::ColourMode::Colour, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+        ]
+        .spacing(2);
+
+        column![
+            self.pdf_section_title("Additional PDF Settings"),
+            container(
+                row![
+                    column![zoom_col, Space::new().height(12), info_col]
+                        .spacing(0)
+                        .width(Length::FillPortion(2)),
+                    Space::new().width(16),
+                    schematics_include_col.width(Length::FillPortion(2)),
+                    Space::new().width(16),
+                    sch_color_col.width(Length::FillPortion(2)),
+                ]
+                .padding([10, 12]),
+            ),
+        ]
+        .spacing(0)
+        .into()
     }
 
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -236,43 +2012,32 @@ impl Signex {
     /// so it reads as "the tab itself is moving". The ghost is
     /// non-interactive; it just shows what the user is carrying.
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
-        use iced::widget::{Space, container, row, text};
+        use iced::widget::{container, row, text};
+        use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border = crate::styles::ti(tokens.border);
         let active_bg = crate::styles::ti(tokens.hover);
-        // Slight translucency so the user still sees the tab bar
-        // underneath — reads as "ghost" rather than a solid widget.
-        let bg = iced::Color {
-            a: 0.88,
-            ..active_bg
+        let accent = crate::styles::ti(tokens.accent);
+        // Match the live tab look: same TabPill widget, accent
+        // stripe at the bottom, top-rounded corners. The previous
+        // ghost showed an old style with inline ↗ undock + × close
+        // glyphs that were removed when the tab right-click menu
+        // landed.
+        let pill_style = TabPillStyle {
+            fill: iced::Color { a: 0.88, ..active_bg },
+            border: crate::styles::ti(tokens.border),
+            accent,
+            is_active: true,
+            is_last: true,
+            accent_position: AccentPosition::Bottom,
         };
-        let tab_like = container(
-            row![
-                text(title.to_string()).size(11).color(text_c),
-                Space::new().width(6),
-                text("\u{2197}".to_string()).size(12).color(text_muted),
-                Space::new().width(4),
-                text("\u{00D7}".to_string()).size(14).color(text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 10])
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(bg)),
-            border: iced::Border {
-                width: 1.0,
-                radius: 0.0.into(),
-                color: border,
-            },
-            text_color: Some(text_c),
-            ..container::Style::default()
-        });
+        let inner = container(row![text(title.to_string()).size(11).color(text_c)])
+            .padding([4, 10]);
+        let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
         let (cx, cy) = self.interaction_state.last_mouse_pos;
-        super::view::translate::Translate::new(tab_like, (cx + 10.0, cy + 6.0)).into()
+        super::view::translate::Translate::new(pill, (cx + 10.0, cy + 6.0)).into()
     }
 
     /// Altium-style Move Selection dialog. Two numeric inputs plus
@@ -297,7 +2062,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::MoveSelection,
@@ -387,7 +2152,8 @@ impl Signex {
                 .width(iced::Length::Fixed(420.0))
                 .height(iced::Length::Fixed(240.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -444,7 +2210,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::NetColorPalette,
@@ -582,7 +2348,8 @@ impl Signex {
             .width(iced::Length::Fixed(520.0))
             .height(iced::Length::Fixed(480.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -609,7 +2376,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .padding([10, 14])
-            .style(crate::styles::toolbar_strip(tokens)),
+            .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
             super::state::ModalId::ParameterManager,
@@ -629,7 +2396,8 @@ impl Signex {
                 .width(iced::Length::Fixed(900.0))
                 .height(iced::Length::Fixed(560.0)),
             )
-            .style(crate::styles::context_menu(tokens))
+            .style(crate::styles::modal_card(tokens))
+        .clip(true)
             .into();
         };
         let doc = engine.document();
@@ -733,7 +2501,8 @@ impl Signex {
             .width(iced::Length::Fixed(900.0))
             .height(iced::Length::Fixed(560.0)),
         )
-        .style(crate::styles::context_menu(tokens))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
         .into()
     }
 
@@ -1018,30 +2787,15 @@ impl Signex {
     ) -> Element<'a, Message> {
         use iced::widget::{Space, button, container, mouse_area, row, svg, text};
         use iced::{Alignment, Background, Border, Color, Length};
-        use std::sync::LazyLock;
 
-        // Window-control SVG icons (10×10 strokes, tinted via svg::Style
-        // per theme).
-        static H_MIN: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_min.svg"
-            ))
-        });
-        static H_MAX: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_max.svg"
-            ))
-        });
-        static H_CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/window_close.svg"
-            ))
-        });
-        static H_SEARCH: LazyLock<svg::Handle> = LazyLock::new(|| {
-            svg::Handle::from_memory(include_bytes!(
-                "../../../assets/icons/chrome/search.svg"
-            ))
-        });
+        // Window-control SVG icons resolved through `crate::icons` so the
+        // accent sentinel in each SVG tints to the active theme at
+        // fetch time.
+        let theme_id = self.ui_state.theme_id;
+        let h_min = crate::icons::icon_chrome_window_min(theme_id);
+        let h_max = crate::icons::icon_chrome_window_max(theme_id);
+        let h_close = crate::icons::icon_chrome_window_close(theme_id);
+        let h_search = crate::icons::icon_chrome_search(theme_id);
 
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
@@ -1058,9 +2812,12 @@ impl Signex {
                           hover_bg: Color,
                           hover_icon: Color|
          -> Element<'static, Message> {
+            // 14×14 brings the X / – / □ glyphs up to native-Windows
+            // chrome scale; the prior 10×10 left them visibly smaller
+            // than the surrounding menu-bar text.
             let icon = svg(handle)
-                .width(10)
-                .height(10)
+                .width(14)
+                .height(14)
                 .style(move |_: &iced::Theme, _| svg::Style {
                     color: Some(text_c),
                 });
@@ -1076,10 +2833,7 @@ impl Signex {
             .padding(0)
             .on_press(msg)
             .style(move |_: &iced::Theme, status: button::Status| {
-                let hovered = matches!(
-                    status,
-                    button::Status::Hovered | button::Status::Pressed
-                );
+                let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
                 button::Style {
                     background: if hovered {
                         Some(Background::Color(hover_bg))
@@ -1095,15 +2849,15 @@ impl Signex {
         };
 
         let controls = row![
-            chrome_btn((*H_MIN).clone(), Message::MinimizeMainWindow, hover_c, text_c),
+            chrome_btn(h_min.clone(), Message::MinimizeMainWindow, hover_c, text_c),
             chrome_btn(
-                (*H_MAX).clone(),
+                h_max.clone(),
                 Message::ToggleMaximizeMainWindow,
                 hover_c,
                 text_c,
             ),
             chrome_btn(
-                (*H_CLOSE).clone(),
+                h_close.clone(),
                 Message::CloseMainWindow,
                 close_hover,
                 Color::WHITE,
@@ -1123,12 +2877,13 @@ impl Signex {
         // Search bar placeholder — visual only for now. Matches VS Code's
         // central command palette peek: rounded rect with search icon
         // and muted prompt text.
-        let search_icon = svg((*H_SEARCH).clone())
-            .width(12)
-            .height(12)
-            .style(move |_: &iced::Theme, _| svg::Style {
-                color: Some(muted_c),
-            });
+        let search_icon =
+            svg(h_search.clone())
+                .width(12)
+                .height(12)
+                .style(move |_: &iced::Theme, _| svg::Style {
+                    color: Some(muted_c),
+                });
         let search_bar: Element<'_, Message> = container(
             row![
                 search_icon,
@@ -1146,7 +2901,7 @@ impl Signex {
             left: 10.0,
         })
         .width(440)
-        .height(24)
+        .height(28)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(search_bg)),
@@ -1177,15 +2932,9 @@ impl Signex {
         // row) is Shrink, and the chrome loses all its draggable real
         // estate the moment menus + search + controls consume their
         // natural widths.
-        let inner = row![
-            menu_padded,
-            drag_zone(),
-            search_bar,
-            drag_zone(),
-            controls,
-        ]
-        .width(Length::Fill)
-        .align_y(Alignment::Center);
+        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls,]
+            .width(Length::Fill)
+            .align_y(Alignment::Center);
 
         container(inner)
             .width(Length::Fill)
@@ -1206,12 +2955,119 @@ impl Signex {
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
-            ModalId::Preferences | ModalId::FindReplace | ModalId::CloseTabConfirm => {
+            ModalId::PrintPreview => self.view_print_preview_body(),
+            ModalId::BomPreview => {
+                // Stack the body underneath a 6 px edge-resize
+                // overlay so the borderless OS window can be
+                // resized by dragging its edges. Without this,
+                // `decorations: false` strips the OS frame and
+                // there's nothing to grab.
+                let body = self.view_bom_preview_body();
+                let resize_active = self
+                    .document_state
+                    .bom_preview
+                    .as_ref()
+                    .map(|p| p.column_resize.is_some())
+                    .unwrap_or(false);
+                let mut stack = iced::widget::Stack::new()
+                    .push(body)
+                    .push(Self::detached_modal_resize_overlay(modal));
+                // While a column-resize drag is in flight, lay an
+                // invisible mouse_area over the whole modal that
+                // pins the cursor to ResizingHorizontally. Without
+                // this, the cursor reverts to default the moment
+                // it leaves the 4 px handle's hit zone — which
+                // happens immediately on horizontal drag.
+                if resize_active {
+                    let overlay: Element<'_, Message> = iced::widget::mouse_area(
+                        iced::widget::Space::new()
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                    )
+                    .on_release(Message::BomPreviewColumnResizeEnd)
+                    .interaction(iced::mouse::Interaction::ResizingHorizontally)
+                    .into();
+                    stack = stack.push(overlay);
+                }
+                stack.into()
+            }
+            ModalId::Preferences
+            | ModalId::FindReplace
+            | ModalId::RenameDialog
+            | ModalId::RemoveDialog => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
             }
         }
+    }
+
+    /// Same 6 px edge-resize overlay as the main window's, but
+    /// emitting `StartDetachedModalResize { modal, direction }`
+    /// so it dispatches to the right OS window. Used as a stack
+    /// layer above the modal's body in `view_detached_modal`.
+    fn detached_modal_resize_overlay<'a>(
+        modal: super::state::ModalId,
+    ) -> Element<'a, Message> {
+        use iced::mouse::Interaction;
+        use iced::widget::{Space, column, mouse_area, row};
+        use iced::window::Direction;
+
+        const EDGE: f32 = 6.0;
+
+        let straight =
+            move |direction: Direction, cursor: Interaction, horizontal: bool|
+                -> Element<'a, Message> {
+                let (w, h) = if horizontal {
+                    (Length::Fill, Length::Fixed(EDGE))
+                } else {
+                    (Length::Fixed(EDGE), Length::Fill)
+                };
+                mouse_area(Space::new().width(w).height(h))
+                    .on_press(Message::StartDetachedModalResize { modal, direction })
+                    .interaction(cursor)
+                    .into()
+            };
+        let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
+            mouse_area(
+                Space::new()
+                    .width(Length::Fixed(EDGE))
+                    .height(Length::Fixed(EDGE)),
+            )
+            .on_press(Message::StartDetachedModalResize { modal, direction })
+            .interaction(cursor)
+            .into()
+        };
+
+        let top = straight(Direction::North, Interaction::ResizingVertically, true);
+        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
+        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
+        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
+        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
+        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
+        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
+        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+
+        let middle = row![
+            left,
+            Space::new().width(Length::Fill).height(Length::Fill),
+            right
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        column![
+            row![nw, top, ne]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+            middle,
+            row![sw, bottom, se]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -1225,7 +3081,7 @@ impl Signex {
         let menu_ctx = crate::menu_bar::MenuContext {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
-            has_project: document.project_path.is_some(),
+            has_project: document.active_project.is_some(),
             has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
             can_undo: document
                 .engine_for_window(window_id, ui)
@@ -1235,6 +3091,11 @@ impl Signex {
                 .engine_for_window(window_id, ui)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
+            // Secondary windows (detached modal, undocked tab) borrow
+            // the main window's scale. Good enough until per-window
+            // scale tracking lands — it's only wrong if the user drags
+            // a secondary window onto a monitor with a different DPI.
+            scale_factor: ui.main_window_scale,
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
@@ -1333,8 +3194,38 @@ impl Signex {
                 _ => std::collections::HashSet::new(),
             }
         };
+        // Reserve the tab strip's vertical footprint regardless of
+        // whether any document is open — opening the first document
+        // would otherwise shift the entire chrome down by ~24 px,
+        // which feels jarring. The 1 px chrome separator stays
+        // visible too so the menu row always reads as a distinct
+        // band above the tab strip.
+        main = main.push(
+            container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(crate::styles::chrome_separator(
+                    &document.panel_ctx.tokens,
+                )),
+        );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
-            let dragging = ui.tab_dragging.map(|(idx, _, _)| idx);
+            // Resolve "really dragging" — Some only after the
+            // cursor has travelled past a 6 px threshold from
+            // the press origin. Without this, every click-to-
+            // switch armed the drag state and flipped the
+            // cursor to Grabbing instantaneously, plus flashed
+            // the drag ghost.
+            const DRAG_THRESHOLD_PX: f32 = 6.0;
+            let dragging = ui.tab_dragging.and_then(|(idx, ox, oy)| {
+                let (mx, my) = interaction.last_mouse_pos;
+                let dx = mx - ox;
+                let dy = my - oy;
+                if dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX {
+                    Some(idx)
+                } else {
+                    None
+                }
+            });
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
@@ -1345,6 +3236,18 @@ impl Signex {
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
             );
+        } else {
+            // Empty placeholder strip with the same metrics as
+            // tab_bar::view: 2 px outer padding + 22 px tall inner
+            // pill = 26 px total. Without this the chrome jumps
+            // when the first tab opens.
+            let placeholder = container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(26)
+                .style(crate::styles::toolbar_strip(
+                    &document.panel_ctx.tokens,
+                ));
+            main = main.push(placeholder);
         }
         let main = main
             .push(center_row)
@@ -1366,12 +3269,17 @@ impl Signex {
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
             || interaction.context_menu.is_some()
+            || interaction.project_tree_context_menu.is_some()
+            || interaction.tab_context_menu.is_some()
             || interaction.active_bar_menu.is_some()
             || interaction.canvas.placement_paused
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
-            || ui.close_tab_confirm.is_some()
+            || ui.rename_dialog.is_some()
+            || ui.remove_dialog.is_some()
+            || ui.project_close_confirm.is_some()
+            || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
             || ui.erc_dialog_open
@@ -1381,16 +3289,22 @@ impl Signex {
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
-            // Tab drag ghost: while a tab is being dragged, follow the
-            // cursor with a translucent copy of the tab label (Altium
-            // parity — see the user's screenshot). Gives direct visual
-            // feedback that the tab is being moved and will drop
-            // wherever the user releases, including into a new window
-            // past the edge.
-            if let Some((tab_idx, _, _)) = ui.tab_dragging
+            // Tab drag ghost: only renders once the cursor has
+            // travelled past the same 6 px threshold the cursor
+            // gating uses (`tab_bar::view`). Mirrors that gate
+            // here so press-without-move keeps the ghost off.
+            if let Some((tab_idx, ox, oy)) = ui.tab_dragging
                 && let Some(tab) = document.tabs.get(tab_idx)
             {
-                overlays.push(self.view_tab_drag_ghost(&tab.title));
+                const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
+                let (mx, my) = interaction.last_mouse_pos;
+                let dx = mx - ox;
+                let dy = my - oy;
+                if dx * dx + dy * dy
+                    > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX
+                {
+                    overlays.push(self.view_tab_drag_ghost(&tab.title));
+                }
             }
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
@@ -1430,24 +3344,20 @@ impl Signex {
 
         const EDGE: f32 = 6.0;
 
-        let straight = |direction: Direction,
-                        cursor: Interaction,
-                        horizontal: bool|
-         -> Element<'a, Message> {
-            let (w, h) = if horizontal {
-                (Length::Fill, Length::Fixed(EDGE))
-            } else {
-                (Length::Fixed(EDGE), Length::Fill)
+        let straight =
+            |direction: Direction, cursor: Interaction, horizontal: bool| -> Element<'a, Message> {
+                let (w, h) = if horizontal {
+                    (Length::Fill, Length::Fixed(EDGE))
+                } else {
+                    (Length::Fixed(EDGE), Length::Fill)
+                };
+                mouse_area(Space::new().width(w).height(h))
+                    .on_press(Message::StartMainWindowResize(direction))
+                    .interaction(cursor)
+                    .into()
             };
-            mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::StartMainWindowResize(direction))
-                .interaction(cursor)
-                .into()
-        };
 
-        let corner = |direction: Direction,
-                      cursor: Interaction|
-         -> Element<'a, Message> {
+        let corner = |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
             mouse_area(
                 Space::new()
                     .width(Length::Fixed(EDGE))
@@ -1470,14 +3380,22 @@ impl Signex {
         // Middle row: left/right edges frame a Fill/Fill empty Space so
         // the whole overlay is window-sized and the centre passes
         // clicks through.
-        let middle = row![left, Space::new().width(Length::Fill).height(Length::Fill), right]
-            .width(Length::Fill)
-            .height(Length::Fill);
+        let middle = row![
+            left,
+            Space::new().width(Length::Fill).height(Length::Fill),
+            right
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         column![
-            row![nw, top, ne].width(Length::Fill).height(Length::Fixed(EDGE)),
+            row![nw, top, ne]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
             middle,
-            row![sw, bottom, se].width(Length::Fill).height(Length::Fixed(EDGE)),
+            row![sw, bottom, se]
+                .width(Length::Fill)
+                .height(Length::Fixed(EDGE)),
         ]
         .width(Length::Fill)
         .height(Length::Fill)
@@ -1613,18 +3531,29 @@ impl Signex {
                 .height(Length::Fill)
                 .into()
         } else {
+            // Distinguish "nothing loaded at all" from "project loaded,
+            // but no document picked yet" — the second case is what
+            // the user sees right after opening a .standard_pro before
+            // clicking any node in the project tree.
+            let (title, hint) = if self.document_state.active_project.is_some() {
+                (
+                    "No document selected",
+                    "Choose a schematic or PCB from the project tree",
+                )
+            } else {
+                (
+                    "No document open",
+                    "Open a project with File > Open or Ctrl+O",
+                )
+            };
             container(
                 column![
-                    iced::widget::text("No document open")
-                        .size(14)
-                        .color(crate::styles::ti(
-                            self.document_state.panel_ctx.tokens.text_secondary
-                        )),
-                    iced::widget::text("Open a project with File > Open or Ctrl+O")
-                        .size(11)
-                        .color(crate::styles::ti(
-                            self.document_state.panel_ctx.tokens.text_secondary
-                        )),
+                    iced::widget::text(title).size(14).color(crate::styles::ti(
+                        self.document_state.panel_ctx.tokens.text_secondary
+                    )),
+                    iced::widget::text(hint).size(11).color(crate::styles::ti(
+                        self.document_state.panel_ctx.tokens.text_secondary
+                    )),
                 ]
                 .spacing(8)
                 .align_x(iced::Alignment::Center),
@@ -1638,10 +3567,31 @@ impl Signex {
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
+        // Opaque semi-transparent backdrop that blocks interaction with
+        // underlying content. Left-click anywhere on it triggers the
+        // dismiss message.
+        //
+        // We intentionally do *not* wire `on_right_press` — iced's
+        // `mouse_area` would `capture_event()` the right-press and
+        // prevent the underlying canvas from starting a pan. Instead
+        // the canvas itself owns the right-press (its pan gesture) and
+        // closes the context menu once the pan actually starts moving
+        // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
+        // `CloseContextMenu` the moment `pan_moved` flips on).
+        const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
-                .height(Length::Fill),
+                .height(Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0,
+                        0.0,
+                        0.0,
+                        BACKDROP_OPACITY,
+                    ))),
+                    ..container::Style::default()
+                }),
         )
         .on_press(on_press)
         .into()
@@ -1653,12 +3603,51 @@ impl Signex {
         let interaction = &self.interaction_state;
         let mut layers = Vec::new();
 
+        // Export-error modal — appears when PDF / netlist / BOM export
+        // hits a user-actionable failure (write permission, invalid path,
+        // empty schematic). Dismiss via OK button or clicking outside.
+        if document.export_error.is_some() {
+            layers.push(Self::dismiss_layer(Message::DismissExportError));
+            layers.push(self.view_export_error());
+        }
+
+        // Print preview overlay — Altium parity: opens as a separate OS
+        // window (see `handle_print_preview_requested → handle_detach_modal`)
+        // so it can be dragged outside the app's client area. Only fall
+        // back to the in-window overlay if the OS window failed to open.
+        let preview_detached = ui
+            .windows
+            .values()
+            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)));
+        if document.preview.is_some() && !preview_detached {
+            layers.push(self.view_print_preview());
+        }
+
+        // BOM preview overlay — same detach-first pattern as Print Preview.
+        let bom_detached = ui
+            .windows
+            .values()
+            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)));
+        if document.bom_preview.is_some() && !bom_detached {
+            layers.push(self.view_bom_preview());
+        }
+
         // Custom net-colour picker. Bespoke modal (not the iced_aw
         // ColorPicker) because the user needs a quick-pick palette +
         // precise RGB inputs side-by-side.
         if ui.net_color_custom.show {
             layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
             layers.push(self.view_net_color_custom_picker());
+        }
+
+        // Blocking modals must own the overlay stack. If we keep adding
+        // tool/menu overlays after these, they can end up visually above
+        // the modal and make the dialog look broken.
+        let has_blocking_modal = document.export_error.is_some()
+            || document.preview.is_some()
+            || ui.net_color_custom.show;
+        if has_blocking_modal {
+            return layers;
         }
 
         // Altium-style pause overlay: big centered "Placement Paused" card
@@ -1721,11 +3710,18 @@ impl Signex {
         if self.has_active_schematic() {
             let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            // Active Bar overlay is only painted on the main window, so
+            // the main canvas's selection set is the right gate.
+            let bar_has_selection = !interaction.canvas.selected.is_empty();
+            let bar_has_net_colors = !ui.net_colors.is_empty();
             let bar = crate::active_bar::view_bar(
                 interaction.current_tool,
                 interaction.draw_mode,
                 &interaction.last_tool,
                 &document.panel_ctx.tokens,
+                self.ui_state.theme_id,
+                bar_has_selection,
+                bar_has_net_colors,
             )
             .map(Message::ActiveBar);
             layers.push(
@@ -1809,10 +3805,16 @@ impl Signex {
         }
 
         if let Some(ab_menu) = interaction.active_bar_menu {
+            let has_selection = !interaction.canvas.selected.is_empty();
+            let has_net_colors = !ui.net_colors.is_empty();
             let dropdown = crate::active_bar::view_dropdown(
                 ab_menu,
                 &document.panel_ctx.tokens,
                 &interaction.selection_filters,
+                &interaction.custom_filter_presets,
+                self.ui_state.theme_id,
+                has_selection,
+                has_net_colors,
             )
             .map(Message::ActiveBar);
             let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
@@ -1839,12 +3841,32 @@ impl Signex {
 
         if let Some(ref ctx_menu) = interaction.context_menu {
             let menu = self.view_context_menu();
+            // Clamp the menu inside the window so a click near the
+            // right/bottom edge doesn't push it off-screen. Estimate
+            // the menu's footprint conservatively from the maximum
+            // possible row count (≈ 22 rows × 22 px + padding) and
+            // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
+            // lands too close to an edge.
+            let (win_w, win_h) = self.ui_state.window_size;
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
+            let edge_margin: f32 = 4.0;
+            let x = if ctx_menu.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                ctx_menu.x
+            };
+            let y = if ctx_menu.y + est_menu_h + edge_margin > win_h {
+                (ctx_menu.y - est_menu_h).max(0.0)
+            } else {
+                ctx_menu.y
+            };
             layers.push(Self::dismiss_layer(Message::CloseContextMenu));
             layers.push(
                 column![
-                    iced::widget::Space::new().height(ctx_menu.y),
+                    iced::widget::Space::new().height(y),
                     row![
-                        iced::widget::Space::new().width(ctx_menu.x),
+                        iced::widget::Space::new().width(x),
                         menu,
                         iced::widget::Space::new().width(Length::Fill),
                     ]
@@ -1852,6 +3874,174 @@ impl Signex {
                 ]
                 .into(),
             );
+            // Submenu (Place / Align) — pop to the right of the parent
+            // menu (or left if the right edge would overflow), and
+            // align its top to the launcher row's y-position so the
+            // first submenu item sits next to the row that opened it.
+            if let Some(submenu_kind) = interaction.context_submenu {
+                let submenu = self.view_context_submenu(submenu_kind);
+                // Wrap in mouse_area so on_enter/on_exit on the panel
+                // can extend the close timer when the cursor crosses
+                // from the launcher into the submenu and back.
+                let submenu = iced::widget::mouse_area(submenu)
+                    .on_enter(Message::EnterContextSubmenuPanel)
+                    .on_exit(Message::LeaveContextSubmenuPanel);
+                let submenu_w = menu_w;
+                let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                    (x - submenu_w).max(0.0)
+                } else {
+                    x + menu_w
+                };
+                // Approximate launcher-row y inside the parent menu.
+                // Each ctx_menu_item_* row is ≈ 22 px tall (text + 4 px
+                // top + 4 px bottom + a tiny line-height fudge); the
+                // separator is rendered as a 1 px line. The numbers
+                // below come from counting rows above each launcher in
+                // `view_context_menu`.
+                const ROW_H: f32 = 22.0;
+                const SEP_H: f32 = 1.0;
+                const TOP_PAD: f32 = 4.0;
+                let launcher_y = match submenu_kind {
+                    // Above Place: 3 always-visible rows + 1 separator.
+                    ContextSubmenu::Place => TOP_PAD + 3.0 * ROW_H + SEP_H,
+                    // Align is only shown when something is selected;
+                    // above Align: the same 3 rows + 1 sep, then
+                    // Place / Part Actions / Sheet Actions / References.
+                    ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                    // AddNewToProject only fires from the project-tree
+                    // menu, never from the canvas menu — fall through
+                    // to a safe placeholder if the state somehow leaks
+                    // (no submenu rendered, just a 0-offset).
+                    ContextSubmenu::AddNewToProject => 0.0,
+                };
+                let sub_y = (y + launcher_y - 4.0).max(0.0);
+                layers.push(
+                    column![
+                        iced::widget::Space::new().height(sub_y),
+                        row![
+                            iced::widget::Space::new().width(sub_x),
+                            submenu,
+                            iced::widget::Space::new().width(Length::Fill),
+                        ]
+                        .width(Length::Fill),
+                    ]
+                    .into(),
+                );
+            }
+        }
+
+        // Document-tab right-click menu. Rendered before the project-
+        // tree menu since the two are mutually exclusive — only one of
+        // them can be open at a time, and opening one closes the
+        // others (see Message::ShowTabContextMenu).
+        if let Some(ref tab_ctx) = interaction.tab_context_menu {
+            let menu = self.view_tab_context_menu(tab_ctx);
+            // Conservative footprint matches the project-tree menu so
+            // the two visually align.
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if tab_ctx.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                tab_ctx.x
+            };
+            let y = if tab_ctx.y + est_menu_h + edge_margin > win_h {
+                (tab_ctx.y - est_menu_h).max(0.0)
+            } else {
+                tab_ctx.y
+            };
+            layers.push(Self::dismiss_layer(Message::CloseTabContextMenu));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+        }
+
+        // Projects-panel tree right-click menu. Rendered here (after the
+        // canvas context menu) so the canvas menu's dismiss layer does
+        // not cover this one — the two are mutually exclusive in
+        // practice since `ShowProjectTreeContextMenu` nulls out
+        // `context_menu` before opening.
+        if let Some(ref tree_ctx) = interaction.project_tree_context_menu {
+            let menu = self.view_project_tree_context_menu(tree_ctx);
+            // Conservative footprint: at most 6 rows × 22 px + 8 px
+            // padding. Width matches the canvas menu so the two look
+            // consistent.
+            let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+            let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if tree_ctx.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                tree_ctx.x
+            };
+            let y = if tree_ctx.y + est_menu_h + edge_margin > win_h {
+                (tree_ctx.y - est_menu_h).max(0.0)
+            } else {
+                tree_ctx.y
+            };
+            layers.push(Self::dismiss_layer(Message::CloseProjectTreeContextMenu));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+            // Adjacent submenu (currently only AddNewToProject opens
+            // from this menu). Mirrors the canvas-menu submenu logic
+            // above — pop to the right of the parent (or left if the
+            // right edge would overflow), align top to the launcher
+            // row's y inside the parent menu.
+            if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+                let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
+                let submenu = iced::widget::mouse_area(submenu)
+                    .on_enter(Message::EnterContextSubmenuPanel)
+                    .on_exit(Message::LeaveContextSubmenuPanel);
+                let submenu_w = menu_w;
+                let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                    (x - submenu_w).max(0.0)
+                } else {
+                    x + menu_w
+                };
+                // Launcher position inside the project-tree menu:
+                // `Make Project Available Online...` (row 0)
+                // `Validate Project`                 (row 1)
+                // `Add New to Project ›`             (row 2) ← target
+                // → top + 2 rows, no separator above the launcher.
+                const ROW_H: f32 = 22.0;
+                const TOP_PAD: f32 = 4.0;
+                let launcher_y = TOP_PAD + 2.0 * ROW_H;
+                let sub_y = (y + launcher_y - 4.0).max(0.0);
+                layers.push(
+                    column![
+                        iced::widget::Space::new().height(sub_y),
+                        row![
+                            iced::widget::Space::new().width(sub_x),
+                            submenu,
+                            iced::widget::Space::new().width(Length::Fill),
+                        ]
+                        .width(Length::Fill),
+                    ]
+                    .into(),
+                );
+            }
         }
 
         if ui.panel_list_open {
@@ -2006,6 +4196,8 @@ impl Signex {
                 &ui.preferences_draft_font,
                 ui.preferences_draft_power_port_style,
                 ui.preferences_draft_label_style,
+                ui.preferences_draft_multisheet_style,
+                ui.preferences_draft_grid_style,
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
                 &ui.erc_severity_override,
@@ -2020,10 +4212,14 @@ impl Signex {
             layers.push(dialog);
         }
 
-        if let Some(idx) = ui.close_tab_confirm
-            && let Some(tab) = document.tabs.get(idx)
-        {
-            layers.push(self.view_close_tab_confirm(&tab.title));
+        if ui.rename_dialog.is_some() {
+            layers.push(self.view_rename_dialog());
+        }
+        if ui.remove_dialog.is_some() {
+            layers.push(self.view_remove_dialog());
+        }
+        if ui.project_close_confirm.is_some() {
+            layers.push(self.view_project_close_confirm());
         }
 
         // Skip overlay rendering for any modal whose detached OS window
@@ -2048,96 +4244,5 @@ impl Signex {
         }
 
         layers
-    }
-
-    fn view_close_tab_confirm(&self, tab_title: &str) -> Element<'_, Message> {
-        use iced::widget::{Space, button, text};
-        use iced::{Background, Border, Color, Theme};
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-
-        let message = format!(
-            "'{}' has unsaved changes. Do you want to save before closing?",
-            tab_title,
-        );
-
-        let btn = |label: &'static str, msg: Message, primary: bool| -> Element<'_, Message> {
-            let label_color = if primary { Color::WHITE } else { text_c };
-            let bg = if primary {
-                Color::from_rgb(0.00, 0.47, 0.84)
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-            };
-            button(container(text(label.to_string()).size(12).color(label_color)).padding([5, 14]))
-                .on_press(msg)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 4.0.into(),
-                        color: border_c,
-                    },
-                    text_color: label_color,
-                    ..iced::widget::button::Style::default()
-                })
-                .into()
-        };
-
-        let dialog = container(
-            column![
-                container(text("Unsaved Changes").size(14).color(text_c))
-                    .padding([10, 14])
-                    .style(crate::styles::toolbar_strip(tokens)),
-                container(text(message).size(11).color(text_muted)).padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        btn(
-                            "Cancel",
-                            Message::CloseTabConfirm(CloseTabChoice::Cancel),
-                            false,
-                        ),
-                        btn(
-                            "Don't Save",
-                            Message::CloseTabConfirm(CloseTabChoice::DiscardAndClose),
-                            false,
-                        ),
-                        btn(
-                            "Save",
-                            Message::CloseTabConfirm(CloseTabChoice::SaveAndClose),
-                            true,
-                        ),
-                    ]
-                    .spacing(8),
-                )
-                .padding([10, 14]),
-            ]
-            .width(420),
-        )
-        .style(crate::styles::context_menu(tokens));
-
-        container(
-            column![
-                Space::new().height(Length::Fill),
-                row![
-                    Space::new().width(Length::Fill),
-                    dialog,
-                    Space::new().width(Length::Fill),
-                ],
-                Space::new().height(Length::Fill),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.55))),
-            ..container::Style::default()
-        })
-        .into()
     }
 }

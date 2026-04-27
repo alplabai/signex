@@ -443,6 +443,12 @@ pub struct Label {
     pub font_size: f64,
     #[serde(default)]
     pub justify: HAlign,
+    #[serde(default = "default_label_v_align")]
+    pub justify_v: VAlign,
+}
+
+fn default_label_v_align() -> VAlign {
+    VAlign::Bottom
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -510,6 +516,14 @@ pub struct ChildSheet {
     pub stroke_width: f64,
     #[serde(default)]
     pub fill: FillType,
+    /// Optional outline colour parsed from `(stroke (color r g b a))`.
+    /// `None` means "use the renderer's default for the active style".
+    #[serde(default)]
+    pub stroke_color: Option<StrokeColor>,
+    /// Optional body fill colour parsed from `(fill (color r g b a))`.
+    /// `None` means "use the renderer's default for the active style".
+    #[serde(default)]
+    pub fill_color: Option<StrokeColor>,
     #[serde(default)]
     pub fields_autoplaced: bool,
     #[serde(default)]
