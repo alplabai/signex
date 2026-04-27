@@ -92,11 +92,7 @@ pub enum BumpKind {
 /// bump. Per the plan, any change to a primitive ref or pin-map override
 /// is a major bump.
 pub fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
-    if diff.symbol_changed
-        || diff.footprint_changed
-        || diff.sim_changed
-        || diff.pin_map_changed
-    {
+    if diff.symbol_changed || diff.footprint_changed || diff.sim_changed || diff.pin_map_changed {
         BumpKind::Major
     } else {
         BumpKind::Minor
