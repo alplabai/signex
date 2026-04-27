@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, BusEntry, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem, Symbol,
-    TextNote, Wire,
+    Bus, BusEntry, HAlign, Junction, Label, NoConnect, SchematicSheet, SelectedItem, StrokeColor,
+    Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -54,6 +54,7 @@ pub enum CommandKind {
     PlaceTextNote,
     PlaceSchDrawing,
     UpdateSchDrawing,
+    UpdateChildSheetStyle,
     AnnotateAll,
     MoveSymbolAbsolute,
     ReorderObjects,
@@ -167,6 +168,18 @@ pub enum Command {
     UpdateSchDrawing {
         drawing: signex_types::schematic::SchDrawing,
     },
+    /// Update a hierarchical child sheet's outline / fill / line-width
+    /// styling. `stroke_color` and `fill_color` are double-Optioned so
+    /// callers can distinguish "don't touch this field" (`None`) from
+    /// "reset to theme default" (`Some(None)`) and "use this colour"
+    /// (`Some(Some(c))`). `stroke_width` of `None` means leave the
+    /// width untouched.
+    UpdateChildSheetStyle {
+        sheet_id: Uuid,
+        stroke_width: Option<f64>,
+        stroke_color: Option<Option<StrokeColor>>,
+        fill_color: Option<Option<StrokeColor>>,
+    },
     /// Auto-annotate every symbol whose reference ends in `?` with a unique
     /// sequential designator per prefix (R?, C?, U?, …). Applied in a
     /// deterministic order so re-running produces the same layout.
@@ -246,6 +259,7 @@ impl Command {
             Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
             Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
             Command::UpdateSchDrawing { .. } => CommandKind::UpdateSchDrawing,
+            Command::UpdateChildSheetStyle { .. } => CommandKind::UpdateChildSheetStyle,
             Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,

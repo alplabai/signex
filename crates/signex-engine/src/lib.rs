@@ -663,6 +663,49 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::UpdateChildSheetStyle {
+                sheet_id,
+                stroke_width,
+                stroke_color,
+                fill_color,
+            } => {
+                let Some(sheet) = self
+                    .document
+                    .child_sheets
+                    .iter_mut()
+                    .find(|cs| cs.uuid == sheet_id)
+                else {
+                    return Ok(CommandResult::unchanged());
+                };
+                let mut changed = false;
+                if let Some(w) = stroke_width
+                    && (sheet.stroke_width - w).abs() > f64::EPSILON
+                {
+                    sheet.stroke_width = w;
+                    changed = true;
+                }
+                if let Some(c) = stroke_color
+                    && sheet.stroke_color != c
+                {
+                    sheet.stroke_color = c;
+                    changed = true;
+                }
+                if let Some(c) = fill_color
+                    && sheet.fill_color != c
+                {
+                    sheet.fill_color = c;
+                    changed = true;
+                }
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::TextUpdated,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
                 // Power ports (is_power == true, or reference starting with '#')
@@ -1049,7 +1092,7 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None,
+            fill: FillType::None, stroke_color: None, fill_color: None,
             fields_autoplaced: false,
             pins: vec![
                 SheetPin {
@@ -1119,7 +1162,7 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None,
+            fill: FillType::None, stroke_color: None, fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
                 uuid: moved_uuid,
@@ -1167,7 +1210,7 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None,
+            fill: FillType::None, stroke_color: None, fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
                 uuid: pin_uuid,
