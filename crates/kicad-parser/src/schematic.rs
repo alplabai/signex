@@ -251,6 +251,21 @@ fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeCol
     Some(signex_types::schematic::StrokeColor { r, g, b, a })
 }
 
+/// Parse `(fill (color R G B A))` if present. Used by `(sheet ...)` blocks
+/// where the fill is a literal RGBA, not a `type` enum. Returns None when
+/// the colour is fully transparent (KiCad's "use default").
+fn parse_fill_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
+    let color = node.find("fill")?.find("color")?;
+    let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
+    let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
+    let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
+    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
+    if r == 0 && g == 0 && b == 0 && a == 0 {
+        return None;
+    }
+    Some(signex_types::schematic::StrokeColor { r, g, b, a })
+}
+
 /// Returns true if an `(effects ...)` node contains a hide marker.
 ///
 /// Handles three formats across KiCad versions:
@@ -1136,6 +1151,8 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
         size,
         stroke_width: parse_stroke_width(s),
         fill: parse_fill_type(s),
+        stroke_color: parse_stroke_color(s),
+        fill_color: parse_fill_color(s),
         fields_autoplaced,
         pins,
         instances: parse_sheet_instances(s),
