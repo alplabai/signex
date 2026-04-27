@@ -500,6 +500,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         LayerStack => "layer_stack",
         NetClasses => "net_classes",
         Library => "library",
+        SchLibrary => "sch_library",
     }
 }
 

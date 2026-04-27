@@ -38,6 +38,11 @@ pub enum PanelKind {
     /// v0.9 Library panel — open `*.snxlib/` libraries, drill into
     /// their components, drag onto the canvas (Phase 2).
     Library,
+    /// v0.9 phase 2.5 — Altium SCH Library panel. Lists symbols
+    /// inside the active `.snxsym` container; clicking switches the
+    /// editor's `active_idx`. Visible whenever a Symbol editor tab
+    /// is focused.
+    SchLibrary,
 }
 
 /// All available panel kinds for the panel list button.
@@ -63,6 +68,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::OutputJobs,
     PanelKind::Todo,
     PanelKind::Wiki,
+    PanelKind::SchLibrary,
 ];
 
 impl PanelKind {
@@ -113,6 +119,7 @@ impl PanelKind {
             PanelKind::Wiki => "Wiki",
             PanelKind::OutputJobs => "Output Jobs",
             PanelKind::Library => "Library",
+            PanelKind::SchLibrary => "SCH Library",
         }
     }
 }
@@ -394,15 +401,31 @@ pub struct PanelContext {
 pub struct SymbolEditorPanelContext {
     /// File path of the open `.snxsym` (used as the tab key).
     pub path: std::path::PathBuf,
-    /// The symbol's `name` field (Altium "Design Item ID").
+    /// The active symbol's `name` field (Altium "Design Item ID").
     pub symbol_name: String,
-    /// UUID of the symbol — surfaced read-only on the panel.
+    /// UUID of the active symbol — surfaced read-only on the panel.
     pub symbol_uuid: uuid::Uuid,
-    /// Pin summaries for the SCH-Library panel pin list.
+    /// Pin summaries for the active symbol — drives Properties panel
+    /// pin selection.
     pub pins: Vec<SymbolPinSummary>,
     /// What's currently selected on the canvas. Drives the right-dock
     /// Properties panel's mode (Pin / Field / Component default).
     pub selected: SymbolEditorSelection,
+    /// All symbols in the open `.snxsym` container — feeds the SCH
+    /// Library left-dock panel's components list.
+    pub symbols_in_file: Vec<SymbolFileEntry>,
+    /// Index into `symbols_in_file` for the symbol currently being
+    /// edited. The SCH Library panel's row click rewrites this.
+    pub active_idx: usize,
+}
+
+/// One symbol's row entry in the SCH Library panel's components list.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolFileEntry {
+    pub idx: usize,
+    pub name: String,
+    pub uuid: uuid::Uuid,
+    pub pin_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -685,6 +708,17 @@ pub enum PanelMsg {
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
+    /// SCH Library panel: switch the active symbol within the open
+    /// `.snxsym` container to the given index.
+    SchLibrarySelectSymbol(usize),
+    /// SCH Library panel: append a new empty symbol to the open
+    /// container and make it active. Caller emits a default name —
+    /// the user renames via the Properties panel.
+    SchLibraryAddSymbol,
+    /// SCH Library panel: delete the symbol at the given index from
+    /// the open container. Refuses to delete the last remaining
+    /// symbol — the file would be empty otherwise.
+    SchLibraryDeleteSymbol(usize),
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
     /// Numeric text_input keystroke for a drawing field. The string
     /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
@@ -808,6 +842,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
              instead of LibraryMessage routing.",
             ctx,
         ),
+        PanelKind::SchLibrary => view_sch_library(ctx),
     };
 
     scrollable(content).width(Length::Fill).into()
@@ -944,6 +979,179 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
     )
     .width(Length::Fill)
     .into()
+}
+
+// ─── SCH Library Panel (Altium parity) ───────────────────────────────
+//
+// When a `.snxsym` standalone editor tab is active, this panel lists
+// the symbols in the open `SymbolFile` container. Click switches the
+// active symbol; "Add Symbol" appends a fresh empty Symbol to the
+// container and makes it active. Read-only on Symbol metadata for now —
+// rename / designator-prefix edits go through the right-dock Properties
+// panel.
+//
+// When no Symbol editor is open the panel renders a hint pointing the
+// user at the project tree's `Add New ▸ Symbol` flow.
+
+fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let border_c = theme_ext::border_color(&ctx.tokens);
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    col = col.push(
+        container(text("SCH Library").size(11).color(primary))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    let Some(sym) = ctx.symbol_editor.as_ref() else {
+        col = col.push(
+            container(
+                text(
+                    "Open a `.snxsym` to see its symbols here. Right-click a library node \
+                     in the project tree and pick `Add New ▸ Symbol` to create one.",
+                )
+                .size(10)
+                .color(muted),
+            )
+            .padding([6, 8])
+            .width(Length::Fill),
+        );
+        return scrollable(col).width(Length::Fill).into();
+    };
+
+    // ── File header ──
+    col = col.push(
+        container(
+            column![
+                text(format!(
+                    "File: {}",
+                    sym.path.file_name().map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "<untitled>".to_string())
+                ))
+                .size(10)
+                .color(muted),
+                text(format!("Symbols: {}", sym.symbols_in_file.len()))
+                    .size(10)
+                    .color(muted),
+            ]
+            .spacing(2),
+        )
+        .padding([4, 8]),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // ── Symbols list ──
+    for entry in &sym.symbols_in_file {
+        let is_active = entry.idx == sym.active_idx;
+        let label_color = if is_active { primary } else { muted };
+        let bg_active = crate::styles::ti(ctx.tokens.selection);
+        let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
+        let pin_count_label = format!("{} pins", entry.pin_count);
+        let row_btn = iced::widget::button(
+            row![
+                text(entry.name.clone())
+                    .size(11)
+                    .color(label_color)
+                    .width(Length::Fill),
+                text(pin_count_label).size(10).color(muted),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill)
+        .on_press(row_msg)
+        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+            iced::widget::button::Style {
+                background: if is_active {
+                    Some(iced::Background::Color(bg_active))
+                } else if matches!(status, iced::widget::button::Status::Hovered) {
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    )))
+                } else {
+                    None
+                },
+                border: iced::Border::default(),
+                text_color: label_color,
+                ..iced::widget::button::Style::default()
+            }
+        });
+        col = col.push(row_btn);
+    }
+
+    col = col.push(thin_sep(border_c));
+
+    // ── Action row: Add / Delete ──
+    let add_btn = iced::widget::button(
+        text("Add Symbol")
+            .size(11)
+            .color(primary),
+    )
+    .padding([4, 10])
+    .on_press(PanelMsg::SchLibraryAddSymbol)
+    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+        iced::widget::button::Style {
+            background: Some(iced::Background::Color(
+                if matches!(status, iced::widget::button::Status::Hovered) {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+                },
+            )),
+            border: iced::Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            text_color: primary,
+            ..iced::widget::button::Style::default()
+        }
+    });
+
+    let can_delete = sym.symbols_in_file.len() > 1;
+    let delete_color = if can_delete { primary } else { muted };
+    let mut delete_btn = iced::widget::button(text("Delete").size(11).color(delete_color))
+        .padding([4, 10])
+        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+            iced::widget::button::Style {
+                background: Some(iced::Background::Color(
+                    if matches!(status, iced::widget::button::Status::Hovered) && can_delete {
+                        iced::Color::from_rgba(1.0, 0.2, 0.2, 0.10)
+                    } else {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+                    },
+                )),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                text_color: delete_color,
+                ..iced::widget::button::Style::default()
+            }
+        });
+    if can_delete {
+        delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
+    }
+
+    col = col.push(
+        container(
+            row![
+                add_btn,
+                Space::new().width(6),
+                delete_btn,
+                Space::new().width(Length::Fill),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 8]),
+    );
+
+    scrollable(col).width(Length::Fill).into()
 }
 
 // ─── Projects Panel (TreeView) ────────────────────────────────

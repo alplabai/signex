@@ -9,6 +9,7 @@ mod library_browser;
 mod panel_controls;
 mod project_navigation;
 mod property_editor;
+mod sch_library;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {
@@ -23,7 +24,8 @@ impl Signex {
             && (self.handle_dock_panel_control_message(panel_msg)
                 || self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
-                || self.handle_dock_project_navigation_panel_message(panel_msg))
+                || self.handle_dock_project_navigation_panel_message(panel_msg)
+                || self.handle_dock_sch_library_message(panel_msg))
         {
             return self.finish_update();
         }

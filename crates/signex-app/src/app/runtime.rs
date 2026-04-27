@@ -483,7 +483,9 @@ fn build_symbol_editor_panel_ctx(
     app: &super::Signex,
 ) -> Option<crate::panels::SymbolEditorPanelContext> {
     use crate::library::editor::symbol::state as sym_state;
-    use crate::panels::{SymbolEditorPanelContext, SymbolEditorSelection, SymbolPinSummary};
+    use crate::panels::{
+        SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinSummary,
+    };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
     let path = match &active.kind {
@@ -508,6 +510,19 @@ fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
+    let symbols_in_file: Vec<SymbolFileEntry> = editor
+        .file
+        .symbols
+        .iter()
+        .enumerate()
+        .map(|(idx, s)| SymbolFileEntry {
+            idx,
+            name: s.name.clone(),
+            uuid: s.uuid,
+            pin_count: s.pins.len(),
+        })
+        .collect();
+
     let selected = match editor.selected {
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
@@ -529,6 +544,8 @@ fn build_symbol_editor_panel_ctx(
         symbol_uuid: sym.uuid,
         pins,
         selected,
+        symbols_in_file,
+        active_idx: editor.active_idx,
     })
 }
 
