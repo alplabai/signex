@@ -82,10 +82,9 @@ fn parse_text_prop(prop_node: &SExpr, _fallback_pos: Point) -> TextProp {
 
     // Parse justify: (justify left bottom), (justify right), (justify center), etc.
     let justify = effects.and_then(|e| e.find("justify"));
-    // KiCad property texts (Reference/Value/custom fields) default to centered
-    // alignment on unspecified axes. For example `(justify left)` means
-    // horizontal left + vertical center.
-    let mut justify_h = HAlign::Left;
+    // KiCad spec: when (justify ...) is omitted, both axes default to centered.
+    // (See KiCad S-expression effects token reference.)
+    let mut justify_h = HAlign::Center;
     let mut justify_v = VAlign::Center;
     let mut seen_h = false;
     let mut seen_v = false;
@@ -239,13 +238,34 @@ fn parse_stroke_width(node: &SExpr) -> f64 {
 /// the stroke has no color override — callers default to the theme.
 fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let color = node.find("stroke")?.find("color")?;
+    parse_rgba_quad(color)
+}
+
+/// Parse `(fill (color R G B A))` if present. Used by `(sheet ...)` blocks
+/// where the fill is a literal RGBA, not a `type` enum. Returns None when
+/// the colour is fully transparent (KiCad's "use default").
+fn parse_fill_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
+    let color = node.find("fill")?.find("color")?;
+    parse_rgba_quad(color)
+}
+
+/// Decode a KiCad `(color R G B A)` quad. RGB channels are 0..255 integers.
+/// Alpha may be either a 0..1 float (the form KiCad writes for sheets and
+/// strokes) or a 0..255 integer (rare legacy form); values <= 1.0 are
+/// treated as the float form and rescaled to 0..255 so renderers can use a
+/// single byte representation. A fully transparent zero-RGBA quad is mapped
+/// to None so callers fall back to the theme default and the file round-
+/// trips cleanly when the user has not customised the colour.
+fn parse_rgba_quad(color: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
     let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
     let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
-    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
-    // A zero RGBA is KiCad's way of saying "use theme default" — we
-    // treat that as None so the sheet round-trips cleanly when the
-    // user hasn't customised the colour.
+    let a_raw = color.arg_f64(3).unwrap_or(1.0);
+    let a = if a_raw <= 1.0 {
+        (a_raw.clamp(0.0, 1.0) * 255.0).round() as u8
+    } else {
+        a_raw.clamp(0.0, 255.0) as u8
+    };
     if r == 0 && g == 0 && b == 0 && a == 0 {
         return None;
     }
@@ -1137,6 +1157,8 @@ fn parse_child_sheet(s: &SExpr) -> ChildSheet {
         size,
         stroke_width: parse_stroke_width(s),
         fill: parse_fill_type(s),
+        stroke_color: parse_stroke_color(s),
+        fill_color: parse_fill_color(s),
         fields_autoplaced,
         pins,
         instances: parse_sheet_instances(s),
