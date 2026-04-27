@@ -258,16 +258,7 @@ impl Signex {
                 library_path,
                 table,
                 row_id,
-            } => {
-                tracing::info!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    table = %table,
-                    row = %row_id,
-                    "place library row — engine wire-up ships in a follow-up patch"
-                );
-                Task::none()
-            }
+            } => self.handle_place_library_component(library_path, table, row_id),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
