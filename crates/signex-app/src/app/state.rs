@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use signex_render::{LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::project::ProjectData;
 use signex_types::theme::ThemeId;
@@ -56,6 +56,8 @@ pub struct UiState {
     pub preferences_draft_label_style: LabelStyle,
     pub multisheet_style: MultisheetStyle,
     pub preferences_draft_multisheet_style: MultisheetStyle,
+    pub grid_style: GridStyle,
+    pub preferences_draft_grid_style: GridStyle,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
