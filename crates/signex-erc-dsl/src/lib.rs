@@ -16,12 +16,10 @@ pub use error::DslError;
 pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
     match parser::parse(src) {
         Ok(rules) => Ok(rules),
-        Err(errors) => Err(
-            errors
-                .into_iter()
-                .map(|(offset, message)| DslError::Parse(offset, offset, message))
-                .collect(),
-        ),
+        Err(errors) => Err(errors
+            .into_iter()
+            .map(|(offset, message)| DslError::Parse(offset, offset, message))
+            .collect()),
     }
 }
 
@@ -66,7 +64,9 @@ mod tests {
         ErcContext {
             paper_size: PaperSize::A4,
             symbols: vec![ErcSymbol {
-                uuid: "00000000-0000-0000-0000-000000000001".parse().expect("valid uuid"),
+                uuid: "00000000-0000-0000-0000-000000000001"
+                    .parse()
+                    .expect("valid uuid"),
                 reference: "U1".to_string(),
                 value: "MCU".to_string(),
                 position: Point::new(10.0, 10.0),
@@ -130,7 +130,9 @@ mod tests {
             Err(errors) => errors,
         };
         assert!(
-            errors.iter().any(|e| matches!(e, DslError::InvalidRegex { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, DslError::InvalidRegex { .. })),
             "expected InvalidRegex error"
         );
     }

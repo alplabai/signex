@@ -17,9 +17,13 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square.
-/// Cap height ≈ 72 % of em-square → scale up by 1/0.72 so visual sizes match Standard.
-pub const STROKE_FONT_SCALE: f32 = 1.0 / 0.72;
+/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square
+/// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
+/// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
+/// canvas font size AND any offset / hit-test math so they stay in sync —
+/// applying the scale only at render sites (as a separate multiplier on
+/// `screen_font`) silently breaks label/pin/text anchors.
+pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
@@ -33,6 +37,53 @@ pub enum LabelStyle {
     #[default]
     Standard,
     Altium,
+}
+
+/// How hierarchical child sheets render. Standard mode keeps each sheet's
+/// stroke/fill colour from the source file (with theme component-body
+/// fallback) so the sheet blends with the rest of the schematic. Altium
+/// mode draws sheets with Altium Designer's signature greenish palette
+/// when no per-sheet colour is set in the file. Per-sheet colours from
+/// the source file always win, regardless of the active style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MultisheetStyle {
+    #[default]
+    Standard,
+    Altium,
+}
+
+/// Visible schematic grid rendering style. Mirrors Standard's Display
+/// Options preference (Dots / Lines / Small crosses).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GridStyle {
+    #[default]
+    Dots,
+    Lines,
+    SmallCrosses,
+}
+
+impl GridStyle {
+    pub const ALL: &'static [GridStyle] =
+        &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses];
+}
+
+impl std::fmt::Display for MultisheetStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MultisheetStyle::Standard => write!(f, "Standard"),
+            MultisheetStyle::Altium => write!(f, "Altium"),
+        }
+    }
+}
+
+impl std::fmt::Display for GridStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GridStyle::Dots => write!(f, "Dots"),
+            GridStyle::Lines => write!(f, "Lines"),
+            GridStyle::SmallCrosses => write!(f, "Small crosses"),
+        }
+    }
 }
 
 impl std::fmt::Display for LabelStyle {
@@ -62,6 +113,8 @@ struct CanvasTextConfig {
     italic: bool,
     power_port_style: PowerPortStyle,
     label_style: LabelStyle,
+    multisheet_style: MultisheetStyle,
+    grid_style: GridStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -92,6 +145,8 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             italic: false,
             power_port_style: PowerPortStyle::Altium,
             label_style: LabelStyle::Standard,
+            multisheet_style: MultisheetStyle::Standard,
+            grid_style: GridStyle::Dots,
         })
     })
 }
@@ -143,6 +198,32 @@ pub fn label_style() -> LabelStyle {
         .read()
         .map(|c| c.label_style)
         .unwrap_or(LabelStyle::Standard)
+}
+
+pub fn set_multisheet_style(style: MultisheetStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.multisheet_style = style;
+    }
+}
+
+pub fn multisheet_style() -> MultisheetStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.multisheet_style)
+        .unwrap_or(MultisheetStyle::Standard)
+}
+
+pub fn set_grid_style(style: GridStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.grid_style = style;
+    }
+}
+
+pub fn grid_style() -> GridStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.grid_style)
+        .unwrap_or(GridStyle::Dots)
 }
 
 pub fn canvas_font() -> iced::Font {

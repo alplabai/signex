@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/signex-app",
     "crates/signex-engine",
+    "crates/signex-bom",
     "crates/signex-types",
     "crates/kicad-parser",
     "crates/kicad-writer",
@@ -10,6 +11,8 @@ members = [
     "crates/signex-widgets",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
+    "crates/signex-output",
+    "crates/chrome-catalog",
 ]
 
 [workspace.package]
@@ -20,7 +23,7 @@ repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg"] }
+iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
 iced_aw = { version = "0.13", default-features = false, features = [
     "tabs", "tab_bar", "card", "context_menu", "number_input",
     "color_picker", "menu", "drop_down", "selection_list",
@@ -45,15 +48,23 @@ rfd = "0.17.2"
 chumsky = "0.12"
 regex = "1"
 
+# Output generation
+pdf-writer = "0.14"
+rust_xlsxwriter = "0.77"
+tiny-skia = "0.11"
+ttf-parser = "0.25"
+
 # Internal crates
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
+signex-bom = { path = "crates/signex-bom" }
 kicad-parser = { path = "crates/kicad-parser" }
 kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
+signex-output = { path = "crates/signex-output" }
 
 [profile.release]
 lto = "thin"

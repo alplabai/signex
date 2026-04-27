@@ -50,6 +50,334 @@
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
         </dict>
+        <!-- Signex native file formats. Each entry pairs a UTI with its
+             bundled .icns (produced by installer/build-file-icons.sh) so
+             macOS Finder paints the correct per-type icon. -->
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Project</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxprj</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxprj.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxprj</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Schematic</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxsch</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxsch.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxsch</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex PCB</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxpcb</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxpcb.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxpcb</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Footprint</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxfpt</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxfpt.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxfpt</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Simulation</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxsim</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxsim.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxsim</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Library</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxlib</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxlib.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxlib</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Symbol</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxsym</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxsym.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxsym</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Package</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxpkg</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxpkg.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxpkg</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex PCB Material</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxmat</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxmat.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxmat</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex Config</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxcfg</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxcfg.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxcfg</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Signex SPICE Model</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxmod</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxmod.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxmod</string></array>
+        </dict>
+    </array>
+    <!-- Tell Launch Services that Signex owns these UTIs. Each
+         declaration pairs the identifier with its extension + icon
+         file so third-party apps can also reason about them. -->
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxprj</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Project</string>
+            <key>UTTypeIconFile</key>
+            <string>snxprj.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxprj</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxsch</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Schematic</string>
+            <key>UTTypeIconFile</key>
+            <string>snxsch.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxsch</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxpcb</string>
+            <key>UTTypeDescription</key>
+            <string>Signex PCB</string>
+            <key>UTTypeIconFile</key>
+            <string>snxpcb.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxpcb</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxfpt</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Footprint</string>
+            <key>UTTypeIconFile</key>
+            <string>snxfpt.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxfpt</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxsim</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Simulation</string>
+            <key>UTTypeIconFile</key>
+            <string>snxsim.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxsim</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxlib</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Library</string>
+            <key>UTTypeIconFile</key>
+            <string>snxlib.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxlib</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxsym</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Symbol</string>
+            <key>UTTypeIconFile</key>
+            <string>snxsym.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxsym</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxpkg</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Package</string>
+            <key>UTTypeIconFile</key>
+            <string>snxpkg.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxpkg</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxmat</string>
+            <key>UTTypeDescription</key>
+            <string>Signex PCB Material</string>
+            <key>UTTypeIconFile</key>
+            <string>snxmat.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxmat</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxcfg</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Config</string>
+            <key>UTTypeIconFile</key>
+            <string>snxcfg.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxcfg</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxmod</string>
+            <key>UTTypeDescription</key>
+            <string>Signex SPICE Model</string>
+            <key>UTTypeIconFile</key>
+            <string>snxmod.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxmod</string></array>
+            </dict>
+        </dict>
     </array>
 </dict>
 </plist>

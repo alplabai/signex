@@ -15,34 +15,56 @@ struct HelperDesc {
 }
 
 const NET_HELPERS: &[HelperDesc] = &[
-    HelperDesc { name: "has_driver",   targets: &[TargetKind::Net], arg_count: 0 },
-    HelperDesc { name: "has_pullup",   targets: &[TargetKind::Net], arg_count: 0 },
-    HelperDesc { name: "has_pin_kind", targets: &[TargetKind::Net], arg_count: 1 },
-    HelperDesc { name: "name_matches", targets: &[TargetKind::Net], arg_count: 1 },
-    HelperDesc { name: "class_is",     targets: &[TargetKind::Net], arg_count: 1 },
+    HelperDesc {
+        name: "has_driver",
+        targets: &[TargetKind::Net],
+        arg_count: 0,
+    },
+    HelperDesc {
+        name: "has_pullup",
+        targets: &[TargetKind::Net],
+        arg_count: 0,
+    },
+    HelperDesc {
+        name: "has_pin_kind",
+        targets: &[TargetKind::Net],
+        arg_count: 1,
+    },
+    HelperDesc {
+        name: "name_matches",
+        targets: &[TargetKind::Net],
+        arg_count: 1,
+    },
+    HelperDesc {
+        name: "class_is",
+        targets: &[TargetKind::Net],
+        arg_count: 1,
+    },
 ];
 
-const PIN_HELPERS: &[HelperDesc] = &[
-    HelperDesc { name: "is_driven",   targets: &[TargetKind::Pin], arg_count: 0 },
-];
+const PIN_HELPERS: &[HelperDesc] = &[HelperDesc {
+    name: "is_driven",
+    targets: &[TargetKind::Pin],
+    arg_count: 0,
+}];
 
 const ALL_HELPERS: &[&[HelperDesc]] = &[NET_HELPERS, PIN_HELPERS];
 
 // Known field access patterns: (object, field, valid_targets)
 const FIELD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
-    ("net",       "name",      &[TargetKind::Net]),
-    ("net",       "class",     &[TargetKind::Net]),
-    ("pin",       "kind",      &[TargetKind::Pin]),
-    ("pin",       "required",  &[TargetKind::Pin]),
-    ("pin",       "connected", &[TargetKind::Pin]),
-    ("component", "ref_des",   &[TargetKind::Component]),
-    ("component", "value",     &[TargetKind::Component]),
+    ("net", "name", &[TargetKind::Net]),
+    ("net", "class", &[TargetKind::Net]),
+    ("pin", "kind", &[TargetKind::Pin]),
+    ("pin", "required", &[TargetKind::Pin]),
+    ("pin", "connected", &[TargetKind::Pin]),
+    ("component", "ref_des", &[TargetKind::Component]),
+    ("component", "value", &[TargetKind::Component]),
 ];
 
 // Known method calls: (object, method, valid_targets)
 const METHOD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
-    ("component", "attr",    &[TargetKind::Component]),
-    ("sheet",     "tagged",  &[TargetKind::Sheet]),
+    ("component", "attr", &[TargetKind::Component]),
+    ("sheet", "tagged", &[TargetKind::Sheet]),
 ];
 
 // ---------------------------------------------------------------------------

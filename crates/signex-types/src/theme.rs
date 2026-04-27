@@ -44,6 +44,10 @@ pub enum ThemeId {
     CatppuccinMocha,
     VsCodeDark,
     Signex,
+    /// Alp Lab brand theme — clones the Signex chrome palette and swaps
+    /// the accent (and any visually-linked iconography) to cyan
+    /// `#0891b2`. Used for co-branded or white-labelled builds.
+    Alplab,
     GitHubDark,
     SolarizedLight,
     Nord,
@@ -55,6 +59,7 @@ impl ThemeId {
     /// All 6 built-in themes (excludes Custom).
     pub const BUILTINS: &[ThemeId] = &[
         ThemeId::Signex,
+        ThemeId::Alplab,
         ThemeId::VsCodeDark,
         ThemeId::CatppuccinMocha,
         ThemeId::GitHubDark,
@@ -70,6 +75,7 @@ impl ThemeId {
             ThemeId::CatppuccinMocha => "Catppuccin Mocha",
             ThemeId::VsCodeDark => "VS Code Dark",
             ThemeId::Signex => "Signex",
+            ThemeId::Alplab => "Alp Lab",
             ThemeId::GitHubDark => "GitHub Dark",
             ThemeId::SolarizedLight => "Solarized Light",
             ThemeId::Nord => "Nord",
@@ -271,6 +277,32 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     cursor: c(0x00, 0x00, 0x00),     // Black cursor crosshair
 };
 
+// ===== Alp Lab =====
+//
+// Clone of the Signex chrome tokens with the accent swapped to the Alp
+// Lab brand cyan. The icon tree in `assets/icons/alplab/` pre-tints the
+// SVG fills to this same cyan; keeping the accent aligned so dropdown
+// chevrons, focus rings and button highlights read as one palette.
+// Canvas colours reuse SIGNEX_CANVAS for now — the schematic sheet
+// keeps the Altium-style cream background regardless of chrome theme.
+
+const ALPLAB_TOKENS: ThemeTokens = ThemeTokens {
+    bg: c(0x2D, 0x2D, 0x30),
+    paper: c(0x1E, 0x1E, 0x1E),
+    text: c(0xDC, 0xDC, 0xDC),
+    text_secondary: c(0x9B, 0x9B, 0x9B),
+    accent: c(0x08, 0x91, 0xB2),
+    border: c(0x3F, 0x3F, 0x46),
+    panel_bg: c(0x25, 0x25, 0x28),
+    toolbar_bg: c(0x2D, 0x2D, 0x30),
+    statusbar_bg: c(0x25, 0x25, 0x28),
+    selection: c(0x51, 0x51, 0x55),
+    hover: c(0x3F, 0x3F, 0x46),
+    error: c(0xF4, 0x4E, 0x4E),
+    warning: c(0xE8, 0x91, 0x2D),
+    success: c(0x57, 0xA6, 0x4A),
+};
+
 // ===== GitHub Dark =====
 
 const GITHUB_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -400,6 +432,7 @@ pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_TOKENS,
         ThemeId::VsCodeDark => VSCODE_DARK_TOKENS,
         ThemeId::Signex => SIGNEX_TOKENS,
+        ThemeId::Alplab => ALPLAB_TOKENS,
         ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
         ThemeId::Nord => NORD_TOKENS,
@@ -412,6 +445,9 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_CANVAS,
         ThemeId::VsCodeDark => VSCODE_DARK_CANVAS,
         ThemeId::Signex => SIGNEX_CANVAS,
+        // Alp Lab reuses the Altium-style cream schematic palette; only
+        // the chrome accent differs.
+        ThemeId::Alplab => SIGNEX_CANVAS,
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,

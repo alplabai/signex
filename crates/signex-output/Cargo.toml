@@ -1,0 +1,26 @@
+[package]
+name = "signex-output"
+description = "Output generation for Signex EDA — PDF, BOM, netlist, sheet templates, print preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+signex-bom = { path = "../signex-bom" }
+signex-types = { path = "../signex-types" }
+standard-parser = { path = "../standard-parser" }
+standard-writer = { path = "../standard-writer" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+pdf-writer = { workspace = true }
+rust_xlsxwriter = { workspace = true }
+tiny-skia = { workspace = true }
+ttf-parser = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
+
+[[example]]
+name = "qa_harness"
+path = "examples/qa_harness.rs"

@@ -89,6 +89,16 @@ impl Signex {
                     tab.dirty = dirty;
                 }
 
+                // Mirror tab dirty state into the project-scoped
+                // `dirty_paths` set so the Projects-panel red dot
+                // survives tab close and is single-source-of-truth
+                // for "the file has unsaved edits".
+                if dirty {
+                    self.document_state.dirty_paths.insert(new_path.clone());
+                } else {
+                    self.document_state.dirty_paths.remove(&new_path);
+                }
+
                 self.document_state.engines.insert(new_path.clone(), engine);
                 self.document_state.active_path = Some(new_path);
                 Some(result)
@@ -188,24 +198,71 @@ impl Signex {
         sheet: SchematicSheet,
     ) {
         self.park_active_schematic_session();
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: None,
             dirty: false,
+            project_id,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true, true);
     }
 
+    /// Reattach a tab to a schematic engine that's already parked in
+    /// `document_state.engines`. Used when the user reopens a file
+    /// that was closed while dirty — we kept the engine alive in
+    /// `close_tab_now` precisely so the in-memory edits survive the
+    /// reopen. Re-parsing from disk would discard those edits.
+    ///
+    /// Pre-condition: `document_state.engines.contains_key(&path)`.
+    /// Post-condition: a new tab exists pointing at `path` with
+    /// `dirty: true`, the active engine is the parked entry, and the
+    /// canvas reflects the parked sheet's current state.
+    pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
+        self.park_active_schematic_session();
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
+        // The parked engine is, by definition, dirty — `close_tab_now`
+        // only keeps engines for paths in `dirty_paths`. Mirror that
+        // into the new tab so the chrome (red dot, etc.) stays
+        // consistent the moment the tab opens.
+        let dirty = self.document_state.dirty_paths.contains(&path);
+        self.document_state.tabs.push(TabInfo {
+            title,
+            path: path.clone(),
+            cached_document: None,
+            dirty,
+            project_id,
+        });
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        // Point active_path at the parked entry. `apply_loaded_schematic`
+        // with `schematic = None` skips the `engines.insert` overwrite
+        // path and just refreshes the canvas / panel against the
+        // existing engine.
+        self.document_state.active_path = Some(path);
+        self.apply_loaded_schematic(None, true, true, true, true);
+    }
+
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
+            project_id,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
@@ -244,7 +301,15 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        self.document_state.clear_active_engine();
+        // Detach from the currently-visible schematic engine, but
+        // leave its entry in `document_state.engines` untouched — the
+        // engine should outlive a tab switch so switching back to a
+        // parked schematic (e.g. Schematic → PCB → Schematic from the
+        // project tree) finds its engine still resident. The only
+        // authoritative removal point is `close_tab_at_index` in
+        // `handlers/document_tabs.rs`, which explicitly prunes the
+        // closing tab's entry. GitHub issue #51.
+        self.document_state.active_path = None;
         self.interaction_state.active_canvas_mut().set_render_cache(None);
         self.interaction_state.active_canvas_mut().selected.clear();
         self.interaction_state.active_canvas_mut().wire_preview.clear();

@@ -32,12 +32,7 @@ pub(crate) fn hide_yes_node() -> SExpr {
     yes_no_node("hide", true)
 }
 
-pub(crate) fn font_node(
-    size: f64,
-    thickness: Option<f64>,
-    bold: bool,
-    italic: bool,
-) -> SExpr {
+pub(crate) fn font_node(size: f64, thickness: Option<f64>, bold: bool, italic: bool) -> SExpr {
     let mut items = vec![node("size", vec![atom(size), atom(size)])];
     if let Some(thickness) = thickness {
         items.push(node("thickness", vec![atom(thickness)]));

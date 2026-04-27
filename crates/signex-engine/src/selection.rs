@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, SchDrawing, SelectedItem, SelectedKind, Symbol, TextNote,
-    Wire, SCHEMATIC_PT_TO_MM,
+    Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem, SelectedKind,
+    Symbol, TextNote, Wire,
 };
 
 use super::Engine;
@@ -55,50 +55,47 @@ impl Engine {
         for item in items {
             match item.kind {
                 SelectedKind::Wire => {
-                    if let Some(wire) =
-                        self.document.wires.iter().find(|w| w.uuid == item.uuid)
-                    {
+                    if let Some(wire) = self.document.wires.iter().find(|w| w.uuid == item.uuid) {
                         clipboard.wires.push(wire.clone());
                     }
                 }
                 SelectedKind::Bus => {
-                    if let Some(bus) =
-                        self.document.buses.iter().find(|b| b.uuid == item.uuid)
-                    {
+                    if let Some(bus) = self.document.buses.iter().find(|b| b.uuid == item.uuid) {
                         clipboard.buses.push(bus.clone());
                     }
                 }
                 SelectedKind::Label => {
-                    if let Some(label) =
-                        self.document.labels.iter().find(|l| l.uuid == item.uuid)
-                    {
+                    if let Some(label) = self.document.labels.iter().find(|l| l.uuid == item.uuid) {
                         clipboard.labels.push(label.clone());
                     }
                 }
                 SelectedKind::Symbol => {
-                    if let Some(symbol) =
-                        self.document.symbols.iter().find(|s| s.uuid == item.uuid)
+                    if let Some(symbol) = self.document.symbols.iter().find(|s| s.uuid == item.uuid)
                     {
                         clipboard.symbols.push(symbol.clone());
                     }
                 }
                 SelectedKind::Junction => {
-                    if let Some(j) =
-                        self.document.junctions.iter().find(|j| j.uuid == item.uuid)
-                    {
+                    if let Some(j) = self.document.junctions.iter().find(|j| j.uuid == item.uuid) {
                         clipboard.junctions.push(j.clone());
                     }
                 }
                 SelectedKind::NoConnect => {
-                    if let Some(nc) =
-                        self.document.no_connects.iter().find(|nc| nc.uuid == item.uuid)
+                    if let Some(nc) = self
+                        .document
+                        .no_connects
+                        .iter()
+                        .find(|nc| nc.uuid == item.uuid)
                     {
                         clipboard.no_connects.push(nc.clone());
                     }
                 }
                 SelectedKind::TextNote => {
-                    if let Some(tn) =
-                        self.document.text_notes.iter().find(|t| t.uuid == item.uuid)
+                    if let Some(tn) = self
+                        .document
+                        .text_notes
+                        .iter()
+                        .find(|t| t.uuid == item.uuid)
                     {
                         clipboard.text_notes.push(tn.clone());
                     }
@@ -149,34 +146,20 @@ impl Engine {
                     .document
                     .child_sheets
                     .iter()
-                    .find_map(|cs| {
-                        cs.pins
-                            .iter()
-                            .find(|p| p.uuid == item.uuid)
-                    })
+                    .find_map(|cs| cs.pins.iter().find(|p| p.uuid == item.uuid))
                     .map(|p| (p.position.x, p.position.y)),
                 SelectedKind::Wire => self
                     .document
                     .wires
                     .iter()
                     .find(|w| w.uuid == item.uuid)
-                    .map(|w| {
-                        (
-                            (w.start.x + w.end.x) / 2.0,
-                            (w.start.y + w.end.y) / 2.0,
-                        )
-                    }),
+                    .map(|w| ((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
                 SelectedKind::Bus => self
                     .document
                     .buses
                     .iter()
                     .find(|b| b.uuid == item.uuid)
-                    .map(|b| {
-                        (
-                            (b.start.x + b.end.x) / 2.0,
-                            (b.start.y + b.end.y) / 2.0,
-                        )
-                    }),
+                    .map(|b| ((b.start.x + b.end.x) / 2.0, (b.start.y + b.end.y) / 2.0)),
                 _ => None,
             };
 
@@ -193,10 +176,7 @@ impl Engine {
         anchors
     }
 
-    pub fn describe_single_selection(
-        &self,
-        items: &[SelectedItem],
-    ) -> Option<SelectionDetails> {
+    pub fn describe_single_selection(&self, items: &[SelectedItem]) -> Option<SelectionDetails> {
         let [item] = items else {
             return None;
         };
@@ -221,12 +201,12 @@ impl Engine {
 
         match item.kind {
             SelectedKind::Symbol => {
-                let symbol = self
-                    .document
-                    .symbols
-                    .iter()
-                    .find(|s| s.uuid == item.uuid)?;
-                let type_label = if symbol.is_power { "Power Port" } else { "Symbol" };
+                let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
+                let type_label = if symbol.is_power {
+                    "Power Port"
+                } else {
+                    "Symbol"
+                };
                 info.push(("Type".into(), type_label.into()));
                 info.push(("Reference".into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
@@ -266,11 +246,7 @@ impl Engine {
                 }
             }
             SelectedKind::Wire => {
-                let wire = self
-                    .document
-                    .wires
-                    .iter()
-                    .find(|w| w.uuid == item.uuid)?;
+                let wire = self.document.wires.iter().find(|w| w.uuid == item.uuid)?;
                 let dx = wire.end.x - wire.start.x;
                 let dy = wire.end.y - wire.start.y;
                 let len = (dx * dx + dy * dy).sqrt();
@@ -286,11 +262,7 @@ impl Engine {
                 info.push(("Length".into(), format!("{:.2} mm", len)));
             }
             SelectedKind::Label => {
-                let label = self
-                    .document
-                    .labels
-                    .iter()
-                    .find(|l| l.uuid == item.uuid)?;
+                let label = self.document.labels.iter().find(|l| l.uuid == item.uuid)?;
                 info.push(("Type".into(), format!("{:?} Label", label.label_type)));
                 info.push(("Text".into(), label.text.clone()));
                 info.push(("Net Name".into(), label.text.clone()));
@@ -386,11 +358,8 @@ impl Engine {
                 ));
             }
             SelectedKind::SheetPin => {
-                let (sheet_name, sheet_file, sheet_pin) = self
-                    .document
-                    .child_sheets
-                    .iter()
-                    .find_map(|cs| {
+                let (sheet_name, sheet_file, sheet_pin) =
+                    self.document.child_sheets.iter().find_map(|cs| {
                         cs.pins
                             .iter()
                             .find(|p| p.uuid == item.uuid)
@@ -407,11 +376,7 @@ impl Engine {
                 ));
             }
             SelectedKind::Bus => {
-                let bus = self
-                    .document
-                    .buses
-                    .iter()
-                    .find(|b| b.uuid == item.uuid)?;
+                let bus = self.document.buses.iter().find(|b| b.uuid == item.uuid)?;
                 info.push(("Type".into(), "Bus".into()));
                 info.push((
                     "Start".into(),
@@ -434,13 +399,21 @@ impl Engine {
                     u == item.uuid
                 })?;
                 match d {
-                    SchDrawing::Line { start, end, width, .. } => {
+                    SchDrawing::Line {
+                        start, end, width, ..
+                    } => {
                         info.push(("Type".into(), "Line".into()));
                         info.push(("Start".into(), format!("{:.2}, {:.2}", start.x, start.y)));
                         info.push(("End".into(), format!("{:.2}, {:.2}", end.x, end.y)));
                         info.push(("Width".into(), format!("{width:.3}")));
                     }
-                    SchDrawing::Rect { start, end, width, fill, .. } => {
+                    SchDrawing::Rect {
+                        start,
+                        end,
+                        width,
+                        fill,
+                        ..
+                    } => {
                         info.push(("Type".into(), "Rectangle".into()));
                         let x0 = start.x.min(end.x);
                         let y0 = start.y.min(end.y);
@@ -452,17 +425,26 @@ impl Engine {
                         info.push(("Border".into(), format!("{width:.3}")));
                         info.push(("Fill".into(), fill_type_label(*fill).into()));
                     }
-                    SchDrawing::Circle { center, radius, width, fill, .. } => {
+                    SchDrawing::Circle {
+                        center,
+                        radius,
+                        width,
+                        fill,
+                        ..
+                    } => {
                         info.push(("Type".into(), "Circle".into()));
-                        info.push((
-                            "Center".into(),
-                            format!("{:.2}, {:.2}", center.x, center.y),
-                        ));
+                        info.push(("Center".into(), format!("{:.2}, {:.2}", center.x, center.y)));
                         info.push(("Radius".into(), format!("{radius:.3}")));
                         info.push(("Border".into(), format!("{width:.3}")));
                         info.push(("Fill".into(), fill_type_label(*fill).into()));
                     }
-                    SchDrawing::Arc { start, mid, end, width, .. } => {
+                    SchDrawing::Arc {
+                        start,
+                        mid,
+                        end,
+                        width,
+                        ..
+                    } => {
                         info.push(("Type".into(), "Arc".into()));
                         if let Some((cx, cy, radius)) =
                             circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
@@ -487,7 +469,12 @@ impl Engine {
                         }
                         info.push(("Width".into(), format!("{width:.3}")));
                     }
-                    SchDrawing::Polyline { points, width, fill, .. } => {
+                    SchDrawing::Polyline {
+                        points,
+                        width,
+                        fill,
+                        ..
+                    } => {
                         info.push(("Type".into(), "Polygon".into()));
                         info.push(("Vertices".into(), format!("{}", points.len())));
                         info.push(("Border".into(), format!("{width:.3}")));
@@ -496,11 +483,7 @@ impl Engine {
                 }
             }
             SelectedKind::SymbolRefField => {
-                let symbol = self
-                    .document
-                    .symbols
-                    .iter()
-                    .find(|s| s.uuid == item.uuid)?;
+                let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
                 let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
                 info.push(("Text".into(), symbol.reference.clone()));
@@ -509,7 +492,8 @@ impl Engine {
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
                 ));
-                info.push(("Rotation".into(), format!("{:.0}°", ref_text.rotation)));
+                let effective_rot = (symbol.rotation + ref_text.rotation).rem_euclid(360.0);
+                info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
                 info.push((
                     "Text Size".into(),
                     format!(
@@ -531,15 +515,16 @@ impl Engine {
                 ));
                 info.push((
                     "Fields Autoplaced".into(),
-                    if symbol.fields_autoplaced { "Yes" } else { "No" }.into(),
+                    if symbol.fields_autoplaced {
+                        "Yes"
+                    } else {
+                        "No"
+                    }
+                    .into(),
                 ));
             }
             SelectedKind::SymbolValField => {
-                let symbol = self
-                    .document
-                    .symbols
-                    .iter()
-                    .find(|s| s.uuid == item.uuid)?;
+                let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
                 let value_text = symbol.val_text.as_ref()?;
                 info.push(("Type".into(), "Value Field".into()));
                 info.push(("Text".into(), symbol.value.clone()));
@@ -551,7 +536,8 @@ impl Engine {
                         value_text.position.x, value_text.position.y
                     ),
                 ));
-                info.push(("Rotation".into(), format!("{:.0}°", value_text.rotation)));
+                let effective_rot = (symbol.rotation + value_text.rotation).rem_euclid(360.0);
+                info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
                 info.push((
                     "Text Size".into(),
                     format!(
@@ -573,7 +559,12 @@ impl Engine {
                 ));
                 info.push((
                     "Fields Autoplaced".into(),
-                    if symbol.fields_autoplaced { "Yes" } else { "No" }.into(),
+                    if symbol.fields_autoplaced {
+                        "Yes"
+                    } else {
+                        "No"
+                    }
+                    .into(),
                 ));
             }
         }
