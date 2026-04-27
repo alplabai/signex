@@ -1743,8 +1743,8 @@ impl Signex {
 
         match ext.as_str() {
             "snxsym" => {
-                let bytes = match std::fs::read_to_string(&path) {
-                    Ok(s) => s,
+                let bytes = match std::fs::read(&path) {
+                    Ok(b) => b,
                     Err(e) => {
                         tracing::warn!(
                             target: "signex::library",
@@ -1755,8 +1755,16 @@ impl Signex {
                         return Task::none();
                     }
                 };
-                let symbol: signex_library::Symbol = match serde_json::from_str(&bytes) {
-                    Ok(s) => s,
+                let file = match signex_library::SymbolFile::from_json(&bytes) {
+                    Ok(f) if !f.symbols.is_empty() => f,
+                    Ok(_) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            "open primitive: .snxsym contains zero symbols",
+                        );
+                        return Task::none();
+                    }
                     Err(e) => {
                         tracing::warn!(
                             target: "signex::library",
@@ -1771,10 +1779,16 @@ impl Signex {
                 let title = path
                     .file_stem()
                     .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| symbol.name.clone());
+                    .unwrap_or_else(|| {
+                        if !file.display_name.is_empty() {
+                            file.display_name.clone()
+                        } else {
+                            file.symbols[0].name.clone()
+                        }
+                    });
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-                let state = crate::app::SymbolEditorState::new(path.clone(), symbol);
+                let state = crate::app::SymbolEditorState::new(path.clone(), file);
                 self.document_state
                     .symbol_editors
                     .insert(path.clone(), state);
@@ -1901,19 +1915,22 @@ impl Signex {
     /// the matching `LibrarySet` adapter to reload its cached copy
     /// so any open Component Preview tabs see the new bytes.
     pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
-        // Symbol path.
+        // Symbol path — write the full multi-symbol container back to
+        // disk so other symbols in the same file are preserved.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            // Refresh the `updated` timestamp before serialising so
-            // downstream consumers can detect the rewrite.
-            editor.primitive.updated = chrono::Utc::now();
-            let json = match serde_json::to_string_pretty(&editor.primitive) {
+            // Refresh the active symbol's + the file's updated
+            // timestamps so downstream consumers can detect the rewrite.
+            let now = chrono::Utc::now();
+            editor.primitive_mut().updated = now;
+            editor.file.updated = now;
+            let json = match serde_json::to_string_pretty(&editor.file) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::warn!(
                         target: "signex::library",
                         path = %path.display(),
                         error = %e,
-                        "save primitive: serialize symbol failed",
+                        "save primitive: serialize symbol file failed",
                     );
                     return;
                 }
@@ -2024,7 +2041,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             };
         }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
-            let idx = crate::library::editor::symbol::state::add_pin(&mut editor.primitive, x, y);
+            let idx = crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y);
             editor.selected = Some(SymbolSelection::Pin(idx));
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -2042,9 +2059,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
+            let selected = editor.selected;
             crate::library::editor::symbol::state::move_selected(
-                &mut editor.primitive,
-                editor.selected,
+                editor.primitive_mut(),
+                selected,
                 x,
                 y,
             );
@@ -2052,9 +2070,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
+            let selected = editor.selected;
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
-                &mut editor.primitive,
-                editor.selected,
+                editor.primitive_mut(),
+                selected,
             ) {
                 editor.selected = new_sel;
                 editor.dirty = true;
@@ -2062,13 +2081,13 @@ pub(crate) fn apply_symbol_primitive_edit(
             }
         }
         PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
-            if let Some(pin) = editor.primitive.pins.get_mut(idx) {
+            if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.number = number;
                 editor.dirty = true;
             }
         }
         PrimitiveEditorMsg::SymbolSetPinName { idx, name } => {
-            if let Some(pin) = editor.primitive.pins.get_mut(idx) {
+            if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.name = name;
                 editor.dirty = true;
             }

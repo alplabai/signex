@@ -157,6 +157,9 @@ fn library_id_returns_manifest_id() {
 }
 
 /// Save a Symbol → reopen → get_symbol → bytes are identical.
+/// Multi-symbol containers (v0.9 phase 2): the adapter writes the
+/// symbol into a `SymbolFile` JSON named after the symbol's
+/// slugified name (`opamp-dual-8.snxsym`), not `<uuid>.snxsym`.
 #[test]
 fn save_then_get_symbol_round_trip() {
     let dir = tempfile::tempdir().unwrap();
@@ -168,7 +171,7 @@ fn save_then_get_symbol_round_trip() {
         .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
         .unwrap();
 
-    let on_disk = root.join("symbols").join(format!("{uuid}.snxsym"));
+    let on_disk = root.join("symbols").join("opamp-dual-8.snxsym");
     assert!(on_disk.exists(), "expected {on_disk:?} after save_symbol");
 
     drop(adapter);

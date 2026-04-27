@@ -145,6 +145,115 @@ impl Symbol {
     }
 }
 
+/// Multi-symbol `.snxsym` container — Altium SchLib parity. One file
+/// holds many symbols; each symbol still has its own UUID for
+/// `PrimitiveRef` resolution. The `format` field is a sentinel so
+/// future schema bumps can be detected without breaking older
+/// readers.
+///
+/// Backcompat: legacy single-symbol `.snxsym` files (a bare `Symbol`
+/// JSON, written before v0.9 phase 2) deserialize via the
+/// [`SymbolFileOnDisk`] enum's untagged variant — see [`SymbolFile::from_json`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SymbolFile {
+    /// Schema sentinel — current emitters write `"snxsym/v1"`. Older
+    /// files (legacy single-symbol form) don't carry this field; the
+    /// loader handles them via `SymbolFileOnDisk`.
+    #[serde(default = "default_format")]
+    pub format: String,
+    /// File-level UUID — distinct from any contained symbol's uuid.
+    /// Used as the file-rename-stable handle.
+    pub file_uuid: Uuid,
+    /// Human-facing library name shown in the SCH-Library panel header.
+    /// Defaults to the file stem when empty.
+    #[serde(default)]
+    pub display_name: String,
+    /// All symbols in this file. Order is the SCH-Library panel order.
+    pub symbols: Vec<Symbol>,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+}
+
+fn default_format() -> String {
+    "snxsym/v1".to_string()
+}
+
+/// Wire format for `.snxsym` JSON. Untagged enum so the same
+/// `serde_json::from_str` call accepts both the new `SymbolFile`
+/// container and legacy single-`Symbol` files written before
+/// v0.9 phase 2.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum SymbolFileOnDisk {
+    /// New multi-symbol container.
+    Container(SymbolFile),
+    /// Legacy single-symbol blob — wrapped on read.
+    Legacy(Symbol),
+}
+
+impl SymbolFile {
+    /// Build a new container holding a single symbol — what the
+    /// `Add New ▸ Symbol` flow seeds.
+    pub fn from_symbol(symbol: Symbol) -> Self {
+        let now = Utc::now();
+        Self {
+            format: default_format(),
+            file_uuid: Uuid::now_v7(),
+            display_name: symbol.name.clone(),
+            symbols: vec![symbol],
+            created: now,
+            updated: now,
+        }
+    }
+
+    /// Parse `.snxsym` JSON — accepts both the new container format
+    /// and legacy single-symbol files. Legacy files are wrapped into
+    /// a one-element container at read time so all downstream code
+    /// can assume the container shape.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, serde_json::Error> {
+        match serde_json::from_slice::<SymbolFileOnDisk>(bytes)? {
+            SymbolFileOnDisk::Container(file) => Ok(file),
+            SymbolFileOnDisk::Legacy(sym) => {
+                let now = Utc::now();
+                Ok(Self {
+                    format: default_format(),
+                    // Reuse the symbol's uuid as the file uuid for legacy
+                    // files — preserves the on-disk filename when the
+                    // adapter scheme had been `<uuid>.snxsym`.
+                    file_uuid: sym.uuid,
+                    display_name: sym.name.clone(),
+                    created: sym.created,
+                    updated: now,
+                    symbols: vec![sym],
+                })
+            }
+        }
+    }
+
+    /// Locate a symbol by UUID within this file.
+    pub fn get_symbol(&self, uuid: Uuid) -> Option<&Symbol> {
+        self.symbols.iter().find(|s| s.uuid == uuid)
+    }
+
+    /// Locate a symbol by UUID within this file (mutable).
+    pub fn get_symbol_mut(&mut self, uuid: Uuid) -> Option<&mut Symbol> {
+        self.symbols.iter_mut().find(|s| s.uuid == uuid)
+    }
+
+    /// Replace `symbol` in the container — matches by `symbol.uuid`.
+    /// Returns `false` when the uuid is not present (caller should
+    /// `push` into `symbols` instead).
+    pub fn upsert(&mut self, symbol: Symbol) -> bool {
+        if let Some(slot) = self.get_symbol_mut(symbol.uuid) {
+            *slot = symbol;
+            self.updated = Utc::now();
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +286,57 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: Symbol = serde_json::from_str(&json).unwrap();
         assert_eq!(s, back);
+    }
+
+    #[test]
+    fn symbol_file_round_trip_with_two_symbols() {
+        let s1 = Symbol::empty("ALPHA");
+        let s2 = Symbol::empty("BETA");
+        let mut file = SymbolFile::from_symbol(s1.clone());
+        file.symbols.push(s2.clone());
+        let json = serde_json::to_vec(&file).unwrap();
+        let back = SymbolFile::from_json(&json).unwrap();
+        assert_eq!(back.symbols.len(), 2);
+        assert_eq!(back.symbols[0].name, "ALPHA");
+        assert_eq!(back.symbols[1].name, "BETA");
+        assert_eq!(back.format, "snxsym/v1");
+    }
+
+    /// Legacy `.snxsym` files (single Symbol JSON, no container) must
+    /// still load — the editor wraps them into one-element
+    /// `SymbolFile`s on read so downstream code can assume the
+    /// container shape. The wrapped file's uuid mirrors the symbol's
+    /// uuid so the on-disk filename `<uuid>.snxsym` is preserved when
+    /// the loader rewrites with the new format.
+    #[test]
+    fn symbol_file_loads_legacy_single_symbol_json() {
+        let s = Symbol::empty("LEGACY");
+        let bare_symbol_json = serde_json::to_vec(&s).unwrap();
+        let file = SymbolFile::from_json(&bare_symbol_json).unwrap();
+        assert_eq!(file.symbols.len(), 1);
+        assert_eq!(file.symbols[0].name, "LEGACY");
+        assert_eq!(file.symbols[0].uuid, s.uuid);
+        assert_eq!(file.file_uuid, s.uuid);
+        assert_eq!(file.display_name, "LEGACY");
+    }
+
+    /// `SymbolFile::upsert` replaces a matching-uuid symbol in-place
+    /// and returns true; non-matching uuids return false so the
+    /// caller can `push` instead.
+    #[test]
+    fn symbol_file_upsert_replaces_matching_uuid() {
+        let original = Symbol::empty("FIRST");
+        let mut file = SymbolFile::from_symbol(original.clone());
+        let mut updated = original.clone();
+        updated.name = "FIRST_RENAMED".into();
+        assert!(file.upsert(updated.clone()));
+        assert_eq!(file.symbols.len(), 1);
+        assert_eq!(file.symbols[0].name, "FIRST_RENAMED");
+
+        let unrelated = Symbol::empty("OTHER");
+        assert!(!file.upsert(unrelated));
+        // Caller would push; we just verify upsert didn't accidentally add.
+        assert_eq!(file.symbols.len(), 1);
     }
 
     #[test]

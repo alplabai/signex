@@ -491,7 +491,7 @@ fn build_symbol_editor_panel_ctx(
         _ => return None,
     };
     let editor = app.document_state.symbol_editors.get(&path)?;
-    let sym = &editor.primitive;
+    let sym = editor.primitive();
 
     let pins: Vec<SymbolPinSummary> = sym
         .pins

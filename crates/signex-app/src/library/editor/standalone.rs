@@ -52,7 +52,7 @@ pub fn view_symbol<'a>(
         .height(Length::Fill);
 
     let status_line = row![
-        text(format!("{} pins", editor.primitive.pins.len()))
+        text(format!("{} pins", editor.primitive().pins.len()))
             .size(11)
             .color(muted),
         Space::new().width(Length::Fill),
@@ -159,7 +159,7 @@ fn symbol_tool_button_style(
 }
 
 fn view_symbol_canvas<'a>(editor: &'a SymbolEditorState) -> Element<'a, LibraryMessage> {
-    let program = SymbolCanvas::new(&editor.primitive, editor.selected, editor.tool);
+    let program = SymbolCanvas::new(editor.primitive(), editor.selected, editor.tool);
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
