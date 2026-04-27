@@ -298,6 +298,42 @@ pub enum EditorMsg {
     /// Drop the distributor listing row at `idx`.
     SupplyListingRemove { idx: usize },
     // ── /WS-K ─────────────────────────────────────────────────
+
+    // ── WS-J: Params tab ──────────────────────────────────────
+    /// Set a `ParamValue::Text` parameter's value directly. Text inputs
+    /// can flush on every keystroke without a parse step.
+    ParamSetText { name: String, value: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Number`
+    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// the value is committed via `ParamCommitNumber`.
+    ParamSetNumberBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Number` row.
+    ParamCommitNumber { name: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Measurement`
+    /// row's value field.
+    ParamSetMeasurementBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Measurement` row.
+    ParamCommitMeasurement { name: String, unit: String },
+    /// Toggle a `ParamValue::Bool` parameter.
+    ParamSetBool { name: String, value: bool },
+    /// Drop a parameter from `draft.parameters`.
+    ParamRemove { name: String },
+    /// Add a custom parameter row with an empty value of the chosen kind.
+    ParamAddCustom { name: String, kind: ParamKindMsg },
+    // ── /WS-J ─────────────────────────────────────────────────
+}
+
+// WS-J: Params tab
+/// Pure-data alias for `ParamKind` so messages don't depend on
+/// `signex_library::ParamKind` at the message layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum ParamKindMsg {
+    Text,
+    Number,
+    Bool,
+    /// Carries the unit string ("ohm", "F", "V", …).
+    Measurement(String),
 }
 
 /// Tool selection on the Symbol canvas — pure-data alias for the

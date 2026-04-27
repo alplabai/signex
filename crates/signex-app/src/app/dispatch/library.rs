@@ -20,7 +20,8 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    EditorMsg, LibraryMessage, PickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, SettingsMsg, SymbolSelectionMsg,
+    SymbolToolMsg,
 };
 use crate::library::state::{
     ComponentEditorState, EditorAddress, EditorTab, NewComponentState, PickerState,
@@ -1342,6 +1343,99 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
             }
         }
         // ── /WS-K ─────────────────────────────────────────────
+        // ── WS-J: Params tab ──────────────────────────────────
+        EditorMsg::ParamSetText { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Text(value));
+            editor.dirty = true;
+        }
+        EditorMsg::ParamSetNumberBuf { name, buf } => {
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitNumber { name } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(n) = trimmed.parse::<f64>() {
+                    editor
+                        .draft
+                        .parameters
+                        .insert(name.clone(), ParamValue::Number(n));
+                    editor.params_edit_buf.insert(name, n.to_string());
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::ParamSetMeasurementBuf { name, buf } => {
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitMeasurement { name, unit } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(value) = trimmed.parse::<f64>() {
+                    editor.draft.parameters.insert(
+                        name.clone(),
+                        ParamValue::Measurement {
+                            value,
+                            unit: unit.clone(),
+                        },
+                    );
+                    editor.params_edit_buf.insert(name, value.to_string());
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::ParamSetBool { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Bool(value));
+            editor.dirty = true;
+        }
+        EditorMsg::ParamRemove { name } => {
+            editor.draft.parameters.remove(&name);
+            editor.params_edit_buf.remove(&name);
+            editor.dirty = true;
+        }
+        EditorMsg::ParamAddCustom { name, kind } => {
+            use signex_library::ParamValue;
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+            if editor.draft.parameters.contains_key(trimmed) {
+                return;
+            }
+            let key = trimmed.to_string();
+            let value = match kind {
+                ParamKindMsg::Text => ParamValue::Text(String::new()),
+                ParamKindMsg::Number => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Number(0.0)
+                }
+                ParamKindMsg::Bool => ParamValue::Bool(false),
+                ParamKindMsg::Measurement(unit) => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Measurement { value: 0.0, unit }
+                }
+            };
+            editor.draft.parameters.insert(key, value);
+            editor.dirty = true;
+        }
+        // ── /WS-J ─────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
