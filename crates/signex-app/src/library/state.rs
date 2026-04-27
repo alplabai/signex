@@ -731,9 +731,12 @@ mod tests {
         assert_eq!(lib.total_rows(), 0);
         lib.tables.insert("resistors".into(), Vec::new());
         assert_eq!(lib.total_rows(), 0);
+        lib.tables.insert(
+            "capacitors".into(),
+            vec![fixture_row("C1"), fixture_row("C2")],
+        );
         lib.tables
-            .insert("capacitors".into(), vec![fixture_row("C1"), fixture_row("C2")]);
-        lib.tables.insert("resistors".into(), vec![fixture_row("R1")]);
+            .insert("resistors".into(), vec![fixture_row("R1")]);
         assert_eq!(lib.total_rows(), 3);
     }
 

@@ -2154,12 +2154,14 @@ impl Signex {
                 // a single state owner.
                 super::state::WindowKind::ComponentEditor {
                     library_path,
-                    component_id,
+                    table,
+                    row_id,
                 } => {
                     let tokens = &self.document_state.panel_ctx.tokens;
                     let address = crate::library::state::EditorAddress::new(
                         library_path.clone(),
-                        *component_id,
+                        table.clone(),
+                        *row_id,
                     );
                     if let Some(editor) = self.library.editors.get(&address) {
                         crate::library::editor::view(editor, &self.library, tokens, address)
@@ -3674,7 +3676,8 @@ impl Signex {
             let tokens = &self.document_state.panel_ctx.tokens;
             let address = crate::library::state::EditorAddress::new(
                 editor_id.library_path.clone(),
-                editor_id.component_id,
+                editor_id.table.clone(),
+                editor_id.row_id,
             );
             return if let Some(editor) = self.library.editors.get(&address) {
                 crate::library::editor::view(editor, &self.library, tokens, address)

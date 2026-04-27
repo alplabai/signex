@@ -65,8 +65,8 @@ pub fn view<'a>(
         let label = state
             .editors
             .get(address)
-            .map(|st| st.display_internal_pn.clone())
-            .unwrap_or_else(|| format!("(component {})", address.component_id));
+            .map(|st| st.row.internal_pn.as_str().to_string())
+            .unwrap_or_else(|| format!("({} / {})", address.table, address.row_id));
         rows.push(
             container(text(label).size(11).color(text_c))
                 .padding([4, 8])

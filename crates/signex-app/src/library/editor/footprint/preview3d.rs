@@ -90,7 +90,11 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
             project(w_min_x - 0.5, w_max_y + 0.5, 0.0),
         ];
         fill_quad(&mut frame, &board_pts, pcb_color);
-        stroke_quad(&mut frame, &board_pts, Color::from_rgba(0.30, 0.55, 0.30, 1.0));
+        stroke_quad(
+            &mut frame,
+            &board_pts,
+            Color::from_rgba(0.30, 0.55, 0.30, 1.0),
+        );
 
         // Pads: each pad is a thin extruded rect.
         let pad_height = 0.05_f64; // 50 µm — matches solder paste thickness.
@@ -305,11 +309,7 @@ fn body_bbox(fp: &Footprint) -> (f64, f64, f64, f64) {
 fn pad_color(pad: &signex_library::Pad) -> Color {
     // Pick a colour from the pad's primary layer name. Falls back to
     // a generic copper colour for unknown layers.
-    let name = pad
-        .layers
-        .first()
-        .map(|l| l.as_str())
-        .unwrap_or("F.Cu");
+    let name = pad.layers.first().map(|l| l.as_str()).unwrap_or("F.Cu");
     match name {
         "F.Cu" => Color::from_rgba(0.85, 0.55, 0.20, 1.0),
         "B.Cu" => Color::from_rgba(0.30, 0.45, 0.90, 1.0),
