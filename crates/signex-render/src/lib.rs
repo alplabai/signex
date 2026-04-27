@@ -39,6 +39,28 @@ pub enum LabelStyle {
     Altium,
 }
 
+/// How hierarchical child sheets render. KiCad mode keeps each sheet's
+/// stroke/fill colour from the source file (with theme component-body
+/// fallback) so the sheet blends with the rest of the schematic. Altium
+/// mode draws sheets with Altium Designer's signature greenish palette
+/// when no per-sheet colour is set in the file. Per-sheet colours from
+/// the source file always win, regardless of the active style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MultisheetStyle {
+    #[default]
+    KiCad,
+    Altium,
+}
+
+impl std::fmt::Display for MultisheetStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MultisheetStyle::KiCad => write!(f, "KiCad"),
+            MultisheetStyle::Altium => write!(f, "Altium"),
+        }
+    }
+}
+
 impl std::fmt::Display for LabelStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -66,6 +88,7 @@ struct CanvasTextConfig {
     italic: bool,
     power_port_style: PowerPortStyle,
     label_style: LabelStyle,
+    multisheet_style: MultisheetStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -96,6 +119,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             italic: false,
             power_port_style: PowerPortStyle::Altium,
             label_style: LabelStyle::KiCad,
+            multisheet_style: MultisheetStyle::KiCad,
         })
     })
 }
@@ -147,6 +171,19 @@ pub fn label_style() -> LabelStyle {
         .read()
         .map(|c| c.label_style)
         .unwrap_or(LabelStyle::KiCad)
+}
+
+pub fn set_multisheet_style(style: MultisheetStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.multisheet_style = style;
+    }
+}
+
+pub fn multisheet_style() -> MultisheetStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.multisheet_style)
+        .unwrap_or(MultisheetStyle::KiCad)
 }
 
 pub fn canvas_font() -> iced::Font {

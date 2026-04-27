@@ -772,7 +772,7 @@ pub fn render_schematic(
     // label style: KiCad mode keeps the theme's component body palette so
     // sheets blend with the rest of the schematic; Altium mode uses the
     // signature green sheet-symbol palette from Altium Designer.
-    let altium_mode = matches!(crate::label_style(), crate::LabelStyle::Altium);
+    let altium_mode = matches!(crate::multisheet_style(), crate::MultisheetStyle::Altium);
     let altium_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
     let altium_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
     let stroke_color_to_iced = |c: signex_types::schematic::StrokeColor| {
