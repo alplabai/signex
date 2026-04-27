@@ -18,6 +18,9 @@
 pub mod footprint;
 pub mod history;
 pub mod overview;
+// WS-J: Params tab
+pub mod params;
+pub mod pin_map;
 pub mod submit_for_review;
 pub mod supply; // WS-K: Supply tab
 pub mod symbol;
@@ -157,16 +160,16 @@ fn view_active_tab<'a>(
             tokens,
             address,
         ),
-        EditorTab::Params => placeholder_card(
-            "Parameters",
+        // WS-J: Params tab
+        EditorTab::Params => params::view(editor, library_state, tokens, address.clone()),
+        EditorTab::Supply => placeholder_card(
+            "Supply",
             &[
-                "Parametric values stored on `Revision::parameters`; schema-validated by class template.",
-                "Editor wires up after WS-F so the params editor can use the resolved class template.",
+                "Primary MPN + alternates editor — WS-F polishes the multi-row picker.",
+                "Distributor listings live on `Revision::supply`.",
             ],
             tokens,
         ),
-        // WS-K: Supply tab
-        EditorTab::Supply => supply::view(editor, tokens, address.clone()),
         EditorTab::Sim => placeholder_card(
             "Sim",
             &[
