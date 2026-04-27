@@ -364,6 +364,9 @@ impl LibraryAdapter for LocalGitAdapter {
             .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
     }
 
+    /// Linear scan across every table — O(total rows). Acceptable at v0.9
+    /// scale (libraries are O(thousands)). When the search index lands the
+    /// call should redirect through it; until then, avoid hot-loop usage.
     fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
         for (table, row) in self.iter_rows()? {
             if &row.internal_pn == pn {
