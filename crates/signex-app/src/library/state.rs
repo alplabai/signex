@@ -569,6 +569,15 @@ pub struct ComponentEditorState {
     /// Save Draft / Commit. Drives the close_library dirty prompt.
     #[allow(dead_code)]
     pub dirty: bool,
+
+    // ── WS-J: Params tab ────────────────────────────────────────────
+    /// Live edit buffers for numeric / measurement inputs. Keyed by
+    /// parameter name; flushed to `draft.parameters` on commit
+    /// (Enter / blur / valid-parse). Follows the
+    /// `reference_erasable_numeric_input` pattern: a `text_input`
+    /// bound directly to `f64` fights typing because every keystroke
+    /// has to re-parse the in-progress text.
+    pub params_edit_buf: HashMap<String, String>,
 }
 
 /// Component Editor tabs in display order.
@@ -699,6 +708,8 @@ impl ComponentEditorState {
             review_status: None,
             review_in_flight: false,
             dirty: false,
+            // WS-J: Params tab
+            params_edit_buf: HashMap::new(),
         }
     }
 

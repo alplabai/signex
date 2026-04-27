@@ -257,6 +257,56 @@ pub enum EditorMsg {
     StepAttachResult(Option<(Vec<u8>, String)>),
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
+
+    // ── WS-J: Params tab ──────────────────────────────────────────────
+    /// Set a `ParamValue::Text` parameter's value directly. Text inputs
+    /// can flush on every keystroke without a parse step.
+    ParamSetText { name: String, value: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Number`
+    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// the value is committed via `ParamCommitNumber`.
+    ParamSetNumberBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Number` row — runs the
+    /// parse step on blur / Enter and writes the parsed `f64` back into
+    /// `draft.parameters`. Bad parses leave the buffer dirty so the
+    /// user can fix the typo without losing their text.
+    ParamCommitNumber { name: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Measurement`
+    /// row's value field. The unit comes from the template (or the
+    /// existing `Measurement.unit` for custom rows).
+    ParamSetMeasurementBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Measurement` row.
+    /// Carries the unit so the dispatcher can write it without
+    /// double-borrowing the editor's parameter map. Bad parses leave
+    /// the buffer dirty.
+    ParamCommitMeasurement { name: String, unit: String },
+    /// Toggle a `ParamValue::Bool` parameter.
+    ParamSetBool { name: String, value: bool },
+    /// Drop a parameter from `draft.parameters`. Required-template rows
+    /// stay visible (re-rendered as "missing"); custom rows disappear
+    /// entirely.
+    ParamRemove { name: String },
+    /// Add a custom parameter row with an empty value of the chosen
+    /// kind. The dispatcher chooses defaults: text "", number 0.0,
+    /// bool false, measurement value 0.0 with the supplied unit.
+    ParamAddCustom { name: String, kind: ParamKindMsg },
+    // ── /WS-J ─────────────────────────────────────────────────────────
+}
+
+// WS-J: Params tab
+/// Pure-data alias for `ParamKind` so messages don't depend on
+/// `signex_library::ParamKind` at the message layer. Mirrors
+/// [`signex_library::ParamKind`] but carries the unit string for
+/// measurements (the registry-side `ParamSlot.unit` is `Option<String>`,
+/// but the message variant always knows its unit at construction time).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum ParamKindMsg {
+    Text,
+    Number,
+    Bool,
+    /// Carries the unit string ("ohm", "F", "V", …).
+    Measurement(String),
 }
 
 /// Tool selection on the Symbol canvas — pure-data alias for the
