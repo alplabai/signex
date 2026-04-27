@@ -192,9 +192,101 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::ToggleChildSheetBorderPicker(_) => {
+                let was_open = self.document_state.panel_ctx.child_sheet_border_picker_open;
+                self.document_state.panel_ctx.child_sheet_border_picker_open = !was_open;
+                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
+            }
+            crate::panels::PanelMsg::ToggleChildSheetFillPicker(_) => {
+                let was_open = self.document_state.panel_ctx.child_sheet_fill_picker_open;
+                self.document_state.panel_ctx.child_sheet_fill_picker_open = !was_open;
+                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
+            }
+            crate::panels::PanelMsg::CancelChildSheetColorPicker => {
+                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
+            }
+            crate::panels::PanelMsg::EditChildSheetBorderColor(uuid, color) => {
+                let stroke = iced_color_to_stroke(*color);
+                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
+                self.apply_engine_command(
+                    signex_engine::Command::UpdateChildSheetStyle {
+                        sheet_id: *uuid,
+                        stroke_width: None,
+                        stroke_color: Some(Some(stroke)),
+                        fill_color: None,
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::EditChildSheetFillColor(uuid, color) => {
+                let stroke = iced_color_to_stroke(*color);
+                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
+                self.apply_engine_command(
+                    signex_engine::Command::UpdateChildSheetStyle {
+                        sheet_id: *uuid,
+                        stroke_width: None,
+                        stroke_color: None,
+                        fill_color: Some(Some(stroke)),
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(_uuid, value) => {
+                self.document_state.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
+            }
+            crate::panels::PanelMsg::CommitChildSheetStrokeWidth(uuid) => {
+                let parsed = self
+                    .document_state
+                    .panel_ctx
+                    .child_sheet_stroke_width_buf
+                    .as_ref()
+                    .and_then(|s| s.trim().parse::<f64>().ok());
+                self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
+                if let Some(width) = parsed
+                    && width >= 0.0
+                {
+                    self.apply_engine_command(
+                        signex_engine::Command::UpdateChildSheetStyle {
+                            sheet_id: *uuid,
+                            stroke_width: Some(width),
+                            stroke_color: None,
+                            fill_color: None,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
+            crate::panels::PanelMsg::ResetChildSheetStyle(uuid) => {
+                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
+                self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
+                self.apply_engine_command(
+                    signex_engine::Command::UpdateChildSheetStyle {
+                        sheet_id: *uuid,
+                        stroke_width: Some(0.0),
+                        stroke_color: Some(None),
+                        fill_color: Some(None),
+                    },
+                    true,
+                    true,
+                );
+            }
             _ => return false,
         }
 
         true
+    }
+}
+
+fn iced_color_to_stroke(c: iced::Color) -> signex_types::schematic::StrokeColor {
+    signex_types::schematic::StrokeColor {
+        r: (c.r.clamp(0.0, 1.0) * 255.0).round() as u8,
+        g: (c.g.clamp(0.0, 1.0) * 255.0).round() as u8,
+        b: (c.b.clamp(0.0, 1.0) * 255.0).round() as u8,
+        a: (c.a.clamp(0.0, 1.0) * 255.0).round() as u8,
     }
 }
