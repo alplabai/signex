@@ -205,6 +205,12 @@ pub fn view<'a>(
     .text_size(12)
     .into();
 
+    // Category text input (WS-E) ─────────────────────────────
+    let category_input = text_input("Passives/Resistors/0805", &nc.category)
+        .on_input(LibraryMessage::NewComponentSetCategory)
+        .padding(6)
+        .size(12);
+
     // Form layout ─────────────────────────────────────────────
     let labelled =
         |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
@@ -252,7 +258,7 @@ pub fn view<'a>(
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
     let mut submit_btn = button(
-        container(text("Create Row").size(11).color(submit_fg)).padding([4, 14]),
+        container(text("Create").size(11).color(submit_fg)).padding([4, 14]),
     )
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(submit_bg)),

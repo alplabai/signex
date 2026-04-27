@@ -73,8 +73,7 @@ fn mouser_test_flow_uses_sentinel_mpn_and_apikey_header() {
                     .and(path("/api/v1/search/keyword"))
                     .and(header("apiKey", "TEST-KEY-123"))
                     .respond_with(
-                        ResponseTemplate::new(200)
-                            .set_body_json(fixture_response(SENTINEL_MPN)),
+                        ResponseTemplate::new(200).set_body_json(fixture_response(SENTINEL_MPN)),
                     )
                     .expect(1)
                     .mount(server)

@@ -200,13 +200,13 @@ pub enum WindowKind {
     /// floating panel past the main window edge. Closing the OS window
     /// reattaches the panel to its last dock region.
     DetachedPanel(crate::panels::PanelKind),
-    /// v0.9 Component Editor — one window per open component. The
-    /// editor's full state (active tab, draft revision, etc.) lives
-    /// in `Signex::library.open_editors`, keyed by the same window
-    /// id that `WindowKind` is mapped under.
+    /// v0.9-refactor-2 Component Preview — one window per open row.
+    /// The preview's full state lives in `Signex::library.editors`
+    /// keyed by `EditorAddress(library_path, table, row_id)`.
     ComponentEditor {
         library_path: std::path::PathBuf,
-        component_id: signex_library::ComponentId,
+        table: String,
+        row_id: signex_library::RowId,
     },
 }
 

@@ -9,10 +9,10 @@
 use std::path::{Path, PathBuf};
 
 use signex_library::{
-    Component, ComponentClass, ComponentId, ComponentRow, ComponentSummary, DatasheetRef,
-    Footprint, InternalPn, LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter,
-    Manifest, ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, Revision, RowId, Symbol,
-    UsersConfig, Version, WorkflowConfig, hash_row_content,
+    Component, ComponentClass, ComponentId, ComponentSummary, DatasheetRef, Footprint, InternalPn,
+    LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest,
+    ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, Revision, Symbol, UsersConfig, Version,
+    WorkflowConfig,
 };
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;

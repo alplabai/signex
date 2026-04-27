@@ -29,8 +29,8 @@
 //!   [`Outcome::Cancelled`].
 
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use signex_library::distributors::digikey::{DigiKeyAuth, DigiKeyAuthError};
@@ -144,7 +144,7 @@ pub fn run_blocking(
         Err(e) => {
             return Outcome::Failed {
                 reason: format!("could not bind localhost callback: {e}"),
-            }
+            };
         }
     };
 
@@ -163,9 +163,7 @@ pub fn run_blocking(
 
     let (auth_url, csrf_token, verifier) = auth.start_authorization();
 
-    if open_browser
-        && let Err(e) = webbrowser::open(auth_url.as_str())
-    {
+    if open_browser && let Err(e) = webbrowser::open(auth_url.as_str()) {
         return Outcome::Failed {
             reason: format!("could not open browser: {e}"),
         };

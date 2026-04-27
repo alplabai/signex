@@ -84,12 +84,7 @@ impl Signex {
                                 lib.display_name.clone(),
                                 lib.cached_components
                                     .iter()
-                                    .map(|c| {
-                                        (
-                                            c.internal_pn.as_str().to_string(),
-                                            c.mpn.clone(),
-                                        )
-                                    })
+                                    .map(|c| (c.internal_pn.as_str().to_string(), c.mpn.clone()))
                                     .collect(),
                             ),
                             None => {

@@ -17,7 +17,7 @@ use signex_library::{
 };
 use uuid::Uuid;
 
-use super::state::{EditorAddress, EditorTab};
+use super::state::{EditorAddress, PreviewTab};
 
 // WS-5 (DBLib): kept as type aliases until WS-6 retargets the editor
 // at `ComponentPreviewState`. The original `ComponentId` was a
@@ -86,41 +86,34 @@ pub enum LibraryMessage {
     NewComponentSetTable(String),
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
-    /// Submit the New Component modal — mints fresh Symbol + Footprint
-    /// primitives, builds a [`signex_library::ComponentRow`] binding
-    /// them by `PrimitiveRef`, and inserts it into the chosen table.
+    /// User picked a table in the New Component modal.
+    NewComponentSetTable(String),
+    /// Submit the New Component modal — creates the draft, persists,
+    /// opens the editor on the new component.
     NewComponentSubmit,
     // ─────────────────────────────────────────────────────────────────
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
     ToggleLibraryTreeNode(usize),
-    // WS-I: tab-not-window
-    /// Open the Component Editor for `(library_path, component_id)`
-    /// as a tab in the main window's tab bar. Detach into a separate
-    /// window remains available via the existing tab-undock flow.
-    OpenEditor {
-        library_path: PathBuf,
-        component_id: ComponentId,
-    },
-    /// WS-8 (DBLib model): open a Component Preview tab for a row in
-    /// the named table. Fired by the New Component modal on success
-    /// and consumed by WS-6's editor host (Wave 3 follow-up). The
-    /// dispatcher in this slice surfaces the message via `tracing`
-    /// until WS-6 lands the tab handler.
+    /// v0.9-refactor-2 (DBLib model): open a Component Preview tab for
+    /// the row identified by `(library_path, table, row_id)`. Replaces
+    /// the previous `OpenEditor { library_path, component_id }` shape.
     OpenComponentRow {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
     },
-    // WS-I: tab-not-window
-    /// Inner editor message — keyed by `(library_path, component_id)`
-    /// so the same EditorEvent dispatches to the editor regardless of
-    /// whether it's hosted inline as a tab or in an undocked window.
-    /// The legacy `EditorWindowOpened` daemon-window setup is gone —
-    /// editors are tabs first.
+    /// Open a standalone primitive editor tab for the file at `path`.
+    /// Fired by the Component Preview tab's right-click context menu on
+    /// the Symbol / Footprint render panes; routed to WS-7's standalone
+    /// `.snxsym` / `.snxfpt` editor.
+    OpenPrimitiveEditor { path: PathBuf },
+    /// Inner Component Preview message — keyed by
+    /// `(library_path, table, row_id)`.
     EditorEvent {
         library_path: PathBuf,
-        component_id: ComponentId,
+        table: String,
+        row_id: RowId,
         msg: EditorMsg,
     },
     /// Picker modal interaction.
@@ -132,12 +125,12 @@ pub enum LibraryMessage {
     JumpToUseSite(UseSite),
     /// No-op sink — used by the diff preview canvases in the History tab.
     Noop,
-    /// Picker → user clicked Place. Embeds the library component into
-    /// the active schematic engine.
+    /// Picker → user clicked Place. Embeds the library row into the
+    /// active schematic engine.
     PlaceLibraryComponent {
         library_path: PathBuf,
-        component_id: ComponentId,
-        version: Version,
+        table: String,
+        row_id: RowId,
     },
     // WS-7 (refactor-2): standalone primitive editor tabs
     /// Project tree double-click on `.snxsym` / `.snxfpt`, or Library
@@ -171,18 +164,24 @@ pub enum CloseLibraryChoice {
     Cancel,
 }
 
-/// Component Editor inner messages. WS-E carries the **shape** so the
-/// dispatcher and view tree compile; WS-F (Symbol/Footprint) and WS-G
-/// (Pin Map) replace the per-tab handlers. The variants tagged
-/// `TODO(WS-F)` / `TODO(WS-G)` are placeholders that will be reworked.
+/// Component Preview inner messages. v0.9-refactor-2 (DBLib model):
+/// the surface is preview-only for Symbol/Footprint, so the legacy
+/// Symbol/Footprint canvas messages stay defined for backwards
+/// compatibility (the standalone `.snxsym`/`.snxfpt` editor in WS-7
+/// re-uses them) but they no longer dispatch through the Component
+/// Preview tab.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum EditorMsg {
-    /// User clicked a tab pill (Overview, Symbol, …).
-    SelectTab(EditorTab),
-    /// Save the current draft locally without committing.
+    /// User clicked a Preview tab pill (Preview / Parameters / Supply /
+    /// Datasheet / Simulation).
+    SelectTab(PreviewTab),
+    /// Save the current row to the table — calls
+    /// `adapter.update_row(&table, &row, "edit message")`.
     SaveDraft,
-    /// Auto-bump the version, prompt for changelog, commit.
+    /// Same as [`SaveDraft`] for the Component Preview surface — kept
+    /// distinct so future Commit semantics (lifecycle promotion etc.)
+    /// can layer in without renaming the SaveDraft message.
     Commit,
     /// Open the review-request UI.
     SubmitForReview,
@@ -190,23 +189,28 @@ pub enum EditorMsg {
     SubmitForReviewConfirm,
     SubmitForReviewCancel,
     SubmitForReviewResult(Result<(), String>),
-    /// Footer "Where Used" — switches the active editor tab.
+    /// Footer "Where Used" — switches the active preview tab to
+    /// Preview (the where-used footer line lives there).
     OpenWhereUsedTab,
-    /// User dismissed the editor (Close X or Ctrl+W).
+    /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
 
-    // ── Overview tab ─────────────────────────────────────────
-    OverviewSetDisplayName(String),
-    OverviewSetInternalPn(String),
-    OverviewSetMpn(String),
-    OverviewSetManufacturer(String),
-    OverviewSetDescription(String),
-    OverviewSetDatasheet(String),
-    OverviewSetLifecycle(LifecycleState),
+    // ── Datasheet tab ────────────────────────────────────────
+    /// Switch the datasheet picker between URL / Pinned PDF modes.
+    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
+    /// Live edit of the URL field on the Datasheet tab.
+    DatasheetSetUrl(String),
+    /// Open the Pinned-PDF upload dialog.
+    DatasheetUploadDialog,
+    /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
+    /// on pick, `None` on cancel.
+    DatasheetUploadResult(Option<(Vec<u8>, String)>),
 
-    // ── History tab ─────────────────────────────────────────
-    HistorySelectRevision(Version),
-    // ── WS-G: Pin Map ───────────────────────────────────────
+    // ── Component-level setters ─────────────────────────────
+    /// Set the row's lifecycle state from the Preview tab header.
+    SetLifecycle(LifecycleState),
+
+    // ── WS-G: Pin Map (Preview-tab inline subsection) ───────
     /// Toolbar — clear every override and revert to default 1:1 by
     /// pin/pad number equality.
     PinMapAutoMatchByNumber,

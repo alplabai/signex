@@ -179,7 +179,12 @@ pub fn save_preferred_order_at(path: &std::path::Path, order: &[DistributorSourc
     }
     let cfg = DistributorsConfig {
         distributor_apis: DistributorApisSection {
-            preferred_order: order.iter().copied().map(source_to_str).map(str::to_string).collect(),
+            preferred_order: order
+                .iter()
+                .copied()
+                .map(source_to_str)
+                .map(str::to_string)
+                .collect(),
         },
     };
     match toml::to_string_pretty(&cfg) {

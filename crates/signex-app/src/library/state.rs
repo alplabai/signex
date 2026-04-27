@@ -34,63 +34,44 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, RowId, SimModel, Symbol, TemplateRegistry, UseSite,
+    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryError,
+    LibrarySet, LocalGitAdapter, RowId, SimModel, Symbol, TemplateRegistry, UseSite,
     WhereUsedIndex,
 };
 use uuid::Uuid;
 
-// WS-5 (DBLib): the v0.9-refactor-2 data model dropped the per-revision
-// `Component` / `Revision` / `Version` shapes — components are TSV rows
-// now. The Component Editor surface (WS-6 territory) hasn't been
-// retargeted yet; until it ships, expose thin type aliases so the
-// editor-state struct compiles. WS-6 replaces `ComponentEditorState`
-// with a row-shaped `ComponentPreviewState` and these aliases drop.
-//
-// The aliases are `pub` so other in-flight modules in the WS-6/7/8
-// scope can `use crate::library::state::Component` without manually
-// rewriting every signature in the same patch — the contract types
-// keep flowing while each slice ships its part of the refactor.
-#[allow(dead_code)]
-pub type Component = ComponentRow;
-#[allow(dead_code)]
-pub type ComponentId = Uuid;
-#[allow(dead_code)]
-pub type Revision = ComponentRow;
-#[allow(dead_code)]
-pub type Version = u32;
-
-// WS-I: tab-not-window
-/// Identity for an open Component Editor — the same shape that lives
-/// on `TabKind::ComponentEditor` and (when the user undocks) on
-/// `WindowKind::ComponentEditor`. Used as the lookup key for
-/// [`LibraryState::editors`] and as the address that editor view
-/// closures clone into messages.
+// v0.9-refactor-2: DBLib model — rows live in `tables/<name>.tsv`, addressed
+// by `(library_path, table, row_id)`.
+/// Identity for an open Component Preview tab — the lookup key for
+/// [`LibraryState::editors`] and the address that preview view closures
+/// clone into messages. Replaces the `(library_path, component_id)` shape
+/// from the original v0.9 refactor.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EditorAddress {
     pub library_path: PathBuf,
-    pub component_id: ComponentId,
+    pub table: String,
+    pub row_id: RowId,
 }
 
 impl EditorAddress {
-    pub fn new(library_path: PathBuf, component_id: ComponentId) -> Self {
+    pub fn new(library_path: PathBuf, table: String, row_id: RowId) -> Self {
         Self {
             library_path,
-            component_id,
+            table,
+            row_id,
         }
     }
 
-    /// Synthetic on-disk identity for a Component Editor tab — used by
+    /// Synthetic on-disk identity for a Component Preview tab — used by
     /// `TabInfo.path` so the tab bar, undock detector, and dirty-paths
-    /// machinery have a single unique `PathBuf` per editor without
-    /// needing to teach them about a second identity scheme. Mirrors
-    /// the `<library>/components/<uuid>.snxprt` storage layout from
-    /// the v0.9 plan §3 so the synthetic path lines up with where the
-    /// component actually persists on disk.
+    /// machinery have a single unique `PathBuf` per row without needing
+    /// a second identity scheme. The path points at the row's home table
+    /// with the `row_id` as a suffix so the synthetic key is unique
+    /// per-row even when multiple rows share a table.
     pub fn synthetic_tab_path(&self) -> PathBuf {
         self.library_path
-            .join("components")
-            .join(format!("{}.snxprt", self.component_id))
+            .join("tables")
+            .join(format!("{}.tsv#{}", self.table, self.row_id))
     }
 }
 
@@ -106,16 +87,13 @@ pub struct LibraryState {
     /// root path. The adapter for each entry is mounted on `set`
     /// under its `library_id`.
     pub open_libraries: Vec<OpenLibrary>,
-    // WS-I: tab-not-window
-    /// Component Editor states currently open. Keyed by
-    /// `(library_path, component_id)` so the same editor surface
-    /// renders whether the editor is hosted inline in the main
-    /// window's tab bar or detached into its own window via the
-    /// existing tab-undock flow. The window-id-keyed
-    /// `HashMap<window::Id, ComponentEditorState>` from Wave 2 is
-    /// gone — Component Editors are tabs first; undocking is a
-    /// rendering host swap, not a separate state owner.
-    pub editors: HashMap<EditorAddress, ComponentEditorState>,
+    // v0.9-refactor-2: DBLib model
+    /// Component Preview states currently open. Keyed by
+    /// `(library_path, table, row_id)` per the DBLib row identity.
+    /// Component Preview tabs are read-only for Symbol+Footprint;
+    /// editing happens via standalone `.snxsym` / `.snxfpt` document
+    /// tabs (see WS-7).
+    pub editors: HashMap<EditorAddress, ComponentPreviewState>,
     /// Reverse "where-used" index — same shape as before.
     pub where_used: WhereUsedIndex,
     /// Picker modal state — `None` while the modal is closed.
@@ -188,6 +166,9 @@ impl LibraryState {
             return Ok(());
         }
         let adapter = LocalGitAdapter::open(&root)?;
+        // `manifest()` is on the LibraryAdapter trait; bring it into scope
+        // via the trait import here so we don't widen the public surface.
+        use signex_library::LibraryAdapter as _;
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
@@ -229,54 +210,29 @@ impl LibraryState {
         }
     }
 
-    /// Refresh the cached table contents for a library — re-reads every
-    /// TSV via the mounted adapter's `list_tables` + `read_table`.
-    ///
-    /// WS-5 (DBLib): replaces the per-revision `search` call from
-    /// v0.9-original. Returns `LibraryError::NotFound` when the
-    /// library at `root` isn't mounted, otherwise the underlying
-    /// adapter error.
+    /// Refresh the cached component list for a library — walks every
+    /// row in every table via `LibraryAdapter::iter_rows` and projects
+    /// each into a [`ComponentSummary`] for the panel grid.
     pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
         let library_id = self
             .library_at(root)
             .map(|lib| lib.library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        // Snapshot the table data through the adapter, then move it
-        // onto the OpenLibrary entry. Two passes keep the borrow
-        // checker happy — `set.get` and `library_at_mut` both
-        // straddle `&self`/`&mut self`.
-        let adapter = self
+        let rows = self
             .set
             .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let names = adapter.list_tables()?;
-        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
-        let mut summaries: Vec<ComponentSummary> = Vec::new();
-        for name in names {
-            match adapter.read_table(&name) {
-                Ok(rows) => {
-                    for row in &rows {
-                        summaries.push(ComponentSummary {
-                            row_id: row.row_id,
-                            internal_pn: row.internal_pn.clone(),
-                            mpn: row.primary_mpn.mpn.clone(),
-                            state: row.state,
-                            description: String::new(),
-                        });
-                    }
-                    tables.insert(name, rows);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        table = %name,
-                        error = %e,
-                        "refresh_components: read_table failed; entry left empty"
-                    );
-                    tables.insert(name, Vec::new());
-                }
-            }
-        }
+            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?
+            .iter_rows()?;
+        let summaries: Vec<ComponentSummary> = rows
+            .into_iter()
+            .map(|(_table, row)| ComponentSummary {
+                row_id: row.row_id,
+                internal_pn: row.internal_pn,
+                mpn: row.primary_mpn.mpn,
+                state: row.state,
+                description: String::new(),
+            })
+            .collect();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
             lib.cached_components = summaries;
@@ -297,31 +253,22 @@ impl LibraryState {
     }
 
     /// Replace the Where-Used entries for one `(project, sheet)` with
-    /// `refs` — `(row_id, instance_id)` tuples.
-    ///
-    /// WS-5 (DBLib): `WhereUsedIndex::ingest_sheet` keys by `RowId`
-    /// directly now that revisions are gone — the per-instance
-    /// version pin from v0.9-original folds away.
+    /// `refs` — `(row_id, instance_id)` tuples (DBLib model).
     #[allow(dead_code)]
-    pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String, Version)]) {
-        let trimmed: Vec<(RowId, String)> = refs
-            .iter()
-            .map(|(uuid, inst, _ver)| (RowId::from_uuid(*uuid), inst.clone()))
-            .collect();
-        self.where_used.ingest_sheet(project, sheet, &trimmed);
+    pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
+        // The current `WhereUsedIndex::ingest_sheet` shape is owned by
+        // signex-library and re-built when WS-9 ships its row-shaped
+        // ingest helper. v0.9-refactor-2 leaves this method as a stub
+        // so callers compile; the panel/where-used wiring is rebuilt
+        // outside this slice.
+        let _ = (project, sheet, refs);
     }
 
-    /// Look up the use-sites for a component row.
-    ///
-    /// WS-5 (DBLib): the v0.9-refactor-2 `where_used` index keys by
-    /// `RowId` directly — there's no per-revision pin since rows
-    /// don't have revisions anymore. The `version` argument is kept
-    /// for source-compat with the legacy callers and ignored.
-    pub fn where_used_for(&self, uuid: ComponentId, _version: Option<Version>) -> Vec<UseSite> {
-        self.where_used.where_used(RowId::from_uuid(uuid))
+    /// Look up the use-sites for a row.
+    pub fn where_used_for(&self, row_id: RowId) -> Vec<UseSite> {
+        self.where_used.where_used(row_id)
     }
 
-    // WS-I: tab-not-window
     /// Editor addresses currently pointing at `root` that have unsaved edits.
     #[allow(dead_code)]
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
@@ -334,21 +281,24 @@ impl LibraryState {
         keys.sort_by(|a, b| {
             a.library_path
                 .cmp(&b.library_path)
-                .then_with(|| a.component_id.cmp(&b.component_id))
+                .then_with(|| a.table.cmp(&b.table))
+                .then_with(|| a.row_id.cmp(&b.row_id))
         });
         keys
     }
 
-    /// Existing editor for `(library_root, component_id)`, if any.
+    /// Existing editor for `(library_root, table, row_id)`, if any.
     #[allow(dead_code)]
     pub fn editor_for(
         &self,
         library_root: &Path,
-        component_id: ComponentId,
-    ) -> Option<&ComponentEditorState> {
+        table: &str,
+        row_id: RowId,
+    ) -> Option<&ComponentPreviewState> {
         self.editors.get(&EditorAddress::new(
             library_root.to_path_buf(),
-            component_id,
+            table.to_string(),
+            row_id,
         ))
     }
 }
@@ -528,276 +478,50 @@ pub struct CloseLibraryConfirmState {
     pub dirty_editors: Vec<EditorAddress>,
 }
 
-/// WS-F stub for the upcoming WS-C `LibrarySet`. Holds Symbol /
-/// Footprint primitives keyed by uuid so the editor can resolve a
-/// `PrimitiveRef::uuid` without a real adapter call. Cross-library
-/// resolution by `library_id` is a no-op until WS-C ships.
+// ─────────────────────────────────────────────────────────────────────
+// Component Preview (v0.9-refactor-2 — DBLib model)
+// ─────────────────────────────────────────────────────────────────────
+
+/// Component Preview tabs in display order.
 ///
-/// TODO(merge-with-WS-C): replace this whole struct with
-/// `signex_library::adapters::library_set::LibrarySet`.
-#[derive(Debug, Default)]
-pub struct LibrarySet {
-    pub symbols: HashMap<Uuid, Symbol>,
-    pub footprints: HashMap<Uuid, Footprint>,
-}
-
-impl LibrarySet {
-    pub fn resolve_symbol(&self, uuid: Uuid) -> Option<Symbol> {
-        self.symbols.get(&uuid).cloned()
-    }
-
-    pub fn resolve_footprint(&self, uuid: Uuid) -> Option<Footprint> {
-        self.footprints.get(&uuid).cloned()
-    }
-
-    pub fn save_symbol(&mut self, sym: Symbol) {
-        self.symbols.insert(sym.uuid, sym);
-    }
-
-    pub fn save_footprint(&mut self, fp: Footprint) {
-        self.footprints.insert(fp.uuid, fp);
-    }
-}
-
-/// WS-F stub for the upcoming WS-C `LibrarySet`. Holds Symbol /
-/// Footprint primitives keyed by uuid so the editor can resolve a
-/// `PrimitiveRef::uuid` without a real adapter call. Cross-library
-/// resolution by `library_id` is a no-op until WS-C ships.
-///
-/// TODO(merge-with-WS-C): replace this whole struct with
-/// `signex_library::adapters::library_set::LibrarySet`.
-#[derive(Debug, Default)]
-pub struct LibrarySet {
-    pub symbols: HashMap<Uuid, Symbol>,
-    pub footprints: HashMap<Uuid, Footprint>,
-}
-
-impl LibrarySet {
-    pub fn resolve_symbol(&self, uuid: Uuid) -> Option<Symbol> {
-        self.symbols.get(&uuid).cloned()
-    }
-
-    pub fn resolve_footprint(&self, uuid: Uuid) -> Option<Footprint> {
-        self.footprints.get(&uuid).cloned()
-    }
-
-    pub fn save_symbol(&mut self, sym: Symbol) {
-        self.symbols.insert(sym.uuid, sym);
-    }
-
-    pub fn save_footprint(&mut self, fp: Footprint) {
-        self.footprints.insert(fp.uuid, fp);
-    }
-}
-
-/// Component Editor window state — one per editor window.
-///
-/// WS-F refactor: instead of carrying the legacy
-/// `SchematicSide.symbol.sexpr` blob and round-tripping it into a
-/// `SymbolDoc`, the editor now holds a typed [`Symbol`] primitive
-/// loaded by reference (`Revision::symbol_ref`) and a typed
-/// [`Footprint`] primitive (`Revision::footprint_ref`). Save dispatches
-/// `LibraryMessage::SaveSymbol` / `SaveFootprint` onto the adapter via
-/// the `LibrarySet`.
-pub struct ComponentEditorState {
-    pub library_root: PathBuf,
-    pub component_id: ComponentId,
-    /// Internal PN at the time the editor opened.
-    pub display_internal_pn: String,
-    /// Currently-displayed lifecycle state (header bar) — sourced
-    /// from `draft.state` while editing.
-    pub displayed_version: Version,
-    /// Active editor tab — defaults to Overview.
-    pub active_tab: EditorTab,
-    /// Mutable working draft. Save Draft writes this via
-    /// `adapter.save_revision`; Commit auto-bumps the version.
-    pub draft: Revision,
-    /// Whole-component view (head + every revision). Refreshed on
-    /// open and after every successful Commit. Used by the History
-    /// tab and the version dropdown.
-    pub component: Component,
-    /// Selected revision in the History tab. Defaults to `component.head`.
-    pub history_selected: Option<Version>,
-    /// Whether the workflow requires reviews — drives the "Submit
-    /// for Review" footer button.
-    pub review_required: bool,
-    /// WS-F: editable [`Symbol`] primitive — loaded via
-    /// `LibrarySet::resolve_symbol(rev.symbol_ref.uuid)` on editor
-    /// open. Save dispatches `LibraryMessage::SaveSymbol` to the
-    /// dispatcher, which routes through the adapter.
-    pub symbol: Symbol,
-    /// WS-F: editable [`Footprint`] primitive — loaded via
-    /// `LibrarySet::resolve_footprint(rev.footprint_ref.uuid)`. `None`
-    /// when the binding has no footprint (a chip with symbol-only
-    /// representation, e.g. a power port).
-    pub footprint: Option<Footprint>,
-    /// Active tool on the Symbol-tab canvas.
-    pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
-    /// Selection on the Symbol canvas — pin / field / etc.
-    pub symbol_selected: Option<super::editor::symbol::state::SymbolSelection>,
-    /// AI-stub PDF preview — populated after a successful PDF pick,
-    /// dismissed on Apply / Cancel.
-    pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
-    /// Footprint canvas interaction state — kept across redraws.
-    pub footprint_state:
-        Option<crate::library::editor::footprint::state::FootprintEditorState>,
-    /// Cache reused across redraws so `iced::widget::Canvas`'s draw
-    /// path only retessellates when the model actually changes.
-    /// Held in `OnceLock` because the canvas program needs a
-    /// borrowed reference; the lock is initialised once on the
-    /// first render and cleared on every model mutation.
-    #[allow(dead_code)]
-    pub symbol: Option<Symbol>,
-    /// Resolved footprint primitive.
-    #[allow(dead_code)]
-    pub footprint: Option<Footprint>,
-    /// Resolved SimModel primitive.
-    #[allow(dead_code)]
-    pub sim: Option<SimModel>,
-    /// Pin Map tab state — placeholder until WS-G fills it in.
-    #[allow(dead_code)]
-    pub pin_map: PinMapTabState,
-
-    // ── WS-F2: Symbol tab canvas state ──────────────────────────────
-    /// Active drawing tool on the Symbol canvas.
-    #[allow(dead_code)]
-    pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
-    /// Currently-selected symbol element (pin index / field key).
-    #[allow(dead_code)]
-    pub symbol_selected: Option<super::editor::symbol::state::SymbolSelection>,
-    /// Live AI-from-datasheet preview — populated after the user picks
-    /// a PDF and the heuristic returns a guess. `None` while no preview
-    /// is in flight.
-    #[allow(dead_code)]
-    pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
-
-    // ── WS-F2: Footprint tab canvas state ───────────────────────────
-    /// Footprint canvas mirror of the primitive's pad list. Built lazily
-    /// the first time the user switches into the Footprint tab; once
-    /// populated, mutations are mirrored back onto `editor.footprint`
-    /// via `FootprintEditorState::sync_pads_to_primitive`.
-    #[allow(dead_code)]
-    pub footprint_state: Option<super::editor::footprint::state::FootprintEditorState>,
-    /// Iced canvas geometry cache — invalidated by the canvas
-    /// program on pan / zoom / mutation. Wrapped in `OnceLock` so the
-    /// view tree gets a stable reference without taking `&mut self`
-    /// in `view`.
-    #[allow(dead_code)]
-    pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
-
-    // ── WS-L: Sim tab ───────────────────────────────────────────────
-    /// Live `text_editor::Content` for the SPICE deck. Mirrored from
-    /// `editor.sim.body` on tab-switch / sim-load and back into
-    /// `editor.sim.body` on every `SimBodyAction`. None when no sim
-    /// model is bound.
-    ///
-    /// `Content` is RefCell-backed so it's neither `Clone` nor
-    /// `PartialEq` in the form we need; keeping it as a separate live
-    /// UI state alongside `editor.sim` avoids dragging that interior
-    /// mutability into the typed primitive.
-    #[allow(dead_code)]
-    pub sim_body: Option<iced::widget::text_editor::Content>,
-
-    // ── Modal flags ─────────────────────────────────────────────────
-    /// True while the SubmitForReview modal is up.
-    pub review_dialog_open: bool,
-    pub review_notes_buf: String,
-    pub review_status: Option<String>,
-    pub review_in_flight: bool,
-    /// True if any inline form edit has been applied since the last
-    /// Save Draft / Commit. Drives the close_library dirty prompt.
-    #[allow(dead_code)]
-    pub dirty: bool,
-
-    // ── WS-J: Params tab ────────────────────────────────────────────
-    /// Live edit buffers for numeric / measurement inputs. Keyed by
-    /// parameter name; flushed to `draft.parameters` on commit
-    /// (Enter / blur / valid-parse). Follows the
-    /// `reference_erasable_numeric_input` pattern: a `text_input`
-    /// bound directly to `f64` fights typing because every keystroke
-    /// has to re-parse the in-progress text.
-    pub params_edit_buf: HashMap<String, String>,
-}
-
-impl std::fmt::Debug for ComponentEditorState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ComponentEditorState")
-            .field("library_root", &self.library_root)
-            .field("component_id", &self.component_id)
-            .field("display_internal_pn", &self.display_internal_pn)
-            .field("displayed_version", &self.displayed_version)
-            .field("active_tab", &self.active_tab)
-            .field("symbol_uuid", &self.symbol.uuid)
-            .field("footprint_uuid", &self.footprint.as_ref().map(|f| f.uuid))
-            .field("dirty", &self.dirty)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for ComponentEditorState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ComponentEditorState")
-            .field("library_root", &self.library_root)
-            .field("component_id", &self.component_id)
-            .field("display_internal_pn", &self.display_internal_pn)
-            .field("displayed_version", &self.displayed_version)
-            .field("active_tab", &self.active_tab)
-            .field("symbol_uuid", &self.symbol.uuid)
-            .field("footprint_uuid", &self.footprint.as_ref().map(|f| f.uuid))
-            .field("dirty", &self.dirty)
-            .finish()
-    }
-}
-
-/// Component Editor tabs in display order. Mirrors LIBRARY_PLAN §10.
+/// Per `v0.9-refactor-2-plan.md` §11, the Component view is preview-only:
+/// Symbol and Footprint are read-only renders; editing happens via the
+/// standalone `.snxsym` / `.snxfpt` document editors (WS-7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EditorTab {
-    Overview,
-    Symbol,
-    Footprint,
-    PinMap,
-    Params,
+pub enum PreviewTab {
+    Preview,
+    Parameters,
     Supply,
-    Sim,
-    History,
-    WhereUsed,
+    Datasheet,
+    Simulation,
 }
 
-impl EditorTab {
-    pub const ORDER: &'static [EditorTab] = &[
-        EditorTab::Overview,
-        EditorTab::Symbol,
-        EditorTab::Footprint,
-        EditorTab::PinMap,
-        EditorTab::Params,
-        EditorTab::Supply,
-        EditorTab::Sim,
-        EditorTab::History,
-        EditorTab::WhereUsed,
+impl PreviewTab {
+    pub const ORDER: &'static [PreviewTab] = &[
+        PreviewTab::Preview,
+        PreviewTab::Parameters,
+        PreviewTab::Supply,
+        PreviewTab::Datasheet,
+        PreviewTab::Simulation,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            EditorTab::Overview => "Overview",
-            EditorTab::Symbol => "Symbol",
-            EditorTab::Footprint => "Footprint",
-            EditorTab::PinMap => "Pin Map",
-            EditorTab::Params => "Params",
-            EditorTab::Supply => "Supply",
-            EditorTab::Sim => "Sim",
-            EditorTab::History => "History",
-            EditorTab::WhereUsed => "Where-Used",
+            PreviewTab::Preview => "Preview",
+            PreviewTab::Parameters => "Parameters",
+            PreviewTab::Supply => "Supply",
+            PreviewTab::Datasheet => "Datasheet",
+            PreviewTab::Simulation => "Simulation",
         }
     }
 }
 
-// ── WS-G: Pin Map ────────────────────────────────────────────────────
-/// Per-window UI state for the Pin Map tab. The Pin/Pad bindings
-/// themselves live on `Revision::pin_map_overrides`; this struct only
-/// holds the inline-editor flags (which row is being overridden, the
-/// live edit buffer for the new pad-number text-input).
+/// Per-row inline pin-map editor state — which row is currently expanded
+/// and the live buffer for the target pad-number input. The pin/pad
+/// bindings themselves live on `ComponentRow::pin_map_overrides`; this
+/// struct only holds the UI-only flags.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PinMapTabState {
+pub struct PinMapInlineState {
     /// `Some(pin_number)` while the override editor is expanded for
     /// that specific pin row. `None` when collapsed.
     pub expanded_row: Option<String>,
@@ -805,7 +529,96 @@ pub struct PinMapTabState {
     /// open / save / cancel.
     pub override_buf: String,
 }
-// ── /WS-G ────────────────────────────────────────────────────────────
+
+/// Component Preview tab state — one per open row.
+///
+/// Per `v0.9-refactor-2-plan.md` §11: a row is the unit of storage
+/// (DBLib model). The preview surface is read-only for Symbol/Footprint;
+/// the form-shaped tabs (Parameters / Supply / Datasheet / Simulation)
+/// edit `row` in-place and persist via `adapter.update_row(table, row, msg)`.
+#[derive(Debug)]
+pub struct ComponentPreviewState {
+    /// Library this row lives in (absolute `*.snxlib/` directory).
+    pub library_path: PathBuf,
+    /// Table the row lives in (filename stem; `tables/<table>.tsv` for
+    /// LocalGit, `component_rows.table_name = ?` for Database).
+    pub table: String,
+    /// Mutable working copy of the row. `Save` calls
+    /// `adapter.update_row(&table, &row, "edit message")`.
+    pub row: ComponentRow,
+
+    // ── Primitive bindings (loaded lazily) ──────────────────────────
+    /// Resolved Symbol — `None` until first switch into the Preview
+    /// tab or when the primitive ref is missing.
+    pub symbol: Option<Symbol>,
+    /// Resolved Footprint — `None` when no footprint is bound or the
+    /// ref is missing.
+    pub footprint: Option<Footprint>,
+    /// Resolved SimModel — `None` when the Simulation tab hasn't been
+    /// visited yet or no sim is bound.
+    pub sim: Option<SimModel>,
+
+    /// Live `text_editor::Content` for the SPICE deck. Mirrors
+    /// `state.sim?.body` and is RefCell-backed so it's neither
+    /// `Clone` nor `PartialEq` — we keep it alongside the typed
+    /// primitive rather than dragging interior mutability into it.
+    pub sim_body: Option<iced::widget::text_editor::Content>,
+
+    /// Active preview tab — defaults to Preview.
+    pub active_tab: PreviewTab,
+
+    /// Live edit buffers for numeric / measurement inputs on the
+    /// Parameters tab. Keyed by parameter name; flushed to
+    /// `row.parameters` on Enter / blur / valid-parse. Pattern from
+    /// `reference_erasable_numeric_input` — a `text_input` bound
+    /// directly to `f64` fights typing.
+    pub params_edit_buf: HashMap<String, String>,
+
+    /// Inline pin-map editor state for the Preview tab's pin-map
+    /// subsection. Holds expanded_row + override_buf only; the
+    /// canonical pin/pad bindings live on `row.pin_map_overrides`.
+    pub pin_map_state: PinMapInlineState,
+
+    /// True if any inline form edit has been applied since the last
+    /// save. Drives the close-tab dirty prompt.
+    pub dirty: bool,
+}
+
+impl ComponentPreviewState {
+    /// Build a preview state from a freshly-loaded row.
+    pub fn from_row(library_path: PathBuf, table: String, row: ComponentRow) -> Self {
+        Self {
+            library_path,
+            table,
+            row,
+            symbol: None,
+            footprint: None,
+            sim: None,
+            sim_body: None,
+            active_tab: PreviewTab::Preview,
+            params_edit_buf: HashMap::new(),
+            pin_map_state: PinMapInlineState::default(),
+            dirty: false,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
+    }
+}
+
+/// Backwards-compatible alias — other slices still refer to
+/// `ComponentEditorState` while their own retarget passes land. Once
+/// every consumer (panel / documents / new_component / commands /
+/// dispatch) is on `ComponentPreviewState`, this alias goes away.
+#[allow(dead_code)]
+pub type ComponentEditorState = ComponentPreviewState;
 
 /// Distributor APIs Settings panel state.
 #[derive(Debug, Clone)]
@@ -841,92 +654,9 @@ impl Default for DistributorSettings {
     }
 }
 
-impl ComponentEditorState {
-    /// Build a fresh editor state from a `ComponentRow`.
-    ///
-    /// WS-5 (DBLib): the v0.9-original `from_head(component, …)` took
-    /// a per-revision `Component` and read its `head_revision()`. With
-    /// the row tier, a row IS the editable unit and there's no
-    /// `head_revision` to look up. The body of the editor still
-    /// expects a working `draft` + `component` pair until WS-6
-    /// retargets it at `ComponentPreviewState`; this stub keeps the
-    /// type-shape intact (both fields point at the same row) so the
-    /// rest of the file compiles. Editor logic is broken — that's
-    /// WS-6 territory per the v0.9-refactor-2 plan §11.
-    pub fn from_head(library_root: PathBuf, row: ComponentRow, review_required: bool) -> Self {
-        let internal_pn = row.internal_pn.as_str().to_string();
-        let component_id = row.row_id;
-        let displayed_version = 0u32;
-        let draft = row.clone();
-        Self {
-            library_root,
-            component_id,
-            display_internal_pn: internal_pn,
-            displayed_version,
-            active_tab: EditorTab::Overview,
-            history_selected: None,
-            draft,
-            component: row,
-            review_required,
-            symbol: None,
-            footprint: None,
-            sim: None,
-            pin_map: PinMapTabState::default(),
-            symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
-            symbol_selected: None,
-            symbol_ai_preview: None,
-            footprint_state: None,
-            footprint_canvas_cache: std::sync::OnceLock::new(),
-            // WS-L: Sim tab — seeded lazily on tab switch into Sim.
-            sim_body: None,
-            review_dialog_open: false,
-            review_notes_buf: String::new(),
-            review_status: None,
-            review_in_flight: false,
-            dirty: false,
-            // WS-J: Params tab
-            params_edit_buf: HashMap::new(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn mark_dirty(&mut self) {
-        self.dirty = true;
-    }
-
-    #[allow(dead_code)]
-    pub fn clear_dirty(&mut self) {
-        self.dirty = false;
-    }
-
-    /// Lazily initialise the Footprint tab's in-memory canvas state
-    /// from the current footprint primitive. Idempotent — subsequent
-    /// calls are no-ops.
-    pub fn ensure_footprint_state(&mut self) {
-        if self.footprint_state.is_none() {
-            let parsed = match self.footprint.as_ref() {
-                Some(fp) => crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
-                None => crate::library::editor::footprint::state::FootprintEditorState::empty(),
-            };
-            self.footprint_state = Some(parsed);
-        }
-    }
-
-    /// Clear the canvas cache (called after every footprint mutation
-    /// so the next draw rebuilds geometry).
-    pub fn invalidate_footprint_cache(&mut self) {
-        self.footprint_canvas_cache = std::sync::OnceLock::new();
-    }
-}
-
-/// Internal helper — produce a fresh draft starting at the supplied
-/// row. WS-5 (DBLib): the v0.9-refactor-2 model has no per-revision
-/// `Revision`, so this is a stub that returns the row itself. WS-6
-/// retires this helper when the editor moves to `ComponentPreviewState`.
-#[allow(dead_code)]
-fn draft_starter(row: &ComponentRow) -> ComponentRow {
-    row.clone()
-}
+// `ComponentPreviewState::from_row` is the canonical builder; the legacy
+// `from_head` helper that constructed an editor from a `Component` chain
+// is gone with the v0.9-refactor-2 DBLib model.
 
 #[cfg(test)]
 mod tests {
@@ -947,18 +677,17 @@ mod tests {
     }
 
     #[test]
-    fn editor_tab_order_includes_pin_map() {
-        assert_eq!(EditorTab::ORDER[0], EditorTab::Overview);
-        assert_eq!(EditorTab::ORDER.last(), Some(&EditorTab::WhereUsed));
-        assert_eq!(EditorTab::ORDER.len(), 9);
-        assert!(EditorTab::ORDER.contains(&EditorTab::PinMap));
+    fn preview_tab_order_is_five_tabs() {
+        assert_eq!(PreviewTab::ORDER[0], PreviewTab::Preview);
+        assert_eq!(PreviewTab::ORDER.last(), Some(&PreviewTab::Simulation));
+        assert_eq!(PreviewTab::ORDER.len(), 5);
     }
 
     #[test]
-    fn editor_tab_labels_are_short_and_distinct() {
+    fn preview_tab_labels_are_short_and_distinct() {
         let labels: std::collections::HashSet<&str> =
-            EditorTab::ORDER.iter().map(|t| t.label()).collect();
-        assert_eq!(labels.len(), EditorTab::ORDER.len());
+            PreviewTab::ORDER.iter().map(|t| t.label()).collect();
+        assert_eq!(labels.len(), PreviewTab::ORDER.len());
     }
 
     #[test]

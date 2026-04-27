@@ -150,16 +150,6 @@ impl Signex {
                     ce.component_id,
                 ));
         }
-        // WS-7 (refactor-2): standalone primitive editor tabs.
-        // Drop the per-tab editor state on close — same shape as
-        // Component Editor cleanup (no dirty-park yet, so closing
-        // discards the in-flight draft).
-        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
-            self.document_state.symbol_editors.remove(p);
-        }
-        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
-            self.document_state.footprint_editors.remove(p);
-        }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()
             && self.document_state.active_tab > 0
