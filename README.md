@@ -39,7 +39,8 @@ get a better editor without leaving the ecosystem they trust.
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.8.0 shipped; next up v0.9 (Library & Polish — symbol /
+> **Status:** Early development — v0.8.0 shipped (Output subsystem + multi-project workspaces + dirty
+> tracking + chrome refactor + hierarchical-sheet polish); next up v0.9 (Library & Polish — symbol /
 > footprint editor, installers). [Join the discussion](https://github.com/alplabai/signex/discussions)
 > or check the [roadmap](#roadmap).
 
