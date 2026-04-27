@@ -765,21 +765,37 @@ pub fn render_schematic(
         }
     }
 
-    // Z=11b: Child sheets (hierarchical sheets) — drawn with Altium's
-    // greenish sheet-symbol palette so child sheets stand out from regular
-    // component bodies. Outline uses a deep moss green; the interior fill
-    // uses a soft pale green that matches Altium's default sheet color.
-    let sheet_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
-    let sheet_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
+    // Z=11b: Child sheets (hierarchical sheets). Each sheet's outline and
+    // body fill are read from the .kicad_sch file when the source provides
+    // `(stroke (color ...))` / `(fill (color ...))`. When no override is
+    // present we fall back to a sensible default that depends on the active
+    // label style: KiCad mode keeps the theme's component body palette so
+    // sheets blend with the rest of the schematic; Altium mode uses the
+    // signature green sheet-symbol palette from Altium Designer.
+    let altium_mode = matches!(crate::label_style(), crate::LabelStyle::Altium);
+    let altium_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
+    let altium_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
+    let stroke_color_to_iced = |c: signex_types::schematic::StrokeColor| {
+        iced::Color::from_rgba(
+            c.r as f32 / 255.0,
+            c.g as f32 / 255.0,
+            c.b as f32 / 255.0,
+            c.a as f32 / 255.0,
+        )
+    };
     for child in &sheet.child_sheets {
         let a = alpha_for(&child.uuid);
-        drawing::draw_child_sheet(
-            frame,
-            child,
-            transform,
-            dim(sheet_outline, a),
-            dim(sheet_fill, a),
-        );
+        let outline = match child.stroke_color {
+            Some(c) => stroke_color_to_iced(c),
+            None if altium_mode => altium_outline,
+            None => body_color,
+        };
+        let fill = match child.fill_color {
+            Some(c) => stroke_color_to_iced(c),
+            None if altium_mode => altium_fill,
+            None => body_fill_color,
+        };
+        drawing::draw_child_sheet(frame, child, transform, dim(outline, a), dim(fill, a));
     }
 
     // Z=12: Text notes

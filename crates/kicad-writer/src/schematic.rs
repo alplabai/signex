@@ -102,6 +102,24 @@ fn fill_type_node(fill: FillType) -> SExpr {
     node("fill", vec![node("type", vec![raw(fill_type_str(fill))])])
 }
 
+/// `(fill ...)` for `(sheet ...)` blocks. KiCad serializes the sheet body
+/// fill as a literal `(color r g b a)` rather than a `(type ...)` enum, so
+/// when a colour is present we emit it; otherwise fall back to the regular
+/// fill-type form to keep round-trips clean for sheets without overrides.
+fn sheet_fill_node(fill: FillType, color: Option<StrokeColor>) -> SExpr {
+    if let Some(c) = color {
+        node(
+            "fill",
+            vec![node(
+                "color",
+                vec![atom(c.r), atom(c.g), atom(c.b), atom(c.a)],
+            )],
+        )
+    } else {
+        fill_type_node(fill)
+    }
+}
+
 fn xy_node(point: Point) -> SExpr {
     node("xy", vec![atom(point.x), atom(point.y)])
 }
@@ -898,8 +916,8 @@ fn child_sheet_node(cs: &ChildSheet) -> SExpr {
     if cs.fields_autoplaced {
         items.push(node("fields_autoplaced", Vec::new()));
     }
-    items.push(stroke_default_node(cs.stroke_width));
-    items.push(fill_type_node(cs.fill));
+    items.push(stroke_colored_node(cs.stroke_width, cs.stroke_color));
+    items.push(sheet_fill_node(cs.fill, cs.fill_color));
     items.push(node("uuid", vec![atom(cs.uuid.to_string())]));
     items.push(child_sheet_property_node(
         "Sheet name",
@@ -1440,6 +1458,8 @@ mod tests {
             size: (30.0, 40.0),
             stroke_width: 0.12,
             fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
             fields_autoplaced: true,
             pins: vec![SheetPin {
                 uuid: Default::default(),
