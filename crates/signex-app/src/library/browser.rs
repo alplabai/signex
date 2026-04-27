@@ -433,16 +433,15 @@ fn view_grid<'a>(
                     ..Default::default()
                 });
 
-            // Click selects; double-click is reserved for Phase 2's
-            // Edit Component Details modal — for now it routes to the
-            // existing OpenComponentRow flow as a useful bridge.
+            // Click selects; double-click opens the Edit Component
+            // Details modal (Deliverable B).
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,
                     table: table_for_msg,
                     row_id,
                 })
-                .on_double_click(LibraryMessage::OpenComponentRow {
+                .on_double_click(LibraryMessage::BrowserOpenEditModal {
                     library_path: library_for_open,
                     table: table_for_open,
                     row_id,

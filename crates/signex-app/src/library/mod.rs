@@ -18,6 +18,7 @@
 pub mod browser;
 pub mod close_prompt;
 pub mod commands;
+pub mod edit_row_modal;
 pub mod editor;
 pub mod messages;
 pub mod new_component;
@@ -34,9 +35,12 @@ pub mod state;
 // the app crate to warrant a flat re-export, even where the only
 // current consumer is the dispatcher (Phase 2 widens the surface).
 #[allow(unused_imports)]
-pub use messages::{EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg};
+pub use messages::{
+    BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
+};
 #[allow(unused_imports)]
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, LibraryBrowserState, LibraryState, OpenLibrary,
-    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    ComponentEditorState, ComponentPreviewState, EditRowModalState, LibraryBrowserState,
+    LibraryState, OpenLibrary, PickerState, PreviewTab, PrimitivePickerState,
+    PrimitivePickerTarget,
 };

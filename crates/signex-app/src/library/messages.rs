@@ -184,6 +184,21 @@ pub enum LibraryMessage {
     },
     /// Inner-message envelope for primitive picker events.
     PrimitivePicker(PrimitivePickerMsg),
+    /// Double-click on a row in the browser grid → opens the Edit
+    /// Component Details modal. Loads the row from the cached tables
+    /// and seeds `EditRowModalState.draft`.
+    BrowserOpenEditModal {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
+    /// Inner-message envelope for events fired by the Edit Component
+    /// Details modal. Keyed by library_path so the dispatcher can find
+    /// the matching `LibraryBrowserState.edit_modal`.
+    BrowserEdit {
+        library_path: PathBuf,
+        msg: BrowserEditMsg,
+    },
 }
 
 /// User choice from the close-library confirmation modal.
@@ -606,6 +621,51 @@ pub enum PickerMsg {
     FilterChanged(String),
     SelectComponent(ComponentSummary),
     PlaceSelected,
+}
+
+/// Edit Component Details modal sub-message tree — keeps
+/// `LibraryMessage` digestible by grouping all the per-field setters
+/// under a single sub-enum.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum BrowserEditMsg {
+    SetInternalPn(String),
+    SetClass(ComponentClass),
+    SetState(LifecycleState),
+    SetDatasheetUrl(String),
+    SetManufacturer(String),
+    SetMpn(String),
+    /// Live edit of a parameter row's value or unit. The dispatcher
+    /// keeps the buffer keyed by `key`; commit happens on
+    /// `BrowserEditMsg::CommitParam`.
+    SetParamValue {
+        key: String,
+        value: String,
+    },
+    SetParamUnit {
+        key: String,
+        unit: String,
+    },
+    /// Commit the live param buffer for `key` to the draft.
+    CommitParam {
+        key: String,
+    },
+    /// Append a fresh blank parameter row.
+    AddParam,
+    /// Drop the parameter row at `key`.
+    DeleteParam {
+        key: String,
+    },
+    /// Open the Symbol primitive picker scoped to this edit modal.
+    OpenSymbolPicker,
+    /// Open the Footprint primitive picker scoped to this edit modal.
+    OpenFootprintPicker,
+    /// Submit the modal — calls `adapter.update_row` and refreshes the
+    /// browser cache. On success the modal closes; on failure the
+    /// error surfaces inline.
+    Save,
+    /// Dismiss the modal without saving.
+    Cancel,
 }
 
 /// Primitive picker modal sub-messages.

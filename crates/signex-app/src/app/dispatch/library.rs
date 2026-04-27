@@ -14,12 +14,12 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg,
-    SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+    BrowserEditMsg, EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, PrimitiveEditorMsg,
+    PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::{
-    ComponentPreviewState, EditorAddress, NewComponentState, PickerState, PreviewTab,
-    PrimitivePickerState, PrimitivePickerTarget,
+    ComponentPreviewState, EditRowModalState, EditorAddress, NewComponentState, PickerState,
+    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -321,6 +321,14 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::PrimitivePicker(msg) => self.handle_primitive_picker_msg(msg),
+            LibraryMessage::BrowserOpenEditModal {
+                library_path,
+                table,
+                row_id,
+            } => self.handle_browser_open_edit_modal(library_path, table, row_id),
+            LibraryMessage::BrowserEdit { library_path, msg } => {
+                self.handle_browser_edit_msg(library_path, msg)
+            }
         }
     }
 
@@ -500,6 +508,219 @@ impl Signex {
         Task::none()
     }
 
+    /// Open the Edit Component Details modal for a row. Loads the row
+    /// from the library cache and seeds the modal with a working copy.
+    fn handle_browser_open_edit_modal(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: RowId,
+    ) -> Task<Message> {
+        let row = self
+            .library
+            .library_at(&library_path)
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
+            .cloned();
+        let Some(row) = row else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %library_path.display(),
+                table = %table,
+                row = %row_id,
+                "browser open edit modal: row not found in cache"
+            );
+            return Task::none();
+        };
+        let address = EditorAddress::new(library_path.clone(), table, row_id);
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.edit_modal = Some(EditRowModalState::new(address, row));
+        }
+        Task::none()
+    }
+
+    /// Apply a `BrowserEditMsg` to the active edit modal for `library_path`.
+    fn handle_browser_edit_msg(
+        &mut self,
+        library_path: std::path::PathBuf,
+        msg: BrowserEditMsg,
+    ) -> Task<Message> {
+        // Some variants need to fire follow-up tasks (open picker,
+        // close modal). We collect those into `next` and return them
+        // after releasing the borrow.
+        let mut next: Option<Task<Message>> = None;
+        // Save needs a separate path — we read the draft, drop the
+        // borrow, run the adapter call, then resume.
+        let mut save_request: Option<(EditorAddress, signex_library::ComponentRow)> = None;
+        let mut close_modal = false;
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+            && let Some(modal) = state.edit_modal.as_mut()
+        {
+            match msg {
+                BrowserEditMsg::SetInternalPn(s) => {
+                    modal.draft.internal_pn = signex_library::InternalPn::new(s);
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetClass(class) => {
+                    modal.draft.class = class;
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetState(state_v) => {
+                    modal.draft.state = state_v;
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetDatasheetUrl(s) => {
+                    modal.draft.datasheet = signex_library::DatasheetRef::url(s);
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetManufacturer(s) => {
+                    modal.draft.primary_mpn.manufacturer = s;
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetMpn(s) => {
+                    modal.draft.primary_mpn.mpn = s;
+                    modal.error = None;
+                }
+                BrowserEditMsg::SetParamValue { key, value } => {
+                    let entry = modal
+                        .param_buf
+                        .entry(key)
+                        .or_insert_with(|| (String::new(), String::new()));
+                    entry.0 = value;
+                }
+                BrowserEditMsg::SetParamUnit { key, unit } => {
+                    let entry = modal
+                        .param_buf
+                        .entry(key)
+                        .or_insert_with(|| (String::new(), String::new()));
+                    entry.1 = unit;
+                }
+                BrowserEditMsg::CommitParam { key } => {
+                    if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
+                        let pv = if !unit.trim().is_empty() {
+                            // Try parse as f64 first, otherwise store as text.
+                            value
+                                .parse::<f64>()
+                                .ok()
+                                .map(|n| signex_library::ParamValue::Measurement {
+                                    value: n,
+                                    unit: unit.clone(),
+                                })
+                                .unwrap_or_else(|| {
+                                    signex_library::ParamValue::Text(format!("{value} {unit}"))
+                                })
+                        } else if let Ok(n) = value.parse::<f64>() {
+                            signex_library::ParamValue::Number(n)
+                        } else if value.eq_ignore_ascii_case("true") {
+                            signex_library::ParamValue::Bool(true)
+                        } else if value.eq_ignore_ascii_case("false") {
+                            signex_library::ParamValue::Bool(false)
+                        } else {
+                            signex_library::ParamValue::Text(value)
+                        };
+                        modal.draft.parameters.insert(key, pv);
+                    }
+                }
+                BrowserEditMsg::AddParam => {
+                    // Find a unique key like "param_N".
+                    let mut idx = modal.draft.parameters.len() + 1;
+                    let key = loop {
+                        let candidate = format!("param_{idx}");
+                        if !modal.draft.parameters.contains_key(&candidate) {
+                            break candidate;
+                        }
+                        idx += 1;
+                    };
+                    modal
+                        .draft
+                        .parameters
+                        .insert(key.clone(), signex_library::ParamValue::Text(String::new()));
+                    modal.param_buf.insert(key, (String::new(), String::new()));
+                }
+                BrowserEditMsg::DeleteParam { key } => {
+                    modal.draft.parameters.remove(&key);
+                    modal.param_buf.remove(&key);
+                }
+                BrowserEditMsg::OpenSymbolPicker => {
+                    next = Some(Task::done(Message::Library(
+                        LibraryMessage::OpenPrimitivePicker {
+                            kind: PrimitiveKind::Symbol,
+                            target: PrimitivePickerTarget::EditRowModal(modal.address.clone()),
+                        },
+                    )));
+                }
+                BrowserEditMsg::OpenFootprintPicker => {
+                    next = Some(Task::done(Message::Library(
+                        LibraryMessage::OpenPrimitivePicker {
+                            kind: PrimitiveKind::Footprint,
+                            target: PrimitivePickerTarget::EditRowModal(modal.address.clone()),
+                        },
+                    )));
+                }
+                BrowserEditMsg::Save => {
+                    save_request = Some((modal.address.clone(), modal.draft.clone()));
+                }
+                BrowserEditMsg::Cancel => {
+                    close_modal = true;
+                }
+            }
+        }
+        if close_modal && let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.edit_modal = None;
+        }
+        if let Some((address, mut draft)) = save_request {
+            // Refresh content_hash before saving.
+            match signex_library::hash_row_content(&draft) {
+                Ok(h) => {
+                    draft.content_hash = h;
+                }
+                Err(e) => {
+                    if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(modal) = state.edit_modal.as_mut()
+                    {
+                        modal.error = Some(format!("hash failed: {e}"));
+                    }
+                    return next.unwrap_or_else(Task::none);
+                }
+            }
+            let library_id = self
+                .library
+                .library_at(&address.library_path)
+                .map(|lib| lib.library_id);
+            let result = match library_id.and_then(|id| self.library.set.get(id)) {
+                Some(adapter) => adapter.update_row(&address.table, draft, "edit row"),
+                None => Err(signex_library::LibraryError::NotFound(
+                    address.library_path.display().to_string(),
+                )),
+            };
+            match result {
+                Ok(_) => {
+                    if let Err(e) = self.library.refresh_components(&address.library_path) {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %address.library_path.display(),
+                            error = %e,
+                            "browser edit: refresh_components failed"
+                        );
+                    }
+                    if let Some(state) =
+                        self.library.library_browsers.get_mut(&address.library_path)
+                    {
+                        state.edit_modal = None;
+                    }
+                }
+                Err(e) => {
+                    if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(modal) = state.edit_modal.as_mut()
+                    {
+                        modal.error = Some(e.to_string());
+                    }
+                }
+            }
+        }
+        next.unwrap_or_else(Task::none)
+    }
+
     /// Apply a primitive picker sub-message. Most variants close the
     /// modal once the pick lands.
     fn handle_primitive_picker_msg(&mut self, msg: PrimitivePickerMsg) -> Task<Message> {
@@ -562,8 +783,25 @@ impl Signex {
             PrimitivePickerTarget::PreviewRow(address) => {
                 self.apply_primitive_pick_to_preview(address, picker.kind, primitive_ref);
             }
-            PrimitivePickerTarget::EditRowModal(_address) => {
-                // Wired in Deliverable B (Edit Component Details modal).
+            PrimitivePickerTarget::EditRowModal(address) => {
+                if let Some(state) = self.library.library_browsers.get_mut(&address.library_path)
+                    && let Some(modal) = state.edit_modal.as_mut()
+                    && modal.address == address
+                {
+                    match picker.kind {
+                        PrimitiveKind::Symbol => {
+                            modal.draft.symbol_ref = primitive_ref;
+                        }
+                        PrimitiveKind::Footprint => {
+                            modal.draft.footprint_ref = Some(primitive_ref);
+                        }
+                        PrimitiveKind::Sim => {
+                            modal.draft.sim_ref = Some(primitive_ref);
+                        }
+                        _ => {}
+                    }
+                    modal.error = None;
+                }
             }
             PrimitivePickerTarget::NewComponentForm => {
                 if let Some(nc) = self.library.new_component.as_mut() {
