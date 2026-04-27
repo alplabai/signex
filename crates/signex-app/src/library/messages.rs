@@ -258,7 +258,6 @@ pub enum EditorMsg {
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
 
-<<<<<<< HEAD
     // ── WS-K: Supply tab ──────────────────────────────────────
     // Primary MPN
     /// Edit the primary MPN's manufacturer string.

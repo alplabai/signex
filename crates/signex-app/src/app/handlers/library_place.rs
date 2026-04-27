@@ -43,7 +43,7 @@ impl Signex {
             return Task::none();
         };
 
-        let component = match self.library.set.adapter(library_id) {
+        let component = match self.library.set.get(library_id) {
             Some(adapter) => match adapter.get_component(component_id) {
                 Ok(c) => c,
                 Err(e) => {

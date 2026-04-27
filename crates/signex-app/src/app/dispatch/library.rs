@@ -651,7 +651,7 @@ impl Signex {
                         }));
                     }
                 };
-                let adapter = match self.library.set.adapter(library_id) {
+                let adapter = match self.library.set.get(library_id) {
                     Some(a) => a,
                     None => {
                         return Task::done(Message::Library(LibraryMessage::EditorEvent {
