@@ -214,7 +214,18 @@ impl LocalGitAdapter {
             .find_tree(tree_oid)
             .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
 
-        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
+        // yet) is the only legitimate "no parent" case — every other error
+        // (corrupt ref, locked ref, etc.) propagates so we don't silently
+        // produce an orphan commit on a broken repo.
+        let parent = match repo.head() {
+            Ok(h) => h
+                .peel_to_commit()
+                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                .map(Some)?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        };
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
             fallback_message.to_string()
@@ -353,6 +364,9 @@ impl LibraryAdapter for LocalGitAdapter {
             .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
     }
 
+    /// Linear scan across every table — O(total rows). Acceptable at v0.9
+    /// scale (libraries are O(thousands)). When the search index lands the
+    /// call should redirect through it; until then, avoid hot-loop usage.
     fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
         for (table, row) in self.iter_rows()? {
             if &row.internal_pn == pn {
