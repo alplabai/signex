@@ -251,8 +251,10 @@ impl LibraryState {
         library_root: &Path,
         component_id: ComponentId,
     ) -> Option<&ComponentEditorState> {
-        self.editors
-            .get(&EditorAddress::new(library_root.to_path_buf(), component_id))
+        self.editors.get(&EditorAddress::new(
+            library_root.to_path_buf(),
+            component_id,
+        ))
     }
 }
 
@@ -320,13 +322,20 @@ pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
 ];
 
 /// "New Component" modal state — collected before the dispatcher
-/// creates a draft revision and opens the Component Editor.
+/// inserts a row into the chosen target table.
 #[derive(Debug, Clone)]
 pub struct NewComponentState {
     /// Live edit buffer for the Internal PN field.
     pub internal_pn: String,
     /// Selected target library — index into `open_libraries`.
     pub library_idx: Option<usize>,
+    /// Picked target table (filename stem) — `None` until the user picks
+    /// one. WS-8 (DBLib model): rows live inside category tables, so the
+    /// New Component modal needs the user to pick a table along with the
+    /// library + class. When the manifest carries no `[[tables]]`
+    /// overrides we still surface the picker with the default
+    /// `<class>s` filename so the user always sees the destination.
+    pub table: Option<String>,
     /// Picked component class — defaults to "generic".
     pub class: ComponentClass,
     /// Tree-style category path ("Passives/Resistors/0805"). Free-form
@@ -341,6 +350,7 @@ impl Default for NewComponentState {
         Self {
             internal_pn: String::new(),
             library_idx: None,
+            table: None,
             class: ComponentClass::generic(),
             category: String::new(),
             error: None,
@@ -684,6 +694,8 @@ mod tests {
         let nc = NewComponentState::default();
         assert!(nc.internal_pn.is_empty());
         assert!(nc.library_idx.is_none());
+        // WS-8: table starts unset until the user picks one in the modal.
+        assert!(nc.table.is_none());
         assert_eq!(nc.class, ComponentClass::generic());
         assert!(nc.category.is_empty());
     }
