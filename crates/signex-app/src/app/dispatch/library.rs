@@ -261,18 +261,221 @@ impl Signex {
                 );
                 Task::none()
             }
-            LibraryMessage::NewComponentSetTable(table) => {
-                // Pin the row's target table on the modal state.
-                if let Some(nc) = self.library.new_component.as_mut() {
-                    nc.table = Some(table);
-                    nc.error = None;
-                }
-                Task::none()
-            }
             LibraryMessage::PrimitiveEditorEvent { path, msg } => {
                 self.handle_primitive_editor_event(path, msg)
             }
+            // ── Library Browser tab ──────────────────────────────────
+            LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
+            LibraryMessage::BrowserSelectTable {
+                library_path,
+                table,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.active_table = Some(table);
+                    state.selected_row = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSearchChanged {
+                library_path,
+                value,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.search = value;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSelectRow {
+                library_path,
+                table,
+                row_id,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    // Switch active table when the click lands on a row
+                    // in a different table — keeps the preview pane and
+                    // selection coherent.
+                    state.active_table = Some(table);
+                    state.selected_row = Some(row_id);
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserAddComponent {
+                library_path,
+                table,
+            } => self.handle_browser_add_component(library_path, table),
+            LibraryMessage::BrowserDeleteRow {
+                library_path,
+                table,
+                row_id,
+            } => self.handle_browser_delete_row(library_path, table, row_id),
         }
+    }
+
+    /// Open `.snxlib` at `path` as a Library Browser tab. Mounts the
+    /// library if not already mounted, seeds the browser state, and
+    /// pushes (or activates) a `TabKind::LibraryBrowser` tab. Phase 1.
+    pub(crate) fn handle_open_library_browser(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
+        // 1. Mount the library if it isn't already. `open_library` is
+        //    idempotent — re-mounting an already-open library is a
+        //    no-op.
+        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "open_library_browser: open_library failed"
+            );
+        }
+
+        // 2. Seed per-browser state if the path isn't already there.
+        // 2b. Default `active_table` to the first table the library
+        //     exposes, if any. Compute it through an immutable borrow
+        //     before we take the mutable browser-entry.
+        let default_table: Option<String> = self.library.library_at(&path).and_then(|lib| {
+            let mut names: Vec<&String> = lib.tables.keys().collect();
+            names.sort();
+            names.first().map(|s| (*s).clone())
+        });
+
+        let entry = self
+            .library
+            .library_browsers
+            .entry(path.clone())
+            .or_insert_with(|| crate::library::state::LibraryBrowserState::new(path.clone()));
+
+        if entry.active_table.is_none() {
+            entry.active_table = default_table;
+        }
+
+        // 3. Activate an existing tab if one is already open for this
+        //    path; otherwise push a fresh tab.
+        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
+            if idx != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = idx;
+                self.sync_active_tab();
+            }
+            return Task::none();
+        }
+
+        let title = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| path.display().to_string());
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+
+        self.park_active_schematic_session();
+        self.document_state.tabs.push(crate::app::TabInfo {
+            title,
+            path: path.clone(),
+            cached_document: None,
+            dirty: false,
+            project_id,
+            kind: crate::app::TabKind::LibraryBrowser(path),
+        });
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        // Library Browser tabs don't drive `active_path` — clear so the
+        // canvas pane doesn't render a stale schematic.
+        self.document_state.active_path = None;
+        self.refresh_panel_ctx();
+        Task::none()
+    }
+
+    /// Open the New Component modal pre-set to the browser's library
+    /// + active table. Wraps the existing `NewComponent` flow.
+    fn handle_browser_add_component(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: Option<String>,
+    ) -> Task<Message> {
+        // Find the library index inside `open_libraries`. The modal's
+        // pick_list is index-based, not path-based, so we need the
+        // position lookup.
+        let library_idx = self
+            .library
+            .open_libraries
+            .iter()
+            .position(|lib| lib.root == library_path);
+        self.library.new_component = Some(NewComponentState {
+            internal_pn: String::new(),
+            library_idx,
+            table,
+            class: signex_library::ComponentClass::generic(),
+            category: String::new(),
+            error: None,
+        });
+        Task::none()
+    }
+
+    /// Delete a row from a library table — Phase 1 fires immediately
+    /// without a confirm modal. Phase 2 will route through a confirm
+    /// modal first.
+    fn handle_browser_delete_row(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: RowId,
+    ) -> Task<Message> {
+        let library_id = match self.library.library_at(&library_path) {
+            Some(lib) => lib.library_id,
+            None => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    "browser delete: library not mounted"
+                );
+                return Task::none();
+            }
+        };
+        let adapter = match self.library.set.get(library_id) {
+            Some(a) => a,
+            None => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    "browser delete: adapter not present in set"
+                );
+                return Task::none();
+            }
+        };
+        match adapter.delete_row(&table, row_id, "delete row") {
+            Ok(_) => {
+                tracing::info!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    table = %table,
+                    row = %row_id,
+                    "browser delete: row removed"
+                );
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %library_path.display(),
+                        error = %e,
+                        "browser delete: refresh_components failed"
+                    );
+                }
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+                    && state.selected_row == Some(row_id)
+                {
+                    state.selected_row = None;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    table = %table,
+                    error = %e,
+                    "browser delete: delete_row failed"
+                );
+            }
+        }
+        Task::none()
     }
 
     /// Create a fresh `<name>.snxlib/` under the project rooted at

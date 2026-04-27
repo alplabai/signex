@@ -3716,6 +3716,29 @@ impl Signex {
                 return crate::library::editor::standalone::view_footprint(editor, tokens)
                     .map(Message::Library);
             }
+            // Library Browser tab — `.snxlib` opened as a main-window
+            // tab. Per-tab state lives in
+            // `LibraryState.library_browsers` keyed by the same path
+            // that lives on `TabInfo.path`.
+            if let Some(path) = active_tab.kind.as_library_browser() {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                if let Some(browser) = self.library.library_browsers.get(path) {
+                    return crate::library::browser::view(path, &self.library, browser, tokens)
+                        .map(Message::Library);
+                } else {
+                    // Fallback when somehow the browser-state map is
+                    // out of sync with the tabs vector. Keeps the tab
+                    // renderable rather than crashing.
+                    return container(
+                        iced::widget::text("Library Browser — state not yet loaded")
+                            .size(13)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    )
+                    .center(Length::Fill)
+                    .style(crate::styles::panel_region(tokens))
+                    .into();
+                }
+            }
         }
 
         let has_schematic = if is_main {

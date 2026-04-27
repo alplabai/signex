@@ -15,6 +15,7 @@
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 
+pub mod browser;
 pub mod close_prompt;
 pub mod commands;
 pub mod editor;
@@ -35,5 +36,6 @@ pub mod state;
 pub use messages::{EditorMsg, LibraryMessage, PickerMsg, SettingsMsg};
 #[allow(unused_imports)]
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, LibraryState, OpenLibrary, PickerState, PreviewTab,
+    ComponentEditorState, ComponentPreviewState, LibraryBrowserState, LibraryState, OpenLibrary,
+    PickerState, PreviewTab,
 };

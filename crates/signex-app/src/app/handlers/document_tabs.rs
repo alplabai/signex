@@ -165,6 +165,12 @@ impl Signex {
         if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
             self.document_state.footprint_editors.remove(p);
         }
+        // Library Browser tabs — drop the per-browser state on close.
+        // The library itself stays mounted; only the tab-scoped UI
+        // state (active table, search buffer, selection) goes away.
+        if let crate::app::TabKind::LibraryBrowser(ref p) = closing_kind {
+            self.library.library_browsers.remove(p);
+        }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()
             && self.document_state.active_tab > 0
