@@ -77,7 +77,32 @@ The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline
 - #55 multi-project + chrome polish + unified PDF preview
 - #56 phase 2.5 cleanup of legacy single-project fields
 
-[Full changelog](https://github.com/alplabai/signex/compare/v0.7.0...v0.8.0) · [Release artifacts](https://github.com/alplabai/signex/releases/tag/v0.8.0)
+[Full changelog](https://github.com/alplabai/signex/compare/v0.7.1...v0.8.0) · [Release artifacts](https://github.com/alplabai/signex/releases/tag/v0.8.0)
+
+## [0.7.1] — 2026-04-24
+
+Patch release addressing a macOS launch failure on Apple Silicon.
+
+### Fixed
+
+- **macOS (Apple Silicon) cannot launch the shipped `.app`** (#49). The
+  DMG-packaged bundle was unsigned; arm64 macOS refuses to execute any
+  binary without at least an ad-hoc signature, so users on M-series
+  Macs saw "Signex is damaged and can't be opened" / "cannot be
+  verified" immediately after dragging the app to Applications. The
+  installer script now ad-hoc signs the bundle (`codesign --force
+  --deep --sign -`) as part of DMG assembly. This is the minimum
+  viable shipping state for arm64 until a Developer ID certificate
+  and notarisation credentials are wired into CI.
+
+### Known issues / workarounds
+
+- The DMG still carries the downloaded-from-internet quarantine flag,
+  so first-launch users will see a "cannot be verified" Gatekeeper
+  prompt. Bypass it with **right-click → Open** on the app icon the
+  first time, or run
+  `xattr -dr com.apple.quarantine /Applications/Signex.app` in
+  Terminal. Subsequent launches work without prompts.
 
 ## [0.7.0] — 2026-04-22
 
