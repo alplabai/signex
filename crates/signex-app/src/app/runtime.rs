@@ -452,7 +452,8 @@ fn build_symbol_editor_panel_ctx(
 ) -> Option<crate::panels::SymbolEditorPanelContext> {
     use crate::library::editor::symbol::state as sym_state;
     use crate::panels::{
-        SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinSummary,
+        SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
+        SymbolPinSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -475,6 +476,20 @@ fn build_symbol_editor_panel_ctx(
             position: pin.position,
             orientation: format!("{:?}", pin.orientation),
             length: pin.length,
+            details: SymbolPinDetails {
+                description: pin.description.clone(),
+                function: pin.function.clone(),
+                pin_package_length: pin.pin_package_length,
+                propagation_delay_ns: pin.propagation_delay_ns,
+                designator_visible: pin.designator_visible,
+                name_visible: pin.name_visible,
+                inside_symbol: pin.inside_symbol,
+                inside_edge_symbol: pin.inside_edge_symbol,
+                outside_edge_symbol: pin.outside_edge_symbol,
+                outside_symbol: pin.outside_symbol,
+                hidden: pin.hidden,
+                locked: pin.locked,
+            },
         })
         .collect();
 

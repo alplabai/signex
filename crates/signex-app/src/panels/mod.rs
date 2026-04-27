@@ -408,6 +408,26 @@ pub struct SymbolFileEntry {
     pub pin_count: usize,
 }
 
+/// Extended pin fields surfaced on the Properties panel — flows
+/// alongside [`SymbolPinSummary`] so the panel doesn't have to
+/// reach back into the editor state to read them. Mirrors the
+/// Altium SchLib Pin Properties layout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolPinDetails {
+    pub description: String,
+    pub function: Vec<String>,
+    pub pin_package_length: Option<f64>,
+    pub propagation_delay_ns: Option<f64>,
+    pub designator_visible: bool,
+    pub name_visible: bool,
+    pub inside_symbol: signex_library::PinSymbolKind,
+    pub inside_edge_symbol: signex_library::PinSymbolKind,
+    pub outside_edge_symbol: signex_library::PinSymbolKind,
+    pub outside_symbol: signex_library::PinSymbolKind,
+    pub hidden: bool,
+    pub locked: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolPinSummary {
     pub idx: usize,
@@ -417,6 +437,11 @@ pub struct SymbolPinSummary {
     pub position: [f64; 2],
     pub orientation: String,
     pub length: f64,
+    /// Extended fields — surfaced on the Properties panel only when
+    /// the pin is selected. Kept in a sub-struct so the SCH Library
+    /// Pins sub-list (which only needs number/name/electrical) can
+    /// stay terse.
+    pub details: SymbolPinDetails,
 }
 
 /// What the canvas currently has selected — drives Properties panel
@@ -719,6 +744,27 @@ pub enum PanelMsg {
     /// Selects the pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
+    /// Properties panel — edit a pin's free-text Description.
+    SymEditorSetPinDescription { pin_idx: usize, value: String },
+    /// Properties panel — edit a pin's Function list (alt-names) as
+    /// a single comma-separated string. Persisted as `Vec<String>`
+    /// after splitting + trimming on commit.
+    SymEditorSetPinFunctionCsv { pin_idx: usize, value: String },
+    /// Properties panel — toggle a pin's designator visibility.
+    SymEditorTogglePinDesignatorVisible(usize),
+    /// Properties panel — toggle a pin's name visibility.
+    SymEditorTogglePinNameVisible(usize),
+    /// Properties panel — toggle Pin Hide.
+    SymEditorTogglePinHidden(usize),
+    /// Properties panel — toggle Pin Locked.
+    SymEditorTogglePinLocked(usize),
+    /// Properties panel — set one of the four IEEE-symbol slots on
+    /// a pin. `slot` is 0=Inside, 1=InsideEdge, 2=OutsideEdge, 3=Outside.
+    SymEditorSetPinSymbol {
+        pin_idx: usize,
+        slot: u8,
+        value: signex_library::PinSymbolKind,
+    },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -1905,6 +1951,75 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     scrollable(col).width(Length::Fill).into()
 }
 
+/// IEEE-symbol pick_list row used four times (Inside / Inside Edge /
+/// Outside Edge / Outside) on the pin Properties surface. `slot`
+/// matches the `SymEditorSetPinSymbol::slot` numbering: 0 / 1 / 2 / 3.
+fn view_pin_symbol_picker<'a>(
+    label: &str,
+    current: signex_library::PinSymbolKind,
+    pin_idx: usize,
+    slot: u8,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use signex_library::PinSymbolKind as K;
+    let options = [
+        ("None", K::None),
+        ("Dot (active-low bubble)", K::Dot),
+        ("Clock edge", K::ClockEdge),
+        ("Active-low input", K::ActiveLowInput),
+        ("Active-low output", K::ActiveLowOutput),
+        ("Schmitt trigger", K::SchmittTrigger),
+        ("Analog (≈)", K::Analog),
+        ("Digital (square wave)", K::Digital),
+        ("Shift-right (▷)", K::ShiftRight),
+        ("Shift-left (◁)", K::ShiftLeft),
+        ("Pi (π)", K::Pi),
+        ("Sigma (Σ)", K::Sigma),
+        ("Open collector", K::OpenCollector),
+        ("Open emitter", K::OpenEmitter),
+        ("Hi-Z (tri-state)", K::HiZ),
+    ];
+    let labels: Vec<String> = options.iter().map(|(l, _)| l.to_string()).collect();
+    let lookup: Vec<(String, K)> = options.iter().map(|(l, v)| (l.to_string(), *v)).collect();
+    let current_label = options
+        .iter()
+        .find(|(_, v)| *v == current)
+        .map(|(l, _)| l.to_string())
+        .unwrap_or_else(|| "None".to_string());
+    let picker = iced::widget::pick_list(
+        labels,
+        Some(current_label),
+        move |chosen: String| {
+            let value = lookup
+                .iter()
+                .find(|(l, _)| l == &chosen)
+                .map(|(_, v)| *v)
+                .unwrap_or(K::None);
+            PanelMsg::SymEditorSetPinSymbol {
+                pin_idx,
+                slot,
+                value,
+            }
+        },
+    )
+    .padding([2, 4])
+    .text_size(10);
+    container(
+        row![
+            text(label.to_string())
+                .size(10)
+                .color(muted)
+                .width(Length::FillPortion(2)),
+            container(picker).width(Length::FillPortion(3)),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([3, 8])
+    .width(Length::Fill)
+    .into()
+}
+
 /// Properties panel content for the active `.snxsym` standalone editor
 /// tab. Mirrors Altium SchLib's right-dock Properties: pin selected →
 /// pin properties (editable Designator / Name / Length, read-only
@@ -2213,6 +2328,133 @@ fn view_symbol_editor_properties<'a>(
             .width(Length::Fill)
             .into();
             col = col.push(length_row);
+
+            // ── Description (text) ──
+            let description_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Description")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("free text", pin.details.description.as_str())
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| PanelMsg::SymEditorSetPinDescription {
+                            pin_idx,
+                            value: s,
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(description_row);
+
+            // ── Function (comma-separated alt-names) ──
+            let function_csv = pin.details.function.join(", ");
+            let function_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Function")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("alt-names, comma-separated", &function_csv)
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| PanelMsg::SymEditorSetPinFunctionCsv {
+                            pin_idx,
+                            value: s,
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(function_row);
+
+            // ── Visibility / state toggles ──
+            let toggle_row =
+                |label: &'static str, value: bool, msg: PanelMsg| -> Element<'a, PanelMsg> {
+                    row![
+                        iced::widget::checkbox(value)
+                            .size(14)
+                            .on_toggle(move |_| msg.clone()),
+                        text(label.to_string()).size(10).color(muted),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center)
+                    .into()
+                };
+            let toggles_row: Element<'a, PanelMsg> = container(
+                column![
+                    toggle_row(
+                        "Designator visible",
+                        pin.details.designator_visible,
+                        PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx),
+                    ),
+                    toggle_row(
+                        "Name visible",
+                        pin.details.name_visible,
+                        PanelMsg::SymEditorTogglePinNameVisible(pin_idx),
+                    ),
+                    toggle_row(
+                        "Hidden (Pin Hide)",
+                        pin.details.hidden,
+                        PanelMsg::SymEditorTogglePinHidden(pin_idx),
+                    ),
+                    toggle_row(
+                        "Locked",
+                        pin.details.locked,
+                        PanelMsg::SymEditorTogglePinLocked(pin_idx),
+                    ),
+                ]
+                .spacing(2),
+            )
+            .padding([6, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(toggles_row);
+
+            // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
+            col = col.push(thin_sep(border_c));
+            col = col.push(
+                container(text("Symbols").size(10).color(primary))
+                    .padding([4, 8]),
+            );
+            col = col.push(view_pin_symbol_picker(
+                "Inside",
+                pin.details.inside_symbol,
+                pin_idx,
+                0,
+                muted,
+            ));
+            col = col.push(view_pin_symbol_picker(
+                "Inside Edge",
+                pin.details.inside_edge_symbol,
+                pin_idx,
+                1,
+                muted,
+            ));
+            col = col.push(view_pin_symbol_picker(
+                "Outside Edge",
+                pin.details.outside_edge_symbol,
+                pin_idx,
+                2,
+                muted,
+            ));
+            col = col.push(view_pin_symbol_picker(
+                "Outside",
+                pin.details.outside_symbol,
+                pin_idx,
+                3,
+                muted,
+            ));
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static("Field", "Reference (designator)".to_string()));

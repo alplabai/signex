@@ -63,8 +63,82 @@ impl Signex {
                 self.sym_editor_select_pin(*idx);
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetPinDescription { pin_idx, value } => {
+                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.description = value.clone());
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value } => {
+                let parsed: Vec<String> = value
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect();
+                self.sym_editor_mutate_pin(*pin_idx, move |pin| {
+                    pin.function = parsed.clone();
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx) => {
+                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                    pin.designator_visible = !pin.designator_visible;
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorTogglePinNameVisible(pin_idx) => {
+                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                    pin.name_visible = !pin.name_visible;
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorTogglePinHidden(pin_idx) => {
+                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.hidden = !pin.hidden);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorTogglePinLocked(pin_idx) => {
+                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.locked = !pin.locked);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinSymbol {
+                pin_idx,
+                slot,
+                value,
+            } => {
+                let slot = *slot;
+                let value = *value;
+                self.sym_editor_mutate_pin(*pin_idx, move |pin| match slot {
+                    0 => pin.inside_symbol = value,
+                    1 => pin.inside_edge_symbol = value,
+                    2 => pin.outside_edge_symbol = value,
+                    3 => pin.outside_symbol = value,
+                    _ => {}
+                });
+                true
+            }
             _ => false,
         }
+    }
+
+    /// Helper — apply a closure to the pin at `pin_idx` on the active
+    /// Symbol editor and run the standard dirty/refresh cycle. Returns
+    /// silently when no Symbol editor is active or the index is out of
+    /// range so callers don't have to gate the call with their own
+    /// match.
+    fn sym_editor_mutate_pin<F>(&mut self, pin_idx: usize, mutator: F)
+    where
+        F: FnOnce(&mut signex_library::SymbolPin),
+    {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) else {
+            return;
+        };
+        mutator(pin);
+        editor.dirty = true;
+        editor.canvas_cache.clear();
+        self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
     }
 
     fn sym_editor_select_pin(&mut self, pin_idx: usize) {

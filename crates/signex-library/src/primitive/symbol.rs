@@ -41,6 +41,49 @@ pub enum PinOrientation {
     Right,
 }
 
+/// Decorative IEEE-style modifier glyph attached to a pin's symbol
+/// body. Altium splits these across four placement zones (Inside,
+/// Inside Edge, Outside Edge, Outside) so a pin can carry multiple
+/// modifiers (e.g. dot + clock for an inverted clock input). The
+/// enum is `#[non_exhaustive]` because Altium ships 30+ IEEE glyphs
+/// and we add them as needed — `None` is the default for legacy /
+/// fresh pins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum PinSymbolKind {
+    /// No modifier glyph in this slot.
+    #[default]
+    None,
+    /// Small filled circle — "active low" / inverted polarity bubble.
+    Dot,
+    /// Right-pointing triangle — clock edge marker.
+    ClockEdge,
+    /// Inward chevron — active-low input.
+    ActiveLowInput,
+    /// Outward chevron — active-low output.
+    ActiveLowOutput,
+    /// Hysteresis curve — Schmitt-trigger input.
+    SchmittTrigger,
+    /// Analog-signal indicator (≈).
+    Analog,
+    /// Digital-signal indicator (square wave).
+    Digital,
+    /// "Right-arrow" group glyph (IEEE shift-right).
+    ShiftRight,
+    /// "Left-arrow" group glyph (IEEE shift-left).
+    ShiftLeft,
+    /// Pi (π) glyph — analog ratio / pi-network indicator.
+    Pi,
+    /// Sigma (Σ) glyph — summation point.
+    Sigma,
+    /// Open-collector output indicator (downward open square).
+    OpenCollector,
+    /// Open-emitter output indicator (upward open square).
+    OpenEmitter,
+    /// Hi-Z (tri-state) output indicator.
+    HiZ,
+}
+
 /// One symbol pin.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SymbolPin {
@@ -54,6 +97,60 @@ pub struct SymbolPin {
     pub orientation: PinOrientation,
     /// Length of the pin's drawn stub from the connection point inward.
     pub length: f64,
+    /// Free-text description shown in the Properties panel and
+    /// surfaced on tooltips. Defaults to empty.
+    #[serde(default)]
+    pub description: String,
+    /// Alternative pin names (Altium "Function" — multi-function pins
+    /// carry several names like `MOSI/PA7`). Empty by default.
+    #[serde(default)]
+    pub function: Vec<String>,
+    /// Optional pin-package length in mm — physical lead length on
+    /// the package (distinct from `length` which is the schematic
+    /// stub length). Used for SI / propagation models.
+    #[serde(default)]
+    pub pin_package_length: Option<f64>,
+    /// Optional propagation delay in nanoseconds for this pin —
+    /// flows into timing analysis when present.
+    #[serde(default)]
+    pub propagation_delay_ns: Option<f64>,
+    /// Whether the designator (pin number) text is drawn next to
+    /// the pin. Defaults to `true` to match legacy files; the
+    /// Altium "eye" toggle flips this.
+    #[serde(default = "default_visibility_true")]
+    pub designator_visible: bool,
+    /// Whether the name text is drawn next to the pin.
+    #[serde(default = "default_visibility_true")]
+    pub name_visible: bool,
+    /// IEEE-style glyph drawn inside the symbol body at this pin's
+    /// stub end. Default `None`.
+    #[serde(default)]
+    pub inside_symbol: PinSymbolKind,
+    /// IEEE-style glyph drawn at the inside edge of the symbol body
+    /// (right where the pin stub meets the body). Default `None`.
+    #[serde(default)]
+    pub inside_edge_symbol: PinSymbolKind,
+    /// IEEE-style glyph drawn at the outside edge of the symbol
+    /// body (right where the pin emerges). Default `None`. Most
+    /// commonly carries the inverted-pin dot.
+    #[serde(default)]
+    pub outside_edge_symbol: PinSymbolKind,
+    /// IEEE-style glyph drawn outside the symbol body, attached to
+    /// the pin's free end. Default `None`.
+    #[serde(default)]
+    pub outside_symbol: PinSymbolKind,
+    /// Hidden pins are not drawn on the schematic but still
+    /// participate in netlists (Altium "Pin Hide"). Default false.
+    #[serde(default)]
+    pub hidden: bool,
+    /// Locked pins refuse drag / delete via the canvas — must be
+    /// edited through the Properties panel. Default false.
+    #[serde(default)]
+    pub locked: bool,
+}
+
+fn default_visibility_true() -> bool {
+    true
 }
 
 impl SymbolPin {
@@ -66,6 +163,18 @@ impl SymbolPin {
             position: [0.0, 0.0],
             orientation: PinOrientation::Right,
             length: 2.54,
+            description: String::new(),
+            function: Vec::new(),
+            pin_package_length: None,
+            propagation_delay_ns: None,
+            designator_visible: true,
+            name_visible: true,
+            inside_symbol: PinSymbolKind::None,
+            inside_edge_symbol: PinSymbolKind::None,
+            outside_edge_symbol: PinSymbolKind::None,
+            outside_symbol: PinSymbolKind::None,
+            hidden: false,
+            locked: false,
         }
     }
 }
@@ -271,6 +380,18 @@ mod tests {
                 position: [0.0, 2.54],
                 orientation: PinOrientation::Right,
                 length: 2.54,
+                description: String::new(),
+                function: Vec::new(),
+                pin_package_length: None,
+                propagation_delay_ns: None,
+                designator_visible: true,
+                name_visible: true,
+                inside_symbol: PinSymbolKind::None,
+                inside_edge_symbol: PinSymbolKind::None,
+                outside_edge_symbol: PinSymbolKind::None,
+                outside_symbol: PinSymbolKind::None,
+                hidden: false,
+                locked: false,
             }],
             graphics: vec![SymbolGraphic {
                 kind: SymbolGraphicKind::Rectangle {
