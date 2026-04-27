@@ -91,6 +91,12 @@ pub struct TabInfo {
     pub path: PathBuf,
     pub cached_document: Option<TabDocument>,
     pub dirty: bool,
+    /// Which loaded project this tab belongs to, if any. Resolved at
+    /// open time via `DocumentState::project_for_path`; a tab opened
+    /// without a matching project (lone file open, project closed
+    /// mid-session) carries `None`. Per-project actions (Close
+    /// Project) filter tabs by this id.
+    pub project_id: Option<super::state::ProjectId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

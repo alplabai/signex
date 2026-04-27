@@ -126,6 +126,43 @@ pub struct SheetInfo {
     pub wire_count: usize,
     #[allow(dead_code)]
     pub label_count: usize,
+    /// True when this sheet is currently in `document_state.tabs`.
+    /// Drives the small accent-coloured dot on the tree row (Altium parity).
+    pub is_open: bool,
+    /// True when the open tab for this sheet has unsaved edits.
+    /// Drives the bright red dot on the tree row.
+    pub is_dirty: bool,
+    /// True when this sheet is the document the user is currently
+    /// viewing (`document_state.tabs[active_tab].path == sheet path`).
+    /// Drives the highlighted row background — Altium parity.
+    pub is_active: bool,
+}
+
+/// Per-project bundle surfaced to the Projects panel. One entry per
+/// `LoadedProject` in `DocumentState.projects`. `build_project_tree`
+/// iterates this list to emit one tree root per project.
+#[derive(Debug, Clone)]
+pub struct ProjectPanelInfo {
+    pub id: crate::app::ProjectId,
+    /// Display name (project stem — "MyBoard" from "MyBoard.kicad_pro").
+    pub name: String,
+    /// Root schematic filename shown as the "project file" under each
+    /// root, when present.
+    pub project_file: Option<String>,
+    /// Open / dirty state for the root schematic, mirrors the same
+    /// flags that `SheetInfo` carries for inner sheets.
+    pub project_file_open: bool,
+    pub project_file_dirty: bool,
+    pub project_file_active: bool,
+    /// Companion PCB filename, when present.
+    pub pcb_file: Option<String>,
+    pub pcb_file_open: bool,
+    pub pcb_file_dirty: bool,
+    pub pcb_file_active: bool,
+    pub sheets: Vec<SheetInfo>,
+    /// Whether this is the currently-active project — drives accent
+    /// styling on the root node.
+    pub is_active: bool,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -162,10 +199,10 @@ pub enum ErcSeverityLite {
 }
 
 pub struct PanelContext {
-    pub project_name: Option<String>,
-    pub project_file: Option<String>,
-    pub pcb_file: Option<String>,
-    pub sheets: Vec<SheetInfo>,
+    /// Multi-project workspace — one entry per `LoadedProject`. Every
+    /// project-aware panel reads from this Vec; the active project is
+    /// the one with `is_active == true`.
+    pub projects: Vec<ProjectPanelInfo>,
     pub sym_count: usize,
     pub wire_count: usize,
     pub label_count: usize,
@@ -180,6 +217,9 @@ pub struct PanelContext {
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
     pub tokens: ThemeTokens,
+    /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
+    /// to the theme's accent (see `crate::icons`).
+    pub theme_id: signex_types::theme::ThemeId,
     // Live settings (synced from Signex on every update)
     pub unit: Unit,
     pub grid_visible: bool,
@@ -236,6 +276,26 @@ pub struct PanelContext {
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
+    /// The live ChildSheet matching `selected_uuid` when a single
+    /// hierarchical sheet is selected. Powers the editable
+    /// border/fill colour pickers and stroke-width input.
+    pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// Whether the border-colour picker overlay is open for the
+    /// currently-selected child sheet.
+    pub child_sheet_border_picker_open: bool,
+    /// Whether the fill-colour picker overlay is open for the
+    /// currently-selected child sheet.
+    pub child_sheet_fill_picker_open: bool,
+    /// Whether the user expanded the border picker into the full
+    /// HSV / RGB ColorPicker (vs the default preset palette).
+    pub child_sheet_border_advanced_open: bool,
+    /// Whether the user expanded the fill picker into the full
+    /// HSV / RGB ColorPicker (vs the default preset palette).
+    pub child_sheet_fill_advanced_open: bool,
+    /// Transient text-input buffer for the child sheet's stroke-width
+    /// numeric field. `None` means "show the live value formatted";
+    /// `Some(s)` keeps half-typed strings between rerenders.
+    pub child_sheet_stroke_width_buf: Option<String>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -252,6 +312,14 @@ pub struct PanelContext {
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
     /// Selection filter state, shared with the Active Bar.
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// User-defined custom filter presets (capped at
+    /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Edited from
+    /// the Properties panel; surfaced as shortcut buttons in the Active
+    /// Bar's filter dropdown.
+    pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    /// Index of the active preset tab in the Properties-panel editor
+    /// (mirrored from `InteractionState`). Clamped on every sync.
+    pub active_custom_filter_tab: usize,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
     /// Vertical page margin zones.
@@ -499,6 +567,8 @@ pub enum PanelMsg {
     EditLabelText(uuid::Uuid, String),
     /// Edit a label's horizontal justification.
     EditLabelJustifyH(uuid::Uuid, signex_types::schematic::HAlign),
+    /// Edit a label direction preset (rotation + horizontal justify).
+    EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
     /// Edit a label's rotation (degrees).
     EditLabelRotation(uuid::Uuid, f64),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
@@ -532,6 +602,28 @@ pub enum PanelMsg {
     /// best-effort and fires UpdateDrawingEdit when the value is a
     /// valid f64.
     DrawingFieldTyping(DrawingFieldId, String),
+    /// Open / close the border-colour picker overlay for a child sheet.
+    ToggleChildSheetBorderPicker(uuid::Uuid),
+    /// Open / close the fill-colour picker overlay for a child sheet.
+    ToggleChildSheetFillPicker(uuid::Uuid),
+    /// Expand the currently-open child-sheet picker dropdown into the
+    /// full HSV / RGB ColorPicker overlay. `is_border` selects which
+    /// channel (border vs fill).
+    OpenChildSheetAdvancedPicker(uuid::Uuid, bool),
+    /// Cancel the currently-open child-sheet colour picker without
+    /// committing a new value.
+    CancelChildSheetColorPicker,
+    /// Commit a new border colour for a child sheet (closes the picker).
+    EditChildSheetBorderColor(uuid::Uuid, iced::Color),
+    /// Commit a new fill colour for a child sheet (closes the picker).
+    EditChildSheetFillColor(uuid::Uuid, iced::Color),
+    /// Buffered keystroke for the child sheet stroke-width input.
+    ChildSheetStrokeWidthTyping(uuid::Uuid, String),
+    /// Commit the currently-buffered child sheet stroke width.
+    CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Reset child sheet styling (border / fill colour, line width)
+    /// back to theme defaults.
+    ResetChildSheetStyle(uuid::Uuid),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -563,6 +655,18 @@ pub enum PanelMsg {
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
     ToggleAllSelectionFilters,
+    /// Append a new empty custom filter preset (no-op when at the cap).
+    AddCustomFilterPreset,
+    /// Remove the preset at this index.
+    RemoveCustomFilterPreset(usize),
+    /// Rename the preset at this index.
+    RenameCustomFilterPreset(usize, String),
+    /// Toggle whether the preset at `idx` includes `filter`.
+    ToggleCustomFilterPresetMember(usize, crate::active_bar::SelectionFilter),
+    /// Snapshot the active selection filter set into the preset at `idx`.
+    CaptureCustomFilterPreset(usize),
+    /// Switch the Properties-panel preset editor to the given tab.
+    SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
     /// Page Options: choose paper size.
@@ -629,43 +733,13 @@ fn chevron_down() -> svg::Handle {
         .clone()
 }
 
-// Draft shape icons (16×16). Stylistic draft only — safe to replace
-// with final assets later by dropping equivalent files at the same
-// paths. Loaded once and cached via OnceLock.
-const SVG_SHAPE_LINE: &[u8] = include_bytes!("../../assets/icons/shape_line.svg");
-const SVG_SHAPE_RECT: &[u8] = include_bytes!("../../assets/icons/shape_rect.svg");
-const SVG_SHAPE_CIRCLE: &[u8] = include_bytes!("../../assets/icons/shape_circle.svg");
-const SVG_SHAPE_ARC: &[u8] = include_bytes!("../../assets/icons/shape_arc.svg");
-const SVG_SHAPE_POLYGON: &[u8] = include_bytes!("../../assets/icons/shape_polygon.svg");
-
-fn shape_icon_handle(elem_type: &str) -> Option<svg::Handle> {
-    static LINE: OnceLock<svg::Handle> = OnceLock::new();
-    static RECT: OnceLock<svg::Handle> = OnceLock::new();
-    static CIRCLE: OnceLock<svg::Handle> = OnceLock::new();
-    static ARC: OnceLock<svg::Handle> = OnceLock::new();
-    static POLY: OnceLock<svg::Handle> = OnceLock::new();
+fn shape_icon_handle(elem_type: &str, theme: signex_types::theme::ThemeId) -> Option<svg::Handle> {
     match elem_type {
-        "Line" => Some(
-            LINE.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_LINE))
-                .clone(),
-        ),
-        "Rectangle" => Some(
-            RECT.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_RECT))
-                .clone(),
-        ),
-        "Circle" => Some(
-            CIRCLE
-                .get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_CIRCLE))
-                .clone(),
-        ),
-        "Arc" => Some(
-            ARC.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_ARC))
-                .clone(),
-        ),
-        "Polygon" => Some(
-            POLY.get_or_init(|| svg::Handle::from_memory(SVG_SHAPE_POLYGON))
-                .clone(),
-        ),
+        "Line" => Some(crate::icons::icon_shape_line(theme)),
+        "Rectangle" => Some(crate::icons::icon_shape_rect(theme)),
+        "Circle" => Some(crate::icons::icon_shape_circle(theme)),
+        "Arc" => Some(crate::icons::icon_shape_arc(theme)),
+        "Polygon" => Some(crate::icons::icon_shape_polygon(theme)),
         _ => None,
     }
 }
@@ -777,34 +851,65 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
 
 // ─── Projects Panel (TreeView) ────────────────────────────────
 
-/// Build the project tree from panel context data.
-/// Called once on project load; result is stored in `PanelContext::project_tree`.
+/// Build the project tree from panel context data. Produces one root
+/// per loaded project so multi-project workspaces show all their
+/// projects side by side. Single-project users see the same shape as
+/// before (one root). `PanelContext::projects` is the source of truth;
+/// the legacy `project_name` / `sheets` singletons are ignored here so
+/// we never emit a duplicate root for the active project.
 pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
-    let Some(name) = &ctx.project_name else {
+    if ctx.projects.is_empty() {
         return vec![];
-    };
+    }
 
-    // Source documents from project sheets
-    let mut source_docs: Vec<TreeNode> = vec![];
+    ctx.projects
+        .iter()
+        .map(|project| project_root_node(project, ctx.lib_symbol_count))
+        .collect()
+}
 
-    if !ctx.sheets.is_empty() {
-        for sheet in &ctx.sheets {
-            source_docs.push(TreeNode::leaf(sheet.filename.clone(), TreeIcon::Schematic));
+/// One project root — "Source Documents" / "Libraries" / "Settings".
+/// `fallback_lib_count` is the workspace-wide library count that we
+/// fall through to when the project's own sheet sym totals don't give
+/// a useful number; accurate per-project lib counting is a follow-up
+/// once the library system is project-scoped (v0.9+).
+fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> TreeNode {
+    let mut source_docs: Vec<TreeNode> = Vec::new();
+
+    if !project.sheets.is_empty() {
+        for sheet in &project.sheets {
+            let icon = TreeIcon::for_path(&sheet.filename);
+            source_docs.push(
+                TreeNode::leaf(sheet.filename.clone(), icon)
+                    .with_open(sheet.is_open)
+                    .with_dirty(sheet.is_dirty)
+                    .with_active(sheet.is_active),
+            );
         }
-    } else if let Some(file) = &ctx.project_file {
-        source_docs.push(TreeNode::leaf(file.clone(), TreeIcon::Schematic));
+    } else if let Some(file) = &project.project_file {
+        let icon = TreeIcon::for_path(file);
+        source_docs.push(
+            TreeNode::leaf(file.clone(), icon)
+                .with_open(project.project_file_open)
+                .with_dirty(project.project_file_dirty)
+                .with_active(project.project_file_active),
+        );
     }
 
-    // PCB file
-    if let Some(pcb) = &ctx.pcb_file {
-        source_docs.push(TreeNode::leaf(pcb.clone(), TreeIcon::Pcb));
+    if let Some(pcb) = &project.pcb_file {
+        let icon = TreeIcon::for_path(pcb);
+        source_docs.push(
+            TreeNode::leaf(pcb.clone(), icon)
+                .with_open(project.pcb_file_open)
+                .with_dirty(project.pcb_file_dirty)
+                .with_active(project.pcb_file_active),
+        );
     }
 
-    // Libraries
-    let lib_count = if ctx.lib_symbol_count > 0 {
-        ctx.lib_symbol_count
+    let lib_count = if fallback_lib_count > 0 {
+        fallback_lib_count
     } else {
-        ctx.sheets.iter().map(|s| s.sym_count).sum::<usize>()
+        project.sheets.iter().map(|s| s.sym_count).sum::<usize>()
     };
     let lib_children = vec![TreeNode::leaf(
         format!("{} symbols loaded", lib_count),
@@ -814,8 +919,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
     let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
     settings.expanded = false;
 
-    vec![TreeNode::branch(
-        name.clone(),
+    TreeNode::branch(
+        project.name.clone(),
         TreeIcon::Folder,
         vec![
             TreeNode::branch(
@@ -826,7 +931,8 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
             TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
             settings,
         ],
-    )]
+    )
+    .with_accent(project.is_active)
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
@@ -842,10 +948,24 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .into()
     } else {
-        // Render the persistent tree — toggle state is preserved
-        TreeView::new(&ctx.project_tree, &ctx.tokens)
-            .view()
-            .map(PanelMsg::Tree)
+        // Render the persistent tree — toggle state is preserved.
+        // Wrap in a container with a small top inset so the tree's
+        // first row doesn't sit flush against the panel's tab-strip
+        // border (matches the breathing room Altium leaves below its
+        // panel tabs).
+        container(
+            TreeView::new(&ctx.project_tree, &ctx.tokens)
+                .view()
+                .map(PanelMsg::Tree),
+        )
+        .padding(iced::Padding {
+            top: 6.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        })
+        .width(Length::Fill)
+        .into()
     }
 }
 
@@ -1146,12 +1266,19 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(section_title("Sheets", &ctx.tokens));
     col = col.push(separator(&ctx.tokens));
 
-    if let Some(name) = &ctx.project_name {
+    // Resolve the active project from the multi-project Vec — replaces
+    // the legacy `ctx.project_name` singleton (#54 phase 2.5).
+    let active_project = ctx.projects.iter().find(|p| p.is_active);
+    if let Some(project) = active_project {
         let mut sheets = vec![];
         for cs in &ctx.child_sheets {
             sheets.push(TreeNode::leaf(cs.clone(), TreeIcon::Sheet));
         }
-        let roots = vec![TreeNode::branch(name.clone(), TreeIcon::Schematic, sheets)];
+        let roots = vec![TreeNode::branch(
+            project.name.clone(),
+            TreeIcon::Schematic,
+            sheets,
+        )];
         col = col.push(
             TreeView::new(&roots, &ctx.tokens)
                 .view()
@@ -1182,11 +1309,20 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
     if !ctx.has_schematic {
+        // Don't mislead the user into thinking nothing is loaded when
+        // they've just switched to a PCB tab — distinguish "no project
+        // yet" from "project open, but the active tab isn't a
+        // schematic". GitHub issue #51.
+        let hint = if ctx.has_pcb {
+            "Properties are available when a schematic is active"
+        } else {
+            "Open a project"
+        };
         return container(
             column![
                 text("Properties").size(12).color(primary),
                 Space::new().height(12.0),
-                text("Open a project").size(11).color(muted),
+                text(hint).size(11).color(muted),
             ]
             .spacing(4)
             .padding(8),
@@ -1783,8 +1919,8 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Horizontal Justification");
-            let justify_v = get("Vertical Justification");
+            let justify_h = get("Justify H");
+            let justify_v = get("Justify V");
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
             let is_reference = matches!(
@@ -1844,14 +1980,14 @@ fn view_selected_element_properties<'a>(
                             "Rotation", &rotation, muted, input_bg, input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Horizontal Justification",
+                            "Justify H",
                             &justify_h,
                             muted,
                             input_bg,
                             input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Vertical Justification",
+                            "Justify V",
                             &justify_v,
                             muted,
                             input_bg,
@@ -1876,7 +2012,7 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
-            let justify_h_str = get("Horizontal Justification");
+            let justify_h_str = get("Justify H");
 
             // Parse numeric values for edit controls (with fallbacks).
             let rotation_deg = rotation_str
@@ -1979,7 +2115,14 @@ fn view_selected_element_properties<'a>(
                         c = c.push(form_label("Justification", muted));
                         c = c.push(
                             container(justification_grid(
-                                id, justify_h, input_bg, input_bdr, primary, muted,
+                                id,
+                                rotation_deg,
+                                justify_h,
+                                input_bg,
+                                input_bdr,
+                                primary,
+                                muted,
+                                ctx.theme_id,
                             ))
                             .padding([4, 8]),
                         );
@@ -1993,8 +2136,8 @@ fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Horizontal Justification");
-            let justify_v = get("Vertical Justification");
+            let justify_h = get("Justify H");
+            let justify_v = get("Justify V");
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
@@ -2027,14 +2170,14 @@ fn view_selected_element_properties<'a>(
                             "Rotation", &rotation, muted, input_bg, input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Horizontal Justification",
+                            "Justify H",
                             &justify_h,
                             muted,
                             input_bg,
                             input_bdr,
                         ));
                         c = c.push(form_input_row(
-                            "Vertical Justification",
+                            "Justify V",
                             &justify_v,
                             muted,
                             input_bg,
@@ -2054,6 +2197,9 @@ fn view_selected_element_properties<'a>(
         }
         Some(signex_types::schematic::SelectedKind::Drawing) => {
             col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+        }
+        Some(signex_types::schematic::SelectedKind::ChildSheet) => {
+            col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
         _ => {
             // Generic read-only properties for other types
@@ -2243,7 +2389,12 @@ fn view_pre_placement<'a>(
                     c = c.push(form_label("Justification", muted));
                     c = c.push(
                         container(preplacement_justification_grid(
-                            justify_h, input_bg, input_bdr, primary, muted,
+                            justify_h,
+                            input_bg,
+                            input_bdr,
+                            primary,
+                            muted,
+                            ctx.theme_id,
                         ))
                         .padding([4, 8]),
                     );
@@ -2409,139 +2560,106 @@ fn view_properties_general<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Selection Filter (collapsible) — shares state with the Active Bar filter dropdown.
+    // Custom Selection Filters (collapsible) — tabbed editor for up to
+    // CUSTOM_FILTER_PRESET_LIMIT named presets that also surface as
+    // shortcut buttons in the Active Bar's filter dropdown.
     {
-        use crate::active_bar::SelectionFilter;
-        let filters = ctx.selection_filters.clone();
-        let all_on = filters.len() == SelectionFilter::ALL.len();
+        use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
+        let presets = ctx.custom_filter_presets.clone();
+        let active_tab = ctx
+            .active_custom_filter_tab
+            .min(presets.len().saturating_sub(1));
+        let muted_c = muted;
+        let primary_c = primary;
+        // Border colour for tabs and member chips — matches the Active
+        // Bar Filter dropdown's chip border treatment so the section
+        // reads as one cohesive piece.
+        let accent_c = crate::styles::ti(ctx.tokens.accent);
         col = col.push(collapsible_section(
             "prop_sel_filter",
-            "Selection Filter",
+            "Custom Selection Filters",
             &ctx.collapsed_sections,
             primary,
             border_c,
             move || {
-                // All-On/Off toggle row
-                let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-                let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-                let all_active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
-                let all_inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
-                let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-                let all_text_on = Color::WHITE;
-                let all_label = if all_on { "All - On" } else { "All - Off" };
-                let all_toggle = iced::widget::button(
-                    text(all_label.to_string())
-                        .size(10)
-                        .color(if all_on { all_text_on } else { all_text_off })
-                        .align_x(iced::alignment::Horizontal::Center),
-                )
-                .padding([3, 10])
-                .on_press(PanelMsg::ToggleAllSelectionFilters)
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => Background::Color(tag_hover),
-                        _ => Background::Color(if all_on {
-                            all_active_bg
-                        } else {
-                            all_inactive_bg
-                        }),
+                let mut c = Column::new().spacing(6).width(Length::Fill);
+                if presets.is_empty() {
+                    c = c.push(
+                        container(
+                            text("No presets yet. Click + to define one.")
+                                .size(11)
+                                .color(muted_c),
+                        )
+                        .padding([4, 8]),
+                    );
+                    c = c.push(
+                        container(
+                            iced::widget::button(text("+ Add Filter").size(11).color(primary_c))
+                                .padding([4, 10])
+                                .on_press(PanelMsg::AddCustomFilterPreset),
+                        )
+                        .padding([4, 8]),
+                    );
+                    return c;
+                }
+                // Tab strip: one tab per preset + a trailing "+" tab
+                // when room remains. Each tab is its own button — the
+                // active one gets the accent border, others a muted one.
+                let mut tabs = iced::widget::Row::new()
+                    .spacing(2)
+                    .align_y(iced::Alignment::Center);
+                for (idx, preset) in presets.iter().enumerate() {
+                    let label = if preset.name.trim().is_empty() {
+                        format!("Filter {}", idx + 1)
+                    } else {
+                        preset.name.clone()
                     };
-                    iced::widget::button::Style {
-                        background: Some(bg),
-                        border: Border {
-                            width: 1.0,
-                            radius: 12.0.into(),
-                            color: if all_on {
-                                all_active_border
-                            } else {
-                                all_inactive_border
-                            },
-                        },
-                        text_color: if all_on { all_text_on } else { all_text_off },
-                        ..iced::widget::button::Style::default()
-                    }
-                });
-                let mut c = Column::new().spacing(4).width(Length::Fill);
-                c = c.push(container(all_toggle).padding([4, 8]));
+                    tabs = tabs.push(custom_filter_tab(
+                        label,
+                        idx == active_tab,
+                        idx,
+                        tag_hover,
+                        accent_c,
+                    ));
+                }
+                if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
+                    tabs = tabs.push(
+                        iced::widget::button(text("+").size(12).color(primary_c))
+                            .padding([3, 10])
+                            .on_press(PanelMsg::AddCustomFilterPreset),
+                    );
+                }
+                c = c.push(container(tabs).padding([4, 8]));
+                // Active tab body — name input + chips + delete.
+                let preset = &presets[active_tab];
+                let included: std::collections::HashSet<SelectionFilter> =
+                    preset.filters.iter().copied().collect();
+                let header = row![
+                    iced::widget::text_input("Preset name", &preset.name)
+                        .size(11)
+                        .padding([3, 6])
+                        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
+                        .width(Length::Fill),
+                    iced::widget::button(text("Delete").size(10).color(primary_c))
+                        .padding([3, 8])
+                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center);
+                let mut wrap = Wrap::new().spacing(4.0).line_spacing(4.0);
+                for &f in SelectionFilter::ALL {
+                    wrap = wrap.push(preset_chip(
+                        f.label(),
+                        active_tab,
+                        f,
+                        included.contains(&f),
+                        tag_hover,
+                        accent_c,
+                    ));
+                }
                 c = c.push(
-                    container(
-                        Wrap::new()
-                            .spacing(4.0)
-                            .line_spacing(4.0)
-                            .push(tag_btn(
-                                "Components",
-                                SelectionFilter::Components,
-                                filters.contains(&SelectionFilter::Components),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Wires",
-                                SelectionFilter::Wires,
-                                filters.contains(&SelectionFilter::Wires),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Buses",
-                                SelectionFilter::Buses,
-                                filters.contains(&SelectionFilter::Buses),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Sheet Symbols",
-                                SelectionFilter::SheetSymbols,
-                                filters.contains(&SelectionFilter::SheetSymbols),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Sheet Entries",
-                                SelectionFilter::SheetEntries,
-                                filters.contains(&SelectionFilter::SheetEntries),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Net Labels",
-                                SelectionFilter::NetLabels,
-                                filters.contains(&SelectionFilter::NetLabels),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Parameters",
-                                SelectionFilter::Parameters,
-                                filters.contains(&SelectionFilter::Parameters),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Ports",
-                                SelectionFilter::Ports,
-                                filters.contains(&SelectionFilter::Ports),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Power Ports",
-                                SelectionFilter::PowerPorts,
-                                filters.contains(&SelectionFilter::PowerPorts),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Texts",
-                                SelectionFilter::Texts,
-                                filters.contains(&SelectionFilter::Texts),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Drawing Objects",
-                                SelectionFilter::DrawingObjects,
-                                filters.contains(&SelectionFilter::DrawingObjects),
-                                tag_hover,
-                            ))
-                            .push(tag_btn(
-                                "Other",
-                                SelectionFilter::Other,
-                                filters.contains(&SelectionFilter::Other),
-                                tag_hover,
-                            )),
-                    )
-                    .padding([6, 8]),
+                    container(column![header, container(wrap).padding([4, 0])].spacing(4))
+                        .padding([6, 8]),
                 );
                 c
             },
@@ -3851,58 +3969,33 @@ fn net_params_add_bar<'a>(
 /// but don't mutate the label.
 fn justification_grid(
     id: uuid::Uuid,
+    rotation_deg: f64,
     h: signex_types::schematic::HAlign,
     input_bg: Color,
     input_bdr: Color,
     primary: Color,
     muted: Color,
+    theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    use std::sync::LazyLock;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
-    });
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
-    });
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
-    });
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
-    });
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
-    });
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
-    });
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
-    });
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
-    });
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
-    });
     let _ = muted;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+    let cell = |handle: iced::widget::svg::Handle,
                 active: bool,
                 on_press: PanelMsg|
      -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg((*handle).clone())
-            .width(12.0)
-            .height(12.0)
-            .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: Some(if active { fg_active } else { fg_inactive }),
-            });
+        let svg_widget =
+            iced::widget::svg(handle)
+                .width(12.0)
+                .height(12.0)
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: Some(if active { fg_active } else { fg_inactive }),
+                });
         iced::widget::button(
             container(svg_widget)
                 .width(Length::Fill)
@@ -3935,62 +4028,103 @@ fn justification_grid(
         })
         .into()
     };
-    // Only the middle-row cell of the matching column lights up — labels in
-    // KiCad have no vertical-justify field, so the top/bottom rows of the
-    // 9-grid are visual controls only (a future addition).
-    let hl_mid = |target: HAlign| -> bool { h == target };
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum LabelDir {
+        Left,
+        Up,
+        Right,
+        Down,
+    }
+
+    let normalize_rot = |deg: f64| {
+        let r = (deg.round() as i32) % 360;
+        if r < 0 { r + 360 } else { r }
+    };
+
+    let current_dir = {
+        match normalize_rot(rotation_deg) {
+            90 => LabelDir::Up,
+            270 => LabelDir::Down,
+            180 => {
+                if matches!(h, HAlign::Right) {
+                    LabelDir::Right
+                } else {
+                    LabelDir::Left
+                }
+            }
+            _ => {
+                if matches!(h, HAlign::Right) {
+                    LabelDir::Left
+                } else {
+                    LabelDir::Right
+                }
+            }
+        }
+    };
+
+    let to_msg = |dir: LabelDir| -> PanelMsg {
+        match dir {
+            LabelDir::Right => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Left),
+            LabelDir::Left => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Right),
+            LabelDir::Up => PanelMsg::EditLabelDirection(id, 90.0, HAlign::Left),
+            LabelDir::Down => PanelMsg::EditLabelDirection(id, 270.0, HAlign::Left),
+        }
+    };
+
+    let hl = |dir: LabelDir| current_dir == dir;
+
     iced::widget::column![
         iced::widget::row![
             cell(
-                &ICON_TL,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
+                crate::icons::icon_justify_tl(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
             ),
             cell(
-                &ICON_T,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
+                crate::icons::icon_justify_t(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
             ),
             cell(
-                &ICON_TR,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
-            ),
-        ]
-        .spacing(2),
-        iced::widget::row![
-            cell(
-                &ICON_L,
-                hl_mid(HAlign::Left),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
-            ),
-            cell(
-                &ICON_C,
-                hl_mid(HAlign::Center),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
-            ),
-            cell(
-                &ICON_R,
-                hl_mid(HAlign::Right),
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
+                crate::icons::icon_justify_tr(theme),
+                hl(LabelDir::Up),
+                to_msg(LabelDir::Up)
             ),
         ]
         .spacing(2),
         iced::widget::row![
             cell(
-                &ICON_BL,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Left)
+                crate::icons::icon_justify_l(theme),
+                hl(LabelDir::Left),
+                to_msg(LabelDir::Left)
             ),
             cell(
-                &ICON_B,
+                crate::icons::icon_justify_c(theme),
                 false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Center)
+                to_msg(current_dir)
             ),
             cell(
-                &ICON_BR,
-                false,
-                PanelMsg::EditLabelJustifyH(id, HAlign::Right)
+                crate::icons::icon_justify_r(theme),
+                hl(LabelDir::Right),
+                to_msg(LabelDir::Right)
+            ),
+        ]
+        .spacing(2),
+        iced::widget::row![
+            cell(
+                crate::icons::icon_justify_bl(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
+            ),
+            cell(
+                crate::icons::icon_justify_b(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
+            ),
+            cell(
+                crate::icons::icon_justify_br(theme),
+                hl(LabelDir::Down),
+                to_msg(LabelDir::Down)
             ),
         ]
         .spacing(2),
@@ -4008,52 +4142,26 @@ fn preplacement_justification_grid(
     input_bdr: Color,
     primary: Color,
     muted: Color,
+    theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    use std::sync::LazyLock;
-    static ICON_TL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tl.svg"))
-    });
-    static ICON_T: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/t.svg"))
-    });
-    static ICON_TR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/tr.svg"))
-    });
-    static ICON_L: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/l.svg"))
-    });
-    static ICON_C: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/c.svg"))
-    });
-    static ICON_R: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/r.svg"))
-    });
-    static ICON_BL: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/bl.svg"))
-    });
-    static ICON_B: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/b.svg"))
-    });
-    static ICON_BR: LazyLock<iced::widget::svg::Handle> = LazyLock::new(|| {
-        iced::widget::svg::Handle::from_memory(include_bytes!("../../assets/icons/justify/br.svg"))
-    });
     let _ = muted;
 
     const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: &LazyLock<iced::widget::svg::Handle>,
+    let cell = |handle: iced::widget::svg::Handle,
                 active: bool,
                 on_press: PanelMsg|
      -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        let svg_widget = iced::widget::svg((*handle).clone())
-            .width(12.0)
-            .height(12.0)
-            .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: Some(if active { fg_active } else { fg_inactive }),
-            });
+        let svg_widget =
+            iced::widget::svg(handle)
+                .width(12.0)
+                .height(12.0)
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: Some(if active { fg_active } else { fg_inactive }),
+                });
         iced::widget::button(
             container(svg_widget)
                 .width(Length::Fill)
@@ -4090,17 +4198,17 @@ fn preplacement_justification_grid(
     iced::widget::column![
         iced::widget::row![
             cell(
-                &ICON_TL,
+                crate::icons::icon_justify_tl(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_T,
+                crate::icons::icon_justify_t(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_TR,
+                crate::icons::icon_justify_tr(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4108,17 +4216,17 @@ fn preplacement_justification_grid(
         .spacing(2),
         iced::widget::row![
             cell(
-                &ICON_L,
+                crate::icons::icon_justify_l(theme),
                 hl_mid(HAlign::Left),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_C,
+                crate::icons::icon_justify_c(theme),
                 hl_mid(HAlign::Center),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_R,
+                crate::icons::icon_justify_r(theme),
                 hl_mid(HAlign::Right),
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4126,17 +4234,17 @@ fn preplacement_justification_grid(
         .spacing(2),
         iced::widget::row![
             cell(
-                &ICON_BL,
+                crate::icons::icon_justify_bl(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
             ),
             cell(
-                &ICON_B,
+                crate::icons::icon_justify_b(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
             ),
             cell(
-                &ICON_BR,
+                crate::icons::icon_justify_br(theme),
                 false,
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
@@ -4147,7 +4255,91 @@ fn preplacement_justification_grid(
     .into()
 }
 
+/// Tab button in the Custom Selection Filters tab strip. Active tab
+/// gets a filled background; both states use the theme accent for the
+/// border so the section reads as one piece with the chips and the
+/// Active Bar dropdown.
+fn custom_filter_tab(
+    label: String,
+    active: bool,
+    idx: usize,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
+    iced::widget::button(
+        text(label)
+            .size(11)
+            .color(if active { text_on } else { text_off }),
+    )
+    .padding([3, 10])
+    .on_press(PanelMsg::SelectCustomFilterTab(idx))
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
+            _ if active => Background::Color(active_bg),
+            _ => Background::Color(Color::TRANSPARENT),
+        };
+        iced::widget::button::Style {
+            background: Some(bg),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+            },
+            text_color: if active { text_on } else { text_off },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
+/// Member chip for a custom-filter preset card (Properties panel).
+/// Border colour matches the Active Bar Filter dropdown chips (theme
+/// accent), so chip styling stays consistent across both surfaces.
+fn preset_chip(
+    label: &str,
+    preset_idx: usize,
+    filter: crate::active_bar::SelectionFilter,
+    enabled: bool,
+    hover_bg: Color,
+    border_c: Color,
+) -> Element<'static, PanelMsg> {
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    iced::widget::button(
+        text(label.to_string())
+            .size(10)
+            .color(if enabled { text_on } else { text_off })
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding([3, 8])
+    .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
+            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
+        };
+        iced::widget::button::Style {
+            background: Some(bg),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+            },
+            text_color: if enabled { text_on } else { text_off },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
 /// Selection filter tag button — Altium pill with active/inactive state.
+#[allow(dead_code)]
 fn tag_btn(
     label: &str,
     filter: crate::active_bar::SelectionFilter,
@@ -4383,13 +4575,15 @@ fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .width(Length::Fill)
             .padding([2, 6])
             .on_press(PanelMsg::FocusErcViolation(v.global_index))
-            .style(move |_theme: &Theme, status: iced::widget::button::Status| {
-                let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
-                iced::widget::button::Style {
-                    background: row_bg.clone().or(base.background),
-                    ..base
-                }
-            }),
+            .style(
+                move |_theme: &Theme, status: iced::widget::button::Status| {
+                    let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
+                    iced::widget::button::Style {
+                        background: row_bg.clone().or(base.background),
+                        ..base
+                    }
+                },
+            ),
         );
     }
 
@@ -4577,22 +4771,23 @@ fn view_drawing_properties<'a>(
     // Header: shape icon + type label. Draft SVGs live at
     // assets/icons/shape_*.svg and can be swapped out for final art
     // without touching the panel code.
-    let header_row: Element<'a, PanelMsg> = if let Some(icon) = shape_icon_handle(&elem_type) {
-        row![
-            iced::widget::svg(icon).width(16).height(16),
+    let header_row: Element<'a, PanelMsg> =
+        if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
+            row![
+                iced::widget::svg(icon).width(16).height(16),
+                text(elem_type.clone())
+                    .size(11)
+                    .color(Color::from_rgb(0.90, 0.90, 0.92)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
             text(elem_type.clone())
                 .size(11)
-                .color(Color::from_rgb(0.90, 0.90, 0.92)),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center)
-        .into()
-    } else {
-        text(elem_type.clone())
-            .size(11)
-            .color(Color::from_rgb(0.90, 0.90, 0.92))
-            .into()
-    };
+                .color(Color::from_rgb(0.90, 0.90, 0.92))
+                .into()
+        };
     col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
     col = col.push(thin_sep(border_c));
 
@@ -4898,6 +5093,389 @@ fn view_drawing_properties<'a>(
         col = col.push(drawing_stroke_color_row(current_color, muted));
     }
     col.into()
+}
+
+/// Properties section for a single hierarchical child sheet.
+/// Shows read-only info (Name / File / Position / Size) plus
+/// editable Border Colour, Fill Colour and Line Width with a
+/// Reset-to-default button. Colour edits open an iced_aw
+/// ColorPicker overlay anchored to a swatch button.
+fn view_child_sheet_properties<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let Some(child_sheet) = ctx.selected_child_sheet.as_ref() else {
+        return Column::new().width(Length::Fill).into();
+    };
+
+    let id = child_sheet.uuid;
+    let name = child_sheet.name.clone();
+    let filename = child_sheet.filename.clone();
+    let position = format!(
+        "{:.2}, {:.2}",
+        child_sheet.position.x, child_sheet.position.y
+    );
+    let size = format!(
+        "{:.1} x {:.1} mm",
+        child_sheet.size.0, child_sheet.size.1
+    );
+
+    let stroke_width = child_sheet.stroke_width;
+    let stroke_color = child_sheet.stroke_color;
+    let fill_color = child_sheet.fill_color;
+    let border_picker_open = ctx.child_sheet_border_picker_open;
+    let fill_picker_open = ctx.child_sheet_fill_picker_open;
+    let border_advanced_open = ctx.child_sheet_border_advanced_open;
+    let fill_advanced_open = ctx.child_sheet_fill_advanced_open;
+    let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // ── Properties (read-only identity / geometry) ──
+    col = col.push(collapsible_section(
+        "sel_child_sheet_props",
+        "Properties",
+        &ctx.collapsed_sections,
+        muted,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(prop_kv_row("Name", &name, muted, primary));
+            c = c.push(prop_kv_row("File", &filename, muted, primary));
+            c = c.push(prop_kv_row("Position", &position, muted, primary));
+            c = c.push(prop_kv_row("Size", &size, muted, primary));
+            c
+        },
+    ));
+
+    // ── Style (editable) ──
+    col = col.push(collapsible_section(
+        "sel_child_sheet_style",
+        "Style",
+        &ctx.collapsed_sections,
+        muted,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(child_sheet_color_row(
+                "Border Colour",
+                id,
+                stroke_color,
+                border_picker_open,
+                border_advanced_open,
+                muted,
+                border_c,
+                /* is_border */ true,
+            ));
+            c = c.push(child_sheet_color_row(
+                "Fill Colour",
+                id,
+                fill_color,
+                fill_picker_open,
+                fill_advanced_open,
+                muted,
+                border_c,
+                /* is_border */ false,
+            ));
+            c = c.push(child_sheet_stroke_width_row(
+                id,
+                stroke_width,
+                stroke_width_buf,
+                muted,
+                border_c,
+            ));
+            c = c.push(
+                container(
+                    iced::widget::button(
+                        text("Reset to Default")
+                            .size(10)
+                            .color(Color::from_rgb(0.92, 0.92, 0.94)),
+                    )
+                    .padding([4, 10])
+                    .on_press(PanelMsg::ResetChildSheetStyle(id))
+                    .style(iced::widget::button::secondary),
+                )
+                .padding([6, 8])
+                .width(Length::Fill),
+            );
+            c
+        },
+    ));
+
+    col.into()
+}
+
+/// One swatch row in the child-sheet Style section.
+///
+/// Click flow:
+///   1. Click swatch → expands an inline preset palette panel below
+///      the row (full panel width, like the canvas-font popup) with
+///      a 12-colour grid plus "Custom…" and (when an override is
+///      active) "Reset to Default".
+///   2. Click the swatch again to collapse, or click "Custom…" to
+///      switch to the iced_aw HSV / RGB ColorPicker overlay.
+///
+/// Both the palette pick and the advanced-picker submit reuse the
+/// same `EditChildSheet*Color` message so engine command + undo/redo
+/// round-trip is identical for both paths.
+fn child_sheet_color_row<'a>(
+    label: &'a str,
+    sheet_id: uuid::Uuid,
+    current: Option<signex_types::schematic::StrokeColor>,
+    show_picker: bool,
+    show_advanced: bool,
+    muted: Color,
+    border_c: Color,
+    is_border: bool,
+) -> Element<'a, PanelMsg> {
+    let preview_color = current
+        .map(|c| {
+            iced::Color::from_rgba(
+                c.r as f32 / 255.0,
+                c.g as f32 / 255.0,
+                c.b as f32 / 255.0,
+                c.a as f32 / 255.0,
+            )
+        })
+        .unwrap_or(iced::Color::from_rgba(0.5, 0.5, 0.5, 0.4));
+    let label_text = if current.is_some() {
+        format!(
+            "#{:02X}{:02X}{:02X}",
+            current.unwrap().r,
+            current.unwrap().g,
+            current.unwrap().b
+        )
+    } else {
+        "Default".to_string()
+    };
+
+    let toggle_msg = if is_border {
+        PanelMsg::ToggleChildSheetBorderPicker(sheet_id)
+    } else {
+        PanelMsg::ToggleChildSheetFillPicker(sheet_id)
+    };
+
+    // Swatch button: 18x18 colour fill + small hex / "Default" caption.
+    let swatch_color = preview_color;
+    let swatch: Element<'a, PanelMsg> = container(Space::new())
+        .width(18)
+        .height(18)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(swatch_color)),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 2.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into();
+
+    let swatch_button = iced::widget::button(
+        row![
+            swatch,
+            text(label_text).size(10).color(Color::from_rgb(0.90, 0.90, 0.92)),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 6])
+    .on_press(toggle_msg)
+    .style(iced::widget::button::secondary);
+
+    // Build the per-channel "submit colour" message.
+    let make_submit = move |c: iced::Color| -> PanelMsg {
+        if is_border {
+            PanelMsg::EditChildSheetBorderColor(sheet_id, c)
+        } else {
+            PanelMsg::EditChildSheetFillColor(sheet_id, c)
+        }
+    };
+
+    // ── Advanced (HSV / RGB) overlay ──
+    if show_advanced {
+        let picker = iced_aw::ColorPicker::new(
+            true,
+            preview_color,
+            swatch_button,
+            PanelMsg::CancelChildSheetColorPicker,
+            move |c| make_submit(c),
+        );
+        return container(
+            row![
+                text(label.to_string()).size(10).color(muted).width(96),
+                picker,
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill)
+        .into();
+    }
+
+    // The header row (label + swatch button) is always shown.
+    let header = container(
+        row![
+            text(label.to_string()).size(10).color(muted).width(96),
+            swatch_button,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill);
+
+    if !show_picker {
+        return header.into();
+    }
+
+    // ── Inline preset palette (rendered below the row, full width) ──
+    let presets: [(&str, [u8; 3]); 12] = [
+        ("Black",       [0x00, 0x00, 0x00]),
+        ("Dark Gray",   [0x40, 0x40, 0x40]),
+        ("Gray",        [0x80, 0x80, 0x80]),
+        ("White",       [0xFF, 0xFF, 0xFF]),
+        ("Red",         [0xC0, 0x39, 0x2B]),
+        ("Orange",      [0xE6, 0x7E, 0x22]),
+        ("Yellow",      [0xF1, 0xC4, 0x0F]),
+        ("Olive",       [0xB4, 0xA5, 0x58]),
+        ("Green",       [0x27, 0xAE, 0x60]),
+        ("Teal",        [0x16, 0xA0, 0x85]),
+        ("Blue",        [0x29, 0x80, 0xB9]),
+        ("Purple",      [0x8E, 0x44, 0xAD]),
+    ];
+
+    // 6 columns × 2 rows of preset swatches; each cell stretches
+    // proportionally so the grid always fills the available panel
+    // width (no clipping in narrow docks).
+    let mut palette_grid: Column<'a, PanelMsg> = Column::new().spacing(4);
+    for chunk in presets.chunks(6) {
+        let mut r: iced::widget::Row<'a, PanelMsg> = iced::widget::Row::new().spacing(4);
+        for (_name, rgb) in chunk {
+            let c = iced::Color::from_rgb(
+                rgb[0] as f32 / 255.0,
+                rgb[1] as f32 / 255.0,
+                rgb[2] as f32 / 255.0,
+            );
+            let swatch_btn = iced::widget::button(Space::new())
+                .width(Length::Fill)
+                .height(22)
+                .padding(0)
+                .on_press(make_submit(c))
+                .style(move |_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Background::Color(c)),
+                    border: Border {
+                        width: 1.0,
+                        color: border_c,
+                        radius: 2.0.into(),
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            r = r.push(swatch_btn);
+        }
+        palette_grid = palette_grid.push(r);
+    }
+
+    let mut palette_col: Column<'a, PanelMsg> =
+        Column::new().spacing(6).padding([6, 8]).width(Length::Fill);
+    palette_col = palette_col.push(text("Preset Colours").size(10).color(muted));
+    palette_col = palette_col.push(palette_grid);
+
+    let mut action_row: iced::widget::Row<'a, PanelMsg> =
+        iced::widget::Row::new().spacing(4).width(Length::Fill);
+    action_row = action_row.push(
+        iced::widget::button(
+            text("Custom…")
+                .size(10)
+                .color(Color::from_rgb(0.92, 0.92, 0.94)),
+        )
+        .padding([4, 10])
+        .width(Length::Fill)
+        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
+        .style(iced::widget::button::secondary),
+    );
+    if current.is_some() {
+        action_row = action_row.push(
+            iced::widget::button(
+                text("Reset to Default")
+                    .size(10)
+                    .color(Color::from_rgb(0.92, 0.92, 0.94)),
+            )
+            .padding([4, 10])
+            .width(Length::Fill)
+            .on_press(PanelMsg::ResetChildSheetStyle(sheet_id))
+            .style(iced::widget::button::secondary),
+        );
+    }
+    palette_col = palette_col.push(action_row);
+
+    let palette_panel = container(palette_col)
+        .width(Length::Fill)
+        .style(move |_t: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgb(0.16, 0.16, 0.18))),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        });
+
+    column![header, container(palette_panel).padding([0, 8])]
+        .spacing(4)
+        .width(Length::Fill)
+        .into()
+}
+
+/// Numeric stroke-width row for the child-sheet Style section.
+fn child_sheet_stroke_width_row<'a>(
+    sheet_id: uuid::Uuid,
+    stored_value: f64,
+    buffered: Option<String>,
+    muted: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let display = match buffered {
+        Some(s) => s,
+        None => format!("{:.4}", stored_value)
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string(),
+    };
+    let display_for_input = display.clone();
+    let input = iced::widget::text_input("0.1524", &display_for_input)
+        .size(11)
+        .padding(4)
+        .width(120)
+        .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
+        .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
+        .style(move |_theme: &Theme, _status| iced::widget::text_input::Style {
+            background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 2.0.into(),
+            },
+            icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
+            placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
+            value: Color::from_rgb(0.95, 0.95, 0.96),
+            selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
+        });
+
+    container(
+        row![
+            text("Line Width (mm)").size(10).color(muted).width(96),
+            input,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
 }
 
 /// Buffer-backed numeric row — survives empty / partial input so the

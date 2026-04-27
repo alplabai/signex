@@ -2,16 +2,16 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use signex_types::property::PcbProperty;
 use signex_types::pcb::{
-    BoardGraphic, BoardText, DrillDef, Footprint, FpGraphic, LayerDef, NetDef, Pad, PadNet,
-    PadShape, PadType, PcbBoard, PcbSetup, Point, Segment, Via, ViaType, Zone,
-    PCB_COINCIDENCE_EPS, PCB_DEFAULT_CLEARANCE_MM, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
-    PCB_DEFAULT_PAD_SIZE_MM, PCB_DEFAULT_TEXT_SIZE_MM, PCB_DEFAULT_THICKNESS_MM,
-    PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM,
-    PCB_GRID_MM, PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM, PCB_TRACK_MIN_MM,
-    PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, PCB_ZONE_MIN_THICKNESS_MM,
+    BoardGraphic, BoardText, DrillDef, Footprint, FpGraphic, LayerDef, NetDef, PCB_COINCIDENCE_EPS,
+    PCB_DEFAULT_CLEARANCE_MM, PCB_DEFAULT_GRAPHIC_WIDTH_MM, PCB_DEFAULT_PAD_SIZE_MM,
+    PCB_DEFAULT_TEXT_SIZE_MM, PCB_DEFAULT_THICKNESS_MM, PCB_DEFAULT_TRACE_WIDTH_MM,
+    PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PCB_GRID_MM, PCB_THERMAL_BRIDGE_MM,
+    PCB_THERMAL_GAP_MM, PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM,
+    PCB_ZONE_MIN_THICKNESS_MM, Pad, PadNet, PadShape, PadType, PcbBoard, PcbSetup, Point, Segment,
+    Via, ViaType, Zone,
 };
+use signex_types::property::PcbProperty;
 
 use crate::error::ParseError;
 use crate::sexpr::{self, SExpr};
@@ -642,14 +642,26 @@ fn parse_footprint_node(fp: &SExpr) -> Footprint {
             let (pad_pos, _) = parse_at(p);
             let size = if let Some(sz) = p.find("size") {
                 Point {
-                    x: sz.arg(0).and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
-                    y: sz.arg(1).and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
+                    x: sz
+                        .arg(0)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
+                    y: sz
+                        .arg(1)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(PCB_DEFAULT_PAD_SIZE_MM),
                 }
             } else {
-                Point { x: PCB_DEFAULT_PAD_SIZE_MM, y: PCB_DEFAULT_PAD_SIZE_MM }
+                Point {
+                    x: PCB_DEFAULT_PAD_SIZE_MM,
+                    y: PCB_DEFAULT_PAD_SIZE_MM,
+                }
             };
             let drill = p.find("drill").map(|d| DrillDef {
-                diameter: d.first_arg().and_then(|s| s.parse().ok()).unwrap_or(PCB_DEFAULT_VIA_DRILL_MM),
+                diameter: d
+                    .first_arg()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(PCB_DEFAULT_VIA_DRILL_MM),
                 shape: String::new(),
             });
             let pad_layers: Vec<String> = if let Some(layers) = p.find("layers") {
@@ -992,12 +1004,12 @@ pub fn parse_footprint_file(content: &str) -> Result<Footprint, ParseError> {
 
 #[cfg(test)]
 mod tests {
-        use super::*;
+    use super::*;
 
-        #[test]
-        fn parse_footprint_property_metadata() {
-                let footprint = parse_footprint_file(
-                        r#"(footprint "Resistor_SMD:R_0603"
+    #[test]
+    fn parse_footprint_property_metadata() {
+        let footprint = parse_footprint_file(
+            r#"(footprint "Resistor_SMD:R_0603"
     (layer "F.Cu")
     (at 10 20 90)
     (uuid "00000000-0000-0000-0000-000000000010")
@@ -1018,22 +1030,22 @@ mod tests {
         (effects (font (size 1.2 1.2) (thickness 0.15)))
     )
 )"#,
-                )
-                .unwrap();
+        )
+        .unwrap();
 
-                assert_eq!(footprint.reference, "R1");
-                assert_eq!(footprint.value, "10k");
-                assert_eq!(footprint.properties.len(), 3);
-                let mpn = footprint
-                        .properties
-                        .iter()
-                        .find(|property| property.key == "MPN")
-                        .unwrap();
-                assert_eq!(mpn.value, "RC0603FR-0710KL");
-                assert_eq!(mpn.position, Some(Point { x: 1.0, y: 3.0 }));
-                assert_eq!(mpn.rotation, 180.0);
-                assert_eq!(mpn.layer.as_deref(), Some("Cmts.User"));
-                assert_eq!(mpn.font_size, Some(1.2));
-                assert!(mpn.hidden);
-        }
+        assert_eq!(footprint.reference, "R1");
+        assert_eq!(footprint.value, "10k");
+        assert_eq!(footprint.properties.len(), 3);
+        let mpn = footprint
+            .properties
+            .iter()
+            .find(|property| property.key == "MPN")
+            .unwrap();
+        assert_eq!(mpn.value, "RC0603FR-0710KL");
+        assert_eq!(mpn.position, Some(Point { x: 1.0, y: 3.0 }));
+        assert_eq!(mpn.rotation, 180.0);
+        assert_eq!(mpn.layer.as_deref(), Some("Cmts.User"));
+        assert_eq!(mpn.font_size, Some(1.2));
+        assert!(mpn.hidden);
+    }
 }
