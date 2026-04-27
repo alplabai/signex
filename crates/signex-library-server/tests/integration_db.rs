@@ -60,20 +60,6 @@ fn fixture_row(internal_pn: &str) -> ComponentRow {
         created: Utc::now(),
         updated: Utc::now(),
         content_hash: [0u8; 32],
-    };
-    rev.refresh_content_hash().unwrap();
-    rev
-}
-
-fn fixture_component() -> Component {
-    Component {
-        uuid: Uuid::now_v7(),
-        internal_pn: InternalPn::new("R0805_10k"),
-        class: ComponentClass::new("resistor"),
-        category: std::path::PathBuf::from("Passives/Resistors/0805"),
-        family: None,
-        revisions: vec![fixture_revision(Version::new(1, 0))],
-        head: Version::new(1, 0),
     }
 }
 

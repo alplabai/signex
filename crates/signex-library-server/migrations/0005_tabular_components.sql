@@ -1,46 +1,40 @@
--- 0005_tabular_components.sql
+-- v0.9-refactor-2 (WS-3 / WS-4) — DBLib row model.
 --
--- v0.9-refactor-2 step 3.1 — DBLib row model. Replaces the v0.9-original
--- `revisions` + `components` tables with a generic component_rows table
--- (`library_id`, `table_name`, `row_id`, `internal_pn`, `payload` JSON,
--- `created_at`, `updated_at`) plus `component_tables` for per-table config.
+-- Per `v0.9-refactor-2-plan.md` §2.1, components are now rows inside category
+-- tables (Altium DBLib parity). The legacy per-revision schema in
+-- `0001_initial.sql` and `004_primitives.sql` (components / revisions /
+-- parameters / suppliers) is superseded by a single `component_rows` table
+-- whose payload is the JSON-serialised `ComponentRow` struct from
+-- `signex-library`.
 --
--- Schema parity with the LocalGit TSV layout (see `signex_library::tables`)
--- — the same `ComponentRow` JSON serialises into the `payload` column on
--- both backends.
+-- Layout intentionally mirrors the WS-D primitives tables: `(library_id, …)`
+-- is the partition key, the row's `row_id` (UUIDv7 stringified) is the
+-- intra-table identifier, and `payload` carries the canonical JSON. The
+-- `table_name` column groups rows by category (e.g. "resistors",
+-- "Discrete_Passives") matching the LocalGit `tables/<name>.tsv` filename
+-- stem from `Manifest::table_for_class`.
 --
--- Portable across SQLite + Postgres: only TEXT columns are used and the
--- `payload` JSON is stored as TEXT (not jsonb) so SQLite tests stay
--- representative of production behaviour.
---
--- The `revisions` and `components` tables are dropped here — they were
--- introduced by `0001_initial.sql` for the per-component-revision-chain
--- model that the DBLib refactor supersedes. SQLite's `DROP TABLE IF EXISTS`
--- is a no-op when the tables are absent (e.g., on a clean install where
--- v0.9-refactor-2 is the first build to ever touch the DB).
+-- Schema portability: same DDL applies to SQLite and Postgres — TEXT for
+-- UUIDs, JSON, and timestamps. Postgres-native `uuid`/`jsonb` are deferred
+-- until the cross-backend test matrix is in CI.
 
-DROP TABLE IF EXISTS revisions;
-DROP TABLE IF EXISTS components;
-
-CREATE TABLE component_rows (
-    library_id      TEXT NOT NULL,
-    table_name      TEXT NOT NULL,
-    row_id          TEXT NOT NULL,
-    internal_pn     TEXT NOT NULL,
-    payload         TEXT NOT NULL,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS component_rows (
+    library_id     TEXT NOT NULL,
+    table_name     TEXT NOT NULL,
+    row_id         TEXT NOT NULL,
+    internal_pn    TEXT NOT NULL,
+    payload        TEXT NOT NULL,           -- full ComponentRow JSON
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
     PRIMARY KEY (library_id, table_name, row_id)
 );
 
-CREATE INDEX component_rows_pn_idx
-    ON component_rows (library_id, internal_pn);
-CREATE INDEX component_rows_table_idx
-    ON component_rows (library_id, table_name);
+-- The picker UI sorts rows alphabetically by internal_pn within a table; a
+-- composite index over (library_id, table_name, internal_pn) covers that
+-- access pattern without forcing a full scan + in-memory sort.
+CREATE INDEX IF NOT EXISTS idx_component_rows_pn
+    ON component_rows(library_id, table_name, internal_pn);
 
-CREATE TABLE component_tables (
-    library_id      TEXT NOT NULL,
-    name            TEXT NOT NULL,
-    classes_json    TEXT NOT NULL,
-    PRIMARY KEY (library_id, name)
-);
+-- `GET /tables` runs `SELECT DISTINCT table_name FROM component_rows
+-- WHERE library_id = ?`; the index above starts on `library_id` so the
+-- distinct prefix scan is index-only.
