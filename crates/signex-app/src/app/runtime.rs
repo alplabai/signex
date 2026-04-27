@@ -78,28 +78,22 @@ impl Signex {
                     .map(|entry| {
                         let resolved = p.data.resolve_library_path(entry);
                         let mounted_lib = self.library.library_at(&resolved);
-                        let (display_name, components) = match mounted_lib {
-                            Some(lib) => (
-                                lib.display_name.clone(),
-                                lib.cached_components
-                                    .iter()
-                                    .map(|c| (c.internal_pn.as_str().to_string(), c.mpn.clone()))
-                                    .collect(),
-                            ),
-                            None => {
-                                let fallback = entry
-                                    .path
-                                    .file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .map(str::to_string)
-                                    .unwrap_or_else(|| entry.path.display().to_string());
-                                (fallback, Vec::new())
-                            }
+                        let display_name = match mounted_lib {
+                            Some(lib) => lib.display_name.clone(),
+                            None => entry
+                                .path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .map(str::to_string)
+                                .unwrap_or_else(|| entry.path.display().to_string()),
                         };
+                        let (symbols, footprints, sims) = scan_library_primitives(&resolved);
                         crate::panels::LibraryNodeInfo {
                             display_name,
                             root: resolved,
-                            components,
+                            symbols,
+                            footprints,
+                            sims,
                             mounted: mounted_lib.is_some(),
                         }
                     })
@@ -470,4 +464,65 @@ impl Signex {
             .clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
     }
+}
+
+/// Scan a library directory for standalone primitive files. Returns
+/// `(symbols, footprints, sims)` triples — each `(stem, absolute_path)`.
+/// Missing subdirectories are silently treated as empty so a fresh
+/// library doesn't error; non-UTF-8 filenames and dotfiles are skipped.
+///
+/// Order is filename-stem-sorted so the project tree stays stable
+/// across sessions (read_dir order is platform-dependent on Windows).
+fn scan_library_primitives(
+    root: &std::path::Path,
+) -> (
+    Vec<(String, std::path::PathBuf)>,
+    Vec<(String, std::path::PathBuf)>,
+    Vec<(String, std::path::PathBuf)>,
+) {
+    let symbols = scan_dir(&root.join("symbols"), "snxsym");
+    let footprints = scan_dir(&root.join("footprints"), "snxfpt");
+    let sims = scan_dir(&root.join("sims"), "snxsim");
+    (symbols, footprints, sims)
+}
+
+fn scan_dir(dir: &std::path::Path, want_ext: &str) -> Vec<(String, std::path::PathBuf)> {
+    let read_iter = match std::fs::read_dir(dir) {
+        Ok(it) => it,
+        Err(_) => return Vec::new(),
+    };
+    let mut out: Vec<(String, std::path::PathBuf)> = Vec::new();
+    for entry in read_iter.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = match path.file_name().and_then(|s| s.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        // Skip dotfiles, swap files, backup files.
+        if name.starts_with('.')
+            || name.ends_with(".swp")
+            || name.ends_with(".bak")
+            || name.ends_with('~')
+        {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default();
+        if ext != want_ext {
+            continue;
+        }
+        let stem = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        out.push((stem, path));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
 }

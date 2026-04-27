@@ -146,6 +146,47 @@ pub enum LibraryMessage {
         path: PathBuf,
         msg: PrimitiveEditorMsg,
     },
+    // ── Library Browser tab ──────────────────────────────────────────
+    /// Open the Library Browser tab for `.snxlib` at `library_path`.
+    /// Mounts the library if not already mounted, then pushes a
+    /// `TabKind::LibraryBrowser(path)` tab (or activates the existing
+    /// one when the path is already open).
+    OpenLibraryBrowser(PathBuf),
+    /// Active table change inside a Library Browser tab — clicked one
+    /// of the category tabs in the strip.
+    BrowserSelectTable {
+        library_path: PathBuf,
+        table: String,
+    },
+    /// Search-buffer edit inside a Library Browser tab.
+    BrowserSearchChanged {
+        library_path: PathBuf,
+        value: String,
+    },
+    /// Row click inside the browser grid — selects the row, drives
+    /// the side preview pane.
+    BrowserSelectRow {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
+    /// User clicked the Add Component button (inside the empty-state
+    /// CTA, the action row, or the "+" tab). Pre-sets the New
+    /// Component modal to the active library + table.
+    BrowserAddComponent {
+        library_path: PathBuf,
+        /// Pre-selected destination table — `None` from the empty
+        /// state CTA when the library has no tables yet.
+        table: Option<String>,
+    },
+    /// User clicked Delete Selected on the browser action row. Phase 1
+    /// fires `delete_row` immediately without a confirm modal — the
+    /// confirm modal lands in Phase 2.
+    BrowserDeleteRow {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
 }
 
 /// User choice from the close-library confirmation modal.

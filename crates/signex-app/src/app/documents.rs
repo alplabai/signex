@@ -35,6 +35,13 @@ pub enum TabKind {
     /// lives in [`crate::app::DocumentState::footprint_editors`] keyed
     /// by the same path that lives on `TabInfo.path`.
     FootprintEditor(PathBuf),
+    /// `.snxlib` opened as a Library Browser tab. The browser is the
+    /// primary surface for working with library rows: tables on the
+    /// left, read-only Symbol+Footprint preview on the right. Per-tab
+    /// state lives in
+    /// [`crate::library::state::LibraryState::library_browsers`]
+    /// keyed by the same path that lives on `TabInfo.path`.
+    LibraryBrowser(PathBuf),
 }
 
 impl TabKind {
@@ -62,6 +69,15 @@ impl TabKind {
     pub fn as_footprint_editor(&self) -> Option<&PathBuf> {
         match self {
             TabKind::FootprintEditor(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// `Some(path)` if this tab is a Library Browser. The path is the
+    /// `.snxlib` directory the browser is bound to.
+    pub fn as_library_browser(&self) -> Option<&PathBuf> {
+        match self {
+            TabKind::LibraryBrowser(p) => Some(p),
             _ => None,
         }
     }

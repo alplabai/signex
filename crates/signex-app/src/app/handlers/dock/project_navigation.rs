@@ -666,21 +666,15 @@ impl Signex {
             return Ok(());
         }
 
-        // `.snxlib/` is a directory package, not a document. Project
-        // libraries auto-mount on project open; double-clicking the
-        // row expands the matching entry in the Library left-dock
-        // panel so the user can see its tables + rows.
+        // `.snxlib/` is a directory package, not a document. Open it
+        // as a Library Browser tab in the main canvas area — the
+        // browser is the primary surface for working with library rows
+        // (table grid + symbol/footprint preview).
         if filename.ends_with(".snxlib") {
-            if let Some(idx) = self
-                .library
-                .open_libraries
-                .iter()
-                .position(|lib| lib.root == file_path)
-            {
-                if let Some(slot) = self.library.expanded.get_mut(idx) {
-                    *slot = true;
-                }
-            }
+            // The browser handler returns a Task; in this synchronous
+            // path we can drop it because mount + open are all
+            // immediate-side-effecting (no async file dialogs etc.).
+            let _ = self.handle_open_library_browser(file_path);
             return Ok(());
         }
 

@@ -70,6 +70,52 @@ impl EditorAddress {
     }
 }
 
+/// Per-browser-tab state — owned by a single
+/// `TabKind::LibraryBrowser(path)` tab, keyed by the same `path` on
+/// `LibraryState::library_browsers`. Phase 1 is read-only-plus-modal-
+/// edit: the grid renders rows verbatim, click selects a row,
+/// double-click is reserved for the upcoming row-edit modal (Phase 2).
+#[derive(Debug, Clone)]
+pub struct LibraryBrowserState {
+    pub library_path: PathBuf,
+    /// Which category tab is active (filename stem of `tables/<name>.tsv`).
+    /// `None` when a library has no tables yet (fresh library) — the
+    /// view shows an empty-state panel with an "Add Component" CTA.
+    pub active_table: Option<String>,
+    /// Currently selected row in the active table — drives the side
+    /// preview pane.
+    pub selected_row: Option<RowId>,
+    /// Filter text applied to row PN / MPN / manufacturer.
+    pub search: String,
+    /// Modal state for "Edit Component Details" (Phase 1 = read-only
+    /// preview; Phase 2 = full editor). For now `None` always.
+    #[allow(dead_code)]
+    pub edit_modal: Option<EditRowModalState>,
+}
+
+impl LibraryBrowserState {
+    pub fn new(library_path: PathBuf) -> Self {
+        Self {
+            library_path,
+            active_table: None,
+            selected_row: None,
+            search: String::new(),
+            edit_modal: None,
+        }
+    }
+}
+
+/// "Edit Component Details" modal state. Phase 1 keeps this as a stub
+/// — the modal is never opened; rows are read-only in the grid.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct EditRowModalState {
+    pub table: String,
+    pub row_id: RowId,
+    /// Working copy — committed to the row on Save.
+    pub draft: ComponentRow,
+}
+
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
@@ -110,6 +156,10 @@ pub struct LibraryState {
     /// registry; this struct owns the field.
     #[allow(dead_code)]
     pub template_registry: Arc<TemplateRegistry>,
+    /// Per-browser-tab state, keyed by `.snxlib` root path. One entry
+    /// per `TabKind::LibraryBrowser(path)` tab in the main window's
+    /// tab bar; insert on tab open, drop on tab close.
+    pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
 }
 
 impl Default for LibraryState {
@@ -129,7 +179,8 @@ impl Default for LibraryState {
             panel_search: String::new(),
             new_component: None,
             close_library_confirm: None,
-            set: LibrarySet::default(),
+            template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
+            library_browsers: HashMap::new(),
         }
     }
 }

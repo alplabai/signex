@@ -42,21 +42,13 @@ impl Signex {
             "snxsym" | "snxfpt" => {
                 let _ = self.handle_open_primitive(path);
             }
-            // `.snxlib/` is a directory package — mount it through the
-            // library subsystem and expand it in the Library panel.
+            // `.snxlib/` is a directory package — open it as a Library
+            // Browser tab in the main canvas area. The handler mounts
+            // the library if not already mounted and pushes the tab
+            // (or activates it if a tab for the same library is
+            // already open).
             "snxlib" => {
-                if let Err(e) = crate::library::commands::open_library(&mut self.library, path.clone()) {
-                    tracing::warn!(target: "signex::library", error = %e, path = %path.display(), "open_library failed");
-                } else if let Some(idx) = self
-                    .library
-                    .open_libraries
-                    .iter()
-                    .position(|lib| lib.root == path)
-                {
-                    if let Some(slot) = self.library.expanded.get_mut(idx) {
-                        *slot = true;
-                    }
-                }
+                let _ = self.handle_open_library_browser(path);
             }
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         }
