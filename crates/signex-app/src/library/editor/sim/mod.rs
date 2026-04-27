@@ -322,23 +322,22 @@ fn pin_node_row<'a>(
 mod tests {
     use super::*;
     use crate::library::messages::EditorMsg;
-    use crate::library::state::ComponentEditorState;
+    use crate::library::state::ComponentPreviewState;
     use signex_library::{
-        Component, ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
-        ParamMap, PlmReserved, PrimitiveRef, Revision, Version,
+        ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart,
+        ParamMap, PlmReserved, PrimitiveRef,
     };
     use std::path::PathBuf;
     use uuid::Uuid;
 
-    fn fixture_editor() -> ComponentEditorState {
+    fn fixture_editor() -> ComponentPreviewState {
         let lib_id = Uuid::new_v4();
-        let comp_id = Uuid::now_v7();
-        let rev = Revision {
-            version: Version::new(0, 1),
+        let row = ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("TEST_PN"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
             state: LifecycleState::Draft,
-            created: chrono::Utc::now(),
-            author: "test@example.com".into(),
-            message: "init".into(),
             symbol_ref: PrimitiveRef::new(lib_id, Uuid::new_v4()),
             footprint_ref: None,
             sim_ref: None,
@@ -346,24 +345,16 @@ mod tests {
             primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
             alternates: Vec::new(),
             supply: Vec::new(),
-            datasheet: DatasheetRef::default(),
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
         };
-        let comp = Component {
-            uuid: comp_id,
-            internal_pn: InternalPn::new("TEST_PN"),
-            class: ComponentClass::generic(),
-            category: PathBuf::from("Generic"),
-            family: None,
-            revisions: vec![rev],
-            head: Version::new(0, 1),
-        };
-        ComponentEditorState::from_head(PathBuf::from("/tmp/test.snxlib"), comp, false)
+        ComponentPreviewState::from_row(PathBuf::from("/tmp/test.snxlib"), "generics".into(), row)
     }
 
-    fn apply(editor: &mut ComponentEditorState, msg: EditorMsg) {
+    fn apply(editor: &mut ComponentPreviewState, msg: EditorMsg) {
         // Drive the same code path the dispatcher uses for inline edits.
         // `apply_inline_edit` is `pub(crate)` so the unit tests in this
         // module can exercise the SimSet*/SimBodyAction handlers
@@ -377,7 +368,7 @@ mod tests {
         let mut e = fixture_editor();
         assert!(e.sim.is_none());
         assert!(e.sim_body.is_none());
-        assert!(e.draft.sim_ref.is_none());
+        assert!(e.row.sim_ref.is_none());
 
         apply(&mut e, EditorMsg::SimSetEnabled(true));
         assert!(e.sim.is_some(), "enable should construct a SimModel");
@@ -385,10 +376,10 @@ mod tests {
             e.sim_body.is_some(),
             "enable should seed text_editor::Content"
         );
-        assert!(e.draft.sim_ref.is_some(), "enable should bind sim_ref");
+        assert!(e.row.sim_ref.is_some(), "enable should bind sim_ref");
         let bound_uuid = e.sim.as_ref().unwrap().uuid;
         assert_eq!(
-            e.draft.sim_ref.unwrap().uuid,
+            e.row.sim_ref.unwrap().uuid,
             bound_uuid,
             "sim_ref must point at the constructed SimModel"
         );
@@ -396,7 +387,7 @@ mod tests {
         apply(&mut e, EditorMsg::SimSetEnabled(false));
         assert!(e.sim.is_none(), "disable should clear sim");
         assert!(e.sim_body.is_none(), "disable should clear sim_body");
-        assert!(e.draft.sim_ref.is_none(), "disable should clear sim_ref");
+        assert!(e.row.sim_ref.is_none(), "disable should clear sim_ref");
     }
 
     /// WS-L: setting a pin-node mapping persists into

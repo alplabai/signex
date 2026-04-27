@@ -52,43 +52,40 @@ pub fn view<'a>(
         ShapePick(BodyShape::Custom),
     ];
     let shape_addr = address.clone();
-    let shape_picker = pick_list(
-        opts,
-        Some(ShapePick(body.shape)),
-        move |ShapePick(s)| LibraryMessage::EditorEvent {
+    let shape_picker = pick_list(opts, Some(ShapePick(body.shape)), move |ShapePick(s)| {
+        LibraryMessage::EditorEvent {
             library_path: shape_addr.library_path.clone(),
-            component_id: shape_addr.component_id,
+            table: shape_addr.table.clone(),
+            row_id: shape_addr.row_id,
             msg: EditorMsg::SetBodyShape(s),
-        },
-    )
+        }
+    })
     .text_size(11)
     .padding([4, 8]);
 
     // Numeric inputs — height_mm / offset_z_mm.
     let height_addr = address.clone();
-    let height_input = NumberInput::new(
-        &body.height_mm,
-        0.0_f32..=50.0_f32,
-        move |v: f32| LibraryMessage::EditorEvent {
+    let height_input = NumberInput::new(&body.height_mm, 0.0_f32..=50.0_f32, move |v: f32| {
+        LibraryMessage::EditorEvent {
             library_path: height_addr.library_path.clone(),
-            component_id: height_addr.component_id,
+            table: height_addr.table.clone(),
+            row_id: height_addr.row_id,
             msg: EditorMsg::SetBodyHeight(v),
-        },
-    )
+        }
+    })
     .step(0.1_f32)
     .padding(4)
     .width(Length::Fixed(96.0));
 
     let offset_addr = address.clone();
-    let offset_input = NumberInput::new(
-        &body.offset_z_mm,
-        -10.0_f32..=10.0_f32,
-        move |v: f32| LibraryMessage::EditorEvent {
+    let offset_input = NumberInput::new(&body.offset_z_mm, -10.0_f32..=10.0_f32, move |v: f32| {
+        LibraryMessage::EditorEvent {
             library_path: offset_addr.library_path.clone(),
-            component_id: offset_addr.component_id,
+            table: offset_addr.table.clone(),
+            row_id: offset_addr.row_id,
             msg: EditorMsg::SetBodyOffsetZ(v),
-        },
-    )
+        }
+    })
     .step(0.1_f32)
     .padding(4)
     .width(Length::Fixed(96.0));
@@ -199,7 +196,8 @@ fn color_row<'a>(
     let cycle_btn = button(container(text("Cycle").size(10).color(text_c)).padding([3, 8]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: address.library_path,
-            component_id: address.component_id,
+            table: address.table.clone(),
+            row_id: address.row_id,
             msg,
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {

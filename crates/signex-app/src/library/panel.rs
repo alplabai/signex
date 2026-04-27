@@ -498,4 +498,3 @@ fn menu_button_disabled<'a>(
         .width(Length::Fill)
         .into()
 }
-

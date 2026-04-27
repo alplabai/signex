@@ -31,26 +31,26 @@ pub fn view<'a>(
     let border = theme_ext::border_color(tokens);
 
     let attach_addr = address.clone();
-    let attach_btn = button(
-        container(text("Attach STEP…").size(11).color(iced::Color::WHITE)).padding([4, 12]),
-    )
-    .on_press(LibraryMessage::EditorEvent {
-        library_path: attach_addr.library_path,
-        component_id: attach_addr.component_id,
-        msg: EditorMsg::StepAttachDialog,
-    })
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    let attach_btn =
+        button(container(text("Attach STEP…").size(11).color(iced::Color::WHITE)).padding([4, 12]))
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: attach_addr.library_path,
+                table: attach_addr.table.clone(),
+                row_id: attach_addr.row_id,
+                msg: EditorMsg::StepAttachDialog,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.00, 0.47, 0.84,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
 
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
@@ -59,7 +59,8 @@ pub fn view<'a>(
                 button(container(text("Remove").size(10).color(text_c)).padding([3, 8]))
                     .on_press(LibraryMessage::EditorEvent {
                         library_path: remove_addr.library_path,
-                        component_id: remove_addr.component_id,
+                        table: remove_addr.table.clone(),
+                        row_id: remove_addr.row_id,
                         msg: EditorMsg::StepAttachRemove,
                     })
                     .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -82,7 +83,9 @@ pub fn view<'a>(
                 ]
                 .align_y(iced::Alignment::Center),
                 Space::new().height(4),
-                text(format!("File: {}", att.filename)).size(11).color(text_c),
+                text(format!("File: {}", att.filename))
+                    .size(11)
+                    .color(text_c),
                 text(format!(
                     "SHA-256: {}",
                     &att.content_hash[..16.min(att.content_hash.len())]
@@ -185,7 +188,9 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let lib_root = tmp.path();
         let att = stash_step(lib_root, b"hello", "X.step").expect("first stash");
-        let target = lib_root.join("step").join(format!("{}.step", att.content_hash));
+        let target = lib_root
+            .join("step")
+            .join(format!("{}.step", att.content_hash));
         assert!(target.exists());
         // Second call with same bytes should be a no-op (file
         // already exists; we don't overwrite).

@@ -867,8 +867,11 @@ impl Signex {
                     k,
                     super::super::state::WindowKind::ComponentEditor {
                         library_path,
-                        component_id,
-                    } if library_path == &ce.library_path && component_id == &ce.component_id
+                        table,
+                        row_id,
+                    } if library_path == &ce.library_path
+                        && table == &ce.table
+                        && row_id == &ce.row_id
                 )
             }),
             None => self.ui_state.windows.values().any(
@@ -904,7 +907,8 @@ impl Signex {
                 id,
                 super::super::state::WindowKind::ComponentEditor {
                     library_path: ce.library_path.clone(),
-                    component_id: ce.component_id,
+                    table: ce.table.clone(),
+                    row_id: ce.row_id,
                 },
             );
             // Component Editor windows don't need the

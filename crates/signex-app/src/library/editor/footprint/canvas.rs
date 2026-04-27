@@ -169,10 +169,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 };
                 let new_scale = (cstate.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
                 let actual_factor = new_scale / cstate.scale;
-                cstate.offset.x =
-                    cursor_pos.x - (cursor_pos.x - cstate.offset.x) * actual_factor;
-                cstate.offset.y =
-                    cursor_pos.y - (cursor_pos.y - cstate.offset.y) * actual_factor;
+                cstate.offset.x = cursor_pos.x - (cursor_pos.x - cstate.offset.x) * actual_factor;
+                cstate.offset.y = cursor_pos.y - (cursor_pos.y - cstate.offset.y) * actual_factor;
                 cstate.scale = new_scale;
                 self.cache.clear();
                 return Some(canvas::Action::capture());
@@ -203,7 +201,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         return Some(
                             canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
-                                component_id: self.address.component_id,
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
                                 msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
                             })
                             .and_capture(),
@@ -238,16 +237,15 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }
                         // Click-add at the press position (world coords
                         // were stashed in grab_offset_mm).
-                        return Some(canvas::Action::publish(
-                            LibraryMessage::EditorEvent {
-                                library_path: self.address.library_path.clone(),
-                                component_id: self.address.component_id,
-                                msg: EditorMsg::FootprintAddPad {
-                                    x_mm: drag.grab_offset_mm.0,
-                                    y_mm: drag.grab_offset_mm.1,
-                                },
+                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintAddPad {
+                                x_mm: drag.grab_offset_mm.0,
+                                y_mm: drag.grab_offset_mm.1,
                             },
-                        ));
+                        }));
                     }
                     if drag.moved {
                         // Final move position is already published per
@@ -279,24 +277,24 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     if drag.moved && drag.pad_idx != usize::MAX {
                         let new_x = world.0 - drag.grab_offset_mm.0;
                         let new_y = world.1 - drag.grab_offset_mm.1;
-                        return Some(canvas::Action::publish(
-                            LibraryMessage::EditorEvent {
-                                library_path: self.address.library_path.clone(),
-                                component_id: self.address.component_id,
-                                msg: EditorMsg::FootprintMovePad {
-                                    idx: drag.pad_idx,
-                                    x_mm: new_x,
-                                    y_mm: new_y,
-                                },
+                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintMovePad {
+                                idx: drag.pad_idx,
+                                x_mm: new_x,
+                                y_mm: new_y,
                             },
-                        ));
+                        }));
                     }
                 }
                 // Background hover — push the cursor position so the
                 // footer readout updates.
                 return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                     library_path: self.address.library_path.clone(),
-                    component_id: self.address.component_id,
+                    table: self.address.table.clone(),
+                    row_id: self.address.row_id,
                     msg: EditorMsg::FootprintCursorAt {
                         x_mm: world.0,
                         y_mm: world.1,
@@ -325,16 +323,28 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             let minor_step = 1.0_f32 * cstate.scale;
             let major_step = 5.0_f32 * cstate.scale;
             if minor_step >= 6.0 {
-                draw_grid(frame, bounds, cstate.offset, minor_step, Color {
-                    a: 0.10,
-                    ..self.grid_color
-                });
+                draw_grid(
+                    frame,
+                    bounds,
+                    cstate.offset,
+                    minor_step,
+                    Color {
+                        a: 0.10,
+                        ..self.grid_color
+                    },
+                );
             }
             if major_step >= 8.0 {
-                draw_grid(frame, bounds, cstate.offset, major_step, Color {
-                    a: 0.30,
-                    ..self.grid_color
-                });
+                draw_grid(
+                    frame,
+                    bounds,
+                    cstate.offset,
+                    major_step,
+                    Color {
+                        a: 0.30,
+                        ..self.grid_color
+                    },
+                );
             }
 
             // Origin crosshair — small + at world (0, 0).
@@ -388,12 +398,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if !self.state.layer_visibility.get(pad.primary_layer()) {
                     continue;
                 }
-                draw_pad(
-                    frame,
-                    cstate,
-                    pad,
-                    self.state.selected_pad == Some(idx),
-                );
+                draw_pad(frame, cstate, pad, self.state.selected_pad == Some(idx));
             }
         });
 
@@ -420,13 +425,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
     }
 }
 
-fn draw_grid(
-    frame: &mut canvas::Frame,
-    bounds: Rectangle,
-    offset: Point,
-    step: f32,
-    color: Color,
-) {
+fn draw_grid(frame: &mut canvas::Frame, bounds: Rectangle, offset: Point, step: f32, color: Color) {
     let stroke = Stroke::default().with_width(0.5).with_color(color);
     let mut x = offset.x.rem_euclid(step) - step;
     while x <= bounds.width + step {

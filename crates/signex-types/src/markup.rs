@@ -121,8 +121,7 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
         }
 
         if starts_with_ascii_ci(bytes, i, b"NET_NAME(")
-            && let Some((arg, next_index)) =
-                read_parenthesized(input, i + "NET_NAME(".len())
+            && let Some((arg, next_index)) = read_parenthesized(input, i + "NET_NAME(".len())
         {
             if let Some(value) = eval_net_name(arg.trim(), ctx) {
                 out.push_str(&value);

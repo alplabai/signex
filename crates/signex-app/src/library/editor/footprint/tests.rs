@@ -43,7 +43,9 @@ fn auto_fit_courtyard_tracks_pads() {
     let mut s = FootprintEditorState::empty();
     s.add_pad_at(-2.0, -1.0);
     s.add_pad_at(2.0, 1.0);
-    let c = s.courtyard_mm.expect("auto-fit should have produced a rect");
+    let c = s
+        .courtyard_mm
+        .expect("auto-fit should have produced a rect");
     assert!(c.min_x < -2.0);
     assert!(c.max_x > 2.0);
 }

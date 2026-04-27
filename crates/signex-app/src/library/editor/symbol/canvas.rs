@@ -320,10 +320,8 @@ impl<'a> SymbolCanvas<'a> {
         frame.fill(&canvas::Path::circle(tip, 2.5), stroke_color);
 
         // Pin number — between body_end and tip.
-        let num_pos = iced::Point::new(
-            (tip.x + body_end.x) * 0.5,
-            (tip.y + body_end.y) * 0.5 - 8.0,
-        );
+        let num_pos =
+            iced::Point::new((tip.x + body_end.x) * 0.5, (tip.y + body_end.y) * 0.5 - 8.0);
         frame.fill_text(canvas::Text {
             content: pin.number.clone(),
             position: num_pos,

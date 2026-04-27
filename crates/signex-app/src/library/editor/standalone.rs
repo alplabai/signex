@@ -455,9 +455,13 @@ fn view_footprint_canvas<'a>(
     // standalone primitive-editor envelope via `Element::map`. The
     // `EditorAddress` we stamp on the program is a sentinel — its
     // `library_path` field is the tab path (so dirty-tracking still
-    // resolves), and `component_id` is `Uuid::nil()` since standalone
-    // tabs don't carry a Component.
-    let address = crate::library::state::EditorAddress::new(editor.path.clone(), uuid::Uuid::nil());
+    // resolves), and the `table` / `row_id` are nil-shaped since
+    // standalone tabs don't carry a Component.
+    let address = crate::library::state::EditorAddress::new(
+        editor.path.clone(),
+        String::new(),
+        signex_library::RowId::from_uuid(uuid::Uuid::nil()),
+    );
     let prog = FootprintCanvas {
         state: &editor.state,
         address,

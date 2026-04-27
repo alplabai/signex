@@ -71,7 +71,7 @@ pub fn view<'a>(
             let is_selected = picker
                 .selected
                 .as_ref()
-                .map(|(p, c)| p == path && c.uuid == summary.uuid)
+                .map(|(p, c)| p == path && c.row_id == summary.row_id)
                 .unwrap_or(false);
             let row_bg = if is_selected {
                 Some(crate::styles::ti(tokens.hover))
@@ -85,10 +85,6 @@ pub fn view<'a>(
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
-                    text(format!("{}", summary.head))
-                        .size(11)
-                        .color(muted)
-                        .width(Length::Fixed(48.0)),
                     text(format!("{:?}", summary.state))
                         .size(11)
                         .color(muted)
