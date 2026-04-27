@@ -130,14 +130,15 @@ pub fn view<'a>(
         .iter()
         .find(|p| p.key == nc.class.as_str())
         .cloned();
-    let class_picker: Element<'_, LibraryMessage> =
-        pick_list(class_picks.clone(), selected_class_pick, |pick: ClassPick| {
-            LibraryMessage::NewComponentSetClass(ComponentClass::new(pick.key))
-        })
-        .placeholder("Select class…")
-        .padding(6)
-        .text_size(12)
-        .into();
+    let class_picker: Element<'_, LibraryMessage> = pick_list(
+        class_picks.clone(),
+        selected_class_pick,
+        |pick: ClassPick| LibraryMessage::NewComponentSetClass(ComponentClass::new(pick.key)),
+    )
+    .placeholder("Select class…")
+    .padding(6)
+    .text_size(12)
+    .into();
 
     // Category text input (WS-E) ─────────────────────────────
     let category_input = text_input("Passives/Resistors/0805", &nc.category)
@@ -146,14 +147,15 @@ pub fn view<'a>(
         .size(12);
 
     // Form layout ─────────────────────────────────────────────
-    let labelled = |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
-        column![
-            text(lbl).size(11).color(muted),
-            container(body).padding([2, 0])
-        ]
-        .spacing(4)
-        .into()
-    };
+    let labelled =
+        |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
+            column![
+                text(lbl).size(11).color(muted),
+                container(body).padding([2, 0])
+            ]
+            .spacing(4)
+            .into()
+        };
 
     let form = column![
         labelled("Internal PN", pn_input.into()),
@@ -190,17 +192,19 @@ pub fn view<'a>(
     } else {
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
-    let mut submit_btn = button(container(text("Create").size(11).color(submit_fg)).padding([4, 14]))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(submit_bg)),
-            text_color: submit_fg,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let mut submit_btn = button(
+        container(text("Create").size(11).color(submit_fg)).padding([4, 14]),
+    )
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(submit_bg)),
+        text_color: submit_fg,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
     if submit_enabled {
         submit_btn = submit_btn.on_press(LibraryMessage::NewComponentSubmit);
     }

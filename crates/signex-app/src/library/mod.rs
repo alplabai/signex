@@ -42,4 +42,6 @@ pub mod state;
 #[allow(unused_imports)]
 pub use messages::{EditorMsg, LibraryMessage, PickerMsg, SettingsMsg};
 #[allow(unused_imports)]
-pub use state::{ComponentEditorState, EditorTab, LibraryState, OpenLibrary, PickerState};
+pub use state::{
+    ComponentEditorState, ComponentPreviewState, LibraryState, OpenLibrary, PickerState, PreviewTab,
+};

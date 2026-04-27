@@ -53,16 +53,13 @@ impl Signex {
             ))),
             // WS-H: Project tree library wiring
             MenuMessage::AddComponentLibrary => {
-                let path = self
-                    .document_state
-                    .active_project
-                    .and_then(|id| {
-                        self.document_state
-                            .projects
-                            .iter()
-                            .find(|p| p.id == id)
-                            .map(|p| p.path.clone())
-                    });
+                let path = self.document_state.active_project.and_then(|id| {
+                    self.document_state
+                        .projects
+                        .iter()
+                        .find(|p| p.id == id)
+                        .map(|p| p.path.clone())
+                });
                 match path {
                     Some(path) => Some(self.update(Message::Library(
                         crate::library::LibraryMessage::CreateLibraryAt(path),

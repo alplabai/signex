@@ -2,15 +2,15 @@ use std::path::PathBuf;
 
 use signex_types::pcb::PcbBoard;
 
-// WS-I: tab-not-window
-// Identity payload for a Component Editor tab. Mirrors the
-// `WindowKind::ComponentEditor` undock target so the same `(library,
-// component)` pair routes through both the inline tab and the
-// detached-window cases without an extra translation step.
+// v0.9-refactor-2: DBLib model. Identity payload for a Component
+// Preview tab — `(library_path, table, row_id)` triple from
+// `EditorAddress`. The inline tab and any future undock case route
+// through the same triple.
 #[derive(Debug, Clone)]
 pub struct ComponentEditorTab {
     pub library_path: PathBuf,
-    pub component_id: signex_library::ComponentId,
+    pub table: String,
+    pub row_id: signex_library::RowId,
 }
 
 // WS-I: tab-not-window

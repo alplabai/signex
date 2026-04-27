@@ -1,15 +1,13 @@
-//! Datasheet picker widget — small pick_list + value control bound to
-//! the editor's working-copy `SharedSide.datasheet`. Used by the
-//! Overview tab.
+//! Datasheet tab — small pick_list + value control bound to
+//! `state.row.datasheet`. Standalone Component-Preview tab per
+//! `v0.9-refactor-2-plan.md` §11.5.
 //!
 //! Two modes:
 //!  * **URL** — plain text input. Sets `DatasheetRef::Url`.
 //!  * **Pinned PDF** — file picker. Hashes the bytes and sets
 //!    `DatasheetRef::HashPinned { hash, filename }`.
 //!
-//! The mode is derived from the working-copy `DatasheetRef` variant.
-//! The control therefore round-trips through serde without needing a
-//! UI-only "mode" field on the editor state.
+//! The mode is derived from the row's `DatasheetRef` variant.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
@@ -18,6 +16,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
+use super::super::state::{ComponentPreviewState, EditorAddress};
 
 /// Mode picker entries — drives both the visible pick_list and the
 /// inline message routing.
@@ -50,25 +49,27 @@ impl std::fmt::Display for DatasheetMode {
     }
 }
 
-/// Render the datasheet picker. The caller owns layout — this returns
-/// a single column ready to drop into a vertical stack alongside the
-/// other Overview-tab fields.
+/// Render the Datasheet tab. Reads / writes `state.row.datasheet`.
 pub fn view<'a>(
-    datasheet: Option<&'a DatasheetRef>,
+    state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
+    let datasheet = Some(&state.row.datasheet);
     let mode = DatasheetMode::from_ref(datasheet);
-    let mode_picker = pick_list(
-        DatasheetMode::ALL,
-        Some(mode),
-        move |m| LibraryMessage::EditorEvent {
-            window_id,
+    let lib_path_mode = address.library_path.clone();
+    let table_mode = address.table.clone();
+    let row_id = address.row_id;
+    let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
+        LibraryMessage::EditorEvent {
+            library_path: lib_path_mode.clone(),
+            table: table_mode.clone(),
+            row_id,
             msg: EditorMsg::DatasheetSetMode(m),
-        },
-    )
+        }
+    })
     .text_size(11)
     .padding([4, 8]);
 
@@ -80,8 +81,8 @@ pub fn view<'a>(
     .align_y(iced::Alignment::Center);
 
     let value_row: Element<'a, LibraryMessage> = match mode {
-        DatasheetMode::Url => view_url_input(datasheet, window_id),
-        DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, window_id),
+        DatasheetMode::Url => view_url_input(datasheet, address.clone()),
+        DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, address.clone()),
     };
 
     column![
@@ -109,18 +110,20 @@ pub fn view<'a>(
 
 fn view_url_input<'a>(
     datasheet: Option<&'a DatasheetRef>,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let url_value = match datasheet {
         Some(DatasheetRef::Url { url }) => url.clone(),
-        // When swapping back from Pinned mode the buffer starts empty —
-        // the previous URL is gone the moment the user uploaded. Phase
-        // 2.x can preserve a per-mode buffer if reviewers ask for it.
         _ => String::new(),
     };
+    let lib_path = address.library_path;
+    let table = address.table;
+    let row_id = address.row_id;
     text_input("https://example.com/datasheet.pdf", &url_value)
         .on_input(move |s| LibraryMessage::EditorEvent {
-            window_id,
+            library_path: lib_path.clone(),
+            table: table.clone(),
+            row_id,
             msg: EditorMsg::DatasheetSetUrl(s),
         })
         .padding([4, 8])
@@ -131,30 +134,31 @@ fn view_url_input<'a>(
 fn view_pinned_input<'a>(
     datasheet: Option<&'a DatasheetRef>,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let upload_btn = button(
-        container(text("Upload PDF…").size(11).color(iced::Color::WHITE)).padding([4, 14]),
-    )
-    .on_press(LibraryMessage::EditorEvent {
-        window_id,
-        msg: EditorMsg::DatasheetUploadDialog,
-    })
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    let upload_btn =
+        button(container(text("Upload PDF…").size(11).color(iced::Color::WHITE)).padding([4, 14]))
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: address.library_path.clone(),
+                table: address.table.clone(),
+                row_id: address.row_id,
+                msg: EditorMsg::DatasheetUploadDialog,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.00, 0.47, 0.84,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
 
     let summary: Element<'a, LibraryMessage> = match datasheet {
         Some(DatasheetRef::HashPinned { hash, filename }) => {
@@ -166,9 +170,7 @@ fn view_pinned_input<'a>(
             container(
                 column![
                     row![
-                        text(filename.clone())
-                            .size(11)
-                            .color(text_c),
+                        text(filename.clone()).size(11).color(text_c),
                         Space::new().width(Length::Fill),
                         text(short_hash).size(10).color(muted),
                     ]

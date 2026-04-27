@@ -243,8 +243,7 @@ impl Signex {
         // leaf icons share. Detect by icon + tree depth — the
         // Libraries group sits two levels below the project root
         // (path = `[project_idx, libraries_idx, library_idx]`).
-        let is_library_node =
-            matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
+        let is_library_node = matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
         let is_openable_leaf = !is_library_node
             && matches!(
                 node.icon,
@@ -3669,10 +3668,7 @@ impl Signex {
         // `WindowKind::ComponentEditor` branch in `view()` when the
         // user undocks the tab into its own OS window.
         if is_main
-            && let Some(active_tab) = self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(editor_id) = active_tab.kind.as_component_editor()
         {
             let tokens = &self.document_state.panel_ctx.tokens;
@@ -4483,12 +4479,9 @@ impl Signex {
         // Opened by File ▸ Library ▸ New Component… (and, post-WS-H,
         // from the project tree's library-node right-click menu).
         if let Some(nc) = self.library.new_component.as_ref() {
-            let card = crate::library::new_component::view(
-                &self.library,
-                nc,
-                &document.panel_ctx.tokens,
-            )
-            .map(Message::Library);
+            let card =
+                crate::library::new_component::view(&self.library, nc, &document.panel_ctx.tokens)
+                    .map(Message::Library);
             let backdrop = container(card)
                 .width(Length::Fill)
                 .height(Length::Fill)
