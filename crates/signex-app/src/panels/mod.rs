@@ -276,6 +276,20 @@ pub struct PanelContext {
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
+    /// The live ChildSheet matching `selected_uuid` when a single
+    /// hierarchical sheet is selected. Powers the editable
+    /// border/fill colour pickers and stroke-width input.
+    pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// Whether the border-colour picker overlay is open for the
+    /// currently-selected child sheet.
+    pub child_sheet_border_picker_open: bool,
+    /// Whether the fill-colour picker overlay is open for the
+    /// currently-selected child sheet.
+    pub child_sheet_fill_picker_open: bool,
+    /// Transient text-input buffer for the child sheet's stroke-width
+    /// numeric field. `None` means "show the live value formatted";
+    /// `Some(s)` keeps half-typed strings between rerenders.
+    pub child_sheet_stroke_width_buf: Option<String>,
     /// Component search filter text.
     pub component_filter: String,
     /// Which sections are collapsed (by section name key).
@@ -582,6 +596,24 @@ pub enum PanelMsg {
     /// best-effort and fires UpdateDrawingEdit when the value is a
     /// valid f64.
     DrawingFieldTyping(DrawingFieldId, String),
+    /// Open / close the border-colour picker overlay for a child sheet.
+    ToggleChildSheetBorderPicker(uuid::Uuid),
+    /// Open / close the fill-colour picker overlay for a child sheet.
+    ToggleChildSheetFillPicker(uuid::Uuid),
+    /// Cancel the currently-open child-sheet colour picker without
+    /// committing a new value.
+    CancelChildSheetColorPicker,
+    /// Commit a new border colour for a child sheet (closes the picker).
+    EditChildSheetBorderColor(uuid::Uuid, iced::Color),
+    /// Commit a new fill colour for a child sheet (closes the picker).
+    EditChildSheetFillColor(uuid::Uuid, iced::Color),
+    /// Buffered keystroke for the child sheet stroke-width input.
+    ChildSheetStrokeWidthTyping(uuid::Uuid, String),
+    /// Commit the currently-buffered child sheet stroke width.
+    CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Reset child sheet styling (border / fill colour, line width)
+    /// back to theme defaults.
+    ResetChildSheetStyle(uuid::Uuid),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
     /// Set snap grid size (mm).
@@ -2155,6 +2187,9 @@ fn view_selected_element_properties<'a>(
         }
         Some(signex_types::schematic::SelectedKind::Drawing) => {
             col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+        }
+        Some(signex_types::schematic::SelectedKind::ChildSheet) => {
+            col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
         _ => {
             // Generic read-only properties for other types
@@ -5048,6 +5083,257 @@ fn view_drawing_properties<'a>(
         col = col.push(drawing_stroke_color_row(current_color, muted));
     }
     col.into()
+}
+
+/// Properties section for a single hierarchical child sheet.
+/// Shows read-only info (Name / File / Position / Size) plus
+/// editable Border Colour, Fill Colour and Line Width with a
+/// Reset-to-default button. Colour edits open an iced_aw
+/// ColorPicker overlay anchored to a swatch button.
+fn view_child_sheet_properties<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let Some(child_sheet) = ctx.selected_child_sheet.as_ref() else {
+        return Column::new().width(Length::Fill).into();
+    };
+
+    let id = child_sheet.uuid;
+    let name = child_sheet.name.clone();
+    let filename = child_sheet.filename.clone();
+    let position = format!(
+        "{:.2}, {:.2}",
+        child_sheet.position.x, child_sheet.position.y
+    );
+    let size = format!(
+        "{:.1} x {:.1} mm",
+        child_sheet.size.0, child_sheet.size.1
+    );
+
+    let stroke_width = child_sheet.stroke_width;
+    let stroke_color = child_sheet.stroke_color;
+    let fill_color = child_sheet.fill_color;
+    let border_picker_open = ctx.child_sheet_border_picker_open;
+    let fill_picker_open = ctx.child_sheet_fill_picker_open;
+    let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // ── Properties (read-only identity / geometry) ──
+    col = col.push(collapsible_section(
+        "sel_child_sheet_props",
+        "Properties",
+        &ctx.collapsed_sections,
+        muted,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(prop_kv_row("Name", &name, muted, primary));
+            c = c.push(prop_kv_row("File", &filename, muted, primary));
+            c = c.push(prop_kv_row("Position", &position, muted, primary));
+            c = c.push(prop_kv_row("Size", &size, muted, primary));
+            c
+        },
+    ));
+
+    // ── Style (editable) ──
+    col = col.push(collapsible_section(
+        "sel_child_sheet_style",
+        "Style",
+        &ctx.collapsed_sections,
+        muted,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(0).width(Length::Fill);
+            c = c.push(child_sheet_color_row(
+                "Border Colour",
+                id,
+                stroke_color,
+                border_picker_open,
+                muted,
+                border_c,
+                /* is_border */ true,
+            ));
+            c = c.push(child_sheet_color_row(
+                "Fill Colour",
+                id,
+                fill_color,
+                fill_picker_open,
+                muted,
+                border_c,
+                /* is_border */ false,
+            ));
+            c = c.push(child_sheet_stroke_width_row(
+                id,
+                stroke_width,
+                stroke_width_buf,
+                muted,
+                border_c,
+            ));
+            c = c.push(
+                container(
+                    iced::widget::button(
+                        text("Reset to Default")
+                            .size(10)
+                            .color(Color::from_rgb(0.92, 0.92, 0.94)),
+                    )
+                    .padding([4, 10])
+                    .on_press(PanelMsg::ResetChildSheetStyle(id))
+                    .style(iced::widget::button::secondary),
+                )
+                .padding([6, 8])
+                .width(Length::Fill),
+            );
+            c
+        },
+    ));
+
+    col.into()
+}
+
+/// One swatch row in the child-sheet Style section.
+/// Renders a small colour preview (or a hatched "default" indicator
+/// when the override is None) wrapped in an iced_aw ColorPicker so
+/// clicking the swatch opens the picker overlay.
+fn child_sheet_color_row<'a>(
+    label: &'a str,
+    sheet_id: uuid::Uuid,
+    current: Option<signex_types::schematic::StrokeColor>,
+    show_picker: bool,
+    muted: Color,
+    border_c: Color,
+    is_border: bool,
+) -> Element<'a, PanelMsg> {
+    let preview_color = current
+        .map(|c| {
+            iced::Color::from_rgba(
+                c.r as f32 / 255.0,
+                c.g as f32 / 255.0,
+                c.b as f32 / 255.0,
+                c.a as f32 / 255.0,
+            )
+        })
+        .unwrap_or(iced::Color::from_rgba(0.5, 0.5, 0.5, 0.4));
+    let label_text = if current.is_some() {
+        format!(
+            "#{:02X}{:02X}{:02X}",
+            current.unwrap().r,
+            current.unwrap().g,
+            current.unwrap().b
+        )
+    } else {
+        "Default".to_string()
+    };
+
+    let toggle_msg = if is_border {
+        PanelMsg::ToggleChildSheetBorderPicker(sheet_id)
+    } else {
+        PanelMsg::ToggleChildSheetFillPicker(sheet_id)
+    };
+
+    // Swatch button: 18x18 colour fill + small hex / "Default" caption.
+    let swatch_color = preview_color;
+    let swatch: Element<'a, PanelMsg> = container(Space::new())
+        .width(18)
+        .height(18)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(swatch_color)),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 2.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into();
+
+    let underlay = iced::widget::button(
+        row![
+            swatch,
+            text(label_text).size(10).color(Color::from_rgb(0.90, 0.90, 0.92)),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, 6])
+    .on_press(toggle_msg)
+    .style(iced::widget::button::secondary);
+
+    let on_submit_msg: Box<dyn Fn(iced::Color) -> PanelMsg> = if is_border {
+        Box::new(move |c| PanelMsg::EditChildSheetBorderColor(sheet_id, c))
+    } else {
+        Box::new(move |c| PanelMsg::EditChildSheetFillColor(sheet_id, c))
+    };
+
+    let picker = iced_aw::ColorPicker::new(
+        show_picker,
+        preview_color,
+        underlay,
+        PanelMsg::CancelChildSheetColorPicker,
+        move |c| on_submit_msg(c),
+    );
+
+    container(
+        row![
+            text(label.to_string()).size(10).color(muted).width(96),
+            picker,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
+}
+
+/// Numeric stroke-width row for the child-sheet Style section.
+fn child_sheet_stroke_width_row<'a>(
+    sheet_id: uuid::Uuid,
+    stored_value: f64,
+    buffered: Option<String>,
+    muted: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let display = match buffered {
+        Some(s) => s,
+        None => format!("{:.4}", stored_value)
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string(),
+    };
+    let display_for_input = display.clone();
+    let input = iced::widget::text_input("0.1524", &display_for_input)
+        .size(11)
+        .padding(4)
+        .width(120)
+        .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
+        .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
+        .style(move |_theme: &Theme, _status| iced::widget::text_input::Style {
+            background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 2.0.into(),
+            },
+            icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
+            placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
+            value: Color::from_rgb(0.95, 0.95, 0.96),
+            selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
+        });
+
+    container(
+        row![
+            text("Line Width (mm)").size(10).color(muted).width(96),
+            input,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill)
+    .into()
 }
 
 /// Buffer-backed numeric row — survives empty / partial input so the

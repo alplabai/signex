@@ -118,6 +118,16 @@ impl Signex {
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
+        let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
+        let child_sheet_border_picker_open =
+            self.document_state.panel_ctx.child_sheet_border_picker_open;
+        let child_sheet_fill_picker_open =
+            self.document_state.panel_ctx.child_sheet_fill_picker_open;
+        let child_sheet_stroke_width_buf = self
+            .document_state
+            .panel_ctx
+            .child_sheet_stroke_width_buf
+            .clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -233,6 +243,10 @@ impl Signex {
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,
+            selected_child_sheet,
+            child_sheet_border_picker_open,
+            child_sheet_fill_picker_open,
+            child_sheet_stroke_width_buf,
             component_filter,
             collapsed_sections,
             pre_placement,
@@ -323,6 +337,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
+        self.document_state.panel_ctx.selected_child_sheet = None;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -367,6 +382,17 @@ impl Signex {
                         };
                         u == details.selected_uuid
                     })
+                    .cloned();
+            }
+            if matches!(
+                details.selected_kind,
+                signex_types::schematic::SelectedKind::ChildSheet
+            ) {
+                self.document_state.panel_ctx.selected_child_sheet = engine
+                    .document()
+                    .child_sheets
+                    .iter()
+                    .find(|cs| cs.uuid == details.selected_uuid)
                     .cloned();
             }
         }
