@@ -266,38 +266,66 @@ pub fn draw_child_sheet(
         .with_width(sw);
     frame.stroke(&rect, stroke);
 
-    // Sheet name text
+    // Sheet name + filename are placed OUTSIDE the box so they don't
+    // overlap pins or fill colour:
+    //   - Altium style: stacked above the top-left corner.
+    //   - KiCad style:  stacked below the bottom-left corner.
     let font_size = transform.world_len(1.5).abs();
     if font_size < 1.0 {
         return;
     }
+    let small_font = (font_size * 0.75).abs();
+    let label_gap = 2.0_f32;
+
+    let style = crate::multisheet_style();
+    let (name_anchor, file_anchor, v_align) = match style {
+        crate::MultisheetStyle::Altium => {
+            // Above the box: filename closest to the border, name on top.
+            let file_y = tl.y - label_gap;
+            let name_y = file_y - small_font - label_gap;
+            (
+                iced::Point::new(tl.x, name_y),
+                iced::Point::new(tl.x, file_y),
+                iced::alignment::Vertical::Bottom,
+            )
+        }
+        crate::MultisheetStyle::KiCad => {
+            // Below the box: name closest to the border, filename underneath.
+            let name_y = br.y + label_gap;
+            let file_y = name_y + font_size + label_gap;
+            (
+                iced::Point::new(tl.x, name_y),
+                iced::Point::new(tl.x, file_y),
+                iced::alignment::Vertical::Top,
+            )
+        }
+    };
+
     draw_rich_text(
         frame,
         &child.name,
-        iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
+        name_anchor,
         body_color,
         font_size,
         iced::alignment::Horizontal::Left,
-        iced::alignment::Vertical::Top,
+        v_align,
         0.0,
     );
 
-    // Filename text (smaller, below name)
-    let small_font = (font_size * 0.75).abs();
     if small_font < 1.0 {
         return;
     }
     draw_rich_text(
         frame,
         &child.filename,
-        iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
+        file_anchor,
         Color {
             a: body_color.a * 0.7,
             ..body_color
         },
         small_font,
         iced::alignment::Horizontal::Left,
-        iced::alignment::Vertical::Top,
+        v_align,
         0.0,
     );
 
