@@ -427,25 +427,35 @@ pub(super) fn field_display_pos(
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// KiCad stores `SCH_FIELD` rotation as an **absolute** screen angle —
-/// the symbol's own rotation is *not* re-applied at draw time. Rotating
-/// the parent symbol updates each field's stored angle directly (via
-/// AutoplaceFields). So at render time we only need to fold 180°→0°
-/// and 270°→90° on the field's own angle to keep the text readable,
-/// matching KiCad's `SCH_FIELD::GetDrawRotation()`.
+/// Mirrors KiCad's `SCH_FIELD::GetDrawRotation()`:
+/// - For symbols at 0° or 180° (`y1 == 0` in the transform matrix) the
+///   stored field angle is used directly.
+/// - For symbols at 90° or 270° (`y1 != 0`) the field angle is toggled
+///   between 0° and 90° so vertically-rotated symbols still produce
+///   horizontal text when the field's stored angle is 90°.
+///
+/// We fold 180°→0° and 270°→90° on the result for readability.
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
-    _sym: &signex_types::schematic::Symbol,
+    sym: &signex_types::schematic::Symbol,
 ) -> (
     f64,
     signex_types::schematic::HAlign,
     signex_types::schematic::VAlign,
 ) {
-    let angle = prop.rotation.rem_euclid(360.0);
-    let draw_rot = match angle.round() as i32 {
+    let sym_rot = sym.rotation.rem_euclid(360.0).round() as i32;
+    let y1_nonzero = matches!(sym_rot, 90 | 270);
+    let stored = prop.rotation.rem_euclid(360.0);
+    let draw = if y1_nonzero {
+        // KiCad toggles: 0° ↔ 90° when symbol is rotated 90°/270°.
+        if stored.round() as i32 == 0 { 90.0 } else { 0.0 }
+    } else {
+        stored
+    };
+    let draw_rot = match draw.round() as i32 {
         0 | 180 => 0.0,
         90 | 270 => 90.0,
-        _ => angle,
+        _ => draw,
     };
 
     (draw_rot, prop.justify_h, prop.justify_v)
