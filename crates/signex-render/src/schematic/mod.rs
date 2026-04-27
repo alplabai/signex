@@ -765,15 +765,20 @@ pub fn render_schematic(
         }
     }
 
-    // Z=11b: Child sheets (hierarchical sheets)
+    // Z=11b: Child sheets (hierarchical sheets) — drawn with Altium's
+    // greenish sheet-symbol palette so child sheets stand out from regular
+    // component bodies. Outline uses a deep moss green; the interior fill
+    // uses a soft pale green that matches Altium's default sheet color.
+    let sheet_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
+    let sheet_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
     for child in &sheet.child_sheets {
         let a = alpha_for(&child.uuid);
         drawing::draw_child_sheet(
             frame,
             child,
             transform,
-            dim(body_color, a),
-            dim(body_fill_color, a),
+            dim(sheet_outline, a),
+            dim(sheet_fill, a),
         );
     }
 

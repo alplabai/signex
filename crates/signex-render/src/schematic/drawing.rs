@@ -304,12 +304,14 @@ pub fn draw_child_sheet(
     // Draw sheet pins — Altium hierarchical port style. The pin's position is
     // the connection point on the sheet edge; the pentagon tip sits exactly
     // there with the body extending INWARD into the sheet so external wires
-    // dock cleanly without any protruding stub. Rotation maps the inward
-    // direction:
-    //   0°   = left edge   → body extends right, label to the right
-    //   180° = right edge  → body extends left,  label to the left
-    //   270° = top edge    → body extends down,  label below
-    //   90°  = bottom edge → body extends up,    label above
+    // dock cleanly without any protruding stub.
+    //
+    // KiCad sheet-pin `rotation` is the OUTWARD direction (the way the pin
+    // points away from the sheet body). Inward is therefore the opposite.
+    //   rotation 0°   → outward +X (pin on right edge)  → inward -X
+    //   rotation 180° → outward -X (pin on left  edge)  → inward +X
+    //   rotation 90°  → outward -Y, screen up (pin on top    edge) → inward +Y down
+    //   rotation 270° → outward +Y, screen down(pin on bottom edge) → inward -Y up
     let pin_h_mm = 1.4_f64;
     let arrow_len_mm = 0.7_f64;
     let body_len_mm = 2.4_f64;
@@ -319,8 +321,8 @@ pub fn draw_child_sheet(
     for pin in &child.pins {
         let rot = pin.rotation.rem_euclid(360.0).round() as i32;
 
-        // Inward unit vector (into the sheet), text alignment, and text anchor
-        // offset along the inward axis.
+        // Inward unit vector (into the sheet) and label placement that puts
+        // the text inside the sheet, hugging the flat back of the pentagon.
         let (ix, iy, h_align, v_align, text_dx, text_dy): (
             f64,
             f64,
@@ -329,7 +331,8 @@ pub fn draw_child_sheet(
             f64,
             f64,
         ) = match rot {
-            180 => (
+            0 => (
+                // pin on RIGHT edge, body extends LEFT into sheet
                 -1.0,
                 0.0,
                 iced::alignment::Horizontal::Right,
@@ -338,14 +341,7 @@ pub fn draw_child_sheet(
                 0.0,
             ),
             90 => (
-                0.0,
-                -1.0,
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Bottom,
-                0.0,
-                -(total_in_mm + text_pad_mm),
-            ),
-            270 => (
+                // pin on TOP edge, body extends DOWN into sheet
                 0.0,
                 1.0,
                 iced::alignment::Horizontal::Center,
@@ -353,7 +349,17 @@ pub fn draw_child_sheet(
                 0.0,
                 total_in_mm + text_pad_mm,
             ),
+            270 => (
+                // pin on BOTTOM edge, body extends UP into sheet
+                0.0,
+                -1.0,
+                iced::alignment::Horizontal::Center,
+                iced::alignment::Vertical::Bottom,
+                0.0,
+                -(total_in_mm + text_pad_mm),
+            ),
             _ => (
+                // 180° and fallback: pin on LEFT edge, body extends RIGHT into sheet
                 1.0,
                 0.0,
                 iced::alignment::Horizontal::Left,
