@@ -521,6 +521,7 @@ fn build_symbol_editor_panel_ctx(
                 outside_symbol: pin.outside_symbol,
                 hidden: pin.hidden,
                 locked: pin.locked,
+                part_number: pin.part_number,
             },
         })
         .collect();
