@@ -43,7 +43,83 @@ impl Signex {
                 self.sym_editor_set_symbol_name(value.clone());
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetPinElectrical { pin_idx, value } => {
+                self.sym_editor_set_pin_electrical(*pin_idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinOrientation { pin_idx, value } => {
+                self.sym_editor_set_pin_orientation(*pin_idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinX { pin_idx, value } => {
+                self.sym_editor_set_pin_x(*pin_idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinY { pin_idx, value } => {
+                self.sym_editor_set_pin_y(*pin_idx, *value);
+                true
+            }
             _ => false,
+        }
+    }
+
+    fn sym_editor_set_pin_electrical(
+        &mut self,
+        pin_idx: usize,
+        value: signex_library::PinElectricalType,
+    ) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.electrical = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_pin_orientation(
+        &mut self,
+        pin_idx: usize,
+        value: signex_library::PinOrientation,
+    ) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.orientation = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_pin_x(&mut self, pin_idx: usize, value: f64) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.position[0] = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_pin_y(&mut self, pin_idx: usize, value: f64) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.position[1] = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
         }
     }
 

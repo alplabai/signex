@@ -716,6 +716,25 @@ pub enum PanelMsg {
     SymEditorSetPinName { pin_idx: usize, value: String },
     /// Properties panel — edit a pin's stub length in mm.
     SymEditorSetPinLength { pin_idx: usize, value: f64 },
+    /// Properties panel — set a pin's electrical type from the
+    /// Altium-spec dropdown (Input / Output / Bidirectional / Power
+    /// / Passive / Open Collector / Open Emitter / Tri-state /
+    /// Not Connected / Unspecified).
+    SymEditorSetPinElectrical {
+        pin_idx: usize,
+        value: signex_library::PinElectricalType,
+    },
+    /// Properties panel — set a pin's orientation (Right / Up /
+    /// Left / Down). Also updates the canvas cache so the pin
+    /// re-renders.
+    SymEditorSetPinOrientation {
+        pin_idx: usize,
+        value: signex_library::PinOrientation,
+    },
+    /// Properties panel — set a pin's X coordinate in mm.
+    SymEditorSetPinX { pin_idx: usize, value: f64 },
+    /// Properties panel — set a pin's Y coordinate in mm.
+    SymEditorSetPinY { pin_idx: usize, value: f64 },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -1916,6 +1935,8 @@ fn view_symbol_editor_properties<'a>(
         }
         SymbolEditorSelection::Pin(pin) => {
             let pin_idx = pin.idx;
+
+            // ── Designator (text) ──
             let designator_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Designator")
@@ -1939,6 +1960,7 @@ fn view_symbol_editor_properties<'a>(
             .into();
             col = col.push(designator_row);
 
+            // ── Name (text) ──
             let name_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Name")
@@ -1962,16 +1984,168 @@ fn view_symbol_editor_properties<'a>(
             .into();
             col = col.push(name_row);
 
-            col = col.push(prop_row_static("Electrical", pin.electrical.clone()));
-            col = col.push(prop_row_static(
-                "Position",
-                format!("{:.3} mm, {:.3} mm", pin.position[0], pin.position[1]),
-            ));
-            col = col.push(prop_row_static("Orientation", pin.orientation.clone()));
+            // ── Electrical Type (pick_list) ──
+            let electrical_options = [
+                ("Input", signex_library::PinElectricalType::Input),
+                ("I/O", signex_library::PinElectricalType::Bidirectional),
+                ("Output", signex_library::PinElectricalType::Output),
+                ("Open Collector", signex_library::PinElectricalType::OpenCollector),
+                ("Passive", signex_library::PinElectricalType::Passive),
+                ("HiZ", signex_library::PinElectricalType::Tristate),
+                ("Open Emitter", signex_library::PinElectricalType::OpenEmitter),
+                ("Power", signex_library::PinElectricalType::Power),
+                ("Not Connected", signex_library::PinElectricalType::NotConnected),
+                ("Unspecified", signex_library::PinElectricalType::Unspecified),
+            ];
+            let current_label = electrical_options
+                .iter()
+                .find(|(_, v)| format!("{:?}", v) == pin.electrical)
+                .map(|(label, _)| label.to_string())
+                .unwrap_or_else(|| pin.electrical.clone());
+            let labels: Vec<String> =
+                electrical_options.iter().map(|(label, _)| label.to_string()).collect();
+            let labels_for_msg: Vec<(String, signex_library::PinElectricalType)> =
+                electrical_options
+                    .iter()
+                    .map(|(label, v)| (label.to_string(), *v))
+                    .collect();
+            let electrical_picker = iced::widget::pick_list(
+                labels,
+                Some(current_label),
+                move |chosen: String| {
+                    let value = labels_for_msg
+                        .iter()
+                        .find(|(label, _)| label == &chosen)
+                        .map(|(_, v)| *v)
+                        .unwrap_or(signex_library::PinElectricalType::Unspecified);
+                    PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
+                },
+            )
+            .padding([2, 4])
+            .text_size(11);
+            let electrical_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Electrical")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    container(electrical_picker).width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(electrical_row);
 
-            // Length is editable via numeric text_input — best-effort
-            // f64 parse, dropped on parse failure so half-typed values
-            // ("2." / "-") survive across rerenders.
+            // ── Position (X, Y) ──
+            let pos_x = pin.position[0];
+            let pos_y = pin.position[1];
+            let pos_x_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("X")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("mm", &format!("{:.3}", pos_x))
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| {
+                            let parsed = s.trim().parse::<f64>().unwrap_or(pos_x);
+                            PanelMsg::SymEditorSetPinX {
+                                pin_idx,
+                                value: parsed,
+                            }
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(pos_x_row);
+
+            let pos_y_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Y")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("mm", &format!("{:.3}", pos_y))
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| {
+                            let parsed = s.trim().parse::<f64>().unwrap_or(pos_y);
+                            PanelMsg::SymEditorSetPinY {
+                                pin_idx,
+                                value: parsed,
+                            }
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(pos_y_row);
+
+            // ── Orientation (pick_list) ──
+            let orientation_options = [
+                ("Right", signex_library::PinOrientation::Right),
+                ("Up", signex_library::PinOrientation::Up),
+                ("Left", signex_library::PinOrientation::Left),
+                ("Down", signex_library::PinOrientation::Down),
+            ];
+            let current_orient = orientation_options
+                .iter()
+                .find(|(_, v)| format!("{:?}", v) == pin.orientation)
+                .map(|(label, _)| label.to_string())
+                .unwrap_or_else(|| pin.orientation.clone());
+            let orient_labels: Vec<String> = orientation_options
+                .iter()
+                .map(|(label, _)| label.to_string())
+                .collect();
+            let orient_msg_lookup: Vec<(String, signex_library::PinOrientation)> =
+                orientation_options
+                    .iter()
+                    .map(|(label, v)| (label.to_string(), *v))
+                    .collect();
+            let orientation_picker = iced::widget::pick_list(
+                orient_labels,
+                Some(current_orient),
+                move |chosen: String| {
+                    let value = orient_msg_lookup
+                        .iter()
+                        .find(|(label, _)| label == &chosen)
+                        .map(|(_, v)| *v)
+                        .unwrap_or(signex_library::PinOrientation::Right);
+                    PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
+                },
+            )
+            .padding([2, 4])
+            .text_size(11);
+            let orientation_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Orientation")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    container(orientation_picker).width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(orientation_row);
+
+            // ── Length (numeric) ──
             let length_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Length")
