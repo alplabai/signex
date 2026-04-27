@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use signex_library::{
     Component, ComponentClass, ComponentId, ComponentSummary, DatasheetRef, Footprint, InternalPn,
-    LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, ManufacturerPart,
-    Manifest, ParamMap, PlmReserved, PrimitiveRef, Revision, Symbol, UsersConfig, Version,
+    LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest,
+    ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, Revision, Symbol, UsersConfig, Version,
     WorkflowConfig,
 };
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
@@ -61,9 +61,7 @@ pub fn create_library(
 ) -> Result<Uuid, LibraryError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name is empty".to_string(),
-        ));
+        return Err(LibraryError::Conflict("library name is empty".to_string()));
     }
     if trimmed
         .chars()
@@ -141,10 +139,7 @@ pub fn create_library(
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
-pub fn auto_mount_project_libraries(
-    state: &mut LibraryState,
-    project: &ProjectData,
-) -> usize {
+pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
     let mut mounted = 0usize;
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
@@ -201,10 +196,7 @@ pub fn load_component_for_editor(
 /// Save the editor's draft revision locally.
 // WS-I: tab-not-window — editors are addressed by
 // `EditorAddress(library_path, component_id)` instead of by window id.
-pub fn save_draft(
-    state: &mut LibraryState,
-    address: &EditorAddress,
-) -> Result<(), LibraryError> {
+pub fn save_draft(state: &mut LibraryState, address: &EditorAddress) -> Result<(), LibraryError> {
     let editor = state
         .editors
         .get_mut(address)

@@ -2,9 +2,9 @@
 //!
 //! WS-L: backed by the typed `SimModel` primitive bound through
 //! `Revision::sim_ref`. The view operates entirely on
-//! `editor.sim` (resolved lazily by the dispatcher's
+//! `state.sim` (resolved lazily by the dispatcher's
 //! `EditorTab::Sim` arm via `LibrarySet::resolve_sim`) and
-//! `editor.sim_body`, the live `text_editor::Content` mirror of
+//! `state.sim_body`, the live `text_editor::Content` mirror of
 //! the SPICE deck.
 //!
 //! The pin/node table iterates `editor.symbol.pins`; the SPICE-node
@@ -24,7 +24,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::{ComponentEditorState, EditorAddress};
+use super::super::state::{ComponentPreviewState, EditorAddress};
 
 const SIM_KIND_OPTS: [SimKind; 4] = [
     SimKind::Spice3,
@@ -56,7 +56,7 @@ impl std::fmt::Display for SimKindPick {
 }
 
 pub fn view<'a>(
-    editor: &'a ComponentEditorState,
+    state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -64,20 +64,22 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
 
     let lib_path_for_toggle = address.library_path.clone();
-    let component_id_for_toggle = address.component_id;
-    let has_sim = editor.sim.is_some();
+    let table_for_toggle = address.table.clone();
+    let row_id = address.row_id;
+    let has_sim = state.sim.is_some();
     let toggle = checkbox(has_sim)
         .label("Has SPICE Model")
         .on_toggle(move |v| LibraryMessage::EditorEvent {
             library_path: lib_path_for_toggle.clone(),
-            component_id: component_id_for_toggle,
+            table: table_for_toggle.clone(),
+            row_id,
             msg: EditorMsg::SimSetEnabled(v),
         })
         .size(14)
         .text_size(12)
         .spacing(6);
 
-    let Some(sim) = editor.sim.as_ref() else {
+    let Some(sim) = state.sim.as_ref() else {
         // No sim model bound — show only the toggle and a muted hint.
         let body = column![
             row![toggle].align_y(iced::Alignment::Center),
@@ -101,47 +103,41 @@ pub fn view<'a>(
 
     // Header — checkbox + kind picker.
     let lib_path_for_kind = address.library_path.clone();
-    let component_id_for_kind = address.component_id;
+    let table_for_kind = address.table.clone();
     let kind_picker = pick_list(
         SIM_KIND_OPTS.map(SimKindPick),
         Some(SimKindPick(sim.kind)),
         move |SimKindPick(k)| LibraryMessage::EditorEvent {
             library_path: lib_path_for_kind.clone(),
-            component_id: component_id_for_kind,
+            table: table_for_kind.clone(),
+            row_id,
             msg: EditorMsg::SimSetKind(k),
         },
     )
     .text_size(12)
     .padding([4, 8]);
 
-    let header_row = row![
-        toggle,
-        Space::new().width(20),
-        kind_picker,
-    ]
-    .align_y(iced::Alignment::Center);
+    let header_row =
+        row![toggle, Space::new().width(20), kind_picker,].align_y(iced::Alignment::Center);
 
     // Name row.
     let lib_path_for_name = address.library_path.clone();
-    let component_id_for_name = address.component_id;
+    let table_for_name = address.table.clone();
     let name_input = text_input("LM358_DUAL", sim.name.as_str())
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_name.clone(),
-            component_id: component_id_for_name,
+            table: table_for_name.clone(),
+            row_id,
             msg: EditorMsg::SimSetName(s),
         })
         .padding([4, 8])
         .size(12);
-    let name_block = column![
-        text("Name").size(10).color(muted),
-        name_input,
-    ]
-    .spacing(4);
+    let name_block = column![text("Name").size(10).color(muted), name_input,].spacing(4);
 
-    // SPICE deck — multi-line text_editor backed by editor.sim_body.
-    let deck: Element<'a, LibraryMessage> = if let Some(content) = editor.sim_body.as_ref() {
+    // SPICE deck — multi-line text_editor backed by state.sim_body.
+    let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
         let lib_path_for_deck = address.library_path.clone();
-        let component_id_for_deck = address.component_id;
+        let table_for_deck = address.table.clone();
         let editor_widget = text_editor(content)
             .placeholder(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS")
             .padding(8)
@@ -149,7 +145,8 @@ pub fn view<'a>(
             .height(Length::Fixed(220.0))
             .on_action(move |a| LibraryMessage::EditorEvent {
                 library_path: lib_path_for_deck.clone(),
-                component_id: component_id_for_deck,
+                table: table_for_deck.clone(),
+                row_id,
                 msg: EditorMsg::SimBodyAction(a),
             });
         editor_widget.into()
@@ -160,11 +157,7 @@ pub fn view<'a>(
         // multi-line view of whatever sim.body has.
         text(sim.body.clone()).size(11).color(text_c).into()
     };
-    let deck_block = column![
-        text("SPICE deck").size(10).color(muted),
-        deck,
-    ]
-    .spacing(4);
+    let deck_block = column![text("SPICE deck").size(10).color(muted), deck,].spacing(4);
 
     // Pin/Node map table. Defensive fallback: if `editor.symbol` is
     // None (the symbol primitive failed to resolve, or the user
@@ -172,7 +165,7 @@ pub fn view<'a>(
     // a muted hint instead of crashing on an empty pin slice. The
     // canonical lazy-load happens in
     // `dispatch::library::handle_select_editor_tab`.
-    let table: Element<'a, LibraryMessage> = match editor.symbol.as_ref() {
+    let table: Element<'a, LibraryMessage> = match state.symbol.as_ref() {
         Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, &address),
         None => container(
             text("(load Symbol tab first to populate pin/node map)")
@@ -223,13 +216,9 @@ fn view_pin_node_table<'a>(
     let border = theme_ext::border_color(tokens);
 
     if pins.is_empty() {
-        return container(
-            text("(symbol has no pins yet)")
-                .size(11)
-                .color(muted),
-        )
-        .padding([6, 0])
-        .into();
+        return container(text("(symbol has no pins yet)").size(11).color(muted))
+            .padding([6, 0])
+            .into();
     }
 
     let header = row![
@@ -281,13 +270,15 @@ fn pin_node_row<'a>(
 
     let pin_for_input = pin.number.clone();
     let lib_path_for_input = address.library_path.clone();
-    let component_id_for_input = address.component_id;
+    let table_for_input = address.table.clone();
+    let row_id = address.row_id;
     let input = text_input("net", &buf)
         .padding([3, 6])
         .size(11)
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_input.clone(),
-            component_id: component_id_for_input,
+            table: table_for_input.clone(),
+            row_id,
             msg: EditorMsg::SimSetPinNode {
                 pin_number: pin_for_input.clone(),
                 value: s,
@@ -390,7 +381,10 @@ mod tests {
 
         apply(&mut e, EditorMsg::SimSetEnabled(true));
         assert!(e.sim.is_some(), "enable should construct a SimModel");
-        assert!(e.sim_body.is_some(), "enable should seed text_editor::Content");
+        assert!(
+            e.sim_body.is_some(),
+            "enable should seed text_editor::Content"
+        );
         assert!(e.draft.sim_ref.is_some(), "enable should bind sim_ref");
         let bound_uuid = e.sim.as_ref().unwrap().uuid;
         assert_eq!(
@@ -419,7 +413,10 @@ mod tests {
             },
         );
         let sim = e.sim.as_ref().unwrap();
-        assert_eq!(sim.default_node_map.get("1").map(String::as_str), Some("VCC"));
+        assert_eq!(
+            sim.default_node_map.get("1").map(String::as_str),
+            Some("VCC")
+        );
     }
 
     /// WS-L: empty value removes the key from `default_node_map`.
@@ -498,5 +495,4 @@ mod tests {
         let second_uuid = e.sim.as_ref().unwrap().uuid;
         assert_eq!(first_uuid, second_uuid, "re-enabling must not re-construct");
     }
-
 }

@@ -80,10 +80,8 @@ impl Signex {
         // are logged inside `auto_mount_project_libraries` and never
         // bubble: a missing library shouldn't block the project
         // from loading.
-        let mounted = crate::library::commands::auto_mount_project_libraries(
-            &mut self.library,
-            &data,
-        );
+        let mounted =
+            crate::library::commands::auto_mount_project_libraries(&mut self.library, &data);
         if mounted > 0 {
             tracing::info!(
                 target: "signex::library",

@@ -143,12 +143,12 @@ impl Signex {
         // dirty-park mechanism yet, so closing the tab discards the
         // draft (matches Wave 2's window-close behaviour).
         if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
-            self.library.editors.remove(
-                &crate::library::state::EditorAddress::new(
+            self.library
+                .editors
+                .remove(&crate::library::state::EditorAddress::new(
                     ce.library_path.clone(),
                     ce.component_id,
-                ),
-            );
+                ));
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()

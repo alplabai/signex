@@ -47,8 +47,8 @@ pub fn view<'a>(
         (false, Some(s), _) => s.to_string(),
         _ => "Not connected".to_string(),
     };
-    let mut digikey_actions = row![text(digikey_status).size(11).color(text_c)]
-        .align_y(iced::Alignment::Center);
+    let mut digikey_actions =
+        row![text(digikey_status).size(11).color(text_c)].align_y(iced::Alignment::Center);
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill));
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(

@@ -385,10 +385,9 @@ fn build_content<'a>(
         // `app/handlers/preferences.rs` re-dispatches via
         // `Message::Library` to keep the canonical settings state on
         // `LibraryState.settings`.
-        PrefNav::LibraryDistributors => content_library_distributors(
-            distributor_settings,
-            panel_tokens,
-        ),
+        PrefNav::LibraryDistributors => {
+            content_library_distributors(distributor_settings, panel_tokens)
+        }
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -427,13 +426,12 @@ fn content_library_distributors<'a>(
     // map to `PrefMsg::LibrarySettings` for every Settings sub-
     // variant; non-Settings library messages are ignored (they're
     // never produced by `distributor_apis::view`).
-    let pane = crate::library::settings::distributor_apis::view(settings, tokens).map(
-        |lm| match lm {
+    let pane =
+        crate::library::settings::distributor_apis::view(settings, tokens).map(|lm| match lm {
             crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
             // distributor_apis::view never produces anything else.
             _ => PrefMsg::Close,
-        },
-    );
+        });
 
     column![header, container(pane).padding([0, 20]).width(Length::Fill)]
         .spacing(0)
