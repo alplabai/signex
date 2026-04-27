@@ -57,9 +57,8 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
 
         let push_snap = |path: std::path::PathBuf,
                          snap: signex_render::schematic::SchematicRenderSnapshot,
@@ -108,7 +107,7 @@ impl Signex {
             }
         }
         // Unopened project sheets.
-        if let Some(pd) = self.document_state.project_data.as_ref() {
+        if let Some(pd) = self.document_state.active_loaded_project().map(|p| &p.data) {
             for sheet in &pd.sheets {
                 let path = match project_root.as_ref() {
                     Some(root) => root.join(&sheet.filename),
@@ -132,9 +131,7 @@ impl Signex {
         for (path, snapshot) in &snapshots_by_path {
             let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
                 apply_overrides(signex_erc::run_with_project_and_dsl(
-                    snapshot,
-                    &children,
-                    eval_fns,
+                    snapshot, &children, eval_fns,
                 ))
             } else {
                 apply_overrides(signex_erc::run_with_project(snapshot, &children))
@@ -176,9 +173,8 @@ impl Signex {
     fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from))?;
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))?;
 
         let dsl_path_candidates = [
             project_root.join("erc.dsl"),
@@ -187,10 +183,7 @@ impl Signex {
         let dsl_path = dsl_path_candidates.iter().find(|p| p.exists())?;
 
         let Ok(src) = std::fs::read_to_string(dsl_path) else {
-            crate::diagnostics::log_info(format!(
-                "ERC DSL: failed to read {}",
-                dsl_path.display()
-            ));
+            crate::diagnostics::log_info(format!("ERC DSL: failed to read {}", dsl_path.display()));
             return None;
         };
 
@@ -237,12 +230,19 @@ impl Signex {
                 primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.ui_state.erc_violations = violations;
     }
 
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
-        let mut paths: Vec<_> = self.ui_state.erc_violations_by_path.keys().cloned().collect();
+        let mut paths: Vec<_> = self
+            .ui_state
+            .erc_violations_by_path
+            .keys()
+            .cloned()
+            .collect();
         paths.sort();
 
         let mut out = Vec::new();
@@ -306,7 +306,12 @@ impl Signex {
     }
 
     fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
-        if let Some(index) = self.document_state.tabs.iter().position(|tab| &tab.path == path) {
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| &tab.path == path)
+        {
             if index != self.document_state.active_tab {
                 self.park_active_schematic_session();
                 self.document_state.active_tab = index;
@@ -351,7 +356,9 @@ impl Signex {
         if let Some(item) = select {
             self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
-            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
         }
         // Stage a tighter fit target around the target point so
         // navigation jumps both center and zoom in to the issue.
@@ -373,8 +380,12 @@ impl Signex {
         // Mirror the flag onto the canvas so the renderer can compute
         // the focus uuid set locally without reaching into app state.
         self.interaction_state.active_canvas_mut().auto_focus = self.ui_state.auto_focus;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         Task::none()
     }
 
@@ -459,15 +470,14 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(std::path::PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
         let unopened_sheet_paths: Vec<std::path::PathBuf> = self
             .document_state
-            .project_data
-            .as_ref()
-            .map(|pd| {
-                pd.sheets
+            .active_loaded_project()
+            .map(|p| {
+                p.data
+                    .sheets
                     .iter()
                     .filter_map(|s| {
                         let path = match project_root.as_ref() {
@@ -506,6 +516,7 @@ impl Signex {
             }
             if engine.save().is_ok() {
                 disk_touched += 1;
+                self.document_state.dirty_paths.remove(&sheet_path);
                 crate::diagnostics::log_info(format!("Annotate: saved {}", sheet_path.display()));
             }
         }
@@ -523,7 +534,9 @@ impl Signex {
             ));
         }
         // Force a render + panel refresh as if a command had fired.
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
@@ -592,15 +605,14 @@ impl Signex {
             .collect();
         let project_root = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|p| p.parent().map(PathBuf::from));
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(PathBuf::from));
         let unopened_paths: Vec<PathBuf> = self
             .document_state
-            .project_data
-            .as_ref()
-            .map(|pd| {
-                pd.sheets
+            .active_loaded_project()
+            .map(|p| {
+                p.data
+                    .sheets
                     .iter()
                     .filter_map(|s| {
                         let path = match project_root.as_ref() {
@@ -707,9 +719,8 @@ impl Signex {
             let applied = self.document_state.engines.get_mut(&path).map(|engine| {
                 let mut sheet = engine.document().clone();
                 if reset_in(&mut sheet, &duplicates) {
-                    let _ = engine.execute(signex_engine::Command::ReplaceDocument {
-                        document: sheet,
-                    });
+                    let _ =
+                        engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
                     true
                 } else {
                     false
@@ -719,6 +730,7 @@ impl Signex {
                 if let Some(tab) = self.document_state.tabs.get_mut(idx) {
                     tab.dirty = true;
                 }
+                self.document_state.dirty_paths.insert(path);
                 resets += 1;
             }
         }
@@ -743,6 +755,7 @@ impl Signex {
             match engine.save() {
                 Ok(_) => {
                     resets += 1;
+                    self.document_state.dirty_paths.remove(&path);
                 }
                 Err(err) => {
                     crate::diagnostics::log_info(format!(
@@ -754,7 +767,9 @@ impl Signex {
         }
 
         if any_active_changed {
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );
@@ -957,7 +972,10 @@ impl Signex {
             ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
             ModalId::Preferences => iced::Size::new(900.0, 620.0),
             ModalId::FindReplace => iced::Size::new(420.0, 180.0),
-            ModalId::CloseTabConfirm => iced::Size::new(420.0, 180.0),
+            ModalId::RenameDialog => iced::Size::new(420.0, 200.0),
+            ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
+            ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
+            ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
@@ -1024,8 +1042,12 @@ impl Signex {
             let _ = engine.execute(signex_engine::Command::MoveSelection { items, dx, dy });
         }
         self.ui_state.move_selection.open = false;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
         self.update_selection_info();
         Task::none()
@@ -1043,7 +1065,9 @@ impl Signex {
                 key,
                 value,
             });
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
                 signex_render::schematic::RenderInvalidation::FULL,
             );

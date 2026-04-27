@@ -25,6 +25,7 @@ anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
+signex-output = { workspace = true }
 rfd = { workspace = true }
 fontdb = "0.23"
 log = "0.4"

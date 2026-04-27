@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use signex_render::{LabelStyle, PowerPortStyle};
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
@@ -181,6 +181,82 @@ pub fn write_label_style_pref(style: LabelStyle) {
     }
 }
 
+/// Read `multisheet_style` from preferences file.
+/// Defaults to `KiCad` when missing or invalid.
+pub fn read_multisheet_style_pref() -> MultisheetStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return MultisheetStyle::KiCad;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return MultisheetStyle::KiCad;
+    };
+
+    match json["multisheet_style"].as_str().unwrap_or("kicad") {
+        "altium" | "Altium" => MultisheetStyle::Altium,
+        _ => MultisheetStyle::KiCad,
+    }
+}
+
+/// Persist multisheet style without clobbering other preference keys.
+pub fn write_multisheet_style_pref(style: MultisheetStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    json["multisheet_style"] = serde_json::Value::String(match style {
+        MultisheetStyle::KiCad => "kicad".to_string(),
+        MultisheetStyle::Altium => "altium".to_string(),
+    });
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the schematic visible-grid `grid_style` preference. Defaults
+/// to `Dots` (matches the previous hard-coded behaviour).
+pub fn read_grid_style_pref() -> GridStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return GridStyle::Dots;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return GridStyle::Dots;
+    };
+    match json["grid_style"].as_str().unwrap_or("dots") {
+        "lines" | "Lines" => GridStyle::Lines,
+        "crosses" | "small_crosses" | "SmallCrosses" => GridStyle::SmallCrosses,
+        _ => GridStyle::Dots,
+    }
+}
+
+/// Persist grid style without clobbering other preference keys.
+pub fn write_grid_style_pref(style: GridStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_style"] = serde_json::Value::String(match style {
+        GridStyle::Dots => "dots".to_string(),
+        GridStyle::Lines => "lines".to_string(),
+        GridStyle::SmallCrosses => "crosses".to_string(),
+    });
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
 /// Read ERC severity overrides from preferences file. Returns an empty
 /// map if the file is absent or the key missing — callers treat "no
 /// entry" as "use the rule's default severity", matching the ui_state
@@ -281,6 +357,48 @@ fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
         signex_erc::Severity::Warning => "warning",
         signex_erc::Severity::Info => "info",
         signex_erc::Severity::Off => "off",
+    }
+}
+
+/// Read the user-defined custom selection-filter presets. Returns an
+/// empty `Vec` if the file is missing, malformed, or the key absent.
+/// Capped to `CUSTOM_FILTER_PRESET_LIMIT` entries on read so a hand-
+/// edited file with too many slots still loads cleanly.
+pub fn read_custom_filter_presets() -> Vec<crate::active_bar::CustomFilterPreset> {
+    use crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Vec::new();
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return Vec::new();
+    };
+    let Some(array) = json.get("custom_filter_presets").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    array
+        .iter()
+        .take(CUSTOM_FILTER_PRESET_LIMIT)
+        .filter_map(|v| serde_json::from_value(v.clone()).ok())
+        .collect()
+}
+
+/// Persist the list of custom selection-filter presets without
+/// clobbering other preference keys.
+pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPreset]) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(array) = serde_json::to_value(presets) {
+        json["custom_filter_presets"] = array;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
     }
 }
 
