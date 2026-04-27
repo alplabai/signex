@@ -7,6 +7,10 @@
 //! stacked. All three right-column panes operate on the
 //! `Footprint::body_3d` / `Footprint::step_attachment` fields directly
 //! per `v0.9-library-refactor-plan.md` §11.
+//!
+//! WS-F2: post-WS-I the editor lives as a tab in the main window, so
+//! all messages route via `EditorAddress(library_path, component_id)`
+//! rather than an `iced::window::Id`.
 
 pub mod body3d;
 pub mod canvas;
@@ -25,7 +29,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
-use crate::library::state::ComponentEditorState;
+use crate::library::state::{ComponentEditorState, EditorAddress};
 
 use canvas::FootprintCanvas;
 use layers::FpLayer;
@@ -34,12 +38,12 @@ use layers::FpLayer;
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // Two-column split: 2D editor (left, FillPortion(2)) + body3d/3d/STEP
     // pane (right, FillPortion(1)).
-    let left = view_two_d_editor(editor, tokens, window_id);
-    let right = view_three_d_panel(editor, tokens, window_id);
+    let left = view_two_d_editor(editor, tokens, address.clone());
+    let right = view_three_d_panel(editor, tokens, address);
 
     let split = row![
         container(left)
@@ -63,14 +67,14 @@ pub fn view<'a>(
 fn view_two_d_editor<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.bg);
     let grid = crate::styles::ti(tokens.text_secondary);
 
-    let toolbar = layer_toolbar(editor, tokens, window_id);
-    let canvas_area = canvas_area(editor, tokens, window_id, bg, grid);
-    let footer = footer_status(editor, tokens, window_id);
+    let toolbar = layer_toolbar(editor, tokens, address.clone());
+    let canvas_area = canvas_area(editor, tokens, address.clone(), bg, grid);
+    let footer = footer_status(editor, tokens, address);
 
     column![toolbar, canvas_area, footer]
         .spacing(0)
@@ -84,7 +88,7 @@ fn view_two_d_editor<'a>(
 fn view_three_d_panel<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -102,13 +106,13 @@ fn view_three_d_panel<'a>(
         .into();
     };
 
-    let body_editor = body3d::view(&fp.body_3d, tokens, window_id);
+    let body_editor = body3d::view(&fp.body_3d, tokens, address.clone());
     let preview = container(preview3d::view(fp))
         .padding(0)
         .width(Length::Fill)
         .height(Length::FillPortion(2))
         .style(crate::styles::modal_card(tokens));
-    let step = step_attach::view(fp, tokens, window_id);
+    let step = step_attach::view(fp, tokens, address);
 
     column![
         text("Body 3D & STEP").size(13).color(text_c),
@@ -129,7 +133,7 @@ fn view_three_d_panel<'a>(
 fn layer_toolbar<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -153,6 +157,8 @@ fn layer_toolbar<'a>(
         let on = layers.get(*layer);
         let swatch = layer.color();
         let label_color = if on { text_c } else { muted };
+        let toggle_addr = address.clone();
+        let layer_standard = layer.standard_name().to_string();
         let pill = button(
             row![
                 container(text("").size(11))
@@ -174,8 +180,9 @@ fn layer_toolbar<'a>(
         )
         .padding([3, 8])
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
-            msg: EditorMsg::FootprintToggleLayer(layer.standard_name().to_string()),
+            library_path: toggle_addr.library_path,
+            component_id: toggle_addr.component_id,
+            msg: EditorMsg::FootprintToggleLayer(layer_standard),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: if on {
@@ -212,7 +219,8 @@ fn layer_toolbar<'a>(
         container(text(auto_fit_label).size(11).color(text_c)).padding([3, 10]),
     )
     .on_press(LibraryMessage::EditorEvent {
-        window_id,
+        library_path: address.library_path,
+        component_id: address.component_id,
         msg: EditorMsg::FootprintToggleAutoFit,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -238,7 +246,7 @@ fn layer_toolbar<'a>(
 fn canvas_area<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
     bg: iced::Color,
     grid: iced::Color,
 ) -> Element<'a, LibraryMessage> {
@@ -248,7 +256,7 @@ fn canvas_area<'a>(
         let cache = editor.footprint_canvas_cache.get_or_init(Cache::new);
         let prog = FootprintCanvas {
             state: fp_state,
-            window_id,
+            address,
             bg_color: bg,
             grid_color: grid,
             cache,
@@ -282,7 +290,7 @@ fn canvas_area<'a>(
 fn footer_status<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    _window_id: iced::window::Id,
+    _address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);

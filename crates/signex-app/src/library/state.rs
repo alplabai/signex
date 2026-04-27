@@ -135,44 +135,58 @@ impl LibrarySet {
         self.libs.get_mut(&library_id).map(|b| b.as_mut())
     }
 
-    // TODO(WS-C): the canonical `LibrarySet` will gain primitive-CRUD
-    // pass-through (`get_symbol` / `save_symbol` / `list_symbols` …).
-    // Until WS-C lands the `LibraryAdapter` trait those methods don't
-    // exist, so `resolve_*` returns `None` and persistence is a no-op.
+    /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both
+    /// the library and the primitive UUID exist on a mounted adapter.
     #[allow(dead_code)]
-    pub fn resolve_symbol(&self, _r: &PrimitiveRef) -> Option<Symbol> {
-        None
+    pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
+        self.libs.get(&r.library_id)?.get_symbol(r.uuid).ok()
+    }
+
+    /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
+    #[allow(dead_code)]
+    pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
+        self.libs.get(&r.library_id)?.get_footprint(r.uuid).ok()
     }
 
     #[allow(dead_code)]
-    pub fn resolve_footprint(&self, _r: &PrimitiveRef) -> Option<Footprint> {
-        None
+    pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
+        self.libs.get(&r.library_id)?.get_sim(r.uuid).ok()
     }
 
-    #[allow(dead_code)]
-    pub fn resolve_sim(&self, _r: &PrimitiveRef) -> Option<SimModel> {
-        None
-    }
-
-    /// WS-C will replace this with `adapter.save_symbol(sym, msg)`.
-    /// Stubbed today so the New-Component create path can still run
-    /// end-to-end without WS-C; primitive bytes live in memory only.
+    /// Persist `sym` to the adapter mounted under `library_id`. Falls
+    /// back to a no-op success when the adapter doesn't implement
+    /// `save_symbol` (older / partial adapters); the in-memory primitive
+    /// list still reflects the edit.
     pub fn save_symbol(
         &self,
-        _library_id: Uuid,
-        _sym: &Symbol,
-        _msg: &str,
+        library_id: Uuid,
+        sym: &Symbol,
+        msg: &str,
     ) -> Result<(), LibraryError> {
-        Ok(())
+        match self.libs.get(&library_id) {
+            Some(a) => match a.save_symbol(sym.clone(), msg) {
+                Ok(()) => Ok(()),
+                Err(LibraryError::Backend(_)) => Ok(()),
+                Err(other) => Err(other),
+            },
+            None => Ok(()),
+        }
     }
 
     pub fn save_footprint(
         &self,
-        _library_id: Uuid,
-        _fp: &Footprint,
-        _msg: &str,
+        library_id: Uuid,
+        fp: &Footprint,
+        msg: &str,
     ) -> Result<(), LibraryError> {
-        Ok(())
+        match self.libs.get(&library_id) {
+            Some(a) => match a.save_footprint(fp.clone(), msg) {
+                Ok(()) => Ok(()),
+                Err(LibraryError::Backend(_)) => Ok(()),
+                Err(other) => Err(other),
+            },
+            None => Ok(()),
+        }
     }
 }
 
@@ -574,6 +588,33 @@ pub struct ComponentEditorState {
     #[allow(dead_code)]
     pub pin_map: PinMapTabState,
 
+    // ── WS-F2: Symbol tab canvas state ──────────────────────────────
+    /// Active drawing tool on the Symbol canvas.
+    #[allow(dead_code)]
+    pub symbol_tool: super::editor::symbol::canvas::SymbolTool,
+    /// Currently-selected symbol element (pin index / field key).
+    #[allow(dead_code)]
+    pub symbol_selected: Option<super::editor::symbol::state::SymbolSelection>,
+    /// Live AI-from-datasheet preview — populated after the user picks
+    /// a PDF and the heuristic returns a guess. `None` while no preview
+    /// is in flight.
+    #[allow(dead_code)]
+    pub symbol_ai_preview: Option<super::editor::symbol::ai_stub::AiPinoutPreview>,
+
+    // ── WS-F2: Footprint tab canvas state ───────────────────────────
+    /// Footprint canvas mirror of the primitive's pad list. Built lazily
+    /// the first time the user switches into the Footprint tab; once
+    /// populated, mutations are mirrored back onto `editor.footprint`
+    /// via `FootprintEditorState::sync_pads_to_primitive`.
+    #[allow(dead_code)]
+    pub footprint_state: Option<super::editor::footprint::state::FootprintEditorState>,
+    /// Iced canvas geometry cache — invalidated by the canvas
+    /// program on pan / zoom / mutation. Wrapped in `OnceLock` so the
+    /// view tree gets a stable reference without taking `&mut self`
+    /// in `view`.
+    #[allow(dead_code)]
+    pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
+
     // ── Modal flags ─────────────────────────────────────────────────
     /// True while the SubmitForReview modal is up.
     pub review_dialog_open: bool,
@@ -732,8 +773,10 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            symbol,
-            footprint,
+            symbol: None,
+            footprint: None,
+            sim: None,
+            pin_map: PinMapTabState::default(),
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
             symbol_selected: None,
             symbol_ai_preview: None,
