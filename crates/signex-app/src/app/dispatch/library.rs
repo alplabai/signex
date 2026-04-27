@@ -87,8 +87,41 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSetClass(class) => {
+                // WS-8: when the user changes class, we DON'T overwrite the
+                // table pick — that's the user's explicit choice. Other
+                // slices may extend this with auto-pluralisation hints, but
+                // the canonical rule is "user picks the table; class only
+                // affects the parameter template".
                 if let Some(nc) = self.library.new_component.as_mut() {
                     nc.class = class;
+                    nc.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetTable(name) => {
+                // WS-8: user picked a target table. If there's exactly one
+                // class associated with this table in the manifest, we
+                // surface that as the auto-class so the form fills out
+                // sensibly. Otherwise the user keeps editing the class
+                // independently.
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    if !name.is_empty() {
+                        nc.table = Some(name.clone());
+                        // Try to autoselect the matching class from the
+                        // manifest (`[[tables]]` override). Only triggers
+                        // when the user picked a manifest-declared table.
+                        if let Some(library_idx) = nc.library_idx
+                            && let Some(lib) = self.library.open_libraries.get(library_idx)
+                            && let Some(adapter) = self.library.set.get(lib.library_id)
+                            && let Some(cfg) =
+                                adapter.manifest().tables().iter().find(|c| c.name == name)
+                            && let Some(first) = cfg.classes.first()
+                        {
+                            nc.class = signex_library::ComponentClass::new(first);
+                        }
+                    } else {
+                        nc.table = None;
+                    }
                     nc.error = None;
                 }
                 Task::none()
@@ -108,24 +141,62 @@ impl Signex {
                     Some(i) => i,
                     None => {
                         if let Some(slot) = self.library.new_component.as_mut() {
-                            slot.error =
-                                Some("Pick a target library before submitting.".into());
+                            slot.error = Some("Pick a target library before submitting.".into());
                         }
                         return Task::none();
                     }
                 };
-                match commands::create_component(
+                // WS-8: target table — modal pick takes precedence. When
+                // the manifest declared no `[[tables]]` overrides, the
+                // modal still surfaces a default-pluralised slot (per
+                // plan §13 step 8.2); fall back to `Manifest::table_for_class`
+                // if the user submitted with an unset pick (ghost case
+                // when the modal opens with neither a pre-pick nor a
+                // user-selected table).
+                let library_path = match self.library.open_libraries.get(library_idx) {
+                    Some(lib) => lib.root.clone(),
+                    None => {
+                        if let Some(slot) = self.library.new_component.as_mut() {
+                            slot.error = Some("Selected library is no longer open.".into());
+                        }
+                        return Task::none();
+                    }
+                };
+                let table = match nc.table.clone() {
+                    Some(t) => t,
+                    None => {
+                        // Fall back to the manifest's class → table mapping.
+                        let resolved = self
+                            .library
+                            .open_libraries
+                            .get(library_idx)
+                            .and_then(|lib| self.library.set.get(lib.library_id))
+                            .map(|adapter| adapter.manifest().table_for_class(nc.class.as_str()));
+                        match resolved {
+                            Some(t) => t,
+                            None => {
+                                if let Some(slot) = self.library.new_component.as_mut() {
+                                    slot.error =
+                                        Some("Pick a target table before submitting.".into());
+                                }
+                                return Task::none();
+                            }
+                        }
+                    }
+                };
+                match commands::create_component_row(
                     &mut self.library,
-                    &nc.internal_pn,
                     library_idx,
+                    &table,
+                    &nc.internal_pn,
                     nc.class.clone(),
-                    &nc.category,
                 ) {
-                    Ok(created) => {
+                    Ok(row_id) => {
                         self.library.new_component = None;
-                        return Task::done(Message::Library(LibraryMessage::OpenEditor {
-                            library_path: created.library_root,
-                            component_id: created.component_id,
+                        return Task::done(Message::Library(LibraryMessage::OpenComponentRow {
+                            library_path,
+                            table,
+                            row_id,
                         }));
                     }
                     Err(e) => {
@@ -137,7 +208,6 @@ impl Signex {
                 Task::none()
             }
             // ────────────────────────────────────────────────────────
-
             LibraryMessage::ToggleLibraryTreeNode(idx) => {
                 if let Some(slot) = self.library.expanded.get_mut(idx) {
                     *slot = !*slot;
@@ -149,6 +219,23 @@ impl Signex {
                 library_path,
                 component_id,
             } => self.handle_open_editor(library_path, component_id),
+            // WS-8: DBLib-row preview tab — placeholder until WS-6's
+            // editor host wires the actual tab. Surface via tracing so
+            // the New Component flow's success path is observable.
+            LibraryMessage::OpenComponentRow {
+                library_path,
+                table,
+                row_id,
+            } => {
+                tracing::info!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    table = %table,
+                    row_id = %row_id,
+                    "open component row — Component Preview tab ships in WS-6"
+                );
+                Task::none()
+            }
             LibraryMessage::EditorEvent {
                 library_path,
                 component_id,
@@ -211,11 +298,10 @@ impl Signex {
         // path and against its parent dir — callers in WS-H emit the
         // file path, but a future menu wired to a tree-row right-
         // click could reasonably emit the directory.
-        let Some(loaded) = self
-            .document_state
-            .projects
-            .iter_mut()
-            .find(|p| p.path == project_root || p.path.parent() == Some(project_root.as_path()))
+        let Some(loaded) =
+            self.document_state.projects.iter_mut().find(|p| {
+                p.path == project_root || p.path.parent() == Some(project_root.as_path())
+            })
         else {
             tracing::warn!(
                 target: "signex::library",
@@ -309,14 +395,17 @@ impl Signex {
 
         // Pre-load the editor state. If the load fails, surface the
         // error and bail without leaving an empty tab behind.
-        let editor =
-            match commands::load_component_for_editor(&mut self.library, &library_path, component_id) {
-                Ok(e) => e,
-                Err(e) => {
-                    tracing::warn!(target: "signex::library", error = %e, "open editor pre-load failed");
-                    return Task::none();
-                }
-            };
+        let editor = match commands::load_component_for_editor(
+            &mut self.library,
+            &library_path,
+            component_id,
+        ) {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!(target: "signex::library", error = %e, "open editor pre-load failed");
+                return Task::none();
+            }
+        };
 
         let title = editor.display_internal_pn.clone();
         let project_id = self
@@ -505,9 +594,9 @@ impl Signex {
                             }
                             Err(e) => Err(e),
                         };
-                        Message::Library(LibraryMessage::Settings(
-                            SettingsMsg::MouserTestResult(result),
-                        ))
+                        Message::Library(LibraryMessage::Settings(SettingsMsg::MouserTestResult(
+                            result,
+                        )))
                     },
                 );
             }
@@ -541,11 +630,7 @@ impl Signex {
     }
 
     // WS-I: tab-not-window
-    fn handle_editor_event(
-        &mut self,
-        address: EditorAddress,
-        msg: EditorMsg,
-    ) -> Task<Message> {
+    fn handle_editor_event(&mut self, address: EditorAddress, msg: EditorMsg) -> Task<Message> {
         match msg {
             EditorMsg::CloseEditor => {
                 // Close the editor tab carrying this address. The
@@ -646,7 +731,7 @@ impl Signex {
                             library_path: address.library_path.clone(),
                             component_id: address.component_id,
                             msg: EditorMsg::SubmitForReviewResult(Err(
-                                "library no longer open".into(),
+                                "library no longer open".into()
                             )),
                         }));
                     }
@@ -657,9 +742,9 @@ impl Signex {
                         return Task::done(Message::Library(LibraryMessage::EditorEvent {
                             library_path: address.library_path.clone(),
                             component_id: address.component_id,
-                            msg: EditorMsg::SubmitForReviewResult(Err(
-                                "library not mounted".into()
-                            )),
+                            msg: EditorMsg::SubmitForReviewResult(
+                                Err("library not mounted".into()),
+                            ),
                         }));
                     }
                 };
@@ -743,8 +828,7 @@ impl Signex {
                             .await;
                         match picked {
                             Some(handle) => {
-                                let filename = handle
-                                    .file_name();
+                                let filename = handle.file_name();
                                 let bytes = handle.read().await;
                                 Some((bytes, filename))
                             }
@@ -836,8 +920,7 @@ impl Signex {
                 if let Some(editor) = self.library.editors.get_mut(address)
                     && editor.symbol.is_none()
                 {
-                    let resolved =
-                        self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let resolved = self.library.set.resolve_symbol(&editor.draft.symbol_ref);
                     let editor = self
                         .library
                         .editors
@@ -873,8 +956,7 @@ impl Signex {
                 if let Some(editor) = self.library.editors.get_mut(address)
                     && editor.symbol.is_none()
                 {
-                    let resolved =
-                        self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let resolved = self.library.set.resolve_symbol(&editor.draft.symbol_ref);
                     let editor = self
                         .library
                         .editors
@@ -913,8 +995,7 @@ impl Signex {
                         .editors
                         .get_mut(address)
                         .expect("editor present");
-                    editor.sim_body =
-                        Some(iced::widget::text_editor::Content::with_text(&body));
+                    editor.sim_body = Some(iced::widget::text_editor::Content::with_text(&body));
                 }
             }
             _ => {}
@@ -923,11 +1004,7 @@ impl Signex {
 
     /// WS-F2: package the picked PDF bytes into the AI-stub heuristic
     /// preview so the view can render the apply/cancel card.
-    fn handle_symbol_picked_ai_pdf(
-        &mut self,
-        address: &EditorAddress,
-        payload: Option<Vec<u8>>,
-    ) {
+    fn handle_symbol_picked_ai_pdf(&mut self, address: &EditorAddress, payload: Option<Vec<u8>>) {
         let Some(editor) = self.library.editors.get_mut(address) else {
             return;
         };
@@ -1216,8 +1293,7 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
             // WS-E: description is a free-form note field; the binding
             // record carries it on the primary MPN's `notes` slot for
             // now. WS-F will move it to a first-class field if needed.
-            editor.draft.primary_mpn.notes =
-                if s.trim().is_empty() { None } else { Some(s) };
+            editor.draft.primary_mpn.notes = if s.trim().is_empty() { None } else { Some(s) };
         }
         EditorMsg::OverviewSetDatasheet(s) => {
             let trimmed = s.trim();
@@ -1342,11 +1418,10 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
         }
         EditorMsg::SymbolDeleteSelected => {
             if let Some(sym) = editor.symbol.as_mut()
-                && let Some(new_sel) =
-                    crate::library::editor::symbol::state::delete_selected(
-                        sym,
-                        editor.symbol_selected,
-                    )
+                && let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
+                    sym,
+                    editor.symbol_selected,
+                )
             {
                 editor.symbol_selected = new_sel;
                 editor.dirty = true;
@@ -1405,7 +1480,9 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
                 && let Some(fp) = editor.footprint.as_ref()
             {
                 editor.footprint_state = Some(
-                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
+                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                        fp,
+                    ),
                 );
             }
             if let Some(state) = editor.footprint_state.as_mut() {
@@ -1460,7 +1537,8 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
         }
         EditorMsg::FootprintToggleLayer(name) => {
             if let Some(state) = editor.footprint_state.as_mut()
-                && let Some(layer) = crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
+                && let Some(layer) =
+                    crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
             {
                 state.layer_visibility.toggle(layer);
                 if let Some(cache) = editor.footprint_canvas_cache.get() {
@@ -1482,7 +1560,9 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
         EditorMsg::SaveFootprint(_uuid, fp) => {
             if let Some(stored) = editor.footprint.as_mut() {
                 editor.footprint_state = Some(
-                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(&fp),
+                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                        &fp,
+                    ),
                 );
                 *stored = *fp;
                 if let Some(cache) = editor.footprint_canvas_cache.get() {
@@ -1527,6 +1607,191 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
                 editor.dirty = true;
             }
         }
+        // ── WS-K: Supply tab ──────────────────────────────────
+        EditorMsg::SupplyPrimarySetManufacturer(s) => {
+            editor.draft.primary_mpn.manufacturer = s;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetMpn(s) => {
+            editor.draft.primary_mpn.mpn = s;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetStatus(status) => {
+            editor.draft.primary_mpn.status = status;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetNotes(s) => {
+            editor.draft.primary_mpn.notes = if s.is_empty() { None } else { Some(s) };
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyAlternateAdd => {
+            use signex_library::{AlternateStatus, ManufacturerPart};
+            let mut row = ManufacturerPart::draft("", "");
+            // New alternates default to Approved — `Primary` is the
+            // headline part's slot, not an alternate-row status.
+            row.status = AlternateStatus::Approved;
+            editor.draft.alternates.push(row);
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyAlternateSetManufacturer { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.manufacturer = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetMpn { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.mpn = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetStatus { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.status = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetNotes { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.notes = if value.is_empty() { None } else { Some(value) };
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateRemove { idx } => {
+            if idx < editor.draft.alternates.len() {
+                editor.draft.alternates.remove(idx);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingAdd => {
+            use signex_library::DistributorListing;
+            // Default new listings to DigiKey — matches the picker's
+            // first option so the row renders sensibly out of the gate.
+            editor
+                .draft
+                .supply
+                .push(DistributorListing::new("DigiKey", ""));
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyListingSetDistributor { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.distributor =
+                    crate::library::editor::supply::distributor_source_to_string(value);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingSetSku { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.sku = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingSetUrl { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.url = if value.is_empty() { None } else { Some(value) };
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingRemove { idx } => {
+            if idx < editor.draft.supply.len() {
+                editor.draft.supply.remove(idx);
+                editor.dirty = true;
+            }
+        }
+        // ── /WS-K ─────────────────────────────────────────────
+        // ── WS-J: Params tab ──────────────────────────────────
+        EditorMsg::ParamSetText { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Text(value));
+            editor.dirty = true;
+        }
+        EditorMsg::ParamSetNumberBuf { name, buf } => {
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitNumber { name } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(n) = trimmed.parse::<f64>() {
+                    editor
+                        .draft
+                        .parameters
+                        .insert(name.clone(), ParamValue::Number(n));
+                    editor.params_edit_buf.insert(name, n.to_string());
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::ParamSetMeasurementBuf { name, buf } => {
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitMeasurement { name, unit } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(value) = trimmed.parse::<f64>() {
+                    editor.draft.parameters.insert(
+                        name.clone(),
+                        ParamValue::Measurement {
+                            value,
+                            unit: unit.clone(),
+                        },
+                    );
+                    editor.params_edit_buf.insert(name, value.to_string());
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::ParamSetBool { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Bool(value));
+            editor.dirty = true;
+        }
+        EditorMsg::ParamRemove { name } => {
+            editor.draft.parameters.remove(&name);
+            editor.params_edit_buf.remove(&name);
+            editor.dirty = true;
+        }
+        EditorMsg::ParamAddCustom { name, kind } => {
+            use signex_library::ParamValue;
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+            if editor.draft.parameters.contains_key(trimmed) {
+                return;
+            }
+            let key = trimmed.to_string();
+            let value = match kind {
+                ParamKindMsg::Text => ParamValue::Text(String::new()),
+                ParamKindMsg::Number => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Number(0.0)
+                }
+                ParamKindMsg::Bool => ParamValue::Bool(false),
+                ParamKindMsg::Measurement(unit) => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Measurement { value: 0.0, unit }
+                }
+            };
+            editor.draft.parameters.insert(key, value);
+            editor.dirty = true;
+        }
+        // ── /WS-J ─────────────────────────────────────────────
         // ── WS-L: Sim tab ────────────────────────────────────
         EditorMsg::SimSetEnabled(true) => {
             if editor.sim.is_none() {
@@ -1542,8 +1807,7 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
                     editor.draft.symbol_ref.library_id,
                     model.uuid,
                 ));
-                editor.sim_body =
-                    Some(iced::widget::text_editor::Content::new());
+                editor.sim_body = Some(iced::widget::text_editor::Content::new());
                 editor.sim = Some(model);
                 editor.dirty = true;
             }
@@ -1584,8 +1848,7 @@ pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMs
                 if trimmed.is_empty() {
                     sim.default_node_map.remove(&pin_number);
                 } else {
-                    sim.default_node_map
-                        .insert(pin_number, trimmed.to_string());
+                    sim.default_node_map.insert(pin_number, trimmed.to_string());
                 }
                 sim.updated = chrono::Utc::now();
                 editor.dirty = true;
@@ -1750,7 +2013,10 @@ mod supply_tests {
         editor.dirty = false;
         apply_inline_edit(&mut editor, EditorMsg::SupplyListingRemove { idx: 5 });
 
-        assert_eq!(editor.draft.supply, snapshot, "stale remove must not mutate");
+        assert_eq!(
+            editor.draft.supply, snapshot,
+            "stale remove must not mutate"
+        );
         assert!(!editor.dirty, "out-of-bounds remove must not flip dirty");
     }
 

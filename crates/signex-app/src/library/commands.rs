@@ -9,8 +9,10 @@
 use std::path::{Path, PathBuf};
 
 use signex_library::{
-    ComponentId, LibraryError, LibraryMeta, LibraryMode, LocalGitAdapter, Manifest, Revision,
-    UsersConfig, WorkflowConfig,
+    Component, ComponentClass, ComponentId, ComponentRow, ComponentSummary, DatasheetRef,
+    Footprint, InternalPn, LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter,
+    Manifest, ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, Revision, RowId, Symbol,
+    UsersConfig, Version, WorkflowConfig, hash_row_content,
 };
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;
@@ -59,9 +61,7 @@ pub fn create_library(
 ) -> Result<Uuid, LibraryError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name is empty".to_string(),
-        ));
+        return Err(LibraryError::Conflict("library name is empty".to_string()));
     }
     if trimmed
         .chars()
@@ -99,6 +99,10 @@ pub fn create_library(
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
         users: UsersConfig::default(),
+        // WS-8 (DBLib model): no `[[tables]]` overrides at create
+        // time — class-table routing falls back to mechanical plural
+        // (`<class>s.tsv`) until the user adds explicit overrides.
+        tables: Vec::new(),
     };
 
     // 2. `LocalGitAdapter::init` lays out the directory, writes
@@ -139,10 +143,7 @@ pub fn create_library(
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
-pub fn auto_mount_project_libraries(
-    state: &mut LibraryState,
-    project: &ProjectData,
-) -> usize {
+pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
     let mut mounted = 0usize;
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
@@ -200,10 +201,7 @@ pub fn load_component_for_editor(
 /// Save the editor's draft revision locally.
 // WS-I: tab-not-window — editors are addressed by
 // `EditorAddress(library_path, component_id)` instead of by window id.
-pub fn save_draft(
-    state: &mut LibraryState,
-    address: &EditorAddress,
-) -> Result<(), LibraryError> {
+pub fn save_draft(state: &mut LibraryState, address: &EditorAddress) -> Result<(), LibraryError> {
     let editor = state
         .editors
         .get_mut(address)
@@ -257,155 +255,118 @@ pub fn commit_revision(
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// WS-E: New Component create-flow
+// WS-8: New Component create-flow (DBLib model — components are rows)
 // ─────────────────────────────────────────────────────────────────────
 
-/// Errors specific to the New-Component create flow. Wraps both
-/// validation issues (UI surface) and adapter persistence errors.
-///
-/// Hand-rolled `Display` + `From<LibraryError>` (signex-app doesn't
-/// pull `thiserror` in directly).
-#[derive(Debug)]
-pub enum NewComponentError {
-    EmptyInternalPn,
-    NoLibrarySelected,
-    LibraryNotOpen(String),
-    Library(LibraryError),
-}
+// The create_component_row helper returns `LibraryError` directly —
+// validation cases (empty PN, missing table, missing library) are
+// reported as `LibraryError::Conflict` / `LibraryError::NotFound` so
+// the dispatcher's existing `Display`-based error surface works
+// unchanged. The bespoke `NewComponentError` enum from the WS-E
+// shape (which wrapped `LibraryError` plus `EmptyInternalPn` /
+// `NoLibrarySelected` variants) is gone — `LibraryError` already
+// covers the same surface area for the row-tier flow.
 
-impl std::fmt::Display for NewComponentError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmptyInternalPn => f.write_str("internal PN cannot be empty"),
-            Self::NoLibrarySelected => f.write_str("pick a target library before submitting"),
-            Self::LibraryNotOpen(p) => write!(f, "library not open: {p}"),
-            Self::Library(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl std::error::Error for NewComponentError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Library(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl From<LibraryError> for NewComponentError {
-    fn from(e: LibraryError) -> Self {
-        Self::Library(e)
-    }
-}
-
-/// Result of a successful create — used by the dispatcher to open
-/// the editor on the new component.
-pub struct CreatedComponent {
-    pub library_root: PathBuf,
-    pub component_id: ComponentId,
-}
-
-/// Create a new draft component:
+/// Create a new component **row**:
 ///
 /// 1. Mints a [`Symbol`] primitive with one default pin (`"1"`).
 /// 2. Mints a [`Footprint`] primitive with no pads (the user fills
-///    these in via the Footprint tab — WS-F).
-/// 3. Persists both primitives via `LibrarySet::save_*` (currently a
-///    no-op stub — WS-C will wire the adapter).
-/// 4. Creates a [`Component`] holding one Draft revision binding both
-///    primitives by `PrimitiveRef`, and persists it via
-///    `adapter.save_revision`.
+///    these in via the Footprint editor — WS-7).
+/// 3. Persists both primitives via `adapter.save_symbol` /
+///    `adapter.save_footprint`. Adapters that haven't wired primitive
+///    persistence yet (`LibraryError::Backend("…not implemented…")`)
+///    keep the in-memory binding so the row insert proceeds.
+/// 4. Builds a [`ComponentRow`] holding the binding refs +
+///    user-supplied PN / class, computes the canonical content hash
+///    via [`hash_row_content`], and inserts it into the chosen table
+///    via `adapter.insert_row`.
 ///
-/// Returns the new component's `(library_root, uuid)` so the caller
-/// can open the editor on it.
-pub fn create_component(
+/// Returns the new row's `RowId` so the caller can open it as a
+/// Component Preview tab via `LibraryMessage::OpenComponentRow`.
+pub fn create_component_row(
     state: &mut LibraryState,
-    internal_pn: &str,
     library_idx: usize,
+    table: &str,
+    internal_pn: &str,
     class: ComponentClass,
-    category: &str,
-) -> Result<CreatedComponent, NewComponentError> {
+) -> Result<RowId, LibraryError> {
     let internal_pn = internal_pn.trim();
     if internal_pn.is_empty() {
-        return Err(NewComponentError::EmptyInternalPn);
+        return Err(LibraryError::Conflict("internal PN cannot be empty".into()));
     }
+    let table = table.trim();
+    if table.is_empty() {
+        return Err(LibraryError::Conflict(
+            "target table cannot be empty".into(),
+        ));
+    }
+
     let library = state
         .open_libraries
         .get(library_idx)
-        .ok_or(NewComponentError::NoLibrarySelected)?;
+        .ok_or_else(|| LibraryError::NotFound(format!("library_idx={library_idx}")))?;
     let library_root = library.root.clone();
     let library_id = library.library_id;
 
-    // Seed the empty primitives.
-    let symbol = Symbol::empty(internal_pn);
-    let footprint = Footprint::empty(internal_pn);
-    let symbol_ref = PrimitiveRef::new(library_id, symbol.uuid);
-    let footprint_ref = PrimitiveRef::new(library_id, footprint.uuid);
+    // 1+2. Mint the empty primitives. UUIDs are time-ordered so
+    //      git history naturally sorts in creation order.
+    let symbol_uuid = Uuid::new_v4();
+    let footprint_uuid = Uuid::new_v4();
+    let mut symbol = Symbol::empty(internal_pn);
+    symbol.uuid = symbol_uuid;
+    let mut footprint = Footprint::empty(internal_pn);
+    footprint.uuid = footprint_uuid;
 
-    // Persist primitives via the real adapter (WS-C). Backend-not-implemented
-    // errors are tolerated — partial adapters keep the in-memory primitive
-    // bindings without breaking the New-Component flow.
     let adapter = state
         .set
         .get(library_id)
         .ok_or_else(|| LibraryError::NotFound(format!("library_id={library_id}")))?;
+
+    // 3. Persist the primitives. `Backend("…not implemented…")` is the
+    //    sentinel from the default trait impl — tolerate it so adapters
+    //    that haven't wired primitive storage yet (legacy LibrarySet
+    //    stubs) don't block the row insert.
     match adapter.save_symbol(symbol.clone(), "new component: seed symbol") {
-        Ok(()) | Err(LibraryError::Backend(_)) => {}
-        Err(e) => return Err(e.into()),
+        Ok(()) => {}
+        Err(LibraryError::Backend(msg)) if msg.contains("not implemented") => {}
+        Err(e) => return Err(e),
     }
     match adapter.save_footprint(footprint.clone(), "new component: seed footprint") {
-        Ok(()) | Err(LibraryError::Backend(_)) => {}
-        Err(e) => return Err(e.into()),
+        Ok(()) => {}
+        Err(LibraryError::Backend(msg)) if msg.contains("not implemented") => {}
+        Err(e) => return Err(e),
     }
 
-    // Build the binding component with one Draft revision.
+    // 4. Build the row binding both primitives.
+    let row_id = RowId::new();
     let now = chrono::Utc::now();
-    let head_version = Version::new(0, 1);
-    let mut revision = Revision {
-        version: head_version,
+    let mut row = ComponentRow {
+        row_id: row_id.as_uuid(),
+        internal_pn: InternalPn::new(internal_pn),
+        class,
+        datasheet: DatasheetRef::default(),
         state: LifecycleState::Draft,
-        created: now,
-        author: String::new(),
-        message: format!("draft: {internal_pn}"),
-        symbol_ref,
-        footprint_ref: Some(footprint_ref),
+        symbol_ref: PrimitiveRef::new(library_id, symbol_uuid),
+        footprint_ref: Some(PrimitiveRef::new(library_id, footprint_uuid)),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("", ""),
         alternates: Vec::new(),
         supply: Vec::new(),
-        datasheet: DatasheetRef::default(),
         parameters: ParamMap::new(),
         plm: PlmReserved::default(),
+        created: now,
+        updated: now,
         content_hash: [0u8; 32],
     };
-    revision.refresh_content_hash();
+    row.content_hash = hash_row_content(&row)?;
 
-    let category_path = if category.trim().is_empty() {
-        std::path::PathBuf::new()
-    } else {
-        std::path::PathBuf::from(category.trim())
-    };
-
-    let component = Component {
-        uuid: Uuid::now_v7(),
-        internal_pn: InternalPn::new(internal_pn),
-        class,
-        category: category_path,
-        family: None,
-        revisions: vec![revision.clone()],
-        head: head_version,
-    };
-
-    // Persist the component via the adapter.
+    let commit_msg = format!("new component: {internal_pn}");
     let adapter = state
         .set
         .get(library_id)
-        .ok_or_else(|| NewComponentError::LibraryNotOpen(library_root.display().to_string()))?;
-    adapter
-        .save_revision(component.uuid, revision, "new component (signex-app)")
-        .map_err(NewComponentError::Library)?;
+        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+    adapter.insert_row(table, row, &commit_msg)?;
 
     // Best-effort refresh of the cached component list. Failure here
     // doesn't void the create — surface as a warning only.
@@ -418,10 +379,7 @@ pub fn create_component(
         );
     }
 
-    Ok(CreatedComponent {
-        library_root,
-        component_id: component.uuid,
-    })
+    Ok(row_id)
 }
 
 /// Re-run a query against every open library — picker filter helper.
@@ -451,12 +409,15 @@ pub fn list_components_filtered(
 /// Stub: emit `tracing::info!` with the use-site coordinates the
 /// editor's Where-Used tab handed back.
 pub fn jump_to_use_site(site: &signex_library::UseSite) {
+    // WS-8 (DBLib model): `UseSite::version_pinned` is gone — past
+    // versions of a row are read from `git log` (LocalGit) or the
+    // audit trail (Database) rather than carried inline. The handler
+    // surfaces just the project / sheet / instance triple now.
     tracing::info!(
         target: "signex::library",
         project = %site.project_path.display(),
         sheet = %site.sheet_path.display(),
         instance = %site.instance_id,
-        version = %site.version_pinned,
         "jump-to-use-site requested (phase-2 follow-up)"
     );
 }
