@@ -1,17 +1,10 @@
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
 //! The adapter is a synchronous facade for the trait. Per
-//! `v0.9-refactor-2-plan.md` §8 (WS-3), row CRUD speaks to the new
-//! `/tables` / `/rows` routes — primitive (`/symbols` / `/footprints` /
-//! `/sims`) wiring is unchanged from v0.9-original because primitives are
-//! already row-shaped under the refactor.
-//!
-//! The new routes (owned by WS-4) are addressed by a `library_id` query
-//! parameter — the adapter sources its own from
-//! `manifest().library.library_id`. Mutating calls carry their commit
-//! message in the `x-signex-message` header so the server-side audit log
-//! has it (the DB backend doesn't have its own commit graph the way
-//! `LocalGitAdapter` does — see TODO around the `audit_log` table below).
+//! `v0.9-refactor-2-plan.md` §8, WS-3 will replace this with row CRUD
+//! against the new `/tables` / `/rows` routes. WS-1 keeps just the
+//! primitive CRUD wiring intact (still correct under the row model);
+//! component / revision routes are gone.
 
 use std::sync::OnceLock;
 
@@ -19,8 +12,6 @@ use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
-use crate::component::ComponentRow;
-use crate::identity::{InternalPn, RowId};
 use crate::manifest::{LibraryMode, Manifest};
 use crate::primitive::{Footprint, SimModel, Symbol};
 
@@ -211,193 +202,9 @@ impl LibraryAdapter for DatabaseAdapter {
         &self.manifest
     }
 
-    // ── Row + table CRUD (WS-3) ──────────────────────────────────────────
-    //
-    // The adapter forwards each method to its planned route on
-    // `signex-library-server` (WS-4). The server-side DB schema lives in
-    // `migrations/0005_tabular_components.sql`; the wire format is the
-    // `ComponentRow` JSON serialisation defined in `component::ComponentRow`.
-    //
-    // TODO(audit): mutating routes pass a commit message via
-    // `x-signex-message`, but the DB backend has no audit_log table yet —
-    // the message currently shows up only in `tracing::info!` lines.
-    // v0.9.x can add an `audit_log (library_id, row_id, actor, message,
-    // occurred)` row per mutation when the workflow grows server-side
-    // history beyond what the route handler logs surface.
-
-    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
-        let url = self.url(&format!("/tables?{}", self.library_id_query()));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "list_tables: {}",
-                resp.status()
-            )));
-        }
-        resp.json::<Vec<String>>()
-            .map_err(|e| LibraryError::Backend(e.to_string()))
-    }
-
-    fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
-        let url = self.url(&format!("/tables/{name}?{}", self.library_id_query()));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => resp
-                .json::<Vec<ComponentRow>>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
-            reqwest::StatusCode::NOT_FOUND => Err(LibraryError::NotFound(format!("table {name}"))),
-            other => Err(LibraryError::Backend(format!("read_table {name}: {other}"))),
-        }
-    }
-
-    /// Composed from `list_tables` + `read_table` per plan §9 (the server
-    /// only ships the 6 row/table routes; no aggregate `/rows` endpoint).
-    /// Cost is one round-trip per table, then one per non-empty table —
-    /// fine at v0.9 scale.
-    fn iter_rows(&self) -> Result<Vec<(String, ComponentRow)>, LibraryError> {
-        let mut out = Vec::new();
-        for name in self.list_tables()? {
-            let rows = self.read_table(&name)?;
-            for row in rows {
-                out.push((name.clone(), row));
-            }
-        }
-        Ok(out)
-    }
-
-    fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
-        let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
-            self.library_id_query()
-        ));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => resp
-                .json::<ComponentRow>()
-                .map_err(|e| LibraryError::Backend(e.to_string())),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "read_row {table}/{row_id}: {other}"
-            ))),
-        }
-    }
-
-    /// Linear scan via `iter_rows` — same composition rationale as
-    /// `iter_rows`. The server has no PN index endpoint; v0.9 acceptable.
-    fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
-        for (table, row) in self.iter_rows()? {
-            if &row.internal_pn == pn {
-                return Ok((table, row));
-            }
-        }
-        Err(LibraryError::NotFound(format!("internal_pn {pn}")))
-    }
-
-    fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
-        // The DB backend has no commit log — surface the audit message at
-        // the `tracing` layer so it shows up in operator logs even before
-        // the planned `audit_log` table lands.
-        tracing::info!(
-            target: "signex_library::database",
-            library_id = %self.manifest.library.library_id,
-            table = table,
-            row_id = %row.row_id,
-            internal_pn = %row.internal_pn,
-            message = msg,
-            "insert_row",
-        );
-        let url = self.url(&format!("/tables/{table}/rows?{}", self.library_id_query()));
-        let resp = self
-            .auth(
-                self.client
-                    .post(url)
-                    .header("x-signex-message", msg)
-                    .json(&row),
-            )
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "insert_row {table}: {}",
-                resp.status()
-            )));
-        }
-        Ok(())
-    }
-
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
-        tracing::info!(
-            target: "signex_library::database",
-            library_id = %self.manifest.library.library_id,
-            table = table,
-            row_id = %row.row_id,
-            internal_pn = %row.internal_pn,
-            message = msg,
-            "update_row",
-        );
-        let row_id = row.row_id;
-        let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
-            self.library_id_query()
-        ));
-        let resp = self
-            .auth(
-                self.client
-                    .put(url)
-                    .header("x-signex-message", msg)
-                    .json(&row),
-            )
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "update_row {table}/{row_id}: {other}"
-            ))),
-        }
-    }
-
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
-        tracing::info!(
-            target: "signex_library::database",
-            library_id = %self.manifest.library.library_id,
-            table = table,
-            row_id = %row_id,
-            message = msg,
-            "delete_row",
-        );
-        let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
-            self.library_id_query()
-        ));
-        let resp = self
-            .auth(self.client.delete(url).header("x-signex-message", msg))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => Ok(()),
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("row {table}/{row_id}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "delete_row {table}/{row_id}: {other}"
-            ))),
-        }
-    }
+    // Row CRUD lands in WS-3; until then the trait defaults
+    // (`Backend("not impl")`) cover every row method so the adapter still
+    // satisfies the trait shape.
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
         self.get_primitive_json::<Symbol>("symbols", uuid, "symbol")

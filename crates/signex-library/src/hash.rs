@@ -18,7 +18,6 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::adapter::LibraryError;
 use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
@@ -72,34 +71,9 @@ impl<'a> CanonView<'a> {
 }
 
 /// Compute the canonical content hash of a row.
-///
-/// Returns `LibraryError::Backend` when the row contains a non-finite float
-/// (`NaN` / `±Infinity`) inside any `ParamValue::Number` / `ParamValue::
-/// Measurement` reached by the canonical view. Two reasons we trap this here
-/// rather than upstream:
-///
-/// 1. **Hash determinism.** `serde_json` silently encodes `NaN` / `Infinity`
-///    as JSON `null`, so a row carrying `Number(NaN)` would hash equal to a
-///    row carrying `Number(0.0)` (after the upstream constructor zeroed it
-///    out, etc.) — that defeats the "did the technical content actually
-///    change?" question content_hash answers.
-/// 2. **Less-invasive than upstream validation.** Tightening `ParamValue` to
-///    reject non-finite floats at construction would require making variants
-///    `#[non_exhaustive]` and rewriting ~50 enum-literal call sites in
-///    signex-app and tests. Boundary validation here keeps the change
-///    localised to the two functions whose semantics actually depend on it.
-pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
-    check_param_map_finite(&row.parameters)?;
-
-    // serde_json::to_vec on `Serialize` is infallible for the field set used
-    // by CanonView (no non-finite floats remain after the check above; all
-    // other fields are strings / ints / structs of strings). The match arm
-    // exists for defence-in-depth: any future field added to CanonView that
-    // can fail to serialise will surface as a `Backend` error rather than a
-    // panic.
-    let canon = serde_json::to_vec(&CanonView::from_row(row)).map_err(|e| {
-        LibraryError::Backend(format!("hash row content: serialise canonical view: {e}"))
-    })?;
+pub fn hash_row_content(row: &ComponentRow) -> [u8; 32] {
+    let canon = serde_json::to_vec(&CanonView::from_row(row))
+        .expect("CanonView must serialise");
     let mut hasher = Sha256::new();
     hasher.update(&canon);
     let result = hasher.finalize();
@@ -162,10 +136,7 @@ mod tests {
     #[test]
     fn hash_is_deterministic() {
         let row = fixture_row();
-        assert_eq!(
-            hash_row_content(&row).unwrap(),
-            hash_row_content(&row).unwrap()
-        );
+        assert_eq!(hash_row_content(&row), hash_row_content(&row));
     }
 
     #[test]
@@ -174,7 +145,7 @@ mod tests {
         let mut b = fixture_row();
         a.primary_mpn = ManufacturerPart::draft("Acme", "A");
         b.primary_mpn = ManufacturerPart::draft("Acme", "B");
-        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        assert_ne!(hash_row_content(&a), hash_row_content(&b));
     }
 
     #[test]
@@ -183,7 +154,7 @@ mod tests {
         let mut b = fixture_row();
         a.symbol_ref = PrimitiveRef::new(Uuid::nil(), Uuid::nil());
         b.symbol_ref = PrimitiveRef::new(Uuid::nil(), Uuid::now_v7());
-        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        assert_ne!(hash_row_content(&a), hash_row_content(&b));
     }
 
     #[test]
@@ -191,7 +162,7 @@ mod tests {
         let a = fixture_row();
         let mut b = fixture_row();
         b.pin_map_overrides.push(PinPadOverride::new("EP", "EP1"));
-        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        assert_ne!(hash_row_content(&a), hash_row_content(&b));
     }
 
     /// Bookkeeping fields (`created`, `updated`, `content_hash`) MUST NOT
@@ -207,7 +178,7 @@ mod tests {
         b.updated = Utc::now() + chrono::Duration::days(99);
         a.content_hash = [0xAA; 32];
         b.content_hash = [0xBB; 32];
-        assert_eq!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        assert_eq!(hash_row_content(&a), hash_row_content(&b));
     }
 
     #[test]
@@ -216,7 +187,7 @@ mod tests {
         let mut b = fixture_row();
         a.class = ComponentClass::new("resistor");
         b.class = ComponentClass::new("capacitor");
-        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        assert_ne!(hash_row_content(&a), hash_row_content(&b));
     }
 
     #[test]
@@ -225,24 +196,6 @@ mod tests {
         let mut b = fixture_row();
         a.state = LifecycleState::Released;
         b.state = LifecycleState::Deprecated;
-        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
-    }
-
-    /// `serde_json` cannot encode `NaN` / `±Infinity`. The hash function
-    /// surfaces that as `LibraryError::Backend` instead of panicking.
-    #[test]
-    fn hash_returns_backend_error_on_non_finite_float() {
-        use crate::param::ParamValue;
-        let mut row = fixture_row();
-        row.parameters
-            .insert("bad".into(), ParamValue::Number(f64::NAN));
-        let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
-
-        let mut row = fixture_row();
-        row.parameters
-            .insert("bad".into(), ParamValue::Number(f64::INFINITY));
-        let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
+        assert_ne!(hash_row_content(&a), hash_row_content(&b));
     }
 }

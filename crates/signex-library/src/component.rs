@@ -149,14 +149,8 @@ pub struct ComponentRow {
 
 impl ComponentRow {
     /// Recompute and store the content hash from the canonical view.
-    ///
-    /// Returns `LibraryError::Backend` when the row contains a non-finite
-    /// float (`NaN` / `±Infinity`) anywhere reached by the canonical view —
-    /// `serde_json` can't encode those, and panicking on save would be an
-    /// availability bug. See [`crate::hash::hash_row_content`].
-    pub fn refresh_content_hash(&mut self) -> Result<(), crate::adapter::LibraryError> {
-        self.content_hash = crate::hash::hash_row_content(self)?;
-        Ok(())
+    pub fn refresh_content_hash(&mut self) {
+        self.content_hash = crate::hash::hash_row_content(self);
     }
 }
 
@@ -222,7 +216,7 @@ mod tests {
     fn refresh_content_hash_populates() {
         let mut row = fixture_row();
         assert_eq!(row.content_hash, [0u8; 32]);
-        row.refresh_content_hash().unwrap();
+        row.refresh_content_hash();
         assert_ne!(row.content_hash, [0u8; 32]);
     }
 
