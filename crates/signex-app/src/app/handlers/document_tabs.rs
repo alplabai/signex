@@ -114,14 +114,18 @@ impl Signex {
             .iter()
             .filter_map(|(id, kind)| match (kind, &closing_kind) {
                 (WindowKind::UndockedTab { path, .. }, _) if path == &closing_path => Some(*id),
-                // WS-I: tab-not-window
+                // WS-I: tab-not-window — DBLib row tier
                 (
                     WindowKind::ComponentEditor {
                         library_path,
-                        component_id,
+                        table,
+                        row_id,
                     },
                     crate::app::TabKind::ComponentEditor(ce),
-                ) if library_path == &ce.library_path && component_id == &ce.component_id => {
+                ) if library_path == &ce.library_path
+                    && table == &ce.table
+                    && row_id == &ce.row_id =>
+                {
                     Some(*id)
                 }
                 _ => None,
@@ -147,8 +151,19 @@ impl Signex {
                 .editors
                 .remove(&crate::library::state::EditorAddress::new(
                     ce.library_path.clone(),
-                    ce.component_id,
+                    ce.table.clone(),
+                    ce.row_id,
                 ));
+        }
+        // WS-7 (refactor-2): standalone primitive editor tabs.
+        // Drop the per-tab editor state on close — same shape as
+        // Component Editor cleanup (no dirty-park yet, so closing
+        // discards the in-flight draft).
+        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
+            self.document_state.symbol_editors.remove(p);
+        }
+        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
+            self.document_state.footprint_editors.remove(p);
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()

@@ -3695,6 +3695,29 @@ impl Signex {
             };
         }
 
+        // WS-7 (refactor-2): standalone primitive editor tabs.
+        // `.snxsym` / `.snxfpt` open as main-window document tabs
+        // alongside `.snxsch` / `.snxpcb`. Lookup is path-keyed via
+        // `DocumentState.symbol_editors` / `footprint_editors`.
+        if is_main
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+        {
+            if let Some(path) = active_tab.kind.as_symbol_editor()
+                && let Some(editor) = self.document_state.symbol_editors.get(path)
+            {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                return crate::library::editor::standalone::view_symbol(editor, tokens)
+                    .map(Message::Library);
+            }
+            if let Some(path) = active_tab.kind.as_footprint_editor()
+                && let Some(editor) = self.document_state.footprint_editors.get(path)
+            {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                return crate::library::editor::standalone::view_footprint(editor, tokens)
+                    .map(Message::Library);
+            }
+        }
+
         let has_schematic = if is_main {
             self.has_active_schematic()
         } else {

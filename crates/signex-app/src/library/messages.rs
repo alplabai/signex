@@ -121,6 +121,17 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// Inner-message envelope for events fired from a standalone
+    /// primitive editor tab (WS-7). Keyed by file path so the
+    /// dispatcher can locate the matching `SymbolEditorState` /
+    /// `FootprintEditorState` in `DocumentState.symbol_editors` /
+    /// `footprint_editors`. Mirrors the `EditorEvent` shape used
+    /// for Component Preview tabs but with a path identity instead
+    /// of `(library_path, table, row_id)`.
+    PrimitiveEditorEvent {
+        path: PathBuf,
+        msg: PrimitiveEditorMsg,
+    },
 }
 
 /// User choice from the close-library confirmation modal.
@@ -490,6 +501,60 @@ pub enum SymbolSelectionMsg {
 pub enum FieldKeyMsg {
     Reference,
     Value,
+}
+
+// WS-7 (refactor-2): standalone primitive editor tabs
+/// Inner messages for a [`LibraryMessage::PrimitiveEditorEvent`]
+/// envelope. Path-keyed dispatch routes each variant to the symbol or
+/// footprint editor state stored on `DocumentState` per the active
+/// tab's [`crate::app::TabKind`]. Save (Ctrl+S) flows through the
+/// existing schematic-save handler — these variants only cover the
+/// editor-side mutations + the explicit "save primitive" command.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum PrimitiveEditorMsg {
+    // ── Symbol ─────────────────────────────────────────────
+    /// Set the active drawing tool on the Symbol canvas.
+    SymbolSetTool(SymbolToolMsg),
+    /// Click-to-place a pin on the standalone Symbol canvas at the
+    /// given grid-snapped (mm) world position.
+    SymbolAddPin { x: f64, y: f64 },
+    /// Select a symbol element (pin index / field key).
+    SymbolSelect(SymbolSelectionMsg),
+    /// Click landed on empty canvas — drop the current selection.
+    SymbolDeselect,
+    /// Drag the currently-selected element to a new grid-snapped
+    /// world position.
+    SymbolMoveSelected { x: f64, y: f64 },
+    /// Delete-key — drop the currently-selected element.
+    SymbolDeleteSelected,
+    /// Properties pane — overwrite the pin number string at index.
+    SymbolSetPinNumber { idx: usize, number: String },
+    /// Properties pane — overwrite the pin name string at index.
+    SymbolSetPinName { idx: usize, name: String },
+
+    // ── Footprint ──────────────────────────────────────────
+    /// Click-to-place a pad at the given world position.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag the pad at `idx` to a new world position.
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Cursor moved over the canvas — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` deselects everything.
+    FootprintSelectPad(Option<usize>),
+    /// Delete-key — remove the currently-selected pad.
+    FootprintDeleteSelected,
+    /// Toolbar — toggle a layer's visibility. Carries the Standard layer
+    /// name string; the dispatcher maps to `FpLayer`.
+    FootprintToggleLayer(String),
+    /// Toolbar — toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+
+    // ── Save ───────────────────────────────────────────────
+    /// Explicit "Save this primitive tab to disk" — fires from the
+    /// editor's Save button. Ctrl+S also routes here for primitive
+    /// tabs via the `save_active_document` dispatch path.
+    Save,
 }
 
 /// Picker modal messages.

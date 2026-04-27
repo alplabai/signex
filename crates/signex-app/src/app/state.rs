@@ -326,6 +326,16 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// Per-tab state for open `.snxsym` document tabs. Keyed by the
+    /// file path stored on `TabInfo.path` for matching
+    /// `TabKind::SymbolEditor(path)` tabs. Insert on
+    /// `LibraryMessage::OpenPrimitiveEditor`; drop in
+    /// `close_tab_at_index` alongside the engine cleanup.
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
+    /// way as `symbol_editors`.
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing

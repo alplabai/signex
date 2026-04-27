@@ -16,16 +16,15 @@
 //! `git log`, Where-Used is a footer line on Preview.
 
 pub mod datasheet_picker;
+pub mod footprint;
 pub mod params;
 pub mod preview;
 pub mod sim;
+pub mod standalone;
 pub mod supply;
-
-// `editor/symbol/` and `editor/footprint/` STAY on disk for WS-7 to
-// pick up as standalone document editors. Per plan §11 step 6.8, the
-// Component context drops its references to them — we keep the file
-// tree but stop declaring the modules from this `editor/mod.rs`. No
-// `pub mod symbol;` / `pub mod footprint;` lines here.
+pub mod symbol;
+// `submit_for_review` / `where_used` are dropped — Component Preview
+// surface drops them per plan §11.
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
