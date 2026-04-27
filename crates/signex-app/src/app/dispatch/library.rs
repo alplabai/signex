@@ -347,6 +347,33 @@ impl Signex {
             LibraryMessage::BrowserEdit { library_path, msg } => {
                 self.handle_browser_edit_msg(library_path, msg)
             }
+            LibraryMessage::BrowserCellEdit {
+                library_path,
+                row_id,
+                column,
+                value,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.cell_edit.insert((row_id, column), value);
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserCellCommit {
+                library_path,
+                table,
+                row_id,
+                column,
+            } => self.handle_browser_cell_commit(library_path, table, row_id, column),
+            LibraryMessage::BrowserCellCancel {
+                library_path,
+                row_id,
+                column,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.cell_edit.remove(&(row_id, column));
+                }
+                Task::none()
+            }
         }
     }
 
@@ -737,6 +764,138 @@ impl Signex {
             }
         }
         next.unwrap_or_else(Task::none)
+    }
+
+    /// Commit a per-cell inline edit to the row. Re-hashes + persists.
+    fn handle_browser_cell_commit(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: RowId,
+        column: String,
+    ) -> Task<Message> {
+        // Drop the buffer eagerly — if the save fails we re-insert below.
+        let buf = match self
+            .library
+            .library_browsers
+            .get_mut(&library_path)
+            .and_then(|s| s.cell_edit.remove(&(row_id, column.clone())))
+        {
+            Some(v) => v,
+            None => return Task::none(),
+        };
+        // Read the current row from the cache, mutate, re-hash, save.
+        let mut row = match self
+            .library
+            .library_at(&library_path)
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
+            .cloned()
+        {
+            Some(r) => r,
+            None => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    table = %table,
+                    row = %row_id,
+                    "browser cell commit: row not found in cache"
+                );
+                return Task::none();
+            }
+        };
+        match column.as_str() {
+            "internal_pn" => {
+                row.internal_pn = signex_library::InternalPn::new(buf.clone());
+            }
+            "manufacturer" => {
+                row.primary_mpn.manufacturer = buf.clone();
+            }
+            "mpn" => {
+                row.primary_mpn.mpn = buf.clone();
+            }
+            other if other.starts_with("parameters.") => {
+                let key = &other["parameters.".len()..];
+                // Preserve unit on commit by reading the existing value.
+                let new_value = match row.parameters.get(key) {
+                    Some(signex_library::ParamValue::Measurement { unit, .. }) => {
+                        match buf.parse::<f64>() {
+                            Ok(n) => signex_library::ParamValue::Measurement {
+                                value: n,
+                                unit: unit.clone(),
+                            },
+                            Err(_) => signex_library::ParamValue::Text(buf.clone()),
+                        }
+                    }
+                    Some(signex_library::ParamValue::Number(_)) => match buf.parse::<f64>() {
+                        Ok(n) => signex_library::ParamValue::Number(n),
+                        Err(_) => signex_library::ParamValue::Text(buf.clone()),
+                    },
+                    Some(signex_library::ParamValue::Bool(_)) => {
+                        if buf.eq_ignore_ascii_case("true") {
+                            signex_library::ParamValue::Bool(true)
+                        } else if buf.eq_ignore_ascii_case("false") {
+                            signex_library::ParamValue::Bool(false)
+                        } else {
+                            signex_library::ParamValue::Text(buf.clone())
+                        }
+                    }
+                    _ => signex_library::ParamValue::Text(buf.clone()),
+                };
+                row.parameters.insert(key.to_string(), new_value);
+            }
+            _ => {
+                tracing::warn!(
+                    target: "signex::library",
+                    column = %column,
+                    "browser cell commit: unknown column"
+                );
+                return Task::none();
+            }
+        }
+        match signex_library::hash_row_content(&row) {
+            Ok(h) => row.content_hash = h,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    error = %e,
+                    "browser cell commit: hash failed; reverting buffer"
+                );
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.cell_edit.insert((row_id, column), buf);
+                }
+                return Task::none();
+            }
+        }
+        let library_id = self
+            .library
+            .library_at(&library_path)
+            .map(|lib| lib.library_id);
+        let result = match library_id.and_then(|id| self.library.set.get(id)) {
+            Some(adapter) => adapter.update_row(&table, row, "edit cell"),
+            None => Err(signex_library::LibraryError::NotFound(
+                library_path.display().to_string(),
+            )),
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "browser cell commit: update_row failed"
+            );
+            if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                state.cell_edit.insert((row_id, column), buf);
+            }
+            return Task::none();
+        }
+        if let Err(e) = self.library.refresh_components(&library_path) {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "browser cell commit: refresh_components failed"
+            );
+        }
+        Task::none()
     }
 
     /// Apply a primitive picker sub-message. Most variants close the

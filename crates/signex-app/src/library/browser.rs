@@ -119,7 +119,7 @@ pub fn view<'a>(
         active_table,
         &visible,
         &columns,
-        browser.selected_row,
+        browser,
         tokens,
     );
 
@@ -336,12 +336,13 @@ fn view_grid<'a>(
     table: &str,
     rows: &[&'a ComponentRow],
     columns: &[GridColumn],
-    selected: Option<RowId>,
+    browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
+    let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
+    let selected = browser.selected_row;
 
     let header_row = {
         let mut r = row![].spacing(0);
@@ -392,10 +393,13 @@ fn view_grid<'a>(
 
             let mut data_row = row![].spacing(0);
             for c in columns {
-                let cell = match &c.kind {
-                    // TODO(phase-2): row-double-click opens the Edit
-                    // Component Details modal; cells stay text-only
-                    // here in Phase 1.
+                let column_key = match &c.kind {
+                    ColumnKind::InternalPn => "internal_pn".to_string(),
+                    ColumnKind::Manufacturer => "manufacturer".to_string(),
+                    ColumnKind::Mpn => "mpn".to_string(),
+                    ColumnKind::Parameter(key) => format!("parameters.{key}"),
+                };
+                let row_value = match &c.kind {
                     ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
                     ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
                     ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
@@ -404,14 +408,37 @@ fn view_grid<'a>(
                         None => String::new(),
                     },
                 };
-                let color = if matches!(c.kind, ColumnKind::InternalPn) {
-                    text_c
-                } else {
-                    muted
-                };
+                // Buffer wins over row when active.
+                let buf_key = (row_id, column_key.clone());
+                let cell_value = browser
+                    .cell_edit
+                    .get(&buf_key)
+                    .cloned()
+                    .unwrap_or(row_value);
+
+                let library_for_input = library_path.to_path_buf();
+                let column_for_input = column_key.clone();
+                let library_for_submit = library_path.to_path_buf();
+                let table_for_submit = table.to_string();
+                let column_for_submit = column_key.clone();
+                let input = text_input("", &cell_value)
+                    .on_input(move |s| LibraryMessage::BrowserCellEdit {
+                        library_path: library_for_input.clone(),
+                        row_id,
+                        column: column_for_input.clone(),
+                        value: s,
+                    })
+                    .on_submit(LibraryMessage::BrowserCellCommit {
+                        library_path: library_for_submit,
+                        table: table_for_submit,
+                        row_id,
+                        column: column_for_submit,
+                    })
+                    .padding([2, 6])
+                    .size(BROWSER_TEXT_SIZE);
                 data_row = data_row.push(
-                    container(text(cell).size(BROWSER_TEXT_SIZE).color(color))
-                        .padding([2, 6])
+                    container(input)
+                        .padding([2, 2])
                         .width(Length::Fixed(c.width)),
                 );
             }
@@ -434,7 +461,11 @@ fn view_grid<'a>(
                 });
 
             // Click selects; double-click opens the Edit Component
-            // Details modal (Deliverable B).
+            // Details modal (Deliverable B). The text_inputs above
+            // capture single-clicks for focus, so the row's
+            // on_press/on_double_click only fires on the gaps between
+            // cells — that's fine for selection because the user is
+            // clicking on a row, not a specific cell.
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,
