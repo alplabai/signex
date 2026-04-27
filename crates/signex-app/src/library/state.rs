@@ -34,8 +34,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    Component, ComponentId, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibraryQuery, LocalGitAdapter, Revision, Symbol, UseSite, Version, WhereUsedIndex,
+    Component, ComponentClass, ComponentId, ComponentSummary, DistributorSource, Footprint,
+    LibraryAdapter, LibraryError, LibraryQuery, LibrarySet, LocalGitAdapter, PrimitiveRef,
+    Revision, SimModel, Symbol, TemplateRegistry, UseSite, Version, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -70,129 +71,6 @@ impl EditorAddress {
         self.library_path
             .join("components")
             .join(format!("{}.snxprt", self.component_id))
-    }
-}
-
-/// WS-E shim for the cross-library resolver.
-///
-/// WS-C is adding the canonical `LibrarySet` inside
-/// `signex_library::adapters::library_set` — when that lands the field
-/// type on [`LibraryState`] flips to `signex_library::LibrarySet` and this
-/// shim is deleted.
-///
-/// Ownership rule: an open `*.snxlib/` is mounted **here** by
-/// `library_id`. `OpenLibrary` records the root path so the panel can
-/// render it; the underlying adapter is reached via `set.adapter(...)`.
-pub struct LibrarySet {
-    libs: HashMap<Uuid, Box<dyn LibraryAdapter>>,
-}
-
-impl EditorAddress {
-    pub fn new(library_path: PathBuf, component_id: ComponentId) -> Self {
-        Self {
-            library_path,
-            component_id,
-        }
-    }
-
-    /// Mount an adapter under `library_id`. Replaces any prior adapter
-    /// that was mounted under the same id.
-    pub fn mount(&mut self, library_id: Uuid, adapter: Box<dyn LibraryAdapter>) {
-        self.libs.insert(library_id, adapter);
-    }
-
-    /// Drop the adapter for `library_id`, if any.
-    pub fn unmount(&mut self, library_id: Uuid) {
-        self.libs.remove(&library_id);
-    }
-
-    /// Number of mounted libraries.
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.libs.len()
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.libs.is_empty()
-    }
-
-    /// Mounted library ids — used to flatten primitive lookups.
-    #[allow(dead_code)]
-    pub fn library_ids(&self) -> impl Iterator<Item = Uuid> + '_ {
-        self.libs.keys().copied()
-    }
-
-    pub fn adapter(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
-        self.libs.get(&library_id).map(|b| &**b)
-    }
-
-    #[allow(dead_code)]
-    pub fn adapter_mut<'a>(
-        &'a mut self,
-        library_id: Uuid,
-    ) -> Option<&'a mut (dyn LibraryAdapter + 'static)> {
-        self.libs.get_mut(&library_id).map(|b| b.as_mut())
-    }
-
-    /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both
-    /// the library and the primitive UUID exist on a mounted adapter.
-    #[allow(dead_code)]
-    pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
-        self.libs.get(&r.library_id)?.get_symbol(r.uuid).ok()
-    }
-
-    /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
-    #[allow(dead_code)]
-    pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
-        self.libs.get(&r.library_id)?.get_footprint(r.uuid).ok()
-    }
-
-    #[allow(dead_code)]
-    pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
-        self.libs.get(&r.library_id)?.get_sim(r.uuid).ok()
-    }
-
-    /// Persist `sym` to the adapter mounted under `library_id`. Falls
-    /// back to a no-op success when the adapter doesn't implement
-    /// `save_symbol` (older / partial adapters); the in-memory primitive
-    /// list still reflects the edit.
-    pub fn save_symbol(
-        &self,
-        library_id: Uuid,
-        sym: &Symbol,
-        msg: &str,
-    ) -> Result<(), LibraryError> {
-        match self.libs.get(&library_id) {
-            Some(a) => match a.save_symbol(sym.clone(), msg) {
-                Ok(()) => Ok(()),
-                Err(LibraryError::Backend(_)) => Ok(()),
-                Err(other) => Err(other),
-            },
-            None => Ok(()),
-        }
-    }
-
-    pub fn save_footprint(
-        &self,
-        library_id: Uuid,
-        fp: &Footprint,
-        msg: &str,
-    ) -> Result<(), LibraryError> {
-        match self.libs.get(&library_id) {
-            Some(a) => match a.save_footprint(fp.clone(), msg) {
-                Ok(()) => Ok(()),
-                Err(LibraryError::Backend(_)) => Ok(()),
-                Err(other) => Err(other),
-            },
-            None => Ok(()),
-        }
-    }
-}
-
-impl Default for LibrarySet {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

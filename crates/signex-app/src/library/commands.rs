@@ -180,14 +180,16 @@ pub fn load_component_for_editor(
     library_root: &Path,
     id: ComponentId,
 ) -> Result<ComponentEditorState, LibraryError> {
-    let (component, review_required) = {
-        let lib = state
-            .library_at_mut(library_root)
-            .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-        let c = lib.adapter.get_component(id)?;
-        let r = lib.adapter.manifest().workflow.review_required;
-        (c, r)
-    };
+    let library_id = state
+        .library_at(library_root)
+        .map(|lib| lib.library_id)
+        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+    let adapter = state
+        .set
+        .get(library_id)
+        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+    let component = adapter.get_component(id)?;
+    let review_required = adapter.manifest().workflow.review_required;
     Ok(ComponentEditorState::from_head(
         library_root.to_path_buf(),
         component,
@@ -318,10 +320,21 @@ pub fn create_component_row(
     let mut footprint = Footprint::empty(internal_pn);
     footprint.uuid = footprint_uuid;
 
+    // Persist primitives via the real adapter (WS-C). Backend-not-implemented
+    // errors are tolerated — partial adapters keep the in-memory primitive
+    // bindings without breaking the New-Component flow.
     let adapter = state
         .set
         .get(library_id)
         .ok_or_else(|| LibraryError::NotFound(format!("library_id={library_id}")))?;
+    match adapter.save_symbol(symbol.clone(), "new component: seed symbol") {
+        Ok(()) | Err(LibraryError::Backend(_)) => {}
+        Err(e) => return Err(e.into()),
+    }
+    match adapter.save_footprint(footprint.clone(), "new component: seed footprint") {
+        Ok(()) | Err(LibraryError::Backend(_)) => {}
+        Err(e) => return Err(e.into()),
+    }
 
     // 3. Persist the primitives. `Backend("…not implemented…")` is the
     //    sentinel from the default trait impl — tolerate it so adapters
@@ -366,8 +379,10 @@ pub fn create_component_row(
     let adapter = state
         .set
         .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    adapter.insert_row(table, row, &commit_msg)?;
+        .ok_or_else(|| NewComponentError::LibraryNotOpen(library_root.display().to_string()))?;
+    adapter
+        .save_revision(component.uuid, revision, "new component (signex-app)")
+        .map_err(NewComponentError::Library)?;
 
     // Best-effort refresh of the cached component list. Failure here
     // doesn't void the create — surface as a warning only.
