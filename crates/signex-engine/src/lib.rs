@@ -39,8 +39,6 @@ impl Engine {
         document: SchematicSheet,
         path: Option<PathBuf>,
     ) -> Result<Self, EngineError> {
-        let mut document = document;
-        transform::autoplace_all_marked_fields(&mut document);
         Ok(Self {
             document,
             path,
@@ -50,9 +48,8 @@ impl Engine {
     }
 
     pub fn open(path: &Path) -> Result<Self, EngineError> {
-        let mut document = standard_parser::parse_schematic_file(path)
+        let document = standard_parser::parse_schematic_file(path)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
-        transform::autoplace_all_marked_fields(&mut document);
 
         Ok(Self {
             document,
