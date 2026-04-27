@@ -615,6 +615,19 @@ pub struct ComponentEditorState {
     #[allow(dead_code)]
     pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
 
+    // ── WS-L: Sim tab ───────────────────────────────────────────────
+    /// Live `text_editor::Content` for the SPICE deck. Mirrored from
+    /// `editor.sim.body` on tab-switch / sim-load and back into
+    /// `editor.sim.body` on every `SimBodyAction`. None when no sim
+    /// model is bound.
+    ///
+    /// `Content` is RefCell-backed so it's neither `Clone` nor
+    /// `PartialEq` in the form we need; keeping it as a separate live
+    /// UI state alongside `editor.sim` avoids dragging that interior
+    /// mutability into the typed primitive.
+    #[allow(dead_code)]
+    pub sim_body: Option<iced::widget::text_editor::Content>,
+
     // ── Modal flags ─────────────────────────────────────────────────
     /// True while the SubmitForReview modal is up.
     pub review_dialog_open: bool,
@@ -791,6 +804,8 @@ impl ComponentEditorState {
             symbol_ai_preview: None,
             footprint_state: None,
             footprint_canvas_cache: std::sync::OnceLock::new(),
+            // WS-L: Sim tab — seeded lazily on tab switch into Sim.
+            sim_body: None,
             review_dialog_open: false,
             review_notes_buf: String::new(),
             review_status: None,

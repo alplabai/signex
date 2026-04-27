@@ -14,7 +14,7 @@ use crate::toolbar::ToolMessage;
 mod actions;
 mod bootstrap;
 pub mod contracts;
-mod dispatch;
+pub(crate) mod dispatch;
 mod documents;
 mod handlers;
 mod helpers;

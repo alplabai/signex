@@ -865,6 +865,58 @@ impl Signex {
                     }));
                 }
             }
+            // WS-L: Sim tab
+            EditorTab::Sim => {
+                // Symbol is needed for the pin/node table — resolve it
+                // alongside the sim model so the table renders without
+                // an additional tab switch.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.symbol.is_none()
+                {
+                    let resolved =
+                        self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.symbol = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Symbol::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+                // Lazy-resolve the SimModel primitive when the binding
+                // exists. Missing-binding stays as `None` so the view
+                // can render the "no SPICE model bound" placeholder
+                // and a "Has SPICE Model" toggle to opt in.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.sim.is_none()
+                    && let Some(sim_ref) = editor.draft.sim_ref
+                {
+                    let resolved = self.library.set.resolve_sim(&sim_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.sim = resolved;
+                }
+                // Seed the live `text_editor::Content` from the sim's
+                // body — mirrored back on every SimBodyAction. When no
+                // sim model is bound the content stays `None`.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.sim_body.is_none()
+                    && let Some(sim) = editor.sim.as_ref()
+                {
+                    let body = sim.body.clone();
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.sim_body =
+                        Some(iced::widget::text_editor::Content::with_text(&body));
+                }
+            }
             _ => {}
         }
     }
@@ -918,58 +970,14 @@ impl Signex {
     }
 }
 
-/// WS-F: persist the in-memory editor.symbol back into LibrarySet so
-/// the next `from_head` re-read sees the new pin layout. Replaces the
-/// pre-refactor `sync_symbol_sexpr` round-trip — Symbol primitives are
-/// now typed, no sexpr serialisation involved.
-fn save_symbol(library: &mut crate::library::state::LibraryState, window_id: iced::window::Id) {
-    if let Some(editor) = library.open_editors.get_mut(&window_id) {
-        editor.symbol.updated = chrono::Utc::now();
-        let sym = editor.symbol.clone();
-        let uuid = sym.uuid;
-        // Write the binding ref so the editor doesn't lose its
-        // primitive on the next reload.
-        editor.draft.symbol_ref = signex_library::PrimitiveRef::new(
-            editor.draft.symbol_ref.library_id,
-            uuid,
-        );
-        library.set.save_symbol(sym);
-    }
-}
-
-/// WS-F: persist the in-memory editor.footprint back into LibrarySet.
-fn save_footprint(library: &mut crate::library::state::LibraryState, window_id: iced::window::Id) {
-    if let Some(editor) = library.open_editors.get_mut(&window_id)
-        && let Some(fp) = editor.footprint.as_mut()
-    {
-        fp.updated = chrono::Utc::now();
-        let new_fp = fp.clone();
-        let uuid = new_fp.uuid;
-        editor.draft.footprint_ref = Some(signex_library::PrimitiveRef::new(
-            editor
-                .draft
-                .footprint_ref
-                .as_ref()
-                .map(|r| r.library_id)
-                .unwrap_or_default(),
-            uuid,
-        ));
-        library.set.save_footprint(new_fp);
-    }
-}
-
-/// WS-F-only inline-edit dispatcher.
+/// Apply an inline form edit to the editor draft. WS-E only handles
+/// the Overview + History fields that survive the data-model refactor.
+/// Symbol / Footprint / 3D / Sim / Pin Map dispatch returns when WS-F
+/// + WS-G land.
 ///
-/// Pre-refactor `apply_inline_edit` covered every tab. WS-E owns the
-/// rebuild for Overview / Params / Supply / Sim / 3D / History; until
-/// it merges, this stub handles only Tab selection plus the WS-F
-/// surfaces (Symbol primitive edits, Footprint primitive edits, Body3D
-/// fields). Every other variant is a no-op.
-///
-/// TODO(merge-with-WS-E): restore the per-tab dispatch arms against
-/// the new Revision binding fields.
-fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
-    use crate::library::editor::footprint::state::FootprintEditorState;
+/// Visibility is `pub(crate)` so unit tests in sibling modules can
+/// drive the editor through the same code path the dispatcher uses.
+pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
     match msg {
         // SelectTab is handled before reaching here (lazy-load needs
         // `&mut self.library.set`); this branch is the catch-all for
@@ -1519,106 +1527,81 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
                 editor.dirty = true;
             }
         }
-        // ── WS-J: Params tab ──────────────────────────────────────
-        EditorMsg::ParamSetText { name, value } => {
-            use signex_library::ParamValue;
-            editor
-                .draft
-                .parameters
-                .insert(name, ParamValue::Text(value));
+        // ── WS-L: Sim tab ────────────────────────────────────
+        EditorMsg::SimSetEnabled(true) => {
+            if editor.sim.is_none() {
+                let model = signex_library::SimModel::empty(
+                    editor.display_internal_pn.as_str(),
+                    signex_library::SimKind::Spice3,
+                );
+                // Bind the new primitive via PrimitiveRef. We reuse
+                // the same `library_id` the symbol_ref already points
+                // at — every component lives inside one library, so
+                // its primitives share that library_id.
+                editor.draft.sim_ref = Some(signex_library::PrimitiveRef::new(
+                    editor.draft.symbol_ref.library_id,
+                    model.uuid,
+                ));
+                editor.sim_body =
+                    Some(iced::widget::text_editor::Content::new());
+                editor.sim = Some(model);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SimSetEnabled(false) => {
+            editor.sim = None;
+            editor.sim_body = None;
+            editor.draft.sim_ref = None;
             editor.dirty = true;
         }
-        EditorMsg::ParamSetNumberBuf { name, buf } => {
-            // Numeric edits stage in the live buffer; commit happens on
-            // blur / Enter via `ParamCommitNumber`.
-            editor.params_edit_buf.insert(name, buf);
+        EditorMsg::SimSetKind(kind) => {
+            if let Some(sim) = editor.sim.as_mut() {
+                sim.kind = kind;
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
+            }
         }
-        EditorMsg::ParamCommitNumber { name } => {
-            use signex_library::ParamValue;
-            if let Some(buf) = editor.params_edit_buf.get(&name) {
-                let trimmed = buf.trim();
+        EditorMsg::SimSetName(name) => {
+            if let Some(sim) = editor.sim.as_mut() {
+                sim.name = name;
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SimBodyAction(action) => {
+            if let Some(content) = editor.sim_body.as_mut() {
+                content.perform(action);
+                if let Some(sim) = editor.sim.as_mut() {
+                    sim.body = content.text();
+                    sim.updated = chrono::Utc::now();
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::SimSetPinNode { pin_number, value } => {
+            if let Some(sim) = editor.sim.as_mut() {
+                let trimmed = value.trim();
                 if trimmed.is_empty() {
-                    // Empty buffer = remove the parameter entirely.
-                    editor.draft.parameters.remove(&name);
-                    editor.params_edit_buf.remove(&name);
-                    editor.dirty = true;
-                } else if let Ok(n) = trimmed.parse::<f64>() {
-                    editor
-                        .draft
-                        .parameters
-                        .insert(name.clone(), ParamValue::Number(n));
-                    // Keep the buffer in sync so the display matches.
-                    editor.params_edit_buf.insert(name, n.to_string());
-                    editor.dirty = true;
+                    sim.default_node_map.remove(&pin_number);
+                } else {
+                    sim.default_node_map
+                        .insert(pin_number, trimmed.to_string());
                 }
-                // Bad parse: leave the buffer dirty so the user sees
-                // their text and can fix the typo without losing it.
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
             }
         }
-        EditorMsg::ParamSetMeasurementBuf { name, buf } => {
-            editor.params_edit_buf.insert(name, buf);
-        }
-        EditorMsg::ParamCommitMeasurement { name, unit } => {
-            use signex_library::ParamValue;
-            if let Some(buf) = editor.params_edit_buf.get(&name) {
-                let trimmed = buf.trim();
-                if trimmed.is_empty() {
-                    editor.draft.parameters.remove(&name);
-                    editor.params_edit_buf.remove(&name);
-                    editor.dirty = true;
-                } else if let Ok(value) = trimmed.parse::<f64>() {
-                    editor.draft.parameters.insert(
-                        name.clone(),
-                        ParamValue::Measurement {
-                            value,
-                            unit: unit.clone(),
-                        },
-                    );
-                    editor.params_edit_buf.insert(name, value.to_string());
-                    editor.dirty = true;
-                }
+        EditorMsg::SaveSim(_uuid, sm) => {
+            // Snapshot save — the canonical persistence path is
+            // SaveDraft (which writes the Revision binding); this
+            // variant is reserved for any future "save the primitive
+            // only" flow, mirroring SaveSymbol / SaveFootprint.
+            if let Some(stored) = editor.sim.as_mut() {
+                *stored = *sm;
+                editor.dirty = true;
             }
         }
-        EditorMsg::ParamSetBool { name, value } => {
-            use signex_library::ParamValue;
-            editor
-                .draft
-                .parameters
-                .insert(name, ParamValue::Bool(value));
-            editor.dirty = true;
-        }
-        EditorMsg::ParamRemove { name } => {
-            editor.draft.parameters.remove(&name);
-            editor.params_edit_buf.remove(&name);
-            editor.dirty = true;
-        }
-        EditorMsg::ParamAddCustom { name, kind } => {
-            use signex_library::ParamValue;
-            let trimmed = name.trim();
-            if trimmed.is_empty() {
-                return;
-            }
-            if editor.draft.parameters.contains_key(trimmed) {
-                // Already a row — don't clobber an existing value.
-                return;
-            }
-            let key = trimmed.to_string();
-            let value = match kind {
-                ParamKindMsg::Text => ParamValue::Text(String::new()),
-                ParamKindMsg::Number => {
-                    editor.params_edit_buf.insert(key.clone(), String::new());
-                    ParamValue::Number(0.0)
-                }
-                ParamKindMsg::Bool => ParamValue::Bool(false),
-                ParamKindMsg::Measurement(unit) => {
-                    editor.params_edit_buf.insert(key.clone(), String::new());
-                    ParamValue::Measurement { value: 0.0, unit }
-                }
-            };
-            editor.draft.parameters.insert(key, value);
-            editor.dirty = true;
-        }
-        // ── /WS-J ──────────────────────────────────────────────────
+        // ── /WS-L ────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
