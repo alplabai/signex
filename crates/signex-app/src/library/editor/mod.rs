@@ -21,6 +21,8 @@ pub mod overview;
 // WS-J: Params tab
 pub mod params;
 pub mod pin_map;
+// WS-L: Sim tab
+pub mod sim;
 pub mod submit_for_review;
 pub mod supply; // WS-K: Supply tab
 pub mod symbol;
@@ -164,14 +166,10 @@ fn view_active_tab<'a>(
         EditorTab::Params => params::view(editor, library_state, tokens, address.clone()),
         // WS-K: Supply tab
         EditorTab::Supply => supply::view(editor, tokens, address.clone()),
-        EditorTab::Sim => placeholder_card(
-            "Sim",
-            &[
-                "Sim tab rewires against the new `SimModel` primitive (post-WS-F).",
-                "Per-pin SPICE node mapping moves onto `SimModel::default_node_map`.",
-            ],
-            tokens,
-        ),
+        // WS-L: Sim tab — replaces the placeholder with the real
+        // SPICE deck editor + pin/node mapping table backed by the
+        // typed `SimModel` primitive bound through `Revision::sim_ref`.
+        EditorTab::Sim => sim::view(editor, tokens, address.clone()),
         EditorTab::History => history::view(editor, tokens, address),
         EditorTab::WhereUsed => where_used::view(editor, library_state, tokens),
     };

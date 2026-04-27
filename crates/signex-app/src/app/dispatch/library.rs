@@ -865,6 +865,58 @@ impl Signex {
                     }));
                 }
             }
+            // WS-L: Sim tab
+            EditorTab::Sim => {
+                // Symbol is needed for the pin/node table — resolve it
+                // alongside the sim model so the table renders without
+                // an additional tab switch.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.symbol.is_none()
+                {
+                    let resolved =
+                        self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.symbol = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Symbol::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+                // Lazy-resolve the SimModel primitive when the binding
+                // exists. Missing-binding stays as `None` so the view
+                // can render the "no SPICE model bound" placeholder
+                // and a "Has SPICE Model" toggle to opt in.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.sim.is_none()
+                    && let Some(sim_ref) = editor.draft.sim_ref
+                {
+                    let resolved = self.library.set.resolve_sim(&sim_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.sim = resolved;
+                }
+                // Seed the live `text_editor::Content` from the sim's
+                // body — mirrored back on every SimBodyAction. When no
+                // sim model is bound the content stays `None`.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.sim_body.is_none()
+                    && let Some(sim) = editor.sim.as_ref()
+                {
+                    let body = sim.body.clone();
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.sim_body =
+                        Some(iced::widget::text_editor::Content::with_text(&body));
+                }
+            }
             _ => {}
         }
     }
@@ -922,7 +974,10 @@ impl Signex {
 /// the Overview + History fields that survive the data-model refactor.
 /// Symbol / Footprint / 3D / Sim / Pin Map dispatch returns when WS-F
 /// + WS-G land.
-fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
+///
+/// Visibility is `pub(crate)` so unit tests in sibling modules can
+/// drive the editor through the same code path the dispatcher uses.
+pub(crate) fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
     match msg {
         // SelectTab is handled before reaching here (lazy-load needs
         // `&mut self.library.set`); this branch is the catch-all for
@@ -1436,6 +1491,81 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
             editor.dirty = true;
         }
         // ── /WS-J ─────────────────────────────────────────────
+        // ── WS-L: Sim tab ────────────────────────────────────
+        EditorMsg::SimSetEnabled(true) => {
+            if editor.sim.is_none() {
+                let model = signex_library::SimModel::empty(
+                    editor.display_internal_pn.as_str(),
+                    signex_library::SimKind::Spice3,
+                );
+                // Bind the new primitive via PrimitiveRef. We reuse
+                // the same `library_id` the symbol_ref already points
+                // at — every component lives inside one library, so
+                // its primitives share that library_id.
+                editor.draft.sim_ref = Some(signex_library::PrimitiveRef::new(
+                    editor.draft.symbol_ref.library_id,
+                    model.uuid,
+                ));
+                editor.sim_body =
+                    Some(iced::widget::text_editor::Content::new());
+                editor.sim = Some(model);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SimSetEnabled(false) => {
+            editor.sim = None;
+            editor.sim_body = None;
+            editor.draft.sim_ref = None;
+            editor.dirty = true;
+        }
+        EditorMsg::SimSetKind(kind) => {
+            if let Some(sim) = editor.sim.as_mut() {
+                sim.kind = kind;
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SimSetName(name) => {
+            if let Some(sim) = editor.sim.as_mut() {
+                sim.name = name;
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SimBodyAction(action) => {
+            if let Some(content) = editor.sim_body.as_mut() {
+                content.perform(action);
+                if let Some(sim) = editor.sim.as_mut() {
+                    sim.body = content.text();
+                    sim.updated = chrono::Utc::now();
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::SimSetPinNode { pin_number, value } => {
+            if let Some(sim) = editor.sim.as_mut() {
+                let trimmed = value.trim();
+                if trimmed.is_empty() {
+                    sim.default_node_map.remove(&pin_number);
+                } else {
+                    sim.default_node_map
+                        .insert(pin_number, trimmed.to_string());
+                }
+                sim.updated = chrono::Utc::now();
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SaveSim(_uuid, sm) => {
+            // Snapshot save — the canonical persistence path is
+            // SaveDraft (which writes the Revision binding); this
+            // variant is reserved for any future "save the primitive
+            // only" flow, mirroring SaveSymbol / SaveFootprint.
+            if let Some(stored) = editor.sim.as_mut() {
+                *stored = *sm;
+                editor.dirty = true;
+            }
+        }
+        // ── /WS-L ────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft

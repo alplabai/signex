@@ -3,7 +3,7 @@ use iced::Task;
 use super::*;
 
 mod document;
-mod library;
+pub(crate) mod library;
 mod overlay;
 mod routed;
 mod text_edit;

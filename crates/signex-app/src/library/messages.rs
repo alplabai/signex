@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use signex_library::{
     AlternateStatus, BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource,
-    LifecycleState, UseSite, Version,
+    LifecycleState, SimKind, SimModel, UseSite, Version,
 };
 
 use super::state::{EditorAddress, EditorTab};
@@ -258,6 +258,7 @@ pub enum EditorMsg {
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
 
+<<<<<<< HEAD
     // ── WS-K: Supply tab ──────────────────────────────────────
     // Primary MPN
     /// Edit the primary MPN's manufacturer string.
@@ -321,6 +322,26 @@ pub enum EditorMsg {
     /// Add a custom parameter row with an empty value of the chosen kind.
     ParamAddCustom { name: String, kind: ParamKindMsg },
     // ── /WS-J ─────────────────────────────────────────────────
+
+    // ── WS-L: Sim tab ─────────────────────────────────────────
+    /// Toggle the "Has SPICE Model" checkbox. `true` constructs a fresh
+    /// `SimModel` and binds it via `Revision::sim_ref`; `false` clears
+    /// both `editor.sim` and `editor.draft.sim_ref`.
+    SimSetEnabled(bool),
+    /// SPICE dialect picker — Spice3 / Ngspice / LtSpice / VerilogA.
+    SimSetKind(SimKind),
+    /// Live edit of the SimModel `name` field.
+    SimSetName(String),
+    /// Multi-line edit on the SPICE deck `text_editor`. Action is
+    /// applied to `editor.sim_body`; the resulting text mirrors back
+    /// onto `editor.sim?.body` so persistence picks it up on save.
+    SimBodyAction(iced::widget::text_editor::Action),
+    /// Set or clear the SPICE node binding for one symbol pin number.
+    /// Empty `value` removes the key from `default_node_map`.
+    SimSetPinNode { pin_number: String, value: String },
+    /// Fire-and-forget save of the active SimModel primitive.
+    SaveSim(uuid::Uuid, Box<SimModel>),
+    // ── /WS-L ─────────────────────────────────────────────────
 }
 
 // WS-J: Params tab
