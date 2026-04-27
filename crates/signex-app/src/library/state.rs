@@ -258,8 +258,10 @@ impl LibraryState {
         library_root: &Path,
         component_id: ComponentId,
     ) -> Option<&ComponentEditorState> {
-        self.editors
-            .get(&EditorAddress::new(library_root.to_path_buf(), component_id))
+        self.editors.get(&EditorAddress::new(
+            library_root.to_path_buf(),
+            component_id,
+        ))
     }
 }
 
@@ -841,12 +843,15 @@ mod tests {
     }
 
     #[test]
-    fn ingest_sheet_round_trips_through_state_to_where_used_index() {
-        let mut state = LibraryState::default();
-        let project = PathBuf::from("/tmp/sample.snxprj");
-        let sheet = PathBuf::from("/tmp/sample.snxprj/main.snxsch");
-        let uuid = Uuid::now_v7();
-        let v = Version::new(1, 2);
+    fn new_component_state_defaults_to_generic_class() {
+        let nc = NewComponentState::default();
+        assert!(nc.internal_pn.is_empty());
+        assert!(nc.library_idx.is_none());
+        // WS-8: table starts unset until the user picks one in the modal.
+        assert!(nc.table.is_none());
+        assert_eq!(nc.class, ComponentClass::generic());
+        assert!(nc.category.is_empty());
+    }
 
         // Empty state → no sites.
         assert!(state.where_used_for(uuid, None).is_empty());
