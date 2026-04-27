@@ -13,7 +13,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::ComponentEditorState;
+use super::super::state::{ComponentEditorState, EditorAddress};
 
 const LIFECYCLE_OPTS: [LifecycleState; 5] = [
     LifecycleState::Draft,
@@ -43,7 +43,7 @@ impl std::fmt::Display for LifecyclePick {
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
@@ -64,11 +64,14 @@ pub fn view<'a>(
                  placeholder: &'static str,
                  msg: fn(String) -> EditorMsg|
      -> Element<'a, LibraryMessage> {
+        let lib_path_for_input = address.library_path.clone();
+        let component_id_for_input = address.component_id;
         column![
             text(label).size(10).color(muted),
             text_input(placeholder, &value)
                 .on_input(move |s| LibraryMessage::EditorEvent {
-                    window_id,
+                    library_path: lib_path_for_input.clone(),
+                    component_id: component_id_for_input,
                     msg: msg(s),
                 })
                 .padding([4, 8])
@@ -79,11 +82,14 @@ pub fn view<'a>(
         .into()
     };
 
+    let lib_path_for_lifecycle = address.library_path.clone();
+    let component_id_for_lifecycle = address.component_id;
     let lifecycle_picker = pick_list(
         LIFECYCLE_OPTS.map(LifecyclePick),
         Some(LifecyclePick(editor.draft.state)),
         move |LifecyclePick(s)| LibraryMessage::EditorEvent {
-            window_id,
+            library_path: lib_path_for_lifecycle.clone(),
+            component_id: component_id_for_lifecycle,
             msg: EditorMsg::OverviewSetLifecycle(s),
         },
     )

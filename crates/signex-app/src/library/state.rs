@@ -12,9 +12,13 @@
 //!   the root path, display name, and a cached `Vec<ComponentSummary>` so
 //!   the panel doesn't re-scan disk between renders. The actual adapter
 //!   lives on `set`, keyed by `library_id`.
-//! * `open_editors` — one entry per Component Editor window keyed by
-//!   `iced::window::Id`. The non-main window itself is registered in
-//!   `Signex::ui_state.windows` as `WindowKind::ComponentEditor`.
+//! * `editors` — one entry per Component Editor keyed by
+//!   `EditorAddress(library_path, component_id)`. The editor lives
+//!   as a tab in the main window's tab bar; the user can detach it
+//!   into its own OS window via the existing tab-undock flow, in
+//!   which case `Signex::ui_state.windows` registers the new id as
+//!   `WindowKind::ComponentEditor` referring to the same address.
+//!   (WS-I: tab-not-window — Wave 2 keyed by `iced::window::Id`.)
 //! * `picker` — Phase 1 component picker modal state.
 //! * `new_component` — modal state for the "New Component" flow (PN +
 //!   library + class + category).
@@ -31,6 +35,40 @@ use signex_library::{
     Symbol, TemplateRegistry, UseSite, Version, WhereUsedIndex,
 };
 use uuid::Uuid;
+
+// WS-I: tab-not-window
+/// Identity for an open Component Editor — the same shape that lives
+/// on `TabKind::ComponentEditor` and (when the user undocks) on
+/// `WindowKind::ComponentEditor`. Used as the lookup key for
+/// [`LibraryState::editors`] and as the address that editor view
+/// closures clone into messages.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EditorAddress {
+    pub library_path: PathBuf,
+    pub component_id: ComponentId,
+}
+
+impl EditorAddress {
+    pub fn new(library_path: PathBuf, component_id: ComponentId) -> Self {
+        Self {
+            library_path,
+            component_id,
+        }
+    }
+
+    /// Synthetic on-disk identity for a Component Editor tab — used by
+    /// `TabInfo.path` so the tab bar, undock detector, and dirty-paths
+    /// machinery have a single unique `PathBuf` per editor without
+    /// needing to teach them about a second identity scheme. Mirrors
+    /// the `<library>/components/<uuid>.snxprt` storage layout from
+    /// the v0.9 plan §3 so the synthetic path lines up with where the
+    /// component actually persists on disk.
+    pub fn synthetic_tab_path(&self) -> PathBuf {
+        self.library_path
+            .join("components")
+            .join(format!("{}.snxprt", self.component_id))
+    }
+}
 
 /// WS-E shim for the cross-library resolver.
 ///
@@ -152,11 +190,16 @@ pub struct LibraryState {
     /// root path. The adapter for each entry is mounted on `set`
     /// under its `library_id`.
     pub open_libraries: Vec<OpenLibrary>,
-    /// Component Editor windows currently open. Multi-window-aware:
-    /// each entry maps an `iced::window::Id` to the live editor
-    /// state. The non-main window itself is registered in
-    /// `Signex::ui_state.windows` so `view(id)` knows what to render.
-    pub open_editors: HashMap<iced::window::Id, ComponentEditorState>,
+    // WS-I: tab-not-window
+    /// Component Editor states currently open. Keyed by
+    /// `(library_path, component_id)` so the same editor surface
+    /// renders whether the editor is hosted inline in the main
+    /// window's tab bar or detached into its own window via the
+    /// existing tab-undock flow. The window-id-keyed
+    /// `HashMap<window::Id, ComponentEditorState>` from Wave 2 is
+    /// gone — Component Editors are tabs first; undocking is a
+    /// rendering host swap, not a separate state owner.
+    pub editors: HashMap<EditorAddress, ComponentEditorState>,
     /// Reverse "where-used" index — same shape as before.
     pub where_used: WhereUsedIndex,
     /// Picker modal state — `None` while the modal is closed.
@@ -189,7 +232,8 @@ impl Default for LibraryState {
         Self {
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
-            open_editors: HashMap::new(),
+            // WS-I: tab-not-window
+            editors: HashMap::new(),
             where_used: WhereUsedIndex::new(),
             picker: None,
             settings,
@@ -244,7 +288,8 @@ impl LibraryState {
             if idx < self.expanded.len() {
                 self.expanded.remove(idx);
             }
-            self.open_editors.retain(|_, st| st.library_root != root);
+            // WS-I: tab-not-window
+            self.editors.retain(|key, _| key.library_path != root);
         }
     }
 
@@ -290,29 +335,33 @@ impl LibraryState {
         self.where_used.where_used(uuid, version)
     }
 
-    /// Editor windows currently pointing at `root` that have unsaved edits.
+    // WS-I: tab-not-window
+    /// Editor addresses currently pointing at `root` that have unsaved edits.
     #[allow(dead_code)]
-    pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<iced::window::Id> {
-        let mut ids: Vec<iced::window::Id> = self
-            .open_editors
+    pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
+        let mut keys: Vec<EditorAddress> = self
+            .editors
             .iter()
-            .filter(|(_, st)| st.library_root == root && st.dirty)
-            .map(|(id, _)| *id)
+            .filter(|(key, st)| key.library_path == root && st.dirty)
+            .map(|(key, _)| key.clone())
             .collect();
-        ids.sort();
-        ids
+        keys.sort_by(|a, b| {
+            a.library_path
+                .cmp(&b.library_path)
+                .then_with(|| a.component_id.cmp(&b.component_id))
+        });
+        keys
     }
 
-    /// Existing editor window for `(library_root, component_id)`, if any.
+    /// Existing editor for `(library_root, component_id)`, if any.
     #[allow(dead_code)]
     pub fn editor_for(
         &self,
         library_root: &Path,
         component_id: ComponentId,
-    ) -> Option<iced::window::Id> {
-        self.open_editors.iter().find_map(|(id, st)| {
-            (st.library_root == library_root && st.component_id == component_id).then_some(*id)
-        })
+    ) -> Option<&ComponentEditorState> {
+        self.editors
+            .get(&EditorAddress::new(library_root.to_path_buf(), component_id))
     }
 }
 
@@ -414,7 +463,10 @@ impl Default for NewComponentState {
 pub struct CloseLibraryConfirmState {
     pub library_path: PathBuf,
     pub library_name: String,
-    pub dirty_editors: Vec<iced::window::Id>,
+    // WS-I: tab-not-window — editors are addressed by
+    // `(library_path, component_id)` now that they live as tabs, not
+    // OS windows.
+    pub dirty_editors: Vec<EditorAddress>,
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -13,14 +13,14 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::ComponentEditorState;
+use super::super::state::{ComponentEditorState, EditorAddress};
 
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let revs = revision_list(editor, tokens, window_id);
+    let revs = revision_list(editor, tokens, address);
     let diff = diff_placeholder(editor, tokens);
 
     container(
@@ -44,7 +44,7 @@ pub fn view<'a>(
 fn revision_list<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -60,7 +60,7 @@ fn revision_list<'a>(
             row_bg,
             text_c,
             hover,
-            window_id,
+            &address,
         ));
     }
     if editor.component.revisions.is_empty() {
@@ -94,13 +94,14 @@ fn revision_row<'a>(
     row_bg: Option<iced::Color>,
     text_c: iced::Color,
     hover: iced::Color,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     button(container(text(label).size(11).color(text_c)).padding([4, 8]))
         .padding(0)
         .width(Length::Fill)
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: address.library_path.clone(),
+            component_id: address.component_id,
             msg: EditorMsg::HistorySelectRevision(version),
         })
         .style(move |_: &Theme, status: iced::widget::button::Status| {

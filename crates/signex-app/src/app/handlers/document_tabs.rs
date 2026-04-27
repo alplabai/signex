@@ -99,6 +99,9 @@ impl Signex {
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
+        // WS-I: tab-not-window — capture before removal so the
+        // editor-state cleanup below can run after the tab is dropped.
+        let closing_kind = self.document_state.tabs[idx].kind.clone();
 
         // If the tab has an undocked window open, close that window
         // too — otherwise it'd be an orphan showing "No document open"
@@ -109,8 +112,18 @@ impl Signex {
             .ui_state
             .windows
             .iter()
-            .filter_map(|(id, kind)| match kind {
-                WindowKind::UndockedTab { path, .. } if path == &closing_path => Some(*id),
+            .filter_map(|(id, kind)| match (kind, &closing_kind) {
+                (WindowKind::UndockedTab { path, .. }, _) if path == &closing_path => Some(*id),
+                // WS-I: tab-not-window
+                (
+                    WindowKind::ComponentEditor {
+                        library_path,
+                        component_id,
+                    },
+                    crate::app::TabKind::ComponentEditor(ce),
+                ) if library_path == &ce.library_path && component_id == &ce.component_id => {
+                    Some(*id)
+                }
                 _ => None,
             })
             .collect();
@@ -123,6 +136,19 @@ impl Signex {
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
+        }
+
+        // WS-I: tab-not-window — drop the editor state when the tab is
+        // a Component Editor. The library subsystem doesn't have a
+        // dirty-park mechanism yet, so closing the tab discards the
+        // draft (matches Wave 2's window-close behaviour).
+        if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
+            self.library.editors.remove(
+                &crate::library::state::EditorAddress::new(
+                    ce.library_path.clone(),
+                    ce.component_id,
+                ),
+            );
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()

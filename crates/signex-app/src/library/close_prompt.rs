@@ -57,15 +57,16 @@ pub fn view<'a>(
     .color(muted);
 
     // List of dirty drafts by display_internal_pn. We look each one
-    // up in `state.open_editors` so the modal stays accurate even
-    // if the user opens / closes other editors while it's up.
+    // up in `state.editors` so the modal stays accurate even if the
+    // user opens / closes other editors while it's up.
+    // WS-I: tab-not-window — keys are `EditorAddress`, not window ids.
     let mut rows: Vec<Element<'_, LibraryMessage>> = Vec::new();
-    for win_id in &confirm.dirty_editors {
+    for address in &confirm.dirty_editors {
         let label = state
-            .open_editors
-            .get(win_id)
+            .editors
+            .get(address)
             .map(|st| st.display_internal_pn.clone())
-            .unwrap_or_else(|| format!("(window {win_id:?})"));
+            .unwrap_or_else(|| format!("(component {})", address.component_id));
         rows.push(
             container(text(label).size(11).color(text_c))
                 .padding([4, 8])

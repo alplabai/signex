@@ -16,7 +16,7 @@ use signex_library::{
     Version,
 };
 
-use super::state::EditorTab;
+use super::state::{EditorAddress, EditorTab};
 
 /// Top-level library message — folded into [`Message::Library`].
 #[derive(Debug, Clone)]
@@ -31,10 +31,12 @@ pub enum LibraryMessage {
     /// pointing at it). No-op when the path isn't currently open.
     CloseLibrary(PathBuf),
     /// Show the close-library confirmation modal carrying the list of
-    /// dirty editor windows the user is about to lose.
+    /// dirty editor addresses the user is about to lose.
+    // WS-I: tab-not-window — keyed by `EditorAddress` because the
+    // editors live as tabs, not as OS windows.
     ConfirmCloseLibrary {
         library_path: PathBuf,
-        dirty_editors: Vec<iced::window::Id>,
+        dirty_editors: Vec<EditorAddress>,
     },
     /// User picked Save All / Discard All / Cancel in the close prompt.
     CloseLibraryConfirm(CloseLibraryChoice),
@@ -71,22 +73,23 @@ pub enum LibraryMessage {
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
     ToggleLibraryTreeNode(usize),
-    /// Open the Component Editor in a new OS window for `id` inside
-    /// the library at `library_path`.
+    // WS-I: tab-not-window
+    /// Open the Component Editor for `(library_path, component_id)`
+    /// as a tab in the main window's tab bar. Detach into a separate
+    /// window remains available via the existing tab-undock flow.
     OpenEditor {
         library_path: PathBuf,
         component_id: ComponentId,
     },
-    /// `iced::window::open` resolved for a Component Editor window.
-    EditorWindowOpened {
+    // WS-I: tab-not-window
+    /// Inner editor message — keyed by `(library_path, component_id)`
+    /// so the same EditorEvent dispatches to the editor regardless of
+    /// whether it's hosted inline as a tab or in an undocked window.
+    /// The legacy `EditorWindowOpened` daemon-window setup is gone —
+    /// editors are tabs first.
+    EditorEvent {
         library_path: PathBuf,
         component_id: ComponentId,
-        window_id: iced::window::Id,
-    },
-    /// Inner editor message — `window_id` selects which open editor
-    /// gets the message.
-    EditorEvent {
-        window_id: iced::window::Id,
         msg: EditorMsg,
     },
     /// Picker modal interaction.
