@@ -172,10 +172,22 @@ impl Signex {
 
         let (new_path, save_result) = match kind {
             PrimitiveKind::Symbol => {
+                // Multi-symbol containers — let the adapter pick the
+                // on-disk filename (slug from `Symbol::name`), then
+                // discover where it landed by scanning the symbols dir
+                // for the file that holds the new uuid. We could
+                // alternatively change the adapter to return the path,
+                // but the scan keeps the adapter trait small and the
+                // failure surface visible (a missing-after-write file
+                // surfaces as "not found" right here).
                 let sym = signex_library::Symbol::empty("NewSymbol");
                 let uuid = sym.uuid;
-                let path = resolved_root.join("symbols").join(format!("{uuid}.snxsym"));
                 let result = adapter.save_symbol(sym, "add new symbol");
+                let path = result
+                    .as_ref()
+                    .ok()
+                    .and_then(|_| find_symbol_file_for_uuid(&resolved_root, uuid))
+                    .unwrap_or_else(|| resolved_root.join("symbols").join("NewSymbol.snxsym"));
                 (path, result)
             }
             PrimitiveKind::Footprint => {
@@ -227,4 +239,36 @@ impl Signex {
         // Open the new file as a standalone primitive-editor tab.
         self.handle_open_primitive(new_path)
     }
+}
+
+/// Walk `<library_root>/symbols/*.snxsym` and return the path of the
+/// first file whose `SymbolFile` container holds the given symbol uuid.
+/// Used by `Add New ▸ Symbol` to discover where the adapter wrote the
+/// fresh symbol — the adapter slugifies `Symbol::name` so we can't
+/// predict the filename ahead of time. Returns `None` when no file
+/// owns the uuid (caller falls back to a best-guess path for the
+/// editor tab; the open-primitive flow will then error with a
+/// `tracing::warn` instead of crashing).
+fn find_symbol_file_for_uuid(
+    library_root: &std::path::Path,
+    uuid: uuid::Uuid,
+) -> Option<std::path::PathBuf> {
+    let dir = library_root.join("symbols");
+    let entries = std::fs::read_dir(&dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("snxsym") {
+            continue;
+        }
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        if let Ok(file) = signex_library::SymbolFile::from_json(&bytes)
+            && file.symbols.iter().any(|s| s.uuid == uuid)
+        {
+            return Some(path);
+        }
+    }
+    None
 }

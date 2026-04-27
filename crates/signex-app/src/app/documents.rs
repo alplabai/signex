@@ -198,7 +198,14 @@ pub struct TabInfo {
 #[derive(Debug)]
 pub struct SymbolEditorState {
     pub path: PathBuf,
-    pub primitive: Symbol,
+    /// Multi-symbol container backing this `.snxsym` tab. The editor
+    /// works against `file.symbols[active_idx]`; access via
+    /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
+    pub file: signex_library::SymbolFile,
+    /// Which symbol within the file is currently being edited. The
+    /// SCH-Library left-dock panel will eventually drive this index;
+    /// for now it always lands on the first symbol.
+    pub active_idx: usize,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
@@ -207,18 +214,37 @@ pub struct SymbolEditorState {
 }
 
 impl SymbolEditorState {
-    /// Build a fresh standalone editor state from a primitive loaded
-    /// off disk. `path` is the `.snxsym` file the user opened.
-    pub fn new(path: PathBuf, primitive: Symbol) -> Self {
+    /// Build a fresh standalone editor state from a `SymbolFile`
+    /// container loaded off disk. `path` is the `.snxsym` file the
+    /// user opened. The editor opens on the first symbol in the file.
+    pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         Self {
             path,
-            primitive,
+            file,
+            active_idx: 0,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
         }
+    }
+
+    /// Borrow the symbol currently being edited. Falls back to the
+    /// first symbol in the file when `active_idx` is out of range
+    /// (defensive — should never happen in practice). Panics only
+    /// when the file has zero symbols, which the loader rejects.
+    pub fn primitive(&self) -> &Symbol {
+        let idx = self.active_idx.min(self.file.symbols.len().saturating_sub(1));
+        &self.file.symbols[idx]
+    }
+
+    /// Mutable borrow of the active symbol — used by canvas mutations
+    /// (add/move/delete pin etc.). Same out-of-range fallback as
+    /// [`primitive`](Self::primitive).
+    pub fn primitive_mut(&mut self) -> &mut Symbol {
+        let idx = self.active_idx.min(self.file.symbols.len().saturating_sub(1));
+        &mut self.file.symbols[idx]
     }
 }
 

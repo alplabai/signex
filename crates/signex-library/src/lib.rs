@@ -56,7 +56,7 @@ pub use param::{ParamMap, ParamValue};
 pub use primitive::{
     Body3D, BodyShape, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
     PinElectricalType, PinOrientation, Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel,
-    StepAttachment, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]

@@ -26,7 +26,8 @@ pub use footprint::{
 pub use ref_::PrimitiveRef;
 pub use sim::{SimKind, SimModel};
 pub use symbol::{
-    PinElectricalType, PinOrientation, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    PinElectricalType, PinOrientation, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind,
+    SymbolPin,
 };
 
 /// Discriminator surfaced on `PrimitiveSummary` so a single `list_*` API can
