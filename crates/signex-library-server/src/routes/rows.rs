@@ -1,8 +1,8 @@
-//! `/tables/:name/rows` routes — per-row CRUD over `ComponentRow` (WS-4).
+//! `/tables/:name/rows` routes — per-row CRUD over `ComponentRow`.
 //!
-//! All routes carry `?library_id=<uuid>` to scope into one library inside
-//! the shared `component_rows` table. JSON body shape is `ComponentRow`
-//! (already serializable per WS-1) — no envelope wrapper.
+//! All routes carry `?library_id=<uuid>` to scope into one library
+//! inside the shared `component_rows` table. JSON body shape is
+//! `ComponentRow` directly — no envelope wrapper.
 //!
 //! ```text
 //! POST   /tables/:name/rows             insert row, body=ComponentRow
@@ -11,8 +11,7 @@
 //! DELETE /tables/:name/rows/:row_id     delete, 204 on success
 //! ```
 //!
-//! `:row_id` is parsed as a [`RowId`] — UUIDv7 stringified per the WS-1
-//! identity newtype.
+//! `:row_id` is parsed as a [`RowId`] — a UUIDv7 newtype.
 
 use axum::{
     Json, Router,

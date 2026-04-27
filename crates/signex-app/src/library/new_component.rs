@@ -1,14 +1,14 @@
 //! "New Component" modal — opened from File ▸ Library ▸ New
-//! Component… (and, post-WS-H, from the project tree's library node
-//! right-click menu).
+//! Component… and from the project tree's library-node right-click
+//! menu.
 //!
-//! WS-8 (DBLib model): components are rows in category tables now.
-//! The modal collects PN + library + table + class. On submit the
-//! dispatcher calls `commands::create_component_row` which mints
-//! Symbol + Footprint primitives, builds a `ComponentRow` with the
-//! binding refs, and inserts it into the chosen table. Success
-//! fires `LibraryMessage::OpenComponentRow` so the new row opens
-//! as a Component Preview tab (WS-6 host).
+//! Components are rows in category tables (DBLib model). The modal
+//! collects PN + library + table + class. On submit the dispatcher
+//! calls `commands::create_component_row` which mints Symbol +
+//! Footprint primitives, builds a `ComponentRow` with the binding
+//! refs, and inserts it into the chosen table. Success fires
+//! `LibraryMessage::OpenComponentRow` so the new row opens as a
+//! Component Preview tab.
 //!
 //! Shape (plan §13):
 //!
@@ -136,12 +136,11 @@ pub fn view<'a>(
         .into()
     };
 
-    // Table picker (WS-8) ────────────────────────────────────
-    //
-    // Populated from the selected library's manifest. When the
-    // manifest declares no `[[tables]]` overrides we still surface
-    // a single placeholder row carrying the default-pluralised
-    // filename (`<class>s`) so the user always sees the destination.
+    // Table picker — populated from the selected library's
+    // manifest. When the manifest declares no `[[tables]]` overrides
+    // we still surface a single placeholder row carrying the
+    // default-pluralised filename (`<class>s`) so the user always
+    // sees the destination.
     let table_picks: Vec<TablePick> = nc
         .library_idx
         .and_then(|i| state.open_libraries.get(i))

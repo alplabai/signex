@@ -165,12 +165,11 @@ pub struct ProjectPanelInfo {
     pub pcb_file_dirty: bool,
     pub pcb_file_active: bool,
     pub sheets: Vec<SheetInfo>,
-    // WS-H: Project tree library wiring
-    /// Component libraries attached to this project (v0.9 WS-H).
-    /// One entry per `Project::libraries[]`. Drives the `Libraries`
-    /// branch under the project root — each entry renders as a
-    /// `*.snxlib` leaf and (when the library is mounted) a small
-    /// list of cached components beneath it.
+    /// Component libraries attached to this project. One entry per
+    /// `Project::libraries[]`. Drives the `Libraries` branch under
+    /// the project root — each entry renders as a `*.snxlib` leaf
+    /// and (when the library is mounted) a small list of cached
+    /// components beneath it.
     pub libraries: Vec<LibraryNodeInfo>,
     /// Whether this is the currently-active project — drives accent
     /// styling on the root node.
@@ -908,11 +907,10 @@ fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> T
         );
     }
 
-    // WS-H: Project tree library wiring — render each
-    // `Project::libraries[i]` entry as a `*.snxlib` leaf with the
-    // mounted library's component summaries listed beneath it.
-    // When the project carries no library entries we fall back to
-    // the legacy "N symbols loaded" placeholder so single-project
+    // Render each `Project::libraries[i]` entry as a `*.snxlib` leaf
+    // with the mounted library's component summaries listed beneath
+    // it. When the project carries no library entries we fall back
+    // to the legacy "N symbols loaded" placeholder so single-project
     // workspaces without a library still get a useful tree row.
     let lib_children: Vec<TreeNode> = if project.libraries.is_empty() {
         let lib_count = if fallback_lib_count > 0 {

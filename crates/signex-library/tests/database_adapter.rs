@@ -1,13 +1,13 @@
-//! M11: wiremock-backed integration tests for `DatabaseAdapter`.
+//! Wiremock-backed integration tests for `DatabaseAdapter`.
 //!
-//! Per `v0.9-refactor-2-plan.md` §8, WS-3 wires row CRUD against the new
-//! `/tables` and `/rows` routes (owned by WS-4). The primitive
-//! (`/symbols` / `/footprints` / `/sims`) coverage stays unchanged under
-//! the row model — those routes are still v0.9-original shape.
+//! Row CRUD speaks to the `/tables` and `/rows` routes; primitive
+//! (`/symbols` / `/footprints` / `/sims`) coverage stays unchanged
+//! under the DBLib model.
 //!
-//! Mirrors the `distributor_*` test layout — a private tokio runtime drives
-//! a `MockServer`; the adapter (which uses `reqwest::blocking`) runs on a
-//! standard thread so its blocking calls don't deadlock the runtime.
+//! Mirrors the `distributor_*` test layout — a private tokio runtime
+//! drives a `MockServer`; the adapter (which uses `reqwest::blocking`)
+//! runs on a standard thread so its blocking calls don't deadlock the
+//! runtime.
 
 #![cfg(feature = "database")]
 
@@ -242,11 +242,11 @@ fn get_symbol_404_maps_to_not_found() {
     );
 }
 
-// ── Row CRUD over HTTP (WS-3) ─────────────────────────────────────────────
+// ── Row CRUD over HTTP ────────────────────────────────────────────────────
 //
 // `DatabaseAdapter::with_token` fabricates a manifest whose `library_id` is
 // `Uuid::nil()`; the wiremock expectations match that nil-uuid query string.
-// WS-4 owns the matching server-side routes.
+// The matching server-side routes live in `signex-library-server`.
 
 /// Build a `ComponentRow` fixture — same shape as `component::tests::fixture_row`
 /// but with controllable PN + class so the assertions in each test don't

@@ -1,7 +1,7 @@
 //! User-config persistence for the Distributor APIs panel.
 //!
-//! UI-WS7: stores the `[distributor_apis] preferred_order = [...]`
-//! list at `<config_dir>/signex/distributors.toml`.
+//! Stores the `[distributor_apis] preferred_order = [...]` list at
+//! `<config_dir>/signex/distributors.toml`.
 //!
 //! Why a dedicated file vs. piggy-backing on `prefs.json`:
 //! - `prefs.json` is JSON; the rest of the v0.9 library config is TOML

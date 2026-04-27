@@ -2,18 +2,22 @@
 //! template-validated forms for parameters / supply / datasheet /
 //! simulation.
 //!
-//! Per `v0.9-refactor-2-plan.md` §11, the Component view is preview-
-//! only. Symbol and Footprint editing happens via standalone
-//! `.snxsym` / `.snxfpt` document tabs (WS-7); right-click on either
-//! render in the Preview tab fires
+//! In the v0.9-refactor-2 (DBLib) model, components are TSV rows
+//! addressed by [`crate::library::state::EditorAddress`]
+//! (`library_path + table + row_id`). The state lives on
+//! [`crate::library::state::ComponentPreviewState`].
+//!
+//! The Component view is preview-only: Symbol and Footprint render
+//! read-only. Editing happens via standalone `.snxsym` / `.snxfpt`
+//! document tabs in the main window — right-click on either render
+//! in the Preview tab fires
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone editor.
 //!
 //! Tab count is 5: Preview / Parameters / Supply / Datasheet /
-//! Simulation. The History / Where-Used / Pin Map / Symbol / Footprint
-//! tabs from the original v0.9 layout are dropped — Pin Map folds
-//! into Preview as an inline subsection, History is reachable via
-//! `git log`, Where-Used is a footer line on Preview.
+//! Simulation. Pin Map folds into Preview as an inline subsection;
+//! History is reachable via `git log`; Where-Used is a footer line
+//! on Preview.
 
 pub mod datasheet_picker;
 pub mod footprint;
@@ -23,8 +27,6 @@ pub mod sim;
 pub mod standalone;
 pub mod supply;
 pub mod symbol;
-// `submit_for_review` / `where_used` are dropped — Component Preview
-// surface drops them per plan §11.
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};

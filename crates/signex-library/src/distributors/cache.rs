@@ -1,6 +1,5 @@
 //! Disk JSON cache for `DistributorPart` records.
 //!
-//! Spec (WS-C):
 //! - Layout: `<root>/<provider>/<mpn>.json` (one JSON file per part).
 //! - Default TTL: **24 hours** for metadata. Datasheet URLs cached
 //!   indefinitely (the URL is stored as part of the same JSON; the
@@ -19,7 +18,7 @@ use chrono::Utc;
 
 use crate::distributor::DistributorPart;
 
-/// 24-hour TTL per LIBRARY_PLAN §14a.4 / WS-C.
+/// 24-hour TTL per `LIBRARY_PLAN.md` §14a.4.
 pub const DEFAULT_TTL: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug, thiserror::Error)]

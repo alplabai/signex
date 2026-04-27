@@ -1,10 +1,7 @@
-//! `/rows/:row_id/locks` — advisory locking over the WS-4 row tier.
+//! `/rows/:row_id/locks` — advisory locking over the row tier.
 //!
-//! Per `v0.9-refactor-2-plan.md` §7, locks now key off `RowId` rather than
-//! the legacy `ComponentId` (the type alias was removed alongside the
-//! `Component`/`Revision` model). The wire format is identical to v0.9-original:
-//! the caller identifies itself with the `x-signex-holder` header and the
-//! body picks the field-set.
+//! Locks key off `RowId`. The caller identifies itself with the
+//! `x-signex-holder` header and the body picks the field-set.
 //!
 //! ```json
 //! { "field_set": "Symbol" }

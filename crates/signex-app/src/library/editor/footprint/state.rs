@@ -1,8 +1,7 @@
 //! Footprint editor in-memory state.
 //!
-//! WS-F refactor: the canvas state now derives from a typed
-//! [`signex_library::Footprint`] primitive. The pre-refactor
-//! `from_sexpr` round-trip is gone — pad geometry mirrors
+//! The canvas state derives from a typed
+//! [`signex_library::Footprint`] primitive — pad geometry mirrors
 //! `Footprint::pads: Vec<Pad>`. Two-way sync runs through
 //! [`FootprintEditorState::sync_pads_to_primitive`] so the dispatcher
 //! keeps the primitive authoritative.
@@ -277,10 +276,10 @@ impl FootprintEditorState {
         self.recompute_courtyard();
     }
 
-    /// WS-F: write the canvas-side pad list back onto the primitive.
-    /// Called after every mutation so save_revision sees the current
-    /// pad layout. Other Footprint fields (graphics, body_3d, etc.)
-    /// are left untouched — they're edited by their own panes.
+    /// Write the canvas-side pad list back onto the primitive. Called
+    /// after every mutation so the saved row sees the current pad
+    /// layout. Other Footprint fields (graphics, body_3d, etc.) are
+    /// left untouched — they're edited by their own panes.
     pub fn sync_pads_to_primitive(canvas: &Self, fp: &mut Footprint) {
         fp.pads = canvas.pads.iter().map(EditorPad::to_pad).collect();
         // Auto-fit courtyard is mirrored as a Polygon for downstream

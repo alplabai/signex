@@ -1,8 +1,8 @@
 //! Shared `ApiError` envelope reused by every route module.
 //!
-//! Lifted out of the (now-deleted) `routes::components` module so the
-//! WS-4 `tables` / `rows` and the WS-D `symbols` / `footprints` / `sims`
-//! routes can sit on the same status-code → JSON-body contract.
+//! Sits in its own module so the `tables` / `rows` row tier and the
+//! `symbols` / `footprints` / `sims` primitive routes can share one
+//! status-code → JSON-body contract.
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;

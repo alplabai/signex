@@ -31,9 +31,9 @@ pub enum LibraryMessage {
     /// pointing at it). No-op when the path isn't currently open.
     CloseLibrary(PathBuf),
     /// Show the close-library confirmation modal carrying the list of
-    /// dirty editor addresses the user is about to lose.
-    // WS-I: tab-not-window — keyed by `EditorAddress` because the
-    // editors live as tabs, not as OS windows.
+    /// dirty editor addresses the user is about to lose. Keyed by
+    /// `EditorAddress` because Component Preview editors live as tabs,
+    /// not as OS windows.
     ConfirmCloseLibrary {
         library_path: PathBuf,
         dirty_editors: Vec<EditorAddress>,
@@ -44,10 +44,9 @@ pub enum LibraryMessage {
     OpenPicker,
     /// Dismiss the picker modal (Esc / X / outside click).
     ClosePicker,
-    // ── WS-E: New Component flow ─────────────────────────────────────
+    // ── New Component flow ────────────────────────────────────────────
     /// File ▸ Library ▸ New Component… — opens the New Component modal.
     NewComponent,
-    // WS-H: Project tree library wiring
     /// Project tree → right-click → Add New to Project ▸ Component
     /// Library. Carries the active project's root directory; the
     /// dispatcher prompts for a name (default `<project>-lib`),
@@ -64,11 +63,11 @@ pub enum LibraryMessage {
     NewComponentSetLibrary(usize),
     /// User picked a class in the modal pick_list.
     NewComponentSetClass(ComponentClass),
-    /// User picked a target table (filename stem) in the modal pick_list.
-    /// WS-8 (DBLib model): rows live inside category tables, so the
-    /// modal needs the user to pick a destination table — populated
-    /// from `manifest().tables()` plus the default `<class>s` slot
-    /// when the manifest declares no overrides.
+    /// User picked a target table (filename stem) in the modal
+    /// pick_list. Rows live inside category tables, so the modal
+    /// needs the user to pick a destination table — populated from
+    /// `manifest().tables()` plus the default `<class>s` slot when
+    /// the manifest declares no overrides.
     NewComponentSetTable(String),
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
@@ -80,18 +79,17 @@ pub enum LibraryMessage {
     /// Toggle the Library left-dock panel's library tree node at
     /// `path` (path relative to the open libraries list).
     ToggleLibraryTreeNode(usize),
-    /// v0.9-refactor-2 (DBLib model): open a Component Preview tab for
-    /// the row identified by `(library_path, table, row_id)`. Replaces
-    /// the previous `OpenEditor { library_path, component_id }` shape.
+    /// Open a Component Preview tab for the row identified by
+    /// `(library_path, table, row_id)`.
     OpenComponentRow {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
     },
     /// Open a standalone primitive editor tab for the file at `path`.
-    /// Fired by the Component Preview tab's right-click context menu on
-    /// the Symbol / Footprint render panes; routed to WS-7's standalone
-    /// `.snxsym` / `.snxfpt` editor.
+    /// Fired by the Component Preview tab's right-click context menu
+    /// on the Symbol / Footprint render panes; routed to the
+    /// standalone `.snxsym` / `.snxfpt` document tab.
     OpenPrimitiveEditor { path: PathBuf },
     /// Inner Component Preview message — keyed by
     /// `(library_path, table, row_id)`.
@@ -117,22 +115,22 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
-    /// Internal trace-only signal: a Component Preview tab was opened
-    /// for the given address. WS-5 fires this from
-    /// `OpenComponentRow` so WS-6 has a single message to subscribe
-    /// to once the row-shaped editor lands.
+    /// Internal trace-only signal: a Component Preview tab was
+    /// opened for the given address. Fired alongside
+    /// `OpenComponentRow` so downstream observers can attach to a
+    /// single message.
     ComponentPreviewOpened {
         path: PathBuf,
         table: String,
         row_id: RowId,
     },
     /// Inner-message envelope for events fired from a standalone
-    /// primitive editor tab (WS-7). Keyed by file path so the
-    /// dispatcher can locate the matching `SymbolEditorState` /
-    /// `FootprintEditorState` in `DocumentState.symbol_editors` /
-    /// `footprint_editors`. Mirrors the `EditorEvent` shape used
-    /// for Component Preview tabs but with a path identity instead
-    /// of `(library_path, table, row_id)`.
+    /// primitive editor tab (`.snxsym` / `.snxfpt`). Keyed by file
+    /// path so the dispatcher can locate the matching
+    /// `SymbolEditorState` / `FootprintEditorState` in
+    /// `DocumentState.symbol_editors` / `footprint_editors`. Mirrors
+    /// the `EditorEvent` shape used for Component Preview tabs but
+    /// with a path identity instead of `(library_path, table, row_id)`.
     PrimitiveEditorEvent {
         path: PathBuf,
         msg: PrimitiveEditorMsg,
@@ -148,12 +146,11 @@ pub enum CloseLibraryChoice {
     Cancel,
 }
 
-/// Component Preview inner messages. v0.9-refactor-2 (DBLib model):
-/// the surface is preview-only for Symbol/Footprint, so the legacy
-/// Symbol/Footprint canvas messages stay defined for backwards
-/// compatibility (the standalone `.snxsym`/`.snxfpt` editor in WS-7
-/// re-uses them) but they no longer dispatch through the Component
-/// Preview tab.
+/// Component Preview inner messages. The surface is preview-only
+/// for Symbol/Footprint; the canvas messages stay defined here so
+/// the standalone `.snxsym` / `.snxfpt` document tabs can reuse
+/// them, but they no longer dispatch through the Component Preview
+/// tab.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum EditorMsg {
@@ -194,7 +191,7 @@ pub enum EditorMsg {
     /// Set the row's lifecycle state from the Preview tab header.
     SetLifecycle(LifecycleState),
 
-    // ── WS-G: Pin Map (Preview-tab inline subsection) ───────
+    // ── Pin Map (Preview-tab inline subsection) ─────────────
     /// Toolbar — clear every override and revert to default 1:1 by
     /// pin/pad number equality.
     PinMapAutoMatchByNumber,
@@ -228,9 +225,8 @@ pub enum EditorMsg {
     PinMapRemoveOverride {
         pin: String,
     },
-    // ── /WS-G ───────────────────────────────────────────────
 
-    // ── WS-F2: Symbol tab ─────────────────────────────────────
+    // ── Symbol canvas (used by standalone .snxsym tab) ─────────
     /// Set the active drawing tool on the Symbol canvas.
     SymbolSetTool(SymbolToolMsg),
     /// Click-to-place a pin on the symbol canvas at the given grid-
@@ -283,7 +279,7 @@ pub enum EditorMsg {
     /// containing enum stays cheap to clone and propagate.
     SaveSymbol(uuid::Uuid, Box<signex_library::Symbol>),
 
-    // ── WS-F2: Footprint tab ──────────────────────────────────
+    // ── Footprint canvas (used by standalone .snxfpt tab) ──────
     /// Click-to-place a pad at the given world position. Fires from
     /// the canvas program on a press-without-drag.
     FootprintAddPad {
@@ -331,7 +327,7 @@ pub enum EditorMsg {
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
 
-    // ── WS-K: Supply tab ──────────────────────────────────────
+    // ── Supply tab ────────────────────────────────────────────
     // Primary MPN
     /// Edit the primary MPN's manufacturer string.
     SupplyPrimarySetManufacturer(String),
@@ -395,9 +391,7 @@ pub enum EditorMsg {
     SupplyListingRemove {
         idx: usize,
     },
-    // ── /WS-K ─────────────────────────────────────────────────
-
-    // ── WS-J: Params tab ──────────────────────────────────────
+    // ── Parameters tab ────────────────────────────────────────
     /// Set a `ParamValue::Text` parameter's value directly. Text inputs
     /// can flush on every keystroke without a parse step.
     ParamSetText {
@@ -440,9 +434,7 @@ pub enum EditorMsg {
         name: String,
         kind: ParamKindMsg,
     },
-    // ── /WS-J ─────────────────────────────────────────────────
-
-    // ── WS-L: Sim tab ─────────────────────────────────────────
+    // ── Simulation tab ────────────────────────────────────────
     /// Toggle the "Has SPICE Model" checkbox. `true` constructs a fresh
     /// `SimModel` and binds it via `Revision::sim_ref`; `false` clears
     /// both `editor.sim` and `editor.draft.sim_ref`.
@@ -463,10 +455,8 @@ pub enum EditorMsg {
     },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
-    // ── /WS-L ─────────────────────────────────────────────────
 }
 
-// WS-J: Params tab
 /// Pure-data alias for `ParamKind` so messages don't depend on
 /// `signex_library::ParamKind` at the message layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -508,13 +498,12 @@ pub enum FieldKeyMsg {
     Value,
 }
 
-// WS-7 (refactor-2): standalone primitive editor tabs
 /// Inner messages for a [`LibraryMessage::PrimitiveEditorEvent`]
-/// envelope. Path-keyed dispatch routes each variant to the symbol or
-/// footprint editor state stored on `DocumentState` per the active
-/// tab's [`crate::app::TabKind`]. Save (Ctrl+S) flows through the
-/// existing schematic-save handler — these variants only cover the
-/// editor-side mutations + the explicit "save primitive" command.
+/// envelope. Path-keyed dispatch routes each variant to the symbol
+/// or footprint editor state stored on `DocumentState` per the
+/// active tab's [`crate::app::TabKind`]. Save (Ctrl+S) flows through
+/// the existing schematic-save handler — these variants only cover
+/// the editor-side mutations + the explicit "save primitive" command.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum PrimitiveEditorMsg {

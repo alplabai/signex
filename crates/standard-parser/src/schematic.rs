@@ -1556,7 +1556,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ParseError> {
     // populated only when reading a Signex `.snxprj` (handled below
     // via the serde struct's `#[serde(default)]` fallback). For the
     // hand-built `ProjectData` here we emit an empty vec — Signex
-    // libraries are recorded by `Project::libraries` (v0.9 WS-H).
+    // libraries are recorded by `Project::libraries`.
     Ok(ProjectData {
         name: project_name,
         dir: dir.to_string_lossy().to_string(),

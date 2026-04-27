@@ -246,14 +246,13 @@ impl Signex {
                                 .dock
                                 .add_panel(crate::dock::PanelPosition::Right, kind);
                         }
-                        // WS-I: tab-not-window
-                        // The Component Editor lives as a tab in the
-                        // main window now; its state outlasts the
+                        // The Component Preview lives as a tab in the
+                        // main window; its state outlasts the
                         // detached OS window. Closing the OS window
                         // re-docks the editor to the main-window tab
                         // bar — `library.editors` keeps the in-flight
-                        // edits keyed by `(library_path,
-                        // component_id)`, and the main-window tab
+                        // edits keyed by `(library_path, table,
+                        // row_id)`, and the main-window tab
                         // already exists, so there's nothing to do
                         // here beyond letting the window-id mapping
                         // drop above.

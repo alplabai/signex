@@ -1,7 +1,7 @@
 //! JLCPCB distributor adapter — anonymous, polite-throttled (1 req/s).
 //!
-//! Spec (WS-C): same shape as LCSC — no auth, 1 req/s throttle, disk cache
-//! with 24h TTL. JLCPCB's public component search returns an LCSC-style
+//! Same shape as LCSC — no auth, 1 req/s throttle, disk cache with
+//! 24h TTL. JLCPCB's public component search returns an LCSC-style
 //! response (the JLCPCB parts catalogue is a curated subset of LCSC).
 
 use std::collections::BTreeMap;

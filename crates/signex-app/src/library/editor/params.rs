@@ -453,7 +453,7 @@ fn add_custom_row<'a>(
     // Static placeholder row — the Add operation requires the user to
     // type the name into the input below and pick a kind. A single
     // "Add" pill seeds with `Text` for now (custom-row kind switching
-    // happens via toggling later in WS-J's polish pass).
+    // happens via toggling in a later polish pass).
     let pill = |label: &'static str, kind: ParamKindMsg| -> Element<'a, LibraryMessage> {
         let lib_path = lib_path.clone();
         let table = table.clone();
@@ -464,7 +464,7 @@ fn add_custom_row<'a>(
                 table,
                 row_id,
                 msg: EditorMsg::ParamAddCustom {
-                    // The name picker is intentionally minimal in WS-J;
+                    // The name picker is intentionally minimal here;
                     // the dispatcher rejects empty names so the message
                     // is benign when fired with an empty buffer. UIs
                     // (e.g. an inline name field) layer on top.

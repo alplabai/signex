@@ -2,17 +2,12 @@
 //! [`crate::library::LibraryMessage`] to the right side-effecting
 //! handler.
 //!
-//! v0.9-refactor-2 (DBLib model): the Component Editor became a
-//! preview surface. Symbol/Footprint/Sim are read-only here; their
-//! standalone `.snxsym` / `.snxfpt` / `.snxsim` document tabs (WS-7)
-//! own actual editing. The dispatcher's editor handlers are scoped
-//! to the five Component Preview tabs (Preview / Parameters / Supply
-//! / Datasheet / Simulation).
-//!
-//! New-Component / picker-place / library-create flows depend on
-//! `commands::*` helpers that are still being retargeted by other
-//! Wave-3 slices (WS-5/8); the variants stay defined but log + bail
-//! when the underlying helper hasn't landed yet.
+//! In the DBLib model the Component view is preview-only.
+//! Symbol/Footprint/Sim render read-only here; the standalone
+//! `.snxsym` / `.snxfpt` / `.snxsim` document tabs own actual
+//! editing. The dispatcher's editor handlers are scoped to the five
+//! Component Preview tabs (Preview / Parameters / Supply / Datasheet
+//! / Simulation).
 
 use iced::Task;
 
@@ -60,7 +55,7 @@ impl Signex {
                 Task::none()
             }
 
-            // ── New Component flow (WS-8 retargets the helper) ──────
+            // ── New Component flow ───────────────────────────────────
             LibraryMessage::NewComponent => {
                 self.library.new_component = Some(NewComponentState {
                     library_idx: (!self.library.open_libraries.is_empty()).then_some(0),
@@ -87,11 +82,9 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSetClass(class) => {
-                // WS-8: when the user changes class, we DON'T overwrite the
-                // table pick — that's the user's explicit choice. Other
-                // slices may extend this with auto-pluralisation hints, but
-                // the canonical rule is "user picks the table; class only
-                // affects the parameter template".
+                // Changing class does NOT overwrite the table pick —
+                // that's the user's explicit choice. Class only
+                // affects the parameter template.
                 if let Some(nc) = self.library.new_component.as_mut() {
                     nc.class = class;
                     nc.error = None;
@@ -99,9 +92,9 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSetTable(name) => {
-                // WS-8: user picked a target table. If there's exactly one
-                // class associated with this table in the manifest, we
-                // surface that as the auto-class so the form fills out
+                // User picked a target table. If exactly one class is
+                // associated with this table in the manifest, surface
+                // that as the auto-class so the form fills out
                 // sensibly. Otherwise the user keeps editing the class
                 // independently.
                 if let Some(nc) = self.library.new_component.as_mut() {
@@ -146,13 +139,13 @@ impl Signex {
                         return Task::none();
                     }
                 };
-                // WS-8: target table — modal pick takes precedence. When
-                // the manifest declared no `[[tables]]` overrides, the
-                // modal still surfaces a default-pluralised slot (per
-                // plan §13 step 8.2); fall back to
-                // `Manifest::table_for_class` if the user submitted with
-                // an unset pick (ghost case when the modal opens with
-                // neither a pre-pick nor a user-selected table).
+                // Target table — modal pick takes precedence. When
+                // the manifest declared no `[[tables]]` overrides the
+                // modal still surfaces a default-pluralised slot;
+                // fall back to `Manifest::table_for_class` if the
+                // user submitted with an unset pick (ghost case when
+                // the modal opens with neither a pre-pick nor a
+                // user-selected table).
                 let library_path = match self.library.open_libraries.get(library_idx) {
                     Some(lib) => lib.root.clone(),
                     None => {
@@ -278,14 +271,13 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSetTable(table) => {
-                // WS-8: pin the row's target table on the modal state.
+                // Pin the row's target table on the modal state.
                 if let Some(nc) = self.library.new_component.as_mut() {
                     nc.table = Some(table);
                     nc.error = None;
                 }
                 Task::none()
             }
-            // WS-7 (refactor-2): standalone primitive editor tabs
             LibraryMessage::PrimitiveEditorEvent { path, msg } => {
                 self.handle_primitive_editor_event(path, msg)
             }
@@ -303,9 +295,9 @@ impl Signex {
     ) -> Task<Message> {
         // Locate the LoadedProject so we can mutate its `libraries`
         // list. We match on `project_root` against the project file
-        // path and against its parent dir — callers in WS-H emit the
-        // file path, but a future menu wired to a tree-row right-
-        // click could reasonably emit the directory.
+        // path and against its parent dir — callers emit the file
+        // path, but a future menu wired to a tree-row right-click
+        // could reasonably emit the directory.
         let Some(loaded) =
             self.document_state.projects.iter_mut().find(|p| {
                 p.path == project_root || p.path.parent() == Some(project_root.as_path())
@@ -387,9 +379,9 @@ impl Signex {
             return Task::none();
         }
 
-        // Pre-load the row from the adapter. WS-2's `read_row` is the
-        // canonical lookup; if it fails we surface and bail without
-        // leaving an empty tab behind.
+        // Pre-load the row from the adapter via `read_row`; if it
+        // fails we surface and bail without leaving an empty tab
+        // behind.
         let library_id = match self.library.library_at(&library_path) {
             Some(lib) => lib.library_id,
             None => {
@@ -452,9 +444,8 @@ impl Signex {
                 picker.filter = s;
             }
             PickerMsg::SelectComponent(summary) => {
-                // WS-5 (DBLib): `ComponentSummary` lost its `uuid`
-                // alias when WS-1 renamed `ComponentId` → `RowId`.
-                // Match against the row tier's `row_id` directly.
+                // `ComponentSummary` carries `row_id` directly in the
+                // DBLib model; match against that.
                 let path = self
                     .library
                     .open_libraries
@@ -821,7 +812,6 @@ impl Signex {
         }
     }
 
-    // WS-7 (refactor-2): standalone primitive editor tabs
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.
     /// Reads the file from disk, builds the matching editor state,
     /// and pushes a `TabKind::SymbolEditor(path)` /
@@ -969,12 +959,11 @@ impl Signex {
         }
     }
 
-    // WS-7 (refactor-2): standalone primitive editor tabs
     /// Apply a primitive-editor inner message to the matching tab's
     /// editor state. Path-keyed lookup distinguishes Symbol vs
     /// Footprint; the dispatcher routes to the existing canvas-state
-    /// helpers so the behaviour matches the in-Component Editor
-    /// experience verbatim.
+    /// helpers so the standalone tab behaviour matches the in-Component
+    /// Editor experience verbatim.
     pub(crate) fn handle_primitive_editor_event(
         &mut self,
         path: std::path::PathBuf,
@@ -1008,11 +997,10 @@ impl Signex {
         Task::none()
     }
 
-    // WS-7 (refactor-2): standalone primitive editor tabs
     /// Write the primitive at `path` back to disk as JSON, mark the
     /// tab clean, and (when the file lives under a `.snxlib/`) ask
     /// the matching `LibrarySet` adapter to reload its cached copy
-    /// so any open Component Preview tabs (WS-6) see the new bytes.
+    /// so any open Component Preview tabs see the new bytes.
     pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
         // Symbol path.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
@@ -1108,15 +1096,12 @@ impl Signex {
     /// mounted library or when the adapter has no reload hook.
     fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
         // Stubbed pending the corresponding `LibrarySet::reload_primitive`
-        // helper (called out in plan §12 Step 7.4 as a small change in
-        // `signex-library`). The standalone editor tab already holds
-        // the authoritative copy of the primitive in memory; on-disk
-        // round-trips happen here, and Component Preview tabs (WS-6)
-        // pull through `LibrarySet::resolve_*` on the next view, so
-        // the only hole this leaves is a Preview tab that's already
-        // resolved + cached its primitive in editor state. WS-6 owns
-        // that cache; we mark this as "no-op for now" so the wave
-        // doesn't add a dependency on a sibling slice.
+        // helper. The standalone editor tab already holds the
+        // authoritative copy of the primitive in memory and on-disk
+        // round-trips happen here; Component Preview tabs pull
+        // through `LibrarySet::resolve_*` on the next view, so the
+        // only hole this leaves is a Preview tab that has already
+        // resolved + cached its primitive in editor state.
     }
 }
 
@@ -1613,9 +1598,9 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
             }
         }
         // Variants below are kept around for the standalone primitive
-        // editors (WS-7); they're never fired through the Component
-        // Preview surface in v0.9-refactor-2 but stay defined to keep
-        // the message tree backwards-compatible.
+        // editors (`.snxsym` / `.snxfpt` document tabs); they're
+        // never fired through the Component Preview surface but stay
+        // defined to keep the message tree backwards-compatible.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
         | EditorMsg::Commit

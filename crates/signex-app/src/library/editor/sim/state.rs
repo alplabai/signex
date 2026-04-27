@@ -1,10 +1,10 @@
-//! Sim tab state — WS-L.
+//! Sim tab state.
 //!
-//! All persistent state for the Sim tab now lives on the typed
+//! All persistent state for the Sim tab lives on the typed
 //! [`signex_library::SimModel`] primitive bound through
-//! `Revision::sim_ref`. The only piece of UI-only state — the live
-//! `text_editor::Content` mirror of the SPICE deck — sits on
-//! [`crate::library::state::ComponentEditorState::sim_body`] so it
+//! `ComponentRow::sim_ref`. The only piece of UI-only state — the
+//! live `text_editor::Content` mirror of the SPICE deck — sits on
+//! [`crate::library::state::ComponentPreviewState::sim_body`] so it
 //! shares the per-editor lifetime that the rest of the tab tooling
 //! uses.
 //!

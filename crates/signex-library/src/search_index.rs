@@ -1,4 +1,4 @@
-//! Tantivy-backed implementation of [`SearchIndex`] (Phase 1 WS-E).
+//! Tantivy-backed implementation of [`SearchIndex`].
 //!
 //! Schema:
 //! - `uuid`         STRING | STORED  (primary key — used for delete-then-add updates)
@@ -283,11 +283,12 @@ impl TantivySearchIndex {
 
     /// Add or replace the doc for a single row.
     ///
-    /// Per `v0.9-refactor-2-plan.md` §17, full Tantivy rewiring is deferred
-    /// — the row-flavour `add_or_update` mirrors the v0.9-original schema
-    /// but reads from a [`ComponentRow`] directly instead of walking a
-    /// `Revision` chain. The `head_major / head_minor` fields are filled
-    /// with zeros for now; WS-9 may drop them entirely.
+    /// Full Tantivy rewiring for the DBLib model is deferred (see
+    /// `v0.9-refactor-2-plan.md` §17). This entry mirrors the original
+    /// schema but reads from a [`ComponentRow`] directly instead of
+    /// walking a `Revision` chain. The `head_major` / `head_minor`
+    /// columns are filled with zeros and survive only so the on-disk
+    /// schema stays compatible until a future polish pass drops them.
     ///
     /// Replacement is by `row_id` term; safe to call on the same row
     /// repeatedly. Caller must `commit()` to make changes visible to
@@ -305,8 +306,9 @@ impl TantivySearchIndex {
         // filters by category keeps working.
         let category_value = row.class.as_str().to_string();
 
-        // Synthesised "<manufacturer> <mpn>" stays the description until
-        // WS-9 retargets the field at the row's `parameters` map.
+        // Synthesised "<manufacturer> <mpn>" stands in for the
+        // description field until search rewiring lands and pulls the
+        // text from the row's `parameters` map (deferred polish).
         let description = format!("{} {}", row.primary_mpn.manufacturer, row.primary_mpn.mpn)
             .trim()
             .to_string();
@@ -318,9 +320,9 @@ impl TantivySearchIndex {
         doc.add_text(self.fields.manufacturer, &row.primary_mpn.manufacturer);
         doc.add_text(self.fields.description, &description);
         doc.add_text(self.fields.category, &category_value);
-        // Rows have no per-row version chain in the refactor-2 model.
-        // Stash zeros so the schema doesn't need a rebuild before WS-9
-        // drops these columns entirely.
+        // Rows have no per-row version chain in the DBLib model;
+        // stash zeros so the on-disk schema doesn't need a rebuild
+        // before a future polish pass drops these columns.
         doc.add_u64(self.fields.head_major, 0);
         doc.add_u64(self.fields.head_minor, 0);
         doc.add_text(self.fields.state, lifecycle_token(row.state));
@@ -568,9 +570,10 @@ impl TantivySearchIndex {
         let internal_pn = read_text(doc, self.fields.internal_pn).unwrap_or_default();
         let mpn = read_text(doc, self.fields.mpn).unwrap_or_default();
         let description = read_text(doc, self.fields.description).unwrap_or_default();
-        // `head_major` / `head_minor` are written as zeros in the row model;
-        // the unused bindings below silence the unused-helper warning until
-        // WS-9 drops them entirely.
+        // `head_major` / `head_minor` are written as zeros in the
+        // DBLib row model; the unused binding below silences the
+        // unused-helper warning until a future schema rebuild drops
+        // those columns and the helper with them.
         let _ = read_u64;
         let state_raw = read_text(doc, self.fields.state).unwrap_or_default();
         let state = parse_lifecycle_token(&state_raw).unwrap_or(LifecycleState::Released);

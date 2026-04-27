@@ -19,7 +19,6 @@ pub enum PrefNav {
     /// Electrical Rule Check — per-rule severity override.
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
-    /// First-class Preferences pane as of UI-WS7.
     LibraryDistributors,
     // Future: Editor, Shortcuts, ...
 }
@@ -81,7 +80,7 @@ pub enum PrefMsg {
     ResetErcSeverities,
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
-    /// live panel as a first-class pane (UI-WS7) without breaking the
+    /// live panel as a first-class pane without breaking the
     /// existing `Message::PreferencesMsg` plumbing. The handler
     /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
     LibrarySettings(crate::library::messages::SettingsMsg),
@@ -376,8 +375,8 @@ fn build_content<'a>(
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
-        // UI-WS7: Library → Distributor APIs is now a first-class
-        // pane. The library subsystem owns the actual form
+        // Library → Distributor APIs — the library subsystem owns
+        // the actual form
         // (`crate::library::settings::distributor_apis::view`); we
         // re-emit its `LibraryMessage::Settings(_)` wrapper as
         // `PrefMsg::LibrarySettings(_)` so the Preferences modal's
@@ -405,9 +404,9 @@ fn build_content<'a>(
 
 /// Mount the live Distributor APIs panel inside the Preferences modal.
 ///
-/// UI-WS7: the panel emits `LibraryMessage::Settings(_)`; we wrap
-/// every message in `PrefMsg::LibrarySettings(_)` so the modal's
-/// outer `Message::PreferencesMsg(_)` map stays a single layer. The
+/// The panel emits `LibraryMessage::Settings(_)`; we wrap every
+/// message in `PrefMsg::LibrarySettings(_)` so the modal's outer
+/// `Message::PreferencesMsg(_)` map stays a single layer. The
 /// `app/handlers/preferences.rs` handler unwraps and re-dispatches
 /// via `Message::Library` so the canonical state writeback runs
 /// through the same dispatcher the Tools-menu surface uses.

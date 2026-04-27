@@ -1,26 +1,28 @@
-//! In-memory state for the Library subsystem.
+//! In-memory state for the Library subsystem (DBLib model).
 //!
-//! Owned by [`crate::app::Signex::library`]. The main pieces:
+//! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
+//! model, components are rows inside per-category TSV tables under
+//! `<lib>/tables/<category>.tsv`, addressed by
+//! `(library_path, table, row_id)`. The main pieces:
 //!
-//! * `set` — `signex_library::LibrarySet`, the cross-library resolver that
-//!   maps `library_id → Box<dyn LibraryAdapter>`. Editors and renderers
-//!   hand a `PrimitiveRef` to `set.resolve_*` to load
-//!   `Symbol`/`Footprint`/`SimModel` primitives without knowing which library
-//!   they live in.
-//! * `open_libraries` — display caches per `*.snxlib/`. Each entry holds
-//!   the root path, display name, and a cached `Vec<ComponentSummary>` so
-//!   the panel doesn't re-scan disk between renders. The actual adapter
-//!   lives on `set`, keyed by `library_id`.
-//! * `editors` — one entry per Component Editor keyed by
-//!   `EditorAddress(library_path, component_id)`. The editor lives
-//!   as a tab in the main window's tab bar; the user can detach it
-//!   into its own OS window via the existing tab-undock flow, in
-//!   which case `Signex::ui_state.windows` registers the new id as
-//!   `WindowKind::ComponentEditor` referring to the same address.
-//!   (WS-I: tab-not-window — Wave 2 keyed by `iced::window::Id`.)
-//! * `picker` — Phase 1 component picker modal state.
-//! * `new_component` — modal state for the "New Component" flow (PN +
-//!   library + class + category).
+//! * `set` — `signex_library::LibrarySet`, the cross-library resolver
+//!   that maps `library_id → Box<dyn LibraryAdapter>`. Editors and
+//!   renderers hand a `PrimitiveRef` to `set.resolve_*` to load
+//!   `Symbol`/`Footprint`/`SimModel` primitives without knowing which
+//!   library they live in.
+//! * `open_libraries` — display caches per `*.snxlib/`. Each entry
+//!   holds the root path, display name, and per-table `Vec<ComponentRow>`
+//!   so the panel can render an inline grid per category without
+//!   re-reading disk between view ticks.
+//! * `editors` — one entry per Component Preview tab keyed by
+//!   [`EditorAddress`]. The preview lives as a tab in the main
+//!   window's tab bar and may be undocked into its own OS window via
+//!   the standard tab-undock flow; either way the address is the
+//!   stable identity, not the window id.
+//! * `picker` — component picker modal state (used by schematic
+//!   placement; flattens across every open library).
+//! * `new_component` — modal state for the "New Row" flow
+//!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
 
@@ -35,12 +37,10 @@ use signex_library::{
 };
 use uuid::Uuid;
 
-// v0.9-refactor-2: DBLib model — rows live in `tables/<name>.tsv`, addressed
-// by `(library_path, table, row_id)`.
 /// Identity for an open Component Preview tab — the lookup key for
 /// [`LibraryState::editors`] and the address that preview view closures
-/// clone into messages. Replaces the `(library_path, component_id)` shape
-/// from the original v0.9 refactor.
+/// clone into messages. Rows live in `tables/<name>.tsv` and are
+/// addressed by `(library_path, table, row_id)`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EditorAddress {
     pub library_path: PathBuf,
@@ -82,12 +82,11 @@ pub struct LibraryState {
     /// root path. The adapter for each entry is mounted on `set`
     /// under its `library_id`.
     pub open_libraries: Vec<OpenLibrary>,
-    // v0.9-refactor-2: DBLib model
     /// Component Preview states currently open. Keyed by
     /// `(library_path, table, row_id)` per the DBLib row identity.
     /// Component Preview tabs are read-only for Symbol+Footprint;
     /// editing happens via standalone `.snxsym` / `.snxfpt` document
-    /// tabs (see WS-7).
+    /// tabs.
     pub editors: HashMap<EditorAddress, ComponentPreviewState>,
     /// Reverse "where-used" index — same shape as before.
     pub where_used: WhereUsedIndex,
@@ -106,8 +105,9 @@ pub struct LibraryState {
     #[allow(dead_code)]
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// Bundled + per-library parameter templates. Reference-counted
-    /// because both the editor and the validator borrow it. WS-F/WS-G
-    /// surface this through the editor; WS-E only owns the field.
+    /// because both the editor and the validator borrow it. The
+    /// Component Preview tab + the validator both read through this
+    /// registry; this struct owns the field.
     #[allow(dead_code)]
     pub template_registry: Arc<TemplateRegistry>,
 }
@@ -115,13 +115,12 @@ pub struct LibraryState {
 impl Default for LibraryState {
     fn default() -> Self {
         let mut settings = DistributorSettings::default();
-        // UI-WS7: rehydrate the preferred-order list from
+        // Rehydrate the preferred-order list from
         // `<config_dir>/signex/distributors.toml`.
         settings.preferred_order = super::settings::persistence::load_preferred_order();
         Self {
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
-            // WS-I: tab-not-window
             editors: HashMap::new(),
             where_used: WhereUsedIndex::new(),
             picker: None,
@@ -149,11 +148,11 @@ impl LibraryState {
     /// `library_id` on `set` and registering the display entry in
     /// `open_libraries`. Idempotent.
     ///
-    /// WS-5 (DBLib): also primes the per-library `tables` cache by
-    /// running `list_tables` + `read_table` for every table the
-    /// adapter exposes. Read errors warn through `tracing` and the
-    /// affected entries are left empty — one bad table doesn't sink
-    /// the open flow.
+    /// Also primes the per-library `tables` cache by running
+    /// `list_tables` + `read_table` for every table the adapter
+    /// exposes. Read errors warn through `tracing` and the affected
+    /// entries are left empty — one bad table doesn't sink the open
+    /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             return Ok(());
@@ -173,15 +172,15 @@ impl LibraryState {
             tables: HashMap::new(),
             cached_components: Vec::new(),
         };
-        if let Some(adapter) = self.set.get(library_id) {
-            if let Err(e) = entry.reload_tables(adapter) {
-                tracing::warn!(
-                    target: "signex::library",
-                    library_id = %library_id,
-                    error = %e,
-                    "open_library: reload_tables failed; library opens with empty cache"
-                );
-            }
+        if let Some(adapter) = self.set.get(library_id)
+            && let Err(e) = entry.reload_tables(adapter)
+        {
+            tracing::warn!(
+                target: "signex::library",
+                library_id = %library_id,
+                error = %e,
+                "open_library: reload_tables failed; library opens with empty cache"
+            );
         }
         self.open_libraries.push(entry);
         self.expanded.push(true);
@@ -198,7 +197,6 @@ impl LibraryState {
             if idx < self.expanded.len() {
                 self.expanded.remove(idx);
             }
-            // WS-I: tab-not-window
             self.editors.retain(|key, _| key.library_path != root);
         }
     }
@@ -206,12 +204,11 @@ impl LibraryState {
     /// Refresh the cached table contents for a library — re-reads every
     /// TSV via the mounted adapter's `list_tables` + `read_table`.
     ///
-    /// WS-5 (DBLib): replaces the per-revision `search` call from
-    /// v0.9-original. Returns `LibraryError::NotFound` when the
-    /// library at `root` isn't mounted, otherwise the underlying
-    /// adapter error. The cached `Vec<ComponentSummary>` is rebuilt
-    /// alongside `tables` so the picker (legacy summary tier) and the
-    /// panel grid (row tier) stay coherent.
+    /// Returns `LibraryError::NotFound` when the library at `root`
+    /// isn't mounted, otherwise the underlying adapter error. The
+    /// cached `Vec<ComponentSummary>` is rebuilt alongside `tables`
+    /// so the picker (summary tier) and the panel grid (row tier)
+    /// stay coherent.
     pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
         let library_id = self
             .library_at(root)
@@ -273,11 +270,9 @@ impl LibraryState {
     }
 
     /// Replace the Where-Used entries for one `(project, sheet)` with
-    /// `refs` — `(row_id, instance_id)` tuples (DBLib model).
-    ///
-    /// WS-5 (DBLib): `WhereUsedIndex::ingest_sheet` keys by `RowId`
-    /// directly now that revisions are gone — the per-instance
-    /// version pin from v0.9-original folds away.
+    /// `refs` — `(row_id, instance_id)` tuples. The index keys by
+    /// `RowId` directly; revisions and per-instance version pins are
+    /// not part of the DBLib model.
     #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
         let trimmed: Vec<(RowId, String)> = refs
@@ -330,12 +325,12 @@ impl LibraryState {
 /// `LibraryAdapter` lives on [`LibraryState::set`] keyed by
 /// `library_id`.
 ///
-/// WS-5 (DBLib): in the v0.9-refactor-2 model components are rows in
-/// per-category TSV tables, not standalone files. The display cache
-/// is keyed by table name; each entry holds the full row payload so
-/// the panel can render a grid view per category without re-reading
-/// disk between view ticks. Hot tables can be re-read on edit; v0.9
-/// keeps it simple — every row write triggers a full table reload.
+/// Components are rows in per-category TSV tables, not standalone
+/// files. The display cache is keyed by table name; each entry holds
+/// the full row payload so the panel can render a grid view per
+/// category without re-reading disk between view ticks. Every row
+/// write triggers a full table reload (v0.9 keeps it simple — hot
+/// per-row patches are a polish item).
 pub struct OpenLibrary {
     pub root: PathBuf,
     pub display_name: String,
@@ -345,9 +340,9 @@ pub struct OpenLibrary {
     /// `read_table`. The Library panel renders a category node per
     /// entry and an inline row grid per category.
     pub tables: HashMap<String, Vec<ComponentRow>>,
-    /// Last-loaded summary list. Compatibility shim used by the
-    /// `picker.rs` modal until WS-6 retargets it at the row tier;
-    /// kept in lock-step with `tables` by `reload_tables`.
+    /// Last-loaded summary list — used by `picker.rs` (and any
+    /// caller that wants a flat per-library view); kept in lock-step
+    /// with `tables` by `reload_tables`.
     pub cached_components: Vec<ComponentSummary>,
 }
 
@@ -420,12 +415,12 @@ pub struct PickerState {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// WS-E: New Component flow
+// New Component flow
 // ─────────────────────────────────────────────────────────────────────
 
 /// Built-in component classes — keep this list in sync with
-/// `v0.9-library-refactor-plan.md` §4.1. The string is what gets
-/// stored on `Component::class`; the label is what the picker shows.
+/// `v0.9-refactor-2-plan.md`. The string is what gets stored on
+/// `ComponentRow::class`; the label is what the picker shows.
 pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
     ("resistor", "Resistor"),
     ("capacitor", "Capacitor"),
@@ -461,8 +456,8 @@ pub struct NewComponentState {
     pub internal_pn: String,
     /// Selected target library — index into `open_libraries`.
     pub library_idx: Option<usize>,
-    /// WS-8 (DBLib): target table the row will be written to. `None`
-    /// while the modal first opens; the dispatcher requires it before
+    /// Target table the row will be written to. `None` while the
+    /// modal first opens; the dispatcher requires it before
     /// `NewComponentSubmit` can run because rows live in TSV tables
     /// addressed by name. Populated from `manifest().tables()` plus
     /// the default `<class>s` slot when the manifest declares no
@@ -496,21 +491,18 @@ impl Default for NewComponentState {
 pub struct CloseLibraryConfirmState {
     pub library_path: PathBuf,
     pub library_name: String,
-    // WS-I: tab-not-window — editors are addressed by
-    // `(library_path, component_id)` now that they live as tabs, not
-    // OS windows.
     pub dirty_editors: Vec<EditorAddress>,
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Component Preview (v0.9-refactor-2 — DBLib model)
+// Component Preview
 // ─────────────────────────────────────────────────────────────────────
 
 /// Component Preview tabs in display order.
 ///
-/// Per `v0.9-refactor-2-plan.md` §11, the Component view is preview-only:
-/// Symbol and Footprint are read-only renders; editing happens via the
-/// standalone `.snxsym` / `.snxfpt` document editors (WS-7).
+/// The Component view is preview-only: Symbol and Footprint are
+/// read-only renders; editing happens via the standalone
+/// `.snxsym` / `.snxfpt` document editors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PreviewTab {
     Preview,
@@ -719,7 +711,7 @@ mod tests {
         let nc = NewComponentState::default();
         assert!(nc.internal_pn.is_empty());
         assert!(nc.library_idx.is_none());
-        // WS-8: table starts unset until the user picks one in the modal.
+        // Table starts unset until the user picks one in the modal.
         assert!(nc.table.is_none());
         assert_eq!(nc.class, ComponentClass::generic());
         assert!(nc.category.is_empty());
@@ -735,8 +727,8 @@ mod tests {
         assert!(set.is_empty());
     }
 
-    /// WS-5 (DBLib): `OpenLibrary::total_rows` sums every cached
-    /// table's length — feeds the panel's library-node `(N)` count.
+    /// `OpenLibrary::total_rows` sums every cached table's length —
+    /// feeds the panel's library-node `(N)` count.
     #[test]
     fn open_library_total_rows_sums_tables() {
         let mut lib = OpenLibrary {

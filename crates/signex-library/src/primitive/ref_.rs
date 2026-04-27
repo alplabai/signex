@@ -1,10 +1,10 @@
 //! `PrimitiveRef` — `(library_id, uuid)` address for a reusable primitive.
 //!
-//! Per the v0.9 library refactor (§2.4 / §2.6), every primitive lives inside
-//! a single library and is identified by its UUID *within that library*.
-//! Cross-library references compose the library UUID (from `library.toml::id`)
-//! with the primitive UUID. `LibrarySet` (WS-C) resolves these tuples back to
-//! the actual primitive struct.
+//! Every primitive lives inside a single library and is identified
+//! by its UUID *within that library*. Cross-library references
+//! compose the library UUID (from `library.toml::library_id`) with
+//! the primitive UUID. [`crate::adapters::library_set::LibrarySet`]
+//! resolves these tuples back to the actual primitive struct.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

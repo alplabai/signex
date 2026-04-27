@@ -1,4 +1,4 @@
-//! UI-WS7 — wiremock-backed validation for the Mouser test flow.
+//! Wiremock-backed validation for the Mouser test flow.
 //!
 //! The signex-app handler runs `MouserAdapter::lookup_by_mpn(SENTINEL)`
 //! against the Mouser API; on success it writes the API key to the OS

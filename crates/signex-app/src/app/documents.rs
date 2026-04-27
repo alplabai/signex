@@ -14,21 +14,19 @@ pub struct ComponentEditorTab {
     pub row_id: signex_library::RowId,
 }
 
-// WS-I: tab-not-window
 // Per-tab role marker. Schematic / Pcb retain the path on `TabInfo`
 // for the existing `engines` HashMap and dirty-paths machinery;
-// `ComponentEditor` carries its own `(library_path, component_id)`
+// `ComponentEditor` carries its own `(library_path, table, row_id)`
 // payload that the dispatcher uses to look the editor state up out
 // of `LibraryState.editors`. The synthetic `TabInfo.path` for
-// ComponentEditor tabs is `<library_path>/<component_id>.snxprt` so
-// undock / "is this tab already undocked?" / per-tab visibility
-// continue to use a single PathBuf identity.
+// ComponentEditor tabs is `<library_path>/<row_id>.snxprt` so undock
+// / "is this tab already undocked?" / per-tab visibility continue
+// to use a single PathBuf identity.
 #[derive(Debug, Clone)]
 pub enum TabKind {
     Schematic,
     Pcb,
     ComponentEditor(ComponentEditorTab),
-    // WS-7 (refactor-2): standalone primitive editor tabs
     /// `.snxsym` opened as a main-window document tab. Editor state
     /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
     /// the same path that lives on `TabInfo.path`.
@@ -164,19 +162,17 @@ pub struct TabInfo {
     /// mid-session) carries `None`. Per-project actions (Close
     /// Project) filter tabs by this id.
     pub project_id: Option<super::state::ProjectId>,
-    // WS-I: tab-not-window
     /// What kind of document this tab is hosting. Schematic / PCB
     /// tabs continue to use `path` for engine + dirty-paths bookkeeping;
-    /// ComponentEditor tabs carry the `(library_path, component_id)`
-    /// pair that resolves into `LibraryState.editors`.
+    /// ComponentEditor tabs carry the `(library_path, table, row_id)`
+    /// triple that resolves into `LibraryState.editors`.
     pub kind: TabKind,
 }
 
-// WS-7 (refactor-2): standalone primitive editor tabs
-/// Per-tab state for an open `.snxsym` document. Mirrors the symbol-
-/// editing fields the Component Editor's Symbol tab carries on
-/// `ComponentEditorState` but keyed by file path so the same primitive
-/// can be edited standalone without a hosting `Component`.
+/// Per-tab state for an open `.snxsym` document. Symbol editing
+/// happens standalone (not embedded in the Component Preview tab),
+/// keyed by file path so the same primitive can be edited without a
+/// hosting `ComponentRow`.
 ///
 /// The editor reuses the existing
 /// [`crate::library::editor::symbol::canvas::SymbolCanvas`] program for

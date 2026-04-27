@@ -1,6 +1,5 @@
 //! DigiKey distributor adapter — OAuth2 PKCE scaffold.
 //!
-//! Spec (WS-C):
 //! - Uses the `oauth2` crate (v5) for the authorization-code + PKCE flow.
 //! - Refresh token persisted in OS keyring under
 //!   `signex-distributor-digikey` (username slot `"refresh"`).

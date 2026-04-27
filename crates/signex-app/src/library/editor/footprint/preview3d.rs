@@ -1,11 +1,11 @@
 //! Procedural 3D preview pane.
 //!
-//! WS-F: stub-quality CPU isometric render of the footprint's pads
+//! Stub-quality CPU isometric render of the footprint's pads
 //! (extruded as boxes), the courtyard outline, and the Body3D box
 //! straight from `Footprint::body_3d`. The render is intentionally
 //! cheap — a single `iced::widget::Canvas` with no GPU pipeline.
 //!
-//! TODO(v0.9-phase-3 / v2.x): real 3D pipeline per
+//! TODO(v2.x): real 3D pipeline per
 //! `docs/internal/docs/PCB_3D_RENDER_PLAN.md` (wgpu Shader widget
 //! + STEP geometry triangulation + lighting model).
 

@@ -214,7 +214,6 @@ impl Signex {
             cached_document: None,
             dirty: false,
             project_id,
-            // WS-I: tab-not-window
             kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
@@ -246,7 +245,6 @@ impl Signex {
             cached_document: None,
             dirty,
             project_id,
-            // WS-I: tab-not-window
             kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
@@ -267,7 +265,6 @@ impl Signex {
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
             project_id,
-            // WS-I: tab-not-window
             kind: super::TabKind::Pcb,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;

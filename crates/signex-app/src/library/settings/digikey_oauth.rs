@@ -1,6 +1,6 @@
 //! DigiKey OAuth2 PKCE handshake — UI side.
 //!
-//! UI-WS7 spec:
+//! Flow:
 //! - "Connect via OAuth" → `DigiKeyAuth::start_authorization` → open
 //!   the URL in the user's default browser via `webbrowser`.
 //! - Spin up a one-shot HTTP server on `127.0.0.1:<random_port>` that

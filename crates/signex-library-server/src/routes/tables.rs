@@ -1,4 +1,4 @@
-//! `/tables` routes — DBLib row model (`v0.9-refactor-2-plan.md` §9, WS-4).
+//! `/tables` routes — DBLib row model.
 //!
 //! Two endpoints under this prefix:
 //!

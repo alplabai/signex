@@ -105,7 +105,6 @@ pub enum MenuMessage {
     LibraryOpenLibrary,
     /// File ▸ Library ▸ Place Component… (v0.9 Phase 1).
     LibraryPlaceComponent,
-    // WS-H: Project tree library wiring
     /// Project tree → right-click → Add New to Project ▸ Component
     /// Library. Emitted from `view_context_submenu` for the project
     /// root; the dispatcher resolves the active project and forwards
@@ -326,9 +325,9 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
 
     // v0.9 Library submenu — open / place. New-component creation
     // moved to the project tree → right-click → Library ▸ Add New
-    // ▸ Component flow (v0.9 WS-H), so File ▸ Library only carries
-    // "open libraries outside the active project" + the canvas-side
-    // place picker.
+    // ▸ Component flow, so File ▸ Library only carries "open
+    // libraries outside the active project" + the canvas-side place
+    // picker.
     let library_menu = Item::with_menu(
         submenu_item_btn("Library", mc),
         menu_template(vec![

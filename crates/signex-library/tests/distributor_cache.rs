@@ -1,5 +1,5 @@
-//! Integration tests for `DistributorCache`. WS-C acceptance: cache
-//! round-trip tests must run **without network**.
+//! Integration tests for `DistributorCache`. Cache round-trip tests
+//! must run **without network**.
 
 #![cfg(feature = "distributors-community")]
 
@@ -102,7 +102,7 @@ fn cache_partitions_by_provider() {
 
 #[test]
 fn cache_path_layout_matches_spec() {
-    // Per WS-C: `<root>/<provider>/<mpn>.json`.
+    // Layout: `<root>/<provider>/<mpn>.json`.
     let dir = tempfile::tempdir().unwrap();
     let cache = DistributorCache::with_root(dir.path()).unwrap();
     let part = sample_part("RC0805FR-0710KL", DistributorSource::Lcsc);

@@ -639,10 +639,10 @@ impl Signex {
             return Ok(());
         }
 
-        // WS-7 (refactor-2): standalone primitive editor tabs.
-        // `.snxsym` / `.snxfpt` route through the library subsystem
-        // so the same `OpenPrimitiveEditor` path used by the Library
-        // panel right-click handles project-tree double-clicks too.
+        // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
+        // route through the library subsystem so the same
+        // `OpenPrimitiveEditor` path used by the Library panel
+        // right-click handles project-tree double-clicks too.
         if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
             let _ = self.handle_open_primitive(file_path);
             return Ok(());

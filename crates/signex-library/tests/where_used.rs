@@ -1,8 +1,8 @@
-//! Integration tests for the where-used reverse index (Phase 1 WS-G).
+//! Integration tests for the where-used reverse index.
 //!
-//! Per `v0.9-refactor-2-plan.md` §6 step 1.8, the index is keyed by
-//! [`RowId`] (component-table row), not by the legacy `(uuid, Version)`
-//! pair. Verifies the public contract:
+//! The index is keyed by [`RowId`] (component-table row) under the
+//! DBLib model — not by a `(uuid, Version)` pair. Verifies the
+//! public contract:
 //!   - `ingest_sheet` registers row references for a (project, sheet) pair.
 //!   - `where_used(row_id)` returns every site.
 //!   - `drop_project(p)` removes every site under that project root.

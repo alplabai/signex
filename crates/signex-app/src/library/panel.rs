@@ -62,7 +62,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
         .on_input(|s| {
             // Routed through the picker filter buffer so the picker
             // modal and the panel filter share a single source of
-            // truth. WS-6 may split these into separate buffers if a
+            // truth. May split into separate buffers later if a
             // distinct UX shows up.
             LibraryMessage::Picker(super::messages::PickerMsg::FilterChanged(s))
         })
@@ -371,8 +371,8 @@ fn grid_row<'a>(
 
     // Path resolution for the per-row right-click. Symbol/footprint
     // primitives live at `<library>/symbols/<uuid>.snxsym` and
-    // `<library>/footprints/<uuid>.snxfpt` per `v0.9-refactor-2-plan.md`
-    // §4.3 — that's the address WS-7's standalone editor consumes.
+    // `<library>/footprints/<uuid>.snxfpt` — that's the address the
+    // standalone `.snxsym` / `.snxfpt` document tab consumes.
     let symbol_path = library_path
         .join("symbols")
         .join(format!("{}.snxsym", r.symbol_ref.uuid));

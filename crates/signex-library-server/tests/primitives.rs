@@ -1,4 +1,5 @@
-//! Integration tests for the v0.9 library refactor primitive routes (WS-D).
+//! Integration tests for the primitive routes
+//! (`/symbols` / `/footprints` / `/sims`).
 //!
 //! Each test exercises a `POST` → `GET` round-trip via `tower::ServiceExt`
 //! against the in-memory test harness, exactly mirroring the flow that the

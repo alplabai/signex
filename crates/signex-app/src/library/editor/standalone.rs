@@ -1,19 +1,18 @@
-//! WS-7 (refactor-2): standalone primitive editor tabs.
+//! Standalone primitive editor tabs (`.snxsym` / `.snxfpt`).
 //!
 //! Renders `.snxsym` / `.snxfpt` files as main-window document tabs
-//! using the existing canvas editor programs from
+//! using the canvas editor programs from
 //! [`crate::library::editor::symbol`] and
-//! [`crate::library::editor::footprint`] verbatim. The only thing this
-//! module changes is the messaging surface — canvas events flow through
-//! `LibraryMessage::PrimitiveEditorEvent { path, msg }` instead of the
-//! Component Editor's `LibraryMessage::EditorEvent { library_path,
-//! component_id, msg }`.
+//! [`crate::library::editor::footprint`] verbatim. Canvas events flow
+//! through `LibraryMessage::PrimitiveEditorEvent { path, msg }` —
+//! distinct from the Component Preview tab's
+//! `LibraryMessage::EditorEvent { library_path, table, row_id, msg }`.
 //!
-//! Per plan §12, primitives are first-class document tabs alongside
-//! `.snxsch` / `.snxpcb`. Dirty-tracking is keyed by `path`; persistence
-//! is plain JSON via serde. The Save action lives on the parent
-//! dispatcher (`save_primitive_tab_at`); the editor view only owns the
-//! widget tree.
+//! Primitives are first-class document tabs alongside `.snxsch` /
+//! `.snxpcb`. Dirty-tracking is keyed by `path`; persistence is plain
+//! JSON via serde. The Save action lives on the parent dispatcher
+//! (`save_primitive_tab_at`); the editor view only owns the widget
+//! tree.
 
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
