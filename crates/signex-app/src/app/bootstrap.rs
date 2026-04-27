@@ -222,6 +222,7 @@ impl Signex {
                     custom_paper_w_mm: 297.0,
                     custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
+                    symbol_editor: None,
                 },
                 standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),

@@ -357,6 +357,53 @@ pub struct PanelContext {
     pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,
+    /// When the active tab is a `.snxsym` standalone editor, this carries
+    /// the symbol's display data so the right-dock Properties panel and
+    /// the left-dock SCH-Library panel can render context-aware content
+    /// without the in-tab editor having to embed its own properties pane.
+    /// `None` for any other tab kind.
+    pub symbol_editor: Option<SymbolEditorPanelContext>,
+}
+
+/// Context handed to the right-dock Properties panel and the SCH-Library
+/// left-dock panel when the active tab is a `.snxsym` standalone editor.
+/// Mirrors the live `SymbolEditorState` but contains only the fields the
+/// panels render — keeps `panel_ctx` cloneable and decouples panel code
+/// from the canvas state struct.
+#[derive(Debug, Clone)]
+pub struct SymbolEditorPanelContext {
+    /// File path of the open `.snxsym` (used as the tab key).
+    pub path: std::path::PathBuf,
+    /// The symbol's `name` field (Altium "Design Item ID").
+    pub symbol_name: String,
+    /// UUID of the symbol — surfaced read-only on the panel.
+    pub symbol_uuid: uuid::Uuid,
+    /// Pin summaries for the SCH-Library panel pin list.
+    pub pins: Vec<SymbolPinSummary>,
+    /// What's currently selected on the canvas. Drives the right-dock
+    /// Properties panel's mode (Pin / Field / Component default).
+    pub selected: SymbolEditorSelection,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolPinSummary {
+    pub idx: usize,
+    pub number: String,
+    pub name: String,
+    pub electrical: String,
+    pub position: [f64; 2],
+    pub orientation: String,
+    pub length: f64,
+}
+
+/// What the canvas currently has selected — drives Properties panel
+/// content. `None` = nothing selected, panel shows the symbol's defaults.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolEditorSelection {
+    None,
+    Pin(SymbolPinSummary),
+    FieldReference,
+    FieldValue,
 }
 
 /// Sheet background colour presets.
@@ -1385,6 +1432,15 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let input_bg = crate::styles::ti(ctx.tokens.selection);
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
+    // Symbol-editor tab takes precedence — when the user is editing a
+    // `.snxsym` the right-dock Properties panel shows symbol/pin
+    // properties driven by `panel_ctx.symbol_editor`. Matches Altium's
+    // SchLib editor flow where the same Properties panel switches mode
+    // based on selection. (#62 / v0.9 phase 1)
+    if let Some(sym) = ctx.symbol_editor.as_ref() {
+        return view_symbol_editor_properties(sym, muted, primary, border_c);
+    }
+
     if !ctx.has_schematic {
         // Don't mislead the user into thinking nothing is loaded when
         // they've just switched to a PCB tab — distinguish "no project
@@ -1520,6 +1576,105 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(text("Nothing selected").size(10).color(muted))
             .padding([6, 8])
             .width(Length::Fill),
+    );
+
+    scrollable(col).width(Length::Fill).into()
+}
+
+/// Properties panel content for the active `.snxsym` standalone editor
+/// tab. Mirrors Altium SchLib's right-dock Properties: pin selected →
+/// pin properties, field selected → field properties, nothing selected
+/// → symbol-level defaults (name, uuid, pin count). Read-only for
+/// Phase 1 — edit handlers are wired in Phase 3 alongside the Active
+/// Bar drawing tools.
+fn view_symbol_editor_properties<'a>(
+    sym: &'a SymbolEditorPanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    let header_label = match &sym.selected {
+        SymbolEditorSelection::None => "Symbol",
+        SymbolEditorSelection::Pin(_) => "Pin",
+        SymbolEditorSelection::FieldReference => "Field — Reference",
+        SymbolEditorSelection::FieldValue => "Field — Value",
+    };
+    col = col.push(
+        container(text(header_label).size(11).color(primary))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    let prop_row = |label: &str, value: String| {
+        container(
+            row![
+                text(label.to_string())
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
+                text(value)
+                    .size(10)
+                    .color(primary)
+                    .width(Length::FillPortion(3)),
+            ]
+            .spacing(4),
+        )
+        .padding([3, 8])
+        .width(Length::Fill)
+    };
+
+    match &sym.selected {
+        SymbolEditorSelection::None => {
+            col = col.push(prop_row("Name", sym.symbol_name.clone()));
+            col = col.push(prop_row("UUID", sym.symbol_uuid.to_string()));
+            col = col.push(prop_row("Pins", sym.pins.len().to_string()));
+        }
+        SymbolEditorSelection::Pin(pin) => {
+            col = col.push(prop_row("Designator", pin.number.clone()));
+            col = col.push(prop_row("Name", pin.name.clone()));
+            col = col.push(prop_row("Electrical", pin.electrical.clone()));
+            col = col.push(prop_row(
+                "Position",
+                format!("{:.3} mm, {:.3} mm", pin.position[0], pin.position[1]),
+            ));
+            col = col.push(prop_row("Orientation", pin.orientation.clone()));
+            col = col.push(prop_row("Length", format!("{:.3} mm", pin.length)));
+        }
+        SymbolEditorSelection::FieldReference => {
+            col = col.push(prop_row("Field", "Reference (designator)".to_string()));
+            col = col.push(
+                container(
+                    text("Bound to the host Component's designator at place-time.")
+                        .size(10)
+                        .color(muted),
+                )
+                .padding([4, 8]),
+            );
+        }
+        SymbolEditorSelection::FieldValue => {
+            col = col.push(prop_row("Field", "Value".to_string()));
+            col = col.push(
+                container(
+                    text("Bound to the host Component's value at place-time.")
+                        .size(10)
+                        .color(muted),
+                )
+                .padding([4, 8]),
+            );
+        }
+    }
+
+    col = col.push(thin_sep(border_c));
+    col = col.push(
+        container(
+            text("Pin/body editing is in flight — Active Bar tools land in v0.9 phase 3.")
+                .size(10)
+                .color(muted),
+        )
+        .padding([6, 8]),
     );
 
     scrollable(col).width(Length::Fill).into()
