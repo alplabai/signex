@@ -453,23 +453,26 @@ pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
 ];
 
 /// "New Component" modal state — collected before the dispatcher
-/// creates a row and opens the Component Preview tab.
+/// inserts a row into the chosen target table and opens the
+/// Component Preview tab.
 #[derive(Debug, Clone)]
 pub struct NewComponentState {
     /// Live edit buffer for the Internal PN field.
     pub internal_pn: String,
     /// Selected target library — index into `open_libraries`.
     pub library_idx: Option<usize>,
+    /// WS-8 (DBLib): target table the row will be written to. `None`
+    /// while the modal first opens; the dispatcher requires it before
+    /// `NewComponentSubmit` can run because rows live in TSV tables
+    /// addressed by name. Populated from `manifest().tables()` plus
+    /// the default `<class>s` slot when the manifest declares no
+    /// overrides.
+    pub table: Option<String>,
     /// Picked component class — defaults to "generic".
     pub class: ComponentClass,
     /// Tree-style category path ("Passives/Resistors/0805"). Free-form
     /// — validation happens at submit time.
     pub category: String,
-    /// WS-8 (DBLib): target table the row will be written to. `None`
-    /// while the modal first opens; the dispatcher requires it before
-    /// `NewComponentSubmit` can run because rows live in TSV tables
-    /// addressed by name.
-    pub table: Option<String>,
     /// Latest validation error.
     pub error: Option<String>,
 }
@@ -479,9 +482,9 @@ impl Default for NewComponentState {
         Self {
             internal_pn: String::new(),
             library_idx: None,
+            table: None,
             class: ComponentClass::generic(),
             category: String::new(),
-            table: None,
             error: None,
         }
     }
@@ -716,6 +719,8 @@ mod tests {
         let nc = NewComponentState::default();
         assert!(nc.internal_pn.is_empty());
         assert!(nc.library_idx.is_none());
+        // WS-8: table starts unset until the user picks one in the modal.
+        assert!(nc.table.is_none());
         assert_eq!(nc.class, ComponentClass::generic());
         assert!(nc.category.is_empty());
     }

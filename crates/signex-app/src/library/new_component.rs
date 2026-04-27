@@ -2,25 +2,29 @@
 //! Component… (and, post-WS-H, from the project tree's library node
 //! right-click menu).
 //!
-//! WS-E (refactor): adds `class` pick_list + `category` text_input on
-//! top of the existing PN + library picker so the new `Component`
-//! binding record is created with the right class for template
-//! resolution and the right category-tree slot for the panel view.
+//! WS-8 (DBLib model): components are rows in category tables now.
+//! The modal collects PN + library + table + class. On submit the
+//! dispatcher calls `commands::create_component_row` which mints
+//! Symbol + Footprint primitives, builds a `ComponentRow` with the
+//! binding refs, and inserts it into the chosen table. Success
+//! fires `LibraryMessage::OpenComponentRow` so the new row opens
+//! as a Component Preview tab (WS-6 host).
 //!
-//! Shape:
+//! Shape (plan §13):
 //!
 //! ```text
-//! ┌─[New Component ─────────────────────────────────────── X]─┐
-//! │ Internal PN  [______________________________________]    │
-//! │ Library      [▾ MyComponents                          ]   │
-//! │ Class        [▾ Generic                                ] │
-//! │ Category     [Passives/Resistors/0805________________ ] │
-//! │                                                          │
-//! │ <error string, if any>                                   │
-//! ├──────────────────────────────────────────────────────────┤
-//! │                                  [ Cancel ] [ Create ]   │
-//! └──────────────────────────────────────────────────────────┘
+//! ┌─[ New Component ]──────────────────────────────┐
+//! │ Internal PN [_______________________________]  │
+//! │ Library     [▾ MyComponents              ]     │
+//! │ Table       [▾ Resistors                 ]     │
+//! │ Class       [▾ resistor                  ]     │
+//! │             [ Cancel ]  [ Create Row ]         │
+//! └────────────────────────────────────────────────┘
 //! ```
+//!
+//! When the manifest declares no `[[tables]]` overrides we still
+//! surface the table pick_list with a single "<class>s" placeholder
+//! option so the user always sees the destination filename.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
@@ -51,7 +55,7 @@ impl std::fmt::Display for LibraryPick {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ClassPick {
     /// Canonical class string ("resistor", "opamp", …) — what gets
-    /// stored on `Component::class`.
+    /// stored on `ComponentRow::class`.
     key: String,
     /// Display label.
     label: String,
@@ -60,6 +64,20 @@ struct ClassPick {
 impl std::fmt::Display for ClassPick {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.label)
+    }
+}
+
+/// `pick_list` adapter for the table dropdown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TablePick {
+    /// Filename stem (no extension) — what gets stored on
+    /// `NewComponentState.table`.
+    name: String,
+}
+
+impl std::fmt::Display for TablePick {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
     }
 }
 
@@ -118,7 +136,54 @@ pub fn view<'a>(
         .into()
     };
 
-    // Class picker (WS-E) ────────────────────────────────────
+    // Table picker (WS-8) ────────────────────────────────────
+    //
+    // Populated from the selected library's manifest. When the
+    // manifest declares no `[[tables]]` overrides we still surface
+    // a single placeholder row carrying the default-pluralised
+    // filename (`<class>s`) so the user always sees the destination.
+    let table_picks: Vec<TablePick> = nc
+        .library_idx
+        .and_then(|i| state.open_libraries.get(i))
+        .and_then(|lib| state.set.get(lib.library_id))
+        .map(|adapter| {
+            let configured = adapter.manifest().tables();
+            if configured.is_empty() {
+                vec![TablePick {
+                    name: adapter.manifest().table_for_class(nc.class.as_str()),
+                }]
+            } else {
+                configured
+                    .iter()
+                    .map(|cfg| TablePick {
+                        name: cfg.name.clone(),
+                    })
+                    .collect()
+            }
+        })
+        .unwrap_or_default();
+    let selected_table_pick = nc
+        .table
+        .as_deref()
+        .and_then(|t| table_picks.iter().find(|p| p.name == t).cloned());
+    let table_picker: Element<'_, LibraryMessage> = if table_picks.is_empty() {
+        text("Pick a library first; tables come from the library manifest.")
+            .size(11)
+            .color(muted)
+            .into()
+    } else {
+        pick_list(
+            table_picks.clone(),
+            selected_table_pick,
+            |pick: TablePick| LibraryMessage::NewComponentSetTable(pick.name),
+        )
+        .placeholder("Select table…")
+        .padding(6)
+        .text_size(12)
+        .into()
+    };
+
+    // Class picker ───────────────────────────────────────────
     let class_picks: Vec<ClassPick> = BUILTIN_CLASSES
         .iter()
         .map(|(key, label)| ClassPick {
@@ -140,12 +205,6 @@ pub fn view<'a>(
     .text_size(12)
     .into();
 
-    // Category text input (WS-E) ─────────────────────────────
-    let category_input = text_input("Passives/Resistors/0805", &nc.category)
-        .on_input(LibraryMessage::NewComponentSetCategory)
-        .padding(6)
-        .size(12);
-
     // Form layout ─────────────────────────────────────────────
     let labelled =
         |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
@@ -162,9 +221,9 @@ pub fn view<'a>(
         Space::new().height(8),
         labelled("Library", lib_picker),
         Space::new().height(8),
-        labelled("Class", class_picker),
+        labelled("Table", table_picker),
         Space::new().height(8),
-        labelled("Category", category_input.into()),
+        labelled("Class", class_picker),
     ]
     .spacing(0)
     .padding([16, 16]);
@@ -193,7 +252,7 @@ pub fn view<'a>(
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
     };
     let mut submit_btn = button(
-        container(text("Create").size(11).color(submit_fg)).padding([4, 14]),
+        container(text("Create Row").size(11).color(submit_fg)).padding([4, 14]),
     )
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(submit_bg)),

@@ -64,12 +64,17 @@ pub enum LibraryMessage {
     NewComponentSetLibrary(usize),
     /// User picked a class in the modal pick_list.
     NewComponentSetClass(ComponentClass),
+    /// User picked a target table (filename stem) in the modal pick_list.
+    /// WS-8 (DBLib model): rows live inside category tables, so the
+    /// modal needs the user to pick a destination table — populated
+    /// from `manifest().tables()` plus the default `<class>s` slot
+    /// when the manifest declares no overrides.
+    NewComponentSetTable(String),
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
-    /// User picked a table in the New Component modal.
-    NewComponentSetTable(String),
-    /// Submit the New Component modal — creates the draft, persists,
-    /// opens the editor on the new component.
+    /// Submit the New Component modal — mints fresh Symbol + Footprint
+    /// primitives, builds a [`signex_library::ComponentRow`] binding
+    /// them by `PrimitiveRef`, and inserts it into the chosen table.
     NewComponentSubmit,
     // ─────────────────────────────────────────────────────────────────
     /// Toggle the Library left-dock panel's library tree node at

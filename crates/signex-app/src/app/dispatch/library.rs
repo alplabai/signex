@@ -87,8 +87,41 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSetClass(class) => {
+                // WS-8: when the user changes class, we DON'T overwrite the
+                // table pick — that's the user's explicit choice. Other
+                // slices may extend this with auto-pluralisation hints, but
+                // the canonical rule is "user picks the table; class only
+                // affects the parameter template".
                 if let Some(nc) = self.library.new_component.as_mut() {
                     nc.class = class;
+                    nc.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetTable(name) => {
+                // WS-8: user picked a target table. If there's exactly one
+                // class associated with this table in the manifest, we
+                // surface that as the auto-class so the form fills out
+                // sensibly. Otherwise the user keeps editing the class
+                // independently.
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    if !name.is_empty() {
+                        nc.table = Some(name.clone());
+                        // Try to autoselect the matching class from the
+                        // manifest (`[[tables]]` override). Only triggers
+                        // when the user picked a manifest-declared table.
+                        if let Some(library_idx) = nc.library_idx
+                            && let Some(lib) = self.library.open_libraries.get(library_idx)
+                            && let Some(adapter) = self.library.set.get(lib.library_id)
+                            && let Some(cfg) =
+                                adapter.manifest().tables().iter().find(|c| c.name == name)
+                            && let Some(first) = cfg.classes.first()
+                        {
+                            nc.class = signex_library::ComponentClass::new(first);
+                        }
+                    } else {
+                        nc.table = None;
+                    }
                     nc.error = None;
                 }
                 Task::none()
@@ -101,14 +134,76 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::NewComponentSubmit => {
-                // WS-8 wires the row-based `create_component_row` flow.
-                // Until that helper lands here, log the request and
-                // bail.
-                tracing::warn!(
-                    target: "signex::library",
-                    "NewComponentSubmit: row-based create flow ships in WS-8"
-                );
-                self.library.new_component = None;
+                let Some(nc) = self.library.new_component.as_ref().cloned() else {
+                    return Task::none();
+                };
+                let library_idx = match nc.library_idx {
+                    Some(i) => i,
+                    None => {
+                        if let Some(slot) = self.library.new_component.as_mut() {
+                            slot.error = Some("Pick a target library before submitting.".into());
+                        }
+                        return Task::none();
+                    }
+                };
+                // WS-8: target table — modal pick takes precedence. When
+                // the manifest declared no `[[tables]]` overrides, the
+                // modal still surfaces a default-pluralised slot (per
+                // plan §13 step 8.2); fall back to
+                // `Manifest::table_for_class` if the user submitted with
+                // an unset pick (ghost case when the modal opens with
+                // neither a pre-pick nor a user-selected table).
+                let library_path = match self.library.open_libraries.get(library_idx) {
+                    Some(lib) => lib.root.clone(),
+                    None => {
+                        if let Some(slot) = self.library.new_component.as_mut() {
+                            slot.error = Some("Selected library is no longer open.".into());
+                        }
+                        return Task::none();
+                    }
+                };
+                let table = match nc.table.clone() {
+                    Some(t) => t,
+                    None => {
+                        let resolved = self
+                            .library
+                            .open_libraries
+                            .get(library_idx)
+                            .and_then(|lib| self.library.set.get(lib.library_id))
+                            .map(|adapter| adapter.manifest().table_for_class(nc.class.as_str()));
+                        match resolved {
+                            Some(t) => t,
+                            None => {
+                                if let Some(slot) = self.library.new_component.as_mut() {
+                                    slot.error =
+                                        Some("Pick a target table before submitting.".into());
+                                }
+                                return Task::none();
+                            }
+                        }
+                    }
+                };
+                match commands::create_component_row(
+                    &mut self.library,
+                    library_idx,
+                    &table,
+                    &nc.internal_pn,
+                    nc.class.clone(),
+                ) {
+                    Ok(row_id) => {
+                        self.library.new_component = None;
+                        return Task::done(Message::Library(LibraryMessage::OpenComponentRow {
+                            library_path,
+                            table,
+                            row_id,
+                        }));
+                    }
+                    Err(e) => {
+                        if let Some(slot) = self.library.new_component.as_mut() {
+                            slot.error = Some(e.to_string());
+                        }
+                    }
+                }
                 Task::none()
             }
             // ────────────────────────────────────────────────────────
