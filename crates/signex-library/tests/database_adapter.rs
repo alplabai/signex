@@ -358,27 +358,40 @@ fn database_round_trip_row() {
 
 #[test]
 fn database_iter_rows_across_tables() {
+    // iter_rows composes list_tables + read_table per plan §9 — the server
+    // ships only the 6 row/table routes.
     let row_a = mk_row("R10K", "resistor");
     let row_b = mk_row("OPA177", "opamp");
     let nil = Uuid::nil().to_string();
-    let wire = serde_json::json!([
-        { "table": "resistors", "row": row_a },
-        { "table": "opamps",    "row": row_b },
-    ]);
+    let tables = serde_json::json!(["resistors", "opamps"]);
+    let resistors = serde_json::json!([row_a]);
+    let opamps = serde_json::json!([row_b]);
 
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
-            let body = wire.clone();
+            let tables = tables.clone();
+            let resistors = resistors.clone();
+            let opamps = opamps.clone();
             Box::pin(async move {
                 Mock::given(method("GET"))
-                    .and(path("/rows"))
+                    .and(path("/tables"))
                     .and(query_param("library_id", nil_for_mock.as_str()))
-                    .and(header(
-                        "authorization",
-                        format!("Bearer {TEST_TOKEN}").as_str(),
-                    ))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(tables))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/resistors"))
+                    .and(query_param("library_id", nil_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(resistors))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/opamps"))
+                    .and(query_param("library_id", nil_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(opamps))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -397,24 +410,30 @@ fn database_iter_rows_across_tables() {
 
 #[test]
 fn database_read_row_by_pn() {
+    // read_row_by_pn composes iter_rows then filters in-memory.
     let row = mk_row("R10K", "resistor");
     let row_for_assert = row.row_id;
     let nil = Uuid::nil().to_string();
-    let body = serde_json::json!({ "table": "resistors", "row": row });
+    let tables = serde_json::json!(["resistors"]);
+    let resistors = serde_json::json!([row]);
 
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
-            let body = body.clone();
+            let tables = tables.clone();
+            let resistors = resistors.clone();
             Box::pin(async move {
                 Mock::given(method("GET"))
-                    .and(path("/rows/by_pn/R10K"))
+                    .and(path("/tables"))
                     .and(query_param("library_id", nil_for_mock.as_str()))
-                    .and(header(
-                        "authorization",
-                        format!("Bearer {TEST_TOKEN}").as_str(),
-                    ))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(tables))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/resistors"))
+                    .and(query_param("library_id", nil_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(resistors))
                     .expect(1)
                     .mount(server)
                     .await;
@@ -432,15 +451,28 @@ fn database_read_row_by_pn() {
 
 #[test]
 fn database_read_row_by_pn_404_maps_to_not_found() {
+    // No matching row across all tables → NotFound.
     let nil = Uuid::nil().to_string();
+    let tables = serde_json::json!(["resistors"]);
+    let resistors: serde_json::Value = serde_json::json!([]);
+
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
+            let tables = tables.clone();
+            let resistors = resistors.clone();
             Box::pin(async move {
                 Mock::given(method("GET"))
-                    .and(path("/rows/by_pn/UNKNOWN"))
+                    .and(path("/tables"))
                     .and(query_param("library_id", nil_for_mock.as_str()))
-                    .respond_with(ResponseTemplate::new(404))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(tables))
+                    .expect(1)
+                    .mount(server)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/tables/resistors"))
+                    .and(query_param("library_id", nil_for_mock.as_str()))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(resistors))
                     .expect(1)
                     .mount(server)
                     .await;
