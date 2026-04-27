@@ -1518,6 +1518,95 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
                 editor.dirty = true;
             }
         }
+        // ── WS-K: Supply tab ──────────────────────────────────
+        EditorMsg::SupplyPrimarySetManufacturer(s) => {
+            editor.draft.primary_mpn.manufacturer = s;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetMpn(s) => {
+            editor.draft.primary_mpn.mpn = s;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetStatus(status) => {
+            editor.draft.primary_mpn.status = status;
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyPrimarySetNotes(s) => {
+            editor.draft.primary_mpn.notes = if s.is_empty() { None } else { Some(s) };
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyAlternateAdd => {
+            use signex_library::{AlternateStatus, ManufacturerPart};
+            let mut row = ManufacturerPart::draft("", "");
+            // New alternates default to Approved — `Primary` is the
+            // headline part's slot, not an alternate-row status.
+            row.status = AlternateStatus::Approved;
+            editor.draft.alternates.push(row);
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyAlternateSetManufacturer { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.manufacturer = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetMpn { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.mpn = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetStatus { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.status = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateSetNotes { idx, value } => {
+            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
+                alt.notes = if value.is_empty() { None } else { Some(value) };
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyAlternateRemove { idx } => {
+            if idx < editor.draft.alternates.len() {
+                editor.draft.alternates.remove(idx);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingAdd => {
+            use signex_library::DistributorListing;
+            // Default new listings to DigiKey — matches the picker's
+            // first option so the row renders sensibly out of the gate.
+            editor.draft.supply.push(DistributorListing::new("DigiKey", ""));
+            editor.dirty = true;
+        }
+        EditorMsg::SupplyListingSetDistributor { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.distributor =
+                    crate::library::editor::supply::distributor_source_to_string(value);
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingSetSku { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.sku = value;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingSetUrl { idx, value } => {
+            if let Some(listing) = editor.draft.supply.get_mut(idx) {
+                listing.url = if value.is_empty() { None } else { Some(value) };
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SupplyListingRemove { idx } => {
+            if idx < editor.draft.supply.len() {
+                editor.draft.supply.remove(idx);
+                editor.dirty = true;
+            }
+        }
+        // ── /WS-K ─────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
@@ -1532,5 +1621,186 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         | EditorMsg::SymbolPickedAiPdf(_)
         | EditorMsg::StepAttachDialog
         | EditorMsg::StepAttachResult(_) => {}
+    }
+}
+
+// ── WS-K: Supply tab tests ────────────────────────────────────────────
+//
+// These exercise `apply_inline_edit` directly against the inline-edit
+// arms added in WS-K. The dispatcher is otherwise driven through `Signex`
+// (the iced application), so we hand-build a `ComponentEditorState` from
+// a minimal `Component` and assert that the supply / alternates branches
+// mutate `editor.draft.*` exactly as the view expects.
+#[cfg(test)]
+mod supply_tests {
+    use super::*;
+    use signex_library::{
+        AlternateStatus, Component, ComponentClass, DatasheetRef, DistributorListing,
+        DistributorSource, InternalPn, LifecycleState, ManufacturerPart, ParamMap, PlmReserved,
+        PrimitiveRef, Revision, Version,
+    };
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    fn fixture_revision() -> Revision {
+        let lib = Uuid::new_v4();
+        Revision {
+            version: Version::new(0, 1),
+            state: LifecycleState::Draft,
+            created: chrono::Utc::now(),
+            author: "test".into(),
+            message: "seed".into(),
+            symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            datasheet: DatasheetRef::default(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            content_hash: [0u8; 32],
+        }
+    }
+
+    fn fixture_editor() -> ComponentEditorState {
+        let rev = fixture_revision();
+        let component = Component {
+            uuid: Uuid::new_v4(),
+            internal_pn: InternalPn::new("R0805_10k"),
+            class: ComponentClass::generic(),
+            category: PathBuf::new(),
+            family: None,
+            head: rev.version,
+            revisions: vec![rev],
+        };
+        ComponentEditorState::from_head(PathBuf::from("/tmp/lib"), component, false)
+    }
+
+    /// Add three alternates, then remove the middle one. The remaining
+    /// two must keep their original relative order.
+    #[test]
+    fn supply_alternates_add_and_remove_preserve_order() {
+        let mut editor = fixture_editor();
+
+        // Add three rows.
+        for _ in 0..3 {
+            apply_inline_edit(&mut editor, EditorMsg::SupplyAlternateAdd);
+        }
+        assert_eq!(editor.draft.alternates.len(), 3);
+
+        // Tag each row so we can verify ordering after the remove.
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyAlternateSetMpn {
+                idx: 0,
+                value: "ALT-A".into(),
+            },
+        );
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyAlternateSetMpn {
+                idx: 1,
+                value: "ALT-B".into(),
+            },
+        );
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyAlternateSetMpn {
+                idx: 2,
+                value: "ALT-C".into(),
+            },
+        );
+
+        // Remove the middle row.
+        apply_inline_edit(&mut editor, EditorMsg::SupplyAlternateRemove { idx: 1 });
+
+        assert_eq!(editor.draft.alternates.len(), 2);
+        assert_eq!(editor.draft.alternates[0].mpn, "ALT-A");
+        assert_eq!(editor.draft.alternates[1].mpn, "ALT-C");
+        // New rows default to `Approved` (Primary is reserved for the
+        // headline part), so the surviving rows should keep that.
+        assert_eq!(editor.draft.alternates[0].status, AlternateStatus::Approved);
+        assert!(editor.dirty);
+    }
+
+    /// Removing a distributor listing at an out-of-bounds index must be
+    /// a silent no-op — guards against stale messages racing the view.
+    #[test]
+    fn supply_listing_remove_out_of_bounds_is_noop() {
+        let mut editor = fixture_editor();
+
+        // Seed two listings.
+        apply_inline_edit(&mut editor, EditorMsg::SupplyListingAdd);
+        apply_inline_edit(&mut editor, EditorMsg::SupplyListingAdd);
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyListingSetSku {
+                idx: 0,
+                value: "SKU-0".into(),
+            },
+        );
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyListingSetSku {
+                idx: 1,
+                value: "SKU-1".into(),
+            },
+        );
+
+        // Snapshot the listings, clear the dirty flag, then issue an
+        // out-of-bounds remove. The list and dirty flag must be unchanged.
+        let snapshot: Vec<DistributorListing> = editor.draft.supply.clone();
+        editor.dirty = false;
+        apply_inline_edit(&mut editor, EditorMsg::SupplyListingRemove { idx: 5 });
+
+        assert_eq!(editor.draft.supply, snapshot, "stale remove must not mutate");
+        assert!(!editor.dirty, "out-of-bounds remove must not flip dirty");
+    }
+
+    /// Distributor pick_list converts the `DistributorSource` enum to the
+    /// canonical string stored on `DistributorListing.distributor`.
+    #[test]
+    fn supply_listing_set_distributor_writes_canonical_string() {
+        let mut editor = fixture_editor();
+        apply_inline_edit(&mut editor, EditorMsg::SupplyListingAdd);
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyListingSetDistributor {
+                idx: 0,
+                value: DistributorSource::Mouser,
+            },
+        );
+        assert_eq!(editor.draft.supply[0].distributor, "Mouser");
+        assert!(editor.dirty);
+    }
+
+    /// Setting URL to an empty string clears the `Option<String>` back
+    /// to `None` (matches the `notes` semantics on the primary MPN).
+    #[test]
+    fn supply_listing_empty_url_clears_to_none() {
+        let mut editor = fixture_editor();
+        apply_inline_edit(&mut editor, EditorMsg::SupplyListingAdd);
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyListingSetUrl {
+                idx: 0,
+                value: "https://example.com/sku".into(),
+            },
+        );
+        assert_eq!(
+            editor.draft.supply[0].url.as_deref(),
+            Some("https://example.com/sku")
+        );
+
+        apply_inline_edit(
+            &mut editor,
+            EditorMsg::SupplyListingSetUrl {
+                idx: 0,
+                value: String::new(),
+            },
+        );
+        assert!(editor.draft.supply[0].url.is_none());
     }
 }
