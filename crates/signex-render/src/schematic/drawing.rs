@@ -7,7 +7,7 @@ use iced::widget::canvas::{self, path};
 use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
 
 use super::ScreenTransform;
-use super::text::display_text_content;
+use super::text::draw_rich_text;
 
 /// Resolve the per-drawing stroke colour: falls back to the theme
 /// `color` when the drawing has no `stroke_color` override.
@@ -266,99 +266,203 @@ pub fn draw_child_sheet(
         .with_width(sw);
     frame.stroke(&rect, stroke);
 
-    // Sheet name text
+    // Sheet name + filename are placed OUTSIDE the box so they don't
+    // overlap pins or fill colour:
+    //   - Altium style: stacked above the top-left corner.
+    //   - Standard style:  stacked below the bottom-left corner.
     let font_size = transform.world_len(1.5).abs();
     if font_size < 1.0 {
         return;
     }
-    let text = canvas::Text {
-        content: display_text_content(&child.name),
-        position: iced::Point::new(tl.x + 4.0, tl.y + font_size + 2.0),
-        color: body_color,
-        size: iced::Pixels(font_size),
-        font: crate::canvas_font(),
-        ..canvas::Text::default()
-    };
-    frame.fill_text(text);
-
-    // Filename text (smaller, below name)
     let small_font = (font_size * 0.75).abs();
+    let label_gap = 2.0_f32;
+
+    let style = crate::multisheet_style();
+    let (name_anchor, file_anchor, v_align) = match style {
+        crate::MultisheetStyle::Altium => {
+            // Above the box: filename closest to the border, name on top.
+            let file_y = tl.y - label_gap;
+            let name_y = file_y - small_font - label_gap;
+            (
+                iced::Point::new(tl.x, name_y),
+                iced::Point::new(tl.x, file_y),
+                iced::alignment::Vertical::Bottom,
+            )
+        }
+        crate::MultisheetStyle::Standard => {
+            // Below the box: name closest to the border, filename underneath.
+            let name_y = br.y + label_gap;
+            let file_y = name_y + font_size + label_gap;
+            (
+                iced::Point::new(tl.x, name_y),
+                iced::Point::new(tl.x, file_y),
+                iced::alignment::Vertical::Top,
+            )
+        }
+    };
+
+    draw_rich_text(
+        frame,
+        &child.name,
+        name_anchor,
+        body_color,
+        font_size,
+        iced::alignment::Horizontal::Left,
+        v_align,
+        0.0,
+    );
+
     if small_font < 1.0 {
         return;
     }
-    let file_text = canvas::Text {
-        content: display_text_content(&child.filename),
-        position: iced::Point::new(tl.x + 4.0, tl.y + font_size + small_font + 6.0),
-        color: Color {
+    draw_rich_text(
+        frame,
+        &child.filename,
+        file_anchor,
+        Color {
             a: body_color.a * 0.7,
             ..body_color
         },
-        size: iced::Pixels(small_font),
-        font: crate::canvas_font(),
-        ..canvas::Text::default()
-    };
-    frame.fill_text(file_text);
+        small_font,
+        iced::alignment::Horizontal::Left,
+        v_align,
+        0.0,
+    );
 
-    // Draw sheet pins — stub direction and label placement driven by rotation:
-    //   0°   = left edge  (stub exits left,  label inside-right)
-    //   180° = right edge (stub exits right, label inside-left)
-    //   270° = top edge   (stub exits up,    label inside-below)
-    //   90°  = bottom edge(stub exits down,  label inside-above)
-    let pin_stub = 1.5;
+    // Draw sheet pins — Altium hierarchical port style. The pin's position is
+    // the connection point on the sheet edge; the pentagon tip sits exactly
+    // there with the body extending INWARD into the sheet so external wires
+    // dock cleanly without any protruding stub.
+    //
+    // Standard sheet-pin `rotation` is the OUTWARD direction (the way the pin
+    // points away from the sheet body). Inward is therefore the opposite.
+    //   rotation 0°   → outward +X (pin on right edge)  → inward -X
+    //   rotation 180° → outward -X (pin on left  edge)  → inward +X
+    //   rotation 90°  → outward -Y, screen up (pin on top    edge) → inward +Y down
+    //   rotation 270° → outward +Y, screen down(pin on bottom edge) → inward -Y up
+    let pin_h_mm = 1.4_f64;
+    let arrow_len_mm = 0.7_f64;
+    let body_len_mm = 2.4_f64;
+    let text_pad_mm = 0.4_f64;
+    let total_in_mm = arrow_len_mm + body_len_mm;
+
     for pin in &child.pins {
-        let pp = transform.to_screen_point(pin.position.x, pin.position.y);
-
         let rot = pin.rotation.rem_euclid(360.0).round() as i32;
-        let (stub_wx, stub_wy, text_off_x, text_off_y, h_align, v_align) = match rot {
-            180 => (
-                pin.position.x + pin_stub, pin.position.y,
-                -4.0, 0.0,
+
+        // Inward unit vector (into the sheet) and label placement that puts
+        // the text inside the sheet, hugging the flat back of the pentagon.
+        // For top / bottom pins the label is rotated 90° so it reads
+        // vertically along the inward direction — otherwise long names
+        // overlap each other on closely-spaced pins (Altium convention).
+        let (
+            ix,
+            iy,
+            h_align,
+            v_align,
+            text_dx,
+            text_dy,
+            label_rotation_rad,
+        ): (
+            f64,
+            f64,
+            iced::alignment::Horizontal,
+            iced::alignment::Vertical,
+            f64,
+            f64,
+            f32,
+        ) = match rot {
+            0 => (
+                // pin on RIGHT edge, body extends LEFT into sheet
+                -1.0,
+                0.0,
                 iced::alignment::Horizontal::Right,
                 iced::alignment::Vertical::Center,
-            ),
-            270 => (
-                pin.position.x, pin.position.y - pin_stub,
-                0.0, small_font + 4.0,
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Top,
+                -(total_in_mm + text_pad_mm),
+                0.0,
+                0.0,
             ),
             90 => (
-                pin.position.x, pin.position.y + pin_stub,
-                0.0, -(small_font + 4.0),
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Bottom,
-            ),
-            _ => (
-                // 0° and anything else → left edge
-                pin.position.x - pin_stub, pin.position.y,
-                4.0, 0.0,
+                // pin on TOP edge, body extends DOWN into sheet — vertical
+                // label reads top-to-bottom (edge → into sheet).
+                0.0,
+                1.0,
                 iced::alignment::Horizontal::Left,
                 iced::alignment::Vertical::Center,
+                0.0,
+                total_in_mm + text_pad_mm,
+                std::f32::consts::FRAC_PI_2,
+            ),
+            270 => (
+                // pin on BOTTOM edge, body extends UP into sheet — vertical
+                // label reads bottom-to-top (edge → into sheet).
+                0.0,
+                -1.0,
+                iced::alignment::Horizontal::Left,
+                iced::alignment::Vertical::Center,
+                0.0,
+                -(total_in_mm + text_pad_mm),
+                -std::f32::consts::FRAC_PI_2,
+            ),
+            _ => (
+                // 180° and fallback: pin on LEFT edge, body extends RIGHT into sheet
+                1.0,
+                0.0,
+                iced::alignment::Horizontal::Left,
+                iced::alignment::Vertical::Center,
+                total_in_mm + text_pad_mm,
+                0.0,
+                0.0,
             ),
         };
 
-        let stub_end = transform.to_screen_point(stub_wx, stub_wy);
+        // Perpendicular vector (rotate inward 90° CCW) for the body half-height.
+        let perpx = -iy;
+        let perpy = ix;
+        let half_h = pin_h_mm / 2.0;
+
+        let lx = pin.position.x;
+        let ly = pin.position.y;
+        let arr_x = lx + ix * arrow_len_mm;
+        let arr_y = ly + iy * arrow_len_mm;
+        let back_x = lx + ix * total_in_mm;
+        let back_y = ly + iy * total_in_mm;
+
+        // Pentagon: tip on edge → arrow shoulders → flat back inside.
+        let pts_world = [
+            (lx, ly),
+            (arr_x + perpx * half_h, arr_y + perpy * half_h),
+            (back_x + perpx * half_h, back_y + perpy * half_h),
+            (back_x - perpx * half_h, back_y - perpy * half_h),
+            (arr_x - perpx * half_h, arr_y - perpy * half_h),
+        ];
+
+        let path = canvas::Path::new(|b: &mut path::Builder| {
+            let p0 = transform.to_screen_point(pts_world[0].0, pts_world[0].1);
+            b.move_to(p0);
+            for &(x, y) in &pts_world[1..] {
+                b.line_to(transform.to_screen_point(x, y));
+            }
+            b.close();
+        });
+
+        frame.fill(&path, body_fill_color);
+        let sw = (transform.scale * 0.16).clamp(1.0, 2.0);
         frame.stroke(
-            &canvas::Path::line(pp, stub_end),
-            canvas::Stroke::default()
-                .with_color(body_color)
-                .with_width((transform.scale * 0.16).clamp(1.0, 2.0)),
+            &path,
+            canvas::Stroke::default().with_color(body_color).with_width(sw),
         );
 
-        let dot = canvas::Path::circle(pp, (transform.scale * 0.3).max(2.0));
-        frame.fill(&dot, body_color);
-
-        let pin_text = canvas::Text {
-            content: display_text_content(&pin.name),
-            position: iced::Point::new(pp.x + text_off_x, pp.y + text_off_y),
-            color: body_color,
-            size: iced::Pixels(small_font),
-            font: crate::canvas_font(),
-            align_x: h_align.into(),
-            align_y: v_align,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(pin_text);
+        let text_anchor = transform.to_screen_point(lx + text_dx, ly + text_dy);
+        draw_rich_text(
+            frame,
+            &pin.name,
+            text_anchor,
+            body_color,
+            small_font,
+            h_align,
+            v_align,
+            label_rotation_rad,
+        );
     }
 }
 

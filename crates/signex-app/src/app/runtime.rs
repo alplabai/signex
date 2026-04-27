@@ -14,35 +14,90 @@ impl Signex {
     }
 
     pub(crate) fn refresh_panel_ctx(&mut self) {
-        let sheets: Vec<crate::panels::SheetInfo> = self
+        // Build per-project panel info from every loaded project in the
+        // workspace. The `project_name` / `project_file` / `pcb_file` /
+        // `sheets` legacy singletons mirror whichever entry is `is_active`
+        // — kept around for the few panels that haven't migrated to read
+        // `panel_ctx.projects` directly yet.
+        let active_id = self.document_state.active_project;
+        // Open-state lookup is "is there a tab pointing at this path?"
+        // Dirty-state lookup is the project-scoped `dirty_paths` set,
+        // which persists across tab close (Altium parity: closing a
+        // tab keeps the file dirty until the project is saved or the
+        // edits are explicitly discarded).
+        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
             .document_state
-            .project_data
-            .as_ref()
-            .map(|proj| {
-                proj.sheets
-                    .iter()
-                    .map(|sheet| crate::panels::SheetInfo {
-                        name: sheet.name.clone(),
-                        filename: sheet.filename.clone(),
-                        sym_count: sheet.symbols_count,
-                        wire_count: sheet.wires_count,
-                        label_count: sheet.labels_count,
-                    })
-                    .collect()
+            .tabs
+            .iter()
+            .map(|tab| tab.path.clone())
+            .collect();
+        let dirty_paths = self.document_state.dirty_paths.clone();
+        // Active-tab path drives the per-row highlight in the tree —
+        // matches Altium's "you are here" cue. None when no tabs open.
+        let active_path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.clone());
+        let projects_panel: Vec<crate::panels::ProjectPanelInfo> = self
+            .document_state
+            .projects
+            .iter()
+            .map(|p| {
+                let project_dir = std::path::Path::new(&p.data.dir);
+                let active_path_ref = active_path.as_ref();
+                let lookup = |filename: &str| -> (bool, bool, bool) {
+                    let abs = project_dir.join(filename);
+                    let is_open = open_paths.contains(&abs);
+                    let is_dirty = dirty_paths.contains(&abs);
+                    let is_active = active_path_ref == Some(&abs);
+                    (is_open, is_dirty, is_active)
+                };
+                let (project_file_open, project_file_dirty, project_file_active) = p
+                    .data
+                    .schematic_root
+                    .as_deref()
+                    .map(lookup)
+                    .unwrap_or((false, false, false));
+                let (pcb_file_open, pcb_file_dirty, pcb_file_active) = p
+                    .data
+                    .pcb_file
+                    .as_deref()
+                    .map(lookup)
+                    .unwrap_or((false, false, false));
+                crate::panels::ProjectPanelInfo {
+                    id: p.id,
+                    name: p.data.name.clone(),
+                    project_file: p.data.schematic_root.clone(),
+                    project_file_open,
+                    project_file_dirty,
+                    project_file_active,
+                    pcb_file: p.data.pcb_file.clone(),
+                    pcb_file_open,
+                    pcb_file_dirty,
+                    pcb_file_active,
+                    sheets: p
+                        .data
+                        .sheets
+                        .iter()
+                        .map(|sheet| {
+                            let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
+                            crate::panels::SheetInfo {
+                                name: sheet.name.clone(),
+                                filename: sheet.filename.clone(),
+                                sym_count: sheet.symbols_count,
+                                wire_count: sheet.wires_count,
+                                label_count: sheet.labels_count,
+                                is_open,
+                                is_dirty,
+                                is_active,
+                            }
+                        })
+                        .collect(),
+                    is_active: Some(p.id) == active_id,
+                }
             })
-            .unwrap_or_default();
-
-        let project_name = self
-            .document_state
-            .project_data
-            .as_ref()
-            .map(|project| project.name.clone())
-            .or_else(|| {
-                self.document_state.project_path.as_ref().and_then(|path| {
-                    path.file_stem()
-                        .map(|stem| stem.to_string_lossy().to_string())
-                })
-            });
+            .collect();
 
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
@@ -63,6 +118,20 @@ impl Signex {
         let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
+        let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
+        let child_sheet_border_picker_open =
+            self.document_state.panel_ctx.child_sheet_border_picker_open;
+        let child_sheet_fill_picker_open =
+            self.document_state.panel_ctx.child_sheet_fill_picker_open;
+        let child_sheet_border_advanced_open =
+            self.document_state.panel_ctx.child_sheet_border_advanced_open;
+        let child_sheet_fill_advanced_open =
+            self.document_state.panel_ctx.child_sheet_fill_advanced_open;
+        let child_sheet_stroke_width_buf = self
+            .document_state
+            .panel_ctx
+            .child_sheet_stroke_width_buf
+            .clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -76,24 +145,7 @@ impl Signex {
         let erc_diagnostics = self.build_erc_diagnostic_entries();
 
         self.document_state.panel_ctx = crate::panels::PanelContext {
-            project_name,
-            project_file: self
-                .document_state
-                .project_data
-                .as_ref()
-                .and_then(|project| project.schematic_root.clone())
-                .or_else(|| {
-                    self.document_state.project_path.as_ref().and_then(|path| {
-                        path.file_name()
-                            .map(|name| name.to_string_lossy().to_string())
-                    })
-                }),
-            pcb_file: self
-                .document_state
-                .project_data
-                .as_ref()
-                .and_then(|project| project.pcb_file.clone()),
-            sheets,
+            projects: projects_panel,
             sym_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.symbols.len())
                 .or_else(|| active_pcb_snapshot.map(|snapshot| snapshot.footprints.len()))
@@ -166,6 +218,7 @@ impl Signex {
                     .unwrap_or_default()
             },
             tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
+            theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,
             snap_enabled: self.ui_state.snap_enabled,
@@ -194,6 +247,12 @@ impl Signex {
             drawing_edit_buf,
             drawing_edit_buf_for,
             selected_drawing,
+            selected_child_sheet,
+            child_sheet_border_picker_open,
+            child_sheet_fill_picker_open,
+            child_sheet_border_advanced_open,
+            child_sheet_fill_advanced_open,
+            child_sheet_stroke_width_buf,
             component_filter,
             collapsed_sections,
             pre_placement,
@@ -202,6 +261,8 @@ impl Signex {
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),
+            custom_filter_presets: self.interaction_state.custom_filter_presets.clone(),
+            active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
             page_format_mode,
             margin_vertical,
             margin_horizontal,
@@ -221,6 +282,22 @@ impl Signex {
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
+        // Follow the focused tab into its project: the Projects-panel
+        // accent and active_project-scoped handlers (ERC / annotate /
+        // save-all) should track the user's tab focus, not the most
+        // recently opened project. Tabs with no `project_id` (loose
+        // schematics opened without a `.standard_pro`) leave the pointer
+        // alone so the panel keeps showing whichever project was last
+        // active. (#54 phase 2.4)
+        if let Some(pid) = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| t.project_id)
+        {
+            self.document_state.active_project = Some(pid);
+        }
+
         self.sync_visible_document_from_active_tab();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
@@ -230,7 +307,14 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
         self.refresh_active_erc_from_cache(active_path.as_ref());
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
+        // Always rebuild the panel context so the active-row highlight
+        // and active-project accent track the focused tab even when
+        // sync_visible_document_from_active_tab took the empty-doc
+        // branch (which suppresses the implicit refresh).
+        self.refresh_panel_ctx();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas.
@@ -249,7 +333,9 @@ impl Signex {
         // selection change must invalidate the cached content layer to
         // reflect the new focus set.
         if self.ui_state.auto_focus {
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
         }
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
@@ -257,6 +343,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
+        self.document_state.panel_ctx.selected_child_sheet = None;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -303,6 +390,17 @@ impl Signex {
                     })
                     .cloned();
             }
+            if matches!(
+                details.selected_kind,
+                signex_types::schematic::SelectedKind::ChildSheet
+            ) {
+                self.document_state.panel_ctx.selected_child_sheet = engine
+                    .document()
+                    .child_sheets
+                    .iter()
+                    .find(|cs| cs.uuid == details.selected_uuid)
+                    .cloned();
+            }
         }
     }
 
@@ -327,7 +425,9 @@ impl Signex {
         );
         self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
     }
 }

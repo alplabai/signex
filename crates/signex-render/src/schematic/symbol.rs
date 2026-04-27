@@ -8,7 +8,7 @@ use iced::widget::canvas::{self, LineCap, LineJoin, path};
 use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::display_text_content;
+use super::text::draw_rich_text;
 
 // ---------------------------------------------------------------------------
 // Instance transform: position + rotation + mirror
@@ -510,34 +510,16 @@ fn draw_graphic_text(
     };
     let _ = keep_upright;
 
-    let text = canvas::Text {
-        content: display_text_content(content),
-        position: iced::Point::ORIGIN,
+    draw_rich_text(
+        frame,
+        content,
+        sp,
         color,
-        size: iced::Pixels(size),
-        font: crate::canvas_font(),
-        align_x: iced::alignment::Horizontal::Center.into(),
-        align_y: iced::alignment::Vertical::Center,
-        ..canvas::Text::default()
-    };
-    if text_rot.abs() < 1e-4 {
-        frame.fill_text(canvas::Text {
-            position: sp,
-            ..text
-        });
-    } else {
-        // Pre-rotate glyph paths at the lyon level — iced 0.14's text path
-        // doesn't visibly honor `frame.rotate()` for canvas glyphs, so we
-        // bake the rotation into the path coordinates themselves.
-        use iced::widget::canvas::path::lyon_path::math as lyon_math;
-        let t = lyon_math::Transform::identity()
-            .then_rotate(lyon_math::Angle::radians(text_rot))
-            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-        text.draw_with(|path, color| {
-            let rotated = path.transform(&t);
-            frame.fill(&rotated, color);
-        });
-    }
+        size,
+        iced::alignment::Horizontal::Center,
+        iced::alignment::Vertical::Center,
+        text_rot,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

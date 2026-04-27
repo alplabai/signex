@@ -2,8 +2,13 @@
 
 use iced::Color;
 use iced::widget::canvas;
+use std::collections::HashMap;
+use uuid::Uuid;
 
-use signex_types::markup::{RichSegment, parse_markup};
+use signex_types::markup::{
+    ExpressionEvalContext, RichSegment, evaluate_expressions, standard_auto_net_name_from_pins,
+    parse_markup,
+};
 use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
 use super::{ScreenTransform, field_effective_style};
@@ -40,6 +45,418 @@ pub fn display_text_content(input: &str) -> String {
         }
     }
     out
+}
+
+#[derive(Clone)]
+struct RichRun {
+    text: String,
+    scale: f32,
+    baseline_offset: f32,
+    kind: RichRunKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RichRunKind {
+    Normal,
+    Overbar,
+    Subscript,
+    Superscript,
+}
+
+// Keep horizontal advance in sync with label metric tuning (`label_text_aabb`).
+const GLYPH_ADVANCE_FACTOR: f32 = 0.55;
+
+fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
+    match (prev, next) {
+        // Standard keeps suffix indices visually tight to the preceding glyph.
+        (
+            RichRunKind::Normal | RichRunKind::Overbar,
+            RichRunKind::Subscript | RichRunKind::Superscript,
+        ) => -size * 0.16,
+        _ => 0.0,
+    }
+}
+
+fn rich_runs(input: &str) -> Vec<RichRun> {
+    let expanded = expand_backslash_escapes(&expand_char_escapes(input));
+    let segments = parse_markup(&expanded);
+    if segments.is_empty() {
+        return vec![RichRun {
+            text: expanded,
+            scale: 1.0,
+            baseline_offset: 0.0,
+            kind: RichRunKind::Normal,
+        }];
+    }
+
+    segments
+        .into_iter()
+        .map(|segment| match segment {
+            RichSegment::Normal(text) => RichRun {
+                text,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Normal,
+            },
+            RichSegment::Overbar(text) => RichRun {
+                text,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Overbar,
+            },
+            RichSegment::Subscript(text) => RichRun {
+                text,
+                scale: 0.72,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Subscript,
+            },
+            RichSegment::Superscript(text) => RichRun {
+                text,
+                scale: 0.72,
+                baseline_offset: -0.34,
+                kind: RichRunKind::Superscript,
+            },
+        })
+        .filter(|run| !run.text.is_empty())
+        .collect()
+}
+
+fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
+    let mut vars = sym.fields.clone();
+    for prop in &sym.custom_properties {
+        if !prop.key.is_empty() {
+            vars.insert(prop.key.clone(), prop.value.clone());
+        }
+    }
+    vars.entry("refdes".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("reference".to_string())
+        .or_insert_with(|| sym.reference.clone());
+    vars.entry("value".to_string())
+        .or_insert_with(|| sym.value.clone());
+    vars
+}
+
+pub fn evaluate_symbol_text(content: &str, sym: &Symbol, current_pin: Option<&str>) -> String {
+    evaluate_symbol_text_with_context(content, sym, current_pin, None, None, None)
+}
+
+pub fn evaluate_symbol_text_with_context(
+    content: &str,
+    sym: &Symbol,
+    current_pin: Option<&str>,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    pin_net_names: Option<&HashMap<String, String>>,
+) -> String {
+    let at_vars = symbol_eval_variables(sym);
+    let mut refdes_vars = HashMap::new();
+    if !sym.uuid.is_nil() && !sym.reference.is_empty() {
+        refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
+    }
+
+    let ctx = ExpressionEvalContext {
+        current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
+        current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
+        current_pin,
+        cell,
+        at_variables: Some(&at_vars),
+        refdes_variables: global_refdes.or(Some(&refdes_vars)),
+        net_name_by_pin: pin_net_names,
+        ..ExpressionEvalContext::default()
+    };
+    evaluate_expressions(content, &ctx)
+}
+
+pub fn build_global_refdes_lookup(
+    snapshot: &super::SchematicRenderSnapshot,
+) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for sym in &snapshot.symbols {
+        if sym.reference.is_empty() {
+            continue;
+        }
+        out.entry(sym.uuid.to_string())
+            .or_insert_with(|| sym.reference.clone());
+        out.entry(sym.reference.clone())
+            .or_insert_with(|| sym.reference.clone());
+
+        for instance in &sym.instances {
+            if instance.path.is_empty() {
+                continue;
+            }
+            out.entry(instance.path.clone())
+                .or_insert_with(|| sym.reference.clone());
+            let trimmed = instance.path.trim_matches('/');
+            if !trimmed.is_empty() {
+                out.entry(trimmed.to_string())
+                    .or_insert_with(|| sym.reference.clone());
+            }
+        }
+    }
+    out
+}
+
+pub fn build_symbol_pin_net_lookup(
+    snapshot: &super::SchematicRenderSnapshot,
+) -> HashMap<Uuid, HashMap<String, String>> {
+    type Node = (i64, i64);
+
+    fn q(p: signex_types::schematic::Point) -> Node {
+        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    }
+
+    fn find(parent: &mut HashMap<Node, Node>, x: Node) -> Node {
+        let p = *parent.entry(x).or_insert(x);
+        if p == x {
+            x
+        } else {
+            let r = find(parent, p);
+            parent.insert(x, r);
+            r
+        }
+    }
+
+    fn union(parent: &mut HashMap<Node, Node>, a: Node, b: Node) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent.insert(ra, rb);
+        }
+    }
+
+    fn point_on_segment(
+        p: signex_types::schematic::Point,
+        a: signex_types::schematic::Point,
+        b: signex_types::schematic::Point,
+        tol: f64,
+    ) -> bool {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len_sq = dx * dx + dy * dy;
+        if len_sq < tol * tol {
+            return (p.x - a.x).abs() < tol && (p.y - a.y).abs() < tol;
+        }
+        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq;
+        if !(0.0..=1.0).contains(&t) {
+            return false;
+        }
+        let proj_x = a.x + t * dx;
+        let proj_y = a.y + t * dy;
+        (p.x - proj_x).abs() < tol && (p.y - proj_y).abs() < tol
+    }
+
+    fn transform_pin_position(
+        sym: &Symbol,
+        local_pos: &signex_types::schematic::Point,
+    ) -> signex_types::schematic::Point {
+        let x = local_pos.x;
+        let y = -local_pos.y;
+
+        let rad = -sym.rotation.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        let rx = x * cos - y * sin;
+        let ry = x * sin + y * cos;
+
+        let rx = if sym.mirror_y { -rx } else { rx };
+        let ry = if sym.mirror_x { -ry } else { ry };
+
+        signex_types::schematic::Point::new(rx + sym.position.x, ry + sym.position.y)
+    }
+
+    fn label_priority(kind: signex_types::schematic::LabelType) -> u8 {
+        match kind {
+            signex_types::schematic::LabelType::Global => 4,
+            signex_types::schematic::LabelType::Power => 3,
+            signex_types::schematic::LabelType::Hierarchical => 2,
+            signex_types::schematic::LabelType::Net => 1,
+        }
+    }
+
+    let mut parent: HashMap<Node, Node> = HashMap::new();
+    let tolerance = 0.01;
+
+    for wire in &snapshot.wires {
+        union(&mut parent, q(wire.start), q(wire.end));
+    }
+
+    for junction in &snapshot.junctions {
+        let j = q(junction.position);
+        parent.entry(j).or_insert(j);
+        for wire in &snapshot.wires {
+            if wire.start == junction.position
+                || wire.end == junction.position
+                || point_on_segment(junction.position, wire.start, wire.end, tolerance)
+            {
+                union(&mut parent, j, q(wire.start));
+                union(&mut parent, j, q(wire.end));
+            }
+        }
+    }
+
+    let mut label_root_by_name: HashMap<String, Node> = HashMap::new();
+    let mut root_name: HashMap<Node, (u8, String)> = HashMap::new();
+
+    for label in &snapshot.labels {
+        let mut n = q(label.position);
+        parent.entry(n).or_insert(n);
+        for wire in &snapshot.wires {
+            if point_on_segment(label.position, wire.start, wire.end, tolerance) {
+                union(&mut parent, q(wire.start), q(wire.end));
+                union(&mut parent, n, q(wire.start));
+                n = q(wire.start);
+                break;
+            }
+        }
+
+        let mut root = find(&mut parent, n);
+        if matches!(
+            label.label_type,
+            signex_types::schematic::LabelType::Global
+                | signex_types::schematic::LabelType::Hierarchical
+        ) && !label.text.is_empty()
+        {
+            if let Some(existing) = label_root_by_name.get(&label.text).copied() {
+                union(&mut parent, root, existing);
+                root = find(&mut parent, root);
+            }
+            label_root_by_name.insert(label.text.clone(), root);
+        }
+
+        if !label.text.is_empty() {
+            let priority = label_priority(label.label_type);
+            match root_name.get(&root) {
+                Some((p, _)) if *p >= priority => {}
+                _ => {
+                    root_name.insert(root, (priority, label.text.clone()));
+                }
+            }
+        }
+    }
+
+    let mut root_pins: HashMap<Node, Vec<(String, String)>> = HashMap::new();
+    let mut pin_entries: Vec<(Uuid, String, Node)> = Vec::new();
+
+    for sym in &snapshot.symbols {
+        let Some(lib) = snapshot.lib_symbols.get(&sym.lib_id) else {
+            continue;
+        };
+        for lp in &lib.pins {
+            if !(lp.unit == 0 || lp.unit == sym.unit) {
+                continue;
+            }
+            let world = transform_pin_position(sym, &lp.pin.position);
+            let root = find(&mut parent, q(world));
+            root_pins
+                .entry(root)
+                .or_default()
+                .push((sym.reference.clone(), lp.pin.number.clone()));
+            pin_entries.push((sym.uuid, lp.pin.number.clone(), root));
+        }
+    }
+
+    let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
+    for root in root_pins.keys().copied() {
+        let named = root_name
+            .get(&root)
+            .map(|(_, n)| n.clone())
+            .unwrap_or_default();
+        if !named.is_empty() {
+            resolved_root_name.insert(root, named);
+            continue;
+        }
+        let auto = root_pins
+            .get(&root)
+            .and_then(|pins| standard_auto_net_name_from_pins(pins))
+            .unwrap_or_default();
+        resolved_root_name.insert(root, auto);
+    }
+
+    let mut out: HashMap<Uuid, HashMap<String, String>> = HashMap::new();
+    for (sym_uuid, pin_number, root) in pin_entries {
+        let net_name = resolved_root_name.get(&root).cloned().unwrap_or_default();
+        if !net_name.is_empty() {
+            out.entry(sym_uuid)
+                .or_default()
+                .insert(pin_number, net_name);
+        }
+    }
+
+    out
+}
+
+pub fn draw_rich_text(
+    frame: &mut canvas::Frame,
+    input: &str,
+    anchor: iced::Point,
+    color: Color,
+    size: f32,
+    h_align: iced::alignment::Horizontal,
+    v_align: iced::alignment::Vertical,
+    rotation_rad: f32,
+) {
+    if input.is_empty() || size < 1.0 {
+        return;
+    }
+
+    let runs = rich_runs(input);
+    let total_w: f32 = runs
+        .iter()
+        .map(|run| run.text.chars().count() as f32 * size * run.scale * GLYPH_ADVANCE_FACTOR)
+        .sum();
+
+    let mut cursor_x = match h_align {
+        iced::alignment::Horizontal::Left => anchor.x,
+        iced::alignment::Horizontal::Center => anchor.x - total_w * 0.5,
+        iced::alignment::Horizontal::Right => anchor.x - total_w,
+    };
+
+    // Vertical alignment: defer to iced's canvas::Text align_y so the glyph's
+    // visual center / top / bottom lands exactly on `anchor.y`. This is what
+    // Standard's renderer assumes — the anchor is the field's pivot — and it
+    // matters the most for rotated fields, where any pre-rotation Y offset
+    // turns into a visible horizontal shift after the rotate-around-anchor
+    // transform below.
+    let base_y = anchor.y;
+    let canvas_align_y = v_align;
+
+    let mut prev_kind: Option<RichRunKind> = None;
+    for run in runs {
+        if let Some(prev) = prev_kind {
+            cursor_x += run_pair_kerning(prev, run.kind, size);
+        }
+
+        let run_size = size * run.scale;
+        let run_y = base_y + size * run.baseline_offset;
+        let text = canvas::Text {
+            content: run.text.clone(),
+            position: iced::Point::new(cursor_x, run_y),
+            color,
+            size: iced::Pixels(run_size),
+            font: crate::canvas_font(),
+            align_x: iced::alignment::Horizontal::Left.into(),
+            align_y: canvas_align_y,
+            ..canvas::Text::default()
+        };
+
+        if rotation_rad.abs() > 0.001 {
+            use iced::widget::canvas::path::lyon_path::math as lyon_math;
+            let t = lyon_math::Transform::identity()
+                .then_translate(lyon_math::Vector::new(-anchor.x, -anchor.y))
+                .then_rotate(lyon_math::Angle::radians(rotation_rad))
+                .then_translate(lyon_math::Vector::new(anchor.x, anchor.y));
+            text.draw_with(|path, fill| {
+                let rotated = path.transform(&t);
+                frame.fill(&rotated, fill);
+            });
+        } else {
+            frame.fill_text(text);
+        }
+
+        cursor_x += run.text.chars().count() as f32 * run_size * GLYPH_ADVANCE_FACTOR;
+        prev_kind = Some(run.kind);
+    }
 }
 
 /// Plain display string + ordered list of `(start_char_idx, char_count)` pairs
@@ -213,31 +630,16 @@ pub fn draw_text_note(
 
     let rad = -(note.rotation.to_radians() as f32);
 
-    let text = canvas::Text {
-        content: display_text_content(&note.text),
-        position: iced::Point::ORIGIN,
+    draw_rich_text(
+        frame,
+        &note.text,
+        sp,
         color,
-        size: iced::Pixels(screen_font),
-        font: crate::canvas_font(),
-        align_x: h_align.into(),
-        align_y: v_align,
-        ..canvas::Text::default()
-    };
-    if rad.abs() > 0.001 {
-        use iced::widget::canvas::path::lyon_path::math as lyon_math;
-        let t = lyon_math::Transform::identity()
-            .then_rotate(lyon_math::Angle::radians(rad))
-            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-        text.draw_with(|path, color| {
-            let rotated = path.transform(&t);
-            frame.fill(&rotated, color);
-        });
-    } else {
-        frame.fill_text(canvas::Text {
-            position: sp,
-            ..text
-        });
-    }
+        screen_font,
+        h_align,
+        v_align,
+        rad,
+    );
 }
 
 /// Draw a property text (reference, value, or other field).
@@ -259,8 +661,17 @@ pub fn draw_text_prop(
     display_pos: (f64, f64),
     transform: &ScreenTransform,
     color: Color,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    pin_net_names: Option<&HashMap<String, String>>,
 ) {
     if content.is_empty() {
+        return;
+    }
+
+    let evaluated =
+        evaluate_symbol_text_with_context(content, sym, None, cell, global_refdes, pin_net_names);
+    if evaluated.is_empty() {
         return;
     }
 
@@ -291,29 +702,46 @@ pub fn draw_text_prop(
     // Iced CW-positive, Y-down; Standard field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
-    let text = canvas::Text {
-        content: display_text_content(content),
-        position: iced::Point::ORIGIN,
+    draw_rich_text(
+        frame,
+        &evaluated,
+        sp,
         color,
-        size: iced::Pixels(screen_font),
-        font: crate::canvas_font(),
-        align_x: h_align.into(),
-        align_y: v_align,
-        ..canvas::Text::default()
-    };
-    if rad.abs() > 0.001 {
-        use iced::widget::canvas::path::lyon_path::math as lyon_math;
-        let t = lyon_math::Transform::identity()
-            .then_rotate(lyon_math::Angle::radians(rad))
-            .then_translate(lyon_math::Vector::new(sp.x, sp.y));
-        text.draw_with(|path, color| {
-            let rotated = path.transform(&t);
-            frame.fill(&rotated, color);
-        });
-    } else {
-        frame.fill_text(canvas::Text {
-            position: sp,
-            ..text
-        });
+        screen_font,
+        h_align,
+        v_align,
+        rad,
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RichRunKind, run_pair_kerning};
+
+    #[test]
+    fn kerning_tightens_normal_to_subscript_gap() {
+        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Subscript, 10.0);
+        assert!(k < 0.0);
+    }
+
+    #[test]
+    fn kerning_does_not_affect_normal_to_normal() {
+        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Normal, 10.0);
+        assert_eq!(k, 0.0);
+    }
+
+    #[test]
+    fn subscript_keeps_same_baseline_as_normal() {
+        let runs = super::rich_runs("DIVIDED-S_{3}");
+        let s_run = runs
+            .iter()
+            .find(|run| run.kind == RichRunKind::Normal && run.text.ends_with('S'))
+            .expect("normal run with S should exist");
+        let sub_run = runs
+            .iter()
+            .find(|run| run.kind == RichRunKind::Subscript && run.text == "3")
+            .expect("subscript run should exist");
+
+        assert_eq!(s_run.baseline_offset, sub_run.baseline_offset);
     }
 }

@@ -9,11 +9,12 @@
 use iced::Color;
 use iced::widget::canvas::{self, LineCap, LineJoin, path};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
 
 use super::ScreenTransform;
-use super::text::{display_text_content, display_text_with_overbars};
+use super::text::{display_text_with_overbars, draw_rich_text, evaluate_symbol_text_with_context};
 
 // ---------------------------------------------------------------------------
 // Instance transform (duplicated for self-containment -- could be shared)
@@ -77,6 +78,9 @@ pub fn draw_symbol_pins(
     lib: &LibSymbol,
     transform: &ScreenTransform,
     pin_color: Color,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    net_name_by_symbol_pin: Option<&HashMap<Uuid, HashMap<String, String>>>,
 ) {
     let visible_pins: Vec<&Pin> = lib
         .pins
@@ -108,6 +112,9 @@ pub fn draw_symbol_pins(
                 index: stack_index,
                 total: stack_total,
             },
+            cell,
+            global_refdes,
+            net_name_by_symbol_pin,
         );
     }
 }
@@ -135,6 +142,9 @@ fn draw_pin(
     transform: &ScreenTransform,
     pin_color: Color,
     stack: StackPlacement,
+    cell: Option<&str>,
+    global_refdes: Option<&HashMap<String, String>>,
+    net_name_by_symbol_pin: Option<&HashMap<Uuid, HashMap<String, String>>>,
 ) {
     if !pin.visible {
         return;
@@ -191,6 +201,16 @@ fn draw_pin(
         && !pin.name.is_empty()
         && pin.name != "~"
     {
+        let pin_nets = net_name_by_symbol_pin.and_then(|m| m.get(&sym.uuid));
+        let evaluated_pin_name = evaluate_symbol_text_with_context(
+            &pin.name,
+            sym,
+            Some(pin.number.as_str()),
+            cell,
+            global_refdes,
+            pin_nets,
+        );
+
         // Standard pin-name placement has two modes keyed on `pin_name_offset`:
         //
         // * offset > 0  — name along the pin, INSIDE body, at
@@ -272,7 +292,7 @@ fn draw_pin(
         // flush against the cap-height). Any overbar segments are drawn as
         // a separate stroke above the text with a small visible gap, which
         // matches Standard's look.
-        let (plain, overbars) = display_text_with_overbars(&pin.name);
+        let (plain, overbars) = display_text_with_overbars(&evaluated_pin_name);
 
         // Determine whether the pin runs vertically on screen.
         let (wdx, wdy) = instance_rotate_dir(sym, dir_x, dir_y);
@@ -347,6 +367,16 @@ fn draw_pin(
 
     // Pin number (inside the body, along the pin line)
     if screen_font >= 1.0 && lib.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+        let pin_nets = net_name_by_symbol_pin.and_then(|m| m.get(&sym.uuid));
+        let evaluated_pin_number = evaluate_symbol_text_with_context(
+            &pin.number,
+            sym,
+            Some(pin.number.as_str()),
+            cell,
+            global_refdes,
+            pin_nets,
+        );
+
         // Number is placed at the midpoint of the pin line.
         let mid = Point::new(
             pin.position.x + dir_x * len * 0.5,
@@ -360,16 +390,15 @@ fn draw_pin(
         let perp_offset_px = transform.world_len(0.8);
 
         // Offset perpendicular to the pin so the number clears the pin line.
-        // Horizontal pins → above line; vertical (top/bottom) pins → left of
-        // line. Both cases render horizontal, unrotated text — same convention
-        // as side-pin numbers, keeping numbers outside the IC body.
-        let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
-            // Horizontal pin → above line (screen -Y), centered on X.
-            (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
+        // Horizontal pins → above line, text horizontal. Vertical pins → left
+        // of line, text rotated -90° (CCW) so it reads along the pin axis,
+        // matching Standard's pin number orientation.
+        let (perp_sx, perp_sy, num_rotation) = if wdx.abs() >= wdy.abs() {
+            (0.0_f32, -1.0_f32, 0.0_f32)
         } else {
-            // Vertical pin → left of pin line (screen -X), right-aligned.
-            (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
+            (-1.0_f32, 0.0_f32, -std::f32::consts::FRAC_PI_2)
         };
+        let num_align = iced::alignment::Horizontal::Center;
 
         let np = iced::Point::new(
             np_base.x + perp_sx * perp_offset_px,
@@ -389,17 +418,16 @@ fn draw_pin(
             np.x + (line_dx / line_len) * fanout_step_px * stack_center,
             np.y + (line_dy / line_len) * fanout_step_px * stack_center,
         );
-        let text = canvas::Text {
-            content: display_text_content(&pin.number),
-            position: stack_np,
-            color: pin_color,
-            size: iced::Pixels(num_font),
-            font: crate::canvas_font(),
-            align_x: num_align.into(),
-            align_y: iced::alignment::Vertical::Center,
-            ..canvas::Text::default()
-        };
-        frame.fill_text(text);
+        draw_rich_text(
+            frame,
+            &evaluated_pin_number,
+            stack_np,
+            pin_color,
+            num_font,
+            num_align,
+            iced::alignment::Vertical::Center,
+            num_rotation,
+        );
     }
 }
 

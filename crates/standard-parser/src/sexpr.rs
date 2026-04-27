@@ -358,9 +358,13 @@ mod tests {
             _ => panic!("expected list"),
         };
 
-        assert!(matches!(&items[0], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "footprint"));
+        assert!(
+            matches!(&items[0], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "footprint")
+        );
         assert!(matches!(&items[1], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "F.Cu"));
-        assert!(matches!(&items[2], SExpr::Atom(atom) if atom.is_quoted() && atom.as_str() == "F.Cu"));
+        assert!(
+            matches!(&items[2], SExpr::Atom(atom) if atom.is_quoted() && atom.as_str() == "F.Cu")
+        );
         assert!(matches!(&items[3], SExpr::Atom(atom) if atom.is_raw() && atom.as_str() == "123"));
     }
 
