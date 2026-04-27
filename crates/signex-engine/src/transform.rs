@@ -544,9 +544,12 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
     };
 
-    // 6. Field rotation must fold to 0 in `field_effective_style` so the
-    //    rendered text is always horizontal regardless of symbol rotation.
-    let field_rotation = (360.0 - symbol.rotation).rem_euclid(360.0);
+    // 6. Field rotation is stored as an absolute screen angle (Standard
+    //    convention). Autoplaced fields always render horizontally, so
+    //    we set rotation to 0 directly. The renderer reads this verbatim
+    //    without re-adding the symbol's rotation, which keeps round-trips
+    //    through .standard_sch readable on both sides.
+    let field_rotation = 0.0;
 
     for (i, prop) in fields.iter_mut().enumerate() {
         prop.position.x = anchor_x;
