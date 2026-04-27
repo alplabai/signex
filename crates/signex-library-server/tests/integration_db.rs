@@ -1,27 +1,22 @@
-//! Integration tests for WS-B — DB schema migrations, components/revisions/locks
-//! routes, lock contention, git-export round-trip, and database adapter client.
+//! Integration tests for WS-4 — DB schema migrations + the `/tables` and
+//! `/rows` HTTP routes that replace the legacy `/components` family.
 //!
 //! Default backend: in-memory SQLite. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
-use signex_library::adapter::{FieldSet, LibraryAdapter, LibraryQuery};
-use signex_library::adapters::database::DatabaseAdapter;
-use signex_library::component::{Component, DatasheetRef, PinPadOverride, PlmReserved, Revision};
-use signex_library::identity::{ComponentClass, InternalPn, Version};
+use signex_library::adapter::FieldSet;
+use signex_library::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
-use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::PrimitiveRef;
-use signex_library::snxpart::{read_snxpart, snxpart_filename};
 use signex_library_server::db::AppState;
-use signex_library_server::git_export::export_to_dir;
 use signex_library_server::{API_TOKEN_ENV, router_with_state};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -43,39 +38,28 @@ fn ensure_test_token() {
     }
 }
 
-fn fixture_revision(version: Version) -> Revision {
+/// Build a fixture row for the `resistors` table — covers the full
+/// `ComponentRow` shape so JSON round-trips exercise every nested type.
+fn fixture_row(internal_pn: &str) -> ComponentRow {
     let lib = Uuid::now_v7();
-    let mut rev = Revision {
-        version,
+    ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: InternalPn::new(internal_pn),
+        class: ComponentClass::new("resistor"),
+        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         state: LifecycleState::Released,
-        created: Utc::now(),
-        author: "test@signex".into(),
-        message: format!("rev {version}"),
         symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
         sim_ref: None,
         pin_map_overrides: Vec::<PinPadOverride>::new(),
-        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{version}")),
+        primary_mpn: ManufacturerPart::draft("Acme", format!("MPN-{internal_pn}")),
         alternates: Vec::new(),
         supply: Vec::new(),
-        datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
         parameters: ParamMap::new(),
         plm: PlmReserved::default(),
+        created: Utc::now(),
+        updated: Utc::now(),
         content_hash: [0u8; 32],
-    };
-    rev.refresh_content_hash().unwrap();
-    rev
-}
-
-fn fixture_component() -> Component {
-    Component {
-        uuid: Uuid::now_v7(),
-        internal_pn: InternalPn::new("R0805_10k"),
-        class: ComponentClass::new("resistor"),
-        category: std::path::PathBuf::from("Passives/Resistors/0805"),
-        family: None,
-        revisions: vec![fixture_revision(Version::new(1, 0))],
-        head: Version::new(1, 0),
     }
 }
 
@@ -96,22 +80,15 @@ fn bearer_header() -> String {
 #[tokio::test]
 async fn migrations_apply_cleanly() {
     let state = fresh_state().await;
-    // After migrations, the seven tables must exist.
     let tables: Vec<String> =
         sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             .fetch_all(state.pool().sqlite().expect("sqlite pool"))
             .await
             .unwrap();
 
-    for required in [
-        "components",
-        "revisions",
-        "parameters",
-        "suppliers",
-        "lifecycle_log",
-        "locks",
-        "review_requests",
-    ] {
+    // The WS-4 row table must exist alongside the WS-D primitive tables and
+    // any legacy tables retained for forward-compat.
+    for required in ["component_rows", "symbols", "footprints", "sims"] {
         assert!(
             tables.iter().any(|t| t == required),
             "missing table {required}; have {tables:?}"
@@ -120,19 +97,47 @@ async fn migrations_apply_cleanly() {
 }
 
 #[tokio::test]
-async fn post_then_get_component_round_trip() {
+async fn route_tables_lists_empty() {
+    // Fresh library → no rows → `GET /tables` returns `[]`.
     let state = fresh_state().await;
     let app = router_with_state(state);
 
-    let comp = fixture_component();
-    let body = serde_json::to_vec(&comp).unwrap();
+    let library_id = Uuid::now_v7();
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/tables?library_id={library_id}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let names: Vec<String> = serde_json::from_slice(&bytes).unwrap();
+    assert!(names.is_empty());
+}
 
-    let response = app
+#[tokio::test]
+async fn route_post_row_then_get() {
+    // POST a row to /tables/resistors/rows, then GET it back via
+    // /tables/resistors/rows/{row_id}.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R0805_10k");
+    let body = serde_json::to_vec(&row).unwrap();
+
+    let resp = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/components")
+                .uri(format!("/tables/resistors/rows?library_id={library_id}"))
                 .header("content-type", "application/json")
                 .header("authorization", bearer_header())
                 .body(Body::from(body))
@@ -140,70 +145,246 @@ async fn post_then_get_component_round_trip() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let response = app
+    let resp = app
+        .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/components/{}", comp.uuid))
+                .uri(format!(
+                    "/tables/resistors/rows/{}?library_id={library_id}",
+                    row.row_id
+                ))
                 .header("authorization", bearer_header())
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
         .await
         .unwrap();
-    let got: Component = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(got.uuid, comp.uuid);
-    assert_eq!(got.head, comp.head);
-    assert_eq!(got.revisions.len(), 1);
-    assert_eq!(
-        got.revisions[0].content_hash,
-        comp.revisions[0].content_hash
-    );
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got, row);
+
+    // List endpoint surfaces the inserted row.
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/tables/resistors?library_id={library_id}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let listed: Vec<ComponentRow> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(listed, vec![row.clone()]);
+
+    // After at least one row exists, /tables surfaces the table name.
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/tables?library_id={library_id}"))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let names: Vec<String> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(names, vec!["resistors".to_string()]);
 }
+
+#[tokio::test]
+async fn route_put_row_updates() {
+    // POST a row, PUT a modified copy back, GET should return the modified
+    // version.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R0805_10k");
+    let row_id = row.row_id;
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/tables/resistors/rows?library_id={library_id}"))
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&row).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let mut updated = row.clone();
+    updated.internal_pn = InternalPn::new("R0805_10k_REV2");
+    updated.state = LifecycleState::Deprecated;
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!(
+                    "/tables/resistors/rows/{row_id}?library_id={library_id}"
+                ))
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&updated).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{row_id}?library_id={library_id}"
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(got.internal_pn, InternalPn::new("R0805_10k_REV2"));
+    assert_eq!(got.state, LifecycleState::Deprecated);
+}
+
+#[tokio::test]
+async fn route_delete_row() {
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let row = fixture_row("R0805_10k");
+    let row_id = row.row_id;
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/tables/resistors/rows?library_id={library_id}"))
+                .header("content-type", "application/json")
+                .header("authorization", bearer_header())
+                .body(Body::from(serde_json::to_vec(&row).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!(
+                    "/tables/resistors/rows/{row_id}?library_id={library_id}"
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/tables/resistors/rows/{row_id}?library_id={library_id}"
+                ))
+                .header("authorization", bearer_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn route_unauthenticated_returns_401() {
+    // Hit `/tables` without an Authorization header — the bearer-token
+    // layer rejects with 401 before the handler runs.
+    let state = fresh_state().await;
+    let app = router_with_state(state);
+
+    let library_id = Uuid::now_v7();
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/tables?library_id={library_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+// Lock tests — kept here because the lock manager keys off `RowId.as_uuid()`
+// after the WS-4 refactor and the ergonomics are easiest to exercise from
+// a single integration suite.
 
 #[tokio::test]
 async fn lock_contention_second_attempt_blocks_until_release() {
     let state = fresh_state().await;
-    // Use a short TTL so the test runs fast.
     state.locks().set_idle_ttl(Duration::from_millis(200));
 
-    let comp_uuid = Uuid::now_v7();
+    let row_uuid = RowId::new().as_uuid();
 
-    // First holder grabs the lock.
     state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Symbol, "alice")
+        .try_lock(row_uuid, FieldSet::Symbol, "alice")
         .expect("alice acquires");
 
-    // Second holder fails immediately.
     let err = state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Symbol, "bob")
+        .try_lock(row_uuid, FieldSet::Symbol, "bob")
         .unwrap_err();
     assert!(matches!(
         err.kind,
         signex_library_server::locks::LockErrorKind::Held { .. }
     ));
 
-    // Release, then bob succeeds.
     state
         .locks()
-        .release(comp_uuid, FieldSet::Symbol, "alice")
+        .release(row_uuid, FieldSet::Symbol, "alice")
         .unwrap();
     state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Symbol, "bob")
+        .try_lock(row_uuid, FieldSet::Symbol, "bob")
         .expect("bob acquires after release");
 
-    // Different field set is independently lockable.
     state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Footprint, "alice")
+        .try_lock(row_uuid, FieldSet::Footprint, "alice")
         .expect("different field-set is independent");
 }
 
@@ -212,121 +393,18 @@ async fn lock_contention_ttl_expiry_allows_takeover() {
     let state = fresh_state().await;
     state.locks().set_idle_ttl(Duration::from_millis(50));
 
-    let comp_uuid = Uuid::now_v7();
+    let row_uuid = RowId::new().as_uuid();
     state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Symbol, "alice")
+        .try_lock(row_uuid, FieldSet::Symbol, "alice")
         .unwrap();
 
-    // Wait past TTL.
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Bob can now claim — alice's lock has expired.
     state
         .locks()
-        .try_lock(comp_uuid, FieldSet::Symbol, "bob")
+        .try_lock(row_uuid, FieldSet::Symbol, "bob")
         .expect("bob takes over after TTL");
-}
-
-#[tokio::test]
-async fn git_export_round_trip_three_components() {
-    let state = fresh_state().await;
-    let mut comps = Vec::new();
-    for i in 0..3 {
-        let mut c = fixture_component();
-        c.internal_pn = InternalPn::new(format!("PART_{i}"));
-        state.insert_component(&c).await.unwrap();
-        comps.push(c);
-    }
-
-    let dir = tempfile::tempdir().unwrap();
-    export_to_dir(&state, dir.path()).await.unwrap();
-
-    // Assert .snxprt files exist in <uuid>/<uuid>.snxprt layout (refactor:
-    // one file per component, all revisions live inside the embedded
-    // `Component`).
-    for c in &comps {
-        let part_path = dir
-            .path()
-            .join(c.uuid.to_string())
-            .join(snxpart_filename(c.uuid));
-        assert!(part_path.exists(), "expected {part_path:?}");
-        let part = read_snxpart(&part_path).unwrap();
-        assert_eq!(part.component.uuid, c.uuid);
-        assert_eq!(part.component.internal_pn, c.internal_pn);
-        assert_eq!(
-            part.component.revisions[0].content_hash,
-            c.revisions[0].content_hash
-        );
-    }
-
-    // Manifest at the export root.
-    let manifest_path = dir.path().join("manifest.toml");
-    assert!(manifest_path.exists());
-    let mtext = std::fs::read_to_string(&manifest_path).unwrap();
-    let m = Manifest::parse(&mtext).unwrap();
-    assert!(matches!(m.mode, LibraryMode::LocalGit));
-    assert_eq!(m.library.name, "exported-library");
-}
-
-/// Spin up the server in-process, point a `DatabaseAdapter` at it, exercise
-/// the full LibraryAdapter trait surface. Adapter is blocking (uses reqwest's
-/// blocking client) so it must run on a non-async thread; we hand it to
-/// `tokio::task::spawn_blocking`.
-#[tokio::test(flavor = "multi_thread")]
-async fn database_adapter_round_trips_through_http() {
-    let state = fresh_state().await;
-    let app = router_with_state(state);
-
-    // Bind to an OS-assigned port so parallel tests don't collide.
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-
-    // H1: the manifest's `auth` slot now carries the bearer token; the
-    // server's `ValidateRequestHeaderLayer` checks it against
-    // `SIGNEX_API_TOKEN` (set by `ensure_test_token` above).
-    let manifest = Manifest {
-        library: LibraryMeta {
-            name: "test".into(),
-            library_id: Uuid::now_v7(),
-            description: None,
-        },
-        mode: LibraryMode::Database {
-            url: format!("http://{addr}"),
-            auth: TEST_BEARER.into(),
-        },
-        workflow: Default::default(),
-        users: Default::default(),
-    };
-
-    let comp = fixture_component();
-    let comp_clone = comp.clone();
-    let manifest_clone = manifest.clone();
-    tokio::task::spawn_blocking(move || {
-        let adapter = Arc::new(DatabaseAdapter::new(manifest_clone).expect("adapter constructs"));
-        adapter
-            .save_revision(comp_clone.uuid, comp_clone.revisions[0].clone(), "initial")
-            .expect("first save");
-
-        let summaries = adapter.search(&LibraryQuery::default()).expect("search");
-        assert_eq!(summaries.len(), 1);
-        assert_eq!(summaries[0].uuid, comp_clone.uuid);
-
-        adapter
-            .try_lock(comp_clone.uuid, FieldSet::Symbol)
-            .expect("first lock");
-        adapter
-            .release_lock(comp_clone.uuid, FieldSet::Symbol)
-            .expect("release");
-    })
-    .await
-    .expect("spawn_blocking completed");
-
-    let _ = comp;
-    let _ = manifest;
 }
 
 #[tokio::test]
@@ -335,12 +413,12 @@ async fn locks_endpoint_returns_409_when_held() {
     state.locks().set_idle_ttl(Duration::from_secs(60));
     let app = router_with_state(state);
 
-    let comp_uuid = Uuid::now_v7();
+    let row_id = RowId::new();
 
     let mk_req = |holder: &str| {
         Request::builder()
             .method("POST")
-            .uri(format!("/components/{comp_uuid}/locks"))
+            .uri(format!("/rows/{row_id}/locks"))
             .header("content-type", "application/json")
             .header("authorization", bearer_header())
             .header("x-signex-holder", holder)
