@@ -218,13 +218,23 @@ impl Signex {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
         if clear_overlay_cache {
-            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
         }
         if update_selection_info {
             self.update_selection_info();
         }
+        // Re-derive panel context — `tab.dirty` has just transitioned
+        // false→true (or stayed true), and `panel_ctx.projects[*].sheets[*]
+        // .is_dirty` is what drives the red dot on the project-tree row.
+        // Without this refresh, the dot only appears after the next
+        // unrelated event that happens to call `refresh_panel_ctx`.
+        self.refresh_panel_ctx();
         true
     }
 }

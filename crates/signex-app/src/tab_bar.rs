@@ -1,8 +1,9 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
-use iced::widget::{Row, button, container, mouse_area, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{Row, container, mouse_area, row, text};
+use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 use crate::app::TabInfo;
 use crate::styles;
@@ -10,15 +11,15 @@ use crate::styles;
 #[derive(Debug, Clone)]
 pub enum TabMessage {
     Select(usize),
-    Close(usize),
-    /// Pop this tab into its own OS window (Altium-style undock). The
-    /// tab stays in `document_state.tabs` while the window lives; closing
-    /// the window reattaches it in place.
-    Undock(usize),
     /// User pressed the mouse on this tab at (x, y). Arms the tab for
     /// drag-to-undock — if the cursor later leaves the main window, the
     /// tab auto-detaches.
     StartDrag(usize, f32, f32),
+    /// Right-click on this tab — the app opens the per-tab context
+    /// menu (Close [filename] / Close All Others / Close All / Open
+    /// In New Window). Replaces the inline close-X / undock buttons
+    /// that used to live on every tab.
+    ContextMenu(usize),
 }
 
 pub fn view<'a>(
@@ -28,121 +29,135 @@ pub fn view<'a>(
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
-    let mut bar = Row::new().spacing(2.0);
+    // Tabs sit flush against each other — Altium parity. The active
+    // pill's accent underline distinguishes it from neighbours; no
+    // gap or vertical divider needed.
+    let mut bar = Row::new().spacing(0.0);
 
     let text_primary = styles::ti(tokens.text);
     let text_muted = styles::ti(tokens.text_secondary);
-    let tab_active_bg = styles::ti(tokens.hover);
-    let border = styles::ti(tokens.border);
 
-    for (i, tab) in tabs.iter().enumerate() {
-        // Only show tabs that belong to the window being rendered. Main
-        // gets all tabs except those owned by undocked windows; undocked
-        // windows get only their owned tab.
-        if !visible_paths.contains(&tab.path) {
-            continue;
-        }
+    // Collect the indices of tabs that should render in this window —
+    // we need the count up front so each pill knows whether it's the
+    // last one (which draws the right edge; the rest skip it so
+    // adjacent tabs share their L/R divider as a single 1 px line).
+    let visible_indices: Vec<usize> = tabs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, tab)| visible_paths.contains(&tab.path).then_some(i))
+        .collect();
+    let last_idx = visible_indices.last().copied();
 
-        let label = if tab.dirty {
-            format!("{} \u{2022}", tab.title) // bullet for dirty
-        } else {
-            tab.title.clone()
-        };
+    for &i in &visible_indices {
+        let tab = &tabs[i];
+        // Tab title — no dirty indicator here. The unsaved-changes
+        // marker now lives on the corresponding row in the Projects
+        // tree (red dot to the right of the file name) so the user
+        // sees dirty state without it competing with tab close-X.
+        let label = tab.title.clone();
 
         let is_active = i == active;
+        let is_dragging = dragging == Some(i);
+        let is_last = Some(i) == last_idx;
         let text_c = if is_active { text_primary } else { text_muted };
 
-        // Close button — visible "×" with hover highlight
-        let hover_close = Color::from_rgb(0.35, 0.35, 0.38);
-        let close_btn = button(text("\u{00D7}").size(14).color(text_muted))
-            .padding([0, 4])
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered => Some(Background::Color(hover_close)),
-                    _ => None,
-                };
-                button::Style {
-                    background: bg,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            })
-            .on_press(TabMessage::Close(i));
-
-        // Undock button — ↗ arrow. Pops the tab into its own OS window.
-        let undock_btn = button(text("\u{2197}").size(12).color(text_muted))
-            .padding([0, 4])
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered => Some(Background::Color(hover_close)),
-                    _ => None,
-                };
-                button::Style {
-                    background: bg,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            })
-            .on_press(TabMessage::Undock(i));
-
-        // Use a non-capturing container for the tab body so the outer
-        // mouse_area actually sees ButtonPressed — iced's mouse_area
-        // bails out when the inner widget captures the event, and
-        // button does capture on press. The undock / close buttons
-        // still capture their own presses so those clicks behave
-        // normally; presses on the text area fall through to the
-        // mouse_area's on_press (StartDrag).
-        // Visual feedback: the tab currently being dragged gets a
-        // brighter accent border + slightly lifted background so the
-        // user can see which tab they grabbed.
-        let is_dragging = dragging == Some(i);
-        let accent = Color::from_rgb(0.00, 0.47, 0.84);
-        let drag_bg = Color::from_rgba(0.0, 0.47, 0.84, 0.18);
-        let bg = if is_dragging {
-            Some(Background::Color(drag_bg))
-        } else if is_active {
-            Some(Background::Color(tab_active_bg))
-        } else {
-            None
+        // No inline close-X / undock buttons. Both actions live in the
+        // right-click menu now (Altium parity) — the tab itself is the
+        // entire hit target.
+        //
+        // The pill itself is a custom widget (`signex_widgets::TabPill`)
+        // that paints its own bg + 3-sided border (top + L/R only) +
+        // 2 px accent strip below. Iced's stock Border can't do "top
+        // and sides only", and a stacked-bg fake leaked accent through
+        // the rounded corners (visible on dark themes).
+        let pill_style = TabPillStyle {
+            fill: pill_fill(tokens, is_active, is_dragging),
+            // Theme border colour — reads as a subtle divider on
+            // each theme's chrome surface. Tried pure black; it
+            // looked harsh on every theme.
+            border: styles::ti(tokens.border),
+            accent: styles::ti(tokens.accent),
+            is_active,
+            is_last,
+            // Document tabs hang from the top of the editing area:
+            // rounded top corners + accent stripe at the bottom.
+            accent_position: AccentPosition::Bottom,
         };
-        let border_w = if is_dragging { 2.0 } else { 1.0 };
-        let border_c = if is_dragging { accent } else { border };
-        let tab_body = container(
-            row![text(label).size(11).color(text_c), undock_btn, close_btn,]
+        let inner = container(
+            row![text(label).size(11).color(text_c)]
                 .spacing(6.0)
                 .align_y(iced::Alignment::Center),
         )
-        .padding([4, 10])
-        .style(move |_: &Theme| container::Style {
-            background: bg,
-            border: Border {
-                width: border_w,
-                radius: 0.0.into(),
-                color: border_c,
-            },
-            ..container::Style::default()
-        });
-
-        let tab_el: Element<'_, TabMessage> = mouse_area(tab_body)
+        .padding([4, 10]);
+        // Cursor: default Pointer on hover so the bar reads as
+        // "clickable tabs", switching to Grabbing only while a tab
+        // is in flight so the drag-to-reorder / drag-to-undock
+        // gesture stays advertised. Always-on Grab on hover read
+        // as the move cursor and felt heavy.
+        let cursor = if dragging.is_some() {
+            iced::mouse::Interaction::Grabbing
+        } else {
+            iced::mouse::Interaction::Pointer
+        };
+        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
             .on_press(TabMessage::StartDrag(i, 0.0, 0.0))
             .on_release(TabMessage::Select(i))
-            // Grab cursor advertises that the tab is draggable —
-            // discoverability for the Altium-style drag-to-undock
-            // behaviour.
-            .interaction(iced::mouse::Interaction::Grab)
+            .on_right_press(TabMessage::ContextMenu(i))
+            .interaction(cursor)
             .into();
         bar = bar.push(tab_el);
     }
 
-    container(bar)
+    // Strip baseline — 1 px theme-border line at the bottom of the
+    // tab bar. Inactive tabs sit "on" the line; the active tab's
+    // accent stripe overlays it at its x-range, visually punching
+    // through. Color follows the theme's border token so it reads
+    // as part of the chrome rather than a hard black edge.
+    let baseline_color = styles::ti(tokens.border);
+    let baseline = container(iced::widget::Space::new())
         .width(Length::Fill)
-        .padding([2, 6])
-        .style(styles::toolbar_strip(tokens))
-        .into()
+        .height(1)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(baseline_color)),
+            ..iced::widget::container::Style::default()
+        });
+    container(iced::widget::column![
+        container(bar)
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                top: 2.0,
+                right: 6.0,
+                bottom: 0.0,
+                left: 6.0,
+            }),
+        baseline,
+    ])
+    .width(Length::Fill)
+    .style(styles::toolbar_strip(tokens))
+    .into()
+}
+
+/// Resolve the pill bg fill for the current state. Altium parity:
+/// inactive tabs are dimmer than active so they read as "off" but
+/// still show their tab body (transparent inactive made them look
+/// like floating labels — the strip showed through). Active uses
+/// `tokens.hover` at full alpha; inactive 0.35× the same; drag
+/// tints with theme accent at 22 %.
+fn pill_fill(
+    tokens: &ThemeTokens,
+    is_active: bool,
+    is_dragging: bool,
+) -> iced::Color {
+    let tab_active = styles::ti(tokens.hover);
+    let accent = styles::ti(tokens.accent);
+    if is_dragging {
+        iced::Color { a: 0.22, ..accent }
+    } else if is_active {
+        tab_active
+    } else {
+        iced::Color {
+            a: tab_active.a * 0.35,
+            ..tab_active
+        }
+    }
 }

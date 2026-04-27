@@ -76,13 +76,23 @@ pub enum ExprAst {
     Not(Box<ExprAst>),
     /// `name(arg, …)` — built-in predicate helper.
     /// Examples: `has_driver()`, `has_pin_kind(OpenDrain)`.
-    HelperCall { name: String, args: Vec<LiteralAst> },
+    HelperCall {
+        name: String,
+        args: Vec<LiteralAst>,
+    },
     /// `object.field == value` or `object.field != value`.
     /// Examples: `pin.kind == Input`, `pin.connected == false`.
-    FieldCmp { field: FieldExprAst, op: CmpOp, value: LiteralAst },
+    FieldCmp {
+        field: FieldExprAst,
+        op: CmpOp,
+        value: LiteralAst,
+    },
     /// `object.field matches "pattern"`.
     /// Example: `net.name matches "^I2C_"`.
-    FieldMatches { field: FieldExprAst, pattern: String },
+    FieldMatches {
+        field: FieldExprAst,
+        pattern: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +104,11 @@ pub enum FieldExprAst {
     /// `pin.kind`, `net.name`, `net.class`.
     Access { object: String, field: String },
     /// `component.attr("class")`.
-    MethodCall { object: String, method: String, args: Vec<LiteralAst> },
+    MethodCall {
+        object: String,
+        method: String,
+        args: Vec<LiteralAst>,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +140,13 @@ impl LiteralAst {
     pub fn as_str_value(&self) -> &str {
         match self {
             LiteralAst::Str(s) | LiteralAst::Ident(s) => s.as_str(),
-            LiteralAst::Bool(b) => if *b { "true" } else { "false" },
+            LiteralAst::Bool(b) => {
+                if *b {
+                    "true"
+                } else {
+                    "false"
+                }
+            }
         }
     }
 }

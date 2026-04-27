@@ -23,8 +23,12 @@ impl Signex {
         // when no net-colour action is pending.
         if let Some(prev) = self.ui_state.net_color_undo.pop() {
             self.ui_state.wire_color_overrides = prev.clone();
-            self.interaction_state.active_canvas_mut().wire_color_overrides = prev;
-            self.interaction_state.active_canvas_mut().clear_content_cache();
+            self.interaction_state
+                .active_canvas_mut()
+                .wire_color_overrides = prev;
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_content_cache();
             return;
         }
         let undone = self.apply_engine_undo(true);

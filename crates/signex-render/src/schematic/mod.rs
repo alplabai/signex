@@ -54,6 +54,7 @@ pub struct ScreenTransform {
 #[derive(Debug, Clone)]
 pub struct SchematicRenderSnapshot {
     pub paper_size: String,
+    pub root_sheet_page: String,
     pub symbols: Vec<Symbol>,
     pub wires: Vec<Wire>,
     pub junctions: Vec<Junction>,
@@ -72,6 +73,7 @@ impl SchematicRenderSnapshot {
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self {
             paper_size: sheet.paper_size.clone(),
+            root_sheet_page: sheet.root_sheet_page.clone(),
             symbols: sheet.symbols.clone(),
             wires: sheet.wires.clone(),
             junctions: sheet.junctions.clone(),
@@ -425,17 +427,18 @@ pub(super) fn field_display_pos(
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// Standard stores `prop.rotation` in the symbol's lib frame. Compose with
-/// `sym.rotation` to get the on-screen angle, then fold so text is always
-/// drawn at 0° or 90° (readable — never upside-down or reversed):
-///
-/// * 180° → 0° with horizontal justify flipped
-/// * 270° → 90° with vertical justify flipped
-///
-/// Mirror state additionally flips the perpendicular axis:
-///
-/// * `mirror_y` flips the X axis → toggle horizontal justify
-/// * `mirror_x` flips the Y axis → toggle vertical justify
+/// Mirrors two pieces of Standard behaviour:
+/// 1. `SCH_FIELD::GetDrawRotation()` — for symbols at 0°/180° (`y1 == 0`)
+///    the stored field angle is used directly; for 90°/270° the angle is
+///    toggled between 0° and 90° so vertically-rotated symbols still
+///    render horizontal text when the field's stored angle is 90°.
+///    180°→0° and 270°→90° are folded for readability.
+/// 2. `SCH_FIELD::GetEffectiveJustify()` — Standard mirrors the field's
+///    justify whenever the symbol's transform flips an axis. Concretely,
+///    a 180°-rotated symbol turns left→right and top→bottom; the mirror
+///    flags add an extra flip on the corresponding axis. Without this,
+///    a `justify left` field stored to the *left* of a 180°-rotated body
+///    anchors on its left edge and visibly grows back through the body.
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,
@@ -446,36 +449,47 @@ pub(super) fn field_effective_style(
 ) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
-    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
-        0 => (0.0, false, false),
-        90 => (90.0, false, false),
-        180 => (0.0, true, false),
-        270 => (90.0, false, true),
-        _ => (total, false, false),
+    let sym_rot = sym.rotation.rem_euclid(360.0).round() as i32;
+    let y1_nonzero = matches!(sym_rot, 90 | 270);
+    let stored = prop.rotation.rem_euclid(360.0);
+    let draw = if y1_nonzero {
+        if stored.round() as i32 == 0 { 90.0 } else { 0.0 }
+    } else {
+        stored
+    };
+    let draw_rot = match draw.round() as i32 {
+        0 | 180 => 0.0,
+        90 | 270 => 90.0,
+        _ => draw,
     };
 
-    let flip_h = fold_h ^ sym.mirror_y;
-    let flip_v = fold_v ^ sym.mirror_x;
+    // Effective justify: count flips on each axis from the symbol's
+    // transform; an odd count flips the corresponding alignment.
+    // - rotation 180°: flips both H and V.
+    // - mirror_y (mirror about X-axis in Standard convention): flips H.
+    // - mirror_x (mirror about Y-axis): flips V.
+    let h_flips = (sym_rot == 180) as u8 + sym.mirror_y as u8;
+    let v_flips = (sym_rot == 180) as u8 + sym.mirror_x as u8;
 
-    let h = if flip_h {
-        match prop.justify_h {
-            HAlign::Left => HAlign::Right,
-            HAlign::Right => HAlign::Left,
-            HAlign::Center => HAlign::Center,
-        }
-    } else {
-        prop.justify_h
+    let flip_h = |h: HAlign| match h {
+        HAlign::Left => HAlign::Right,
+        HAlign::Right => HAlign::Left,
+        HAlign::Center => HAlign::Center,
     };
-    let v = if flip_v {
-        match prop.justify_v {
-            VAlign::Top => VAlign::Bottom,
-            VAlign::Bottom => VAlign::Top,
-            VAlign::Center => VAlign::Center,
-        }
-    } else {
-        prop.justify_v
+    let flip_v = |v: VAlign| match v {
+        VAlign::Top => VAlign::Bottom,
+        VAlign::Bottom => VAlign::Top,
+        VAlign::Center => VAlign::Center,
     };
+
+    let mut h = prop.justify_h;
+    if h_flips % 2 == 1 {
+        h = flip_h(h);
+    }
+    let mut v = prop.justify_v;
+    if v_flips % 2 == 1 {
+        v = flip_v(v);
+    }
 
     (draw_rot, h, v)
 }
@@ -673,6 +687,13 @@ pub fn render_schematic(
     }
 
     // Z=10-11: Symbol bodies + pins
+    let global_refdes = text::build_global_refdes_lookup(sheet);
+    let pin_net_lookup = text::build_symbol_pin_net_lookup(sheet);
+    let cell = {
+        let page = sheet.root_sheet_page.trim();
+        if page.is_empty() { None } else { Some(page) }
+    };
+
     for sym in &sheet.symbols {
         let a = alpha_for(&sym.uuid);
         let body_c = dim(body_color, a);
@@ -690,7 +711,16 @@ pub fn render_schematic(
             symbol::draw_symbol(frame, sym, lib_sym, transform, body_c, body_fill_c, pin_c);
 
             // Pins
-            pin::draw_symbol_pins(frame, sym, lib_sym, transform, pin_c);
+            pin::draw_symbol_pins(
+                frame,
+                sym,
+                lib_sym,
+                transform,
+                pin_c,
+                cell,
+                Some(&global_refdes),
+                Some(&pin_net_lookup),
+            );
 
             // Reference text — power symbols (#PWR refs) are always hidden
             if let Some(ref ref_text) = sym.ref_text
@@ -706,6 +736,9 @@ pub fn render_schematic(
                     dpos,
                     transform,
                     reference_c,
+                    cell,
+                    Some(&global_refdes),
+                    pin_net_lookup.get(&sym.uuid),
                 );
             }
 
@@ -714,23 +747,55 @@ pub fn render_schematic(
                 && !val_text.hidden
             {
                 let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(frame, &sym.value, val_text, sym, dpos, transform, value_c);
+                text::draw_text_prop(
+                    frame,
+                    &sym.value,
+                    val_text,
+                    sym,
+                    dpos,
+                    transform,
+                    value_c,
+                    cell,
+                    Some(&global_refdes),
+                    pin_net_lookup.get(&sym.uuid),
+                );
             }
         } else if sym.is_power {
             draw_builtin_power(frame, sym, transform, power_c, power_c);
         }
     }
 
-    // Z=11b: Child sheets (hierarchical sheets)
+    // Z=11b: Child sheets (hierarchical sheets). Each sheet's outline and
+    // body fill are read from the .standard_sch file when the source provides
+    // `(stroke (color ...))` / `(fill (color ...))`. When no override is
+    // present we fall back to a sensible default that depends on the active
+    // label style: Standard mode keeps the theme's component body palette so
+    // sheets blend with the rest of the schematic; Altium mode uses the
+    // signature green sheet-symbol palette from Altium Designer.
+    let altium_mode = matches!(crate::multisheet_style(), crate::MultisheetStyle::Altium);
+    let altium_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
+    let altium_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
+    let stroke_color_to_iced = |c: signex_types::schematic::StrokeColor| {
+        iced::Color::from_rgba(
+            c.r as f32 / 255.0,
+            c.g as f32 / 255.0,
+            c.b as f32 / 255.0,
+            c.a as f32 / 255.0,
+        )
+    };
     for child in &sheet.child_sheets {
         let a = alpha_for(&child.uuid);
-        drawing::draw_child_sheet(
-            frame,
-            child,
-            transform,
-            dim(body_color, a),
-            dim(body_fill_color, a),
-        );
+        let outline = match child.stroke_color {
+            Some(c) => stroke_color_to_iced(c),
+            None if altium_mode => altium_outline,
+            None => body_color,
+        };
+        let fill = match child.fill_color {
+            Some(c) => stroke_color_to_iced(c),
+            None if altium_mode => altium_fill,
+            None => body_fill_color,
+        };
+        drawing::draw_child_sheet(frame, child, transform, dim(outline, a), dim(fill, a));
     }
 
     // Z=12: Text notes

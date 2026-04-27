@@ -43,16 +43,18 @@ impl Signex {
                     signex_types::schematic::LabelType::Global,
                     "bidirectional".to_string(),
                 ));
-                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
-                    uuid: uuid::Uuid::new_v4(),
-                    text: "PORT".to_string(),
-                    position: signex_types::schematic::Point::new(0.0, 0.0),
-                    rotation: 0.0,
-                    label_type: signex_types::schematic::LabelType::Global,
-                    shape: "bidirectional".to_string(),
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify: signex_types::schematic::HAlign::Left,
-                });
+                self.interaction_state.active_canvas_mut().ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "PORT".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Global,
+                        shape: "bidirectional".to_string(),
+                        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        justify: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::Bottom,
+                    });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
@@ -60,16 +62,18 @@ impl Signex {
                     signex_types::schematic::LabelType::Hierarchical,
                     String::new(),
                 ));
-                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
-                    uuid: uuid::Uuid::new_v4(),
-                    text: "SHEET".to_string(),
-                    position: signex_types::schematic::Point::new(0.0, 0.0),
-                    rotation: 0.0,
-                    label_type: signex_types::schematic::LabelType::Hierarchical,
-                    shape: String::new(),
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify: signex_types::schematic::HAlign::Left,
-                });
+                self.interaction_state.active_canvas_mut().ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "SHEET".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Hierarchical,
+                        shape: String::new(),
+                        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        justify: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::Bottom,
+                    });
             }
             ActiveBarAction::PlaceBusEntry => {
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
@@ -125,16 +129,18 @@ impl Signex {
                 // Parameter Manager (Design menu).
                 let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
-                self.interaction_state.active_canvas_mut().ghost_label = Some(signex_types::schematic::Label {
-                    uuid: uuid::Uuid::new_v4(),
-                    text: "PARAM=VALUE".to_string(),
-                    position: signex_types::schematic::Point::new(0.0, 0.0),
-                    rotation: 0.0,
-                    label_type: signex_types::schematic::LabelType::Net,
-                    shape: String::new(),
-                    font_size: 1.8,
-                    justify: signex_types::schematic::HAlign::Left,
-                });
+                self.interaction_state.active_canvas_mut().ghost_label =
+                    Some(signex_types::schematic::Label {
+                        uuid: uuid::Uuid::new_v4(),
+                        text: "PARAM=VALUE".to_string(),
+                        position: signex_types::schematic::Point::new(0.0, 0.0),
+                        rotation: 0.0,
+                        label_type: signex_types::schematic::LabelType::Net,
+                        shape: String::new(),
+                        font_size: 1.8,
+                        justify: signex_types::schematic::HAlign::Left,
+                        justify_v: signex_types::schematic::VAlign::Bottom,
+                    });
             }
             ActiveBarAction::PlaceDiffPair => {
                 // DiffPair directive — attaches a differential-pair rule.
@@ -188,7 +194,8 @@ impl Signex {
                 });
                 // Sync to canvas so mouse_interaction can show a pen
                 // cursor while armed.
-                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
+                self.interaction_state.active_canvas_mut().pending_net_color =
+                    self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Net-color armed — click a wire to flood its net");
             }
             ActiveBarAction::NetColorCustom => {
@@ -218,7 +225,8 @@ impl Signex {
                     b: 0,
                     a: 0,
                 });
-                self.interaction_state.active_canvas_mut().pending_net_color = self.ui_state.pending_net_color;
+                self.interaction_state.active_canvas_mut().pending_net_color =
+                    self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
@@ -228,10 +236,15 @@ impl Signex {
                         .push(self.ui_state.wire_color_overrides.clone());
                 }
                 self.ui_state.wire_color_overrides.clear();
-                self.interaction_state.active_canvas_mut().wire_color_overrides.clear();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .wire_color_overrides
+                    .clear();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
-                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
                 crate::diagnostics::log_info("Cleared all net-color overrides");
             }
             _ => {}
@@ -250,31 +263,32 @@ impl Signex {
         // Live preview: build a ghost power-port symbol that follows the
         // cursor so the user sees the actual shape (bars / bar / triangle)
         // before committing to a click.
-        self.interaction_state.active_canvas_mut().ghost_symbol = Some(signex_types::schematic::Symbol {
-            uuid: uuid::Uuid::new_v4(),
-            lib_id: lib_id.to_string(),
-            reference: String::new(),
-            value: net_name.to_string(),
-            footprint: String::new(),
-            datasheet: String::new(),
-            position: signex_types::schematic::Point::new(0.0, 0.0),
-            rotation: 0.0,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: true,
-            ref_text: None,
-            val_text: None,
-            fields_autoplaced: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: std::collections::HashMap::new(),
-            custom_properties: Vec::new(),
-            pin_uuids: std::collections::HashMap::new(),
-            instances: Vec::new(),
-        });
+        self.interaction_state.active_canvas_mut().ghost_symbol =
+            Some(signex_types::schematic::Symbol {
+                uuid: uuid::Uuid::new_v4(),
+                lib_id: lib_id.to_string(),
+                reference: String::new(),
+                value: net_name.to_string(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                position: signex_types::schematic::Point::new(0.0, 0.0),
+                rotation: 0.0,
+                mirror_x: false,
+                mirror_y: false,
+                unit: 1,
+                is_power: true,
+                ref_text: None,
+                val_text: None,
+                fields_autoplaced: false,
+                dnp: false,
+                in_bom: true,
+                on_board: true,
+                exclude_from_sim: false,
+                locked: false,
+                fields: std::collections::HashMap::new(),
+                custom_properties: Vec::new(),
+                pin_uuids: std::collections::HashMap::new(),
+                instances: Vec::new(),
+            });
     }
 }

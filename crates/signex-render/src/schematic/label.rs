@@ -97,7 +97,11 @@ fn draw_port_label_altium(
     let arrow_w = h * 0.5;
     let base_pad = fs * 0.3;
     let text_w = super::text::visible_char_count(&label.text) as f64 * fs * 0.6;
-    let extra_body = if text_w > fs * 4.0 { fs * 0.8 } else { fs * 0.0 };
+    let extra_body = if text_w > fs * 4.0 {
+        fs * 0.8
+    } else {
+        fs * 0.0
+    };
     let right_breathing = fs * 0.45;
     let lx = label.position.x;
     let ly = label.position.y;

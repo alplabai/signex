@@ -3,35 +3,19 @@
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
 //! Each region can hold multiple panels as tabs.
 
-use std::sync::LazyLock;
-
 use iced::widget::{Column, Space, button, canvas, column, container, mouse_area, row, svg, text};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
+use crate::icons;
 use crate::panels::{self, PanelKind, PanelMsg};
 use crate::styles;
 
-// ─── SVG handles (created once via LazyLock, cloned cheaply) ──
-
-static H_CLOSE: LazyLock<svg::Handle> =
-    LazyLock::new(|| svg::Handle::from_memory(include_bytes!("../../assets/icons/close.svg")));
-static H_COLLAPSE_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_left.svg"))
-});
-static H_COLLAPSE_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_right.svg"))
-});
-static H_COLLAPSE_DOWN: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/collapse_down.svg"))
-});
-static H_EXPAND_LEFT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_left.svg"))
-});
-static H_EXPAND_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../assets/icons/expand_right.svg"))
-});
-fn svg_icon(handle: &LazyLock<svg::Handle>) -> iced::widget::Svg<'static> {
-    svg((*handle).clone()).width(10).height(10)
+/// Wrap a themed SVG handle into a 10×10 `Svg` widget — matches the
+/// dimensions of the old LazyLock-based helper. Kept as a free
+/// function so every call site reads `svg_icon(icons::icon_close(tid))`
+/// without extra boilerplate.
+fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {
+    svg(handle).width(14).height(14)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +49,17 @@ pub enum DockMessage {
     },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
+    /// Pointer entered a dock tab — feeds the hover highlight on
+    /// inactive tabs. Container-style tabs can't read `button::Status`,
+    /// so we track the hovered tab in `DockArea::hovered_tab` via
+    /// `mouse_area::on_enter` / `on_exit`.
+    TabHoverEnter(PanelPosition, usize),
+    /// Pointer left the named dock tab. Carries the tab's coords so we
+    /// only clear `hovered_tab` when the exit matches the currently
+    /// hovered tab — otherwise a fast move from A to B where iced
+    /// fires `on_enter(B)` before `on_exit(A)` would blow the new
+    /// hover away and leave the highlight stuck off.
+    TabHoverExit(PanelPosition, usize),
     /// Move a floating panel by delta.
     #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
@@ -105,6 +100,9 @@ pub struct DockArea {
     pub floating: Vec<FloatingPanel>,
     /// Active tab drag: (region, tab index). Set on mouse-down, cleared on release or undock.
     pub tab_drag: Option<(PanelPosition, usize)>,
+    /// Dock tab currently under the pointer, for Altium-style hover
+    /// highlight on inactive tabs. `None` when no tab is hovered.
+    pub hovered_tab: Option<(PanelPosition, usize)>,
 }
 
 impl DockArea {
@@ -130,6 +128,7 @@ impl DockArea {
             },
             floating: Vec::new(),
             tab_drag: None,
+            hovered_tab: None,
         }
     }
 
@@ -191,6 +190,14 @@ impl DockArea {
             }
             DockMessage::TabDragStart(pos, idx) => {
                 self.tab_drag = Some((pos, idx));
+            }
+            DockMessage::TabHoverEnter(pos, idx) => {
+                self.hovered_tab = Some((pos, idx));
+            }
+            DockMessage::TabHoverExit(pos, idx) => {
+                if self.hovered_tab == Some((pos, idx)) {
+                    self.hovered_tab = None;
+                }
             }
             DockMessage::ReorderTab { pos, from, to } => {
                 let region = match pos {
@@ -378,9 +385,14 @@ impl DockArea {
             });
         }
 
+        // Last visible panel index drives the `is_last` flag so
+        // adjacent tabs share their L/R borders and the rightmost
+        // tab actually closes off with a right edge.
+        let last_panel_idx = region.panels.len().saturating_sub(1);
         for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
             let is_active = i == region.active;
+            let is_last = i == last_panel_idx;
 
             let text_c = if is_active {
                 styles::ti(ctx.tokens.text)
@@ -398,27 +410,54 @@ impl DockArea {
             // which tab they grabbed.
             let is_dragging_this =
                 matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
+            let is_hovered =
+                matches!(self.hovered_tab, Some((p, idx)) if p == position && idx == i);
             // No manual width — Iced's layout engine measures the text.
             // The accent underline is done via bottom-padding on an outer
             // container whose background is the accent color, avoiding
             // Length::Fill which would expand the tab to the panel width.
-            let label_el = container(text(label).size(11).color(text_c))
-                .padding([5, 10])
-                .style(styles::dock_tab_container_dragging(
-                    &ctx.tokens,
-                    is_active,
-                    is_dragging_this,
-                ));
-            let tab = mouse_area(
-                container(label_el)
-                    .padding(iced::Padding {
-                        top: 0.0,
-                        right: 0.0,
-                        bottom: 2.0,
-                        left: 0.0,
-                    })
-                    .style(styles::tab_underline(line_c)),
-            )
+            // Shared `signex_widgets::TabPill` custom widget — same
+            // rounded-top + 3-sided border + accent underline that the
+            // document tab bar uses. Panel tabs and document tabs stay
+            // visually in lockstep.
+            let _ = line_c; // accent line lives inside TabPill now
+            let tab_active = styles::ti(ctx.tokens.hover);
+            let accent = styles::ti(ctx.tokens.accent);
+            let fill = if is_dragging_this {
+                iced::Color { a: 0.22, ..accent }
+            } else if is_active {
+                tab_active
+            } else if is_hovered {
+                iced::Color {
+                    a: tab_active.a * 0.70,
+                    ..tab_active
+                }
+            } else {
+                iced::Color {
+                    a: tab_active.a * 0.35,
+                    ..tab_active
+                }
+            };
+            let pill_style = signex_widgets::tab_pill::TabPillStyle {
+                fill,
+                border: styles::ti(ctx.tokens.border),
+                accent,
+                is_active,
+                is_last,
+                // Panel tabs sit at the top of each dock region but
+                // visually hang from the strip baseline that runs
+                // ABOVE the panel content — so the accent stripe
+                // belongs at the top of the pill and the rounded
+                // corners flip to the bottom. Inverse of doc tabs.
+                accent_position: signex_widgets::tab_pill::AccentPosition::Top,
+            };
+            let inner = container(text(label).size(11).color(text_c))
+                .padding([4, 10]);
+            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
+                inner, pill_style,
+            ))
+            .on_enter(DockMessage::TabHoverEnter(position, i))
+            .on_exit(DockMessage::TabHoverExit(position, i))
             .on_press(DockMessage::TabDragStart(position, i))
             .on_release(DockMessage::TabClick(position, i));
 
@@ -438,12 +477,13 @@ impl DockArea {
         }
 
         // Collapse button (SVG icon)
+        let tid = ctx.theme_id;
         let collapse_icon = match position {
-            PanelPosition::Left => svg_icon(&H_COLLAPSE_LEFT),
-            PanelPosition::Right => svg_icon(&H_COLLAPSE_RIGHT),
-            PanelPosition::Bottom => svg_icon(&H_COLLAPSE_DOWN),
+            PanelPosition::Left => svg_icon(icons::icon_collapse_left(tid)),
+            PanelPosition::Right => svg_icon(icons::icon_collapse_right(tid)),
+            PanelPosition::Bottom => svg_icon(icons::icon_collapse_down(tid)),
         };
-        let close_btn = button(svg_icon(&H_CLOSE))
+        let close_btn = button(svg_icon(icons::icon_close(tid)))
             .padding([5, 4])
             .style(button::text)
             .on_press(DockMessage::ClosePanel(position, region.active));
@@ -524,10 +564,11 @@ impl DockArea {
             let mut rail: Column<DockMessage> = Column::new().spacing(2.0);
 
             // Expand button with SVG arrow
+            let tid = ctx.theme_id;
             let expand_icon = match position {
-                PanelPosition::Left => svg_icon(&H_EXPAND_LEFT),
-                PanelPosition::Right => svg_icon(&H_EXPAND_RIGHT),
-                _ => svg_icon(&H_EXPAND_LEFT),
+                PanelPosition::Left => svg_icon(icons::icon_expand_left(tid)),
+                PanelPosition::Right => svg_icon(icons::icon_expand_right(tid)),
+                _ => svg_icon(icons::icon_expand_left(tid)),
             };
             rail = rail.push(
                 button(expand_icon)
@@ -615,7 +656,7 @@ impl DockArea {
                 container(text(label).size(11).color(styles::ti(ctx.tokens.text)))
                     .padding([4, 8])
                     .width(Length::Fill),
-                button(svg_icon(&H_CLOSE))
+                button(svg_icon(icons::icon_close(ctx.theme_id)))
                     .padding([4, 4])
                     .style(button::text)
                     .on_press(DockMessage::DockFloating(idx)),

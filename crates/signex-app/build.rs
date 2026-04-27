@@ -40,6 +40,21 @@ fn main() {
         println!("cargo:rerun-if-changed={svg}");
     }
 
+    // Wordmark PNGs (1×/2×/3×) are rasterised from the logo SVGs by
+    // `installer/build-wordmark.py` and `include_bytes!`-embedded. Cargo
+    // doesn't trace include_bytes! through transitively, so regenerating
+    // the PNGs has to trigger a rebuild explicitly.
+    for png in [
+        "assets/brand/generated/wordmark-white-1x.png",
+        "assets/brand/generated/wordmark-white-2x.png",
+        "assets/brand/generated/wordmark-white-3x.png",
+        "assets/brand/generated/wordmark-black-1x.png",
+        "assets/brand/generated/wordmark-black-2x.png",
+        "assets/brand/generated/wordmark-black-3x.png",
+    ] {
+        println!("cargo:rerun-if-changed={png}");
+    }
+
     embed_windows_exe_icon();
 }
 

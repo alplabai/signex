@@ -104,7 +104,8 @@ mod tests {
 
     #[test]
     fn pretty_prints_nested_macro_output() {
-        let expr = sexpr!((footprint "R_0603" (property "Reference" "R1") (property "Value" "10k")));
+        let expr =
+            sexpr!((footprint "R_0603" (property "Reference" "R1") (property "Value" "10k")));
         let pretty = expr.pretty(0);
 
         assert!(pretty.contains("(property \"Reference\" \"R1\")"));

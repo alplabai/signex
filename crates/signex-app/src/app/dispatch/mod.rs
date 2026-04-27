@@ -48,7 +48,69 @@ impl Signex {
             | Message::Duplicate
             | Message::SaveFile
             | Message::SaveFileAs(_)
-            | Message::SchematicLoaded(_) => self.dispatch_document_message(message),
+            | Message::SchematicLoaded(_)
+            | Message::ExportPdfOpenDialog
+            | Message::ExportPdfFinished(_)
+            | Message::ExportNetlistFinished(_)
+            | Message::ExportBomRequested
+            | Message::ExportBomFinished(_)
+            | Message::BomPreviewSetGrouping(_)
+            | Message::BomPreviewSetFormat(_)
+            | Message::BomPreviewSetIncludeDnp(_)
+            | Message::BomPreviewSetIncludeNotFitted(_)
+            | Message::BomPreviewToggleColumn(_)
+            | Message::BomPreviewSetVariant(_)
+            | Message::BomPreviewSortColumn(_)
+            | Message::BomPreviewColumnDragStart(_)
+            | Message::BomPreviewColumnDragDrop(_)
+            | Message::BomPreviewColumnHoverEnter(_)
+            | Message::BomPreviewColumnHoverExit(_)
+            | Message::BomPreviewColumnResizeStart(_)
+            | Message::BomPreviewColumnResizeEnd
+            | Message::BomPreviewSetSidebarTab(_)
+            | Message::BomPreviewExport
+            | Message::BomPreviewClose
+            | Message::PrintPreviewRequested
+            | Message::PrintPreviewSelectPage(_)
+            | Message::PrintPreviewSetColourMode(_)
+            | Message::PrintPreviewSetPageRangeAll
+            | Message::PrintPreviewSetPageRangeCurrent
+            | Message::PrintPreviewSetPageRangeSpecific
+            | Message::PrintPreviewSetSpecificPageInput(_)
+            | Message::PrintPreviewSetFitToPage(_)
+            | Message::PrintPreviewSetIncludeTitleBlock(_)
+            | Message::PrintPreviewZoom(_)
+            | Message::PrintPreviewExport
+            | Message::PrintPreviewClose
+            | Message::PrintPreviewSetTab(_)
+            | Message::PrintPreviewPanStart
+            | Message::PrintPreviewPanFinished
+            | Message::PrintPreviewToggleFile(_)
+            | Message::PrintPreviewSelectAllFiles
+            | Message::PrintPreviewClearAllFiles
+            | Message::PrintPreviewSetVariant(_)
+            | Message::PrintPreviewSetUsePhysicalStructure(_)
+            | Message::PrintPreviewSetPhysicalDesignators(_)
+            | Message::PrintPreviewSetPhysicalNetLabels(_)
+            | Message::PrintPreviewSetPhysicalPorts(_)
+            | Message::PrintPreviewSetPhysicalSheetNumber(_)
+            | Message::PrintPreviewSetPhysicalDocumentNumber(_)
+            | Message::PrintPreviewSetIncludeNoErcMarkers(_)
+            | Message::PrintPreviewSetIncludeParameterSets(_)
+            | Message::PrintPreviewSetIncludeProbes(_)
+            | Message::PrintPreviewSetIncludeBlankets(_)
+            | Message::PrintPreviewSetIncludeNotes(_)
+            | Message::PrintPreviewSetIncludeCollapsedNotes(_)
+            | Message::PrintPreviewSetQuality(_)
+            | Message::PrintPreviewSetBookmarkZoom(_)
+            | Message::PrintPreviewSetGenerateNetsInfo(_)
+            | Message::PrintPreviewSetBookmarkPins(_)
+            | Message::PrintPreviewSetBookmarkNetLabels(_)
+            | Message::PrintPreviewSetBookmarkPorts(_)
+            | Message::PrintPreviewSetIncludeComponentParameters(_)
+            | Message::PrintPreviewSetGlobalBookmarks(_)
+            | Message::PrintPreviewSetPcbColourMode(_)
+            | Message::DismissExportError => self.dispatch_document_message(message),
             Message::TogglePanelList
             | Message::OpenPanel(_)
             | Message::OpenFind
@@ -61,8 +123,25 @@ impl Signex {
             | Message::ActiveBar(_)
             | Message::ShowContextMenu(_, _)
             | Message::CloseContextMenu
+            | Message::ShowProjectTreeContextMenu(_)
+            | Message::CloseProjectTreeContextMenu
+            | Message::ProjectTreeAction(_)
+            | Message::ShowTabContextMenu(_)
+            | Message::CloseTabContextMenu
+            | Message::TabContextAction(_)
+            | Message::ProjectCloseConfirm(_)
+            | Message::RenameBufferChanged(_)
+            | Message::RenameSubmit
+            | Message::CloseRenameDialog
+            | Message::RemoveConfirm(_)
+            | Message::CloseRemoveDialog
+            | Message::OpenContextSubmenu(_)
+            | Message::HoverContextSubmenu(_)
+            | Message::LeaveContextSubmenu
+            | Message::EnterContextSubmenuPanel
+            | Message::LeaveContextSubmenuPanel
+            | Message::TickContextSubmenuHover
             | Message::ContextAction(_)
-            | Message::CloseTabConfirm(_)
             | Message::RunErc
             | Message::Annotate(_)
             | Message::OpenAnnotateDialog
@@ -83,7 +162,17 @@ impl Signex {
                 // that would otherwise clobber the main-window state.
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
+                    // Windows fires a resize event whenever DWM moves
+                    // the window to a monitor with a different DPI, so
+                    // re-querying the scale factor here keeps the
+                    // wordmark-PNG tier picker in sync after a
+                    // cross-monitor drag.
+                    return iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
                 }
+                Task::none()
+            }
+            Message::MainWindowScaleChanged(scale) => {
+                self.ui_state.main_window_scale = scale;
                 Task::none()
             }
             Message::MainWindowOpened(id) => {
@@ -95,12 +184,17 @@ impl Signex {
                 // until the user physically resizes the window.
                 let size_task = iced::window::size(id)
                     .map(move |size| Message::WindowResizedFor(id, size.width, size.height));
+                // Stash the scale factor so the wordmark PNG picker
+                // can render at native device-pixel count. Re-queried
+                // on every resize to track monitor moves.
+                let scale_task =
+                    iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
                 // Re-add Windows 11 DWM rounded corners + drop shadow
                 // (silently no-ops on Windows 10 and non-Windows). Has
                 // to run after the HWND is alive, hence here rather than
                 // in bootstrap.
                 let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
-                iced::Task::batch([size_task, corners_task])
+                iced::Task::batch([size_task, scale_task, corners_task])
             }
             Message::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
@@ -123,7 +217,6 @@ impl Signex {
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => self.ui_state.preferences_open = false,
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
-                            ModalId::CloseTabConfirm => self.ui_state.close_tab_confirm = None,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
                                 self.ui_state.net_color_palette_open = false
@@ -131,6 +224,10 @@ impl Signex {
                             ModalId::ParameterManager => {
                                 self.ui_state.parameter_manager_open = false
                             }
+                            ModalId::RenameDialog => self.ui_state.rename_dialog = None,
+                            ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
+                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::BomPreview => self.document_state.bom_preview = None,
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
@@ -161,7 +258,13 @@ impl Signex {
                 // once the modal is popped out, the OS handles window
                 // drags directly.
                 self.ui_state.modal_dragging = None;
-                Task::none()
+                // Win11 DWM rounded corners on the detached window so
+                // its edges visually match the modal_card's 8 px
+                // radius. Silent no-op on Win10 / non-Windows.
+                // Without this the OS paints the window with hard
+                // corners and the modal_card's rounded border is
+                // hidden inside a square OS frame.
+                crate::chrome::apply_rounded_corners::<Message>(id)
             }
             Message::UndockTab(idx) => self.handle_undock_tab(idx),
             Message::UndockedTabOpened { path, id } => {
@@ -238,6 +341,26 @@ impl Signex {
                 Some(id) => iced::window::drag_resize(id, direction),
                 None => Task::none(),
             },
+            Message::StartDetachedModalResize { modal, direction } => {
+                // Find the OS window id hosting this modal, then ask
+                // iced/winit to start a resize drag in the requested
+                // direction. Same pattern as the main window —
+                // detached modals have `decorations: false`, so
+                // there's no OS frame to grab; the 6 px overlay
+                // strips are how we expose resize.
+                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
+                    if let super::state::WindowKind::DetachedModal(m) = kind {
+                        if *m == modal {
+                            return Some(*id);
+                        }
+                    }
+                    None
+                });
+                match id {
+                    Some(id) => iced::window::drag_resize(id, direction),
+                    None => Task::none(),
+                }
+            }
             Message::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),
@@ -278,7 +401,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state.active_canvas_mut().clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
                 Task::none()
             }
             Message::OpenParameterManager => {
@@ -373,8 +498,13 @@ impl Signex {
                         false,
                         false,
                     );
-                    self.interaction_state.active_canvas_mut().polyline_points.clear();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .polyline_points
+                        .clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
                 if let Some(pts) = self.ui_state.lasso_polygon.take()

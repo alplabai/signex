@@ -40,11 +40,7 @@ fn uf_find(parent: &mut HashMap<(i64, i64), (i64, i64)>, x: (i64, i64)) -> (i64,
     }
 }
 
-fn uf_union(
-    parent: &mut HashMap<(i64, i64), (i64, i64)>,
-    a: (i64, i64),
-    b: (i64, i64),
-) {
+fn uf_union(parent: &mut HashMap<(i64, i64), (i64, i64)>, a: (i64, i64), b: (i64, i64)) {
     let ra = uf_find(parent, a);
     let rb = uf_find(parent, b);
     if ra != rb {
@@ -63,8 +59,14 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
         for pin in &symbol.pins {
             let pos = &pin.world_pos;
-            let connected = ctx.wires.iter().any(|w| same(&w.start, pos) || same(&w.end, pos))
-                || ctx.buses.iter().any(|b| same(&b.start, pos) || same(&b.end, pos))
+            let connected = ctx
+                .wires
+                .iter()
+                .any(|w| same(&w.start, pos) || same(&w.end, pos))
+                || ctx
+                    .buses
+                    .iter()
+                    .any(|b| same(&b.start, pos) || same(&b.end, pos))
                 || ctx.no_connects.iter().any(|nc| same(&nc.position, pos))
                 || ctx.labels.iter().any(|l| same(&l.position, pos));
             if connected {
@@ -126,7 +128,10 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
 
 pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for label in &ctx.labels {
-        if !matches!(label.label_type, LabelType::Hierarchical | LabelType::Global) {
+        if !matches!(
+            label.label_type,
+            LabelType::Hierarchical | LabelType::Global
+        ) {
             continue;
         }
         let touched = ctx
@@ -143,7 +148,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
         out.push(
             Diagnostic::new(
                 RuleKind::HierPortDisconnected,
-                format!("{:?} port '{}' is not on a wire", label.label_type, label.text),
+                format!(
+                    "{:?} port '{}' is not on a wire",
+                    label.label_type, label.text
+                ),
                 label.position,
             )
             .with_primary(sel(label.uuid, SelectedKind::Label)),
@@ -243,7 +251,10 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
 pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for label in &ctx.labels {
-        if matches!(label.label_type, LabelType::Hierarchical | LabelType::Global) {
+        if matches!(
+            label.label_type,
+            LabelType::Hierarchical | LabelType::Global
+        ) {
             continue;
         }
         let on_wire = ctx
@@ -319,8 +330,7 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
             .max_by_key(|&(_, c)| *c)
             .map(|(r, c)| (*r, *c))
             .expect("group len >= 2");
-        let Some((ref_lbl, ref_range)) =
-            group.iter().find(|(_, r)| *r == majority_range).copied()
+        let Some((ref_lbl, ref_range)) = group.iter().find(|(_, r)| *r == majority_range).copied()
         else {
             continue;
         };
@@ -401,9 +411,7 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         let hier_text: HashSet<&str> = child_ctx
             .labels
             .iter()
-            .filter(|l| {
-                matches!(l.label_type, LabelType::Hierarchical | LabelType::Global)
-            })
+            .filter(|l| matches!(l.label_type, LabelType::Hierarchical | LabelType::Global))
             .map(|l| l.text.as_str())
             .collect();
 
@@ -481,8 +489,11 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<&crate::context::ErcSymbol> =
-        ctx.symbols.iter().filter(|s| s.is_power && !s.value.is_empty()).collect();
+    let power: Vec<&crate::context::ErcSymbol> = ctx
+        .symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty())
+        .collect();
 
     for (i, a) in power.iter().enumerate() {
         for b in &power[i + 1..] {
@@ -527,10 +538,7 @@ pub(crate) fn symbol_outside_sheet(ctx: &ErcContext, out: &mut Vec<Diagnostic>) 
             out.push(
                 Diagnostic::new(
                     RuleKind::SymbolOutsideSheet,
-                    format!(
-                        "Symbol '{reference}' sits outside the {}×{} mm sheet",
-                        w, h,
-                    ),
+                    format!("Symbol '{reference}' sits outside the {}×{} mm sheet", w, h,),
                     symbol.position,
                 )
                 .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),

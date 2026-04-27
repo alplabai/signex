@@ -10,6 +10,7 @@ mod diagnostics;
 mod dock;
 mod find_replace;
 mod fonts;
+mod icons;
 mod menu_bar;
 mod panels;
 mod pcb_canvas;
@@ -46,6 +47,10 @@ fn main() -> iced::Result {
         // Roboto — UI chrome (panels, toolbars, menus, dialogs).
         .font(ROBOTO_REGULAR)
         .font(ROBOTO_BOLD)
+        // iced_aw bundled icon font — used by ColorPicker (Cancel / OK
+        // glyphs) and other iced_aw widgets. Without this their action
+        // buttons render as empty rectangles.
+        .font(iced_aw::ICED_AW_FONT_BYTES)
         // Default UI font resolves through the Preferences-panel pick. When
         // it matches a bundled family ("Roboto" / "Iosevka") iced uses the
         // embedded TTF directly; otherwise it falls back to a system font.

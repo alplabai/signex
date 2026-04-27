@@ -51,6 +51,24 @@ impl Signex {
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
+        // BOM column-resize drag: while a header's resize handle is
+        // pressed, every mouse-move tick recomputes the column's
+        // width as `start_width + (current_x - start_x)`. Min width
+        // floors at 40 px so the column doesn't disappear.
+        if let Some(preview) = self.document_state.bom_preview.as_mut()
+            && let Some(resize) = preview.column_resize
+        {
+            let new_width = (resize.start_width + (x - resize.start_x)).max(40.0);
+            preview.column_widths.insert(resize.idx, new_width);
+        }
+        // PDF preview pan-drag: while panning, every move tick adds
+        // (cursor - press_origin) to the original pan offset so the
+        // page slides under the cursor 1:1.
+        if let Some(preview) = self.document_state.preview.as_mut()
+            && let Some((origin, ox, oy)) = preview.panning
+        {
+            preview.pan = (origin.0 + (x - ox), origin.1 + (y - oy));
+        }
         // Modal drag — accumulate delta into the per-modal offset so the
         // dialog slides under the cursor.
         if let Some((modal, last_x, last_y)) = self.ui_state.modal_dragging {
@@ -216,6 +234,19 @@ impl Signex {
     }
 
     pub(crate) fn handle_layout_drag_finished(&mut self) {
+        // Always release any in-flight BOM column resize on a
+        // global mouse-up — the resize handle's `on_release`
+        // doesn't fire reliably when the cursor leaves the handle's
+        // 4 px hit zone during the drag.
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.column_resize = None;
+        }
+        // Same belt-and-braces release for the PDF preview pan
+        // drag — the on_release on the viewport mouse_area can miss
+        // when the cursor leaves the modal during a fast drag.
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.panning = None;
+        }
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;
@@ -549,9 +580,12 @@ impl Signex {
                                     self.ui_state.wire_color_overrides.insert(uuid, pending);
                                 }
                             }
-                            self.interaction_state.active_canvas_mut().wire_color_overrides =
-                                self.ui_state.wire_color_overrides.clone();
-                            self.interaction_state.active_canvas_mut().clear_content_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_content_cache();
                         }
                     }
                     // Altium-style continuous placement: stay armed
@@ -590,8 +624,12 @@ impl Signex {
                         }
                     }
                     self.ui_state.reorder_picker = None;
-                    self.interaction_state.active_canvas_mut().reorder_picker_armed = false;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .reorder_picker_armed = false;
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
 
@@ -788,7 +826,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Line {
@@ -809,7 +849,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Line));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -824,7 +866,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Rect));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(start) => {
                                 let drawing = signex_types::schematic::SchDrawing::Rect {
@@ -842,7 +886,9 @@ impl Signex {
                                 );
                                 self.interaction_state.shape_anchor = None;
                                 self.interaction_state.active_canvas_mut().shape_anchor = None;
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -856,7 +902,9 @@ impl Signex {
                                 self.interaction_state.shape_anchor = Some(p);
                                 self.interaction_state.active_canvas_mut().shape_anchor =
                                     Some((p, crate::canvas::ShapePreviewKind::Circle));
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                             Some(center) => {
                                 let dx = p.x - center.x;
@@ -879,7 +927,9 @@ impl Signex {
                                 }
                                 self.interaction_state.shape_anchor = None;
                                 self.interaction_state.active_canvas_mut().shape_anchor = None;
-                                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                                self.interaction_state
+                                    .active_canvas_mut()
+                                    .clear_overlay_cache();
                             }
                         }
                     }
@@ -907,7 +957,9 @@ impl Signex {
                         }
                         self.interaction_state.active_canvas_mut().arc_points =
                             self.interaction_state.arc_points.clone();
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                     }
                     Tool::Polyline => {
                         // Click-by-click polyline. Enter / double-click commits.
@@ -915,7 +967,9 @@ impl Signex {
                         self.interaction_state.polyline_points.push(p);
                         self.interaction_state.active_canvas_mut().polyline_points =
                             self.interaction_state.polyline_points.clone();
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                     }
                     Tool::Text => {
                         let note_text = self
@@ -971,7 +1025,7 @@ impl Signex {
                         // Pick up the rotation / font size / justification
                         // the user edited in the TAB pre-placement form so
                         // the first click matches what they configured.
-                        let (pp_rot, pp_fs_mm, pp_justify) = self
+                        let (pp_rot, pp_fs_mm, pp_justify_h, pp_justify_v) = self
                             .document_state
                             .panel_ctx
                             .pre_placement
@@ -982,12 +1036,14 @@ impl Signex {
                                     pp.font_size_pt as f64
                                         * signex_types::schematic::SCHEMATIC_PT_TO_MM,
                                     pp.justify_h,
+                                    pp.justify_v,
                                 )
                             })
                             .unwrap_or((
                                 0.0,
                                 signex_types::schematic::SCHEMATIC_TEXT_MM,
                                 signex_types::schematic::HAlign::Left,
+                                signex_types::schematic::VAlign::Bottom,
                             ));
                         let label = signex_types::schematic::Label {
                             uuid: uuid::Uuid::new_v4(),
@@ -997,7 +1053,8 @@ impl Signex {
                             label_type,
                             shape,
                             font_size: pp_fs_mm,
-                            justify: pp_justify,
+                            justify: pp_justify_h,
+                            justify_v: pp_justify_v,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceLabel { label },
@@ -1042,7 +1099,11 @@ impl Signex {
                     (dx, dy)
                 };
                 if (dx.abs() > 0.001 || dy.abs() > 0.001)
-                    && !self.interaction_state.active_canvas_mut().selected.is_empty()
+                    && !self
+                        .interaction_state
+                        .active_canvas_mut()
+                        .selected
+                        .is_empty()
                 {
                     self.apply_engine_command(
                         signex_engine::Command::MoveSelection {
@@ -1113,7 +1174,9 @@ impl Signex {
                             self.interaction_state.shape_anchor = Some(p);
                             self.interaction_state.active_canvas_mut().shape_anchor =
                                 Some((p, crate::canvas::ShapePreviewKind::Line));
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1135,7 +1198,9 @@ impl Signex {
                                 false,
                             );
                             self.interaction_state.active_canvas_mut().shape_anchor = None;
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1162,7 +1227,9 @@ impl Signex {
                                 );
                             }
                             self.interaction_state.active_canvas_mut().shape_anchor = None;
-                            self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .clear_overlay_cache();
                         }
                         return Task::none();
                     }
@@ -1186,12 +1253,17 @@ impl Signex {
                                 false,
                                 false,
                             );
-                            self.interaction_state.active_canvas_mut().arc_points.clear();
+                            self.interaction_state
+                                .active_canvas_mut()
+                                .arc_points
+                                .clear();
                         } else {
                             self.interaction_state.active_canvas_mut().arc_points =
                                 self.interaction_state.arc_points.clone();
                         }
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                         return Task::none();
                     }
                     _ => {}
@@ -1231,14 +1303,22 @@ impl Signex {
                             false,
                         );
                     }
-                    self.interaction_state.active_canvas_mut().polyline_points.clear();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .polyline_points
+                        .clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     return Task::none();
                 }
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
-                    self.interaction_state.active_canvas_mut().wire_preview.clear();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .wire_preview
+                        .clear();
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                 } else if let Some(snapshot) = self.active_render_snapshot() {
                     use signex_types::schematic::SelectedKind;
@@ -1296,16 +1376,23 @@ impl Signex {
             }
             CanvasEvent::CursorMoved => {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state.active_canvas_mut().pending_fit.set(None);
+                self.interaction_state
+                    .active_canvas_mut()
+                    .pending_fit
+                    .set(None);
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::FitAll => {
                 if self.has_active_schematic() {
                     self.interaction_state.active_canvas_mut().fit_to_paper();
                     self.interaction_state.active_canvas_mut().clear_bg_cache();
-                    self.interaction_state.active_canvas_mut().clear_content_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_content_cache();
                 } else if self.has_active_pcb() {
                     self.interaction_state.pcb_canvas.fit_to_board();
                     self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -1329,11 +1416,19 @@ impl Signex {
                         .iter()
                         .position(|s| s.uuid == hit.uuid)
                     {
-                        self.interaction_state.active_canvas_mut().selected.remove(pos);
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .selected
+                            .remove(pos);
                     } else {
-                        self.interaction_state.active_canvas_mut().selected.push(hit);
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .selected
+                            .push(hit);
                     }
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -1364,9 +1459,8 @@ impl Signex {
 
         let base_dir = self
             .document_state
-            .project_path
-            .as_ref()
-            .and_then(|path| path.parent().map(std::path::PathBuf::from))
+            .active_loaded_project()
+            .and_then(|p| p.path.parent().map(std::path::PathBuf::from))
             .or_else(|| {
                 self.active_tab_path()
                     .and_then(|path| path.parent().map(std::path::PathBuf::from))
@@ -1384,10 +1478,7 @@ impl Signex {
         };
 
         if !path.exists() {
-            crate::diagnostics::log_info(format!(
-                "Child-sheet file not found: {}",
-                path.display()
-            ));
+            crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
             return;
         }
 
