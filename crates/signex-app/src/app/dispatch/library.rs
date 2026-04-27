@@ -19,7 +19,9 @@ use iced::Task;
 
 use super::super::*;
 use crate::library::commands;
-use crate::library::messages::{EditorMsg, LibraryMessage, PickerMsg, SettingsMsg};
+use crate::library::messages::{
+    EditorMsg, LibraryMessage, PickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+};
 use crate::library::state::{
     ComponentEditorState, EditorAddress, EditorTab, NewComponentState, PickerState,
 };
@@ -795,62 +797,26 @@ impl Signex {
                     },
                 );
             }
-            EditorMsg::SymbolPickedAiPdf(None) => return Task::none(),
-            EditorMsg::SymbolPickedAiPdf(Some(path)) => {
-                use crate::library::editor::symbol::ai_stub::AiPinoutPreview;
-                let preview = match std::fs::read(&path) {
-                    Ok(bytes) => AiPinoutPreview::from_pdf(&bytes),
-                    Err(e) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            error = %e,
-                            path = %path.display(),
-                            "failed to read datasheet PDF"
-                        );
-                        AiPinoutPreview::default()
-                    }
-                };
-                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
-                    editor.symbol_ai_preview = Some(preview);
-                }
-                return Task::none();
-            }
-            EditorMsg::SymbolApplyAiPreview => {
-                let mut should_save = false;
-                if let Some(editor) = self.library.open_editors.get_mut(&window_id)
-                    && let Some(preview) = editor.symbol_ai_preview.take()
-                {
-                    let pins = preview.into_apply_list();
-                    crate::library::editor::symbol::state::apply_ai_pinout(
-                        &mut editor.symbol,
-                        pins,
-                    );
-                    should_save = true;
-                }
-                if should_save {
-                    save_symbol(&mut self.library, window_id);
-                }
-                return Task::none();
-            }
-            EditorMsg::SymbolDismissAiPreview => {
-                if let Some(editor) = self.library.open_editors.get_mut(&window_id) {
-                    editor.symbol_ai_preview = None;
-                }
-                return Task::none();
-            }
-            EditorMsg::DatasheetUploadDialog => {
-                return Task::future(async move {
-                    let picked = rfd::AsyncFileDialog::new()
-                        .set_title("Pin Datasheet PDF")
-                        .add_filter("PDF", &["pdf"])
-                        .pick_file()
-                        .await;
-                    let resolved = match picked {
-                        Some(f) => {
-                            let bytes = f.read().await;
-                            let filename = f
-                                .file_name();
-                            Some((bytes, filename))
+            // ── WS-F2: STEP attach picker ────────────────────────────
+            EditorMsg::StepAttachDialog => {
+                let library_path = address.library_path.clone();
+                let component_id = address.component_id;
+                return Task::perform(
+                    async {
+                        let picked = rfd::AsyncFileDialog::new()
+                            .set_title("Attach STEP file")
+                            .add_filter("STEP", &["step", "stp"])
+                            .add_filter("All files", &["*"])
+                            .pick_file()
+                            .await;
+                        match picked {
+                            Some(handle) => {
+                                let filename = handle
+                                    .file_name();
+                                let bytes = handle.read().await;
+                                Some((bytes, filename))
+                            }
+                            None => None,
                         }
                     },
                     move |result| {
@@ -870,30 +836,6 @@ impl Signex {
                 self.handle_symbol_picked_ai_pdf(&address, payload);
                 return Task::none();
             }
-            // WS-F: STEP attach picker — runs `rfd`, hashes the file
-            // bytes, and lands in `EditorMsg::StepAttachResult` where
-            // the dispatcher writes the file under `<lib_root>/step/`.
-            EditorMsg::StepAttachDialog => {
-                return Task::future(async move {
-                    let picked = rfd::AsyncFileDialog::new()
-                        .set_title("Attach STEP file")
-                        .add_filter("STEP", &["step", "stp"])
-                        .pick_file()
-                        .await;
-                    let resolved = match picked {
-                        Some(f) => {
-                            let bytes = f.read().await;
-                            let filename = f.file_name();
-                            Some((bytes, filename))
-                        }
-                        None => None,
-                    };
-                    Message::Library(crate::library::LibraryMessage::EditorEvent {
-                        window_id,
-                        msg: EditorMsg::StepAttachResult(resolved),
-                    })
-                });
-            }
             _ => {}
         }
 
@@ -905,22 +847,142 @@ impl Signex {
         Task::none()
     }
 
-/// WS-F: persist the in-memory editor.symbol back into LibrarySet so
-/// the next `from_head` re-read sees the new pin layout. Replaces the
-/// pre-refactor `sync_symbol_sexpr` round-trip — Symbol primitives are
-/// now typed, no sexpr serialisation involved.
-fn save_symbol(library: &mut crate::library::state::LibraryState, window_id: iced::window::Id) {
-    if let Some(editor) = library.open_editors.get_mut(&window_id) {
-        editor.symbol.updated = chrono::Utc::now();
-        let sym = editor.symbol.clone();
-        let uuid = sym.uuid;
-        // Write the binding ref so the editor doesn't lose its
-        // primitive on the next reload.
-        editor.draft.symbol_ref = signex_library::PrimitiveRef::new(
-            editor.draft.symbol_ref.library_id,
-            uuid,
+    /// WS-F2: lazy-load the bound primitive when the user enters a tab
+    /// that needs it. Symbol / Footprint / PinMap all fall back to
+    /// `LibrarySet::resolve_*` (and seed an empty primitive when the
+    /// resolver returns nothing — the New-Component flow saves
+    /// primitives via the no-op `LibrarySet::save_*` shim until WS-C
+    /// wires real persistence).
+    fn handle_select_editor_tab(&mut self, address: &EditorAddress, tab: EditorTab) {
+        let Some(editor) = self.library.editors.get_mut(address) else {
+            return;
+        };
+        editor.active_tab = tab;
+
+        match tab {
+            EditorTab::Symbol => {
+                if editor.symbol.is_none() {
+                    let resolved = self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.symbol = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Symbol::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+            }
+            EditorTab::Footprint => {
+                if editor.footprint.is_none() {
+                    let resolved = editor
+                        .draft
+                        .footprint_ref
+                        .as_ref()
+                        .and_then(|r| self.library.set.resolve_footprint(r));
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.footprint = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Footprint::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+                // Build / refresh canvas-side mirror.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && let Some(fp) = editor.footprint.as_ref()
+                    && editor.footprint_state.is_none()
+                {
+                    editor.footprint_state = Some(
+                        crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
+                    );
+                }
+            }
+            EditorTab::PinMap => {
+                // Pin Map needs both primitives — resolve them eagerly.
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.symbol.is_none()
+                {
+                    let resolved =
+                        self.library.set.resolve_symbol(&editor.draft.symbol_ref);
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.symbol = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Symbol::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+                if let Some(editor) = self.library.editors.get_mut(address)
+                    && editor.footprint.is_none()
+                {
+                    let resolved = editor
+                        .draft
+                        .footprint_ref
+                        .as_ref()
+                        .and_then(|r| self.library.set.resolve_footprint(r));
+                    let editor = self
+                        .library
+                        .editors
+                        .get_mut(address)
+                        .expect("editor present");
+                    editor.footprint = Some(resolved.unwrap_or_else(|| {
+                        signex_library::Footprint::empty(editor.display_internal_pn.as_str())
+                    }));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// WS-F2: package the picked PDF bytes into the AI-stub heuristic
+    /// preview so the view can render the apply/cancel card.
+    fn handle_symbol_picked_ai_pdf(
+        &mut self,
+        address: &EditorAddress,
+        payload: Option<Vec<u8>>,
+    ) {
+        let Some(editor) = self.library.editors.get_mut(address) else {
+            return;
+        };
+        match payload {
+            Some(bytes) => {
+                let preview =
+                    crate::library::editor::symbol::ai_stub::AiPinoutPreview::from_pdf(&bytes);
+                editor.symbol_ai_preview = Some(preview);
+            }
+            None => {
+                editor.symbol_ai_preview = None;
+            }
+        }
+    }
+
+    /// WS-F2: stash the picked STEP file under
+    /// `<lib_root>/step/<sha256>.step` and bind a `StepAttachment`
+    /// onto the active footprint primitive.
+    fn handle_step_attach_result(
+        &mut self,
+        address: &EditorAddress,
+        payload: Option<(Vec<u8>, String)>,
+    ) {
+        let Some(editor) = self.library.editors.get_mut(address) else {
+            return;
+        };
+        let Some((bytes, filename)) = payload else {
+            return;
+        };
+        let lib_root = editor.library_root.clone();
+        let attachment = crate::library::editor::footprint::step_attach::stash_step(
+            &lib_root, &bytes, &filename,
         );
-        library.set.save_symbol(sym);
+        if let Some(att) = attachment
+            && let Some(fp) = editor.footprint.as_mut()
+        {
+            fp.step_attachment = Some(att);
+            editor.dirty = true;
+        }
     }
 }
 
@@ -958,6 +1020,9 @@ fn save_footprint(library: &mut crate::library::state::LibraryState, window_id: 
 fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
     use crate::library::editor::footprint::state::FootprintEditorState;
     match msg {
+        // SelectTab is handled before reaching here (lazy-load needs
+        // `&mut self.library.set`); this branch is the catch-all for
+        // editors where the tab was already loaded.
         EditorMsg::SelectTab(tab) => editor.active_tab = tab,
         EditorMsg::HistorySelectRevision(version) => {
             editor.history_selected = Some(version);
@@ -1182,35 +1247,328 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
             editor.component.internal_pn = signex_library::InternalPn::new(s.clone());
             editor.display_internal_pn = s;
         }
-        EditorMsg::OverviewSetMpn(_)
-        | EditorMsg::OverviewSetManufacturer(_)
-        | EditorMsg::OverviewSetDescription(_)
-        | EditorMsg::OverviewSetDatasheet(_)
-        | EditorMsg::OverviewSetLifecycle(_)
-        | EditorMsg::DatasheetSetMode(_)
-        | EditorMsg::DatasheetSetUrl(_)
-        | EditorMsg::DatasheetUploadResult(_)
-        | EditorMsg::Model3dUploadResult(_)
-        | EditorMsg::Model3dRemove
-        | EditorMsg::Model3dSetOffset { .. }
-        | EditorMsg::Model3dSetRotation { .. }
-        | EditorMsg::ParamAddRow
-        | EditorMsg::ParamRemoveRow(_)
-        | EditorMsg::ParamSetKey { .. }
-        | EditorMsg::ParamSetValueText { .. }
-        | EditorMsg::SupplyAddRow
-        | EditorMsg::SupplyRemoveRow(_)
-        | EditorMsg::SupplySetDistributor { .. }
-        | EditorMsg::SupplySetSku { .. }
-        | EditorMsg::SupplySetUrl { .. }
-        | EditorMsg::SupplyPasteUrlChanged(_)
-        | EditorMsg::SupplyRefreshFromApi
-        | EditorMsg::SimSetEnabled(_)
-        | EditorMsg::SimBodyAction(_)
-        | EditorMsg::SimSetPinNode { .. }
-        | EditorMsg::SimChanged => {}
-        // ── Already handled in the outer match (Task-returning
-        // arms or modal flows). ─────────────────────────────────
+        EditorMsg::OverviewSetMpn(s) => {
+            editor.draft.primary_mpn.mpn = s;
+        }
+        EditorMsg::OverviewSetManufacturer(s) => {
+            editor.draft.primary_mpn.manufacturer = s;
+        }
+        EditorMsg::OverviewSetDescription(s) => {
+            // WS-E: description is a free-form note field; the binding
+            // record carries it on the primary MPN's `notes` slot for
+            // now. WS-F will move it to a first-class field if needed.
+            editor.draft.primary_mpn.notes =
+                if s.trim().is_empty() { None } else { Some(s) };
+        }
+        EditorMsg::OverviewSetDatasheet(s) => {
+            let trimmed = s.trim();
+            editor.draft.datasheet = if trimmed.is_empty() {
+                signex_library::DatasheetRef::default()
+            } else {
+                signex_library::DatasheetRef::url(trimmed)
+            };
+        }
+        EditorMsg::OverviewSetLifecycle(state) => editor.draft.state = state,
+        EditorMsg::HistorySelectRevision(version) => {
+            editor.history_selected = Some(version);
+        }
+        // ── WS-G: Pin Map ─────────────────────────────────────
+        EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
+            editor.draft.pin_map_overrides.clear();
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        EditorMsg::PinMapAutoMatchByName => {
+            // Stub — the name-based heuristic ships in a follow-up.
+            tracing::warn!(
+                target: "signex::library",
+                "Pin Map: Auto-Match by Name is stubbed; awaiting heuristic implementation"
+            );
+        }
+        EditorMsg::PinMapOpenOverrideEdit(pin) => {
+            let seed = editor
+                .draft
+                .pin_map_overrides
+                .iter()
+                .find(|o| o.symbol_pin_number == pin)
+                .map(|o| o.footprint_pad_number.clone())
+                .unwrap_or_default();
+            editor.pin_map.expanded_row = Some(pin);
+            editor.pin_map.override_buf = seed;
+        }
+        EditorMsg::PinMapOverrideBufChanged { pin, value } => {
+            if editor.pin_map.expanded_row.as_deref() == Some(pin.as_str()) {
+                editor.pin_map.override_buf = value;
+            }
+        }
+        EditorMsg::PinMapAddOverride { pin, pad } => {
+            let trimmed = pad.trim();
+            if trimmed.is_empty() {
+                editor
+                    .draft
+                    .pin_map_overrides
+                    .retain(|o| o.symbol_pin_number != pin);
+            } else {
+                use signex_library::PinPadOverride;
+                if let Some(existing) = editor
+                    .draft
+                    .pin_map_overrides
+                    .iter_mut()
+                    .find(|o| o.symbol_pin_number == pin)
+                {
+                    existing.footprint_pad_number = trimmed.to_string();
+                } else {
+                    editor
+                        .draft
+                        .pin_map_overrides
+                        .push(PinPadOverride::new(pin, trimmed));
+                }
+            }
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        EditorMsg::PinMapCancelOverrideEdit => {
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+        }
+        EditorMsg::PinMapRemoveOverride { pin } => {
+            editor
+                .draft
+                .pin_map_overrides
+                .retain(|o| o.symbol_pin_number != pin);
+            editor.pin_map.expanded_row = None;
+            editor.pin_map.override_buf.clear();
+            editor.dirty = true;
+        }
+        // ── /WS-G ─────────────────────────────────────────────
+        // ── WS-F2: Symbol tab edits ───────────────────────────
+        EditorMsg::SymbolSetTool(tool) => {
+            editor.symbol_tool = match tool {
+                SymbolToolMsg::Select => crate::library::editor::symbol::canvas::SymbolTool::Select,
+                SymbolToolMsg::AddPin => crate::library::editor::symbol::canvas::SymbolTool::AddPin,
+            };
+        }
+        EditorMsg::SymbolAddPin { x, y } => {
+            if let Some(sym) = editor.symbol.as_mut() {
+                let idx = crate::library::editor::symbol::state::add_pin(sym, x, y);
+                editor.symbol_selected = Some(
+                    crate::library::editor::symbol::state::SymbolSelection::Pin(idx),
+                );
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolSelect(sel) => {
+            use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+            editor.symbol_selected = Some(match sel {
+                SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
+                SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
+                SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
+            });
+        }
+        EditorMsg::SymbolDeselect => {
+            editor.symbol_selected = None;
+        }
+        EditorMsg::SymbolMoveSelected { x, y } => {
+            if let Some(sym) = editor.symbol.as_mut() {
+                crate::library::editor::symbol::state::move_selected(
+                    sym,
+                    editor.symbol_selected,
+                    x,
+                    y,
+                );
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolDeleteSelected => {
+            if let Some(sym) = editor.symbol.as_mut()
+                && let Some(new_sel) =
+                    crate::library::editor::symbol::state::delete_selected(
+                        sym,
+                        editor.symbol_selected,
+                    )
+            {
+                editor.symbol_selected = new_sel;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolSetField { key: _, value: _ } => {
+            // WS-E rebinds Designator/Value drag against `Component`;
+            // a no-op here so the message is benign until that wave
+            // ships.
+        }
+        EditorMsg::SymbolSetPinNumber { idx, number } => {
+            if let Some(sym) = editor.symbol.as_mut()
+                && let Some(pin) = sym.pins.get_mut(idx)
+            {
+                pin.number = number;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolSetPinName { idx, name } => {
+            if let Some(sym) = editor.symbol.as_mut()
+                && let Some(pin) = sym.pins.get_mut(idx)
+            {
+                pin.name = name;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolApplyAiPreview => {
+            if let Some(preview) = editor.symbol_ai_preview.take()
+                && let Some(sym) = editor.symbol.as_mut()
+            {
+                crate::library::editor::symbol::state::apply_ai_pinout(
+                    sym,
+                    preview.into_apply_list(),
+                );
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SymbolDismissAiPreview => {
+            editor.symbol_ai_preview = None;
+        }
+        EditorMsg::SaveSymbol(_uuid, sym) => {
+            // Snapshot save — the canonical path is SaveDraft (which
+            // saves the Revision binding); this variant is reserved
+            // for any future "save the primitive only" flow.
+            if let Some(stored) = editor.symbol.as_mut() {
+                *stored = *sym;
+                editor.dirty = true;
+            }
+        }
+        // ── WS-F2: Footprint tab edits ────────────────────────
+        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
+            // Lazy-build canvas mirror if the tab was opened without
+            // going through `SelectTab` (e.g. direct hit on the
+            // canvas before the tab switch handler ran).
+            if editor.footprint_state.is_none()
+                && let Some(fp) = editor.footprint.as_ref()
+            {
+                editor.footprint_state = Some(
+                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(fp),
+                );
+            }
+            if let Some(state) = editor.footprint_state.as_mut() {
+                let _idx = state.add_pad_at(x_mm, y_mm);
+                if let Some(fp) = editor.footprint.as_mut() {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, fp);
+                }
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+            if let Some(state) = editor.footprint_state.as_mut() {
+                state.move_pad(idx, x_mm, y_mm);
+                if let Some(fp) = editor.footprint.as_mut() {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, fp);
+                }
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+            if let Some(state) = editor.footprint_state.as_mut() {
+                state.cursor_mm = Some((x_mm, y_mm));
+            }
+        }
+        EditorMsg::FootprintSelectPad(sel) => {
+            if let Some(state) = editor.footprint_state.as_mut() {
+                state.selected_pad = sel;
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+            }
+        }
+        EditorMsg::FootprintDeleteSelected => {
+            if let Some(state) = editor.footprint_state.as_mut()
+                && let Some(idx) = state.selected_pad
+            {
+                state.delete_pad(idx);
+                if let Some(fp) = editor.footprint.as_mut() {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, fp);
+                }
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::FootprintToggleLayer(name) => {
+            if let Some(state) = editor.footprint_state.as_mut()
+                && let Some(layer) = crate::library::editor::footprint::layers::FpLayer::from_standard_name(&name)
+            {
+                state.layer_visibility.toggle(layer);
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+            }
+        }
+        EditorMsg::FootprintToggleAutoFit => {
+            if let Some(state) = editor.footprint_state.as_mut() {
+                state.toggle_auto_fit();
+                if let Some(fp) = editor.footprint.as_mut() {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, fp);
+                }
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+            }
+        }
+        EditorMsg::SaveFootprint(_uuid, fp) => {
+            if let Some(stored) = editor.footprint.as_mut() {
+                editor.footprint_state = Some(
+                    crate::library::editor::footprint::state::FootprintEditorState::from_footprint(&fp),
+                );
+                *stored = *fp;
+                if let Some(cache) = editor.footprint_canvas_cache.get() {
+                    cache.clear();
+                }
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyHeight(h) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.height_mm = h;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyOffsetZ(z) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.offset_z_mm = z;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyTopColor(c) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.top_color = c;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodySideColor(c) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.side_color = c;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::SetBodyShape(s) => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.body_3d.shape = s;
+                editor.dirty = true;
+            }
+        }
+        EditorMsg::StepAttachRemove => {
+            if let Some(fp) = editor.footprint.as_mut() {
+                fp.step_attachment = None;
+                editor.dirty = true;
+            }
+        }
+        // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
         | EditorMsg::Commit
@@ -1222,10 +1580,7 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
         | EditorMsg::OpenWhereUsedTab
         | EditorMsg::SymbolPickAiPdf
         | EditorMsg::SymbolPickedAiPdf(_)
-        | EditorMsg::SymbolApplyAiPreview
-        | EditorMsg::SymbolDismissAiPreview
-        | EditorMsg::DatasheetUploadDialog
-        | EditorMsg::Model3dUploadDialog
-        | EditorMsg::StepAttachDialog => {}
+        | EditorMsg::StepAttachDialog
+        | EditorMsg::StepAttachResult(_) => {}
     }
 }

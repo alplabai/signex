@@ -95,17 +95,104 @@ impl EditorAddress {
         }
     }
 
-    /// Synthetic on-disk identity for a Component Editor tab — used by
-    /// `TabInfo.path` so the tab bar, undock detector, and dirty-paths
-    /// machinery have a single unique `PathBuf` per editor without
-    /// needing to teach them about a second identity scheme. Mirrors
-    /// the `<library>/components/<uuid>.snxprt` storage layout from
-    /// the v0.9 plan §3 so the synthetic path lines up with where the
-    /// component actually persists on disk.
-    pub fn synthetic_tab_path(&self) -> PathBuf {
-        self.library_path
-            .join("components")
-            .join(format!("{}.snxprt", self.component_id))
+    /// Mount an adapter under `library_id`. Replaces any prior adapter
+    /// that was mounted under the same id.
+    pub fn mount(&mut self, library_id: Uuid, adapter: Box<dyn LibraryAdapter>) {
+        self.libs.insert(library_id, adapter);
+    }
+
+    /// Drop the adapter for `library_id`, if any.
+    pub fn unmount(&mut self, library_id: Uuid) {
+        self.libs.remove(&library_id);
+    }
+
+    /// Number of mounted libraries.
+    #[allow(dead_code)]
+    pub fn len(&self) -> usize {
+        self.libs.len()
+    }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.libs.is_empty()
+    }
+
+    /// Mounted library ids — used to flatten primitive lookups.
+    #[allow(dead_code)]
+    pub fn library_ids(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.libs.keys().copied()
+    }
+
+    pub fn adapter(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
+        self.libs.get(&library_id).map(|b| &**b)
+    }
+
+    #[allow(dead_code)]
+    pub fn adapter_mut<'a>(
+        &'a mut self,
+        library_id: Uuid,
+    ) -> Option<&'a mut (dyn LibraryAdapter + 'static)> {
+        self.libs.get_mut(&library_id).map(|b| b.as_mut())
+    }
+
+    /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both
+    /// the library and the primitive UUID exist on a mounted adapter.
+    #[allow(dead_code)]
+    pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
+        self.libs.get(&r.library_id)?.get_symbol(r.uuid).ok()
+    }
+
+    /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
+    #[allow(dead_code)]
+    pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
+        self.libs.get(&r.library_id)?.get_footprint(r.uuid).ok()
+    }
+
+    #[allow(dead_code)]
+    pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
+        self.libs.get(&r.library_id)?.get_sim(r.uuid).ok()
+    }
+
+    /// Persist `sym` to the adapter mounted under `library_id`. Falls
+    /// back to a no-op success when the adapter doesn't implement
+    /// `save_symbol` (older / partial adapters); the in-memory primitive
+    /// list still reflects the edit.
+    pub fn save_symbol(
+        &self,
+        library_id: Uuid,
+        sym: &Symbol,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        match self.libs.get(&library_id) {
+            Some(a) => match a.save_symbol(sym.clone(), msg) {
+                Ok(()) => Ok(()),
+                Err(LibraryError::Backend(_)) => Ok(()),
+                Err(other) => Err(other),
+            },
+            None => Ok(()),
+        }
+    }
+
+    pub fn save_footprint(
+        &self,
+        library_id: Uuid,
+        fp: &Footprint,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        match self.libs.get(&library_id) {
+            Some(a) => match a.save_footprint(fp.clone(), msg) {
+                Ok(()) => Ok(()),
+                Err(LibraryError::Backend(_)) => Ok(()),
+                Err(other) => Err(other),
+            },
+            None => Ok(()),
+        }
+    }
+}
+
+impl Default for LibrarySet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -567,19 +654,6 @@ pub struct ComponentEditorState {
     #[allow(dead_code)]
     pub footprint_canvas_cache: std::sync::OnceLock<iced::widget::canvas::Cache>,
 
-    // ── WS-L: Sim tab ───────────────────────────────────────────────
-    /// Live `text_editor::Content` for the SPICE deck. Mirrored from
-    /// `editor.sim.body` on tab-switch / sim-load and back into
-    /// `editor.sim.body` on every `SimBodyAction`. None when no sim
-    /// model is bound.
-    ///
-    /// `Content` is RefCell-backed so it's neither `Clone` nor
-    /// `PartialEq` in the form we need; keeping it as a separate live
-    /// UI state alongside `editor.sim` avoids dragging that interior
-    /// mutability into the typed primitive.
-    #[allow(dead_code)]
-    pub sim_body: Option<iced::widget::text_editor::Content>,
-
     // ── Modal flags ─────────────────────────────────────────────────
     /// True while the SubmitForReview modal is up.
     pub review_dialog_open: bool,
@@ -762,15 +836,15 @@ impl ComponentEditorState {
             draft: head,
             component,
             review_required,
-            symbol,
-            footprint,
+            symbol: None,
+            footprint: None,
+            sim: None,
+            pin_map: PinMapTabState::default(),
             symbol_tool: super::editor::symbol::canvas::SymbolTool::Select,
             symbol_selected: None,
             symbol_ai_preview: None,
             footprint_state: None,
             footprint_canvas_cache: std::sync::OnceLock::new(),
-            // WS-L: Sim tab — seeded lazily on tab switch into Sim.
-            sim_body: None,
             review_dialog_open: false,
             review_notes_buf: String::new(),
             review_status: None,
