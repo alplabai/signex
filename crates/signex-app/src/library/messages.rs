@@ -13,10 +13,10 @@ use std::path::PathBuf;
 
 use signex_library::{
     AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, RowId, SimKind, SimModel, UseSite,
+    LifecycleState, PrimitiveKind, PrimitiveRef, RowId, SimKind, SimModel, UseSite,
 };
 
-use super::state::{EditorAddress, PreviewTab};
+use super::state::{EditorAddress, PreviewTab, PrimitivePickerTarget};
 
 /// Top-level library message — folded into [`Message::Library`].
 #[derive(Debug, Clone)]
@@ -170,12 +170,20 @@ pub enum LibraryMessage {
     },
     /// User clicked Delete Selected on the browser action row. Phase 1
     /// fires `delete_row` immediately without a confirm modal — the
-    /// confirm modal lands in Phase 2.
+    /// confirm modal lands in Deliverable D.
     BrowserDeleteRow {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
     },
+    /// Open the Symbol/Footprint primitive picker modal. `target`
+    /// determines what happens when the user picks something.
+    OpenPrimitivePicker {
+        kind: PrimitiveKind,
+        target: PrimitivePickerTarget,
+    },
+    /// Inner-message envelope for primitive picker events.
+    PrimitivePicker(PrimitivePickerMsg),
 }
 
 /// User choice from the close-library confirmation modal.
@@ -598,6 +606,24 @@ pub enum PickerMsg {
     FilterChanged(String),
     SelectComponent(ComponentSummary),
     PlaceSelected,
+}
+
+/// Primitive picker modal sub-messages.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum PrimitivePickerMsg {
+    /// Live update of the filter text input.
+    SetFilter(String),
+    /// Commit a picked `PrimitiveRef` — applies to the picker's
+    /// configured target.
+    Pick(PrimitiveRef),
+    /// User clicked "Browse filesystem…" — fires `AsyncFileDialog`.
+    Browse,
+    /// Result of the filesystem browse. `Some(path)` when the user
+    /// picked a `.snxsym` / `.snxfpt` file; `None` when cancelled.
+    BrowseResult(Option<PathBuf>),
+    /// Dismiss the picker without picking.
+    Cancel,
 }
 
 /// Settings → Library → Distributor APIs panel messages.

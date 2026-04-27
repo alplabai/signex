@@ -32,8 +32,8 @@ use std::sync::Arc;
 
 use signex_library::{
     ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, RowId, SimModel, Symbol, TemplateRegistry, UseSite,
-    WhereUsedIndex,
+    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, RowId, SimModel,
+    Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -116,6 +116,36 @@ pub struct EditRowModalState {
     pub draft: ComponentRow,
 }
 
+/// Primitive picker modal state — opened when the user clicks
+/// "Pick Symbol" or "Pick Footprint" on a Component Preview tab or in
+/// the New Component modal.
+#[derive(Debug, Clone)]
+pub struct PrimitivePickerState {
+    pub kind: PrimitiveKind,
+    /// Where to send the result — addresses the Component Preview tab
+    /// or the New Component modal.
+    pub target: PrimitivePickerTarget,
+    /// Live filter text.
+    pub filter: String,
+    /// Inline error, e.g. when filesystem-picked file isn't inside a
+    /// `.snxlib`.
+    pub error: Option<String>,
+}
+
+/// Where the picker should write the picked `PrimitiveRef`.
+#[derive(Debug, Clone)]
+pub enum PrimitivePickerTarget {
+    /// The user picks for an open Component Preview tab — apply +
+    /// save the row.
+    PreviewRow(EditorAddress),
+    /// The user picks while filling out the New Component modal — apply
+    /// to `NewComponentState.symbol_ref` / `.footprint_ref`.
+    NewComponentForm,
+    /// The user picks while editing a row in the Library Browser
+    /// grid's Edit Component Details modal (Deliverable B).
+    EditRowModal(EditorAddress),
+}
+
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
@@ -160,6 +190,10 @@ pub struct LibraryState {
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// Primitive picker modal state — `None` while closed. Opened from
+    /// the Component Preview tab's Symbol/Footprint pane, the New
+    /// Component modal, and the Edit Component Details modal.
+    pub primitive_picker: Option<PrimitivePickerState>,
 }
 
 impl Default for LibraryState {
@@ -181,6 +215,7 @@ impl Default for LibraryState {
             close_library_confirm: None,
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
+            primitive_picker: None,
         }
     }
 }
@@ -519,6 +554,12 @@ pub struct NewComponentState {
     /// Tree-style category path ("Passives/Resistors/0805"). Free-form
     /// — validation happens at submit time.
     pub category: String,
+    /// Optional symbol primitive binding picked at modal time.
+    /// `None` = leave the row's symbol_ref as the nil sentinel; the
+    /// user can bind later via the Component Preview's Pick Symbol.
+    pub symbol_ref: Option<PrimitiveRef>,
+    /// Optional footprint primitive binding picked at modal time.
+    pub footprint_ref: Option<PrimitiveRef>,
     /// Latest validation error.
     pub error: Option<String>,
 }
@@ -531,6 +572,8 @@ impl Default for NewComponentState {
             table: None,
             class: ComponentClass::generic(),
             category: String::new(),
+            symbol_ref: None,
+            footprint_ref: None,
             error: None,
         }
     }

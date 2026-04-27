@@ -78,25 +78,54 @@ fn render_panes<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let _ = address; // address only flows into messages from sub-helpers below.
-    let symbol_msg = Some(LibraryMessage::OpenPrimitiveEditor {
-        path: symbol_path(state),
-    });
-    let footprint_msg =
-        footprint_path(state).map(|p| LibraryMessage::OpenPrimitiveEditor { path: p });
+    // When the symbol_ref is the nil sentinel ("unbound") the user
+    // hasn't picked a symbol yet — surface "Pick Symbol" instead of
+    // "Open Symbol Editor". Same shape for footprint.
+    let symbol_unbound = state.row.symbol_ref.uuid.is_nil();
+    let (symbol_msg, symbol_btn_label): (Option<LibraryMessage>, &'static str) = if symbol_unbound {
+        (
+            Some(LibraryMessage::OpenPrimitivePicker {
+                kind: signex_library::PrimitiveKind::Symbol,
+                target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
+            }),
+            "Pick Symbol",
+        )
+    } else {
+        (
+            Some(LibraryMessage::OpenPrimitiveEditor {
+                path: symbol_path(state),
+            }),
+            "Open Symbol Editor",
+        )
+    };
+
+    let (footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
+        match state.row.footprint_ref.as_ref() {
+            None => (
+                Some(LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Footprint,
+                    target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
+                }),
+                "Pick Footprint",
+            ),
+            Some(_) => (
+                footprint_path(state).map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
+                "Open Footprint Editor",
+            ),
+        };
 
     let symbol_pane = render_pane(
         "Symbol",
         symbol_summary_text(state.symbol.as_ref()),
         symbol_msg,
-        "Open Symbol Editor",
+        symbol_btn_label,
         tokens,
     );
     let footprint_pane = render_pane(
         "Footprint",
         footprint_summary_text(state.footprint.as_ref()),
         footprint_msg,
-        "Open Footprint Editor",
+        footprint_btn_label,
         tokens,
     );
 

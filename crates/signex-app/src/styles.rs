@@ -384,4 +384,3 @@ pub fn menu_item(
         }
     }
 }
-

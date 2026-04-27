@@ -9,10 +9,9 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, InternalPn,
-    LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest,
-    ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, RowId, UsersConfig,
-    WorkflowConfig, hash_row_content,
+    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, InternalPn, LibraryError,
+    LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest, ManufacturerPart,
+    ParamMap, PlmReserved, PrimitiveRef, RowId, UsersConfig, WorkflowConfig, hash_row_content,
 };
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;
@@ -156,6 +155,8 @@ pub fn create_component_row(
     table: &str,
     internal_pn: &str,
     class: ComponentClass,
+    symbol_ref: Option<PrimitiveRef>,
+    footprint_ref: Option<PrimitiveRef>,
 ) -> Result<RowId, LibraryError> {
     let internal_pn = internal_pn.trim();
     if internal_pn.is_empty() {
@@ -176,27 +177,23 @@ pub fn create_component_row(
     let library_id = library.library_id;
 
     // Component creation does NOT mint new primitive files. Symbol +
-    // footprint are bound by the user explicitly — they pick existing
-    // `.snxsym` / `.snxfpt` files from this library, another library, or
-    // the filesystem. The row starts with sentinel `Uuid::nil()` refs;
-    // the resolver returns None for nil UUIDs and the Component Preview
-    // surfaces an "Unresolved — pick a symbol" prompt.
-    //
-    // Phase 2 follow-up: dedicated Pick-Symbol / Pick-Footprint picker
-    // UI that lets the user browse mounted libraries (and an optional
-    // filesystem fallback) and writes the selected `PrimitiveRef` back
-    // onto the row via `adapter.update_row`.
+    // footprint are either picked through the Pick Symbol / Pick
+    // Footprint affordances inside the New Component modal, or bound
+    // later via the Component Preview tab. When the user submits with
+    // unbound refs, the row starts with sentinel `Uuid::nil()` and the
+    // Component Preview surfaces an "Unbound — pick a symbol" prompt.
 
     let row_id = RowId::new();
     let now = chrono::Utc::now();
+    let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,
         datasheet: DatasheetRef::default(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(library_id, Uuid::nil()),
-        footprint_ref: None,
+        symbol_ref: resolved_symbol,
+        footprint_ref,
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("", ""),

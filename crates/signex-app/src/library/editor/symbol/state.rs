@@ -42,7 +42,6 @@ pub enum FieldKey {
     Value,
 }
 
-
 /// Selected element on the Symbol canvas — drives delete + drag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SymbolSelection {
@@ -127,7 +126,6 @@ pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
     None
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +163,4 @@ mod tests {
         let sel = hit_test(&s, 3.0, 4.0);
         assert_eq!(sel, Some(SymbolSelection::Pin(0)));
     }
-
 }
