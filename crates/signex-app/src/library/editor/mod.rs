@@ -15,10 +15,12 @@
 //! land. The footer + tabs router still works so the user can move
 //! around the editor without breakage.
 
+pub mod footprint;
 pub mod history;
 pub mod overview;
 pub mod pin_map;
 pub mod submit_for_review;
+pub mod symbol;
 pub mod where_used;
 
 use iced::widget::{Space, button, column, container, row, text};
@@ -147,22 +149,8 @@ fn view_active_tab<'a>(
 ) -> Element<'a, LibraryMessage> {
     let inner: Element<'_, LibraryMessage> = match editor.active_tab {
         EditorTab::Overview => overview::view(editor, tokens, address),
-        EditorTab::Symbol => placeholder_card(
-            "Symbol",
-            &[
-                "WS-F (in flight) rewires the Symbol tab against the new `Symbol` primitive.",
-                "Pins, graphics, schematic params; loaded by `LibrarySet::resolve_symbol`.",
-            ],
-            tokens,
-        ),
-        EditorTab::Footprint => placeholder_card(
-            "Footprint",
-            &[
-                "WS-F adds the new Footprint tab — pads, courtyard, body 3D editor + preview.",
-                "Loaded by `LibrarySet::resolve_footprint`.",
-            ],
-            tokens,
-        ),
+        EditorTab::Symbol => symbol::view(editor, tokens, address.clone()),
+        EditorTab::Footprint => footprint::view(editor, tokens, address.clone()),
         EditorTab::PinMap => pin_map::view(
             editor,
             editor.symbol.as_ref().zip(editor.footprint.as_ref()),
