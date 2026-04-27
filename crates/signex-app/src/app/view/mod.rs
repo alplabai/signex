@@ -2147,16 +2147,30 @@ impl Signex {
                         .padding(8)
                         .into()
                 }
-                super::state::WindowKind::ComponentEditor { .. } => {
+                // WS-I: tab-not-window
+                // Detached Component Editor window — render the same
+                // editor surface as the inline tab. The editor state
+                // is keyed by `EditorAddress(library_path,
+                // component_id)` so the inline + detached cases share
+                // a single state owner.
+                super::state::WindowKind::ComponentEditor {
+                    library_path,
+                    component_id,
+                } => {
                     let tokens = &self.document_state.panel_ctx.tokens;
-                    if let Some(editor) = self.library.open_editors.get(&window_id) {
-                        crate::library::editor::view(editor, &self.library, tokens, window_id)
+                    let address = crate::library::state::EditorAddress::new(
+                        library_path.clone(),
+                        *component_id,
+                    );
+                    if let Some(editor) = self.library.editors.get(&address) {
+                        crate::library::editor::view(editor, &self.library, tokens, address)
                             .map(Message::Library)
                     } else {
-                        // Window mapping exists but state hasn't landed yet —
-                        // render an empty placeholder; the next view
-                        // invocation will catch up once the
-                        // EditorWindowOpened message is handled.
+                        // Window mapping exists but the editor state
+                        // has been dropped (rare race during teardown
+                        // — the tab close path can run ahead of the
+                        // OS window close). Render an empty container
+                        // so the daemon doesn't panic.
                         iced::widget::container(iced::widget::Space::new()).into()
                     }
                 }
@@ -3648,6 +3662,43 @@ impl Signex {
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let is_main = self.ui_state.main_window_id == Some(window_id);
+
+        // WS-I: tab-not-window — when the active tab is a Component
+        // Editor, render the editor inside the main window's content
+        // pane. The same surface lights up via the
+        // `WindowKind::ComponentEditor` branch in `view()` when the
+        // user undocks the tab into its own OS window.
+        if is_main
+            && let Some(active_tab) = self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+            && let Some(editor_id) = active_tab.kind.as_component_editor()
+        {
+            let tokens = &self.document_state.panel_ctx.tokens;
+            let address = crate::library::state::EditorAddress::new(
+                editor_id.library_path.clone(),
+                editor_id.component_id,
+            );
+            return if let Some(editor) = self.library.editors.get(&address) {
+                crate::library::editor::view(editor, &self.library, tokens, address)
+                    .map(Message::Library)
+            } else {
+                container(
+                    column![
+                        iced::widget::text("Component Editor — state not yet loaded")
+                            .size(13)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    ]
+                    .spacing(4)
+                    .align_x(iced::Alignment::Center),
+                )
+                .center(Length::Fill)
+                .style(crate::styles::panel_region(tokens))
+                .into()
+            };
+        }
+
         let has_schematic = if is_main {
             self.has_active_schematic()
         } else {

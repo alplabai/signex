@@ -2,6 +2,47 @@ use std::path::PathBuf;
 
 use signex_types::pcb::PcbBoard;
 
+// WS-I: tab-not-window
+// Identity payload for a Component Editor tab. Mirrors the
+// `WindowKind::ComponentEditor` undock target so the same `(library,
+// component)` pair routes through both the inline tab and the
+// detached-window cases without an extra translation step.
+#[derive(Debug, Clone)]
+pub struct ComponentEditorTab {
+    pub library_path: PathBuf,
+    pub component_id: signex_library::ComponentId,
+}
+
+// WS-I: tab-not-window
+// Per-tab role marker. Schematic / Pcb retain the path on `TabInfo`
+// for the existing `engines` HashMap and dirty-paths machinery;
+// `ComponentEditor` carries its own `(library_path, component_id)`
+// payload that the dispatcher uses to look the editor state up out
+// of `LibraryState.editors`. The synthetic `TabInfo.path` for
+// ComponentEditor tabs is `<library_path>/<component_id>.snxprt` so
+// undock / "is this tab already undocked?" / per-tab visibility
+// continue to use a single PathBuf identity.
+#[derive(Debug, Clone)]
+pub enum TabKind {
+    Schematic,
+    Pcb,
+    ComponentEditor(ComponentEditorTab),
+}
+
+impl TabKind {
+    #[allow(dead_code)]
+    pub fn is_component_editor(&self) -> bool {
+        matches!(self, TabKind::ComponentEditor(_))
+    }
+
+    pub fn as_component_editor(&self) -> Option<&ComponentEditorTab> {
+        match self {
+            TabKind::ComponentEditor(c) => Some(c),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DrawMode {
     #[default]
@@ -97,6 +138,12 @@ pub struct TabInfo {
     /// mid-session) carries `None`. Per-project actions (Close
     /// Project) filter tabs by this id.
     pub project_id: Option<super::state::ProjectId>,
+    // WS-I: tab-not-window
+    /// What kind of document this tab is hosting. Schematic / PCB
+    /// tabs continue to use `path` for engine + dirty-paths bookkeeping;
+    /// ComponentEditor tabs carry the `(library_path, component_id)`
+    /// pair that resolves into `LibraryState.editors`.
+    pub kind: TabKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

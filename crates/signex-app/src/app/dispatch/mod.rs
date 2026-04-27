@@ -246,12 +246,18 @@ impl Signex {
                                 .dock
                                 .add_panel(crate::dock::PanelPosition::Right, kind);
                         }
-                        // v0.9 Component Editor — drop the editor's
-                        // working state. Phase 2 will surface a save
-                        // prompt before letting the close go through.
-                        WindowKind::ComponentEditor { .. } => {
-                            self.library.open_editors.remove(&id);
-                        }
+                        // WS-I: tab-not-window
+                        // The Component Editor lives as a tab in the
+                        // main window now; its state outlasts the
+                        // detached OS window. Closing the OS window
+                        // re-docks the editor to the main-window tab
+                        // bar — `library.editors` keeps the in-flight
+                        // edits keyed by `(library_path,
+                        // component_id)`, and the main-window tab
+                        // already exists, so there's nothing to do
+                        // here beyond letting the window-id mapping
+                        // drop above.
+                        WindowKind::ComponentEditor { .. } => {}
                     }
                 }
                 Task::none()

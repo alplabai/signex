@@ -27,19 +27,25 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{EditorMsg, LibraryMessage};
-use super::state::{ComponentEditorState, EditorTab, LibraryState};
+use super::state::{ComponentEditorState, EditorAddress, EditorTab, LibraryState};
 
-/// Render a Component Editor window.
+// WS-I: tab-not-window
+/// Render a Component Editor surface — same widget tree whether the
+/// editor is hosted inline as a tab in the main window or detached
+/// into its own window via the existing tab-undock flow. Editor
+/// state is addressed by `(library_path, component_id)`; the address
+/// is cloned into each sub-view by value so closures capture owned
+/// copies rather than borrowing back into the local stack.
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let header = view_header(editor, tokens, window_id);
-    let tabs = view_tabs(editor.active_tab, tokens, window_id);
-    let body = view_active_tab(editor, library_state, tokens, window_id);
-    let footer = view_footer(editor, tokens, window_id);
+    let header = view_header(editor, tokens, address.clone());
+    let tabs = view_tabs(editor.active_tab, tokens, address.clone());
+    let body = view_active_tab(editor, library_state, tokens, address.clone());
+    let footer = view_footer(editor, tokens, address.clone());
 
     let main: Element<'_, LibraryMessage> = column![header, tabs, body, footer]
         .spacing(0)
@@ -48,7 +54,7 @@ pub fn view<'a>(
         .into();
 
     if editor.review_dialog_open {
-        let modal_card = submit_for_review::view(editor, tokens, window_id);
+        let modal_card = submit_for_review::view(editor, tokens, address.clone());
         let backdrop: Element<'_, LibraryMessage> = container(modal_card)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -70,7 +76,7 @@ pub fn view<'a>(
 fn view_header<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -85,7 +91,7 @@ fn view_header<'a>(
             Space::new().width(Length::Fill),
             text("\u{1F512}").size(13).color(muted),
             Space::new().width(8),
-            close_btn(window_id, tokens),
+            close_btn(address, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -97,7 +103,7 @@ fn view_header<'a>(
 fn view_tabs<'a>(
     active: EditorTab,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let mut row_widget = row![].spacing(0).align_y(iced::Alignment::Center);
@@ -109,11 +115,14 @@ fn view_tabs<'a>(
             iced::Color::TRANSPARENT
         };
         let label = container(text(tab.label()).size(11).color(text_c)).padding([3, 10]);
+        let address_for_msg = address.clone();
+        let tab_for_msg = *tab;
         let inner_btn = button(label)
             .padding(0)
-            .on_press(LibraryMessage::EditorEvent {
-                window_id,
-                msg: EditorMsg::SelectTab(*tab),
+            .on_press_with(move || LibraryMessage::EditorEvent {
+                library_path: address_for_msg.library_path.clone(),
+                component_id: address_for_msg.component_id,
+                msg: EditorMsg::SelectTab(tab_for_msg),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(bg_color)),
@@ -134,10 +143,10 @@ fn view_active_tab<'a>(
     editor: &'a ComponentEditorState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let inner: Element<'_, LibraryMessage> = match editor.active_tab {
-        EditorTab::Overview => overview::view(editor, tokens, window_id),
+        EditorTab::Overview => overview::view(editor, tokens, address),
         EditorTab::Symbol => placeholder_card(
             "Symbol",
             &[
@@ -158,7 +167,7 @@ fn view_active_tab<'a>(
             editor,
             editor.symbol.as_ref().zip(editor.footprint.as_ref()),
             tokens,
-            window_id,
+            address,
         ),
         EditorTab::Params => placeholder_card(
             "Parameters",
@@ -184,7 +193,7 @@ fn view_active_tab<'a>(
             ],
             tokens,
         ),
-        EditorTab::History => history::view(editor, tokens, window_id),
+        EditorTab::History => history::view(editor, tokens, address),
         EditorTab::WhereUsed => where_used::view(editor, library_state, tokens),
     };
     container(inner)
@@ -197,14 +206,18 @@ fn view_active_tab<'a>(
 fn view_footer<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let primary = |label: &'static str, msg: EditorMsg| {
+    let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
         button(container(text(label).size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(LibraryMessage::EditorEvent { window_id, msg })
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: addr.library_path.clone(),
+                component_id: addr.component_id,
+                msg,
+            })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgb(
                     0.00, 0.47, 0.84,
@@ -218,9 +231,13 @@ fn view_footer<'a>(
                 ..iced::widget::button::Style::default()
             })
     };
-    let secondary = |label: &'static str, msg: EditorMsg| {
+    let secondary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
         button(container(text(label).size(11).color(text_c)).padding([4, 14]))
-            .on_press(LibraryMessage::EditorEvent { window_id, msg })
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: addr.library_path.clone(),
+                component_id: addr.component_id,
+                msg,
+            })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -236,17 +253,25 @@ fn view_footer<'a>(
     };
 
     let mut footer_row = row![
-        secondary("Save Draft", EditorMsg::SaveDraft),
+        secondary("Save Draft", EditorMsg::SaveDraft, &address),
         Space::new().width(8),
-        primary("Commit", EditorMsg::Commit),
+        primary("Commit", EditorMsg::Commit, &address),
     ]
     .align_y(iced::Alignment::Center);
     if editor.review_required {
         footer_row = footer_row.push(Space::new().width(8));
-        footer_row = footer_row.push(secondary("Submit for Review", EditorMsg::SubmitForReview));
+        footer_row = footer_row.push(secondary(
+            "Submit for Review",
+            EditorMsg::SubmitForReview,
+            &address,
+        ));
     }
     footer_row = footer_row.push(Space::new().width(Length::Fill));
-    footer_row = footer_row.push(secondary("Where Used", EditorMsg::OpenWhereUsedTab));
+    footer_row = footer_row.push(secondary(
+        "Where Used",
+        EditorMsg::OpenWhereUsedTab,
+        &address,
+    ));
 
     container(footer_row)
         .padding([10, 14])
@@ -254,12 +279,16 @@ fn view_footer<'a>(
         .into()
 }
 
-fn close_btn<'a>(window_id: iced::window::Id, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+fn close_btn<'a>(
+    address: EditorAddress,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
     button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: address.library_path,
+            component_id: address.component_id,
             msg: EditorMsg::CloseEditor,
         })
         .style(move |_: &Theme, status: iced::widget::button::Status| {
