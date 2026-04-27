@@ -198,6 +198,8 @@ impl Signex {
                     selected_child_sheet: None,
                     child_sheet_border_picker_open: false,
                     child_sheet_fill_picker_open: false,
+                    child_sheet_border_advanced_open: false,
+                    child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
