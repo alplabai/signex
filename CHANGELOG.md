@@ -6,6 +6,79 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-04-27
+
+The output-and-polish release. Adds the full PDF / BOM / netlist export pipeline, multi-project workspaces, Altium-style dirty tracking, a chrome refactor with the new `TabPill` widget, hierarchical-sheet rendering parity, and KiCad-parity field autoplace. Every v0.8.x sub-feature ships under this one tag.
+
+### Output subsystem
+
+- **PDF export** — tabbed Export modal (file picker / settings / pan-drag preview), bookmarks per sheet, theme palette aware, DPI hookup, physical-structure tokens
+- **BOM** — Altium-spec preview modal with column picker, variant picker, sort / drag / scroll, options applied on export, format-layer export (CSV / HTML / XLSX-ready)
+- **Netlist** — date + path polish, KiCad-format export, output engine validation
+- Unified PDF preview modal — File ▸ Export PDF and File ▸ Print Preview both open the same overlay; legacy `view_pdf_options_dialog` + 12 `ExportPdfSet*` / `ExportPdfDialog*` variants pruned
+
+### Multi-project workspace
+
+- Multiple `.snxprj` projects open side-by-side in the same window
+- `TabInfo` carries `Option<ProjectId>`; `active_project` scoped to focused tab
+- Accent-tinted active project root + per-project Close menu action
+- Per-tree-path semantics for project tree actions (right-click on project B with project A active still operates on B)
+- Phase 2.5 cleanup — legacy single-project fields removed from `DocumentState` (#54, #55, #56)
+
+### Dirty tracking + tab right-click menu
+
+- Altium-style `dirty_paths` model — closing a tab never prompts; engines park while dirty
+- Project-close prompts with a Save All / Discard All / Cancel modal listing every dirty file
+- Tab bar right-click menu replaces the inline close / undock buttons
+
+### Hierarchical sheets
+
+- Child-sheet pins rendered as Altium-style ports (no protruding stubs), inward direction
+- Pin labels rotate vertical on top / bottom edges for parity
+- Per-sheet stroke / fill colours round-trip and editable from the Properties panel
+- `[[multisheet]]` Style preference (with sheet-alpha round-trip fix)
+- Child-sheet name / filename rendered outside the box per multisheet style
+- Inline preset palette under the colour row before opening the picker
+- Altium-green default sheet palette
+
+### Symbol field handling (KiCad parity)
+
+- Autoplace fields on rotate / mirror — body-bbox classification, full text-height clearance, anchored to selection bbox including pins, two-text-height autoplace clearance, body-edge stack alignment
+- Reference and Value rotate independently; rotate / mirror compose with symbol orientation
+- Property `justify` mirrored under rotation fold and mirror flags
+- KiCad `GetDrawRotation` toggle parity; symbol field rotation treated as absolute screen angle
+- Re-autoplace marked fields on load to repair legacy rotations
+- Property `justify` parsing defaults to Center per KiCad spec
+- Pin numbers rotate along the pin axis for vertical pins
+- Single em-size used for schematic text (parity with KiCad)
+
+### Chrome refactor
+
+- New `TabPill` custom widget — 3-sided borders sharing L / R edges between adjacent tabs, permanent strip baseline, theme-border instead of pure black, drag accent follows theme accent
+- Modal close button unified across all 11 modals; chrome icon sizes bumped; thicker panel strokes; modal alignment so borders trace rounded corners
+- Inactive tab fill is now visible (was theme-bg, blending in)
+- New `chrome-catalog` crate + UI iteration workflow doc
+- Taller top-chrome search bar (24 → 28); narrow Justification labels in Properties
+
+### Canvas + engine
+
+- Adaptive multi-level grid that scales smoothly with zoom
+- Schematic editor grid style preference
+
+### Plumbing
+
+- `kicad-parser` / `kicad-writer` round-trip per-sheet stroke / fill colours and respect label style for defaults
+- `signex-types::Label` gains `justify_v` to match renderer + parser contract
+- Engine command surface expanded with multi-project routing
+
+### Issues closed
+
+- #54 multi-project workspace
+- #55 multi-project + chrome polish + unified PDF preview
+- #56 phase 2.5 cleanup of legacy single-project fields
+
+[Full changelog](https://github.com/alplabai/signex/compare/v0.7.0...v0.8.0) · [Release artifacts](https://github.com/alplabai/signex/releases/tag/v0.8.0)
+
 ## [0.7.0] — 2026-04-22
 
 The schematic-phase release. Adds ERC & validation, project-wide annotation, real multi-window architecture via `iced::daemon`, per-window engine/canvas, borderless chrome, and a full Signex brand rollout. Every v0.7.x sub-feature ships under this one tag.
