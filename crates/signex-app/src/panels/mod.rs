@@ -5210,12 +5210,12 @@ fn view_child_sheet_properties<'a>(
 /// One swatch row in the child-sheet Style section.
 ///
 /// Click flow:
-///   1. Click swatch → opens a small DropDown showing a preset palette
-///      (10 named colours) plus "Custom…" and (when an override is
-///      active) "Reset to Default". DropDown closes when the user
-///      clicks anywhere outside.
-///   2. Click "Custom…" inside the dropdown → expands into the full
-///      iced_aw HSV / RGB ColorPicker overlay.
+///   1. Click swatch → expands an inline preset palette panel below
+///      the row (full panel width, like the canvas-font popup) with
+///      a 12-colour grid plus "Custom…" and (when an override is
+///      active) "Reset to Default".
+///   2. Click the swatch again to collapse, or click "Custom…" to
+///      switch to the iced_aw HSV / RGB ColorPicker overlay.
 ///
 /// Both the palette pick and the advanced-picker submit reuse the
 /// same `EditChildSheet*Color` message so engine command + undo/redo
@@ -5273,7 +5273,7 @@ fn child_sheet_color_row<'a>(
         })
         .into();
 
-    let underlay = iced::widget::button(
+    let swatch_button = iced::widget::button(
         row![
             swatch,
             text(label_text).size(10).color(Color::from_rgb(0.90, 0.90, 0.92)),
@@ -5299,7 +5299,7 @@ fn child_sheet_color_row<'a>(
         let picker = iced_aw::ColorPicker::new(
             true,
             preview_color,
-            underlay,
+            swatch_button,
             PanelMsg::CancelChildSheetColorPicker,
             move |c| make_submit(c),
         );
@@ -5316,7 +5316,23 @@ fn child_sheet_color_row<'a>(
         .into();
     }
 
-    // ── Preset palette dropdown ──
+    // The header row (label + swatch button) is always shown.
+    let header = container(
+        row![
+            text(label.to_string()).size(10).color(muted).width(96),
+            swatch_button,
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 8])
+    .width(Length::Fill);
+
+    if !show_picker {
+        return header.into();
+    }
+
+    // ── Inline preset palette (rendered below the row, full width) ──
     let presets: [(&str, [u8; 3]); 12] = [
         ("Black",       [0x00, 0x00, 0x00]),
         ("Dark Gray",   [0x40, 0x40, 0x40]),
@@ -5332,19 +5348,20 @@ fn child_sheet_color_row<'a>(
         ("Purple",      [0x8E, 0x44, 0xAD]),
     ];
 
-    // 4 columns × 3 rows of preset swatches.
+    // 6 columns × 2 rows of preset swatches; each cell stretches
+    // proportionally so the grid always fills the available panel
+    // width (no clipping in narrow docks).
     let mut palette_grid: Column<'a, PanelMsg> = Column::new().spacing(4);
-    for chunk in presets.chunks(4) {
+    for chunk in presets.chunks(6) {
         let mut r: iced::widget::Row<'a, PanelMsg> = iced::widget::Row::new().spacing(4);
-        for (name, rgb) in chunk {
+        for (_name, rgb) in chunk {
             let c = iced::Color::from_rgb(
                 rgb[0] as f32 / 255.0,
                 rgb[1] as f32 / 255.0,
                 rgb[2] as f32 / 255.0,
             );
-            let label_color = *name;
             let swatch_btn = iced::widget::button(Space::new())
-                .width(22)
+                .width(Length::Fill)
                 .height(22)
                 .padding(0)
                 .on_press(make_submit(c))
@@ -5357,23 +5374,31 @@ fn child_sheet_color_row<'a>(
                     },
                     ..iced::widget::button::Style::default()
                 });
-            // Reserved for future tooltip work: name unused for now.
-            let _ = label_color;
             r = r.push(swatch_btn);
         }
         palette_grid = palette_grid.push(r);
     }
 
-    let mut overlay_col: Column<'a, PanelMsg> = Column::new().spacing(6).padding(8);
-    overlay_col = overlay_col.push(
-        text("Preset Colours")
-            .size(10)
-            .color(muted),
-    );
-    overlay_col = overlay_col.push(palette_grid);
+    let mut palette_col: Column<'a, PanelMsg> =
+        Column::new().spacing(6).padding([6, 8]).width(Length::Fill);
+    palette_col = palette_col.push(text("Preset Colours").size(10).color(muted));
+    palette_col = palette_col.push(palette_grid);
 
+    let mut action_row: iced::widget::Row<'a, PanelMsg> =
+        iced::widget::Row::new().spacing(4).width(Length::Fill);
+    action_row = action_row.push(
+        iced::widget::button(
+            text("Custom…")
+                .size(10)
+                .color(Color::from_rgb(0.92, 0.92, 0.94)),
+        )
+        .padding([4, 10])
+        .width(Length::Fill)
+        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
+        .style(iced::widget::button::secondary),
+    );
     if current.is_some() {
-        overlay_col = overlay_col.push(
+        action_row = action_row.push(
             iced::widget::button(
                 text("Reset to Default")
                     .size(10)
@@ -5385,21 +5410,10 @@ fn child_sheet_color_row<'a>(
             .style(iced::widget::button::secondary),
         );
     }
+    palette_col = palette_col.push(action_row);
 
-    overlay_col = overlay_col.push(
-        iced::widget::button(
-            text("Custom…")
-                .size(10)
-                .color(Color::from_rgb(0.92, 0.92, 0.94)),
-        )
-        .padding([4, 10])
+    let palette_panel = container(palette_col)
         .width(Length::Fill)
-        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
-        .style(iced::widget::button::secondary),
-    );
-
-    let overlay_panel: Element<'a, PanelMsg> = container(overlay_col)
-        .width(Length::Fixed(160.0))
         .style(move |_t: &Theme| container::Style {
             background: Some(Background::Color(Color::from_rgb(0.16, 0.16, 0.18))),
             border: Border {
@@ -5408,25 +5422,12 @@ fn child_sheet_color_row<'a>(
                 radius: 4.0.into(),
             },
             ..container::Style::default()
-        })
-        .into();
+        });
 
-    let dropdown = iced_aw::DropDown::new(underlay, overlay_panel, show_picker)
-        .alignment(iced_aw::drop_down::Alignment::Bottom)
-        .offset(4.0)
-        .on_dismiss(PanelMsg::CancelChildSheetColorPicker);
-
-    container(
-        row![
-            text(label.to_string()).size(10).color(muted).width(96),
-            dropdown,
-        ]
+    column![header, container(palette_panel).padding([0, 8])]
         .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([4, 8])
-    .width(Length::Fill)
-    .into()
+        .width(Length::Fill)
+        .into()
 }
 
 /// Numeric stroke-width row for the child-sheet Style section.
