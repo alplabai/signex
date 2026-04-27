@@ -345,6 +345,70 @@ pub enum EditorMsg {
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
 
+    // ── WS-K: Supply tab ──────────────────────────────────────
+    // Primary MPN
+    /// Edit the primary MPN's manufacturer string.
+    SupplyPrimarySetManufacturer(String),
+    /// Edit the primary MPN's MPN string.
+    SupplyPrimarySetMpn(String),
+    /// Pick the primary MPN's approval status.
+    SupplyPrimarySetStatus(AlternateStatus),
+    /// Edit the primary MPN's free-form notes.
+    SupplyPrimarySetNotes(String),
+
+    // Alternates
+    /// Append a fresh blank alternate row.
+    SupplyAlternateAdd,
+    /// Edit the manufacturer of the alternate at `idx`.
+    SupplyAlternateSetManufacturer { idx: usize, value: String },
+    /// Edit the MPN of the alternate at `idx`.
+    SupplyAlternateSetMpn { idx: usize, value: String },
+    /// Pick the approval status of the alternate at `idx`.
+    SupplyAlternateSetStatus { idx: usize, value: AlternateStatus },
+    /// Edit the free-form notes of the alternate at `idx`.
+    SupplyAlternateSetNotes { idx: usize, value: String },
+    /// Drop the alternate row at `idx`.
+    SupplyAlternateRemove { idx: usize },
+
+    // Distributor listings
+    /// Append a fresh blank distributor listing row.
+    SupplyListingAdd,
+    /// Pick the distributor source for the listing at `idx`. The
+    /// dispatcher converts `DistributorSource` to the canonical string
+    /// stored on `DistributorListing.distributor`.
+    SupplyListingSetDistributor { idx: usize, value: DistributorSource },
+    /// Edit the SKU of the distributor listing at `idx`.
+    SupplyListingSetSku { idx: usize, value: String },
+    /// Edit the URL of the distributor listing at `idx`. Empty string
+    /// clears the field back to `None`.
+    SupplyListingSetUrl { idx: usize, value: String },
+    /// Drop the distributor listing row at `idx`.
+    SupplyListingRemove { idx: usize },
+    // ── /WS-K ─────────────────────────────────────────────────
+
+    // ── WS-J: Params tab ──────────────────────────────────────
+    /// Set a `ParamValue::Text` parameter's value directly. Text inputs
+    /// can flush on every keystroke without a parse step.
+    ParamSetText { name: String, value: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Number`
+    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// the value is committed via `ParamCommitNumber`.
+    ParamSetNumberBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Number` row.
+    ParamCommitNumber { name: String },
+    /// Live-update the per-row edit buffer for a `ParamValue::Measurement`
+    /// row's value field.
+    ParamSetMeasurementBuf { name: String, buf: String },
+    /// Commit the live buffer for a `ParamValue::Measurement` row.
+    ParamCommitMeasurement { name: String, unit: String },
+    /// Toggle a `ParamValue::Bool` parameter.
+    ParamSetBool { name: String, value: bool },
+    /// Drop a parameter from `draft.parameters`.
+    ParamRemove { name: String },
+    /// Add a custom parameter row with an empty value of the chosen kind.
+    ParamAddCustom { name: String, kind: ParamKindMsg },
+    // ── /WS-J ─────────────────────────────────────────────────
+
     // ── WS-L: Sim tab ─────────────────────────────────────────
     /// Toggle the "Has SPICE Model" checkbox. `true` constructs a fresh
     /// `SimModel` and binds it via `Revision::sim_ref`; `false` clears

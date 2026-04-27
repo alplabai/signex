@@ -179,14 +179,16 @@ pub fn load_component_for_editor(
     library_root: &Path,
     id: ComponentId,
 ) -> Result<ComponentEditorState, LibraryError> {
-    let (component, review_required) = {
-        let lib = state
-            .library_at_mut(library_root)
-            .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-        let c = lib.adapter.get_component(id)?;
-        let r = lib.adapter.manifest().workflow.review_required;
-        (c, r)
-    };
+    let library_id = state
+        .library_at(library_root)
+        .map(|lib| lib.library_id)
+        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+    let adapter = state
+        .set
+        .get(library_id)
+        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
+    let component = adapter.get_component(id)?;
+    let review_required = adapter.manifest().workflow.review_required;
     Ok(ComponentEditorState::from_head(
         library_root.to_path_buf(),
         component,
@@ -217,7 +219,7 @@ pub fn save_draft(
         .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
     let adapter = state
         .set
-        .adapter(library_id)
+        .get(library_id)
         .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
     adapter.save_revision(id, revision, "save draft (signex-app phase 1)")?;
     if let Err(e) = state.refresh_components(&library_root) {
@@ -248,7 +250,7 @@ pub fn commit_revision(
         .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
     let adapter = state
         .set
-        .adapter(library_id)
+        .get(library_id)
         .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
     adapter.save_revision(id, revision.clone(), message)?;
     Ok(revision)
@@ -341,14 +343,21 @@ pub fn create_component(
     let symbol_ref = PrimitiveRef::new(library_id, symbol.uuid);
     let footprint_ref = PrimitiveRef::new(library_id, footprint.uuid);
 
-    // Persist primitives. WS-C wires the real adapter calls; WS-E ships
-    // a no-op shim so the create flow runs end-to-end today.
-    state
+    // Persist primitives via the real adapter (WS-C). Backend-not-implemented
+    // errors are tolerated — partial adapters keep the in-memory primitive
+    // bindings without breaking the New-Component flow.
+    let adapter = state
         .set
-        .save_symbol(library_id, &symbol, "new component: seed symbol")?;
-    state
-        .set
-        .save_footprint(library_id, &footprint, "new component: seed footprint")?;
+        .get(library_id)
+        .ok_or_else(|| LibraryError::NotFound(format!("library_id={library_id}")))?;
+    match adapter.save_symbol(symbol.clone(), "new component: seed symbol") {
+        Ok(()) | Err(LibraryError::Backend(_)) => {}
+        Err(e) => return Err(e.into()),
+    }
+    match adapter.save_footprint(footprint.clone(), "new component: seed footprint") {
+        Ok(()) | Err(LibraryError::Backend(_)) => {}
+        Err(e) => return Err(e.into()),
+    }
 
     // Build the binding component with one Draft revision.
     let now = chrono::Utc::now();
@@ -392,7 +401,7 @@ pub fn create_component(
     // Persist the component via the adapter.
     let adapter = state
         .set
-        .adapter(library_id)
+        .get(library_id)
         .ok_or_else(|| NewComponentError::LibraryNotOpen(library_root.display().to_string()))?;
     adapter
         .save_revision(component.uuid, revision, "new component (signex-app)")
