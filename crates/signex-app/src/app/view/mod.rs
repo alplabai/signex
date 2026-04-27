@@ -3557,6 +3557,7 @@ impl Signex {
                 &ui.preferences_draft_font,
                 ui.preferences_draft_power_port_style,
                 ui.preferences_draft_label_style,
+                ui.preferences_draft_multisheet_style,
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
                 &ui.erc_severity_override,

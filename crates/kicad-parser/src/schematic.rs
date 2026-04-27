@@ -238,17 +238,7 @@ fn parse_stroke_width(node: &SExpr) -> f64 {
 /// the stroke has no color override — callers default to the theme.
 fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let color = node.find("stroke")?.find("color")?;
-    let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
-    let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
-    let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
-    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
-    // A zero RGBA is Standard's way of saying "use theme default" — we
-    // treat that as None so the sheet round-trips cleanly when the
-    // user hasn't customised the colour.
-    if r == 0 && g == 0 && b == 0 && a == 0 {
-        return None;
-    }
-    Some(signex_types::schematic::StrokeColor { r, g, b, a })
+    parse_rgba_quad(color)
 }
 
 /// Parse `(fill (color R G B A))` if present. Used by `(sheet ...)` blocks
@@ -256,10 +246,26 @@ fn parse_stroke_color(node: &SExpr) -> Option<signex_types::schematic::StrokeCol
 /// the colour is fully transparent (Standard's "use default").
 fn parse_fill_color(node: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let color = node.find("fill")?.find("color")?;
+    parse_rgba_quad(color)
+}
+
+/// Decode a Standard `(color R G B A)` quad. RGB channels are 0..255 integers.
+/// Alpha may be either a 0..1 float (the form Standard writes for sheets and
+/// strokes) or a 0..255 integer (rare legacy form); values <= 1.0 are
+/// treated as the float form and rescaled to 0..255 so renderers can use a
+/// single byte representation. A fully transparent zero-RGBA quad is mapped
+/// to None so callers fall back to the theme default and the file round-
+/// trips cleanly when the user has not customised the colour.
+fn parse_rgba_quad(color: &SExpr) -> Option<signex_types::schematic::StrokeColor> {
     let r = color.arg_f64(0)?.clamp(0.0, 255.0) as u8;
     let g = color.arg_f64(1)?.clamp(0.0, 255.0) as u8;
     let b = color.arg_f64(2)?.clamp(0.0, 255.0) as u8;
-    let a = color.arg_f64(3).unwrap_or(255.0).clamp(0.0, 255.0) as u8;
+    let a_raw = color.arg_f64(3).unwrap_or(1.0);
+    let a = if a_raw <= 1.0 {
+        (a_raw.clamp(0.0, 1.0) * 255.0).round() as u8
+    } else {
+        a_raw.clamp(0.0, 255.0) as u8
+    };
     if r == 0 && g == 0 && b == 0 && a == 0 {
         return None;
     }
