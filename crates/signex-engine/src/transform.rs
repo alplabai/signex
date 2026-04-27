@@ -391,6 +391,25 @@ impl Engine {
 /// symbol body with the fewest pins, mirroring KiCad's `AutoplaceFields`
 /// behaviour. Fields are stacked vertically and given a justify/rotation
 /// that always renders horizontally.
+/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is set.
+///
+/// Older signex builds wrote field rotations as `360 - sym.rotation` to
+/// compensate for a renderer bug. Now that field rotation is treated as
+/// an absolute screen angle (matching KiCad), those stored values appear
+/// rotated 90/270°. Re-autoplacing on load regenerates correct field
+/// positions and angles transparently for both legacy and current files.
+pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
+    let lib_symbols = document.lib_symbols.clone();
+    for symbol in &mut document.symbols {
+        if !symbol.fields_autoplaced {
+            continue;
+        }
+        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+            autoplace_fields(symbol, lib);
+        }
+    }
+}
+
 fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
     use signex_types::schematic::{HAlign, VAlign};
 
