@@ -1,17 +1,22 @@
 //! Integration tests for the local + git library adapter.
 //!
-//! Per `v0.9-refactor-2-plan.md` §7, the row-CRUD impls land in WS-2.
-//! For WS-1 we keep just the primitive (`Symbol` / `Footprint` / `SimModel`)
-//! flows + library_id round-trip — those stayed correct under the refactor.
-//! The component / revision / search / lock tests come back in WS-2 once
-//! the trait surface and on-disk layout are filled in.
+//! Per `v0.9-refactor-2-plan.md` §7, this exercise covers both flows the
+//! adapter ships:
+//!
+//! * Primitive (`Symbol` / `Footprint` / `SimModel`) round-trip + commit.
+//! * Row CRUD over `tables/<category>.tsv` — insert/update/delete by id,
+//!   lookup by `internal_pn`, and `iter_rows` across every table.
 
 #![cfg(feature = "local-git")]
 
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
 use signex_library::adapters::local_git::LocalGitAdapter;
+use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::identity::{ComponentClass, InternalPn, RowId};
+use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
+use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
     Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinElectricalType,
