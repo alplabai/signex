@@ -1,7 +1,10 @@
-//! `/components/:uuid/locks` — advisory locking.
+//! `/rows/:row_id/locks` — advisory locking over the WS-4 row tier.
 //!
-//! The caller identifies itself with the `x-signex-holder` header. Body picks
-//! the field-set:
+//! Per `v0.9-refactor-2-plan.md` §7, locks now key off `RowId` rather than
+//! the legacy `ComponentId` (the type alias was removed alongside the
+//! `Component`/`Revision` model). The wire format is identical to v0.9-original:
+//! the caller identifies itself with the `x-signex-holder` header and the
+//! body picks the field-set.
 //!
 //! ```json
 //! { "field_set": "Symbol" }
@@ -16,15 +19,15 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use signex_library::adapter::FieldSet;
-use signex_library::identity::ComponentId;
+use signex_library::identity::RowId;
 
 use crate::db::AppState;
 use crate::locks::LockErrorKind;
-use crate::routes::components::ApiError;
+use crate::routes::error::ApiError;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
-        "/components/:uuid/locks",
+        "/rows/:row_id/locks",
         post(acquire_lock).delete(release_lock),
     )
 }
@@ -70,15 +73,17 @@ fn holder_from(headers: &HeaderMap) -> Result<String, ApiError> {
 
 async fn acquire_lock(
     State(state): State<AppState>,
-    Path(uuid): Path<String>,
+    Path(row_id): Path<String>,
     headers: HeaderMap,
     Json(body): Json<LockBody>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let uuid = ComponentId::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let row_id: RowId = row_id
+        .parse()
+        .map_err(|e: uuid::Error| ApiError::bad_request(e.to_string()))?;
     let holder = holder_from(&headers)?;
     state
         .locks()
-        .try_lock(uuid, body.field_set.into(), &holder)
+        .try_lock(row_id.as_uuid(), body.field_set.into(), &holder)
         .map_err(|e| match e.kind {
             LockErrorKind::Held { holder } => ApiError::conflict(format!("lock held by {holder}")),
             LockErrorKind::UnknownHolder => ApiError::bad_request("unknown holder"),
@@ -88,15 +93,17 @@ async fn acquire_lock(
 
 async fn release_lock(
     State(state): State<AppState>,
-    Path(uuid): Path<String>,
+    Path(row_id): Path<String>,
     headers: HeaderMap,
     Json(body): Json<LockBody>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let uuid = ComponentId::parse_str(&uuid).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let row_id: RowId = row_id
+        .parse()
+        .map_err(|e: uuid::Error| ApiError::bad_request(e.to_string()))?;
     let holder = holder_from(&headers)?;
     state
         .locks()
-        .release(uuid, body.field_set.into(), &holder)
+        .release(row_id.as_uuid(), body.field_set.into(), &holder)
         .map_err(|e| match e.kind {
             LockErrorKind::Held { holder } => ApiError::conflict(format!("lock held by {holder}")),
             LockErrorKind::UnknownHolder => ApiError::bad_request("not lock holder"),
