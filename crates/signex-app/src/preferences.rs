@@ -6,7 +6,7 @@
 
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_render::{LabelStyle, PowerPortStyle};
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::fonts;
@@ -16,17 +16,21 @@ use crate::fonts;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Schematic Editor — display options (grid style, etc.).
+    SchematicEditor,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
     // Future: Editor, Shortcuts, ...
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] = &[PrefNav::Appearance, PrefNav::Erc];
+    pub const ALL: &'static [PrefNav] =
+        &[PrefNav::Appearance, PrefNav::SchematicEditor, PrefNav::Erc];
 
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::SchematicEditor => "Schematic Editor",
             PrefNav::Erc => "Electrical Rules",
         }
     }
@@ -34,6 +38,7 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::SchematicEditor => "Editors",
             PrefNav::Erc => "Validation",
         }
     }
@@ -59,6 +64,10 @@ pub enum PrefMsg {
     DraftPowerPortStyle(PowerPortStyle),
     /// Update draft global/hier label drawing style (applies as live preview).
     DraftLabelStyle(LabelStyle),
+    /// Update draft hierarchical-sheet drawing style (applies as live preview).
+    DraftMultisheetStyle(MultisheetStyle),
+    /// Update draft visible-grid render style (applies as live preview).
+    DraftGridStyle(GridStyle),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -114,6 +123,8 @@ pub fn view<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
+    draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -125,6 +136,8 @@ pub fn view<'a>(
         draft_font,
         draft_power_port_style,
         draft_label_style,
+        draft_multisheet_style,
+        draft_grid_style,
         custom_name,
         dirty,
         erc_overrides,
@@ -162,6 +175,8 @@ fn build_dialog<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
+    draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -206,6 +221,8 @@ fn build_dialog<'a>(
             draft_font,
             draft_power_port_style,
             draft_label_style,
+            draft_multisheet_style,
+            draft_grid_style,
             custom_name,
             erc_overrides,
         ),
@@ -337,6 +354,8 @@ fn build_content<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
+    draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
@@ -347,8 +366,10 @@ fn build_content<'a>(
             draft_font,
             draft_power_port_style,
             draft_label_style,
+            draft_multisheet_style,
             custom_name,
         ),
+        PrefNav::SchematicEditor => content_schematic_editor(draft_grid_style),
         PrefNav::Erc => content_erc(erc_overrides),
     };
 
@@ -371,6 +392,7 @@ fn content_appearance<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -541,6 +563,64 @@ fn content_appearance<'a>(
                 [LabelStyle::KiCad, LabelStyle::Altium],
                 Some(draft_label_style),
                 PrefMsg::DraftLabelStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(16));
+    col = col.push(
+        row![
+            column![
+                text("Multisheet Style").size(12).color(TEXT_PRI),
+                text(
+                    "Controls hierarchical sheet body fill defaults. \
+                     Per-sheet colours from the source file always win."
+                )
+                .size(10)
+                .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                [MultisheetStyle::KiCad, MultisheetStyle::Altium],
+                Some(draft_multisheet_style),
+                PrefMsg::DraftMultisheetStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    col.into()
+}
+
+// ─── Schematic Editor page ────────────────────────────────────
+
+fn content_schematic_editor<'a>(draft_grid_style: GridStyle) -> Element<'a, PrefMsg> {
+    let mut col = column![].spacing(0).padding([16, 20]);
+
+    col = col.push(section_title("Grid Display"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Style").size(12).color(TEXT_PRI),
+                text("How the visible schematic grid is drawn at each grid point.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(260),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                [GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses],
+                Some(draft_grid_style),
+                PrefMsg::DraftGridStyle,
             )
             .text_size(12)
             .width(200),

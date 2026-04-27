@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use signex_render::{LabelStyle, PowerPortStyle};
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
@@ -176,6 +176,82 @@ pub fn write_label_style_pref(style: LabelStyle) {
         LabelStyle::Altium => "altium".to_string(),
     });
 
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read `multisheet_style` from preferences file.
+/// Defaults to `KiCad` when missing or invalid.
+pub fn read_multisheet_style_pref() -> MultisheetStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return MultisheetStyle::KiCad;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return MultisheetStyle::KiCad;
+    };
+
+    match json["multisheet_style"].as_str().unwrap_or("kicad") {
+        "altium" | "Altium" => MultisheetStyle::Altium,
+        _ => MultisheetStyle::KiCad,
+    }
+}
+
+/// Persist multisheet style without clobbering other preference keys.
+pub fn write_multisheet_style_pref(style: MultisheetStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    json["multisheet_style"] = serde_json::Value::String(match style {
+        MultisheetStyle::KiCad => "kicad".to_string(),
+        MultisheetStyle::Altium => "altium".to_string(),
+    });
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the schematic visible-grid `grid_style` preference. Defaults
+/// to `Dots` (matches the previous hard-coded behaviour).
+pub fn read_grid_style_pref() -> GridStyle {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return GridStyle::Dots;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return GridStyle::Dots;
+    };
+    match json["grid_style"].as_str().unwrap_or("dots") {
+        "lines" | "Lines" => GridStyle::Lines,
+        "crosses" | "small_crosses" | "SmallCrosses" => GridStyle::SmallCrosses,
+        _ => GridStyle::Dots,
+    }
+}
+
+/// Persist grid style without clobbering other preference keys.
+pub fn write_grid_style_pref(style: GridStyle) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_style"] = serde_json::Value::String(match style {
+        GridStyle::Dots => "dots".to_string(),
+        GridStyle::Lines => "lines".to_string(),
+        GridStyle::SmallCrosses => "crosses".to_string(),
+    });
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
     }
