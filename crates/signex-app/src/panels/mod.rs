@@ -708,6 +708,19 @@ pub enum PanelMsg {
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
+    /// Properties panel — edit a pin's designator (number) on the
+    /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`
+    /// because the symbol editor's lifecycle owns the pin edits.
+    SymEditorSetPinNumber { pin_idx: usize, value: String },
+    /// Properties panel — edit a pin's display name.
+    SymEditorSetPinName { pin_idx: usize, value: String },
+    /// Properties panel — edit a pin's stub length in mm.
+    SymEditorSetPinLength { pin_idx: usize, value: f64 },
+    /// Properties panel — edit the active symbol's name (Altium
+    /// "Design Item ID"). Affects the SCH Library panel row label
+    /// + the on-disk container's `display_name` when the active
+    /// symbol is the only one in the file.
+    SymEditorSetSymbolName(String),
     /// SCH Library panel: switch the active symbol within the open
     /// `.snxsym` container to the given index.
     SchLibrarySelectSymbol(usize),
@@ -1833,10 +1846,10 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 /// Properties panel content for the active `.snxsym` standalone editor
 /// tab. Mirrors Altium SchLib's right-dock Properties: pin selected →
-/// pin properties, field selected → field properties, nothing selected
-/// → symbol-level defaults (name, uuid, pin count). Read-only for
-/// Phase 1 — edit handlers are wired in Phase 3 alongside the Active
-/// Bar drawing tools.
+/// pin properties (editable Designator / Name / Length, read-only
+/// Electrical / Position / Orientation), field selected → field
+/// properties, nothing selected → symbol-level defaults (Name /
+/// UUID / pin count) with Name editable.
 fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
     muted: Color,
@@ -1858,7 +1871,7 @@ fn view_symbol_editor_properties<'a>(
     );
     col = col.push(thin_sep(border_c));
 
-    let prop_row = |label: &str, value: String| {
+    let prop_row_static = |label: &str, value: String| {
         container(
             row![
                 text(label.to_string())
@@ -1878,23 +1891,115 @@ fn view_symbol_editor_properties<'a>(
 
     match &sym.selected {
         SymbolEditorSelection::None => {
-            col = col.push(prop_row("Name", sym.symbol_name.clone()));
-            col = col.push(prop_row("UUID", sym.symbol_uuid.to_string()));
-            col = col.push(prop_row("Pins", sym.pins.len().to_string()));
+            // Symbol Name is editable via text_input.
+            let name_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Name")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("Symbol name", sym.symbol_name.as_str())
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(PanelMsg::SymEditorSetSymbolName)
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(name_row);
+            col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
+            col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
         }
         SymbolEditorSelection::Pin(pin) => {
-            col = col.push(prop_row("Designator", pin.number.clone()));
-            col = col.push(prop_row("Name", pin.name.clone()));
-            col = col.push(prop_row("Electrical", pin.electrical.clone()));
-            col = col.push(prop_row(
+            let pin_idx = pin.idx;
+            let designator_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Designator")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("number", pin.number.as_str())
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| PanelMsg::SymEditorSetPinNumber {
+                            pin_idx,
+                            value: s,
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(designator_row);
+
+            let name_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Name")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("name", pin.name.as_str())
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| PanelMsg::SymEditorSetPinName {
+                            pin_idx,
+                            value: s,
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(name_row);
+
+            col = col.push(prop_row_static("Electrical", pin.electrical.clone()));
+            col = col.push(prop_row_static(
                 "Position",
                 format!("{:.3} mm, {:.3} mm", pin.position[0], pin.position[1]),
             ));
-            col = col.push(prop_row("Orientation", pin.orientation.clone()));
-            col = col.push(prop_row("Length", format!("{:.3} mm", pin.length)));
+            col = col.push(prop_row_static("Orientation", pin.orientation.clone()));
+
+            // Length is editable via numeric text_input — best-effort
+            // f64 parse, dropped on parse failure so half-typed values
+            // ("2." / "-") survive across rerenders.
+            let length_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Length")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::text_input("mm", &format!("{:.3}", pin.length))
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| {
+                            let parsed = s.trim().parse::<f64>().unwrap_or(0.0);
+                            PanelMsg::SymEditorSetPinLength {
+                                pin_idx,
+                                value: parsed,
+                            }
+                        })
+                        .width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(length_row);
         }
         SymbolEditorSelection::FieldReference => {
-            col = col.push(prop_row("Field", "Reference (designator)".to_string()));
+            col = col.push(prop_row_static("Field", "Reference (designator)".to_string()));
             col = col.push(
                 container(
                     text("Bound to the host Component's designator at place-time.")
@@ -1905,7 +2010,7 @@ fn view_symbol_editor_properties<'a>(
             );
         }
         SymbolEditorSelection::FieldValue => {
-            col = col.push(prop_row("Field", "Value".to_string()));
+            col = col.push(prop_row_static("Field", "Value".to_string()));
             col = col.push(
                 container(
                     text("Bound to the host Component's value at place-time.")
@@ -1920,9 +2025,11 @@ fn view_symbol_editor_properties<'a>(
     col = col.push(thin_sep(border_c));
     col = col.push(
         container(
-            text("Pin/body editing is in flight — Active Bar tools land in v0.9 phase 3.")
-                .size(10)
-                .color(muted),
+            text(
+                "Click on the canvas to select. Drawing tools (rectangle, line, arc) land in v0.9 phase 3c.",
+            )
+            .size(10)
+            .color(muted),
         )
         .padding([6, 8]),
     );
