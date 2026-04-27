@@ -23,6 +23,8 @@ pub mod params;
 pub mod pin_map;
 // WS-L: Sim tab
 pub mod sim;
+// WS-7 (refactor-2): standalone primitive editor tabs
+pub mod standalone;
 pub mod submit_for_review;
 pub mod supply; // WS-K: Supply tab
 pub mod symbol;
@@ -256,10 +258,7 @@ fn view_footer<'a>(
         .into()
 }
 
-fn close_btn<'a>(
-    address: EditorAddress,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
     button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))

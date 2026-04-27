@@ -32,7 +32,8 @@ pub use contracts::{
     TextEditState,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, SchematicTabSession, TabDocument, TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
+    TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};
 

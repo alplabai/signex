@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use signex_library::{Footprint, Symbol};
 use signex_types::pcb::PcbBoard;
 
 // WS-I: tab-not-window
@@ -27,6 +28,15 @@ pub enum TabKind {
     Schematic,
     Pcb,
     ComponentEditor(ComponentEditorTab),
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// `.snxsym` opened as a main-window document tab. Editor state
+    /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
+    /// the same path that lives on `TabInfo.path`.
+    SymbolEditor(PathBuf),
+    /// `.snxfpt` opened as a main-window document tab. Editor state
+    /// lives in [`crate::app::DocumentState::footprint_editors`] keyed
+    /// by the same path that lives on `TabInfo.path`.
+    FootprintEditor(PathBuf),
 }
 
 impl TabKind {
@@ -38,6 +48,22 @@ impl TabKind {
     pub fn as_component_editor(&self) -> Option<&ComponentEditorTab> {
         match self {
             TabKind::ComponentEditor(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// `Some(path)` if this tab is a standalone Symbol editor.
+    pub fn as_symbol_editor(&self) -> Option<&PathBuf> {
+        match self {
+            TabKind::SymbolEditor(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// `Some(path)` if this tab is a standalone Footprint editor.
+    pub fn as_footprint_editor(&self) -> Option<&PathBuf> {
+        match self {
+            TabKind::FootprintEditor(p) => Some(p),
             _ => None,
         }
     }
@@ -144,6 +170,76 @@ pub struct TabInfo {
     /// ComponentEditor tabs carry the `(library_path, component_id)`
     /// pair that resolves into `LibraryState.editors`.
     pub kind: TabKind,
+}
+
+// WS-7 (refactor-2): standalone primitive editor tabs
+/// Per-tab state for an open `.snxsym` document. Mirrors the symbol-
+/// editing fields the Component Editor's Symbol tab carries on
+/// `ComponentEditorState` but keyed by file path so the same primitive
+/// can be edited standalone without a hosting `Component`.
+///
+/// The editor reuses the existing
+/// [`crate::library::editor::symbol::canvas::SymbolCanvas`] program for
+/// pin layout + the existing
+/// [`crate::library::editor::symbol::state`] mutation helpers, so the
+/// behaviour matches the in-Component Editor experience verbatim.
+#[derive(Debug)]
+pub struct SymbolEditorState {
+    pub path: PathBuf,
+    pub primitive: Symbol,
+    pub tool: crate::library::editor::symbol::canvas::SymbolTool,
+    pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
+    pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
+    pub canvas_cache: iced::widget::canvas::Cache,
+    pub dirty: bool,
+}
+
+impl SymbolEditorState {
+    /// Build a fresh standalone editor state from a primitive loaded
+    /// off disk. `path` is the `.snxsym` file the user opened.
+    pub fn new(path: PathBuf, primitive: Symbol) -> Self {
+        Self {
+            path,
+            primitive,
+            tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
+            selected: None,
+            ai_preview: None,
+            canvas_cache: iced::widget::canvas::Cache::default(),
+            dirty: false,
+        }
+    }
+}
+
+/// Per-tab state for an open `.snxfpt` document. Mirrors the
+/// footprint-editing fields on `ComponentEditorState` but keyed by
+/// file path. Reuses the existing
+/// [`crate::library::editor::footprint::canvas::FootprintCanvas`] +
+/// [`crate::library::editor::footprint::state::FootprintEditorState`]
+/// so the behaviour matches the in-Component Editor experience verbatim.
+#[derive(Debug)]
+pub struct FootprintEditorState {
+    pub path: PathBuf,
+    pub primitive: Footprint,
+    pub state: crate::library::editor::footprint::state::FootprintEditorState,
+    pub canvas_cache: iced::widget::canvas::Cache,
+    pub dirty: bool,
+}
+
+impl FootprintEditorState {
+    /// Build a fresh standalone editor state from a primitive loaded
+    /// off disk. `path` is the `.snxfpt` file the user opened.
+    pub fn new(path: PathBuf, primitive: Footprint) -> Self {
+        let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+            &primitive,
+        );
+        Self {
+            path,
+            primitive,
+            state,
+            canvas_cache: iced::widget::canvas::Cache::default(),
+            dirty: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -108,6 +108,27 @@ pub enum LibraryMessage {
         component_id: ComponentId,
         version: Version,
     },
+    // WS-7 (refactor-2): standalone primitive editor tabs
+    /// Project tree double-click on `.snxsym` / `.snxfpt`, or Library
+    /// panel right-click → "Edit Symbol" / "Edit Footprint". Reads the
+    /// file from disk, builds a [`crate::app::SymbolEditorState`] /
+    /// [`crate::app::FootprintEditorState`], and pushes a
+    /// `TabKind::SymbolEditor(path)` / `FootprintEditor(path)` tab
+    /// into `DocumentState.tabs`. Per plan §12, primitives are
+    /// standalone main-window documents alongside `.snxsch` /
+    /// `.snxpcb`.
+    OpenPrimitiveEditor { path: PathBuf },
+    /// Inner-message envelope for events fired from a standalone
+    /// primitive editor tab. Keyed by file path so the dispatcher
+    /// can locate the matching `SymbolEditorState` /
+    /// `FootprintEditorState` in `DocumentState.symbol_editors` /
+    /// `footprint_editors`. Mirrors the `EditorEvent` shape used
+    /// for Component Editor tabs but with a path identity instead
+    /// of `(library_path, component_id)`.
+    PrimitiveEditorEvent {
+        path: PathBuf,
+        msg: PrimitiveEditorMsg,
+    },
 }
 
 /// User choice from the close-library confirmation modal.
@@ -170,16 +191,24 @@ pub enum EditorMsg {
     PinMapOpenOverrideEdit(String),
     /// Live edit of the override pad-number text input. The dispatcher
     /// keeps the buffer on `PinMapTabState.override_buf`.
-    PinMapOverrideBufChanged { pin: String, value: String },
+    PinMapOverrideBufChanged {
+        pin: String,
+        value: String,
+    },
     /// User clicked "Save" inside the inline editor — push a
     /// `PinPadOverride` onto the active draft.
-    PinMapAddOverride { pin: String, pad: String },
+    PinMapAddOverride {
+        pin: String,
+        pad: String,
+    },
     /// User clicked "Cancel" inside the inline editor — discard the
     /// edit buffer + collapse the row.
     PinMapCancelOverrideEdit,
     /// User clicked "Remove" on an overridden row — drops that pin's
     /// entry from `Revision::pin_map_overrides`.
-    PinMapRemoveOverride { pin: String },
+    PinMapRemoveOverride {
+        pin: String,
+    },
     // ── /WS-G ───────────────────────────────────────────────
 
     // ── WS-F2: Symbol tab ─────────────────────────────────────
@@ -187,7 +216,10 @@ pub enum EditorMsg {
     SymbolSetTool(SymbolToolMsg),
     /// Click-to-place a pin on the symbol canvas at the given grid-
     /// snapped (mm) world position.
-    SymbolAddPin { x: f64, y: f64 },
+    SymbolAddPin {
+        x: f64,
+        y: f64,
+    },
     /// Select a symbol element (pin index / field key) — emitted by
     /// the canvas hit-test on left-click.
     SymbolSelect(SymbolSelectionMsg),
@@ -195,16 +227,28 @@ pub enum EditorMsg {
     SymbolDeselect,
     /// Drag the currently-selected element to a new grid-snapped
     /// world position. Field drag is a no-op for now.
-    SymbolMoveSelected { x: f64, y: f64 },
+    SymbolMoveSelected {
+        x: f64,
+        y: f64,
+    },
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Properties pane — set the value text of one of the canonical
     /// symbol fields (Designator / Value).
-    SymbolSetField { key: FieldKeyMsg, value: String },
+    SymbolSetField {
+        key: FieldKeyMsg,
+        value: String,
+    },
     /// Properties pane — overwrite the pin number string at index.
-    SymbolSetPinNumber { idx: usize, number: String },
+    SymbolSetPinNumber {
+        idx: usize,
+        number: String,
+    },
     /// Properties pane — overwrite the pin name string at index.
-    SymbolSetPinName { idx: usize, name: String },
+    SymbolSetPinName {
+        idx: usize,
+        name: String,
+    },
     /// Toolbar — open the system file picker for an AI-stub PDF.
     SymbolPickAiPdf,
     /// Async file picker returned — `Some(bytes)` or `None` when the
@@ -223,11 +267,21 @@ pub enum EditorMsg {
     // ── WS-F2: Footprint tab ──────────────────────────────────
     /// Click-to-place a pad at the given world position. Fires from
     /// the canvas program on a press-without-drag.
-    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    FootprintAddPad {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Drag the pad at `idx` to a new world position.
-    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    FootprintMovePad {
+        idx: usize,
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Cursor moved over the canvas — drives the footer X/Y readout.
-    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    FootprintCursorAt {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// Delete-key — remove the currently-selected pad.
@@ -273,15 +327,29 @@ pub enum EditorMsg {
     /// Append a fresh blank alternate row.
     SupplyAlternateAdd,
     /// Edit the manufacturer of the alternate at `idx`.
-    SupplyAlternateSetManufacturer { idx: usize, value: String },
+    SupplyAlternateSetManufacturer {
+        idx: usize,
+        value: String,
+    },
     /// Edit the MPN of the alternate at `idx`.
-    SupplyAlternateSetMpn { idx: usize, value: String },
+    SupplyAlternateSetMpn {
+        idx: usize,
+        value: String,
+    },
     /// Pick the approval status of the alternate at `idx`.
-    SupplyAlternateSetStatus { idx: usize, value: AlternateStatus },
+    SupplyAlternateSetStatus {
+        idx: usize,
+        value: AlternateStatus,
+    },
     /// Edit the free-form notes of the alternate at `idx`.
-    SupplyAlternateSetNotes { idx: usize, value: String },
+    SupplyAlternateSetNotes {
+        idx: usize,
+        value: String,
+    },
     /// Drop the alternate row at `idx`.
-    SupplyAlternateRemove { idx: usize },
+    SupplyAlternateRemove {
+        idx: usize,
+    },
 
     // Distributor listings
     /// Append a fresh blank distributor listing row.
@@ -289,37 +357,70 @@ pub enum EditorMsg {
     /// Pick the distributor source for the listing at `idx`. The
     /// dispatcher converts `DistributorSource` to the canonical string
     /// stored on `DistributorListing.distributor`.
-    SupplyListingSetDistributor { idx: usize, value: DistributorSource },
+    SupplyListingSetDistributor {
+        idx: usize,
+        value: DistributorSource,
+    },
     /// Edit the SKU of the distributor listing at `idx`.
-    SupplyListingSetSku { idx: usize, value: String },
+    SupplyListingSetSku {
+        idx: usize,
+        value: String,
+    },
     /// Edit the URL of the distributor listing at `idx`. Empty string
     /// clears the field back to `None`.
-    SupplyListingSetUrl { idx: usize, value: String },
+    SupplyListingSetUrl {
+        idx: usize,
+        value: String,
+    },
     /// Drop the distributor listing row at `idx`.
-    SupplyListingRemove { idx: usize },
+    SupplyListingRemove {
+        idx: usize,
+    },
     // ── /WS-K ─────────────────────────────────────────────────
 
     // ── WS-J: Params tab ──────────────────────────────────────
     /// Set a `ParamValue::Text` parameter's value directly. Text inputs
     /// can flush on every keystroke without a parse step.
-    ParamSetText { name: String, value: String },
+    ParamSetText {
+        name: String,
+        value: String,
+    },
     /// Live-update the per-row edit buffer for a `ParamValue::Number`
     /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
     /// the value is committed via `ParamCommitNumber`.
-    ParamSetNumberBuf { name: String, buf: String },
+    ParamSetNumberBuf {
+        name: String,
+        buf: String,
+    },
     /// Commit the live buffer for a `ParamValue::Number` row.
-    ParamCommitNumber { name: String },
+    ParamCommitNumber {
+        name: String,
+    },
     /// Live-update the per-row edit buffer for a `ParamValue::Measurement`
     /// row's value field.
-    ParamSetMeasurementBuf { name: String, buf: String },
+    ParamSetMeasurementBuf {
+        name: String,
+        buf: String,
+    },
     /// Commit the live buffer for a `ParamValue::Measurement` row.
-    ParamCommitMeasurement { name: String, unit: String },
+    ParamCommitMeasurement {
+        name: String,
+        unit: String,
+    },
     /// Toggle a `ParamValue::Bool` parameter.
-    ParamSetBool { name: String, value: bool },
+    ParamSetBool {
+        name: String,
+        value: bool,
+    },
     /// Drop a parameter from `draft.parameters`.
-    ParamRemove { name: String },
+    ParamRemove {
+        name: String,
+    },
     /// Add a custom parameter row with an empty value of the chosen kind.
-    ParamAddCustom { name: String, kind: ParamKindMsg },
+    ParamAddCustom {
+        name: String,
+        kind: ParamKindMsg,
+    },
     // ── /WS-J ─────────────────────────────────────────────────
 
     // ── WS-L: Sim tab ─────────────────────────────────────────
@@ -337,7 +438,10 @@ pub enum EditorMsg {
     SimBodyAction(iced::widget::text_editor::Action),
     /// Set or clear the SPICE node binding for one symbol pin number.
     /// Empty `value` removes the key from `default_node_map`.
-    SimSetPinNode { pin_number: String, value: String },
+    SimSetPinNode {
+        pin_number: String,
+        value: String,
+    },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
     // ── /WS-L ─────────────────────────────────────────────────
@@ -383,6 +487,60 @@ pub enum SymbolSelectionMsg {
 pub enum FieldKeyMsg {
     Reference,
     Value,
+}
+
+// WS-7 (refactor-2): standalone primitive editor tabs
+/// Inner messages for a [`LibraryMessage::PrimitiveEditorEvent`]
+/// envelope. Path-keyed dispatch routes each variant to the symbol or
+/// footprint editor state stored on `DocumentState` per the active
+/// tab's [`crate::app::TabKind`]. Save (Ctrl+S) flows through the
+/// existing schematic-save handler — these variants only cover the
+/// editor-side mutations + the explicit "save primitive" command.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum PrimitiveEditorMsg {
+    // ── Symbol ─────────────────────────────────────────────
+    /// Set the active drawing tool on the Symbol canvas.
+    SymbolSetTool(SymbolToolMsg),
+    /// Click-to-place a pin on the standalone Symbol canvas at the
+    /// given grid-snapped (mm) world position.
+    SymbolAddPin { x: f64, y: f64 },
+    /// Select a symbol element (pin index / field key).
+    SymbolSelect(SymbolSelectionMsg),
+    /// Click landed on empty canvas — drop the current selection.
+    SymbolDeselect,
+    /// Drag the currently-selected element to a new grid-snapped
+    /// world position.
+    SymbolMoveSelected { x: f64, y: f64 },
+    /// Delete-key — drop the currently-selected element.
+    SymbolDeleteSelected,
+    /// Properties pane — overwrite the pin number string at index.
+    SymbolSetPinNumber { idx: usize, number: String },
+    /// Properties pane — overwrite the pin name string at index.
+    SymbolSetPinName { idx: usize, name: String },
+
+    // ── Footprint ──────────────────────────────────────────
+    /// Click-to-place a pad at the given world position.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag the pad at `idx` to a new world position.
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Cursor moved over the canvas — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` deselects everything.
+    FootprintSelectPad(Option<usize>),
+    /// Delete-key — remove the currently-selected pad.
+    FootprintDeleteSelected,
+    /// Toolbar — toggle a layer's visibility. Carries the Standard layer
+    /// name string; the dispatcher maps to `FpLayer`.
+    FootprintToggleLayer(String),
+    /// Toolbar — toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+
+    // ── Save ───────────────────────────────────────────────
+    /// Explicit "Save this primitive tab to disk" — fires from the
+    /// editor's Save button. Ctrl+S also routes here for primitive
+    /// tabs via the `save_active_document` dispatch path.
+    Save,
 }
 
 /// Picker modal messages.
