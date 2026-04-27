@@ -415,6 +415,13 @@ impl Signex {
             .open_libraries
             .iter()
             .position(|lib| lib.root == library_path);
+        tracing::warn!(
+            target: "signex::library",
+            library = %library_path.display(),
+            ?table,
+            ?library_idx,
+            "browser: Add Component clicked — opening New Component modal"
+        );
         self.library.new_component = Some(NewComponentState {
             internal_pn: String::new(),
             library_idx,

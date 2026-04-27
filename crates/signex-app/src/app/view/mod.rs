@@ -3454,7 +3454,14 @@ impl Signex {
             || ui.erc_dialog_open
             || !document.dock.floating.is_empty()
             || dragging_tab
-            || ui.net_color_custom.show;
+            || ui.net_color_custom.show
+            // Library-side modals (New Component, Place Component picker)
+            // can be triggered from non-canvas contexts — e.g. the Library
+            // Browser tab's Add Component button. Without these flags the
+            // overlay Stack would never be built and the modal layer in
+            // collect_overlays would silently no-op.
+            || self.library.new_component.is_some()
+            || self.library.picker.is_some();
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
