@@ -199,6 +199,29 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         msg: BrowserEditMsg,
     },
+    /// Live edit of a cell in the browser grid (Deliverable C).
+    /// Updates the per-cell edit buffer; the change is flushed to the
+    /// row on `BrowserCellCommit` (Enter / blur).
+    BrowserCellEdit {
+        library_path: PathBuf,
+        row_id: RowId,
+        column: String,
+        value: String,
+    },
+    /// Commit the per-cell edit buffer to the row and persist via
+    /// `adapter.update_row`. Drops the buffer entry on success.
+    BrowserCellCommit {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+        column: String,
+    },
+    /// Drop the per-cell edit buffer (Esc).
+    BrowserCellCancel {
+        library_path: PathBuf,
+        row_id: RowId,
+        column: String,
+    },
 }
 
 /// User choice from the close-library confirmation modal.

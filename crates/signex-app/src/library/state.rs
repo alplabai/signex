@@ -90,6 +90,11 @@ pub struct LibraryBrowserState {
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
+    /// Per-cell live-edit buffers for inline grid editing
+    /// (Deliverable C). Keyed by `(row_id, column_key)` where
+    /// column_key is `"internal_pn"`, `"manufacturer"`, `"mpn"`, or
+    /// `"parameters.<key>"`.
+    pub cell_edit: HashMap<(RowId, String), String>,
 }
 
 impl LibraryBrowserState {
@@ -100,6 +105,7 @@ impl LibraryBrowserState {
             selected_row: None,
             search: String::new(),
             edit_modal: None,
+            cell_edit: HashMap::new(),
         }
     }
 }
