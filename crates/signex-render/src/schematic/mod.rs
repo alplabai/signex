@@ -427,28 +427,25 @@ pub(super) fn field_display_pos(
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// Standard's saved schematic files already store property positions and
-/// justify values in their final, post-orientation, post-mirror visual
-/// state (Standard rewrites them whenever the user rotates or mirrors the
-/// symbol). At render time we only need to ensure the text is readable
-/// — folding 180°→0° and 270°→90° — without touching alignment.
-///
-/// This mirrors Standard's `SCH_FIELD::GetDrawRotation()` which only
-/// toggles the draw angle and never flips the justify (see
-/// `references/sch-symbol.md::render_field_text`).
+/// Standard stores `SCH_FIELD` rotation as an **absolute** screen angle —
+/// the symbol's own rotation is *not* re-applied at draw time. Rotating
+/// the parent symbol updates each field's stored angle directly (via
+/// AutoplaceFields). So at render time we only need to fold 180°→0°
+/// and 270°→90° on the field's own angle to keep the text readable,
+/// matching Standard's `SCH_FIELD::GetDrawRotation()`.
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
-    sym: &signex_types::schematic::Symbol,
+    _sym: &signex_types::schematic::Symbol,
 ) -> (
     f64,
     signex_types::schematic::HAlign,
     signex_types::schematic::VAlign,
 ) {
-    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
-    let draw_rot = match total.round() as i32 {
+    let angle = prop.rotation.rem_euclid(360.0);
+    let draw_rot = match angle.round() as i32 {
         0 | 180 => 0.0,
         90 | 270 => 90.0,
-        _ => total,
+        _ => angle,
     };
 
     (draw_rot, prop.justify_h, prop.justify_v)
