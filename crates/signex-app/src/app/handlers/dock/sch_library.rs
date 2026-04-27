@@ -27,7 +27,94 @@ impl Signex {
                 self.sch_library_delete_symbol(*idx);
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetPinNumber { pin_idx, value } => {
+                self.sym_editor_set_pin_number(*pin_idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinName { pin_idx, value } => {
+                self.sym_editor_set_pin_name(*pin_idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetPinLength { pin_idx, value } => {
+                self.sym_editor_set_pin_length(*pin_idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetSymbolName(value) => {
+                self.sym_editor_set_symbol_name(value.clone());
+                true
+            }
             _ => false,
+        }
+    }
+
+    fn sym_editor_set_pin_number(&mut self, pin_idx: usize, value: String) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.number = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_pin_name(&mut self, pin_idx: usize, value: String) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            pin.name = value;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_pin_length(&mut self, pin_idx: usize, value: f64) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
+            // Clamp to a sane minimum so a user dragging through 0
+            // doesn't produce a degenerate stub. 0.1 mm matches the
+            // smallest grid step Altium allows for pins.
+            pin.length = value.max(0.1);
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+            self.mark_active_symbol_tab_dirty();
+            self.refresh_panel_ctx();
+        }
+    }
+
+    fn sym_editor_set_symbol_name(&mut self, value: String) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        editor.primitive_mut().name = value;
+        editor.dirty = true;
+        editor.canvas_cache.clear();
+        self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
+    }
+
+    fn mark_active_symbol_tab_dirty(&mut self) {
+        let Some(path) = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
+                _ => None,
+            })
+        else {
+            return;
+        };
+        self.document_state.dirty_paths.insert(path.clone());
+        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+            tab.dirty = true;
         }
     }
 
