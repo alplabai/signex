@@ -3463,7 +3463,12 @@ impl Signex {
             // collect_overlays would silently no-op.
             || self.library.new_component.is_some()
             || self.library.picker.is_some()
-            || self.library.primitive_picker.is_some();
+            || self.library.primitive_picker.is_some()
+            || self
+                .library
+                .library_browsers
+                .values()
+                .any(|s| s.edit_modal.is_some());
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -4551,6 +4556,32 @@ impl Signex {
                     ..Default::default()
                 });
             layers.push(backdrop.into());
+        }
+
+        // Edit Component Details modal (Deliverable B). One per
+        // browser tab; iterate to find the one with a live `edit_modal`.
+        for (lib_path, browser_state) in &self.library.library_browsers {
+            if let Some(edit) = browser_state.edit_modal.as_ref() {
+                let card = crate::library::edit_row_modal::view(
+                    lib_path.as_path(),
+                    edit,
+                    &document.panel_ctx.tokens,
+                )
+                .map(Message::Library);
+                let backdrop = container(card)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .style(|_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.0, 0.0, 0.0, 0.45,
+                        ))),
+                        ..Default::default()
+                    });
+                layers.push(backdrop.into());
+                break; // only one edit modal at a time
+            }
         }
 
         // Primitive picker (Pick Symbol / Pick Footprint).

@@ -72,9 +72,9 @@ impl EditorAddress {
 
 /// Per-browser-tab state — owned by a single
 /// `TabKind::LibraryBrowser(path)` tab, keyed by the same `path` on
-/// `LibraryState::library_browsers`. Phase 1 is read-only-plus-modal-
-/// edit: the grid renders rows verbatim, click selects a row,
-/// double-click is reserved for the upcoming row-edit modal (Phase 2).
+/// `LibraryState::library_browsers`. Deliverable B adds the
+/// `edit_modal` field so double-click on a row opens a full-form
+/// editor.
 #[derive(Debug, Clone)]
 pub struct LibraryBrowserState {
     pub library_path: PathBuf,
@@ -87,9 +87,8 @@ pub struct LibraryBrowserState {
     pub selected_row: Option<RowId>,
     /// Filter text applied to row PN / MPN / manufacturer.
     pub search: String,
-    /// Modal state for "Edit Component Details" (Phase 1 = read-only
-    /// preview; Phase 2 = full editor). For now `None` always.
-    #[allow(dead_code)]
+    /// Edit Component Details modal — opened by double-clicking a row
+    /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
 }
 
@@ -105,15 +104,46 @@ impl LibraryBrowserState {
     }
 }
 
-/// "Edit Component Details" modal state. Phase 1 keeps this as a stub
-/// — the modal is never opened; rows are read-only in the grid.
+/// "Edit Component Details" modal state — opened by double-clicking a
+/// row in the browser grid. The user edits a working copy; commit
+/// fires `adapter.update_row` via `BrowserEditMsg::Save`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct EditRowModalState {
-    pub table: String,
-    pub row_id: RowId,
+    pub address: EditorAddress,
     /// Working copy — committed to the row on Save.
     pub draft: ComponentRow,
+    /// Per-parameter live edit buffer — `(value_str, unit_str)` keyed
+    /// by parameter name. Mirrors the `params_edit_buf` pattern used
+    /// in the Component Preview tab.
+    pub param_buf: HashMap<String, (String, String)>,
+    /// Inline error text — surfaced if the save fails.
+    pub error: Option<String>,
+}
+
+impl EditRowModalState {
+    pub fn new(address: EditorAddress, draft: ComponentRow) -> Self {
+        let param_buf: HashMap<String, (String, String)> = draft
+            .parameters
+            .iter()
+            .map(|(k, v)| {
+                let (val, unit) = match v {
+                    signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
+                    signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
+                    signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
+                    signex_library::ParamValue::Measurement { value, unit } => {
+                        (value.to_string(), unit.clone())
+                    }
+                };
+                (k.clone(), (val, unit))
+            })
+            .collect();
+        Self {
+            address,
+            draft,
+            param_buf,
+            error: None,
+        }
+    }
 }
 
 /// Primitive picker modal state — opened when the user clicks
