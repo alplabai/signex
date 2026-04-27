@@ -290,11 +290,7 @@ pub enum AnnotateOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {
-    pub fn raw(self) -> u32 {
-        self.0
-    }
-}
+impl ProjectId {}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -579,10 +575,6 @@ impl DocumentState {
 
     pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
         self.projects.iter().find(|p| p.id == id)
-    }
-
-    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
-        self.projects.iter_mut().find(|p| p.id == id)
     }
 
     /// Resolve the project that contains a file at this path. Used for
