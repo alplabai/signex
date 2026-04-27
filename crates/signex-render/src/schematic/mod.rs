@@ -427,14 +427,18 @@ pub(super) fn field_display_pos(
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// Mirrors KiCad's `SCH_FIELD::GetDrawRotation()`:
-/// - For symbols at 0° or 180° (`y1 == 0` in the transform matrix) the
-///   stored field angle is used directly.
-/// - For symbols at 90° or 270° (`y1 != 0`) the field angle is toggled
-///   between 0° and 90° so vertically-rotated symbols still produce
-///   horizontal text when the field's stored angle is 90°.
-///
-/// We fold 180°→0° and 270°→90° on the result for readability.
+/// Mirrors two pieces of KiCad behaviour:
+/// 1. `SCH_FIELD::GetDrawRotation()` — for symbols at 0°/180° (`y1 == 0`)
+///    the stored field angle is used directly; for 90°/270° the angle is
+///    toggled between 0° and 90° so vertically-rotated symbols still
+///    render horizontal text when the field's stored angle is 90°.
+///    180°→0° and 270°→90° are folded for readability.
+/// 2. `SCH_FIELD::GetEffectiveJustify()` — KiCad mirrors the field's
+///    justify whenever the symbol's transform flips an axis. Concretely,
+///    a 180°-rotated symbol turns left→right and top→bottom; the mirror
+///    flags add an extra flip on the corresponding axis. Without this,
+///    a `justify left` field stored to the *left* of a 180°-rotated body
+///    anchors on its left edge and visibly grows back through the body.
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,
@@ -443,11 +447,12 @@ pub(super) fn field_effective_style(
     signex_types::schematic::HAlign,
     signex_types::schematic::VAlign,
 ) {
+    use signex_types::schematic::{HAlign, VAlign};
+
     let sym_rot = sym.rotation.rem_euclid(360.0).round() as i32;
     let y1_nonzero = matches!(sym_rot, 90 | 270);
     let stored = prop.rotation.rem_euclid(360.0);
     let draw = if y1_nonzero {
-        // KiCad toggles: 0° ↔ 90° when symbol is rotated 90°/270°.
         if stored.round() as i32 == 0 { 90.0 } else { 0.0 }
     } else {
         stored
@@ -458,7 +463,35 @@ pub(super) fn field_effective_style(
         _ => draw,
     };
 
-    (draw_rot, prop.justify_h, prop.justify_v)
+    // Effective justify: count flips on each axis from the symbol's
+    // transform; an odd count flips the corresponding alignment.
+    // - rotation 180°: flips both H and V.
+    // - mirror_y (mirror about X-axis in KiCad convention): flips H.
+    // - mirror_x (mirror about Y-axis): flips V.
+    let h_flips = (sym_rot == 180) as u8 + sym.mirror_y as u8;
+    let v_flips = (sym_rot == 180) as u8 + sym.mirror_x as u8;
+
+    let flip_h = |h: HAlign| match h {
+        HAlign::Left => HAlign::Right,
+        HAlign::Right => HAlign::Left,
+        HAlign::Center => HAlign::Center,
+    };
+    let flip_v = |v: VAlign| match v {
+        VAlign::Top => VAlign::Bottom,
+        VAlign::Bottom => VAlign::Top,
+        VAlign::Center => VAlign::Center,
+    };
+
+    let mut h = prop.justify_h;
+    if h_flips % 2 == 1 {
+        h = flip_h(h);
+    }
+    let mut v = prop.justify_v;
+    if v_flips % 2 == 1 {
+        v = flip_v(v);
+    }
+
+    (draw_rot, h, v)
 }
 
 /// Find the circle passing through three non-collinear points.
