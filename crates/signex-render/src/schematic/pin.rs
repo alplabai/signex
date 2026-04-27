@@ -390,16 +390,15 @@ fn draw_pin(
         let perp_offset_px = transform.world_len(0.8);
 
         // Offset perpendicular to the pin so the number clears the pin line.
-        // Horizontal pins → above line; vertical (top/bottom) pins → left of
-        // line. Both cases render horizontal, unrotated text — same convention
-        // as side-pin numbers, keeping numbers outside the IC body.
-        let (perp_sx, perp_sy, num_align) = if wdx.abs() >= wdy.abs() {
-            // Horizontal pin → above line (screen -Y), centered on X.
-            (0.0_f32, -1.0_f32, iced::alignment::Horizontal::Center)
+        // Horizontal pins → above line, text horizontal. Vertical pins → left
+        // of line, text rotated -90° (CCW) so it reads along the pin axis,
+        // matching Standard's pin number orientation.
+        let (perp_sx, perp_sy, num_rotation) = if wdx.abs() >= wdy.abs() {
+            (0.0_f32, -1.0_f32, 0.0_f32)
         } else {
-            // Vertical pin → left of pin line (screen -X), right-aligned.
-            (-1.0_f32, 0.0_f32, iced::alignment::Horizontal::Right)
+            (-1.0_f32, 0.0_f32, -std::f32::consts::FRAC_PI_2)
         };
+        let num_align = iced::alignment::Horizontal::Center;
 
         let np = iced::Point::new(
             np_base.x + perp_sx * perp_offset_px,
@@ -427,7 +426,7 @@ fn draw_pin(
             num_font,
             num_align,
             iced::alignment::Vertical::Center,
-            0.0,
+            num_rotation,
         );
     }
 }

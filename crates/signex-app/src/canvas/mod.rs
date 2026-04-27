@@ -221,8 +221,9 @@ impl SchematicCanvas {
             placement_paused: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
-            snap_grid_mm: 2.54,
-            visible_grid_mm: 2.54,
+            // Altium default is 1.27 mm (50 mil); also matches Standard's default schematic grid step.
+            snap_grid_mm: 1.27,
+            visible_grid_mm: 1.27,
             paper_width_mm: 297.0,
             paper_height_mm: 210.0,
             auto_focus: false,

@@ -71,7 +71,7 @@ impl Signex {
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
-        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
+        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
         let standard_lib_dir = helpers::find_standard_symbols_dir();
         let mut standard_libraries = standard_lib_dir
             .as_deref()
@@ -91,7 +91,7 @@ impl Signex {
                 cursor_y: 0.0,
                 zoom: 100.0,
                 grid_size_mm,
-                visible_grid_mm: 2.54,
+                visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
@@ -113,6 +113,10 @@ impl Signex {
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
                 label_style: crate::fonts::read_label_style_pref(),
                 preferences_draft_label_style: crate::fonts::read_label_style_pref(),
+                multisheet_style: crate::fonts::read_multisheet_style_pref(),
+                preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
+                grid_style: crate::fonts::read_grid_style_pref(),
+                preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
                 rename_dialog: None,
@@ -174,8 +178,8 @@ impl Signex {
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,
-                    grid_size_mm: 2.54,
-                    visible_grid_mm: 2.54,
+                    grid_size_mm: 1.27,
+                    visible_grid_mm: 1.27,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
@@ -199,6 +203,12 @@ impl Signex {
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
+                    selected_child_sheet: None,
+                    child_sheet_border_picker_open: false,
+                    child_sheet_fill_picker_open: false,
+                    child_sheet_border_advanced_open: false,
+                    child_sheet_fill_advanced_open: false,
+                    child_sheet_stroke_width_buf: None,
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
@@ -283,6 +293,8 @@ impl Signex {
         );
         signex_render::set_power_port_style(app.ui_state.power_port_style);
         signex_render::set_label_style(app.ui_state.label_style);
+        signex_render::set_multisheet_style(app.ui_state.multisheet_style);
+        signex_render::set_grid_style(app.ui_state.grid_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
