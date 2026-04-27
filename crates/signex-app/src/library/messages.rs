@@ -168,14 +168,23 @@ pub enum LibraryMessage {
         /// state CTA when the library has no tables yet.
         table: Option<String>,
     },
-    /// User clicked Delete Selected on the browser action row. Phase 1
-    /// fires `delete_row` immediately without a confirm modal — the
-    /// confirm modal lands in Deliverable D.
-    BrowserDeleteRow {
+    /// User clicked Delete Selected on the browser action row. Phase 2
+    /// — opens the confirm modal; the actual delete happens via
+    /// `BrowserDeleteRowConfirm` only if the user confirms.
+    BrowserDeleteRowRequest {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
     },
+    /// User clicked Delete in the confirm modal — fires the actual
+    /// `adapter.delete_row` call.
+    BrowserDeleteRowConfirm {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
+    /// User dismissed the delete confirm modal without deleting.
+    BrowserDeleteRowCancel { library_path: PathBuf },
     /// Open the Symbol/Footprint primitive picker modal. `target`
     /// determines what happens when the user picks something.
     OpenPrimitivePicker {

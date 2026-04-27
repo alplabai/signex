@@ -18,8 +18,8 @@ use crate::library::messages::{
     PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::{
-    ComponentPreviewState, EditRowModalState, EditorAddress, NewComponentState, PickerState,
-    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    ComponentPreviewState, DeleteConfirmState, EditRowModalState, EditorAddress, NewComponentState,
+    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -306,11 +306,22 @@ impl Signex {
                 library_path,
                 table,
             } => self.handle_browser_add_component(library_path, table),
-            LibraryMessage::BrowserDeleteRow {
+            LibraryMessage::BrowserDeleteRowRequest {
                 library_path,
                 table,
                 row_id,
-            } => self.handle_browser_delete_row(library_path, table, row_id),
+            } => self.handle_browser_delete_row_request(library_path, table, row_id),
+            LibraryMessage::BrowserDeleteRowConfirm {
+                library_path,
+                table,
+                row_id,
+            } => self.handle_browser_delete_row_confirm(library_path, table, row_id),
+            LibraryMessage::BrowserDeleteRowCancel { library_path } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.delete_confirm = None;
+                }
+                Task::none()
+            }
             LibraryMessage::OpenPrimitivePicker { kind, target } => {
                 self.library.primitive_picker = Some(PrimitivePickerState {
                     kind,
@@ -468,10 +479,35 @@ impl Signex {
         Task::none()
     }
 
-    /// Delete a row from a library table — Phase 1 fires immediately
-    /// without a confirm modal. Phase 2 will route through a confirm
-    /// modal first.
-    fn handle_browser_delete_row(
+    /// Phase 2 — open the delete-row confirm modal. Records
+    /// `(table, row_id, internal_pn)` on the browser state so the
+    /// modal can render a confident message.
+    fn handle_browser_delete_row_request(
+        &mut self,
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: RowId,
+    ) -> Task<Message> {
+        let internal_pn = self
+            .library
+            .library_at(&library_path)
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
+            .map(|r| r.internal_pn.as_str().to_string())
+            .unwrap_or_else(|| format!("row {row_id}"));
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.delete_confirm = Some(DeleteConfirmState {
+                table,
+                row_id,
+                internal_pn,
+            });
+        }
+        Task::none()
+    }
+
+    /// Confirm step — actually delete the row through
+    /// `adapter.delete_row` and refresh the cache.
+    fn handle_browser_delete_row_confirm(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -516,10 +552,13 @@ impl Signex {
                         "browser delete: refresh_components failed"
                     );
                 }
-                if let Some(state) = self.library.library_browsers.get_mut(&library_path)
-                    && state.selected_row == Some(row_id)
-                {
-                    state.selected_row = None;
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    if state.selected_row == Some(row_id) {
+                        state.selected_row = None;
+                    }
+                    state.delete_confirm = None;
+                    // Drop any cached cell-edit buffers for the gone row.
+                    state.cell_edit.retain(|(rid, _), _| *rid != row_id);
                 }
             }
             Err(e) => {
@@ -530,6 +569,9 @@ impl Signex {
                     error = %e,
                     "browser delete: delete_row failed"
                 );
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.delete_confirm = None;
+                }
             }
         }
         Task::none()

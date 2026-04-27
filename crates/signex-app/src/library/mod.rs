@@ -40,7 +40,7 @@ pub use messages::{
 };
 #[allow(unused_imports)]
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, EditRowModalState, LibraryBrowserState,
-    LibraryState, OpenLibrary, PickerState, PreviewTab, PrimitivePickerState,
+    ComponentEditorState, ComponentPreviewState, DeleteConfirmState, EditRowModalState,
+    LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab, PrimitivePickerState,
     PrimitivePickerTarget,
 };
