@@ -92,10 +92,16 @@ fn stroke_colored_node(width: f64, color: Option<StrokeColor>) -> SExpr {
     if let Some(c) = color {
         children.push(node(
             "color",
-            vec![atom(c.r), atom(c.g), atom(c.b), atom(c.a)],
+            vec![atom(c.r), atom(c.g), atom(c.b), atom(alpha_to_float(c.a))],
         ));
     }
     node("stroke", children)
+}
+
+/// KiCad writes alpha as a 0..1 float in `(color ...)` quads; convert
+/// our 0..255 byte representation back to that form for round-tripping.
+fn alpha_to_float(a: u8) -> f64 {
+    a as f64 / 255.0
 }
 
 fn fill_type_node(fill: FillType) -> SExpr {
@@ -112,7 +118,7 @@ fn sheet_fill_node(fill: FillType, color: Option<StrokeColor>) -> SExpr {
             "fill",
             vec![node(
                 "color",
-                vec![atom(c.r), atom(c.g), atom(c.b), atom(c.a)],
+                vec![atom(c.r), atom(c.g), atom(c.b), atom(alpha_to_float(c.a))],
             )],
         )
     } else {
