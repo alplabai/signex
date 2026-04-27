@@ -2020,11 +2020,56 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.tool = match tool {
                 SymbolToolMsg::Select => SymbolTool::Select,
                 SymbolToolMsg::AddPin => SymbolTool::AddPin,
+                SymbolToolMsg::PlaceRectangle => SymbolTool::PlaceRectangle,
+                SymbolToolMsg::PlaceLine => SymbolTool::PlaceLine,
+                SymbolToolMsg::PlaceCircle => SymbolTool::PlaceCircle,
             };
         }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
             let idx = crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y);
             editor.selected = Some(SymbolSelection::Pin(idx));
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
+            // Default 10×5 mm rectangle centred on the click. User
+            // edits the corners later via Properties (graphics-properties
+            // surface lands in a follow-up; for now they can move/delete
+            // through the Select tool).
+            const W: f64 = 5.08; // half-width 5.08 mm → 10.16 mm overall
+            const H: f64 = 2.54; // half-height
+            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
+                kind: signex_library::SymbolGraphicKind::Rectangle {
+                    from: [x - W, y - H],
+                    to: [x + W, y + H],
+                },
+                stroke_width: 0.15,
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolAddLine { x, y } => {
+            // 5 mm horizontal line going right.
+            const L: f64 = 5.08;
+            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
+                kind: signex_library::SymbolGraphicKind::Line {
+                    from: [x, y],
+                    to: [x + L, y],
+                },
+                stroke_width: 0.15,
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolAddCircle { x, y } => {
+            // 2 mm-radius circle centred on the click.
+            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
+                kind: signex_library::SymbolGraphicKind::Circle {
+                    center: [x, y],
+                    radius: 2.0,
+                },
+                stroke_width: 0.15,
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -2140,6 +2185,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         // Symbol variants are no-ops on a Footprint editor.
         PrimitiveEditorMsg::SymbolSetTool(_)
         | PrimitiveEditorMsg::SymbolAddPin { .. }
+        | PrimitiveEditorMsg::SymbolAddRectangle { .. }
+        | PrimitiveEditorMsg::SymbolAddLine { .. }
+        | PrimitiveEditorMsg::SymbolAddCircle { .. }
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }

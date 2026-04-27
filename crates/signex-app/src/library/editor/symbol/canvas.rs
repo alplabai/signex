@@ -29,6 +29,17 @@ use super::state::{self, SymbolSelection};
 #[derive(Debug, Clone, Copy)]
 pub enum CanvasAction {
     AddPin { x: f64, y: f64 },
+    /// Stamp a default-sized rectangle (10 × 5 mm) centred on
+    /// `(x, y)`. Drag-to-resize lands in a follow-up — for the
+    /// first cut the rectangle is committed in one click and
+    /// the user can later edit the corners via the Properties
+    /// panel (or move/delete via the Select tool).
+    AddRectangle { x: f64, y: f64 },
+    /// Stamp a 5 mm horizontal line starting at `(x, y)` going
+    /// right.
+    AddLine { x: f64, y: f64 },
+    /// Stamp a circle of radius 2 mm centred on `(x, y)`.
+    AddCircle { x: f64, y: f64 },
     Select(SymbolSelection),
     Deselect,
     Move { x: f64, y: f64 },
@@ -40,6 +51,9 @@ pub enum CanvasAction {
 pub enum SymbolTool {
     Select,
     AddPin,
+    PlaceRectangle,
+    PlaceLine,
+    PlaceCircle,
 }
 
 impl SymbolTool {
@@ -48,6 +62,9 @@ impl SymbolTool {
         match self {
             SymbolTool::Select => "Select",
             SymbolTool::AddPin => "Add Pin",
+            SymbolTool::PlaceRectangle => "Rectangle",
+            SymbolTool::PlaceLine => "Line",
+            SymbolTool::PlaceCircle => "Circle",
         }
     }
 }
@@ -170,6 +187,18 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         canvas::Action::publish(CanvasAction::AddPin { x: wx, y: wy })
                             .and_capture(),
                     ),
+                    SymbolTool::PlaceRectangle => Some(
+                        canvas::Action::publish(CanvasAction::AddRectangle { x: wx, y: wy })
+                            .and_capture(),
+                    ),
+                    SymbolTool::PlaceLine => Some(
+                        canvas::Action::publish(CanvasAction::AddLine { x: wx, y: wy })
+                            .and_capture(),
+                    ),
+                    SymbolTool::PlaceCircle => Some(
+                        canvas::Action::publish(CanvasAction::AddCircle { x: wx, y: wy })
+                            .and_capture(),
+                    ),
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
@@ -225,26 +254,122 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             gx += 2.54;
         }
 
-        // Body rectangle.
-        let (bx0, by0, bx1, by1) = self.body_rect();
-        let p1 = w2s(bx0, by0);
-        let p2 = w2s(bx1, by1);
-        let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
-        let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
-        let body_path = canvas::Path::rectangle(top_left, size);
-        frame.fill(
-            &body_path,
-            Color {
-                a: 0.16,
-                ..self.body_color
-            },
-        );
-        frame.stroke(
-            &body_path,
-            canvas::Stroke::default()
-                .with_color(self.body_color)
-                .with_width(2.0),
-        );
+        // ── Body + every other graphic ──
+        // Render the first Rectangle as the filled "body" (translucent
+        // fill + thick stroke); all other graphics (additional rects,
+        // lines, circles, arcs) render as outlines only.
+        let mut body_drawn = false;
+        for g in &self.symbol.graphics {
+            match &g.kind {
+                SymbolGraphicKind::Rectangle { from, to } => {
+                    let p1 = w2s(from[0], from[1]);
+                    let p2 = w2s(to[0], to[1]);
+                    let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
+                    let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
+                    let path = canvas::Path::rectangle(top_left, size);
+                    if !body_drawn {
+                        frame.fill(
+                            &path,
+                            Color {
+                                a: 0.16,
+                                ..self.body_color
+                            },
+                        );
+                        body_drawn = true;
+                    }
+                    frame.stroke(
+                        &path,
+                        canvas::Stroke::default()
+                            .with_color(self.body_color)
+                            .with_width(2.0),
+                    );
+                }
+                SymbolGraphicKind::Line { from, to } => {
+                    let mut builder = canvas::path::Builder::new();
+                    builder.move_to(w2s(from[0], from[1]));
+                    builder.line_to(w2s(to[0], to[1]));
+                    let path = builder.build();
+                    frame.stroke(
+                        &path,
+                        canvas::Stroke::default()
+                            .with_color(self.body_color)
+                            .with_width(1.5),
+                    );
+                }
+                SymbolGraphicKind::Circle { center, radius } => {
+                    let p = w2s(center[0], center[1]);
+                    let path = canvas::Path::circle(p, (*radius as f32) * scale);
+                    frame.stroke(
+                        &path,
+                        canvas::Stroke::default()
+                            .with_color(self.body_color)
+                            .with_width(1.5),
+                    );
+                }
+                SymbolGraphicKind::Arc {
+                    center,
+                    radius,
+                    start_deg,
+                    end_deg,
+                } => {
+                    let p = w2s(center[0], center[1]);
+                    let r = (*radius as f32) * scale;
+                    let s = (*start_deg as f32).to_radians();
+                    let e = (*end_deg as f32).to_radians();
+                    let mut builder = canvas::path::Builder::new();
+                    builder.arc(canvas::path::Arc {
+                        center: p,
+                        radius: r,
+                        start_angle: iced::Radians(s),
+                        end_angle: iced::Radians(e),
+                    });
+                    let path = builder.build();
+                    frame.stroke(
+                        &path,
+                        canvas::Stroke::default()
+                            .with_color(self.body_color)
+                            .with_width(1.5),
+                    );
+                }
+                SymbolGraphicKind::Text { position, content, size: text_size } => {
+                    frame.fill_text(canvas::Text {
+                        content: content.clone(),
+                        position: w2s(position[0], position[1]),
+                        size: ((*text_size as f32) * scale * 0.5).into(),
+                        color: self.text_color,
+                        ..canvas::Text::default()
+                    });
+                }
+            }
+        }
+
+        // No graphics → fall back to a default body rectangle so the
+        // user sees the symbol bounds while the body geometry is still
+        // empty.
+        if !body_drawn {
+            let (bx0, by0, bx1, by1) = self.body_rect();
+            let p1 = w2s(bx0, by0);
+            let p2 = w2s(bx1, by1);
+            let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
+            let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
+            let path = canvas::Path::rectangle(top_left, size);
+            frame.fill(
+                &path,
+                Color {
+                    a: 0.10,
+                    ..self.body_color
+                },
+            );
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_color(Color {
+                        a: 0.4,
+                        ..self.body_color
+                    })
+                    .with_width(1.0),
+            );
+        }
 
         // Pins.
         for (i, pin) in self.symbol.pins.iter().enumerate() {
@@ -255,6 +380,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         let tool_label = match self.tool {
             SymbolTool::Select => "Tool: Select  (Del to remove)",
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
+            SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
+            SymbolTool::PlaceLine => "Tool: Place Line  (click)",
+            SymbolTool::PlaceCircle => "Tool: Place Circle  (click)",
         };
         frame.fill_text(canvas::Text {
             content: tool_label.to_string(),

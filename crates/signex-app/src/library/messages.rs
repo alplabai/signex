@@ -573,6 +573,9 @@ pub enum ParamKindMsg {
 pub enum SymbolToolMsg {
     Select,
     AddPin,
+    PlaceRectangle,
+    PlaceLine,
+    PlaceCircle,
 }
 
 /// Selection target on the Symbol canvas — pure-data version of
@@ -609,6 +612,12 @@ pub enum PrimitiveEditorMsg {
     /// Click-to-place a pin on the standalone Symbol canvas at the
     /// given grid-snapped (mm) world position.
     SymbolAddPin { x: f64, y: f64 },
+    /// Stamp a default-sized 10×5 mm rectangle centred on `(x, y)`.
+    SymbolAddRectangle { x: f64, y: f64 },
+    /// Stamp a 5 mm horizontal line starting at `(x, y)`.
+    SymbolAddLine { x: f64, y: f64 },
+    /// Stamp a 2 mm-radius circle centred on `(x, y)`.
+    SymbolAddCircle { x: f64, y: f64 },
     /// Select a symbol element (pin index / field key).
     SymbolSelect(SymbolSelectionMsg),
     /// Click landed on empty canvas — drop the current selection.

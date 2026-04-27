@@ -86,32 +86,22 @@ fn view_symbol_toolbar<'a>(
     let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
 
-    let select_path = path.clone();
-    let add_pin_path = path.clone();
+    let tool_button = |label: &str,
+                       tool: SymbolTool,
+                       msg: SymbolToolMsg|
+     -> Element<'a, LibraryMessage> {
+        let path_for_press = path.clone();
+        button(text(label.to_string()).size(11).color(text_c))
+            .padding([4, 10])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path: path_for_press,
+                msg: PrimitiveEditorMsg::SymbolSetTool(msg),
+            })
+            .style(symbol_tool_button_style(editor.tool == tool, border))
+            .into()
+    };
+
     let save_path = path.clone();
-
-    let select_btn = button(text("Select").size(11).color(text_c))
-        .padding([4, 10])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: select_path,
-            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::Select),
-        })
-        .style(symbol_tool_button_style(
-            editor.tool == SymbolTool::Select,
-            border,
-        ));
-
-    let add_pin_btn = button(text("Add Pin").size(11).color(text_c))
-        .padding([4, 10])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: add_pin_path,
-            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin),
-        })
-        .style(symbol_tool_button_style(
-            editor.tool == SymbolTool::AddPin,
-            border,
-        ));
-
     let save_btn = button(
         text(if editor.dirty { "Save *" } else { "Save" })
             .size(11)
@@ -126,10 +116,18 @@ fn view_symbol_toolbar<'a>(
 
     container(
         row![
-            select_btn,
-            add_pin_btn,
+            tool_button("Select", SymbolTool::Select, SymbolToolMsg::Select),
+            tool_button("Add Pin", SymbolTool::AddPin, SymbolToolMsg::AddPin),
+            Space::new().width(8),
+            tool_button(
+                "Rectangle",
+                SymbolTool::PlaceRectangle,
+                SymbolToolMsg::PlaceRectangle,
+            ),
+            tool_button("Line", SymbolTool::PlaceLine, SymbolToolMsg::PlaceLine),
+            tool_button("Circle", SymbolTool::PlaceCircle, SymbolToolMsg::PlaceCircle),
             Space::new().width(Length::Fill),
-            save_btn
+            save_btn,
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
@@ -175,6 +173,9 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
     use sym_canvas::CanvasAction;
     match action {
         CanvasAction::AddPin { x, y } => PrimitiveEditorMsg::SymbolAddPin { x, y },
+        CanvasAction::AddRectangle { x, y } => PrimitiveEditorMsg::SymbolAddRectangle { x, y },
+        CanvasAction::AddLine { x, y } => PrimitiveEditorMsg::SymbolAddLine { x, y },
+        CanvasAction::AddCircle { x, y } => PrimitiveEditorMsg::SymbolAddCircle { x, y },
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
