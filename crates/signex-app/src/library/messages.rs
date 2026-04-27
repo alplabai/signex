@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentClass, ComponentId, ComponentSummary, DistributorSource, LifecycleState, UseSite,
-    Version,
+    BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource, LifecycleState,
+    UseSite, Version,
 };
 
 use super::state::{EditorAddress, EditorTab};
@@ -182,10 +182,110 @@ pub enum EditorMsg {
     PinMapRemoveOverride { pin: String },
     // ── /WS-G ───────────────────────────────────────────────
 
-    // TODO(WS-F): Symbol / Footprint / 3D / Sim editor messages —
-    //  add when those tabs land. WS-E only ships the
-    //  shape needed for the modal + Overview round-trip.
-    // TODO(WS-G): Pin Map auto-match / override messages.
+    // ── WS-F2: Symbol tab ─────────────────────────────────────
+    /// Set the active drawing tool on the Symbol canvas.
+    SymbolSetTool(SymbolToolMsg),
+    /// Click-to-place a pin on the symbol canvas at the given grid-
+    /// snapped (mm) world position.
+    SymbolAddPin { x: f64, y: f64 },
+    /// Select a symbol element (pin index / field key) — emitted by
+    /// the canvas hit-test on left-click.
+    SymbolSelect(SymbolSelectionMsg),
+    /// Click landed on empty canvas — drop the current selection.
+    SymbolDeselect,
+    /// Drag the currently-selected element to a new grid-snapped
+    /// world position. Field drag is a no-op for now.
+    SymbolMoveSelected { x: f64, y: f64 },
+    /// Delete-key — drop the currently-selected element.
+    SymbolDeleteSelected,
+    /// Properties pane — set the value text of one of the canonical
+    /// symbol fields (Designator / Value).
+    SymbolSetField { key: FieldKeyMsg, value: String },
+    /// Properties pane — overwrite the pin number string at index.
+    SymbolSetPinNumber { idx: usize, number: String },
+    /// Properties pane — overwrite the pin name string at index.
+    SymbolSetPinName { idx: usize, name: String },
+    /// Toolbar — open the system file picker for an AI-stub PDF.
+    SymbolPickAiPdf,
+    /// Async file picker returned — `Some(bytes)` or `None` when the
+    /// user cancelled. Wraps the heuristic result inline so the view
+    /// can render the preview card without further async hops.
+    SymbolPickedAiPdf(Option<Vec<u8>>),
+    /// User clicked Apply on the AI preview card.
+    SymbolApplyAiPreview,
+    /// User clicked Cancel on the AI preview card.
+    SymbolDismissAiPreview,
+    /// Fire-and-forget save of the active symbol primitive — typically
+    /// chained off SaveDraft via the dispatcher. Boxed so the
+    /// containing enum stays cheap to clone and propagate.
+    SaveSymbol(uuid::Uuid, Box<signex_library::Symbol>),
+
+    // ── WS-F2: Footprint tab ──────────────────────────────────
+    /// Click-to-place a pad at the given world position. Fires from
+    /// the canvas program on a press-without-drag.
+    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// Drag the pad at `idx` to a new world position.
+    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    /// Cursor moved over the canvas — drives the footer X/Y readout.
+    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    /// Select / deselect a pad. `None` deselects everything.
+    FootprintSelectPad(Option<usize>),
+    /// Delete-key — remove the currently-selected pad.
+    FootprintDeleteSelected,
+    /// Toolbar — toggle a layer's visibility. Carries the Standard layer
+    /// name string; the dispatcher maps to `FpLayer`.
+    FootprintToggleLayer(String),
+    /// Toolbar — toggle the auto-fit-courtyard flag.
+    FootprintToggleAutoFit,
+    /// Fire-and-forget save of the active footprint primitive. Boxed
+    /// so the containing enum stays cheap to clone and propagate.
+    SaveFootprint(uuid::Uuid, Box<signex_library::Footprint>),
+    /// Body 3D editor pane — set extruded body height (mm).
+    SetBodyHeight(f32),
+    /// Body 3D editor pane — set body offset above PCB (mm).
+    SetBodyOffsetZ(f32),
+    /// Body 3D editor pane — set the body-top RGBA colour.
+    SetBodyTopColor([f32; 4]),
+    /// Body 3D editor pane — set the body-side RGBA colour.
+    SetBodySideColor([f32; 4]),
+    /// Body 3D editor pane — set the procedural shape variant.
+    SetBodyShape(BodyShape),
+    /// STEP attach — open the system file picker.
+    StepAttachDialog,
+    /// Async file picker returned. `Some((bytes, filename))` on pick,
+    /// `None` on cancel.
+    StepAttachResult(Option<(Vec<u8>, String)>),
+    /// Drop the existing STEP attachment from the footprint primitive.
+    StepAttachRemove,
+}
+
+/// Tool selection on the Symbol canvas — pure-data alias for the
+/// canvas's own `SymbolTool` so messages don't depend on the canvas
+/// module type tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum SymbolToolMsg {
+    Select,
+    AddPin,
+}
+
+/// Selection target on the Symbol canvas — pure-data version of
+/// `editor::symbol::state::SymbolSelection`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum SymbolSelectionMsg {
+    Pin(usize),
+    FieldReference,
+    FieldValue,
+}
+
+/// Symbol field key — pure-data alias of
+/// `editor::symbol::state::FieldKey`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum FieldKeyMsg {
+    Reference,
+    Value,
 }
 
 /// Picker modal messages.

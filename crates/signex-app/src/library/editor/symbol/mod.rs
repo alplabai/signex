@@ -8,6 +8,10 @@
 //! [`crate::library::messages::EditorMsg::SaveSymbol`] which routes
 //! through the dispatcher's `save_symbol` helper to the `LibrarySet`.
 //!
+//! WS-F2: the editor is hosted in the main window's tab bar (post-WS-I),
+//! so messages now carry `EditorAddress(library_path, component_id)`
+//! instead of an `iced::window::Id`.
+//!
 //! Tabs supported by the canvas:
 //! * Select — drag pins, Delete to remove.
 //! * Add Pin — click to drop a pin with auto-incremented number.
@@ -32,24 +36,37 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::ComponentEditorState;
+use super::super::state::{ComponentEditorState, EditorAddress};
 use canvas::SymbolCanvas;
 
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
-    let toolbar = view_toolbar(editor, tokens, window_id);
+    let Some(sym) = editor.symbol.as_ref() else {
+        return container(
+            text("Loading symbol primitive… (resolve_symbol returned no result)")
+                .size(11)
+                .color(muted),
+        )
+        .padding(14)
+        .style(crate::styles::modal_card(tokens))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    };
+
+    let toolbar = view_toolbar(editor, tokens, address.clone());
     let canvas_widget = view_canvas(
-        &editor.symbol,
+        sym,
         editor.symbol_selected,
         editor.symbol_tool,
-        window_id,
+        address.clone(),
     );
-    let props = view_properties(editor, tokens, window_id);
+    let props = view_properties(editor, sym, tokens, address.clone());
 
     let split = row![
         container(canvas_widget)
@@ -65,7 +82,7 @@ pub fn view<'a>(
     let ai_preview = editor
         .symbol_ai_preview
         .as_ref()
-        .map(|preview| view_ai_preview(preview, tokens, window_id));
+        .map(|preview| view_ai_preview(preview, tokens, address.clone()));
 
     let mut body = column![toolbar].spacing(10).width(Length::Fill);
     if let Some(card) = ai_preview {
@@ -74,7 +91,7 @@ pub fn view<'a>(
     body = body.push(split);
 
     let status_line = row![
-        text(format!("{} pins", editor.symbol.pins.len()))
+        text(format!("{} pins", sym.pins.len()))
             .size(11)
             .color(muted),
         Space::new().width(Length::Fill),
@@ -103,44 +120,47 @@ pub fn view<'a>(
 fn view_toolbar<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let tool_btn = |label: &'static str, tool: canvas::SymbolTool, active: bool| {
-        let bg = if active {
-            iced::Background::Color(iced::Color::from_rgb(0.00, 0.47, 0.84))
-        } else {
-            iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.05))
-        };
-        let fg = if active {
-            iced::Color::WHITE
-        } else {
-            text_c
-        };
-        button(container(text(label).size(11).color(fg)).padding([4, 12]))
-            .on_press(LibraryMessage::EditorEvent {
-                window_id,
-                msg: EditorMsg::SymbolSetTool(symbol_tool_msg(tool)),
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(bg),
-                text_color: fg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            })
-    };
+    let select_addr = address.clone();
+    let add_pin_addr = address.clone();
+    let ai_addr = address;
+
+    let select_active = editor.symbol_tool == canvas::SymbolTool::Select;
+    let add_pin_active = editor.symbol_tool == canvas::SymbolTool::AddPin;
+
+    let select_btn = tool_button(
+        "Select",
+        select_active,
+        text_c,
+        border,
+        LibraryMessage::EditorEvent {
+            library_path: select_addr.library_path,
+            component_id: select_addr.component_id,
+            msg: EditorMsg::SymbolSetTool(super::super::messages::SymbolToolMsg::Select),
+        },
+    );
+    let add_pin_btn = tool_button(
+        "Add Pin",
+        add_pin_active,
+        text_c,
+        border,
+        LibraryMessage::EditorEvent {
+            library_path: add_pin_addr.library_path,
+            component_id: add_pin_addr.component_id,
+            msg: EditorMsg::SymbolSetTool(super::super::messages::SymbolToolMsg::AddPin),
+        },
+    );
 
     let ai_btn = button(
         container(text("AI: From Datasheet PDF").size(11).color(text_c)).padding([4, 12]),
     )
     .on_press(LibraryMessage::EditorEvent {
-        window_id,
+        library_path: ai_addr.library_path,
+        component_id: ai_addr.component_id,
         msg: EditorMsg::SymbolPickAiPdf,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -158,17 +178,9 @@ fn view_toolbar<'a>(
 
     container(
         row![
-            tool_btn(
-                "Select",
-                canvas::SymbolTool::Select,
-                editor.symbol_tool == canvas::SymbolTool::Select,
-            ),
+            select_btn,
             Space::new().width(6),
-            tool_btn(
-                "Add Pin",
-                canvas::SymbolTool::AddPin,
-                editor.symbol_tool == canvas::SymbolTool::AddPin,
-            ),
+            add_pin_btn,
             Space::new().width(Length::Fill),
             ai_btn,
         ]
@@ -178,11 +190,43 @@ fn view_toolbar<'a>(
     .into()
 }
 
+fn tool_button<'a>(
+    label: &'static str,
+    active: bool,
+    text_c: iced::Color,
+    border: iced::Color,
+    msg: LibraryMessage,
+) -> Element<'a, LibraryMessage> {
+    let bg = if active {
+        iced::Background::Color(iced::Color::from_rgb(0.00, 0.47, 0.84))
+    } else {
+        iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.05))
+    };
+    let fg = if active {
+        iced::Color::WHITE
+    } else {
+        text_c
+    };
+    button(container(text(label).size(11).color(fg)).padding([4, 12]))
+        .on_press(msg)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(bg),
+            text_color: fg,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+}
+
 fn view_canvas<'a>(
     sym: &'a signex_library::Symbol,
     selected: Option<state::SymbolSelection>,
     tool: canvas::SymbolTool,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let program = SymbolCanvas::new(sym, selected, tool);
     let widget: Element<'a, canvas::CanvasAction> = iced::widget::Canvas::new(program)
@@ -190,7 +234,8 @@ fn view_canvas<'a>(
         .height(Length::Fill)
         .into();
     widget.map(move |action| LibraryMessage::EditorEvent {
-        window_id,
+        library_path: address.library_path.clone(),
+        component_id: address.component_id,
         msg: action_to_msg(action),
     })
 }
@@ -216,18 +261,11 @@ fn selection_to_msg(sel: state::SymbolSelection) -> super::super::messages::Symb
     }
 }
 
-fn symbol_tool_msg(tool: canvas::SymbolTool) -> super::super::messages::SymbolToolMsg {
-    use super::super::messages::SymbolToolMsg;
-    match tool {
-        canvas::SymbolTool::Select => SymbolToolMsg::Select,
-        canvas::SymbolTool::AddPin => SymbolToolMsg::AddPin,
-    }
-}
-
 fn view_properties<'a>(
-    editor: &'a ComponentEditorState,
+    _editor: &'a ComponentEditorState,
+    sym: &'a signex_library::Symbol,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -235,10 +273,8 @@ fn view_properties<'a>(
     let mut col = column![
         text("Symbol Properties").size(13).color(text_c),
         Space::new().height(6),
-        text(format!("Name: {}", editor.symbol.name))
-            .size(11)
-            .color(text_c),
-        text(format!("UUID: {}", editor.symbol.uuid))
+        text(format!("Name: {}", sym.name)).size(11).color(text_c),
+        text(format!("UUID: {}", sym.uuid))
             .size(10)
             .color(muted),
         Space::new().height(8),
@@ -248,14 +284,14 @@ fn view_properties<'a>(
     .spacing(0)
     .width(Length::Fill);
 
-    if editor.symbol.pins.is_empty() {
+    if sym.pins.is_empty() {
         col = col.push(
             text("No pins yet — switch to Add Pin and click on the canvas.")
                 .size(11)
                 .color(muted),
         );
     } else {
-        col = col.push(view_pin_table(&editor.symbol.pins, window_id, tokens));
+        col = col.push(view_pin_table(&sym.pins, address, tokens));
     }
 
     container(scrollable(col).width(Length::Fill).height(Length::Fill))
@@ -266,7 +302,7 @@ fn view_properties<'a>(
 
 fn view_pin_table<'a>(
     pins: &'a [signex_library::SymbolPin],
-    window_id: iced::window::Id,
+    address: EditorAddress,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -293,6 +329,8 @@ fn view_pin_table<'a>(
 
     for (idx, pin) in pins.iter().enumerate() {
         let kind = state::PinKind::from_electrical(pin.electrical);
+        let num_addr = address.clone();
+        let name_addr = address.clone();
         let row_widget = row![
             text(format!("{idx}"))
                 .size(11)
@@ -300,7 +338,8 @@ fn view_pin_table<'a>(
                 .width(Length::Fixed(28.0)),
             text_input("", &pin.number)
                 .on_input(move |s| LibraryMessage::EditorEvent {
-                    window_id,
+                    library_path: num_addr.library_path.clone(),
+                    component_id: num_addr.component_id,
                     msg: EditorMsg::SymbolSetPinNumber { idx, number: s },
                 })
                 .padding([2, 6])
@@ -308,7 +347,8 @@ fn view_pin_table<'a>(
                 .width(Length::FillPortion(2)),
             text_input("", &pin.name)
                 .on_input(move |s| LibraryMessage::EditorEvent {
-                    window_id,
+                    library_path: name_addr.library_path.clone(),
+                    component_id: name_addr.component_id,
                     msg: EditorMsg::SymbolSetPinName { idx, name: s },
                 })
                 .padding([2, 6])
@@ -328,7 +368,7 @@ fn view_pin_table<'a>(
 fn view_ai_preview<'a>(
     preview: &'a ai_stub::AiPinoutPreview,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -373,16 +413,21 @@ fn view_ai_preview<'a>(
         }
     }
 
+    let cancel_addr = address.clone();
+    let apply_addr = address;
+
     let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 12]))
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: cancel_addr.library_path,
+            component_id: cancel_addr.component_id,
             msg: EditorMsg::SymbolDismissAiPreview,
         });
     let apply_btn = button(
         container(text("Apply").size(11).color(iced::Color::WHITE)).padding([4, 14]),
     )
     .on_press(LibraryMessage::EditorEvent {
-        window_id,
+        library_path: apply_addr.library_path,
+        component_id: apply_addr.component_id,
         msg: EditorMsg::SymbolApplyAiPreview,
     })
     .style(|_: &Theme, _| iced::widget::button::Style {

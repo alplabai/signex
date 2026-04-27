@@ -18,22 +18,25 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
+use crate::library::state::EditorAddress;
 
 /// Render the STEP attachment row in the Body 3D pane.
 pub fn view<'a>(
     fp: &'a Footprint,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
 
+    let attach_addr = address.clone();
     let attach_btn = button(
         container(text("Attach STEP…").size(11).color(iced::Color::WHITE)).padding([4, 12]),
     )
     .on_press(LibraryMessage::EditorEvent {
-        window_id,
+        library_path: attach_addr.library_path,
+        component_id: attach_addr.component_id,
         msg: EditorMsg::StepAttachDialog,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -51,10 +54,12 @@ pub fn view<'a>(
 
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
+            let remove_addr = address.clone();
             let remove_btn =
                 button(container(text("Remove").size(10).color(text_c)).padding([3, 8]))
                     .on_press(LibraryMessage::EditorEvent {
-                        window_id,
+                        library_path: remove_addr.library_path,
+                        component_id: remove_addr.component_id,
                         msg: EditorMsg::StepAttachRemove,
                     })
                     .style(move |_: &Theme, _| iced::widget::button::Style {

@@ -16,6 +16,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
+use crate::library::state::EditorAddress;
 
 use super::layers::FpLayer;
 use super::state::{EditorPad, FootprintEditorState};
@@ -118,7 +119,7 @@ impl FootprintCanvasState {
 /// rebuilds this every frame, so we only need a borrowed reference.
 pub struct FootprintCanvas<'a> {
     pub state: &'a FootprintEditorState,
-    pub window_id: iced::window::Id,
+    pub address: EditorAddress,
     pub bg_color: Color,
     pub grid_color: Color,
     /// Pre-allocated empty cache so `draw` can reuse iced's caching
@@ -201,7 +202,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // highlights the pad on press.
                         return Some(
                             canvas::Action::publish(LibraryMessage::EditorEvent {
-                                window_id: self.window_id,
+                                library_path: self.address.library_path.clone(),
+                                component_id: self.address.component_id,
                                 msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
                             })
                             .and_capture(),
@@ -238,7 +240,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // were stashed in grab_offset_mm).
                         return Some(canvas::Action::publish(
                             LibraryMessage::EditorEvent {
-                                window_id: self.window_id,
+                                library_path: self.address.library_path.clone(),
+                                component_id: self.address.component_id,
                                 msg: EditorMsg::FootprintAddPad {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
@@ -278,7 +281,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         let new_y = world.1 - drag.grab_offset_mm.1;
                         return Some(canvas::Action::publish(
                             LibraryMessage::EditorEvent {
-                                window_id: self.window_id,
+                                library_path: self.address.library_path.clone(),
+                                component_id: self.address.component_id,
                                 msg: EditorMsg::FootprintMovePad {
                                     idx: drag.pad_idx,
                                     x_mm: new_x,
@@ -291,7 +295,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // Background hover — push the cursor position so the
                 // footer readout updates.
                 return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
-                    window_id: self.window_id,
+                    library_path: self.address.library_path.clone(),
+                    component_id: self.address.component_id,
                     msg: EditorMsg::FootprintCursorAt {
                         x_mm: world.0,
                         y_mm: world.1,
