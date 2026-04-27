@@ -1,24 +1,26 @@
 //! Local + git storage adapter — `*.snxlib/` directory backed by libgit2.
 //!
-//! Per `v0.9-refactor-2-plan.md` §7, this WS-1 step keeps the primitive
-//! CRUD wiring intact (it remains correct under the row model) but the
-//! component / revision pieces are *not yet* re-implemented for the row
-//! model — that's WS-2's job. Trait methods that used to live on this
-//! adapter (`get_component`, `get_revision`, `save_revision`, etc.) now
-//! fall through to the trait's default `Backend("not impl")` errors so
-//! callers see the gap explicitly.
+//! Per `v0.9-refactor-2-plan.md` §7, this adapter speaks the DBLib row model:
+//! a "component" is a row inside `tables/<category>.tsv`, not a file holding a
+//! revision chain. WS-2 wires up the row CRUD — table read/write, insert /
+//! update / delete by row id, lookup by `internal_pn` — alongside the
+//! pre-existing primitive (`Symbol` / `Footprint` / `SimModel`) flows.
 //!
 //! Layout per the refactor (§3):
 //!
 //! ```text
 //! MyComponents.snxlib/
 //! ├── library.toml
-//! ├── tables/                       (WS-2 — `.tsv` files, one per category)
+//! ├── tables/<category>.tsv          (one row per component, TSV)
 //! ├── symbols/<uuid>.snxsym
 //! ├── footprints/<uuid>.snxfpt
 //! ├── sims/<uuid>.snxsim
 //! └── .git/
 //! ```
+//!
+//! Every write — primitive or row — commits via libgit2 with the supplied
+//! message. The TSV (de)serialisation is delegated to [`crate::tables`]; this
+//! module is the on-disk + git glue.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,15 +29,20 @@ use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::component::ComponentRow;
+use crate::identity::{InternalPn, RowId};
 use crate::manifest::Manifest;
 use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
+use crate::tables;
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
+const TABLES_DIR: &str = "tables";
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
+const TABLE_EXT: &str = "tsv";
 const MANIFEST_FILE: &str = "library.toml";
 
 /// Adapter over a `*.snxlib/` directory + git repo.
@@ -171,6 +178,20 @@ impl LocalGitAdapter {
             .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
         fs::write(&abs_path, bytes)?;
 
+        let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
+        self.commit_path(&rel_path, message, &fallback)
+    }
+
+    /// Stage `rel_path` and create a new commit. Used by both primitive
+    /// saves (`*.snx*` files) and table writes (`tables/*.tsv`). The two
+    /// share a single signature/index/tree/commit dance; only the relative
+    /// path and commit message vary.
+    fn commit_path(
+        &self,
+        rel_path: &str,
+        message: &str,
+        fallback_message: &str,
+    ) -> Result<(), LibraryError> {
         let repo = git2::Repository::open(&self.root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
@@ -181,7 +202,7 @@ impl LocalGitAdapter {
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
         index
-            .add_path(Path::new(&rel_path))
+            .add_path(Path::new(rel_path))
             .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
         index
             .write()
@@ -193,16 +214,45 @@ impl LocalGitAdapter {
             .find_tree(tree_oid)
             .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
 
-        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
+        // yet) is the only legitimate "no parent" case — every other error
+        // (corrupt ref, locked ref, etc.) propagates so we don't silently
+        // produce an orphan commit on a broken repo.
+        let parent = match repo.head() {
+            Ok(h) => h
+                .peel_to_commit()
+                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                .map(Some)?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        };
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let commit_message = if message.is_empty() {
-            format!("save {} {uuid}", primitive_kind_str(kind))
+            fallback_message.to_string()
         } else {
             message.to_string()
         };
         repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &parents)
             .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
         Ok(())
+    }
+
+    // ── Table helpers ──────────────────────────────────────────────────────
+
+    /// Path to `<root>/tables/`.
+    fn tables_dir(&self) -> PathBuf {
+        self.root.join(TABLES_DIR)
+    }
+
+    /// Absolute path to a table file by name (no extension).
+    fn table_path(&self, name: &str) -> PathBuf {
+        self.tables_dir().join(format!("{name}.{TABLE_EXT}"))
+    }
+
+    /// Relative-to-root path for `git add` — always forward slashes regardless
+    /// of platform so the index entries stay portable.
+    fn table_rel_path(name: &str) -> String {
+        format!("{TABLES_DIR}/{name}.{TABLE_EXT}")
     }
 
     /// Walk a primitive directory and produce one [`PrimitiveSummary`] per
@@ -261,9 +311,101 @@ impl LibraryAdapter for LocalGitAdapter {
         &self.manifest
     }
 
-    // Row CRUD lands in WS-2; until then the trait defaults
-    // (`Backend("not impl")`) cover every row method so the adapter still
-    // satisfies the trait shape.
+    // ── Tables ─────────────────────────────────────────────────────────────
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        let dir = self.tables_dir();
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut out: Vec<String> = Vec::new();
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            // Only `.tsv` files count — sibling `.toml` lock files or stray
+            // editor backups (`.tsv~`) are ignored.
+            if path.extension().and_then(|s| s.to_str()) != Some(TABLE_EXT) {
+                continue;
+            }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                out.push(stem.to_string());
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
+        // Delegate to the file-format module — `tables::read_table` returns an
+        // empty `Vec` for missing files, so the caller doesn't have to
+        // existence-check up front.
+        tables::read_table(&self.table_path(name))
+    }
+
+    fn iter_rows(&self) -> Result<Vec<(String, ComponentRow)>, LibraryError> {
+        let mut out: Vec<(String, ComponentRow)> = Vec::new();
+        for name in self.list_tables()? {
+            let rows = self.read_table(&name)?;
+            for row in rows {
+                out.push((name.clone(), row));
+            }
+        }
+        Ok(out)
+    }
+
+    fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
+        let target = row_id.as_uuid();
+        let rows = self.read_table(table)?;
+        rows.into_iter()
+            .find(|r| r.row_id == target)
+            .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
+    }
+
+    /// Linear scan across every table — O(total rows). Acceptable at v0.9
+    /// scale (libraries are O(thousands)). When the search index lands the
+    /// call should redirect through it; until then, avoid hot-loop usage.
+    fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
+        for (table, row) in self.iter_rows()? {
+            if &row.internal_pn == pn {
+                return Ok((table, row));
+            }
+        }
+        Err(LibraryError::NotFound(format!("internal_pn {pn}")))
+    }
+
+    fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        let path = self.table_path(table);
+        // Ensure `<root>/tables/` exists; the file is created (header-only)
+        // by `append_row` if missing.
+        fs::create_dir_all(self.tables_dir())?;
+        tables::append_row(&path, &row)?;
+
+        let rel = Self::table_rel_path(table);
+        let fallback = format!("insert row {} into {}", row.row_id, table);
+        self.commit_path(&rel, msg, &fallback)
+    }
+
+    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+        let path = self.table_path(table);
+        let row_id = row.row_id;
+        tables::update_row(&path, &row)?;
+
+        let rel = Self::table_rel_path(table);
+        let fallback = format!("update row {row_id} in {table}");
+        self.commit_path(&rel, msg, &fallback)
+    }
+
+    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+        let path = self.table_path(table);
+        tables::delete_row(&path, row_id)?;
+
+        let rel = Self::table_rel_path(table);
+        let fallback = format!("delete row {row_id} from {table}");
+        self.commit_path(&rel, msg, &fallback)
+    }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
         self.read_primitive::<Symbol>(PrimitiveKind::Symbol, uuid)
