@@ -286,6 +286,12 @@ pub struct PanelContext {
     /// Whether the fill-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_fill_picker_open: bool,
+    /// Whether the user expanded the border picker into the full
+    /// HSV / RGB ColorPicker (vs the default preset palette).
+    pub child_sheet_border_advanced_open: bool,
+    /// Whether the user expanded the fill picker into the full
+    /// HSV / RGB ColorPicker (vs the default preset palette).
+    pub child_sheet_fill_advanced_open: bool,
     /// Transient text-input buffer for the child sheet's stroke-width
     /// numeric field. `None` means "show the live value formatted";
     /// `Some(s)` keeps half-typed strings between rerenders.
@@ -600,6 +606,10 @@ pub enum PanelMsg {
     ToggleChildSheetBorderPicker(uuid::Uuid),
     /// Open / close the fill-colour picker overlay for a child sheet.
     ToggleChildSheetFillPicker(uuid::Uuid),
+    /// Expand the currently-open child-sheet picker dropdown into the
+    /// full HSV / RGB ColorPicker overlay. `is_border` selects which
+    /// channel (border vs fill).
+    OpenChildSheetAdvancedPicker(uuid::Uuid, bool),
     /// Cancel the currently-open child-sheet colour picker without
     /// committing a new value.
     CancelChildSheetColorPicker,
@@ -5117,6 +5127,8 @@ fn view_child_sheet_properties<'a>(
     let fill_color = child_sheet.fill_color;
     let border_picker_open = ctx.child_sheet_border_picker_open;
     let fill_picker_open = ctx.child_sheet_fill_picker_open;
+    let border_advanced_open = ctx.child_sheet_border_advanced_open;
+    let fill_advanced_open = ctx.child_sheet_fill_advanced_open;
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -5152,6 +5164,7 @@ fn view_child_sheet_properties<'a>(
                 id,
                 stroke_color,
                 border_picker_open,
+                border_advanced_open,
                 muted,
                 border_c,
                 /* is_border */ true,
@@ -5161,6 +5174,7 @@ fn view_child_sheet_properties<'a>(
                 id,
                 fill_color,
                 fill_picker_open,
+                fill_advanced_open,
                 muted,
                 border_c,
                 /* is_border */ false,
@@ -5194,14 +5208,24 @@ fn view_child_sheet_properties<'a>(
 }
 
 /// One swatch row in the child-sheet Style section.
-/// Renders a small colour preview (or a hatched "default" indicator
-/// when the override is None) wrapped in an iced_aw ColorPicker so
-/// clicking the swatch opens the picker overlay.
+///
+/// Click flow:
+///   1. Click swatch → opens a small DropDown showing a preset palette
+///      (10 named colours) plus "Custom…" and (when an override is
+///      active) "Reset to Default". DropDown closes when the user
+///      clicks anywhere outside.
+///   2. Click "Custom…" inside the dropdown → expands into the full
+///      iced_aw HSV / RGB ColorPicker overlay.
+///
+/// Both the palette pick and the advanced-picker submit reuse the
+/// same `EditChildSheet*Color` message so engine command + undo/redo
+/// round-trip is identical for both paths.
 fn child_sheet_color_row<'a>(
     label: &'a str,
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
+    show_advanced: bool,
     muted: Color,
     border_c: Color,
     is_border: bool,
@@ -5261,24 +5285,141 @@ fn child_sheet_color_row<'a>(
     .on_press(toggle_msg)
     .style(iced::widget::button::secondary);
 
-    let on_submit_msg: Box<dyn Fn(iced::Color) -> PanelMsg> = if is_border {
-        Box::new(move |c| PanelMsg::EditChildSheetBorderColor(sheet_id, c))
-    } else {
-        Box::new(move |c| PanelMsg::EditChildSheetFillColor(sheet_id, c))
+    // Build the per-channel "submit colour" message.
+    let make_submit = move |c: iced::Color| -> PanelMsg {
+        if is_border {
+            PanelMsg::EditChildSheetBorderColor(sheet_id, c)
+        } else {
+            PanelMsg::EditChildSheetFillColor(sheet_id, c)
+        }
     };
 
-    let picker = iced_aw::ColorPicker::new(
-        show_picker,
-        preview_color,
-        underlay,
-        PanelMsg::CancelChildSheetColorPicker,
-        move |c| on_submit_msg(c),
+    // ── Advanced (HSV / RGB) overlay ──
+    if show_advanced {
+        let picker = iced_aw::ColorPicker::new(
+            true,
+            preview_color,
+            underlay,
+            PanelMsg::CancelChildSheetColorPicker,
+            move |c| make_submit(c),
+        );
+        return container(
+            row![
+                text(label.to_string()).size(10).color(muted).width(96),
+                picker,
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill)
+        .into();
+    }
+
+    // ── Preset palette dropdown ──
+    let presets: [(&str, [u8; 3]); 12] = [
+        ("Black",       [0x00, 0x00, 0x00]),
+        ("Dark Gray",   [0x40, 0x40, 0x40]),
+        ("Gray",        [0x80, 0x80, 0x80]),
+        ("White",       [0xFF, 0xFF, 0xFF]),
+        ("Red",         [0xC0, 0x39, 0x2B]),
+        ("Orange",      [0xE6, 0x7E, 0x22]),
+        ("Yellow",      [0xF1, 0xC4, 0x0F]),
+        ("Olive",       [0xB4, 0xA5, 0x58]),
+        ("Green",       [0x27, 0xAE, 0x60]),
+        ("Teal",        [0x16, 0xA0, 0x85]),
+        ("Blue",        [0x29, 0x80, 0xB9]),
+        ("Purple",      [0x8E, 0x44, 0xAD]),
+    ];
+
+    // 4 columns × 3 rows of preset swatches.
+    let mut palette_grid: Column<'a, PanelMsg> = Column::new().spacing(4);
+    for chunk in presets.chunks(4) {
+        let mut r: iced::widget::Row<'a, PanelMsg> = iced::widget::Row::new().spacing(4);
+        for (name, rgb) in chunk {
+            let c = iced::Color::from_rgb(
+                rgb[0] as f32 / 255.0,
+                rgb[1] as f32 / 255.0,
+                rgb[2] as f32 / 255.0,
+            );
+            let label_color = *name;
+            let swatch_btn = iced::widget::button(Space::new())
+                .width(22)
+                .height(22)
+                .padding(0)
+                .on_press(make_submit(c))
+                .style(move |_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Background::Color(c)),
+                    border: Border {
+                        width: 1.0,
+                        color: border_c,
+                        radius: 2.0.into(),
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            // Reserved for future tooltip work: name unused for now.
+            let _ = label_color;
+            r = r.push(swatch_btn);
+        }
+        palette_grid = palette_grid.push(r);
+    }
+
+    let mut overlay_col: Column<'a, PanelMsg> = Column::new().spacing(6).padding(8);
+    overlay_col = overlay_col.push(
+        text("Preset Colours")
+            .size(10)
+            .color(muted),
     );
+    overlay_col = overlay_col.push(palette_grid);
+
+    if current.is_some() {
+        overlay_col = overlay_col.push(
+            iced::widget::button(
+                text("Reset to Default")
+                    .size(10)
+                    .color(Color::from_rgb(0.92, 0.92, 0.94)),
+            )
+            .padding([4, 10])
+            .width(Length::Fill)
+            .on_press(PanelMsg::ResetChildSheetStyle(sheet_id))
+            .style(iced::widget::button::secondary),
+        );
+    }
+
+    overlay_col = overlay_col.push(
+        iced::widget::button(
+            text("Custom…")
+                .size(10)
+                .color(Color::from_rgb(0.92, 0.92, 0.94)),
+        )
+        .padding([4, 10])
+        .width(Length::Fill)
+        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
+        .style(iced::widget::button::secondary),
+    );
+
+    let overlay_panel: Element<'a, PanelMsg> = container(overlay_col)
+        .width(Length::Fixed(160.0))
+        .style(move |_t: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgb(0.16, 0.16, 0.18))),
+            border: Border {
+                width: 1.0,
+                color: border_c,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into();
+
+    let dropdown = iced_aw::DropDown::new(underlay, overlay_panel, show_picker)
+        .alignment(iced_aw::drop_down::Alignment::Bottom)
+        .offset(4.0)
+        .on_dismiss(PanelMsg::CancelChildSheetColorPicker);
 
     container(
         row![
             text(label.to_string()).size(10).color(muted).width(96),
-            picker,
+            dropdown,
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
