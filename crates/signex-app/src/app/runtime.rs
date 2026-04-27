@@ -123,6 +123,10 @@ impl Signex {
             self.document_state.panel_ctx.child_sheet_border_picker_open;
         let child_sheet_fill_picker_open =
             self.document_state.panel_ctx.child_sheet_fill_picker_open;
+        let child_sheet_border_advanced_open =
+            self.document_state.panel_ctx.child_sheet_border_advanced_open;
+        let child_sheet_fill_advanced_open =
+            self.document_state.panel_ctx.child_sheet_fill_advanced_open;
         let child_sheet_stroke_width_buf = self
             .document_state
             .panel_ctx
@@ -246,6 +250,8 @@ impl Signex {
             selected_child_sheet,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,
+            child_sheet_border_advanced_open,
+            child_sheet_fill_advanced_open,
             child_sheet_stroke_width_buf,
             component_filter,
             collapsed_sections,
