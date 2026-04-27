@@ -412,11 +412,14 @@ pub fn draw_rich_text(
         iced::alignment::Horizontal::Right => anchor.x - total_w,
     };
 
-    let base_y = match v_align {
-        iced::alignment::Vertical::Top => anchor.y + size * 0.8,
-        iced::alignment::Vertical::Center => anchor.y + size * 0.3,
-        iced::alignment::Vertical::Bottom => anchor.y - size * 0.2,
-    };
+    // Vertical alignment: defer to iced's canvas::Text align_y so the glyph's
+    // visual center / top / bottom lands exactly on `anchor.y`. This is what
+    // Standard's renderer assumes — the anchor is the field's pivot — and it
+    // matters the most for rotated fields, where any pre-rotation Y offset
+    // turns into a visible horizontal shift after the rotate-around-anchor
+    // transform below.
+    let base_y = anchor.y;
+    let canvas_align_y = v_align;
 
     let mut prev_kind: Option<RichRunKind> = None;
     for run in runs {
@@ -433,7 +436,7 @@ pub fn draw_rich_text(
             size: iced::Pixels(run_size),
             font: crate::canvas_font(),
             align_x: iced::alignment::Horizontal::Left.into(),
-            align_y: iced::alignment::Vertical::Bottom,
+            align_y: canvas_align_y,
             ..canvas::Text::default()
         };
 
