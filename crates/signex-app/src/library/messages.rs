@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use signex_library::{
     BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource, LifecycleState,
-    UseSite, Version,
+    SimKind, SimModel, UseSite, Version,
 };
 
 use super::state::{EditorAddress, EditorTab};
@@ -257,6 +257,28 @@ pub enum EditorMsg {
     StepAttachResult(Option<(Vec<u8>, String)>),
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
+
+    // ── WS-L: Sim tab ─────────────────────────────────────────
+    /// Toggle the "Has SPICE Model" checkbox. `true` constructs a fresh
+    /// `SimModel` and binds it via `Revision::sim_ref`; `false` clears
+    /// both `editor.sim` and `editor.draft.sim_ref`.
+    SimSetEnabled(bool),
+    /// SPICE dialect picker — Spice3 / Ngspice / LtSpice / VerilogA.
+    SimSetKind(SimKind),
+    /// Live edit of the SimModel `name` field.
+    SimSetName(String),
+    /// Multi-line edit on the SPICE deck `text_editor`. Action is
+    /// applied to `editor.sim_body`; the resulting text mirrors back
+    /// onto `editor.sim?.body` so persistence picks it up on save.
+    SimBodyAction(iced::widget::text_editor::Action),
+    /// Set or clear the SPICE node binding for one symbol pin number.
+    /// Empty `value` removes the key from `default_node_map`.
+    SimSetPinNode { pin_number: String, value: String },
+    /// Fire-and-forget save of the active SimModel primitive — chains
+    /// off SaveDraft via the dispatcher. Boxed so the containing enum
+    /// stays cheap to clone and propagate.
+    SaveSim(uuid::Uuid, Box<SimModel>),
+    // ── /WS-L ─────────────────────────────────────────────────
 }
 
 /// Tool selection on the Symbol canvas — pure-data alias for the

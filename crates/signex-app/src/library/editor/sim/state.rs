@@ -1,11 +1,21 @@
-//! Sim tab state — WS-E PENDING.
+//! Sim tab state — WS-L.
 //!
-//! WS-B replaced the inline `SpiceModel` with the typed `SimModel`
-//! primitive bound through `Revision::sim_ref`. WS-E rebuilds this
-//! state struct; until then the module exposes empty types so the
-//! editor can compile without dragging the pre-refactor `text_editor`
-//! plumbing along.
+//! All persistent state for the Sim tab now lives on the typed
+//! [`signex_library::SimModel`] primitive bound through
+//! `Revision::sim_ref`. The only piece of UI-only state — the live
+//! `text_editor::Content` mirror of the SPICE deck — sits on
+//! [`crate::library::state::ComponentEditorState::sim_body`] so it
+//! shares the per-editor lifetime that the rest of the tab tooling
+//! uses.
+//!
+//! This module stays as a no-op surface: dropping the file would
+//! cascade into `pub mod state;` removals across the editor module
+//! tree; the empty `SimTabState` keeps the public surface stable
+//! for any sibling that imports it.
 
-/// Empty placeholder — every field landed on `SimModel` in v0.9.
+/// Placeholder — superseded by `ComponentEditorState::sim_body` and
+/// the SimModel primitive itself. Kept for backwards-compatible
+/// imports until WS-? deletes the module.
 #[derive(Debug, Default, Clone)]
+#[allow(dead_code)]
 pub struct SimTabState;
