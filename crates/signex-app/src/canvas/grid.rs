@@ -138,26 +138,91 @@ pub fn draw_grid(
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
-    let mut wy = start_y;
-    while wy <= wy_max + minor_mm * 0.5 {
-        if wy >= 0.0 {
-            let mut wx = start_x;
-            while wx <= wx_max + minor_mm * 0.5 {
-                if wx >= 0.0 {
-                    let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
-                    if screen.x >= -dot_radius
-                        && screen.x <= bounds.width + dot_radius
-                        && screen.y >= -dot_radius
-                        && screen.y <= bounds.height + dot_radius
-                    {
-                        let dot = canvas::Path::circle(screen, dot_radius);
-                        frame.fill(&dot, dot_color);
-                    }
+    let style = signex_render::grid_style();
+    // Small-cross arm length in screen pixels (KiCad-style "+").
+    let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
+    let minor_stroke = canvas::Stroke::default()
+        .with_color(dot_color)
+        .with_width(0.6);
+
+    // For Lines style we draw full minor grid lines instead of per-cell
+    // glyphs and skip the per-point loop below entirely.
+    if matches!(style, signex_render::GridStyle::Lines) {
+        let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
+        let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
+        let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
+        let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
+        let line_y_top = page_top.max(0.0);
+        let line_y_bot = page_bot.min(bounds.height);
+        let line_x_left = page_left.max(0.0);
+        let line_x_right = page_right.min(bounds.width);
+        let mut wx = start_x;
+        while wx <= wx_max + minor_mm * 0.5 {
+            if wx >= 0.0 {
+                let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
+                if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
+                    let line = canvas::Path::line(
+                        Point::new(sx, line_y_top),
+                        Point::new(sx, line_y_bot),
+                    );
+                    frame.stroke(&line, minor_stroke);
                 }
-                wx += minor_mm;
             }
+            wx += minor_mm;
         }
-        wy += minor_mm;
+        let mut wy = start_y;
+        while wy <= wy_max + minor_mm * 0.5 {
+            if wy >= 0.0 {
+                let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
+                if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
+                    let line = canvas::Path::line(
+                        Point::new(line_x_left, sy),
+                        Point::new(line_x_right, sy),
+                    );
+                    frame.stroke(&line, minor_stroke);
+                }
+            }
+            wy += minor_mm;
+        }
+    } else {
+        let mut wy = start_y;
+        while wy <= wy_max + minor_mm * 0.5 {
+            if wy >= 0.0 {
+                let mut wx = start_x;
+                while wx <= wx_max + minor_mm * 0.5 {
+                    if wx >= 0.0 {
+                        let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
+                        if screen.x >= -dot_radius
+                            && screen.x <= bounds.width + dot_radius
+                            && screen.y >= -dot_radius
+                            && screen.y <= bounds.height + dot_radius
+                        {
+                            match style {
+                                signex_render::GridStyle::Dots => {
+                                    let dot = canvas::Path::circle(screen, dot_radius);
+                                    frame.fill(&dot, dot_color);
+                                }
+                                signex_render::GridStyle::SmallCrosses => {
+                                    let h = canvas::Path::line(
+                                        Point::new(screen.x - cross_arm, screen.y),
+                                        Point::new(screen.x + cross_arm, screen.y),
+                                    );
+                                    let v = canvas::Path::line(
+                                        Point::new(screen.x, screen.y - cross_arm),
+                                        Point::new(screen.x, screen.y + cross_arm),
+                                    );
+                                    frame.stroke(&h, minor_stroke);
+                                    frame.stroke(&v, minor_stroke);
+                                }
+                                signex_render::GridStyle::Lines => unreachable!(),
+                            }
+                        }
+                    }
+                    wx += minor_mm;
+                }
+            }
+            wy += minor_mm;
+        }
     }
 
     // --- 4. Major lines, also adaptive and softly faded. ---

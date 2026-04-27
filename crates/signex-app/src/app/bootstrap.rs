@@ -109,6 +109,8 @@ impl Signex {
                 preferences_draft_label_style: crate::fonts::read_label_style_pref(),
                 multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
+                grid_style: crate::fonts::read_grid_style_pref(),
+                preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
                 rename_dialog: None,
@@ -285,6 +287,7 @@ impl Signex {
         signex_render::set_power_port_style(app.ui_state.power_port_style);
         signex_render::set_label_style(app.ui_state.label_style);
         signex_render::set_multisheet_style(app.ui_state.multisheet_style);
+        signex_render::set_grid_style(app.ui_state.grid_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
