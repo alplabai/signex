@@ -20,7 +20,8 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    EditorMsg, LibraryMessage, PickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, SettingsMsg, SymbolSelectionMsg,
+    SymbolToolMsg,
 };
 use crate::library::state::{
     ComponentEditorState, EditorAddress, EditorTab, NewComponentState, PickerState,
@@ -1568,95 +1569,106 @@ fn apply_inline_edit(editor: &mut ComponentEditorState, msg: EditorMsg) {
                 editor.dirty = true;
             }
         }
-        // ── WS-K: Supply tab ──────────────────────────────────
-        EditorMsg::SupplyPrimarySetManufacturer(s) => {
-            editor.draft.primary_mpn.manufacturer = s;
+        // ── WS-J: Params tab ──────────────────────────────────────
+        EditorMsg::ParamSetText { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Text(value));
             editor.dirty = true;
         }
-        EditorMsg::SupplyPrimarySetMpn(s) => {
-            editor.draft.primary_mpn.mpn = s;
+        EditorMsg::ParamSetNumberBuf { name, buf } => {
+            // Numeric edits stage in the live buffer; commit happens on
+            // blur / Enter via `ParamCommitNumber`.
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitNumber { name } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    // Empty buffer = remove the parameter entirely.
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(n) = trimmed.parse::<f64>() {
+                    editor
+                        .draft
+                        .parameters
+                        .insert(name.clone(), ParamValue::Number(n));
+                    // Keep the buffer in sync so the display matches.
+                    editor.params_edit_buf.insert(name, n.to_string());
+                    editor.dirty = true;
+                }
+                // Bad parse: leave the buffer dirty so the user sees
+                // their text and can fix the typo without losing it.
+            }
+        }
+        EditorMsg::ParamSetMeasurementBuf { name, buf } => {
+            editor.params_edit_buf.insert(name, buf);
+        }
+        EditorMsg::ParamCommitMeasurement { name, unit } => {
+            use signex_library::ParamValue;
+            if let Some(buf) = editor.params_edit_buf.get(&name) {
+                let trimmed = buf.trim();
+                if trimmed.is_empty() {
+                    editor.draft.parameters.remove(&name);
+                    editor.params_edit_buf.remove(&name);
+                    editor.dirty = true;
+                } else if let Ok(value) = trimmed.parse::<f64>() {
+                    editor.draft.parameters.insert(
+                        name.clone(),
+                        ParamValue::Measurement {
+                            value,
+                            unit: unit.clone(),
+                        },
+                    );
+                    editor.params_edit_buf.insert(name, value.to_string());
+                    editor.dirty = true;
+                }
+            }
+        }
+        EditorMsg::ParamSetBool { name, value } => {
+            use signex_library::ParamValue;
+            editor
+                .draft
+                .parameters
+                .insert(name, ParamValue::Bool(value));
             editor.dirty = true;
         }
-        EditorMsg::SupplyPrimarySetStatus(status) => {
-            editor.draft.primary_mpn.status = status;
+        EditorMsg::ParamRemove { name } => {
+            editor.draft.parameters.remove(&name);
+            editor.params_edit_buf.remove(&name);
             editor.dirty = true;
         }
-        EditorMsg::SupplyPrimarySetNotes(s) => {
-            editor.draft.primary_mpn.notes = if s.is_empty() { None } else { Some(s) };
+        EditorMsg::ParamAddCustom { name, kind } => {
+            use signex_library::ParamValue;
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+            if editor.draft.parameters.contains_key(trimmed) {
+                // Already a row — don't clobber an existing value.
+                return;
+            }
+            let key = trimmed.to_string();
+            let value = match kind {
+                ParamKindMsg::Text => ParamValue::Text(String::new()),
+                ParamKindMsg::Number => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Number(0.0)
+                }
+                ParamKindMsg::Bool => ParamValue::Bool(false),
+                ParamKindMsg::Measurement(unit) => {
+                    editor.params_edit_buf.insert(key.clone(), String::new());
+                    ParamValue::Measurement { value: 0.0, unit }
+                }
+            };
+            editor.draft.parameters.insert(key, value);
             editor.dirty = true;
         }
-        EditorMsg::SupplyAlternateAdd => {
-            use signex_library::{AlternateStatus, ManufacturerPart};
-            let mut row = ManufacturerPart::draft("", "");
-            // New alternates default to Approved — `Primary` is the
-            // headline part's slot, not an alternate-row status.
-            row.status = AlternateStatus::Approved;
-            editor.draft.alternates.push(row);
-            editor.dirty = true;
-        }
-        EditorMsg::SupplyAlternateSetManufacturer { idx, value } => {
-            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
-                alt.manufacturer = value;
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyAlternateSetMpn { idx, value } => {
-            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
-                alt.mpn = value;
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyAlternateSetStatus { idx, value } => {
-            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
-                alt.status = value;
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyAlternateSetNotes { idx, value } => {
-            if let Some(alt) = editor.draft.alternates.get_mut(idx) {
-                alt.notes = if value.is_empty() { None } else { Some(value) };
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyAlternateRemove { idx } => {
-            if idx < editor.draft.alternates.len() {
-                editor.draft.alternates.remove(idx);
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyListingAdd => {
-            use signex_library::DistributorListing;
-            // Default new listings to DigiKey — matches the picker's
-            // first option so the row renders sensibly out of the gate.
-            editor.draft.supply.push(DistributorListing::new("DigiKey", ""));
-            editor.dirty = true;
-        }
-        EditorMsg::SupplyListingSetDistributor { idx, value } => {
-            if let Some(listing) = editor.draft.supply.get_mut(idx) {
-                listing.distributor =
-                    crate::library::editor::supply::distributor_source_to_string(value);
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyListingSetSku { idx, value } => {
-            if let Some(listing) = editor.draft.supply.get_mut(idx) {
-                listing.sku = value;
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyListingSetUrl { idx, value } => {
-            if let Some(listing) = editor.draft.supply.get_mut(idx) {
-                listing.url = if value.is_empty() { None } else { Some(value) };
-                editor.dirty = true;
-            }
-        }
-        EditorMsg::SupplyListingRemove { idx } => {
-            if idx < editor.draft.supply.len() {
-                editor.draft.supply.remove(idx);
-                editor.dirty = true;
-            }
-        }
-        // ── /WS-K ─────────────────────────────────────────────
+        // ── /WS-J ──────────────────────────────────────────────────
         // Already handled in the outer match.
         EditorMsg::CloseEditor
         | EditorMsg::SaveDraft
