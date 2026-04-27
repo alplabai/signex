@@ -1,18 +1,21 @@
-//! `Component` is now a **thin binding record** — see
-//! `v0.9-library-refactor-plan.md` §2.4.
+//! `ComponentRow` — one row of a component table (Altium DBLib model).
 //!
-//! Each `Revision` references reusable primitives (`Symbol`, `Footprint`,
-//! `SimModel`) by `(library_id, uuid)` tuples (`PrimitiveRef`) instead of
-//! embedding their geometry. Two MPNs sharing a SOIC-8 footprint reference the
-//! same primitive UUID rather than carrying their own copy.
+//! Per `v0.9-refactor-2-plan.md` §2.1, a "component" is no longer a file
+//! holding a chain of revisions. It's a single row inside a category table
+//! (`tables/<name>.tsv` for LocalGit; one record in `component_rows` for the
+//! database backend). Symbols, footprints, and sim models stay as standalone
+//! editable primitive files referenced by `(library_id, uuid)` tuples.
+//!
+//! Two MPNs sharing a SOIC-8 footprint reference the same primitive UUID
+//! rather than carrying their own copy.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::identity::{ComponentClass, ComponentId, InternalPn, Version};
+use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
 use crate::param::ParamMap;
@@ -74,20 +77,31 @@ pub struct PlmReserved {
     pub compliance: BTreeMap<String, String>,
 }
 
-/// One commit's worth of a component — Altium-style binding record.
+/// One row inside a component table — Altium DBLib model.
 ///
-/// Per the refactor plan, a `Revision` no longer embeds the symbol/footprint
-/// blob; it points at primitives by `(library_id, uuid)` tuples. The visual
-/// diff engine (`diff.rs`) operates over the *binding fields* and asks the
-/// adapter to resolve referenced primitives only when a primitive-aware diff
-/// is requested.
+/// Per `v0.9-refactor-2-plan.md` §2.1, a row carries the binding metadata
+/// for a manufacturer part: which primitives (symbol/footprint/sim) it
+/// points at, the parametric data, the supply chain, and the lifecycle
+/// state. The schema is identical across LocalGit (TSV columns) and
+/// Database (JSONB payload) backends — one wire format, two storage
+/// flavours.
+///
+/// Past versions of a row are read from `git log` (LocalGit) or the
+/// audit trail (Database); there is no per-row revision chain anymore.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Revision {
-    pub version: Version,
+pub struct ComponentRow {
+    /// Stable UUID — primary key inside the table. Use `RowId::new()` to
+    /// mint a new time-ordered id when inserting.
+    pub row_id: Uuid,
+    /// Library-internal part number — unique within the library.
+    pub internal_pn: InternalPn,
+    /// Component class — picks the parameter template ("resistor", "opamp", …).
+    pub class: ComponentClass,
+    /// URL or hash-pinned PDF. Default is an empty URL.
+    #[serde(default)]
+    pub datasheet: DatasheetRef,
+    /// Lifecycle state (`Released`, `Draft`, …).
     pub state: LifecycleState,
-    pub created: chrono::DateTime<chrono::Utc>,
-    pub author: String,
-    pub message: String,
 
     // ── Primitive bindings ──────────────────────────────────────────────
     pub symbol_ref: PrimitiveRef,
@@ -107,8 +121,6 @@ pub struct Revision {
     pub alternates: Vec<ManufacturerPart>,
     #[serde(default)]
     pub supply: Vec<DistributorListing>,
-    #[serde(default)]
-    pub datasheet: DatasheetRef,
 
     // ── Parametric ──────────────────────────────────────────────────────
     /// Schema-validated against the class template via
@@ -120,168 +132,88 @@ pub struct Revision {
     #[serde(default)]
     pub plm: PlmReserved,
 
+    /// Bookkeeping — set on insert.
+    pub created: DateTime<Utc>,
+    /// Bookkeeping — bumped on every update.
+    pub updated: DateTime<Utc>,
+
     /// SHA-256 of canonicalised JSON over the binding fields. See
-    /// [`crate::hash::hash_revision_content`].
+    /// [`crate::hash::hash_row_content`].
     #[serde(default)]
     pub content_hash: [u8; 32],
 }
 
-impl Revision {
+impl ComponentRow {
     /// Recompute and store the content hash from the canonical view.
     pub fn refresh_content_hash(&mut self) {
-        self.content_hash = crate::hash::hash_revision_content(self);
-    }
-}
-
-/// Logical component — a thin binding record holding `internal_pn`, class,
-/// category, optional family, and an ordered list of revisions.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Component {
-    pub uuid: ComponentId,
-    pub internal_pn: InternalPn,
-    /// Picks the parameter template ("resistor", "opamp", …).
-    pub class: ComponentClass,
-    /// Tree-style category path ("Passives/Resistors/0805"). Used by the
-    /// library picker tree.
-    #[serde(default)]
-    pub category: PathBuf,
-    /// Optional family UUID — groups multi-package siblings (TQFP / QFN / BGA).
-    #[serde(default)]
-    pub family: Option<Uuid>,
-    pub revisions: Vec<Revision>,
-    /// The "Released" tip — typically the highest Released revision.
-    pub head: Version,
-}
-
-impl Component {
-    /// Find the head revision. Returns `None` if `head` doesn't reference a
-    /// known revision.
-    pub fn head_revision(&self) -> Option<&Revision> {
-        self.revisions.iter().find(|r| r.version == self.head)
-    }
-
-    /// Highest Released revision, or `None` if no Released revision exists.
-    pub fn highest_released(&self) -> Option<&Revision> {
-        self.revisions
-            .iter()
-            .filter(|r| r.state == LifecycleState::Released)
-            .max_by_key(|r| r.version)
+        self.content_hash = crate::hash::hash_row_content(self);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::RowId;
     use crate::manufacturer::ManufacturerPart;
 
-    fn fixture_revision(version: Version, state: LifecycleState) -> Revision {
+    fn fixture_row() -> ComponentRow {
         let lib = Uuid::new_v4();
-        Revision {
-            version,
-            state,
-            created: chrono::Utc::now(),
-            author: "test@example.com".into(),
-            message: "initial".into(),
+        ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("R0805_10k"),
+            class: ComponentClass::new("resistor"),
+            datasheet: DatasheetRef::url("https://example.com"),
+            state: LifecycleState::Draft,
             symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
             footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
-            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
             alternates: Vec::new(),
             supply: Vec::new(),
-            datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            created: Utc::now(),
+            updated: Utc::now(),
             content_hash: [0u8; 32],
         }
     }
 
+    /// Step 1.1 from the plan §6: a `ComponentRow` round-trips through JSON
+    /// without losing any fields. This is the foundational test the rest of
+    /// the WS-1 work hangs on.
     #[test]
-    fn component_revision_holds_primitive_refs() {
-        let lib_id = Uuid::new_v4();
-        let sym_uuid = Uuid::new_v4();
-        let fpt_uuid = Uuid::new_v4();
-        let rev = Revision {
-            version: Version::new(0, 1),
+    fn component_row_json_roundtrip() {
+        let row = ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: "R0805_10k".parse().unwrap(),
+            class: ComponentClass("resistor".into()),
+            datasheet: DatasheetRef::url("https://example.com"),
             state: LifecycleState::Draft,
-            created: chrono::Utc::now(),
-            author: "test".into(),
-            message: "init".into(),
-            symbol_ref: PrimitiveRef::new(lib_id, sym_uuid),
-            footprint_ref: Some(PrimitiveRef::new(lib_id, fpt_uuid)),
+            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
+            footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
             sim_ref: None,
-            pin_map_overrides: Vec::new(),
-            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
-            alternates: Vec::new(),
-            supply: Vec::new(),
-            datasheet: DatasheetRef::url("https://example.com/ds.pdf"),
+            pin_map_overrides: vec![],
+            primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
+            alternates: vec![],
+            supply: vec![],
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            created: Utc::now(),
+            updated: Utc::now(),
             content_hash: [0u8; 32],
         };
-        assert_eq!(rev.symbol_ref.uuid, sym_uuid);
-        assert_eq!(rev.footprint_ref.unwrap().uuid, fpt_uuid);
-    }
-
-    #[test]
-    fn head_revision_resolves() {
-        let c = Component {
-            uuid: Uuid::now_v7(),
-            internal_pn: InternalPn::new("R_TEST"),
-            class: ComponentClass::new("resistor"),
-            category: PathBuf::from("Passives/Resistors"),
-            family: None,
-            revisions: vec![
-                fixture_revision(Version::new(1, 0), LifecycleState::Released),
-                fixture_revision(Version::new(1, 1), LifecycleState::Released),
-            ],
-            head: Version::new(1, 1),
-        };
-        assert_eq!(c.head_revision().unwrap().version, Version::new(1, 1));
-    }
-
-    #[test]
-    fn highest_released_skips_drafts() {
-        let c = Component {
-            uuid: Uuid::now_v7(),
-            internal_pn: InternalPn::new("R_TEST"),
-            class: ComponentClass::new("resistor"),
-            category: PathBuf::new(),
-            family: None,
-            revisions: vec![
-                fixture_revision(Version::new(1, 0), LifecycleState::Released),
-                fixture_revision(Version::new(1, 1), LifecycleState::Draft),
-            ],
-            head: Version::new(1, 0),
-        };
-        assert_eq!(c.highest_released().unwrap().version, Version::new(1, 0));
-    }
-
-    #[test]
-    fn component_round_trip() {
-        let c = Component {
-            uuid: Uuid::now_v7(),
-            internal_pn: InternalPn::new("R0805_10k"),
-            class: ComponentClass::new("resistor"),
-            category: PathBuf::from("Passives/Resistors/0805"),
-            family: None,
-            revisions: vec![fixture_revision(
-                Version::new(1, 0),
-                LifecycleState::Released,
-            )],
-            head: Version::new(1, 0),
-        };
-        let json = serde_json::to_string(&c).unwrap();
-        let back: Component = serde_json::from_str(&json).unwrap();
-        assert_eq!(c, back);
+        let json = serde_json::to_string(&row).unwrap();
+        let back: ComponentRow = serde_json::from_str(&json).unwrap();
+        assert_eq!(row, back);
     }
 
     #[test]
     fn refresh_content_hash_populates() {
-        let mut rev = fixture_revision(Version::new(1, 0), LifecycleState::Released);
-        assert_eq!(rev.content_hash, [0u8; 32]);
-        rev.refresh_content_hash();
-        assert_ne!(rev.content_hash, [0u8; 32]);
+        let mut row = fixture_row();
+        assert_eq!(row.content_hash, [0u8; 32]);
+        row.refresh_content_hash();
+        assert_ne!(row.content_hash, [0u8; 32]);
     }
 
     #[test]
@@ -311,5 +243,16 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let back: PlmReserved = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    /// Verifies that `RowId` wraps cleanly around the row's `row_id` field —
+    /// the field is bare `Uuid` for serde-shape compatibility with the plan's
+    /// schema test, but consumers can `RowId::from_uuid(row.row_id)` to
+    /// get the typed wrapper when needed.
+    #[test]
+    fn row_id_wraps_bare_uuid_field() {
+        let row = fixture_row();
+        let id = RowId::from_uuid(row.row_id);
+        assert_eq!(id.as_uuid(), row.row_id);
     }
 }
