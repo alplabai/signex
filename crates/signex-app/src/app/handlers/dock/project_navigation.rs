@@ -666,6 +666,24 @@ impl Signex {
             return Ok(());
         }
 
+        // `.snxlib/` is a directory package, not a document. Project
+        // libraries auto-mount on project open; double-clicking the
+        // row expands the matching entry in the Library left-dock
+        // panel so the user can see its tables + rows.
+        if filename.ends_with(".snxlib") {
+            if let Some(idx) = self
+                .library
+                .open_libraries
+                .iter()
+                .position(|lib| lib.root == file_path)
+            {
+                if let Some(slot) = self.library.expanded.get_mut(idx) {
+                    *slot = true;
+                }
+            }
+            return Ok(());
+        }
+
         anyhow::bail!("unsupported project tree document: {filename}")
     }
 }
