@@ -3468,7 +3468,7 @@ impl Signex {
                 .library
                 .library_browsers
                 .values()
-                .any(|s| s.edit_modal.is_some());
+                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some());
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -4581,6 +4581,31 @@ impl Signex {
                     });
                 layers.push(backdrop.into());
                 break; // only one edit modal at a time
+            }
+        }
+
+        // Delete Selected confirm modal (Deliverable D).
+        for (lib_path, browser_state) in &self.library.library_browsers {
+            if let Some(confirm) = browser_state.delete_confirm.as_ref() {
+                let card = crate::library::edit_row_modal::view_delete_confirm(
+                    lib_path.as_path(),
+                    confirm,
+                    &document.panel_ctx.tokens,
+                )
+                .map(Message::Library);
+                let backdrop = container(card)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .style(|_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.0, 0.0, 0.0, 0.45,
+                        ))),
+                        ..Default::default()
+                    });
+                layers.push(backdrop.into());
+                break;
             }
         }
 

@@ -95,6 +95,9 @@ pub struct LibraryBrowserState {
     /// column_key is `"internal_pn"`, `"manufacturer"`, `"mpn"`, or
     /// `"parameters.<key>"`.
     pub cell_edit: HashMap<(RowId, String), String>,
+    /// Confirmation modal state for Delete Selected (Deliverable D).
+    /// `Some` while the confirm modal is open.
+    pub delete_confirm: Option<DeleteConfirmState>,
 }
 
 impl LibraryBrowserState {
@@ -106,8 +109,18 @@ impl LibraryBrowserState {
             search: String::new(),
             edit_modal: None,
             cell_edit: HashMap::new(),
+            delete_confirm: None,
         }
     }
+}
+
+/// Delete-row confirmation modal — displayed when the user clicks
+/// Delete Selected on the browser action row.
+#[derive(Debug, Clone)]
+pub struct DeleteConfirmState {
+    pub table: String,
+    pub row_id: RowId,
+    pub internal_pn: String,
 }
 
 /// "Edit Component Details" modal state — opened by double-clicking a

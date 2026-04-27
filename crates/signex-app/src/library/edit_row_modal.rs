@@ -14,10 +14,13 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::state::{BUILTIN_CLASSES, EditRowModalState};
+use super::state::{BUILTIN_CLASSES, DeleteConfirmState, EditRowModalState};
 
 const MODAL_W: f32 = 720.0;
 const MODAL_H: f32 = 640.0;
+
+const CONFIRM_W: f32 = 480.0;
+const CONFIRM_H: f32 = 230.0;
 
 /// `pick_list` adapter for the Class dropdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -532,4 +535,100 @@ fn close_x<'a>(
 pub(crate) fn short_uuid(u: &uuid::Uuid) -> String {
     let s = u.simple().to_string();
     if s.len() >= 8 { s[..8].to_string() } else { s }
+}
+
+/// Delete-row confirm modal — sibling overlay launched from the
+/// Library Browser action row's Delete Selected button.
+pub fn view_delete_confirm<'a>(
+    library_path: &'a std::path::Path,
+    confirm: &'a DeleteConfirmState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let border = theme_ext::border_color(tokens);
+
+    let header = container(
+        row![
+            text("Delete Component?").size(14).color(text_c),
+            Space::new().width(Length::Fill),
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([10, 14])
+    .style(crate::styles::modal_header_strip(tokens));
+
+    let msg_label = format!(
+        "Delete row {} from {}? This cannot be undone from the UI (TSV file is git-tracked, so `git restore` recovers it).",
+        confirm.internal_pn, confirm.table,
+    );
+
+    let body = container(
+        column![text(msg_label).size(11).color(text_c)]
+            .padding([14, 16])
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let lib_path_cancel = library_path.to_path_buf();
+    let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
+        .on_press(LibraryMessage::BrowserDeleteRowCancel {
+            library_path: lib_path_cancel,
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let lib_path_del = library_path.to_path_buf();
+    let table = confirm.table.clone();
+    let row_id = confirm.row_id;
+    let delete_btn =
+        button(container(text("Delete").size(11).color(iced::Color::WHITE)).padding([4, 14]))
+            .on_press(LibraryMessage::BrowserDeleteRowConfirm {
+                library_path: lib_path_del,
+                table,
+                row_id,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.85, 0.30, 0.30,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+
+    let footer = container(
+        row![
+            Space::new().width(Length::Fill),
+            cancel_btn,
+            Space::new().width(8),
+            delete_btn,
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([10, 14])
+    .style(crate::styles::modal_footer_strip(tokens));
+
+    container(
+        column![header, body, footer]
+            .width(Length::Fixed(CONFIRM_W))
+            .height(Length::Fixed(CONFIRM_H)),
+    )
+    .style(crate::styles::modal_card(tokens))
+    .clip(true)
+    .into()
 }

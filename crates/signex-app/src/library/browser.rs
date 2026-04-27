@@ -536,7 +536,7 @@ fn view_action_row<'a>(
                 .color(text_c),
         )
         .padding([4, 12])
-        .on_press(LibraryMessage::BrowserDeleteRow {
+        .on_press(LibraryMessage::BrowserDeleteRowRequest {
             library_path: library_for_del,
             table: table_for_del,
             row_id,
