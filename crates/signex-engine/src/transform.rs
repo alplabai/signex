@@ -393,11 +393,9 @@ impl Engine {
 /// that always renders horizontally.
 /// Re-run autoplace on every symbol whose `fields_autoplaced` flag is set.
 ///
-/// Older signex builds wrote field rotations as `360 - sym.rotation` to
-/// compensate for a renderer bug. Now that field rotation is treated as
-/// an absolute screen angle (matching Standard), those stored values appear
-/// rotated 90/270°. Re-autoplacing on load regenerates correct field
-/// positions and angles transparently for both legacy and current files.
+/// Kept available for callers that want to migrate stale layouts; not
+/// invoked automatically because Standard-saved layouts already match
+/// Standard's autoplace output and re-running ours can shift them.
 pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
     for symbol in &mut document.symbols {
@@ -563,12 +561,13 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
     };
 
-    // 6. Field rotation is stored as an absolute screen angle (Standard
-    //    convention). Autoplaced fields always render horizontally, so
-    //    we set rotation to 0 directly. The renderer reads this verbatim
-    //    without re-adding the symbol's rotation, which keeps round-trips
-    //    through .standard_sch readable on both sides.
-    let field_rotation = 0.0;
+    // 6. Field rotation follows Standard's AutoplaceFields convention:
+    //    horizontal text is achieved by writing 90° when the symbol is
+    //    rotated 90°/270° (because Standard's GetDrawRotation toggles), and
+    //    0° otherwise. The renderer reads this with the same toggle, and
+    //    Standard opens the saved file rendering the text horizontally.
+    let sym_rot = symbol.rotation.rem_euclid(360.0).round() as i32;
+    let field_rotation = if matches!(sym_rot, 90 | 270) { 90.0 } else { 0.0 };
 
     for (i, prop) in fields.iter_mut().enumerate() {
         prop.position.x = anchor_x;
