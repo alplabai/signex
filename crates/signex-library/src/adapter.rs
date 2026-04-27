@@ -146,34 +146,19 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
-    fn insert_row(
-        &self,
-        _table: &str,
-        _row: ComponentRow,
-        _msg: &str,
-    ) -> Result<(), LibraryError> {
+    fn insert_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "insert_row not implemented for this adapter".into(),
         ))
     }
 
-    fn update_row(
-        &self,
-        _table: &str,
-        _row: ComponentRow,
-        _msg: &str,
-    ) -> Result<(), LibraryError> {
+    fn update_row(&self, _table: &str, _row: ComponentRow, _msg: &str) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "update_row not implemented for this adapter".into(),
         ))
     }
 
-    fn delete_row(
-        &self,
-        _table: &str,
-        _row_id: RowId,
-        _msg: &str,
-    ) -> Result<(), LibraryError> {
+    fn delete_row(&self, _table: &str, _row_id: RowId, _msg: &str) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "delete_row not implemented for this adapter".into(),
         ))

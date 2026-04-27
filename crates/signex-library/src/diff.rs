@@ -92,11 +92,7 @@ pub enum BumpKind {
 /// bump. Per the plan, any change to a primitive ref or pin-map override
 /// is a major bump.
 pub fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
-    if diff.symbol_changed
-        || diff.footprint_changed
-        || diff.sim_changed
-        || diff.pin_map_changed
-    {
+    if diff.symbol_changed || diff.footprint_changed || diff.sim_changed || diff.pin_map_changed {
         BumpKind::Major
     } else {
         BumpKind::Minor
@@ -124,8 +120,7 @@ pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
         mpn_changed: mpn_key(&a.primary_mpn) != mpn_key(&b.primary_mpn),
         alternates_changed: !alternates_detail.added.is_empty()
             || !alternates_detail.removed.is_empty(),
-        supply_changed: !supply_detail.added.is_empty()
-            || !supply_detail.removed.is_empty(),
+        supply_changed: !supply_detail.added.is_empty() || !supply_detail.removed.is_empty(),
         datasheet_changed: a.datasheet != b.datasheet,
         state_changed: lifecycle_detail.from.is_some(),
         plm_changed: a.plm != b.plm,
@@ -171,11 +166,21 @@ fn diff_pin_map(a: &[PinPadOverride], b: &[PinPadOverride]) -> PinMapDiff {
     use std::collections::BTreeMap;
     let a_map: BTreeMap<&str, &str> = a
         .iter()
-        .map(|o| (o.symbol_pin_number.as_str(), o.footprint_pad_number.as_str()))
+        .map(|o| {
+            (
+                o.symbol_pin_number.as_str(),
+                o.footprint_pad_number.as_str(),
+            )
+        })
         .collect();
     let b_map: BTreeMap<&str, &str> = b
         .iter()
-        .map(|o| (o.symbol_pin_number.as_str(), o.footprint_pad_number.as_str()))
+        .map(|o| {
+            (
+                o.symbol_pin_number.as_str(),
+                o.footprint_pad_number.as_str(),
+            )
+        })
         .collect();
     let mut added = Vec::new();
     let mut removed = Vec::new();

@@ -313,12 +313,7 @@ mod tests {
             name: "SOIC-8".into(),
             anchor: [0.0, 0.0],
             pads: vec![fixture_pad("1"), fixture_pad("2")],
-            courtyard: Polygon::new(vec![
-                [-2.5, -2.5],
-                [2.5, -2.5],
-                [2.5, 2.5],
-                [-2.5, 2.5],
-            ]),
+            courtyard: Polygon::new(vec![[-2.5, -2.5], [2.5, -2.5], [2.5, 2.5], [-2.5, 2.5]]),
             silk_f: vec![FpGraphic {
                 kind: FpGraphicKind::Line {
                     from: [-1.0, 0.0],

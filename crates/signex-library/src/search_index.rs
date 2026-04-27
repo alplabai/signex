@@ -307,12 +307,9 @@ impl TantivySearchIndex {
 
         // Synthesised "<manufacturer> <mpn>" stays the description until
         // WS-9 retargets the field at the row's `parameters` map.
-        let description = format!(
-            "{} {}",
-            row.primary_mpn.manufacturer, row.primary_mpn.mpn
-        )
-        .trim()
-        .to_string();
+        let description = format!("{} {}", row.primary_mpn.manufacturer, row.primary_mpn.mpn)
+            .trim()
+            .to_string();
 
         let mut doc = TantivyDocument::default();
         doc.add_text(self.fields.uuid, &uuid_str);

@@ -239,7 +239,9 @@ mod tests {
     #[test]
     fn builtin_registry_resolves_resistor() {
         let r = TemplateRegistry::new_with_builtins();
-        let t = r.resolve(Uuid::nil(), "resistor").expect("resistor template");
+        let t = r
+            .resolve(Uuid::nil(), "resistor")
+            .expect("resistor template");
         assert_eq!(t.class, "resistor");
         assert!(t.required_params.iter().any(|s| s.name == "value"));
         assert!(t.required_params.iter().any(|s| s.name == "tolerance"));
@@ -286,7 +288,10 @@ mod tests {
     fn validate_passes_when_no_template_registered() {
         let r = TemplateRegistry::new();
         let params = ParamMap::new();
-        assert!(r.validate_params(Uuid::nil(), "resistor", &params).is_empty());
+        assert!(
+            r.validate_params(Uuid::nil(), "resistor", &params)
+                .is_empty()
+        );
     }
 
     #[test]

@@ -24,8 +24,8 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use csv::{QuoteStyle, ReaderBuilder, WriterBuilder};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::adapter::LibraryError;
 use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
@@ -120,8 +120,7 @@ pub fn read_table(path: &Path) -> Result<Vec<ComponentRow>, LibraryError> {
 
     let mut rows = Vec::new();
     for record in rdr.records() {
-        let record =
-            record.map_err(|e| LibraryError::Backend(format!("read row: {e}")))?;
+        let record = record.map_err(|e| LibraryError::Backend(format!("read row: {e}")))?;
         rows.push(record_to_row(&record)?);
     }
     Ok(rows)
@@ -150,7 +149,10 @@ pub fn write_table(path: &Path, rows: &[ComponentRow]) -> Result<(), LibraryErro
     Ok(())
 }
 
-/// Append one row to the table. Header is written if `path` doesn't exist.
+/// Append a single row to the table file.
+///
+/// **Cost:** This reads the entire table into memory and rewrites it with
+/// the appended row. For bulk loads (>10 rows), use `write_table` directly.
 pub fn append_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
     let mut rows = read_table(path)?;
     rows.push(row.clone());
@@ -198,8 +200,7 @@ pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
 // ── (de)serialisation helpers ─────────────────────────────────────────────
 
 fn json_cell<T: Serialize>(value: &T) -> Result<String, LibraryError> {
-    serde_json::to_string(value)
-        .map_err(|e| LibraryError::Backend(format!("serialise cell: {e}")))
+    serde_json::to_string(value).map_err(|e| LibraryError::Backend(format!("serialise cell: {e}")))
 }
 
 fn from_json_cell<T: DeserializeOwned>(s: &str, name: &str) -> Result<T, LibraryError> {
@@ -314,6 +315,13 @@ fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     // `parameters` JSON map only when the user has set it. For now we drop
     // it on serialise: PlmReserved::default() → empty payload, and v3.0
     // adds an explicit column. The unit tests verify default() round-trips.
+    // **PLM persist gap.** As of v0.9, only `PlmReserved::default()` round-trips
+    // through TSV. Non-default payloads (set by callers that have already
+    // started populating `plm_part_id` / `eco_refs` / `compliance` ahead of the
+    // v3.0 PLM adapter) reject here so the failure is loud rather than a
+    // silent drop. See the `PlmReserved` doc comment in `component.rs` — it
+    // mirrors this contract on the type definition. v3.0 will add dedicated
+    // columns and remove this guard.
     if plm_unused != PlmReserved::default() {
         return Err(LibraryError::Backend(
             "PlmReserved fields cannot round-trip through TSV until v3.0 ships \
@@ -353,8 +361,8 @@ fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, LibraryErro
 
     let cell = |i: usize| record.get(i).unwrap_or_default();
 
-    let row_id =
-        uuid::Uuid::parse_str(cell(0)).map_err(|e| LibraryError::Backend(format!("row_id: {e}")))?;
+    let row_id = uuid::Uuid::parse_str(cell(0))
+        .map_err(|e| LibraryError::Backend(format!("row_id: {e}")))?;
     let internal_pn = InternalPn::new(cell(1));
     let class = ComponentClass::new(cell(2));
     let datasheet = datasheet_from_cell(cell(3))?;
