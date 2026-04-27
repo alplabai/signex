@@ -28,12 +28,12 @@
 
 use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
-use signex_library::ComponentClass;
+use signex_library::{ComponentClass, PrimitiveKind};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::state::{BUILTIN_CLASSES, LibraryState, NewComponentState};
+use super::state::{BUILTIN_CLASSES, LibraryState, NewComponentState, PrimitivePickerTarget};
 
 const MODAL_W: f32 = 520.0;
 const MODAL_H: f32 = 420.0;
@@ -221,6 +221,78 @@ pub fn view<'a>(
             .into()
         };
 
+    // Pick Symbol / Pick Footprint rows. Optional — modal can submit
+    // with unbound refs.
+    let symbol_label = match nc.symbol_ref.as_ref() {
+        None => "Unbound (optional)".to_string(),
+        Some(r) => {
+            let s = r.uuid.simple().to_string();
+            let short = if s.len() >= 8 { &s[..8] } else { s.as_str() };
+            format!("symbol uuid {}…", short)
+        }
+    };
+    let pick_symbol_btn =
+        button(container(text("Pick Symbol…").size(11).color(text_c)).padding([4, 12]))
+            .on_press(LibraryMessage::OpenPrimitivePicker {
+                kind: PrimitiveKind::Symbol,
+                target: PrimitivePickerTarget::NewComponentForm,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
+    let symbol_row = row![
+        text(symbol_label)
+            .size(11)
+            .color(text_c)
+            .width(Length::Fill),
+        pick_symbol_btn,
+    ]
+    .align_y(iced::Alignment::Center);
+
+    let footprint_label = match nc.footprint_ref.as_ref() {
+        None => "Unbound (optional)".to_string(),
+        Some(r) => {
+            let s = r.uuid.simple().to_string();
+            let short = if s.len() >= 8 { &s[..8] } else { s.as_str() };
+            format!("footprint uuid {}…", short)
+        }
+    };
+    let pick_footprint_btn =
+        button(container(text("Pick Footprint…").size(11).color(text_c)).padding([4, 12]))
+            .on_press(LibraryMessage::OpenPrimitivePicker {
+                kind: PrimitiveKind::Footprint,
+                target: PrimitivePickerTarget::NewComponentForm,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
+    let footprint_row = row![
+        text(footprint_label)
+            .size(11)
+            .color(text_c)
+            .width(Length::Fill),
+        pick_footprint_btn,
+    ]
+    .align_y(iced::Alignment::Center);
+
     let form = column![
         labelled("Internal PN", pn_input.into()),
         Space::new().height(8),
@@ -229,6 +301,10 @@ pub fn view<'a>(
         labelled("Table", table_picker),
         Space::new().height(8),
         labelled("Class", class_picker),
+        Space::new().height(8),
+        labelled("Symbol ref", symbol_row.into()),
+        Space::new().height(8),
+        labelled("Footprint ref", footprint_row.into()),
     ]
     .spacing(0)
     .padding([16, 16]);

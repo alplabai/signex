@@ -13,11 +13,15 @@ use iced::Task;
 
 use super::super::*;
 use crate::library::commands;
-use crate::library::messages::{EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, SettingsMsg};
+use crate::library::messages::{
+    EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg,
+    SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+};
 use crate::library::state::{
     ComponentPreviewState, EditorAddress, NewComponentState, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };
-use signex_library::RowId;
+use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
 impl Signex {
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
@@ -179,6 +183,8 @@ impl Signex {
                     &table,
                     &nc.internal_pn,
                     nc.class.clone(),
+                    nc.symbol_ref,
+                    nc.footprint_ref,
                 ) {
                     Ok(row_id) => {
                         self.library.new_component = None;
@@ -323,6 +329,16 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_browser_delete_row(library_path, table, row_id),
+            LibraryMessage::OpenPrimitivePicker { kind, target } => {
+                self.library.primitive_picker = Some(PrimitivePickerState {
+                    kind,
+                    target,
+                    filter: String::new(),
+                    error: None,
+                });
+                Task::none()
+            }
+            LibraryMessage::PrimitivePicker(msg) => self.handle_primitive_picker_msg(msg),
         }
     }
 
@@ -428,6 +444,8 @@ impl Signex {
             table,
             class: signex_library::ComponentClass::generic(),
             category: String::new(),
+            symbol_ref: None,
+            footprint_ref: None,
             error: None,
         });
         Task::none()
@@ -498,6 +516,232 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// Apply a primitive picker sub-message. Most variants close the
+    /// modal once the pick lands.
+    fn handle_primitive_picker_msg(&mut self, msg: PrimitivePickerMsg) -> Task<Message> {
+        match msg {
+            PrimitivePickerMsg::SetFilter(s) => {
+                if let Some(picker) = self.library.primitive_picker.as_mut() {
+                    picker.filter = s;
+                    picker.error = None;
+                }
+                Task::none()
+            }
+            PrimitivePickerMsg::Cancel => {
+                self.library.primitive_picker = None;
+                Task::none()
+            }
+            PrimitivePickerMsg::Pick(primitive_ref) => self.apply_primitive_pick(primitive_ref),
+            PrimitivePickerMsg::Browse => {
+                let kind = self
+                    .library
+                    .primitive_picker
+                    .as_ref()
+                    .map(|p| p.kind)
+                    .unwrap_or(PrimitiveKind::Symbol);
+                let (label, ext) = match kind {
+                    PrimitiveKind::Symbol => ("Pick Symbol (*.snxsym)", "snxsym"),
+                    PrimitiveKind::Footprint => ("Pick Footprint (*.snxfpt)", "snxfpt"),
+                    PrimitiveKind::Sim => ("Pick Sim Model (*.snxsim)", "snxsim"),
+                    _ => ("Pick Primitive", ""),
+                };
+                Task::perform(
+                    async move {
+                        rfd::AsyncFileDialog::new()
+                            .set_title(label)
+                            .add_filter(ext, &[ext])
+                            .pick_file()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    |path| {
+                        Message::Library(LibraryMessage::PrimitivePicker(
+                            PrimitivePickerMsg::BrowseResult(path),
+                        ))
+                    },
+                )
+            }
+            PrimitivePickerMsg::BrowseResult(None) => Task::none(),
+            PrimitivePickerMsg::BrowseResult(Some(path)) => {
+                self.handle_primitive_picker_browse_result(path)
+            }
+        }
+    }
+
+    /// A primitive ref has been picked — apply it to the picker's
+    /// configured target and close the modal.
+    fn apply_primitive_pick(&mut self, primitive_ref: PrimitiveRef) -> Task<Message> {
+        let Some(picker) = self.library.primitive_picker.take() else {
+            return Task::none();
+        };
+        match picker.target {
+            PrimitivePickerTarget::PreviewRow(address) => {
+                self.apply_primitive_pick_to_preview(address, picker.kind, primitive_ref);
+            }
+            PrimitivePickerTarget::EditRowModal(_address) => {
+                // Wired in Deliverable B (Edit Component Details modal).
+            }
+            PrimitivePickerTarget::NewComponentForm => {
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    match picker.kind {
+                        PrimitiveKind::Symbol => {
+                            nc.symbol_ref = Some(primitive_ref);
+                        }
+                        PrimitiveKind::Footprint => {
+                            nc.footprint_ref = Some(primitive_ref);
+                        }
+                        PrimitiveKind::Sim => { /* nothing today */ }
+                        _ => {}
+                    }
+                    nc.error = None;
+                }
+            }
+        }
+        Task::none()
+    }
+
+    /// Component Preview tab — apply a freshly-picked primitive ref to
+    /// the row, resolve through the LibrarySet, save via update_row.
+    fn apply_primitive_pick_to_preview(
+        &mut self,
+        address: EditorAddress,
+        kind: PrimitiveKind,
+        primitive_ref: PrimitiveRef,
+    ) {
+        let Some(state) = self.library.editors.get_mut(&address) else {
+            return;
+        };
+        match kind {
+            PrimitiveKind::Symbol => {
+                state.row.symbol_ref = primitive_ref;
+                state.symbol = self.library.set.resolve_symbol(&primitive_ref);
+            }
+            PrimitiveKind::Footprint => {
+                state.row.footprint_ref = Some(primitive_ref);
+                state.footprint = self.library.set.resolve_footprint(&primitive_ref);
+            }
+            PrimitiveKind::Sim => {
+                state.row.sim_ref = Some(primitive_ref);
+                state.sim = self.library.set.resolve_sim(&primitive_ref);
+            }
+            _ => return,
+        }
+        // Refresh content_hash + save.
+        let mut row = state.row.clone();
+        match signex_library::hash_row_content(&row) {
+            Ok(h) => {
+                row.content_hash = h;
+                state.row.content_hash = h;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    error = %e,
+                    "primitive pick: hash failed"
+                );
+                return;
+            }
+        }
+        let library_id = self
+            .library
+            .library_at(&address.library_path)
+            .map(|lib| lib.library_id);
+        let msg = match kind {
+            PrimitiveKind::Symbol => "bind symbol",
+            PrimitiveKind::Footprint => "bind footprint",
+            PrimitiveKind::Sim => "bind sim",
+            _ => "bind primitive",
+        };
+        let result = match library_id.and_then(|id| self.library.set.get(id)) {
+            Some(adapter) => adapter.update_row(&address.table, row, msg),
+            None => Err(signex_library::LibraryError::NotFound(
+                address.library_path.display().to_string(),
+            )),
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "primitive pick: update_row failed"
+            );
+            return;
+        }
+        if let Err(e) = self.library.refresh_components(&address.library_path) {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "primitive pick: refresh_components failed"
+            );
+        }
+    }
+
+    /// Filesystem-picked primitive — auto-mount the containing
+    /// `.snxlib`, then synthesize a Pick.
+    fn handle_primitive_picker_browse_result(&mut self, file: std::path::PathBuf) -> Task<Message> {
+        // Locate the containing `.snxlib`. Path layout is
+        // `<some>/<lib>.snxlib/<symbols|footprints|sims>/<uuid>.<ext>`.
+        let snxlib_dir = file
+            .ancestors()
+            .find(|p| {
+                p.extension()
+                    .and_then(|s| s.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("snxlib"))
+                    .unwrap_or(false)
+            })
+            .map(|p| p.to_path_buf());
+        let Some(snxlib_dir) = snxlib_dir else {
+            if let Some(picker) = self.library.primitive_picker.as_mut() {
+                picker.error = Some(
+                    "Picked file is not inside a `.snxlib` library. v0.9 only supports primitives bound through libraries."
+                        .into(),
+                );
+            }
+            return Task::none();
+        };
+        // Mount the library if not already.
+        if let Err(e) = commands::open_library(&mut self.library, snxlib_dir.clone()) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %snxlib_dir.display(),
+                error = %e,
+                "browse-pick: open_library failed"
+            );
+            if let Some(picker) = self.library.primitive_picker.as_mut() {
+                picker.error = Some(format!("open library failed: {e}"));
+            }
+            return Task::none();
+        }
+        // Resolve library_id + parse uuid from filename.
+        let library_id = match self.library.library_at(&snxlib_dir) {
+            Some(lib) => lib.library_id,
+            None => {
+                if let Some(picker) = self.library.primitive_picker.as_mut() {
+                    picker.error = Some("Library failed to mount.".into());
+                }
+                return Task::none();
+            }
+        };
+        let stem = file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
+        let uuid = match uuid::Uuid::parse_str(stem) {
+            Ok(u) => u,
+            Err(_) => {
+                if let Some(picker) = self.library.primitive_picker.as_mut() {
+                    picker.error = Some(format!(
+                        "Filename `{stem}` is not a UUID — pick a primitive file in `<lib>.snxlib/symbols/`."
+                    ));
+                }
+                return Task::none();
+            }
+        };
+        let primitive_ref = PrimitiveRef::new(library_id, uuid);
+        Task::done(Message::Library(LibraryMessage::PrimitivePicker(
+            PrimitivePickerMsg::Pick(primitive_ref),
+        )))
     }
 
     /// Create a fresh `<name>.snxlib/` under the project rooted at
