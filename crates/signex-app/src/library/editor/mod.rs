@@ -20,6 +20,7 @@ pub mod history;
 pub mod overview;
 pub mod pin_map;
 pub mod submit_for_review;
+pub mod supply; // WS-K: Supply tab
 pub mod symbol;
 pub mod where_used;
 
@@ -165,14 +166,8 @@ fn view_active_tab<'a>(
             ],
             tokens,
         ),
-        EditorTab::Supply => placeholder_card(
-            "Supply",
-            &[
-                "Primary MPN + alternates editor — WS-F polishes the multi-row picker.",
-                "Distributor listings live on `Revision::supply`.",
-            ],
-            tokens,
-        ),
+        // WS-K: Supply tab
+        EditorTab::Supply => supply::view(editor, tokens, address.clone()),
         EditorTab::Sim => placeholder_card(
             "Sim",
             &[

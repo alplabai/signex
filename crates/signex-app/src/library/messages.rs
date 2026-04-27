@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource, LifecycleState,
-    UseSite, Version,
+    AlternateStatus, BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource,
+    LifecycleState, UseSite, Version,
 };
 
 use super::state::{EditorAddress, EditorTab};
@@ -257,6 +257,47 @@ pub enum EditorMsg {
     StepAttachResult(Option<(Vec<u8>, String)>),
     /// Drop the existing STEP attachment from the footprint primitive.
     StepAttachRemove,
+
+    // ── WS-K: Supply tab ──────────────────────────────────────
+    // Primary MPN
+    /// Edit the primary MPN's manufacturer string.
+    SupplyPrimarySetManufacturer(String),
+    /// Edit the primary MPN's MPN string.
+    SupplyPrimarySetMpn(String),
+    /// Pick the primary MPN's approval status.
+    SupplyPrimarySetStatus(AlternateStatus),
+    /// Edit the primary MPN's free-form notes.
+    SupplyPrimarySetNotes(String),
+
+    // Alternates
+    /// Append a fresh blank alternate row.
+    SupplyAlternateAdd,
+    /// Edit the manufacturer of the alternate at `idx`.
+    SupplyAlternateSetManufacturer { idx: usize, value: String },
+    /// Edit the MPN of the alternate at `idx`.
+    SupplyAlternateSetMpn { idx: usize, value: String },
+    /// Pick the approval status of the alternate at `idx`.
+    SupplyAlternateSetStatus { idx: usize, value: AlternateStatus },
+    /// Edit the free-form notes of the alternate at `idx`.
+    SupplyAlternateSetNotes { idx: usize, value: String },
+    /// Drop the alternate row at `idx`.
+    SupplyAlternateRemove { idx: usize },
+
+    // Distributor listings
+    /// Append a fresh blank distributor listing row.
+    SupplyListingAdd,
+    /// Pick the distributor source for the listing at `idx`. The
+    /// dispatcher converts `DistributorSource` to the canonical string
+    /// stored on `DistributorListing.distributor`.
+    SupplyListingSetDistributor { idx: usize, value: DistributorSource },
+    /// Edit the SKU of the distributor listing at `idx`.
+    SupplyListingSetSku { idx: usize, value: String },
+    /// Edit the URL of the distributor listing at `idx`. Empty string
+    /// clears the field back to `None`.
+    SupplyListingSetUrl { idx: usize, value: String },
+    /// Drop the distributor listing row at `idx`.
+    SupplyListingRemove { idx: usize },
+    // ── /WS-K ─────────────────────────────────────────────────
 }
 
 /// Tool selection on the Symbol canvas — pure-data alias for the
